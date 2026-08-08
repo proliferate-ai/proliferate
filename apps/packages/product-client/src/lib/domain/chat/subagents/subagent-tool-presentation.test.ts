@@ -58,7 +58,7 @@ describe("subagent tool presentation", () => {
       item: { nativeToolName: "mcp__subagents__close_agent" },
       executionState: "completed",
       isRunning: false,
-    })).toBe("Subagent closed");
+    })).toBe("Agent closed");
   });
 
   it("names the peer agent ops tools instead of falling back to the creation verb", () => {
@@ -100,6 +100,18 @@ describe("subagent tool presentation", () => {
       executionState: "completed",
       isRunning: false,
     })).toBe("Agent config options read");
+    expect(formatSubagentMcpActionLabel("mcp__subagents__promote_subagent"))
+      .toBe("Promoted subagent");
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__promote_subagent" },
+      executionState: "running",
+      isRunning: true,
+    })).toBe("Promoting subagent");
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__promote_subagent" },
+      executionState: "completed",
+      isRunning: false,
+    })).toBe("Subagent promoted");
   });
 
   it("derives concise status receipt presentation with the child target", () => {
@@ -194,9 +206,79 @@ describe("subagent tool presentation", () => {
 
     expect(presentation).toMatchObject({
       action: "close",
-      actionLabel: "Closed subagent",
+      actionLabel: "Closed agent",
       title: "API Surface Check",
       openSessionAllowed: false,
+    });
+  });
+
+  it("reads a close of a working agent as a request, not a stop", () => {
+    // The agent is mid-step: `close_agent` returned closeRequested, the row is
+    // stamped, and the runtime closes it when the step ends. A receipt that
+    // said "Closed" here would be claiming something that has not happened.
+    const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__close_agent",
+      rawOutput: {
+        subagentId: "subagent_123",
+        sessionLinkId: "link-123",
+        sessionId: "child-123",
+        label: "API Surface Check",
+        closed: false,
+        closeRequested: true,
+        closeReason: "duplicate work",
+      },
+    }));
+
+    expect(presentation).toMatchObject({
+      action: "close",
+      childSessionId: "child-123",
+      detailLabel: "Finishing current step",
+      openSessionAllowed: true,
+    });
+  });
+
+  it("surfaces the close reason once the agent is actually closed", () => {
+    const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__close_agent",
+      rawOutput: {
+        subagentId: "subagent_123",
+        sessionLinkId: "link-123",
+        sessionId: "child-123",
+        label: "API Surface Check",
+        closed: true,
+        closeRequested: false,
+        closedBySessionId: "ses_owner",
+        closeReason: "duplicate work",
+      },
+    }));
+
+    expect(presentation).toMatchObject({
+      action: "close",
+      detailLabel: "duplicate work",
+      openSessionAllowed: false,
+    });
+  });
+
+  it("derives promotion receipts as openable peer receipts", () => {
+    const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__promote_subagent",
+      rawOutput: {
+        subagentId: "subagent_123",
+        sessionLinkId: "link-123",
+        sessionId: "child-123",
+        label: "API Surface Check",
+        promoted: true,
+        alreadyPromoted: false,
+      },
+    }));
+
+    expect(presentation).toMatchObject({
+      action: "promote",
+      actionLabel: "Promoted subagent",
+      title: "API Surface Check",
+      childSessionId: "child-123",
+      detailLabel: "Now a peer",
+      openSessionAllowed: true,
     });
   });
 });

@@ -215,7 +215,7 @@ describe("TranscriptToolCallItemBlock", () => {
       }),
     );
 
-    expect(html).toContain("Closed subagent");
+    expect(html).toContain("Closed agent");
     expect(html).toContain("API Surface Check");
     expect(html).not.toContain("Open API Surface Check");
   });

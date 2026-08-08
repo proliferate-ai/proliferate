@@ -104,6 +104,9 @@ fn link_record(
         created_by_tool_call_id: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
         closed_at: None,
+        promoted_at: None,
+        closed_by_session_id: None,
+        close_reason: None,
     }
 }
 
@@ -1017,3 +1020,51 @@ exit 0
     let _ = std::fs::remove_dir_all(&empty_home);
 }
 
+
+// --- close cascade (ADR §3.3, ruling 7) ---------------------------------
+//
+// `cascades_to_child` is the whole of the "a promoted child is not collateral"
+// rule, so it is tested directly rather than through a live runtime: these
+// assertions fail the moment the promotion check is dropped from the cascade.
+
+#[test]
+fn an_unpromoted_subagent_still_goes_down_with_its_parent() {
+    let link = link_record("link-1", SessionLinkRelation::Subagent, "parent", "child");
+
+    assert!(super::lifecycle::cascades_to_child(&link));
+}
+
+#[test]
+fn a_promoted_subagent_survives_its_former_parents_close() {
+    let mut link = link_record("link-1", SessionLinkRelation::Subagent, "parent", "child");
+    link.promoted_at = Some("2026-03-25T01:00:00Z".to_string());
+
+    assert!(
+        !super::lifecycle::cascades_to_child(&link),
+        "promotion severs the cascade; the row stays so the owner can still close it deliberately"
+    );
+}
+
+#[test]
+fn an_owned_agent_and_a_fork_are_never_cascade_collateral() {
+    let owned = link_record("link-1", SessionLinkRelation::OwnedAgent, "owner", "agent");
+    let fork = link_record("link-2", SessionLinkRelation::Fork, "origin", "copy");
+
+    assert!(!super::lifecycle::cascades_to_child(&owned));
+    assert!(!super::lifecycle::cascades_to_child(&fork));
+}
+
+#[test]
+fn delegated_coding_and_review_children_are_unaffected_by_promotion() {
+    for relation in [
+        SessionLinkRelation::CoworkCodingSession,
+        SessionLinkRelation::ReviewAgent,
+    ] {
+        let mut link = link_record("link-1", relation, "parent", "child");
+        assert!(super::lifecycle::cascades_to_child(&link));
+        // Nothing else in the product stamps `promoted_at` on these rows, but
+        // the cascade must not become promotion-sensitive if something ever does.
+        link.promoted_at = Some("2026-03-25T01:00:00Z".to_string());
+        assert!(super::lifecycle::cascades_to_child(&link));
+    }
+}

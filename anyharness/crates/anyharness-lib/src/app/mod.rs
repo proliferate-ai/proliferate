@@ -64,6 +64,8 @@ use crate::domains::sessions::mcp_bindings::product_registry::ProductMcpEndpoint
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::ownership::hooks::AgentCloseSessionHooks;
+use crate::domains::sessions::ownership::service::AgentOwnershipService;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
@@ -436,12 +438,27 @@ impl AppState {
             acp_manager.clone(),
         ));
         let workflow_run_session_extension = workflow_wiring.session_extension.clone();
+        // Ownership: who may promote or close whom. Its turn-finish hook is the
+        // second half of a soft close, and it needs the runtime it lives inside,
+        // so it is wired in two phases exactly like the workflow extensions —
+        // constructed here, handed the runtime below.
+        let agent_ownership_service = Arc::new(AgentOwnershipService::new(
+            session_link_service.clone(),
+            SessionStore::new(db.clone()),
+        ));
+        let agent_close_session_hooks = Arc::new(AgentCloseSessionHooks::new(
+            agent_ownership_service.clone(),
+            session_admission.clone(),
+            workspace_operation_gate.clone(),
+            workspace_access_gate.clone(),
+        ));
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
             agent_wake_session_hooks.clone(),
+            agent_close_session_hooks.clone(),
             review_session_hooks.clone(),
             integration_gateway_session_launch_extension.clone(),
             goal_session_hooks,
@@ -466,6 +483,14 @@ impl AppState {
             loop_service.clone(),
             activity_service.clone(),
         ));
+        // Ownership — phase 2: the close hook can now reach the runtime whose
+        // extension list holds it. Weak, so this is not a reference cycle.
+        agent_close_session_hooks.attach_session_runtime(&session_runtime);
+        // Closes this runtime already owed when it started: a request whose
+        // turn never finished because the process died has nothing left to fire
+        // it, so it is settled here instead of leaving the agent open forever.
+        #[cfg(not(test))]
+        agent_close_session_hooks.clone().spawn_startup_pass();
         // Workflow runs — phase 2 (after SessionRuntime): the async facades.
         let workflow_phase_two = workflows::wire_workflow_runtime(
             workflow_wiring,
@@ -567,6 +592,7 @@ impl AppState {
                 agent_wake_service: agent_wake_service.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_runtime: workspace_runtime.clone(),
+                agent_ownership_service: agent_ownership_service.clone(),
                 session_admission: session_admission.clone(),
                 workspace_operation_gate: workspace_operation_gate.clone(),
                 agent_ops_mcp_auth,

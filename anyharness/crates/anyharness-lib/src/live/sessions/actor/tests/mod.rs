@@ -57,6 +57,7 @@ mod prompt;
 mod queue;
 mod requested_mode;
 mod shutdown;
+mod soft_close;
 
 async fn actor_exit_test_context(
     pending_interaction: Option<PendingInteractionSummary>,

@@ -9,6 +9,7 @@ export type SubagentMcpReceiptAction =
   | "status"
   | "read"
   | "search"
+  | "promote"
   | "close";
 
 export interface SubagentMcpReceiptPresentation {
@@ -38,9 +39,11 @@ export function formatSubagentMcpActionLabel(toolName: string | null | undefined
       return "Read subagent turns";
     case "mcp__subagents__search_subagent_transcript":
       return "Searched subagent transcript";
+    case "mcp__subagents__promote_subagent":
+      return "Promoted subagent";
     case "mcp__subagents__close_agent":
     case "mcp__subagents__close_subagent":
-      return "Closed subagent";
+      return "Closed agent";
     case "mcp__subagents__send_agent_message":
       return "Sent agent message";
     case "mcp__subagents__list_agents":
@@ -86,8 +89,11 @@ export function formatSubagentHeaderVerb({
   if (toolName === "mcp__subagents__search_subagent_transcript") {
     return isRunning ? "Searching subagent transcript" : "Subagent transcript searched";
   }
+  if (toolName === "mcp__subagents__promote_subagent") {
+    return isRunning ? "Promoting subagent" : "Subagent promoted";
+  }
   if (toolName === "mcp__subagents__close_agent" || toolName === "mcp__subagents__close_subagent") {
-    return isRunning ? "Closing subagent" : "Subagent closed";
+    return isRunning ? "Closing agent" : "Agent closed";
   }
   // Peer agent ops. Without their own entries these fall through to the
   // creation verb below, which would claim a spawn that never happened.
@@ -149,8 +155,10 @@ export function deriveSubagentMcpReceiptPresentation(
     ?? readStringField(rawInput, "session_link_id");
   const childSessionId =
     readStringField(rawOutput, "childSessionId")
+    ?? readStringField(rawOutput, "sessionId")
     ?? readStringField(rawInput, "childSessionId")
-    ?? readStringField(rawInput, "child_session_id");
+    ?? readStringField(rawInput, "child_session_id")
+    ?? readStringField(rawInput, "sessionId");
   const title =
     readStringField(rawOutput, "label")
     ?? readStringField(rawInput, "label")
@@ -173,7 +181,11 @@ export function deriveSubagentMcpReceiptPresentation(
     statusLabel,
     detailLabel,
     wakeScheduled: action === "wake",
-    openSessionAllowed: action !== "close" && normalizeStatus(rawStatus) !== "closed",
+    // A close that is only REQUESTED leaves the agent running, so the receipt
+    // still offers to open it.
+    openSessionAllowed:
+      (action !== "close" || readBooleanField(rawOutput, "closeRequested"))
+      && normalizeStatus(rawStatus) !== "closed",
   };
 }
 
@@ -195,6 +207,8 @@ function receiptActionFromToolName(toolName: string | null | undefined): Subagen
       return "read";
     case "mcp__subagents__search_subagent_transcript":
       return "search";
+    case "mcp__subagents__promote_subagent":
+      return "promote";
     case "mcp__subagents__close_agent":
     case "mcp__subagents__close_subagent":
       return "close";
@@ -222,8 +236,10 @@ function actionLabel(
       return running ? "Reading subagent turns" : "Read subagent turns";
     case "search":
       return running ? "Searching subagent" : "Searched subagent";
+    case "promote":
+      return running ? "Promoting subagent" : "Promoted subagent";
     case "close":
-      return running ? "Closing subagent" : "Closed subagent";
+      return running ? "Closing agent" : "Closed agent";
   }
 }
 
@@ -249,8 +265,18 @@ function detailLabelForAction(
         ? `${matches.length} ${matches.length === 1 ? "match" : "matches"}`
         : null;
     }
+    case "promote":
+      return readBooleanField(output, "alreadyPromoted") ? "Already promoted" : "Now a peer";
     case "close":
-      return readBooleanField(output, "alreadyClosed") ? "Already closed" : null;
+      // A close of a working agent is a REQUEST: the agent finishes the step it
+      // is on first, so the receipt must not read as though it already stopped.
+      if (readBooleanField(output, "closeRequested")) {
+        return "Finishing current step";
+      }
+      if (readBooleanField(output, "alreadyClosed")) {
+        return "Already closed";
+      }
+      return readStringField(output, "closeReason");
   }
 }
 

@@ -15,6 +15,7 @@ use crate::domains::sessions::agent_ops::{
     AgentOpsPeerGates, AgentOpsProductMcpServer,
 };
 use crate::domains::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
+use crate::domains::sessions::ownership::service::AgentOwnershipService;
 use crate::domains::sessions::mcp_bindings::product_launch::{
     ProductMcpLaunchRegistration, ProductMcpSelectionContext,
 };
@@ -43,6 +44,7 @@ pub(super) struct EndpointRegistryDeps {
     pub(super) agent_wake_service: Arc<AgentWakeService>,
     pub(super) session_runtime: Arc<SessionRuntime>,
     pub(super) workspace_runtime: Arc<WorkspaceRuntime>,
+    pub(super) agent_ownership_service: Arc<AgentOwnershipService>,
     pub(super) session_admission: Arc<SessionMutationAdmission>,
     pub(super) workspace_operation_gate: Arc<WorkspaceOperationGate>,
     pub(super) agent_ops_mcp_auth: Arc<AgentOpsMcpAuth>,
@@ -115,6 +117,7 @@ pub(super) fn build_product_mcp_endpoint_registry(
         agent_wake_service,
         session_runtime,
         workspace_runtime,
+        agent_ownership_service,
         session_admission,
         workspace_operation_gate,
         agent_ops_mcp_auth,
@@ -135,6 +138,7 @@ pub(super) fn build_product_mcp_endpoint_registry(
                 agent_wake_service,
                 session_runtime,
                 workspace_runtime.clone(),
+                agent_ownership_service,
                 AgentOpsPeerGates {
                     session_admission,
                     workspace_operation_gate,

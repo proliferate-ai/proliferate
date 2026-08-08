@@ -16,10 +16,20 @@ use crate::domains::sessions::model::{
 use crate::domains::sessions::prompt::{
     load_prompt_attachments, PromptPayload, PromptValidationError, ResolvedParts,
 };
+use crate::domains::sessions::links::store::SessionLinkStore;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::model::{
-    AttachmentSource, BackgroundWorkDurable, EventPersist, QueueDurable, SessionStateDurable,
+    AttachmentSource, BackgroundWorkDurable, EventPersist, PendingCloseRequests, QueueDurable,
+    SessionStateDurable,
 };
+
+/// The soft-close fence the actor consults before starting a turn. One indexed
+/// point read against `idx_session_links_pending_close_request`.
+impl PendingCloseRequests for SessionLinkStore {
+    fn has_pending_close_request(&self, session_id: &str) -> anyhow::Result<bool> {
+        Ok(SessionLinkStore::find_pending_close_request(self, session_id)?.is_some())
+    }
+}
 
 impl EventPersist for SessionStore {
     fn append_event(&self, event: &SessionEventRecord) -> anyhow::Result<()> {

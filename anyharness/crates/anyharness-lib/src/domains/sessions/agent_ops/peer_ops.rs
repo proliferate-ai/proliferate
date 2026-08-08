@@ -10,6 +10,7 @@ use crate::domains::sessions::admission::{
     SessionMutationSource,
 };
 use crate::domains::sessions::authorize::{authorize, AgentAccessError, AgentAccessIntent};
+use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::prompt::envelope::{agent_message, AgentMessageSender};
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
@@ -40,6 +41,11 @@ pub(super) fn authorize_transcript_read(
 pub(super) enum AgentMessageError {
     #[error("message is required")]
     EmptyMessage,
+    #[error(
+        "that agent is finishing its final step before closing and takes no new messages. \
+         Its transcript stays readable once it stops"
+    )]
+    TargetEndRequested,
     #[error(transparent)]
     Access(#[from] AgentAccessError),
 }
@@ -61,6 +67,7 @@ pub(super) struct PreparedAgentMessage {
 /// *right now* is a separate question, answered by [`admit_peer_mutation`].
 pub(super) fn prepare_agent_message(
     session_store: &SessionStore,
+    link_service: &SessionLinkService,
     caller_session_id: &str,
     target_session_id: &str,
     message: &str,
@@ -74,6 +81,7 @@ pub(super) fn prepare_agent_message(
         target_session_id,
         AgentAccessIntent::Send,
     )?;
+    assert_target_still_takes_messages(link_service, target_session_id)?;
     let sender = AgentMessageSender::from_session(&access.caller);
     let (text, provenance) = agent_message(&sender, message).into_parts();
     Ok(PreparedAgentMessage {
@@ -84,8 +92,34 @@ pub(super) fn prepare_agent_message(
     })
 }
 
+/// An end-requested agent takes no new messages.
+///
+/// Ruling 6 refuses sends to a CLOSED session, and before the soft close that
+/// was the whole story: a close was instantaneous, so there was no third state.
+/// There is now — an open session whose ownership row is stamped
+/// `closed_by_session_id IS NOT NULL AND closed_at IS NULL` — and it can be a
+/// whole turn wide. A prompt accepted into that window would enqueue
+/// successfully and then never run: the actor refuses to start a turn while a
+/// close is pending, and after the close it never boots again. Refusing at the
+/// door tells the sender that, instead of stranding the message silently.
+///
+/// One indexed point read (`idx_session_links_pending_close_request`), the same
+/// one the turn-finish hook makes.
+pub(super) fn assert_target_still_takes_messages(
+    link_service: &SessionLinkService,
+    target_session_id: &str,
+) -> Result<(), AgentMessageError> {
+    let pending = link_service
+        .find_pending_close_request(target_session_id)
+        .map_err(|error| AgentMessageError::Access(AgentAccessError::Internal(error)))?;
+    if pending.is_some() {
+        return Err(AgentMessageError::TargetEndRequested);
+    }
+    Ok(())
+}
+
 #[derive(Debug, thiserror::Error)]
-pub(super) enum PeerGateError {
+pub(crate) enum PeerGateError {
     #[error(
         "that agent's execution is controlled by an active workflow run and cannot be \
          prompted or reconfigured until the run finishes"
@@ -113,7 +147,7 @@ pub(super) enum PeerGateError {
 /// The permit is held across the dispatch, so a workflow that takes control
 /// mid-call cannot interleave, and a peer mutation is visible to the
 /// destructive workspace paths that admit a whole workspace's session set.
-pub(super) async fn admit_peer_mutation(
+pub(crate) async fn admit_peer_mutation(
     admission: &SessionMutationAdmission,
     target_session_id: &str,
     kind: SessionMutationKind,
@@ -161,7 +195,7 @@ pub(super) async fn admit_peer_mutation(
 /// which hold every session permit in a workspace and then reach for that
 /// workspace's exclusive lease. Exactly one workspace lease is taken here, so
 /// there is no second lease to order against either.
-pub(super) async fn lease_target_workspace_for_peer_write(
+pub(crate) async fn lease_target_workspace_for_peer_write(
     operation_gate: &WorkspaceOperationGate,
     access_gate: &WorkspaceAccessGate,
     target_workspace_id: &str,
@@ -177,7 +211,7 @@ pub(super) async fn lease_target_workspace_for_peer_write(
 
 /// Access-state check with no lease attached — the caller-side half of what the
 /// route used to do for this tool (`assert_workspace_mutable`).
-pub(super) fn assert_workspace_can_be_mutated(
+pub(crate) fn assert_workspace_can_be_mutated(
     access_gate: &WorkspaceAccessGate,
     workspace_id: &str,
 ) -> Result<(), PeerGateError> {
@@ -229,6 +263,11 @@ mod tests {
     use crate::app::test_support;
     use crate::domains::sessions::admission::{NoControllerPolicy, SessionControllerPolicy};
     use crate::domains::sessions::extensions::SessionTurnOutcome;
+    use crate::domains::sessions::links::model::{
+        SessionLinkRelation, SessionLinkWorkspaceRelation,
+    };
+    use crate::domains::sessions::links::service::CreateSessionLinkInput;
+    use crate::domains::sessions::links::store::SessionLinkStore;
     use crate::domains::sessions::model::SessionMcpBindingPolicy;
     use crate::domains::sessions::prompt::PromptPayload;
     use crate::domains::sessions::store::agent_wakes::AgentWakeReason;
@@ -269,10 +308,16 @@ mod tests {
     }
 
     fn store_fixture() -> SessionStore {
+        store_and_links_fixture().0
+    }
+
+    /// Two agents in two workspaces, plus the link service the send path reads
+    /// ownership rows from (an end-requested target takes no new messages).
+    fn store_and_links_fixture() -> (SessionStore, SessionLinkService) {
         let db = Db::open_in_memory().expect("open db");
         test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace-1");
         test_support::seed_workspace_with_repo_root(&db, "workspace-2", "local", "/tmp/workspace-2");
-        let store = SessionStore::new(db);
+        let store = SessionStore::new(db.clone());
         store
             .insert(&session_record(
                 "ses_caller",
@@ -283,7 +328,8 @@ mod tests {
         store
             .insert(&session_record("ses_target", "workspace-2", Some("Schema audit")))
             .expect("insert target");
-        store
+        let links = SessionLinkService::new(SessionLinkStore::new(db), store.clone());
+        (store, links)
     }
 
     fn wake_service_fixture(store: &SessionStore) -> AgentWakeService {
@@ -415,11 +461,174 @@ mod tests {
         );
     }
 
+    /// Read `calls.rs` once for the guards below. Same technique, and the same
+    /// justification, as `send_agent_message_arms_before_the_dispatch...`
+    /// above: these are orderings inside an async handler that needs a live
+    /// runtime, and the ordering IS the guarantee.
+    fn calls_source() -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/domains/sessions/agent_ops/calls.rs");
+        std::fs::read_to_string(&path).expect("read calls.rs")
+    }
+
+    /// The slice from `signature` to the next top-level fn — whichever comes
+    /// FIRST. Taking the earliest of the two matches rather than falling back
+    /// to the plain-`fn` search only when no `async fn` follows anywhere: the
+    /// fallback form never fires while any async fn exists further down the
+    /// file, so the window silently swallows the next sync function and the
+    /// guards below could be satisfied by a neighbour's text.
+    /// Collapse every whitespace run to one space so the assertions below
+    /// survive rustfmt's line breaking. `let _lease =\n    match foo(` and
+    /// `let _lease = match foo(` are the same guarantee and must read the same.
+    fn squashed(text: &str) -> String {
+        text.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+        let start = source
+            .find(signature)
+            .unwrap_or_else(|| panic!("{signature} is not defined in the file under guard"));
+        let rest = &source[start..];
+        let end = [rest[1..].find("\nasync fn "), rest[1..].find("\nfn ")]
+            .into_iter()
+            .flatten()
+            .min();
+        &rest[..end.map_or(rest.len(), |at| at + 1)]
+    }
+
+    #[test]
+    fn the_spawn_gate_runs_before_dispatch_not_only_in_the_tool_list() {
+        // Tool lists are frozen at session launch, so hiding the spawn tools in
+        // `tools/list` cannot bind an agent whose state changed afterwards — a
+        // subagent launched before its promotion, or promoted after its launch,
+        // holds a stale list either way. Only this check runs against the
+        // caller's state at the moment it acts. It must also come BEFORE the
+        // dispatch match, or the handler has already run by the time it refuses.
+        let source = calls_source();
+        let body = function_body(&source, "pub async fn call_tool(");
+
+        let gate_at = body
+            .find("is_spawn_style_tool(name)")
+            .expect("call_tool gates the spawn-style tools at dispatch");
+        let dispatch_at = body
+            .find("match canonical_tool_name(name)")
+            .expect("call_tool dispatches on the canonical tool name");
+        assert!(
+            gate_at < dispatch_at,
+            "the spawn gate must refuse BEFORE the tool dispatches"
+        );
+        // Matched on the WIRE name: `canonical_tool_name` would map the
+        // deprecated `create_subagent` spelling onto `spawn_subagent` and let a
+        // launch-frozen subagent walk around the gate under the old name.
+        assert!(
+            !body[..gate_at].contains("canonical_tool_name(name)"),
+            "the spawn gate must match the wire name, not the canonicalized one"
+        );
+    }
+
+    #[test]
+    fn close_agent_takes_the_targets_permit_before_any_workspace_lease() {
+        // H1: a close mutates a session that need not be in the caller's link
+        // tree or workspace, so it must take that session's mutation permit —
+        // otherwise it runs straight through a workflow holding control. And it
+        // must take it OUTERMOST (PR1227-LOCK-01): the reverse order is what
+        // `api/session_admission_tests.rs` proves deadlocks against
+        // retire/purge, which hold every session permit in a workspace and then
+        // reach for that workspace's exclusive lease.
+        let source = calls_source();
+        let body = function_body(&source, "async fn close_agent(");
+
+        let permit_at = body
+            .find("admit_peer_mutation(")
+            .expect("close_agent takes the target session's mutation permit");
+        let lease_at = body
+            .find("lease_target_workspace_for_peer_write(")
+            .expect("close_agent leases the target workspace");
+        let close_at = body
+            .find("close_live_session(")
+            .expect("close_agent closes the live session");
+
+        assert!(
+            body[permit_at..lease_at].contains("SessionMutationKind::Close"),
+            "the permit must be taken for the Close kind"
+        );
+        assert!(
+            permit_at < lease_at,
+            "the session mutation permit must be taken BEFORE the workspace lease"
+        );
+        assert!(
+            lease_at < close_at,
+            "both gates must be held across the close itself"
+        );
+        // The attribution stamp is what arms a deferred close, so it must land
+        // under the permit too — a refused call must arm nothing.
+        let stamp_at = body
+            .find("record_close_attribution(")
+            .expect("close_agent records who closed the agent and why");
+        assert!(
+            permit_at < stamp_at,
+            "the close request must not be armed by a call the fence would refuse"
+        );
+        // Order is only half of it: both guards must be HELD to the end of the
+        // scope. `let _ = admit_peer_mutation(...)` drops the permit at the end
+        // of its own statement, destroys the fence, and leaves every ordering
+        // assertion above still passing — so the bindings are pinned by name.
+        let held = squashed(body);
+        assert!(
+            held.contains("let _admission_permit = admit_peer_mutation("),
+            "the permit must be BOUND (`let _admission_permit = ...`), not dropped at the \
+             end of its own statement"
+        );
+        assert!(
+            held.contains("let _target_workspace_lease = lease_target_workspace_for_peer_write("),
+            "the workspace lease must be BOUND (`let _target_workspace_lease = ...`), not \
+             dropped at the end of its own statement"
+        );
+    }
+
+    #[test]
+    fn the_deferred_half_of_a_soft_close_retakes_the_same_gates_in_the_same_order() {
+        // The requesting call returned long ago and control can be acquired in
+        // between, so the turn-finish completion cannot carry the gates — it
+        // re-takes them, and in the same order, or the deferred path becomes a
+        // second lock order.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/domains/sessions/ownership/hooks.rs");
+        let source = std::fs::read_to_string(&path).expect("read ownership/hooks.rs");
+        // The one body both deferred callers (turn finish, boot reconciliation)
+        // go through.
+        let body = function_body(&source, "async fn complete_close_request(");
+
+        let permit_at = body
+            .find("admit_peer_mutation(")
+            .expect("the deferred close takes the target's mutation permit");
+        let lease_at = body
+            .find("lease_target_workspace_for_peer_write(")
+            .expect("the deferred close leases the target workspace");
+        let close_at = body
+            .find("close_live_session(")
+            .expect("the deferred close closes the live session");
+
+        assert!(body[permit_at..lease_at].contains("SessionMutationKind::Close"));
+        assert!(permit_at < lease_at);
+        assert!(lease_at < close_at);
+        // Held, not merely called — same reason as the synchronous half.
+        let held = squashed(body);
+        assert!(
+            held.contains("let _permit = match admit_peer_mutation("),
+            "the deferred permit must be BOUND across the close"
+        );
+        assert!(
+            held.contains("let _lease = match lease_target_workspace_for_peer_write("),
+            "the deferred workspace lease must be BOUND across the close"
+        );
+    }
+
     #[test]
     fn an_open_target_in_another_workspace_is_reachable() {
-        let store = store_fixture();
+        let (store, links) = store_and_links_fixture();
 
-        let prepared = prepare_agent_message(&store, "ses_caller", "ses_target", "Ship it?")
+        let prepared = prepare_agent_message(&store, &links, "ses_caller", "ses_target", "Ship it?")
             .expect("prepare message");
 
         assert_eq!(prepared.target.id, "ses_target");
@@ -429,13 +638,13 @@ mod tests {
 
     #[test]
     fn a_closed_target_is_rejected_before_any_prompt_is_built() {
-        let store = store_fixture();
+        let (store, links) = store_and_links_fixture();
         let mut closed = session_record("ses_closed", "workspace-1", Some("Retired"));
         closed.closed_at = Some("2026-08-08T01:00:00Z".to_string());
         closed.status = "closed".to_string();
         store.insert(&closed).expect("insert closed target");
 
-        let error = prepare_agent_message(&store, "ses_caller", "ses_closed", "Ship it?")
+        let error = prepare_agent_message(&store, &links, "ses_caller", "ses_closed", "Ship it?")
             .err()
             .expect("closed target is rejected");
 
@@ -448,12 +657,12 @@ mod tests {
 
     #[test]
     fn a_dismissed_target_is_rejected_before_the_boot_path_can_fail_opaquely() {
-        let store = store_fixture();
+        let (store, links) = store_and_links_fixture();
         let mut dismissed = session_record("ses_dismissed", "workspace-1", Some("Deleted"));
         dismissed.dismissed_at = Some("2026-08-08T01:00:00Z".to_string());
         store.insert(&dismissed).expect("insert dismissed target");
 
-        let error = prepare_agent_message(&store, "ses_caller", "ses_dismissed", "Ship it?")
+        let error = prepare_agent_message(&store, &links, "ses_caller", "ses_dismissed", "Ship it?")
             .err()
             .expect("dismissed target is rejected");
 
@@ -469,12 +678,12 @@ mod tests {
 
     #[test]
     fn an_internal_only_target_is_not_a_peer() {
-        let store = store_fixture();
+        let (store, links) = store_and_links_fixture();
         let mut internal = session_record("ses_internal", "workspace-1", Some("Workflow step"));
         internal.mcp_binding_policy = SessionMcpBindingPolicy::InternalOnly;
         store.insert(&internal).expect("insert internal target");
 
-        let error = prepare_agent_message(&store, "ses_caller", "ses_internal", "Ship it?")
+        let error = prepare_agent_message(&store, &links, "ses_caller", "ses_internal", "Ship it?")
             .err()
             .expect("internal-only target is rejected");
         assert!(matches!(
@@ -491,10 +700,54 @@ mod tests {
     }
 
     #[test]
-    fn an_agent_cannot_message_itself() {
-        let store = store_fixture();
+    fn an_end_requested_target_is_refused_and_told_why() {
+        // The soft-close window: the ownership row is stamped but still open,
+        // so the session is not closed and `authorize` lets the send through.
+        // A prompt accepted here would enqueue and then never run — the actor
+        // starts no turn while a close is pending, and after the close it never
+        // boots again — so the send is refused at the door with a reason the
+        // calling agent can act on.
+        let (store, links) = store_and_links_fixture();
+        let link = links
+            .create_link(CreateSessionLinkInput {
+                relation: SessionLinkRelation::Subagent,
+                parent_session_id: "ses_caller".to_string(),
+                child_session_id: "ses_target".to_string(),
+                workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+                label: Some("Schema audit".to_string()),
+                created_by_turn_id: None,
+                created_by_tool_call_id: None,
+            })
+            .expect("link the target as a subagent");
 
-        let error = prepare_agent_message(&store, "ses_caller", "ses_caller", "Ship it?")
+        // Negative control: before the stamp, the very same send is accepted.
+        prepare_agent_message(&store, &links, "ses_caller", "ses_target", "Ship it?")
+            .expect("an open, un-requested target takes messages");
+
+        links
+            .record_close_attribution(&link.id, "ses_caller", Some("superseded"))
+            .expect("stamp the close request");
+
+        let error = prepare_agent_message(&store, &links, "ses_caller", "ses_target", "Ship it?")
+            .err()
+            .expect("an end-requested target is refused");
+        assert!(matches!(error, AgentMessageError::TargetEndRequested));
+        assert!(
+            error.to_string().contains("takes no new messages"),
+            "unexpected message: {error}"
+        );
+
+        // Reads are unaffected: closing removes the agent, not its record, and
+        // the same is true while it is on its way out.
+        authorize_transcript_read(&store, "ses_caller", "ses_target")
+            .expect("an end-requested agent's transcript stays readable");
+    }
+
+    #[test]
+    fn an_agent_cannot_message_itself() {
+        let (store, links) = store_and_links_fixture();
+
+        let error = prepare_agent_message(&store, &links, "ses_caller", "ses_caller", "Ship it?")
             .err()
             .expect("self send is rejected");
 
@@ -506,9 +759,9 @@ mod tests {
 
     #[test]
     fn an_unknown_target_is_named_in_the_error() {
-        let store = store_fixture();
+        let (store, links) = store_and_links_fixture();
 
-        let error = prepare_agent_message(&store, "ses_caller", "ses_ghost", "Ship it?")
+        let error = prepare_agent_message(&store, &links, "ses_caller", "ses_ghost", "Ship it?")
             .err()
             .expect("unknown target is rejected");
 
@@ -520,14 +773,14 @@ mod tests {
 
     #[test]
     fn a_closed_agents_transcript_stays_readable() {
-        let store = store_fixture();
+        let (store, links) = store_and_links_fixture();
         let mut closed = session_record("ses_closed", "workspace-1", Some("Retired"));
         closed.closed_at = Some("2026-08-08T01:00:00Z".to_string());
         closed.status = "closed".to_string();
         store.insert(&closed).expect("insert closed target");
 
         // The same target that refuses a send.
-        prepare_agent_message(&store, "ses_caller", "ses_closed", "Ship it?")
+        prepare_agent_message(&store, &links, "ses_caller", "ses_closed", "Ship it?")
             .err()
             .expect("closed target refuses sends");
         let target = authorize_transcript_read(&store, "ses_caller", "ses_closed")
@@ -556,9 +809,9 @@ mod tests {
 
     #[test]
     fn a_blank_message_is_rejected() {
-        let store = store_fixture();
+        let (store, links) = store_and_links_fixture();
 
-        let error = prepare_agent_message(&store, "ses_caller", "ses_target", "  \n ")
+        let error = prepare_agent_message(&store, &links, "ses_caller", "ses_target", "  \n ")
             .err()
             .expect("blank message is rejected");
 
@@ -567,9 +820,9 @@ mod tests {
 
     #[test]
     fn the_target_receives_the_envelope_and_the_row_stores_exactly_that_text() {
-        let store = store_fixture();
+        let (store, links) = store_and_links_fixture();
 
-        let prepared = prepare_agent_message(&store, "ses_caller", "ses_target", "Ship it?")
+        let prepared = prepare_agent_message(&store, &links, "ses_caller", "ses_target", "Ship it?")
             .expect("prepare message");
 
         assert_eq!(

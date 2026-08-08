@@ -77,6 +77,12 @@ pub(super) fn summaries_to_json(
                 "modeId": summary.mode_id,
                 "createdAt": summary.created_at,
                 "closedAt": summary.closed_at,
+                // Ownership state, so a parent reading its roster can tell a
+                // subordinate child from a promoted peer without a second call.
+                "promoted": summary.promoted_at.is_some(),
+                "promotedAt": summary.promoted_at,
+                "closedBySessionId": summary.closed_by_session_id,
+                "closeReason": summary.close_reason,
             })
         })
         .collect()

@@ -1427,6 +1427,7 @@ function deriveToolCallSemanticKind(
     || normalizedEffectiveToolName === "mcp__subagents__read_subagent_events"
     || normalizedEffectiveToolName === "mcp__subagents__read_subagent_latest_turns"
     || normalizedEffectiveToolName === "mcp__subagents__search_subagent_transcript"
+    || normalizedEffectiveToolName === "mcp__subagents__promote_subagent"
     || normalizedEffectiveToolName === "mcp__subagents__close_agent"
     || normalizedEffectiveToolName === "mcp__subagents__close_subagent"
     // Peer agent ops. They are not subagent operations, but "subagent" is the

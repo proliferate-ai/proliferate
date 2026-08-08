@@ -217,6 +217,16 @@ fn from_contract_session_link(
         created_by_tool_call_id: record.created_by_tool_call_id,
         created_at: record.created_at,
         closed_at: record.closed_at,
+        // The mobility archive contract does not carry ownership state, so an
+        // imported link lands unpromoted with no close attribution. That is the
+        // fail-CLOSED direction: a promoted agent that moves workspaces comes
+        // back as a plain subagent (fewer tools, cascade-closable) rather than
+        // as an agent nobody can account for. Carrying the three columns means
+        // widening `MobilitySessionLinkRecord`, which is a wire-contract change
+        // and an SDK regeneration.
+        promoted_at: None,
+        closed_by_session_id: None,
+        close_reason: None,
     })
 }
 

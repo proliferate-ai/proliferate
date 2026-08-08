@@ -13,18 +13,21 @@ use super::config_ops::{
 };
 use super::context::AgentOpsMcpContext;
 use super::peer_ops::{
-    admit_peer_mutation, assert_workspace_can_be_mutated, authorize_transcript_read,
-    consume_reply_wake, lease_target_workspace_for_peer_write, prepare_agent_message,
+    admit_peer_mutation, assert_target_still_takes_messages, assert_workspace_can_be_mutated,
+    authorize_transcript_read, consume_reply_wake, lease_target_workspace_for_peer_write,
+    prepare_agent_message,
 };
 use super::tools::{
-    canonical_tool_name, ChildSessionArgs, ConfigureAgentArgs, CreateSubagentArgs,
-    GetAgentConfigOptionsArgs, ListAgentsArgs, ReadAgentTranscriptArgs, ReadAgentTranscriptMode,
-    ReadSubagentEventsArgs, ReadSubagentLatestTurnsArgs, ScheduleAgentWakeArgs,
-    SearchSubagentTranscriptArgs, SendAgentMessageArgs, SendSubagentMessageArgs,
+    canonical_tool_name, is_spawn_style_tool, ChildSessionArgs, CloseAgentArgs, ConfigureAgentArgs,
+    CreateSubagentArgs, GetAgentConfigOptionsArgs, ListAgentsArgs, PromoteSubagentArgs,
+    ReadAgentTranscriptArgs, ReadAgentTranscriptMode, ReadSubagentEventsArgs,
+    ReadSubagentLatestTurnsArgs, ScheduleAgentWakeArgs, SearchSubagentTranscriptArgs,
+    SendAgentMessageArgs, SendSubagentMessageArgs,
 };
 use super::AgentOpsPeerGates;
 use crate::domains::sessions::admission::SessionMutationKind;
 use crate::domains::sessions::authorize::{authorize, AgentAccessIntent};
+use crate::domains::sessions::ownership::service::{AgentOwnershipService, OwnedAgent};
 use crate::domains::sessions::delegation::{
     parent_to_child_provenance, READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT,
 };
@@ -45,11 +48,27 @@ pub async fn call_tool(
     service: &SubagentService,
     wake_service: &AgentWakeService,
     session_runtime: &SessionRuntime,
+    ownership: &AgentOwnershipService,
     gates: &AgentOpsPeerGates,
     ctx: &AgentOpsMcpContext,
     name: &str,
     arguments: Option<Value>,
 ) -> anyhow::Result<Value> {
+    // The spawn gate, at dispatch. `tools/list` also hides these, but that list
+    // is baked into a session at launch: a subagent launched before promotion
+    // holds a stale list forever, and one promoted afterwards holds a list that
+    // never showed them. Only this check runs against the caller's state at the
+    // moment it acts, so this — not the advertisement — is the gate. The wire
+    // name is matched, not the canonical one, so the deprecated `create_subagent`
+    // spelling cannot walk around it.
+    if ctx.is_unpromoted_subagent && is_spawn_style_tool(name) {
+        return Err(anyhow::anyhow!(
+            "{name} is not available to a subagent. You are running as another agent's subagent, \
+             so you cannot spawn agents of your own; ask the agent that spawned you to promote \
+             you, or to spawn what you need."
+        ));
+    }
+
     match canonical_tool_name(name) {
         "get_subagent_launch_options" => get_subagent_launch_options(service, session_runtime, ctx),
         "spawn_subagent" => {
@@ -182,9 +201,13 @@ pub async fn call_tool(
                 })
                 .map_err(anyhow::Error::from)
         }
+        "promote_subagent" => {
+            let args: PromoteSubagentArgs = deserialize_args(arguments)?;
+            promote_subagent(ownership, ctx, args)
+        }
         "close_agent" => {
-            let args: ChildSessionArgs = deserialize_args(arguments)?;
-            close_agent(service, session_runtime, &ctx.parent_session_id, args).await
+            let args: CloseAgentArgs = deserialize_args(arguments)?;
+            close_agent(service, session_runtime, ownership, gates, ctx, args).await
         }
         _ => Err(anyhow::anyhow!("unknown tool: {name}")),
     }
@@ -433,6 +456,11 @@ async fn send_subagent_message(
         &link.child_session_id,
         AgentAccessIntent::Send,
     )?;
+    // The same refusal the peer send makes: a child whose end has been
+    // requested is finishing one last step and will never run another prompt.
+    // This is the tool a PARENT uses on its own child, which is exactly the
+    // agent most likely to be end-requested.
+    assert_target_still_takes_messages(service.link_service(), &link.child_session_id)?;
     let wake_scheduled = if args.wake_on_completion {
         service
             .schedule_wake_for_target(parent_session_id, args.subagent_id.as_deref(), None)?
@@ -571,6 +599,7 @@ async fn send_agent_message(
 ) -> anyhow::Result<Value> {
     let prepared = prepare_agent_message(
         service.session_store(),
+        service.link_service(),
         &ctx.parent_session_id,
         args.session_id.trim(),
         &args.message,
@@ -942,42 +971,169 @@ async fn get_subagent_status(
     }))
 }
 
+/// Promote one of the caller's subagents to a peer.
+///
+/// Ownership, not reachability, so it resolves an ownership ROW rather than
+/// going through `authorize` — the runtime-wide funnel deliberately answers a
+/// different question (who may I reach), and every agent may reach every other
+/// one. Only the parent that spawned this child can promote it.
+///
+/// One indexed UPDATE against a link row in the caller's own workspace, and no
+/// session actor is touched, so this takes the route's workspace lease
+/// (`MUTATING_TOOL_NAMES`) and no session mutation permit: there is no session
+/// mutation to admit.
+fn promote_subagent(
+    ownership: &AgentOwnershipService,
+    ctx: &AgentOpsMcpContext,
+    args: PromoteSubagentArgs,
+) -> anyhow::Result<Value> {
+    let owned = ownership.resolve_owned(
+        &ctx.parent_session_id,
+        args.subagent_id.as_deref(),
+        args.session_id.as_deref(),
+    )?;
+    let outcome = ownership.promote(&owned)?;
+    Ok(json!({
+        "subagentId": outcome.link.public_id,
+        "sessionLinkId": outcome.link.id,
+        "sessionId": outcome.link.child_session_id,
+        "label": outcome.link.label,
+        "promoted": true,
+        "alreadyPromoted": outcome.already_promoted,
+        "promotedAt": outcome.promoted_at,
+        // The two consequences the calling agent has to reason about, stated
+        // rather than implied: it is off the cascade, and off the fanout cap.
+        "closesWithYou": false,
+        "countsAgainstSubagentLimit": false,
+    }))
+}
+
+/// Close an agent the caller owns.
+///
+/// Generalizes the old link-scoped `close_subagent`: same close tree underneath,
+/// but the target is resolved through ownership and may be an agent in another
+/// workspace, so this takes its own fence instead of the route's — the TARGET's
+/// session mutation permit FIRST, then the TARGET workspace's write lease
+/// (PR1227-LOCK-01). A close is the most destructive session mutation there is,
+/// so skipping the permit would let it run straight through a workflow that has
+/// taken control of that session.
+///
+/// Soft close (ADR §4): a target that is mid-turn is not interrupted. The
+/// attribution stamp on the still-open ownership row IS the durable request,
+/// and `ownership::hooks` completes it when that turn finishes.
 async fn close_agent(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
-    parent_session_id: &str,
-    args: ChildSessionArgs,
+    ownership: &AgentOwnershipService,
+    gates: &AgentOpsPeerGates,
+    ctx: &AgentOpsMcpContext,
+    args: CloseAgentArgs,
 ) -> anyhow::Result<Value> {
-    let link = service.resolve_target_including_closed(
-        parent_session_id,
+    let owned = ownership.resolve_owned(
+        &ctx.parent_session_id,
         args.subagent_id.as_deref(),
-        None,
+        args.session_id.as_deref(),
     )?;
-    let already_closed = link.closed_at.is_some();
-    let now = chrono::Utc::now().to_rfc3339();
-    if let Some(child) = service.session_store().find_by_id(&link.child_session_id)? {
-        if child.closed_at.is_none() {
-            session_runtime
-                .close_live_session(&link.child_session_id)
-                .await
-                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        }
+    let reason = args
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty());
+
+    // Already closed: idempotent, and the FIRST close's attribution is what the
+    // row keeps. Return before any gate — there is nothing left to admit.
+    if owned.link.closed_at.is_some() || owned.target.closed_at.is_some() {
+        let settled = ownership.reload_link(&owned.link)?;
+        return Ok(close_result(&owned, &settled, false));
     }
-    if !already_closed {
-        service.close_link(&link, &now)?;
+
+    // The caller's own workspace still has to be writable — the route stopped
+    // checking when this tool left `MUTATING_TOOL_NAMES`.
+    assert_workspace_can_be_mutated(service.access_gate(), &ctx.workspace_id)?;
+    let _admission_permit = admit_peer_mutation(
+        &gates.session_admission,
+        &owned.target.id,
+        SessionMutationKind::Close,
+    )
+    .await?;
+    let _target_workspace_lease = lease_target_workspace_for_peer_write(
+        &gates.workspace_operation_gate,
+        service.access_gate(),
+        &owned.target.workspace_id,
+    )
+    .await?;
+
+    // Stamped under the permit, so the request cannot be armed by a call the
+    // fence would have refused.
+    ownership.record_close_attribution(&owned, &ctx.parent_session_id, reason)?;
+
+    if is_mid_turn(session_runtime, &owned).await {
+        // End requested. The row is stamped and open; the turn-finish hook
+        // takes this same pair of gates again and finishes the job.
+        let requested = ownership.reload_link(&owned.link)?;
+        return Ok(close_result(&owned, &requested, true));
     }
-    let refreshed = service.resolve_target_including_closed(
-        parent_session_id,
-        args.subagent_id.as_deref(),
-        None,
-    )?;
-    Ok(json!({
-        "subagentId": refreshed.public_id,
-        "sessionLinkId": refreshed.id,
-        "childSessionId": refreshed.child_session_id,
-        "label": refreshed.label,
-        "closed": true,
-        "alreadyClosed": already_closed,
-        "closedAt": refreshed.closed_at.unwrap_or(now),
-    }))
+
+    session_runtime
+        .close_live_session(&owned.target.id)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+    // The cascade closes the inbound ownership row itself; this covers the case
+    // where the row somehow outlived it, and keeps the close retryable when the
+    // live close failed above (the link stays open, so does the request).
+    let settled = ownership.reload_link(&owned.link)?;
+    let settled = if settled.closed_at.is_none() {
+        ownership.close_link(&settled, &chrono::Utc::now().to_rfc3339())?;
+        ownership.reload_link(&settled)?
+    } else {
+        settled
+    };
+    Ok(close_result(&owned, &settled, false))
+}
+
+/// Whether the target is actually working right now.
+///
+/// Only `Running` defers. `AwaitingInteraction` is a turn that cannot finish
+/// without a human answering a prompt, so "let it finish first" would mean
+/// "never"; `Starting` has no turn to finish and may never emit one. Both close
+/// immediately, which is also what the caller means by "stop this agent".
+async fn is_mid_turn(session_runtime: &SessionRuntime, owned: &OwnedAgent) -> bool {
+    matches!(
+        session_runtime
+            .session_execution_summary(&owned.target)
+            .await
+            .phase,
+        anyharness_contract::v1::SessionExecutionPhase::Running
+    )
+}
+
+fn close_result(
+    owned: &OwnedAgent,
+    settled: &crate::domains::sessions::links::model::SessionLinkRecord,
+    close_requested: bool,
+) -> Value {
+    json!({
+        "subagentId": settled.public_id,
+        "sessionLinkId": settled.id,
+        "sessionId": settled.child_session_id,
+        // The pre-agent-ops field name, kept so a session still holding the
+        // `close_subagent` tool list reads the same shape back.
+        "childSessionId": settled.child_session_id,
+        "label": settled.label,
+        // The link OR the session: the pre-gate early return already treats
+        // either one as closed, and reporting only the link would claim a stop
+        // that did not happen if a repair path ever closed a link out from
+        // under a living session.
+        "closed": settled.closed_at.is_some() || owned.target.closed_at.is_some(),
+        "closeRequested": close_requested,
+        "alreadyClosed": owned.link.closed_at.is_some() || owned.target.closed_at.is_some(),
+        "closedAt": settled.closed_at,
+        "closedBySessionId": settled.closed_by_session_id,
+        "closeReason": settled.close_reason,
+        "message": if close_requested {
+            "That agent is mid-step. It will finish the step it is on, then stop."
+        } else {
+            "That agent is closed. Its transcript stays readable."
+        },
+    })
 }

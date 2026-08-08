@@ -18,6 +18,7 @@ use crate::domains::plans::session_observer::PlanSessionObserver;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::session_observer::ReviewSessionObserver;
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::links::store::SessionLinkStore;
 use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::model::{ActorCapabilities, PermissionAdvisor, SessionEventObserver};
@@ -64,6 +65,9 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
         background: Arc::new(store.clone()),
         state: Arc::new(store.clone()),
         attachments: Arc::new(SessionAttachmentSource::new(store, attachment_storage)),
+        // The soft-close fence on turn starts: an agent whose end has been
+        // requested finishes its step and starts nothing new.
+        close_requests: Some(Arc::new(SessionLinkStore::new(deps.db.clone()))),
         observers,
         permission_advisor,
     };
