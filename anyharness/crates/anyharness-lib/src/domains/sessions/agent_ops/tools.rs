@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 
 use super::context::AgentOpsMcpContext;
 use crate::domains::sessions::delegation::READ_EVENTS_MAX_LIMIT;
+use crate::domains::sessions::store::SESSION_SEARCH_MAX_LIMIT;
 use crate::integrations::mcp::tools::tool_definition;
 
 /// Pre-agent-ops tool names, mapped to what they dispatch to now. Sessions bake
@@ -14,7 +15,17 @@ pub const DEPRECATED_TOOL_ALIASES: &[(&str, &str)] = &[
 ];
 
 // Aliases are listed too: this is matched on the wire name to decide whether a
-// call takes the workspace write lease.
+// call takes the ROUTE's workspace write lease — the lease on the workspace in
+// the URL, which is always the caller's.
+//
+// `send_agent_message` is deliberately absent. It is the one tool here whose
+// target can live in another workspace, so the caller's lease is the wrong one
+// and it takes the TARGET workspace's lease itself
+// (`peer_ops::lease_target_workspace_for_send`), together with the target
+// session's mutation permit. That is also the only way to keep the canonical
+// `permit -> workspace lease` order: a route lease taken before the permit is
+// the reversed order `api/session_admission_tests.rs` proves deadlocks against
+// retire/purge. Absent here means "leases itself", never "mutates nothing".
 pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "spawn_subagent",
     "create_subagent",
@@ -85,6 +96,53 @@ pub struct ReadSubagentLatestTurnsArgs {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ListAgentsArgs {
+    #[serde(default)]
+    pub query: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    #[serde(default)]
+    pub include_closed: bool,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendAgentMessageArgs {
+    pub session_id: String,
+    pub message: String,
+}
+
+#[derive(Debug, Default, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadAgentTranscriptMode {
+    #[default]
+    LatestTurns,
+    Search,
+    Events,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadAgentTranscriptArgs {
+    pub session_id: String,
+    #[serde(default)]
+    pub mode: ReadAgentTranscriptMode,
+    #[serde(default)]
+    pub query: Option<String>,
+    #[serde(default)]
+    pub since_seq: Option<i64>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchSubagentTranscriptArgs {
     #[serde(default)]
     pub subagent_id: Option<String>,
@@ -94,6 +152,9 @@ pub struct SearchSubagentTranscriptArgs {
 }
 
 pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
+    // Peer messaging and peer reads are unconditional: reach is runtime-wide,
+    // and every agent has them — including an unpromoted subagent, which loses
+    // only the spawn-style tools.
     let mut tools = vec![
         tool_definition(
             "get_subagent_launch_options",
@@ -104,6 +165,56 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
             "list_subagents",
             "List child sessions owned by this parent session.",
             json!({ "type": "object", "properties": {} }),
+        ),
+        tool_definition(
+            "list_agents",
+            "List or search agent sessions across every workspace. Search by title or subagent label, or pass sessionId to resolve one id to its title. Returns a page ordered most-recently-active first, plus a nextCursor when more remain.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "Case-insensitive substring matched against session titles and subagent labels." },
+                    "sessionId": { "type": "string", "description": "Exact session id lookup." },
+                    "workspaceId": { "type": "string", "description": "Restrict to one workspace. Omit to search every workspace." },
+                    "includeClosed": { "type": "boolean", "description": "Include closed agents. Their transcripts stay readable; they take no messages." },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": SESSION_SEARCH_MAX_LIMIT
+                    },
+                    "cursor": { "type": "string", "description": "nextCursor from a previous call." }
+                }
+            }),
+        ),
+        tool_definition(
+            "send_agent_message",
+            "Send a message to any open agent session in any workspace. The target receives your message verbatim inside an envelope naming you and your session id, so it can reply with send_agent_message. A busy target queues the message and reads it on its next turn; an idle one starts up; a closed one is rejected.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string", "description": "Target agent's session id. Use list_agents to find it." },
+                    "message": { "type": "string", "description": "Message body, delivered verbatim." }
+                },
+                "required": ["sessionId", "message"]
+            }),
+        ),
+        tool_definition(
+            "read_agent_transcript",
+            "Read a bounded slice of any agent session's transcript, including closed ones. mode=latest_turns summarizes recent turns, mode=search finds matching text, mode=events returns a sanitized event slice from sinceSeq.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string", "description": "Session to read." },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["latest_turns", "search", "events"],
+                        "description": "Defaults to latest_turns."
+                    },
+                    "query": { "type": "string", "description": "Required when mode is search." },
+                    "sinceSeq": { "type": "integer", "description": "Cursor for mode=events." },
+                    "limit": { "type": "integer", "minimum": 1 }
+                },
+                "required": ["sessionId"]
+            }),
         ),
     ];
 
@@ -317,6 +428,34 @@ mod tests {
         assert!(names.contains(&"schedule_subagent_wake"));
         assert!(names.contains(&"get_subagent_status"));
         assert!(names.contains(&"read_subagent_events"));
+    }
+
+    #[test]
+    fn peer_messaging_and_reads_are_offered_to_every_caller() {
+        // A caller with no children and no spawn rights is the unpromoted
+        // subagent case: it keeps messaging, listing and reading.
+        for ctx in [context(true, 2), context(false, 0)] {
+            let tools = build_tool_list(&ctx);
+            let names = tool_names(&tools);
+
+            assert!(names.contains(&"list_agents"));
+            assert!(names.contains(&"send_agent_message"));
+            assert!(names.contains(&"read_agent_transcript"));
+        }
+    }
+
+    #[test]
+    fn send_agent_message_leases_in_the_call_not_at_the_route() {
+        // Not a read tool: it takes the TARGET workspace's SubagentWrite lease
+        // and the target session's mutation permit inside the call, in that
+        // order. The route's lease is the caller's workspace and would have to
+        // be taken before the permit, which is the reversed lock order.
+        assert!(!MUTATING_TOOL_NAMES.contains(&"send_agent_message"));
+        // The link-scoped sibling still leases at the route: its target is
+        // always in the caller's workspace.
+        assert!(MUTATING_TOOL_NAMES.contains(&"send_subagent_message"));
+        assert!(!MUTATING_TOOL_NAMES.contains(&"list_agents"));
+        assert!(!MUTATING_TOOL_NAMES.contains(&"read_agent_transcript"));
     }
 
     #[test]

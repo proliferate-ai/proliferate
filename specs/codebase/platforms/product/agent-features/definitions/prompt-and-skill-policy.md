@@ -116,6 +116,43 @@ Provenance should be metadata, not prompt text. UI can display that a prompt was
 sent by a parent agent or product workflow without changing what the child
 session receives.
 
+#### Peer Agent Messages
+
+The metadata-only rule above was written for delegation, where the child
+already knows it was created by a parent and has the handles to answer it.
+Agent-to-agent messaging between peers has no such standing context: the
+receiver may be any session in the runtime, with no link to the sender.
+
+So a peer message is delivered inside a visible envelope:
+
+```text
+Message from agent "Deploy Checker" (session ses_abc123):
+
+<authored body, byte-for-byte verbatim>
+
+To reply, use send_agent_message with sessionId "ses_abc123".
+```
+
+Rules:
+
+- the authored body stays verbatim inside the envelope — the envelope adds
+  identity and a reply handle, never edits or summarizes the message
+- the envelope is built once, at send time, in the sessions domain — never by
+  the receiving actor, and never by two call sites that could disagree
+- one canonical text: what the harness receives is exactly what the transcript
+  stores. Storing a clean body and sending an envelope (or the reverse) is
+  forbidden — the transcript must stay an honest record of what the agent read
+- provenance metadata is still written beside the prompt, and that is what the
+  UI renders from. The client never parses the envelope text
+- this is the only case where a raw session id belongs in prompt text: it is
+  the handle the receiver must call back with
+- a peer send clears the same session-mutation admission fence as a human
+  prompt: it acquires the target session's `Prompt` permit with the external
+  source before dispatching, so a session a workflow run controls refuses a
+  peer message exactly as it refuses one from the HTTP prompt route
+
+Owner: `anyharness/crates/anyharness-lib/src/domains/sessions/prompt/envelope.rs`.
+
 ### Wake And Notification Prompts
 
 Wake prompts are operational. They should tell the parent what happened and
@@ -124,9 +161,12 @@ which tool/handle to use next.
 Subagent wake prompt:
 
 ```text
-Subagent "API Surface Check" finished a turn. Outcome: completed.
+Subagent "API Surface Check" completed a turn.
 
-Use read_subagent_latest_turns with subagentId "subagent_abc123" before continuing.
+subagentId: subagent_abc123
+Outcome: completed
+
+Use read_subagent_latest_turns or search_subagent_transcript with this subagentId before relying on the result.
 ```
 
 Review feedback prompt:
@@ -147,7 +187,18 @@ Rules:
   the workflow actually computed a judgment
 - point to the next tool or transcript artifact
 - keep long results in transcript artifacts or explicit read tools
-- avoid raw session/link ids in normal prompts
+- avoid raw session/link ids in normal prompts, except in a peer agent message's
+  envelope, where the sender's session id IS the reply handle
+
+A wake is only ever a pointer: label, id, outcome, next tool. It never carries
+the target's turn output — output can be arbitrarily large, the read tools have
+budgets for exactly that, and a wake must stay the same size no matter what the
+target did. Content reaches an agent only as an explicit message or an explicit
+read.
+
+Wake copy has the same owner as message copy
+(`domains/sessions/prompt/envelope.rs`), for the same reason: text and the
+provenance the UI renders from are produced as one value and cannot drift.
 
 ### Transcript Artifacts
 
@@ -205,7 +256,7 @@ apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts
 Product prompts:
 
 ```text
-anyharness/crates/anyharness-lib/src/domains/sessions/subagents/hooks.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/prompt/envelope.rs
 anyharness/crates/anyharness-lib/src/domains/sessions/agent_ops/definition.rs
 anyharness/crates/anyharness-lib/src/domains/reviews/runtime/launch.rs
 anyharness/crates/anyharness-lib/src/domains/reviews/service/detail.rs

@@ -1,13 +1,32 @@
 //! The single access-policy funnel every cross-agent operation clears.
 //!
-//! Today it encodes exactly two rules: sessions are visible runtime-wide (there
-//! is no per-workspace or per-owner scoping to apply), and a closed session
-//! stays readable but takes no more input. **It enforces no ownership check at
-//! all** — any caller may `Read` or `Send` to any target, runtime-wide. The
-//! link-scoped ownership check that makes agent-ops safe today lives entirely
-//! in `SubagentService::resolve_target` (and
-//! `resolve_target_including_closed`), which every mutating call site still
+//! Today it encodes reachability, not ownership: sessions are visible
+//! runtime-wide (there is no per-workspace or per-owner scoping to apply), a
+//! closed or dismissed session stays readable but takes no more input, an agent
+//! is not its own peer, and `internal_only` sessions are not peers at all —
+//! they are workflow/review plumbing the runtime drives, so they are refused as
+//! a target for both intents and hidden from `search_sessions`. **It enforces
+//! no ownership check at all** — any caller may `Read` or `Send` to any other
+//! ordinary target, runtime-wide.
+//!
+//! Refusing an `internal_only` target is a *discovery* rule, not the execution
+//! fence: a workflow-controlled session is refused a prompt by the session
+//! mutation admission permit the peer send takes
+//! ([`crate::domains::sessions::admission`]), which is what actually protects a
+//! run in flight. This module only keeps such sessions out of the peer surface.
+//!
+//! The link-scoped ownership check that keeps the *subagent* tool class safe lives
+//! entirely in `SubagentService::resolve_target` (and
+//! `resolve_target_including_closed`), which every subagent call site still
 //! runs before reaching this funnel.
+//!
+//! The peer tools (`send_agent_message`, `read_agent_transcript`) are the
+//! deliberate exception: they have no link to resolve and are specified to
+//! reach any session in the runtime, so for them this funnel is the *whole*
+//! policy. That is a scope decision, not an oversight — a peer message is an
+//! inbox item the receiver can ignore, whereas closing or promoting a session
+//! acts on it. Keep new tools on the resolve path unless the same reasoning
+//! applies.
 //!
 //! PR 5 is expected to route `close_agent`/promote through `authorize` with an
 //! ownership-aware intent. Do not add a `Close`/`Promote` variant to
@@ -18,7 +37,7 @@
 //! ability to close/promote every other session, and the current test suite
 //! here would not catch it (it asserts runtime-wide access *is* allowed).
 
-use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +65,12 @@ pub enum AgentAccessError {
     CallerClosed,
     #[error("target session is closed")]
     TargetClosed,
+    #[error("target session was dismissed and cannot be messaged")]
+    TargetDismissed,
+    #[error("target session is internal runtime plumbing, not a reachable agent")]
+    TargetInternalOnly,
+    #[error("an agent cannot message itself")]
+    SelfTarget,
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -65,8 +90,30 @@ pub fn authorize(
     let target = session_store
         .find_by_id(target_session_id)?
         .ok_or_else(|| AgentAccessError::TargetNotFound(target_session_id.to_string()))?;
-    if intent == AgentAccessIntent::Send && is_closed(&target) {
-        return Err(AgentAccessError::TargetClosed);
+    // Workflow and review plumbing is not part of the peer-reachable set. It is
+    // not an agent the human is running, it is a session another product
+    // feature drives; discovery hides it (`search_sessions`) and this refuses it
+    // for BOTH intents so the two surfaces agree.
+    if target.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly {
+        return Err(AgentAccessError::TargetInternalOnly);
+    }
+    if intent == AgentAccessIntent::Send {
+        // Self-send is the degenerate loop the rest of the design excludes
+        // structurally (`session_links` carries CHECK(parent != child)). Reads
+        // stay open: an agent re-reading its own transcript perturbs nothing.
+        if caller.id == target.id {
+            return Err(AgentAccessError::SelfTarget);
+        }
+        if is_closed(&target) {
+            return Err(AgentAccessError::TargetClosed);
+        }
+        // A dismissed session is gone from the human's sidebar and the boot path
+        // refuses it (`runtime/launch_policy.rs`), so a send would die deep
+        // inside the runtime with an internal error. Refuse it here instead;
+        // the transcript stays readable, exactly like a closed one.
+        if target.dismissed_at.is_some() {
+            return Err(AgentAccessError::TargetDismissed);
+        }
     }
     Ok(AgentAccess { caller, target })
 }
@@ -182,6 +229,70 @@ mod tests {
                 .expect("closed caller is rejected");
             assert!(matches!(error, AgentAccessError::CallerClosed));
         }
+    }
+
+    #[test]
+    fn dismissed_target_rejects_sends_but_stays_readable() {
+        let store = store_fixture();
+        store
+            .insert(&session_record("caller", "workspace-1"))
+            .expect("insert caller");
+        let mut target = session_record("target", "workspace-1");
+        target.dismissed_at = Some("2026-08-07T01:00:00Z".to_string());
+        store.insert(&target).expect("insert target");
+
+        let error = authorize(&store, "caller", "target", AgentAccessIntent::Send)
+            .err()
+            .expect("dismissed target rejects sends");
+        assert!(matches!(error, AgentAccessError::TargetDismissed));
+        assert_eq!(
+            error.to_string(),
+            "target session was dismissed and cannot be messaged"
+        );
+
+        authorize(&store, "caller", "target", AgentAccessIntent::Read)
+            .expect("dismissed target stays readable");
+    }
+
+    #[test]
+    fn an_internal_only_target_is_not_a_peer_in_either_direction() {
+        let store = store_fixture();
+        store
+            .insert(&session_record("caller", "workspace-1"))
+            .expect("insert caller");
+        let mut target = session_record("target", "workspace-1");
+        target.mcp_binding_policy = SessionMcpBindingPolicy::InternalOnly;
+        store.insert(&target).expect("insert target");
+
+        for intent in [AgentAccessIntent::Read, AgentAccessIntent::Send] {
+            let error = authorize(&store, "caller", "target", intent)
+                .err()
+                .expect("internal-only target is rejected");
+            assert!(matches!(error, AgentAccessError::TargetInternalOnly));
+        }
+
+        // The same caller reaching an ordinary session is untouched.
+        store
+            .insert(&session_record("peer", "workspace-2"))
+            .expect("insert peer");
+        authorize(&store, "caller", "peer", AgentAccessIntent::Send)
+            .expect("an ordinary target stays reachable");
+    }
+
+    #[test]
+    fn an_agent_cannot_send_to_itself_but_can_read_itself() {
+        let store = store_fixture();
+        store
+            .insert(&session_record("caller", "workspace-1"))
+            .expect("insert caller");
+
+        let error = authorize(&store, "caller", "caller", AgentAccessIntent::Send)
+            .err()
+            .expect("self send is rejected");
+        assert!(matches!(error, AgentAccessError::SelfTarget));
+
+        authorize(&store, "caller", "caller", AgentAccessIntent::Read)
+            .expect("reading your own transcript perturbs nothing");
     }
 
     #[test]

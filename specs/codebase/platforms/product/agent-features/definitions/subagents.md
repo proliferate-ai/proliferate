@@ -39,6 +39,22 @@ Subagents cannot create grandchildren. There are no top-level `modelId` or
 `modeId` fields in subagent tools; harness-specific launch configuration is
 carried through `initialConfig`.
 
+`subagentId` is the handle for the subagent tool class only. The peer tools in
+the same MCP — `list_agents`, `send_agent_message`, `read_agent_transcript` —
+address any session in the runtime and take `sessionId`, because there is no
+link to derive a scoped handle from. A subagent addressed as a peer is
+addressed by its session id like any other agent.
+
+"Any session in the runtime" means any session that is an *agent*. The
+peer-reachable set excludes dismissed sessions (deleted from the sidebar, and
+refused by the boot path), closed sessions unless explicitly asked for, the
+caller itself, and `internal_only` sessions — workflow and review plumbing the
+runtime drives, which are not agents the human is running. That is a discovery
+rule: `list_agents` hides them and `send_agent_message` /
+`read_agent_transcript` refuse them. It is not the execution fence — a session
+an active workflow run controls is refused a peer prompt by the same session
+mutation admission permit that fences the HTTP prompt route.
+
 ## Wake Race
 
 Wake scheduling is explicit and not retroactive. `wakeOnCompletion` on

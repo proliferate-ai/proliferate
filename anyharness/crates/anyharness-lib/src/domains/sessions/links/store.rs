@@ -309,6 +309,40 @@ impl SessionLinkStore {
     ) -> anyhow::Result<Option<SessionLinkRecord>> {
         self.find_parent_by_relation(SessionLinkRelation::Subagent, child_session_id)
     }
+
+    /// One query for a whole page of children. `list_agents` renders a subagent
+    /// by the label its parent gave it, and doing that per row is a query per
+    /// row; the page size is bounded but the shape is not.
+    ///
+    /// Rows come back in no particular order and a child has at most one open
+    /// subagent parent, so callers index by `child_session_id`.
+    pub fn find_subagent_parents(
+        &self,
+        child_session_ids: &[String],
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        if child_session_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.db.with_conn(|conn| {
+            let placeholders = std::iter::repeat("?")
+                .take(child_session_ids.len())
+                .collect::<Vec<_>>()
+                .join(",");
+            let sql = format!(
+                "SELECT * FROM session_links
+                 WHERE relation = ?
+                   AND closed_at IS NULL
+                   AND child_session_id IN ({placeholders})"
+            );
+            let mut bound = Vec::with_capacity(child_session_ids.len() + 1);
+            bound.push(SessionLinkRelation::Subagent.as_str());
+            bound.extend(child_session_ids.iter().map(String::as_str));
+            let mut stmt = conn.prepare(&sql)?;
+            let rows =
+                stmt.query_map(rusqlite::params_from_iter(bound.iter()), map_session_link)?;
+            rows.collect()
+        })
+    }
 }
 
 pub(crate) fn delete_session_link_rows_for_session_in_tx(

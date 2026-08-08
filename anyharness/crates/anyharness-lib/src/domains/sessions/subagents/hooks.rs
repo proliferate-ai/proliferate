@@ -8,7 +8,7 @@ use super::service::SubagentService;
 use crate::domains::sessions::extensions::{
     SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
 };
-use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
+use crate::domains::sessions::prompt::envelope::{subagent_wake, SubagentWakePointer};
 use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::live::sessions::LiveSessionManager;
 
@@ -69,17 +69,14 @@ async fn deliver_subagent_completion(
     // cannot target a controlled session and takes no admission permit
     // (threading one here would also wait on the actor callback context,
     // which the spec forbids).
-    let prompt = wake_prompt_text(
-        link.label.as_deref(),
-        link.public_id.as_deref(),
-        ctx.outcome,
-    );
-    let prompt_payload =
-        PromptPayload::text(prompt).with_provenance(PromptProvenance::SubagentWake {
-            session_link_id: link.id.clone(),
-            completion_id: completion.completion_id.clone(),
-            label: link.label.clone(),
-        });
+    let prompt_payload = subagent_wake(SubagentWakePointer {
+        session_link_id: &link.id,
+        completion_id: &completion.completion_id,
+        subagent_id: link.public_id.as_deref(),
+        label: link.label.as_deref(),
+        outcome: ctx.outcome,
+    })
+    .into_payload();
     let Some(inserted) = service.insert_completion_and_consume_schedule(
         &completion,
         &link.parent_session_id,
@@ -138,17 +135,4 @@ fn to_contract_outcome(outcome: SessionTurnOutcome) -> SubagentTurnOutcome {
         SessionTurnOutcome::Failed => SubagentTurnOutcome::Failed,
         SessionTurnOutcome::Cancelled => SubagentTurnOutcome::Cancelled,
     }
-}
-
-fn wake_prompt_text(
-    label: Option<&str>,
-    subagent_id: Option<&str>,
-    outcome: SessionTurnOutcome,
-) -> String {
-    let label = label.unwrap_or("subagent");
-    let subagent_id = subagent_id.unwrap_or("unknown");
-    format!(
-        "Subagent \"{label}\" completed a turn.\n\nsubagentId: {subagent_id}\nOutcome: {}\n\nUse read_subagent_latest_turns or search_subagent_transcript with this subagentId before relying on the result.",
-        outcome.as_str()
-    )
 }

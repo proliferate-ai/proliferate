@@ -5,12 +5,11 @@ use super::model::{
 };
 use super::store::{SubagentCompletionInsert, SubagentStore};
 use super::summary::completion_to_summary;
-use super::transcript::{
-    search_match_for_record, summarize_turn_events, LATEST_TURN_EVENT_BUDGET,
-    READ_LATEST_TURNS_DEFAULT_LIMIT, READ_LATEST_TURNS_MAX_LIMIT, SEARCH_EVENT_BUDGET,
-    SEARCH_TRANSCRIPT_DEFAULT_LIMIT, SEARCH_TRANSCRIPT_MAX_LIMIT,
-};
 use crate::domains::sessions::delegation::read_child_events;
+use crate::domains::sessions::transcript_read::{
+    search_session_transcript, summarize_turn_events, LATEST_TURN_EVENT_BUDGET,
+    READ_LATEST_TURNS_DEFAULT_LIMIT, READ_LATEST_TURNS_MAX_LIMIT,
+};
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
@@ -355,8 +354,22 @@ impl SubagentService {
         self.link_service.find_subagent_parent(child_session_id)
     }
 
+    /// Batched form of [`Self::find_subagent_parent`] for a page of sessions.
+    pub fn find_subagent_parents(
+        &self,
+        child_session_ids: &[String],
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.link_service.find_subagent_parents(child_session_ids)
+    }
+
     pub fn session_store(&self) -> &SessionStore {
         &self.session_store
+    }
+
+    /// The workspace access gate this service already holds — the peer send
+    /// needs it for the TARGET workspace, which the route layer never sees.
+    pub fn access_gate(&self) -> &WorkspaceAccessGate {
+        &self.access_gate
     }
 
     pub fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {
@@ -513,29 +526,8 @@ impl SubagentService {
     ) -> Result<Vec<SubagentTranscriptSearchMatch>, SubagentError> {
         let link =
             self.resolve_target_including_closed(parent_session_id, subagent_id, child_session_id)?;
-        let query = query.trim();
-        if query.is_empty() {
-            return Err(SubagentError::Internal(anyhow::anyhow!(
-                "query is required"
-            )));
-        }
-        let limit = limit
-            .unwrap_or(SEARCH_TRANSCRIPT_DEFAULT_LIMIT)
-            .clamp(1, SEARCH_TRANSCRIPT_MAX_LIMIT);
-        let needle = query.to_lowercase();
-        let records = self
-            .session_store
-            .list_events_limited(&link.child_session_id, SEARCH_EVENT_BUDGET)?;
-        let mut matches = Vec::new();
-        for record in records {
-            if matches.len() >= limit {
-                break;
-            }
-            if let Some(entry) = search_match_for_record(record, &needle, query.len()) {
-                matches.push(entry);
-            }
-        }
-        Ok(matches)
+        search_session_transcript(&self.session_store, &link.child_session_id, query, limit)
+            .map_err(SubagentError::Internal)
     }
 
     pub fn mobility_graph_for_sessions(
