@@ -39,6 +39,12 @@ Subagents cannot create grandchildren. There are no top-level `modelId` or
 `modeId` fields in subagent tools; harness-specific launch configuration is
 carried through `initialConfig`.
 
+`subagentId` is the handle for the subagent tool class only. The peer tools in
+the same MCP — `list_agents`, `send_agent_message`, `read_agent_transcript` —
+address any session in the runtime and take `sessionId`, because there is no
+link to derive a scoped handle from. A subagent addressed as a peer is
+addressed by its session id like any other agent.
+
 ## Wake Race
 
 Wake scheduling is explicit and not retroactive. `wakeOnCompletion` on
