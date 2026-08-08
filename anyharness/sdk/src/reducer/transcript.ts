@@ -1433,6 +1433,7 @@ function deriveToolCallSemanticKind(
     // Peer agent ops. They are not subagent operations, but "subagent" is the
     // only agent-activity semantic kind today; the dedicated presentation
     // lands with the agent-ops client work.
+    || normalizedEffectiveToolName === "mcp__subagents__spawn_agent"
     || normalizedEffectiveToolName === "mcp__subagents__send_agent_message"
     || normalizedEffectiveToolName === "mcp__subagents__list_agents"
     || normalizedEffectiveToolName === "mcp__subagents__read_agent_transcript"

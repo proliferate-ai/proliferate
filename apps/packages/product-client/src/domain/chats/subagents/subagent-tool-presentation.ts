@@ -44,6 +44,8 @@ export function formatSubagentMcpActionLabel(toolName: string | null | undefined
     case "mcp__subagents__close_agent":
     case "mcp__subagents__close_subagent":
       return "Closed agent";
+    case "mcp__subagents__spawn_agent":
+      return "Spawned agent";
     case "mcp__subagents__send_agent_message":
       return "Sent agent message";
     case "mcp__subagents__list_agents":
@@ -97,6 +99,11 @@ export function formatSubagentHeaderVerb({
   }
   // Peer agent ops. Without their own entries these fall through to the
   // creation verb below, which would claim a spawn that never happened.
+  // `spawn_agent` is the opposite hazard: it IS a spawn, but of a peer, and the
+  // fallback verb would call the new agent somebody's subagent.
+  if (toolName === "mcp__subagents__spawn_agent") {
+    return isRunning ? "Spawning agent" : "Agent spawned";
+  }
   if (toolName === "mcp__subagents__send_agent_message") {
     return isRunning ? "Sending message to agent" : "Message sent to agent";
   }
@@ -129,7 +136,9 @@ export function isSubagentCreationAction(item: ToolNameOwner): boolean {
   // Only the product-MCP spawn receipt collapses into a creation group (the
   // create_subagent name is its pre-agent-ops alias). Native subagent calls
   // stay as durable transcript items throughout their lifecycle and must not
-  // match here.
+  // match here. Neither does `spawn_agent`: the creation group is the subagent
+  // launch ledger, and a peer is nobody's subagent, so folding it in would put
+  // an owned agent under a parent's fanout in the UI.
   const toolName = normalizeToolName(item.nativeToolName);
   return toolName === "mcp__subagents__spawn_subagent"
     || toolName === "mcp__subagents__create_subagent";

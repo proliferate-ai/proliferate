@@ -2,6 +2,29 @@ use serde_json::{json, Value};
 
 use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::domains::sessions::runtime::SendPromptOutcome;
+use crate::domains::sessions::subagents::service::SubagentService;
+
+/// Undo a link-scoped `wakeOnCompletion` arm whose prompt then failed to
+/// dispatch. Shared by the spawn path and `send_subagent_message`, which arm
+/// the same row for the same reason.
+///
+/// Unlike the session-scoped reply arm, this row is not shared between callers:
+/// it is keyed by the link, and only the link's parent can arm it, so removing
+/// it takes nothing away from anybody else.
+pub(super) fn cleanup_wake_schedule_after_failed_dispatch(
+    service: &SubagentService,
+    session_link_id: &str,
+    context: &str,
+) {
+    if let Err(error) = service.delete_wake_schedule_for_link(session_link_id) {
+        tracing::warn!(
+            session_link_id,
+            context,
+            error = ?error,
+            "failed to clean up subagent wake schedule after dispatch failure"
+        );
+    }
+}
 
 pub(super) fn default_model_for_agent(
     catalog: &ResolvedWorkspaceLaunchOptions,

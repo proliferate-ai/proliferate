@@ -41,6 +41,8 @@ pub enum SubagentError {
     CrossWorkspace,
     #[error("subagent children cannot create subagents")]
     DepthLimit,
+    #[error("a subagent cannot spawn agents of its own until it is promoted")]
+    Subordinate,
     #[error("subagents are disabled for this session")]
     Disabled,
     #[error("parent already has the maximum number of subagents")]
@@ -90,42 +92,97 @@ impl SubagentService {
         }
     }
 
-    pub fn validate_parent_can_spawn(
+    /// The prechecks every agent creation shares, whatever the caller ends up
+    /// owning: the caller exists and is still open, its workspace is a standard
+    /// one, and creating agents is enabled for that session.
+    ///
+    /// What is deliberately NOT here is everything about SUBORDINATION — the
+    /// depth rule and the fanout cap — because those describe a linked
+    /// subagent, not a peer the caller merely owns (ADR §3.4, ruling 9).
+    fn validate_caller_can_create(
         &self,
-        parent_session_id: &str,
+        caller_session_id: &str,
     ) -> Result<SessionRecord, SubagentError> {
-        let parent = self
+        let caller = self
             .session_store
-            .find_by_id(parent_session_id)?
-            .ok_or_else(|| SubagentError::ParentNotFound(parent_session_id.to_string()))?;
-        if parent.closed_at.is_some() || parent.status == "closed" {
+            .find_by_id(caller_session_id)?
+            .ok_or_else(|| SubagentError::ParentNotFound(caller_session_id.to_string()))?;
+        if caller.closed_at.is_some() || caller.status == "closed" {
             return Err(SubagentError::Closed);
         }
         let workspace = self
             .workspace_runtime
-            .get_workspace(&parent.workspace_id)?
-            .ok_or_else(|| SubagentError::WorkspaceNotFound(parent.workspace_id.clone()))?;
+            .get_workspace(&caller.workspace_id)?
+            .ok_or_else(|| SubagentError::WorkspaceNotFound(caller.workspace_id.clone()))?;
         if workspace.surface != WorkspaceSurface::Standard {
             return Err(SubagentError::IneligibleWorkspace);
         }
-        // Depth is capped at one level of subordination, and promotion is
-        // exactly what lifts it (ADR §3.3): a promoted agent is a peer, so it
-        // may spawn its own children even though its ownership row survives.
-        let ownership = self.link_service.find_subagent_parent(parent_session_id)?;
-        let is_promoted_child = ownership
-            .as_ref()
-            .is_some_and(|link| link.promoted_at.is_some());
         // `spawn_subagent` creates every child with `subagents_enabled = false`;
         // that flag is how a spawned child carries its subordination, and it is
         // the only server-side consumer of the flag (agent ops mounts on every
         // session, and this validation is recomputed per call). So promotion has
-        // to lift it too, or the depth lift below is dead code for every real
-        // child and ruling 7 never takes effect. Derived from `promoted_at`
-        // rather than rewriting the session row, so promotion stays ONE durable
-        // fact on the link instead of two rows in two tables that can diverge.
-        if !parent.subagents_enabled && !is_promoted_child {
+        // to lift it too, or ruling 7 never takes effect for any real child.
+        // Derived from `promoted_at` rather than rewriting the session row, so
+        // promotion stays ONE durable fact on the link instead of two rows in
+        // two tables that can diverge.
+        let ownership = self.link_service.find_subagent_parent(caller_session_id)?;
+        let is_promoted_child = ownership
+            .as_ref()
+            .is_some_and(|link| link.promoted_at.is_some());
+        if !caller.subagents_enabled && !is_promoted_child {
             return Err(SubagentError::Disabled);
         }
+        Ok(caller)
+    }
+
+    /// The `spawn_agent` form of [`Self::validate_parent_can_spawn`].
+    ///
+    /// What the two forms do NOT share is everything the fanout cap and the
+    /// depth rule say about the agent being CREATED: an owned agent is a peer,
+    /// ruling 9 puts no numeric limit on it, and it is subordinate to nobody,
+    /// so a caller holding eight subagents may still spawn one. What they do
+    /// share is every rule about the CALLER — including subordination, below —
+    /// plus the workspace the new session lands in being mutable, which for
+    /// this tool is the caller's own, the one whose write lease the route
+    /// already took.
+    ///
+    /// Ruling 3's spawn block IS restated here, even though
+    /// `agent_ops::calls::call_tool` already refuses an unpromoted subagent
+    /// before dispatch reaches any tool body. The dispatch gate is where the
+    /// refusal can say why; this is the gate that makes the capability itself
+    /// false, so `can_spawn_agent` means what its name claims and the tool body
+    /// refuses on its own rather than trusting one caller to have checked.
+    /// Subordination is read exactly as the depth rule reads it — an open
+    /// subagent link naming this session as the child, not yet promoted.
+    pub fn validate_caller_can_spawn_agent(
+        &self,
+        caller_session_id: &str,
+    ) -> Result<SessionRecord, SubagentError> {
+        let caller = self.validate_caller_can_create(caller_session_id)?;
+        if self
+            .link_service
+            .find_subagent_parent(caller_session_id)?
+            .is_some_and(|link| link.is_unpromoted_subagent())
+        {
+            return Err(SubagentError::Subordinate);
+        }
+        self.access_gate
+            .assert_can_mutate_for_workspace(&caller.workspace_id)
+            .map_err(map_access_error)?;
+        Ok(caller)
+    }
+
+    pub fn validate_parent_can_spawn(
+        &self,
+        parent_session_id: &str,
+    ) -> Result<SessionRecord, SubagentError> {
+        let parent = self.validate_caller_can_create(parent_session_id)?;
+        // Depth is capped at one level of subordination, and promotion is
+        // exactly what lifts it (ADR §3.3): a promoted agent is a peer, so it
+        // may spawn its own children even though its ownership row survives.
+        // (`validate_caller_can_create` already lifted `subagents_enabled` for
+        // a promoted child from the same link.)
+        let ownership = self.link_service.find_subagent_parent(parent_session_id)?;
         if ownership.is_some_and(|link| link.is_unpromoted_subagent()) {
             return Err(SubagentError::DepthLimit);
         }
@@ -628,16 +685,8 @@ fn map_access_error(error: WorkspaceAccessError) -> SubagentError {
 mod tests {
     use super::*;
     use crate::app::test_support;
-    use crate::domains::repo_roots::service::RepoRootService;
-    use crate::domains::repo_roots::store::RepoRootStore;
-    use crate::domains::sessions::links::store::SessionLinkStore;
     use crate::domains::sessions::model::SessionMcpBindingPolicy;
-    use crate::domains::terminals::store::TerminalStore;
-    use crate::live::terminals::TerminalService;
-    use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
-    use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
     use crate::persistence::Db;
-    use std::sync::Arc;
 
     /// `spawn_subagent` creates every child with `subagents_enabled = false`;
     /// a human-created session carries the user's preference.
@@ -671,60 +720,17 @@ mod tests {
         }
     }
 
-    fn fixture() -> (SubagentService, SessionLinkService) {
+    fn fixture(session_ids: &[&str]) -> test_support::SubagentServiceFixture {
         let db = Db::open_in_memory().expect("open db");
-        test_support::seed_workspace_with_repo_root(
-            &db,
-            "workspace-1",
-            "local",
-            "/tmp/workspace-1",
-        );
-        let runtime_home = std::env::temp_dir().join(format!(
-            "anyharness-subagents-test-{}",
-            uuid::Uuid::new_v4()
-        ));
-        let session_store = SessionStore::new(db.clone());
-        let link_service =
-            SessionLinkService::new(SessionLinkStore::new(db.clone()), session_store.clone());
-        let workspace_runtime = Arc::new(WorkspaceRuntime::new(
-            WorkspaceStore::new(db.clone()),
-            WorkspaceDeleteWorkflow::new(db.clone(), SessionDeleteWorkflow::new(db.clone())),
-            RepoRootService::new(RepoRootStore::new(db.clone())),
-            runtime_home.clone(),
-        ));
-        let access_gate = Arc::new(WorkspaceAccessGate::new(
-            WorkspaceStore::new(db.clone()),
-            session_store.clone(),
-            WorkspaceAccessStore::new(db.clone()),
-            Arc::new(TerminalService::new(
-                TerminalStore::new(db.clone()),
-                runtime_home,
-            )),
-        ));
-        let service = SubagentService::new(
-            session_store,
-            SessionDeleteWorkflow::new(db.clone()),
-            link_service.clone(),
-            SubagentStore::new(db),
-            workspace_runtime,
-            access_gate,
-        );
-        (service, link_service)
-    }
-
-    fn link_child(links: &SessionLinkService, parent: &str, child: &str) -> String {
-        links
-            .create_link(CreateSessionLinkInput {
-                relation: SessionLinkRelation::Subagent,
-                parent_session_id: parent.to_string(),
-                child_session_id: child.to_string(),
-                workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
-                label: Some("Schema audit".to_string()),
-                created_by_turn_id: None,
-                created_by_tool_call_id: None,
-            })
-            .expect("create link")
-            .id
+        test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace-1");
+        let fixture = test_support::subagent_service_fixture(&db);
+        for id in session_ids {
+            fixture
+                .sessions
+                .insert(&session_record(id, true))
+                .expect("insert session");
+        }
+        fixture
     }
 
     /// Ruling 7 / ADR §3.3: promotion makes a child a peer, and a peer spawns.
@@ -733,32 +739,39 @@ mod tests {
     /// lift the born-with block as well or it lifts nothing that exists.
     #[test]
     fn promotion_lets_a_spawned_child_spawn_its_own_agents() {
-        let (service, links) = fixture();
-        let store = service.session_store();
-        store
-            .insert(&session_record("ses_parent", true))
-            .expect("insert parent");
+        let fixture = fixture(&["ses_parent"]);
         // Exactly how `spawn_subagent` creates a child.
-        store
+        fixture
+            .sessions
             .insert(&session_record("ses_child", false))
             .expect("insert child");
-        store
+        fixture
+            .sessions
             .insert(&session_record("ses_sibling", false))
             .expect("insert sibling");
-        let child_link = link_child(&links, "ses_parent", "ses_child");
-        link_child(&links, "ses_parent", "ses_sibling");
+        let child_link = fixture
+            .service
+            .link_child("ses_parent", "ses_child", None, None, None)
+            .expect("link the child")
+            .id;
+        fixture
+            .service
+            .link_child("ses_parent", "ses_sibling", None, None, None)
+            .expect("link the sibling");
 
         // Before promotion the child is subordinate and cannot spawn.
         assert!(matches!(
-            service.validate_parent_can_spawn("ses_child"),
+            fixture.service.validate_parent_can_spawn("ses_child"),
             Err(SubagentError::Disabled)
         ));
 
-        assert!(links
+        assert!(fixture
+            .links
             .promote_link(&child_link, "2026-08-08T01:00:00Z")
             .expect("promote the child"));
 
-        service
+        fixture
+            .service
             .validate_parent_can_spawn("ses_child")
             .expect("a promoted agent is a peer and may spawn its own children");
 
@@ -766,7 +779,7 @@ mod tests {
         // only. The sibling, still owned, is still refused — so the assertion
         // above is the promotion and not a blanket removal of the check.
         assert!(matches!(
-            service.validate_parent_can_spawn("ses_sibling"),
+            fixture.service.validate_parent_can_spawn("ses_sibling"),
             Err(SubagentError::Disabled)
         ));
     }
@@ -776,26 +789,137 @@ mod tests {
     /// both keep the refusal.
     #[test]
     fn a_session_with_subagents_switched_off_is_still_refused() {
-        let (service, _links) = fixture();
-        service
-            .session_store()
+        let fixture = fixture(&[]);
+        fixture
+            .sessions
             .insert(&session_record("ses_solo_off", false))
             .expect("insert session");
-        service
-            .session_store()
+        fixture
+            .sessions
             .insert(&session_record("ses_solo_on", true))
             .expect("insert session");
 
         assert!(matches!(
-            service.validate_parent_can_spawn("ses_solo_off"),
+            fixture.service.validate_parent_can_spawn("ses_solo_off"),
             Err(SubagentError::Disabled)
         ));
 
         // Non-vacuity: an otherwise identical session with the preference on
         // passes every gate in this validation, so `Disabled` above is the flag
         // and not some other refusal in the fixture.
-        service
+        fixture
+            .service
             .validate_parent_can_spawn("ses_solo_on")
             .expect("an ordinary session with subagents enabled may spawn");
+    }
+
+    #[test]
+    fn an_unpromoted_subagent_may_not_spawn_a_peer_either() {
+        // Ruling 3 is about SUBORDINATION, not about which spawn tool is being
+        // called: a session that may not create a subagent may not create a
+        // peer that outlives its parent either. Enforced here rather than only
+        // at `call_tool` so `can_spawn_agent` is false for the caller and the
+        // tool body refuses on its own — any future path into
+        // `calls::spawn_agent` that skips the dispatch gate still stops.
+        let fixture = fixture(&["ses_owner", "ses_subagent"]);
+        let link = fixture
+            .service
+            .link_child("ses_owner", "ses_subagent", None, None, None)
+            .expect("link the subagent");
+
+        let error = fixture
+            .service
+            .validate_caller_can_spawn_agent("ses_subagent")
+            .err()
+            .expect("a subordinate caller may not spawn");
+        assert!(matches!(error, SubagentError::Subordinate));
+        // The same caller is refused `spawn_subagent` for the same reason, so
+        // the two spawn tools now have the same answer to subordination.
+        assert!(matches!(
+            fixture
+                .service
+                .validate_parent_can_spawn("ses_subagent")
+                .err()
+                .expect("a subordinate caller may not spawn a subagent either"),
+            SubagentError::DepthLimit
+        ));
+
+        // Promotion is exactly what lifts it — the link stays, the block goes.
+        assert!(fixture
+            .links
+            .promote_link(&link.id, "2026-08-08T01:00:00Z")
+            .expect("promote"));
+        fixture
+            .service
+            .validate_caller_can_spawn_agent("ses_subagent")
+            .expect("a promoted agent is a peer and may spawn");
+    }
+
+    #[test]
+    fn a_top_level_caller_may_spawn_a_peer() {
+        // The negative control for the check above: no subagent link, no
+        // refusal. Without this the test above would pass just as well if
+        // `validate_caller_can_spawn_agent` refused everybody.
+        let fixture = fixture(&["ses_owner"]);
+
+        fixture
+            .service
+            .validate_caller_can_spawn_agent("ses_owner")
+            .expect("a top-level caller may spawn a peer");
+    }
+
+    #[test]
+    fn the_fanout_cap_does_not_reach_the_peer_spawn_gate() {
+        // Ruling 9 at the seam that decides it. An owner holding the maximum
+        // number of subagents is refused another subagent and still allowed a
+        // peer: the cap bounds subordinates, and a peer is not one. Pinned
+        // here because the split between the two validators is the only thing
+        // keeping the cap out — reinstating it inside
+        // `validate_caller_can_create` would be invisible from the tool list.
+        let mut ids = vec!["ses_owner".to_string()];
+        for index in 0..MAX_SUBAGENTS_PER_PARENT {
+            ids.push(format!("ses_child_{index}"));
+        }
+        let borrowed: Vec<&str> = ids.iter().map(String::as_str).collect();
+        let fixture = fixture(&borrowed);
+        for index in 0..MAX_SUBAGENTS_PER_PARENT {
+            fixture
+                .service
+                .link_child("ses_owner", &format!("ses_child_{index}"), None, None, None)
+                .expect("link a subagent");
+        }
+
+        assert!(matches!(
+            fixture
+                .service
+                .validate_parent_can_spawn("ses_owner")
+                .err()
+                .expect("the ninth subagent is refused"),
+            SubagentError::FanoutLimit
+        ));
+        fixture
+            .service
+            .validate_caller_can_spawn_agent("ses_owner")
+            .expect("a capped owner may still spawn a peer");
+    }
+
+    #[test]
+    fn a_closed_caller_may_not_spawn_a_peer() {
+        // The prechecks both validators share still apply to the peer path;
+        // this is the one that says the split did not drop them.
+        let fixture = fixture(&["ses_owner"]);
+        fixture
+            .sessions
+            .update_status("ses_owner", "closed", "2026-08-08T02:00:00Z")
+            .expect("mark closed");
+
+        assert!(matches!(
+            fixture
+                .service
+                .validate_caller_can_spawn_agent("ses_owner")
+                .err()
+                .expect("a closed caller may not spawn"),
+            SubagentError::Closed
+        ));
     }
 }

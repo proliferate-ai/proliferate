@@ -11,6 +11,15 @@ pub struct AgentOpsMcpContext {
     pub workspace_id: String,
     pub can_create: bool,
     pub create_block_reason: Option<String>,
+    /// Whether this session may spawn a PEER agent. Separate from `can_create`
+    /// because the fanout cap is the difference between them: an owner sitting
+    /// at eight subagents may still spawn an owned agent (ruling 9), so
+    /// deriving one from the other would apply a cap the ADR removed. It is
+    /// NOT a weaker flag: an unpromoted subagent has it false, exactly as it
+    /// has `can_create` false, because `validate_caller_can_spawn_agent` reads
+    /// subordination too.
+    pub can_spawn_agent: bool,
+    pub spawn_agent_block_reason: Option<String>,
     pub existing_subagent_count: usize,
     pub max_subagents_per_parent: usize,
     /// True while this session is somebody's subagent and has not been
@@ -60,6 +69,11 @@ pub fn resolve_context(
         Ok(_) => None,
         Err(error) => Some(resolve_create_block_reason(error)?),
     };
+    let spawn_agent_block_reason =
+        match service.validate_caller_can_spawn_agent(&request.session_id) {
+            Ok(_) => None,
+            Err(error) => Some(resolve_create_block_reason(error)?),
+        };
     let is_unpromoted_subagent = service
         .find_subagent_parent(&request.session_id)
         .map_err(ProductMcpContextError::Internal)?
@@ -70,6 +84,8 @@ pub fn resolve_context(
         workspace_id: request.workspace_id.clone(),
         can_create: create_block_reason.is_none(),
         create_block_reason,
+        can_spawn_agent: spawn_agent_block_reason.is_none(),
+        spawn_agent_block_reason,
         existing_subagent_count,
         max_subagents_per_parent: MAX_SUBAGENTS_PER_PARENT,
         is_unpromoted_subagent,
@@ -80,6 +96,7 @@ fn resolve_create_block_reason(error: SubagentError) -> Result<String, ProductMc
     match error {
         reason @ (SubagentError::Disabled
         | SubagentError::DepthLimit
+        | SubagentError::Subordinate
         | SubagentError::FanoutLimit
         | SubagentError::MutationBlocked(_)) => Ok(reason.to_string()),
         not_found @ (SubagentError::ParentNotFound(_)
