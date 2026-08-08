@@ -192,12 +192,17 @@ describe("playground scenarios", () => {
     expect(isValidElement(renderActiveSlot("pending-prompts-with-approval"))).toBe(true);
   });
 
-  it("renders subagent wake prompts as plain queued text", () => {
+  it("collapses queued agent updates into one quiet row", () => {
     const html = renderToStaticMarkup(renderOutboundSlot("subagents-queued-wake"));
-    expect(html).toContain("runtime-server-sdk-survey finished");
+    // You see THAT, not WHAT: glyphs, a count, and when they land — never the
+    // pointer text, and never the human row's edit/delete affordances.
+    expect(html).toContain("data-pending-agent-updates");
+    expect(html).toContain("From agents");
+    expect(html).toContain("1 update");
+    expect(html).toContain("delivered next turn");
     expect(html).not.toContain("Turn Completed");
     expect(html).not.toContain("Child session:");
-    expect(html).toContain('aria-label="Delete queued message"');
+    expect(html).not.toContain('aria-label="Delete queued message"');
     expect(html).not.toContain('aria-label="Edit queued message"');
   });
 
