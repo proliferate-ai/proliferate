@@ -3626,6 +3626,16 @@
               }
             }
           },
+          "400": {
+            "description": "The named target cannot be promoted by this session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Session not found",
             "content": {

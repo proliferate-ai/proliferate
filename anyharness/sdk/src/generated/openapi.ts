@@ -8434,6 +8434,15 @@ export interface operations {
                     "application/json": components["schemas"]["PromoteSubagentResponse"];
                 };
             };
+            /** @description The named target cannot be promoted by this session */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Session not found */
             404: {
                 headers: {

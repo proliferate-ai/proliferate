@@ -157,10 +157,12 @@ promoted agent is a top-level session in the tabs and in the tree, and it moves
 out of its parent's fanout and in with the peers, which is what makes a promoted
 subagent indistinguishable from one born a peer.
 
-Promotion is also a human action, not only a tool call:
-`POST /v1/sessions/{session_id}/subagents/{child_session_id}/promote` performs
-it from the client, and it is offered only on a row that is still subordinate —
-there is nothing to promote a peer out of.
+The human promote route above is offered only on a row that is still
+subordinate — there is nothing to promote a peer out of — and its refusals use
+this file's `SUBAGENT_*` problem-code family: `SUBAGENT_NOT_OWNED` for an agent
+the caller does not own (a 409, because ownership is not reachability),
+`SUBAGENT_ALREADY_TOP_LEVEL`, `SUBAGENT_CLOSED`, and `SUBAGENT_SELF_TARGET` for
+a session naming itself.
 
 Both lists are the OPEN rows. A closed link leaves the endpoint entirely, so
 `closedBySessionId` and `closeReason` appear there in exactly one situation:

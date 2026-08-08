@@ -826,3 +826,48 @@ fn spawn_workspace_has_nothing_to_lease_and_says_so() {
         "spawn_workspace: the repo-root access gate must run before anything is created"
     );
 }
+
+#[test]
+fn the_human_promote_route_takes_no_admission_permit_and_says_why() {
+    // Its neighbour in the same file, `schedule_subagent_wake`, DOES take one:
+    // it queues a prompt on a session, so it has to be admitted against that
+    // session's other mutations. Promotion queues nothing and touches no
+    // session — it is one indexed UPDATE against a `session_links` row — so it
+    // takes only the shared `SubagentWrite` lease, exactly as the agent tool
+    // does (`promote_subagent` takes no permit either). Recording the asymmetry
+    // here so a later reader does not "restore" a missing permit and start
+    // refusing promotions whenever a workflow holds the parent session, for a
+    // write the workflow cannot conflict with.
+    let promote = private_fn_body("src/api/http/subagents.rs", "promote_subagent");
+    let promote = promote.as_str();
+    assert!(
+        !promote.contains("admit_session_mutation("),
+        "the human promote route must take NO session admission permit — promotion is one link \
+         UPDATE, and a permit here would refuse it while the parent session is otherwise busy"
+    );
+    assert!(
+        promote.contains(
+            "acquire_shared(&parent.workspace_id, WorkspaceOperationKind::SubagentWrite)"
+        ),
+        "the human promote route must still take the shared SubagentWrite workspace lease, so a \
+         workspace retire preflight collides with it"
+    );
+    let lease_at = promote
+        .find("acquire_shared(")
+        .expect("promote must take the shared workspace lease");
+    let promote_at = promote
+        .find(".promote(&owned)")
+        .expect("promote must delegate the write to the ownership service");
+    assert!(
+        lease_at < promote_at,
+        "promote_subagent: the workspace lease must be held across the link write"
+    );
+
+    // The asymmetry is only meaningful while the neighbour still has a permit.
+    let wake = private_fn_body("src/api/http/subagents.rs", "schedule_subagent_wake");
+    assert!(
+        wake.contains("admit_session_mutation("),
+        "schedule_subagent_wake must keep its admission permit — it queues a prompt on the \
+         session, which is exactly what admission serialises"
+    );
+}

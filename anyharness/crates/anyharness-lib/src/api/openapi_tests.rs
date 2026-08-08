@@ -37,6 +37,7 @@ fn openapi_registers_workspace_and_session_paths() {
         "/v1/sessions/{session_id}/dismiss",
         "/v1/sessions/{session_id}/subagents",
         "/v1/sessions/{session_id}/subagents/{child_session_id}/wake",
+        "/v1/sessions/{session_id}/subagents/{child_session_id}/promote",
         "/v1/workspaces/{workspace_id}/sessions/restore",
         "/v1/sessions/{session_id}/events",
         "/v1/sessions/{session_id}/raw-notifications",

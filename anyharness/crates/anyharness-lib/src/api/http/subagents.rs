@@ -124,6 +124,7 @@ pub async fn schedule_subagent_wake(
     request_body = PromoteSubagentRequest,
     responses(
         (status = 200, description = "Subagent promoted to a peer", body = PromoteSubagentResponse),
+        (status = 400, description = "The named target cannot be promoted by this session", body = anyharness_contract::v1::ProblemDetails),
         (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
         (status = 409, description = "Workspace or ownership state blocks promotion", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -186,16 +187,22 @@ fn map_ownership_error(error: OwnershipError) -> ApiError {
         OwnershipError::Closed => {
             ApiError::conflict("That agent is closed.", "SUBAGENT_CLOSED")
         }
-        OwnershipError::SelfTarget => ApiError::bad_request(
-            "A session cannot promote itself.",
-            "INVALID_TARGET",
-        ),
-        OwnershipError::TargetRequired | OwnershipError::ConflictingTarget => {
-            ApiError::bad_request(
-                "childSessionId is required.",
-                "SUBAGENT_TARGET_REQUIRED",
-            )
+        // This file's problem codes are a `SUBAGENT_*` family, and a client
+        // switching on them has to be able to tell one refusal from another.
+        // A bare `INVALID_TARGET` would collide with the wake route's own
+        // self-target refusal, and folding "no target" together with "two
+        // targets that disagree" would tell a caller to supply a field it
+        // already supplied.
+        OwnershipError::SelfTarget => {
+            ApiError::bad_request("A session cannot promote itself.", "SUBAGENT_SELF_TARGET")
         }
+        OwnershipError::TargetRequired => {
+            ApiError::bad_request("childSessionId is required.", "SUBAGENT_TARGET_REQUIRED")
+        }
+        OwnershipError::ConflictingTarget => ApiError::bad_request(
+            "subagentId and childSessionId refer to different agents.",
+            "SUBAGENT_TARGET_CONFLICT",
+        ),
         other => ApiError::internal(other.to_string()),
     }
 }
