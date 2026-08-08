@@ -183,6 +183,7 @@ mod tests {
     static TEST_DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
         id: "test",
         route_slug: "test",
+        legacy_route_slugs: &[],
         acp_server_name: "test",
         server_info_name: "proliferate-test",
         display_name: "Test",
@@ -197,6 +198,7 @@ mod tests {
     static INJECTION_TEST_DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
         id: "injection_probe",
         route_slug: "injection_probe",
+        legacy_route_slugs: &[],
         acp_server_name: "injection_probe",
         server_info_name: "proliferate-injection-probe",
         display_name: "Injection probe",

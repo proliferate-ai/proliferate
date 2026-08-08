@@ -5,14 +5,16 @@ use crate::integrations::mcp::product_server::{
     ProductMcpAuth, ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpTokenValidation,
 };
 
+// Renaming this file would rotate the HMAC secret and 401 every session that
+// baked a token in before the restart.
 const SECRET_FILE_NAME: &str = "subagent-mcp-token.key";
 
 #[derive(Clone)]
-pub struct SubagentMcpAuth {
+pub struct AgentOpsMcpAuth {
     inner: ProductMcpAuth,
 }
 
-impl SubagentMcpAuth {
+impl AgentOpsMcpAuth {
     pub fn new(runtime_home: PathBuf) -> Self {
         Self {
             inner: ProductMcpAuth::new(

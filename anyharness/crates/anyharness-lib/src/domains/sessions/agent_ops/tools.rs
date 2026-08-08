@@ -1,16 +1,36 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::context::SubagentMcpContext;
+use super::context::AgentOpsMcpContext;
 use crate::domains::sessions::delegation::READ_EVENTS_MAX_LIMIT;
 use crate::integrations::mcp::tools::tool_definition;
 
+/// Pre-agent-ops tool names, mapped to what they dispatch to now. Sessions bake
+/// their tool list in at launch, so a renamed tool has to stay callable under
+/// the old name; `tools/list` only ever advertises the canonical set.
+pub const DEPRECATED_TOOL_ALIASES: &[(&str, &str)] = &[
+    ("create_subagent", "spawn_subagent"),
+    ("close_subagent", "close_agent"),
+];
+
+// Aliases are listed too: this is matched on the wire name to decide whether a
+// call takes the workspace write lease.
 pub const MUTATING_TOOL_NAMES: &[&str] = &[
+    "spawn_subagent",
     "create_subagent",
     "send_subagent_message",
     "schedule_subagent_wake",
+    "close_agent",
     "close_subagent",
 ];
+
+/// Resolves a wire tool name to the implementation it dispatches to.
+pub fn canonical_tool_name(name: &str) -> &str {
+    DEPRECATED_TOOL_ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == name)
+        .map_or(name, |(_, canonical)| *canonical)
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,7 +93,7 @@ pub struct SearchSubagentTranscriptArgs {
     pub limit: Option<usize>,
 }
 
-pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
+pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
     let mut tools = vec![
         tool_definition(
             "get_subagent_launch_options",
@@ -90,7 +110,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
     if ctx.can_create {
         tools.push(
             tool_definition(
-                "create_subagent",
+                "spawn_subagent",
                 "Create a same-workspace child agent session and send it an initial prompt. Call get_subagent_launch_options first when choosing harnessId or initialConfig. wakeOnCompletion arms a one-shot next-completion wake before sending the prompt.",
                 json!({
                     "type": "object",
@@ -190,7 +210,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             }),
         ),
         tool_definition(
-            "close_subagent",
+            "close_agent",
             "Close an owned subagent and stop future prompts/wakes while preserving history.",
             json!({
                 "type": "object",
@@ -207,11 +227,14 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_tool_list, SubagentMcpContext, MUTATING_TOOL_NAMES};
+    use super::{
+        build_tool_list, canonical_tool_name, AgentOpsMcpContext, DEPRECATED_TOOL_ALIASES,
+        MUTATING_TOOL_NAMES,
+    };
     use serde_json::Value;
 
-    fn context(can_create: bool, existing_subagent_count: usize) -> SubagentMcpContext {
-        SubagentMcpContext {
+    fn context(can_create: bool, existing_subagent_count: usize) -> AgentOpsMcpContext {
+        AgentOpsMcpContext {
             parent_session_id: "session-1".to_string(),
             workspace_id: "workspace-1".to_string(),
             can_create,
@@ -256,7 +279,7 @@ mod tests {
         let names = tool_names(&tools);
 
         assert_eq!(names.first().copied(), Some("get_subagent_launch_options"));
-        assert!(names.contains(&"create_subagent"));
+        assert!(names.contains(&"spawn_subagent"));
     }
 
     #[test]
@@ -282,7 +305,7 @@ mod tests {
 
         assert!(names.contains(&"get_subagent_launch_options"));
         assert!(names.contains(&"list_subagents"));
-        assert!(!names.contains(&"create_subagent"));
+        assert!(!names.contains(&"spawn_subagent"));
     }
 
     #[test]
@@ -313,10 +336,49 @@ mod tests {
         let names = tool_names(&tools);
 
         for tool_name in MUTATING_TOOL_NAMES {
+            let canonical = canonical_tool_name(tool_name);
             assert!(
-                names.contains(tool_name),
-                "mutating tool {tool_name} is not in the available subagent tool list"
+                names.contains(&canonical),
+                "mutating tool {tool_name} is not in the available agent ops tool list"
             );
         }
+    }
+
+    #[test]
+    fn deprecated_aliases_resolve_to_advertised_tools() {
+        let tools = build_tool_list(&context(true, 1));
+        let names = tool_names(&tools);
+
+        assert_eq!(
+            DEPRECATED_TOOL_ALIASES,
+            &[
+                ("create_subagent", "spawn_subagent"),
+                ("close_subagent", "close_agent")
+            ]
+        );
+        for (alias, canonical) in DEPRECATED_TOOL_ALIASES {
+            assert_eq!(canonical_tool_name(alias), *canonical);
+            assert!(
+                names.contains(canonical),
+                "alias {alias} resolves to {canonical}, which no longer exists"
+            );
+        }
+    }
+
+    #[test]
+    fn deprecated_aliases_stay_out_of_the_advertised_tool_list() {
+        let tools = build_tool_list(&context(true, 1));
+        let names = tool_names(&tools);
+
+        for (alias, _) in DEPRECATED_TOOL_ALIASES {
+            assert!(!names.contains(alias), "alias {alias} is advertised");
+        }
+    }
+
+    #[test]
+    fn canonical_names_pass_through_unchanged() {
+        assert_eq!(canonical_tool_name("spawn_subagent"), "spawn_subagent");
+        assert_eq!(canonical_tool_name("close_agent"), "close_agent");
+        assert_eq!(canonical_tool_name("unknown_tool"), "unknown_tool");
     }
 }

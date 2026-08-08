@@ -16,6 +16,7 @@ pub const INSTRUCTIONS: &str = "Use cowork artifact tools to manage cowork artif
 pub const DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
     id: ID,
     route_slug: ROUTE_SLUG,
+    legacy_route_slugs: &[],
     acp_server_name: ACP_SERVER_NAME,
     server_info_name: "proliferate-cowork",
     display_name: "Cowork",

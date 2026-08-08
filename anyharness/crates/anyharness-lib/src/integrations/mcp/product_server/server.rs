@@ -226,6 +226,7 @@ mod tests {
     static TEST_DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
         id: "test_product",
         route_slug: "test-product",
+        legacy_route_slugs: &[],
         acp_server_name: "test_product",
         server_info_name: "proliferate-test-product",
         display_name: "Test Product",

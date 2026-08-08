@@ -10,8 +10,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
-use self::auth::SubagentMcpAuth;
-use self::context::SubagentMcpContext;
+use self::auth::AgentOpsMcpAuth;
+use self::context::AgentOpsMcpContext;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -21,19 +21,19 @@ use crate::integrations::mcp::product_server::{
 };
 
 #[derive(Clone)]
-pub struct SubagentProductMcpServer {
+pub struct AgentOpsProductMcpServer {
     service: Arc<SubagentService>,
     session_runtime: Arc<SessionRuntime>,
     workspace_runtime: Arc<WorkspaceRuntime>,
-    auth: Arc<SubagentMcpAuth>,
+    auth: Arc<AgentOpsMcpAuth>,
 }
 
-impl SubagentProductMcpServer {
+impl AgentOpsProductMcpServer {
     pub fn new(
         service: Arc<SubagentService>,
         session_runtime: Arc<SessionRuntime>,
         workspace_runtime: Arc<WorkspaceRuntime>,
-        auth: Arc<SubagentMcpAuth>,
+        auth: Arc<AgentOpsMcpAuth>,
     ) -> Self {
         Self {
             service,
@@ -45,8 +45,8 @@ impl SubagentProductMcpServer {
 }
 
 #[async_trait]
-impl ProductMcpServer for SubagentProductMcpServer {
-    type Context = SubagentMcpContext;
+impl ProductMcpServer for AgentOpsProductMcpServer {
+    type Context = AgentOpsMcpContext;
 
     fn definition(&self) -> &'static ProductMcpDefinition {
         &definition::DEFINITION

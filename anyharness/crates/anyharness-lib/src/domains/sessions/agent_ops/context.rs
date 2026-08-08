@@ -1,10 +1,12 @@
-use super::super::service::{SubagentError, SubagentService, MAX_SUBAGENTS_PER_PARENT};
+use crate::domains::sessions::subagents::service::{
+    SubagentError, SubagentService, MAX_SUBAGENTS_PER_PARENT,
+};
 use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::integrations::mcp::product_server::{ProductMcpContextError, ProductMcpRequestContext};
 
 #[derive(Debug, Clone)]
-pub struct SubagentMcpContext {
+pub struct AgentOpsMcpContext {
     pub parent_session_id: String,
     pub workspace_id: String,
     pub can_create: bool,
@@ -17,7 +19,7 @@ pub fn resolve_context(
     service: &SubagentService,
     workspace_runtime: &WorkspaceRuntime,
     request: &ProductMcpRequestContext,
-) -> Result<SubagentMcpContext, ProductMcpContextError> {
+) -> Result<AgentOpsMcpContext, ProductMcpContextError> {
     let parent = service
         .session_store()
         .find_by_id(&request.session_id)?
@@ -47,7 +49,7 @@ pub fn resolve_context(
         Err(error) => Some(resolve_create_block_reason(error)?),
     };
 
-    Ok(SubagentMcpContext {
+    Ok(AgentOpsMcpContext {
         parent_session_id: request.session_id.clone(),
         workspace_id: request.workspace_id.clone(),
         can_create: create_block_reason.is_none(),

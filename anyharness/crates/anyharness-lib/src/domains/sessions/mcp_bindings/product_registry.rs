@@ -132,6 +132,14 @@ impl ProductMcpEndpointRegistry {
                 registration.handler.clone(),
                 "product MCP route slug",
             )?;
+            for legacy_slug in definition.legacy_route_slugs {
+                insert_unique(
+                    &mut by_slug,
+                    legacy_slug,
+                    registration.handler.clone(),
+                    "product MCP route slug",
+                )?;
+            }
         }
 
         Ok(Self {
@@ -183,6 +191,7 @@ mod tests {
     static TEST_DEFINITION_A: ProductMcpDefinition = ProductMcpDefinition {
         id: "test_a",
         route_slug: "test-a",
+        legacy_route_slugs: &[],
         acp_server_name: "test_a",
         server_info_name: "proliferate-test-a",
         display_name: "Test A",
@@ -197,6 +206,7 @@ mod tests {
     static TEST_DEFINITION_DUPLICATE_ID: ProductMcpDefinition = ProductMcpDefinition {
         id: "test_a",
         route_slug: "test-b",
+        legacy_route_slugs: &[],
         acp_server_name: "test_b",
         server_info_name: "proliferate-test-b",
         display_name: "Test B",
@@ -211,6 +221,7 @@ mod tests {
     static TEST_DEFINITION_DUPLICATE_SLUG: ProductMcpDefinition = ProductMcpDefinition {
         id: "test_c",
         route_slug: "test-a",
+        legacy_route_slugs: &[],
         acp_server_name: "test_c",
         server_info_name: "proliferate-test-c",
         display_name: "Test C",
@@ -219,6 +230,36 @@ mod tests {
         instructions: "Test C",
         unauthorized_code: "TEST_C_UNAUTHORIZED",
         request_invalid_code: "TEST_C_INVALID",
+        prompt_policy: ProductMcpPromptPolicy::System,
+    };
+
+    static TEST_DEFINITION_RENAMED: ProductMcpDefinition = ProductMcpDefinition {
+        id: "test_d",
+        route_slug: "test-d-renamed",
+        legacy_route_slugs: &["test-d"],
+        acp_server_name: "test_d",
+        server_info_name: "proliferate-test-d",
+        display_name: "Test D",
+        description: "Test D",
+        visibility: ProductMcpVisibility::Internal,
+        instructions: "Test D",
+        unauthorized_code: "TEST_D_UNAUTHORIZED",
+        request_invalid_code: "TEST_D_INVALID",
+        prompt_policy: ProductMcpPromptPolicy::System,
+    };
+
+    static TEST_DEFINITION_TAKES_LEGACY_SLUG: ProductMcpDefinition = ProductMcpDefinition {
+        id: "test_e",
+        route_slug: "test-d",
+        legacy_route_slugs: &[],
+        acp_server_name: "test_e",
+        server_info_name: "proliferate-test-e",
+        display_name: "Test E",
+        description: "Test E",
+        visibility: ProductMcpVisibility::Internal,
+        instructions: "Test E",
+        unauthorized_code: "TEST_E_UNAUTHORIZED",
+        request_invalid_code: "TEST_E_INVALID",
         prompt_policy: ProductMcpPromptPolicy::System,
     };
 
@@ -330,6 +371,45 @@ mod tests {
         assert!(registry.get_by_product_id("test_a").is_some());
         assert!(registry.get_by_route_slug("test-a").is_some());
         assert_eq!(registry.definitions()[0].id, "test_a");
+    }
+
+    #[test]
+    fn registry_serves_a_renamed_product_on_its_legacy_slug() {
+        let handler = Arc::new(TestEndpointHandler(&TEST_DEFINITION_RENAMED));
+        let registry =
+            ProductMcpEndpointRegistry::new(vec![ProductMcpEndpointRegistration::new(handler)])
+                .expect("registry");
+
+        assert_eq!(
+            registry
+                .get_by_route_slug("test-d")
+                .expect("legacy slug routes")
+                .definition()
+                .id,
+            registry
+                .get_by_route_slug("test-d-renamed")
+                .expect("current slug routes")
+                .definition()
+                .id
+        );
+    }
+
+    #[test]
+    fn registry_rejects_a_legacy_slug_that_collides_with_another_product() {
+        let error = ProductMcpEndpointRegistry::new(vec![
+            ProductMcpEndpointRegistration::new(Arc::new(TestEndpointHandler(
+                &TEST_DEFINITION_RENAMED,
+            ))),
+            ProductMcpEndpointRegistration::new(Arc::new(TestEndpointHandler(
+                &TEST_DEFINITION_TAKES_LEGACY_SLUG,
+            ))),
+        ])
+        .err()
+        .expect("colliding legacy slug should fail");
+
+        assert!(error
+            .to_string()
+            .contains("duplicate product MCP route slug"));
     }
 
     #[test]
