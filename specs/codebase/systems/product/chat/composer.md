@@ -15,6 +15,9 @@ Scope:
 - `apps/packages/product-client/src/domain/chats/composer/resolve-dock-slots.ts`
 - `apps/packages/product-client/src/hooks/chat/derived/use-active-todo-tracker.ts`
 - `apps/packages/product-client/src/domain/chats/tools/active-todo-tracker.ts`
+- `apps/packages/product-client/src/domain/chats/composer/todo-progress-summary.ts`
+- `apps/packages/product-client/src/domain/chats/composer/todo-progress-pill-state.ts`
+- `apps/packages/product-client/src/components/workspace/chat/input/TodoProgressPill.tsx`
 - `apps/packages/product-client/src/domain/chats/tools/claude-plan-tool-call.ts`
 - `apps/packages/product-client/src/lib/access/anyharness/reviews.ts`
 - `apps/packages/product-client/src/lib/domain/reviews/**`
@@ -38,11 +41,12 @@ ChatView
     ├── activeSlot: at most one of
     │     ├── ConnectedApprovalCard         (pending tool approval)
     │     ├── ConnectedUserInputCard        (agent question/form)
-    │     ├── ConnectedMcpElicitationCard   (MCP form)
-    │     └── TodoTrackerPanel              (Codex/Gemini structured plan)
+    │     └── ConnectedMcpElicitationCard   (MCP form)
     ├── attachedSlot
     │     ├── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews and subagents)
     │     └── WorkspaceActivityComposerCard (Git/PR summary and source-control actions)
+    ├── floatingSlot                        (absolutely positioned, reserves no layout space)
+    │     └── TodoProgressPill              (transient centered pill above ChatInput — plan/todo progress, any agent)
     ├── ChatInput
     │   └── ChatComposerSurface
     │       └── form: ComposerCommandEditor + ModelSelector + SessionConfigControls + ChatComposerActions
@@ -241,11 +245,16 @@ this order:
 1. **`outboundSlot`** — queued outbound work: user prompts, queued wake prompts,
    review feedback prompts, and review-complete prompts.
 2. **`activeSlot`** — the active agent state. Permission approvals, user-input
-   questions, and MCP elicitation forms take precedence. If there is no blocking
-   request, this slot may show `TodoTrackerPanel`.
+   questions, and MCP elicitation forms are its only inhabitants; it is empty
+   when none of those is pending.
 3. **`attachedSlot`** — parallel delegated work: review agents and linked
    same-workspace subagents. Persistent workspace/runtime blocking state is
    not an attached panel; it takes over the composer itself (below).
+
+Plan/todo progress is **not** a dock-region inhabitant. It renders through the
+separate `floatingSlot` described in §2.2 — a transient overlay that never
+occupies or displaces `activeSlot`, so a permission/question/MCP form is never
+competing with plan state for the slot.
 
 Review status lives in `attachedSlot`, not in active state. The shared
 `DelegatedWorkComposerControl` owns the compact `Agents` summary-control +
@@ -388,6 +397,38 @@ the newest editable queued prompt. Steering promotes the selected prompt to the
 head and interrupts the active turn so normal durable queue drain executes it
 next.
 
+### The todo progress pill (`floatingSlot`)
+
+`TodoProgressPill.tsx` replaced the persistent `TodoTrackerPanel`/`TodoTrackerStrip`
+dock inhabitants with a transient floating pill. It is mounted through
+`ChatComposerDock`'s `floatingSlot` prop — an absolutely positioned overlay,
+centered directly above `ChatInput`, that reserves no layout space of its own
+and therefore never shifts the dock when it shows or hides.
+
+- **Data source.** Driven by `useActiveTodoTracker()`
+  (any agent's live plan, including Claude's TodoWrite — see §3.4). `todo-progress-summary.ts`
+  reduces `PlanEntry[]` to a `{ completedCount, total, currentStepNumber, label }`
+  summary (`"Step N/Total"`); `hasTodoStepAdvanced` compares two summaries to
+  detect a step completing.
+- **Nothing renders by default.** The pill appears only when the current step
+  number advances — never on a tracker's first appearance — lingers ~4s
+  (fade starts at 3.4s, 600ms opacity ease), then unmounts. Hovering pins it
+  (cancels the fade, reveals a checklist card above it with one row per
+  entry); mouse-leave unpins and restarts a short fade (starts at 1.2s, gone
+  by 1.8s). `todo-progress-pill-state.ts` owns this show → linger → fade →
+  hide state machine as a pure reducer (`todoPillReducer`); the connected
+  component only owns the timers.
+- **No dock-slot precedence.** Because it floats independently of
+  `activeSlot`/`attachedSlot`, it never competes with `ConnectedApprovalCard`,
+  `ConnectedUserInputCard`, or `ConnectedMcpElicitationCard` for the slot —
+  there is no more "todo strip" companion under an interaction card.
+- **Reduced motion:** shows/hides directly instead of animating the opacity
+  fade (`usePrefersReducedMotion`).
+- Pure pieces (`TodoProgressPillView`, `TodoProgressChecklistCard`) are
+  exported for fixtures; the playground's `todos-short`/`todos-mid`/`todos-long`
+  scenarios render them pinned open via `PlaygroundFloatingSlotFixtures.tsx`
+  since the connected pill only appears on a live step advance.
+
 ## 2.1 Composer footer semantics
 
 The dock owns footer placement when a product-specific footer exists. This
@@ -401,7 +442,7 @@ All three sit inside the composer area. They differ by lifecycle and role, and t
 
 | Component | Lifecycle | Renders | Header shape |
 |---|---|---|---|
-| `TodoTrackerPanel` | Long-lived, non-gating active agent state | `PlanEntry[]` as a fade-masked list | tiny muted icon + muted status text |
+| `TodoProgressPill` | Transient, non-gating — floats above the dock, not in it (§2.2) | `PlanEntry[]` reduced to a `Step N/Total` pill + hover checklist | `DotCellLoader` + tabular-nums step label |
 | `ApprovalCard` | Short-lived, gating (demands a decision) | options from `pendingApproval`, one variant for all three `toolKind`s | plain title only — NO icon, NO label chip, NO separator |
 | `ProposedPlanCard` | Lives in the **transcript**, not above composer | immutable markdown plan snapshot, decision state, and plan actions | bold plan title + icon-only Copy/Collapse buttons |
 | `PlanReferenceAttachmentCard` | Draft/user-prompt attachment | immutable markdown plan snapshot attached to a prompt | compact draft chip + preview action before send; full collapsible transcript card after send |
@@ -463,9 +504,9 @@ echoes it back as a `plan_reference` content part.
   source proposed plan. Approval state remains local to the session that
   received the original proposed-plan item.
 
-### 3.4 Todo tracker is Codex/Gemini only
+### 3.4 Todo tracker covers every agent's live plan
 
-`useActiveTodoTracker` narrows `deriveCanonicalPlan` to `sourceKind === "structured_plan"`. Claude's `plan` items are filtered out by the SDK (Claude's `TodoWrite` is internal bookkeeping, not a presented plan). Do not re-enable Claude's structured plans in the todo tracker — they belong elsewhere.
+`deriveActiveTodoTracker` reads `plan` items straight off the transcript (latest in-progress item with entries, any `sourceAgentKind`) instead of `deriveCanonicalPlan`. The SDK's canonical derivation excludes Claude's `TodoWrite` because the *formal plan UI* treats it as internal bookkeeping — but internal task tracking is exactly what the progress pill surfaces, so the tracker deliberately bypasses that gate. Keep the two derivations separate: the SDK exclusion still governs the formal plan surfaces, and the pill-side derivation must not feed them.
 
 ## 4. Visual rules (minimalist pattern)
 
@@ -498,7 +539,7 @@ At most **one** visual element in a header's leading position:
 
 | Pattern | Example | Where |
 |---|---|---|
-| Tiny muted icon + muted text | `ClipboardList` icon + "1 out of 5 tasks completed" | TodoTrackerPanel |
+| Loader + tabular-nums step label | `DotCellLoader` + "Step 2/5" | TodoProgressPill |
 | Bold content label (no icon) | "Plan" / plan title | ProposedPlanCard |
 | Plain medium-weight title (no icon, no label chip) | "git push origin main" / "Ready to code?" | ApprovalCard |
 
@@ -519,16 +560,25 @@ Destructive options (deny/reject/cancel) render their label in
 Allow/Deny pair) go through the same row component — do not reintroduce a
 button row.
 
-### 4.4 Todo tracker specifics
+### 4.4 Todo progress pill specifics
 
-- Header: tiny icon + muted status text (`text-muted-foreground`), no bold.
-- Body: `vertical-scroll-fade-mask max-h-40` (160px cap) with `[--edge-fade-distance:2rem]`.
-  The fade-mask utility lives in `apps/packages/design/src/css/product.css` so shared
-  chat components can use it on Desktop and Web.
-- Completed entries: `line-through` + `text-muted-foreground/60` on both the index and the content span.
-- Default: expanded. Collapse chevron in header.
+See §2.2 for lifecycle/state-machine detail. Visual specifics:
 
-Do **not** grow the scroll cap past `max-h-40` — larger caps dominate the composer visually.
+- Pill: `rounded-full bg-popover shadow-popover` + a 0.5px `ring-border` hairline,
+  `px-3 py-[5px]`, `text-ui-sm text-muted-foreground` (hover → foreground).
+  Content: `DotCellLoader` (`size="compact" variant="wave"`, scaled via
+  `--dot-cell-size: 0.125rem; --dot-cell-gap: 0.078rem`) + `"Step N/Total"`
+  (`tabular-nums`).
+- Hover checklist card: `rounded-[10px] bg-popover shadow-popover` + the same
+  0.5px ring, `px-1 py-2`, `max-w-[520px]`. Rows: `CheckCircleFilled` muted +
+  `line-through` `text-muted-foreground/60` label (done); `Spinner` +
+  `text-foreground` label (in progress); `Circle` faint + `text-muted-foreground`
+  label (pending).
+- No scroll cap — the pill is transient and the checklist only appears on
+  hover, so there is no persistent 160px budget to protect.
+
+Do **not** reintroduce a persistent, always-mounted todo panel in the dock —
+that is exactly the pattern this pill replaced.
 
 ### 4.5 ProposedPlanCard specifics
 
@@ -611,7 +661,7 @@ These are patterns that were tried and rejected. Reintroducing them reopens know
   tool approvals go in `ApprovalCard`; formal plan decisions go in
   `ProposedPlanCard`.
 - **`!h-8 !px-2.5` style `!important` button overrides.** Fixed at the root by adding `tailwind-merge` to the `Button` primitive. Don't reintroduce `!` bangs.
-- **`useActivePlan` hook.** Renamed to `useActiveTodoTracker` and narrowed to `structured_plan` only. The old name and signature are gone.
+- **`useActivePlan` hook.** Renamed to `useActiveTodoTracker`; it now derives from raw `plan` items across all agents (see §3.4). The old name and signature are gone.
 - **Icons + label chips + separator + title stacked in a header.** The whole "RUN COMMAND · git push origin main" pattern was dropped. Just the title.
 
 ## 7. Iterating visually — the playground
@@ -621,7 +671,7 @@ These are patterns that were tried and rejected. Reintroducing them reopens know
 Scenarios (selectable via `?s=<key>`):
 
 - `clean` — baseline, no panel
-- `todos-short`, `todos-mid`, `todos-long` — TodoTrackerPanel at three sizes
+- `todos-short`, `todos-mid`, `todos-long` — TodoProgressPill pinned open (pill + checklist) at three plan sizes, via `PlaygroundFloatingSlotFixtures.tsx`
 - `execute-approval`, `edit-approval` — ApprovalCard execute/edit variants
 - `workspace-receipt-setup-succeeded`, `workspace-receipt-setup-failed` — WorkspaceCreationReceiptView (transcript creation receipt) collapsed/expanded
 - `cloud-first-runtime`, `cloud-provisioning`, `cloud-applying-files`, `cloud-blocked`, `cloud-error`, `cloud-reconnecting`, `cloud-reconnect-error` — cloud workspace/runtime composer states
@@ -652,5 +702,6 @@ Thin page → fat components, per the `pages/**` orchestration-only rule:
 - `components/playground/PlaygroundScenarioBar.tsx` — top-bar scenario picker
 - `components/playground/PlaygroundTranscript.tsx` — transcript area (renders `ProposedPlanCard` when applicable)
 - `components/playground/PlaygroundComposer.tsx` — `ChatComposerDock` + scenario-driven dock slots + read-only composer surface
+- `components/playground/composer-slots/PlaygroundFloatingSlotFixtures.tsx` — `floatingSlot` fixture renderer (todo progress pill scenarios)
 
 Adding a new scenario: update `config/playground.ts` (add the key + label), optionally add fixture data in `__fixtures__/playground.ts`, then extend the relevant slot renderer in `PlaygroundComposer` and/or `PlaygroundTranscript`.

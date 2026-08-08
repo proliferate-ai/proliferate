@@ -987,6 +987,11 @@ export const themeTokens = {
     light: motion.cssMs(motion.duration.disclosureMs),
     provenance: "[RETUNE:motion/roles]",
   },
+  "--duration-dissolve": {
+    dark: motion.cssMs(motion.duration.dissolveMs),
+    light: motion.cssMs(motion.duration.dissolveMs),
+    provenance: "[RETUNE:motion/roles]",
+  },
   "--duration-emphasized": {
     dark: motion.cssMs(motion.duration.emphasizedMs),
     light: motion.cssMs(motion.duration.emphasizedMs),

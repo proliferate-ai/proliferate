@@ -4,48 +4,21 @@ import { resolveComposerDockSlots } from "./resolve-dock-slots";
 const BASE_INPUT = {
   pendingPromptCount: 0,
   primaryPendingInteractionKind: null,
-  hasActiveTodoTracker: false,
   hasDelegatedWork: false,
   hasWorkspaceActivity: false,
   hasSessionGoal: false,
 } as const;
 
 describe("resolveComposerDockSlots", () => {
-  it("prioritizes blocking interactions over todo state", () => {
+  it("surfaces a blocking interaction as the active slot", () => {
     expect(resolveComposerDockSlots({
       ...BASE_INPUT,
       primaryPendingInteractionKind: "permission",
-      hasActiveTodoTracker: true,
     }).activeSlot).toEqual({ kind: "permission" });
   });
 
-  it("keeps todo progress as a strip companion while an interaction holds the slot", () => {
-    expect(resolveComposerDockSlots({
-      ...BASE_INPUT,
-      primaryPendingInteractionKind: "permission",
-      hasActiveTodoTracker: true,
-    }).activeSlotCompanion).toEqual({ kind: "todo_strip" });
-  });
-
-  it("omits the strip companion when there is no active todo tracker", () => {
-    expect(resolveComposerDockSlots({
-      ...BASE_INPUT,
-      primaryPendingInteractionKind: "permission",
-    }).activeSlotCompanion).toBeNull();
-  });
-
-  it("omits the strip companion when the tracker owns the slot itself", () => {
-    expect(resolveComposerDockSlots({
-      ...BASE_INPUT,
-      hasActiveTodoTracker: true,
-    }).activeSlotCompanion).toBeNull();
-  });
-
-  it("uses todo state only when no blocking interaction exists", () => {
-    expect(resolveComposerDockSlots({
-      ...BASE_INPUT,
-      hasActiveTodoTracker: true,
-    }).activeSlot).toEqual({ kind: "todo_tracker" });
+  it("leaves the active slot empty when there is no blocking interaction", () => {
+    expect(resolveComposerDockSlots(BASE_INPUT).activeSlot).toBeNull();
   });
 
   it("keeps workspace activity while suppressing session-owned slots", () => {
@@ -55,13 +28,11 @@ describe("resolveComposerDockSlots", () => {
       pendingPromptCount: 2,
       recoveredPromptCount: 1,
       primaryPendingInteractionKind: "user_input",
-      hasActiveTodoTracker: true,
       hasWorkspaceActivity: true,
       hasSessionGoal: true,
     })).toEqual({
       outboundSlot: null,
       activeSlot: null,
-      activeSlotCompanion: null,
       attachedSlot: {
         delegatedWork: false,
         workspaceActivity: true,

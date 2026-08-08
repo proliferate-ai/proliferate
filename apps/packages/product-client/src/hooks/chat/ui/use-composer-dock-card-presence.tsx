@@ -11,8 +11,8 @@ interface HeldSlotEntry {
 
 /**
  * Presence controller for the composer dock's active card slot. Every card
- * that docks there (approval, user input, MCP elicitation, todo tracker)
- * gets one shared motion grammar:
+ * that docks there (approval, user input, MCP elicitation) gets one shared
+ * motion grammar:
  *
  *   - mount: emphasized spring recipe — 300ms cubic-bezier(.16,1,.3,1)
  *     translate/scale/opacity entrance (.composer-dock-card-enter)

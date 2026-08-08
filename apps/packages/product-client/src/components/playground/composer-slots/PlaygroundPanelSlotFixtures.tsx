@@ -1,10 +1,6 @@
 import type { ReactNode } from "react";
 import { ApprovalCard } from "#product/components/workspace/chat/input/ApprovalCard";
 import { McpElicitationCard } from "#product/components/workspace/chat/input/McpElicitationCard";
-import {
-  TodoTrackerPanel,
-  TodoTrackerStrip,
-} from "#product/components/workspace/chat/input/TodoTrackerPanel";
 import { UserInputCard } from "#product/components/workspace/chat/input/UserInputCard";
 import { PlaygroundInteractionMotionFixture } from "#product/components/playground/composer-slots/PlaygroundInteractionMotionFixture";
 import { WorkspaceCreationReceiptView } from "#product/components/workspace/chat/transcript/WorkspaceCreationReceipt";
@@ -25,11 +21,6 @@ import {
   USER_INPUT_SINGLE_FREEFORM,
   USER_INPUT_SINGLE_OPTION,
 } from "#product/lib/domain/chat/__fixtures__/playground/panel-interaction-fixtures";
-import {
-  TODOS_LONG,
-  TODOS_MID,
-  TODOS_SHORT,
-} from "#product/lib/domain/chat/__fixtures__/playground/panel-todo-fixtures";
 import { noop, noopAsync, revealExampleUrl } from "#product/components/playground/PlaygroundComposerActions";
 
 export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {
@@ -43,28 +34,6 @@ export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null 
     case "subagents-queued-wake":
     case "subagent-wake-card":
       return null;
-    case "todos-short":
-      return <TodoTrackerPanel entries={TODOS_SHORT} />;
-    case "todos-mid":
-      return <TodoTrackerPanel entries={TODOS_MID} />;
-    case "todos-long":
-      return <TodoTrackerPanel entries={TODOS_LONG} />;
-    // Mirrors the production active-slot composition (use-composer-dock-slots):
-    // while an interaction holds the slot, plan progress collapses to the slim
-    // one-line strip directly below the card instead of being evicted.
-    case "todo-strip-with-approval":
-      return (
-        <>
-          <ApprovalCard
-            title="pnpm exec vitest run --reporter=dot"
-            actions={EXECUTE_OPTIONS}
-            onSelectOption={noop}
-            onAllow={noop}
-            onDeny={noop}
-          />
-          <TodoTrackerStrip entries={TODOS_MID} />
-        </>
-      );
     // Auto-cycling pending→resolved loop for the dock-card mount/exit motion.
     case "interaction-motion":
       return <PlaygroundInteractionMotionFixture />;

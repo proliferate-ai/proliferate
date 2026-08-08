@@ -10,15 +10,7 @@ export type ComposerDockOutboundSlot =
 export type ComposerDockActiveSlot =
   | { kind: "permission" }
   | { kind: "user_input" }
-  | { kind: "mcp_elicitation" }
-  | { kind: "todo_tracker" };
-
-/**
- * Slim companion rendered directly below the active interaction card so plan
- * progress is not evicted entirely while a permission/question/MCP form
- * holds the dock's single active slot.
- */
-export type ComposerDockActiveSlotCompanion = { kind: "todo_strip" };
+  | { kind: "mcp_elicitation" };
 
 export interface ComposerDockAttachedSlot {
   delegatedWork: boolean;
@@ -39,7 +31,6 @@ export interface ComposerDockAttachedSlot {
 export interface ComposerDockSlotResolution {
   outboundSlot: ComposerDockOutboundSlot | null;
   activeSlot: ComposerDockActiveSlot | null;
-  activeSlotCompanion: ComposerDockActiveSlotCompanion | null;
   attachedSlot: ComposerDockAttachedSlot | null;
 }
 
@@ -48,7 +39,6 @@ export interface ResolveComposerDockSlotsInput {
   pendingPromptCount: number;
   recoveredPromptCount?: number;
   primaryPendingInteractionKind: ComposerDockInteractionKind | null;
-  hasActiveTodoTracker: boolean;
   hasDelegatedWork: boolean;
   hasWorkspaceActivity: boolean;
   hasSessionGoal: boolean;
@@ -60,7 +50,6 @@ export function resolveComposerDockSlots({
   pendingPromptCount,
   recoveredPromptCount = 0,
   primaryPendingInteractionKind,
-  hasActiveTodoTracker,
   hasDelegatedWork,
   hasWorkspaceActivity,
   hasSessionGoal,
@@ -72,12 +61,8 @@ export function resolveComposerDockSlots({
       ? { kind: "pending_prompts" as const }
       : null;
   const activeSlot = !suppressSessionSlots
-    ? resolveActiveSlot(primaryPendingInteractionKind, hasActiveTodoTracker)
+    ? resolveActiveSlot(primaryPendingInteractionKind)
     : null;
-  const activeSlotCompanion =
-    activeSlot && activeSlot.kind !== "todo_tracker" && hasActiveTodoTracker
-      ? { kind: "todo_strip" as const }
-      : null;
   const attachedDelegatedWork = !suppressSessionSlots && hasDelegatedWork;
   const attachedWorkspaceActivity = hasWorkspaceActivity;
   const attachedSessionGoal = !suppressSessionSlots && hasSessionGoal;
@@ -98,17 +83,12 @@ export function resolveComposerDockSlots({
   return {
     outboundSlot,
     activeSlot,
-    activeSlotCompanion,
     attachedSlot,
   };
 }
 
 function resolveActiveSlot(
   primaryPendingInteractionKind: ComposerDockInteractionKind | null,
-  hasActiveTodoTracker: boolean,
 ): ComposerDockActiveSlot | null {
-  if (primaryPendingInteractionKind) {
-    return { kind: primaryPendingInteractionKind };
-  }
-  return hasActiveTodoTracker ? { kind: "todo_tracker" } : null;
+  return primaryPendingInteractionKind ? { kind: primaryPendingInteractionKind } : null;
 }
