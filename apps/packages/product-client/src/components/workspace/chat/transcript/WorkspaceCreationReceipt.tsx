@@ -88,13 +88,18 @@ export function WorkspaceCreationReceiptView({
         aria-controls={hasLog ? logId : undefined}
         className="group/receipt h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left text-chat font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline disabled:cursor-default disabled:opacity-100"
       >
-        <Fork aria-hidden="true" className="icon-compact shrink-0 text-faint" />
+        {/* The spinner owns the leading icon slot while work is in flight.
+            Trailing the label instead means the indicator jumps to a new x
+            every time the phase changes the text ("Creating worktree" →
+            "Worktree created · Setup running"). */}
+        {presentation.showSpinner ? (
+          <Spinner className="icon-compact shrink-0 text-muted-foreground" />
+        ) : (
+          <Fork aria-hidden="true" className="icon-compact shrink-0 text-faint" />
+        )}
         <span className="min-w-0 truncate">{presentation.line}</span>
         {presentation.busyLabel && (
           <span className="shrink-0 text-faint">· {presentation.busyLabel}</span>
-        )}
-        {presentation.showSpinner && (
-          <Spinner className="icon-compact shrink-0 text-muted-foreground" />
         )}
         {hasLog && (
           <ChevronDown
