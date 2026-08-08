@@ -18,10 +18,10 @@ pub const DEPRECATED_TOOL_ALIASES: &[(&str, &str)] = &[
 // call takes the ROUTE's workspace write lease — the lease on the workspace in
 // the URL, which is always the caller's.
 //
-// `send_agent_message` is deliberately absent. It is the one tool here whose
-// target can live in another workspace, so the caller's lease is the wrong one
-// and it takes the TARGET workspace's lease itself
-// (`peer_ops::lease_target_workspace_for_send`), together with the target
+// `send_agent_message` and `configure_agent` are deliberately absent. They are
+// the tools here whose target can live in another workspace, so the caller's
+// lease is the wrong one and they take the TARGET workspace's lease themselves
+// (`peer_ops::lease_target_workspace_for_peer_write`), together with the target
 // session's mutation permit. That is also the only way to keep the canonical
 // `permit -> workspace lease` order: a route lease taken before the permit is
 // the reversed order `api/session_admission_tests.rs` proves deadlocks against
@@ -129,6 +129,25 @@ pub struct ScheduleAgentWakeArgs {
     pub session_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAgentConfigOptionsArgs {
+    pub session_id: String,
+}
+
+/// Deliberately the same two fields as `SetSessionConfigOptionRequest`, the
+/// body the human client posts to `/v1/sessions/{id}/config-options`. Model,
+/// mode and thinking/effort are all `configId` + `value` pairs there; giving
+/// agents a second vocabulary for the same apply path would be a vocabulary to
+/// keep in sync, not a simplification.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigureAgentArgs {
+    pub session_id: String,
+    pub config_id: String,
+    pub value: String,
+}
+
 #[derive(Debug, Default, Deserialize, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum ReadAgentTranscriptMode {
@@ -218,6 +237,30 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
                     "sessionId": { "type": "string", "description": "Agent to wait on. Any open session, in any workspace." }
                 },
                 "required": ["sessionId"]
+            }),
+        ),
+        tool_definition(
+            "get_agent_config_options",
+            "Describe what another agent's configuration allows changing right now: model, mode, thinking/effort and any other control its harness exposes, each with the configId and values configure_agent accepts. Values are composed from the target's own workspace catalog and its live controls, so they are what THAT agent can run — not what you can. Closed agents have no configuration left and are rejected.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string", "description": "Agent to inspect. Any open session, in any workspace." }
+                },
+                "required": ["sessionId"]
+            }),
+        ),
+        tool_definition(
+            "configure_agent",
+            "Change one configuration option on another open agent — model, mode, thinking/effort, or anything else get_agent_config_options lists. Call get_agent_config_options first: configId and value must come from that target's composed options. The change applies immediately when the agent is idle and is queued to its next idle moment when it is mid-turn; either way it persists, so a relaunch keeps it. You cannot configure yourself.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string", "description": "Target agent's session id." },
+                    "configId": { "type": "string", "description": "Option identifier from get_agent_config_options (for example \"model\" or \"mode\")." },
+                    "value": { "type": "string", "description": "One of that option's listed values." }
+                },
+                "required": ["sessionId", "configId", "value"]
             }),
         ),
         tool_definition(
@@ -482,6 +525,45 @@ mod tests {
         assert!(MUTATING_TOOL_NAMES.contains(&"schedule_agent_wake"));
         assert!(!MUTATING_TOOL_NAMES.contains(&"list_agents"));
         assert!(!MUTATING_TOOL_NAMES.contains(&"read_agent_transcript"));
+    }
+
+    #[test]
+    fn configure_agent_leases_in_the_call_and_reading_options_leases_nothing() {
+        // Same shape as `send_agent_message`, for the same reason: the target
+        // can be in another workspace, so the route's caller-workspace lease is
+        // the wrong one AND would be taken before the permit.
+        assert!(!MUTATING_TOOL_NAMES.contains(&"configure_agent"));
+        // Read-only: composing a target's options touches nothing.
+        assert!(!MUTATING_TOOL_NAMES.contains(&"get_agent_config_options"));
+    }
+
+    #[test]
+    fn configure_tools_are_offered_to_every_caller() {
+        // Ruling 3: an unpromoted subagent loses the spawn tools and keeps
+        // messaging, reading, waking and configuring.
+        for ctx in [context(true, 2), context(false, 0)] {
+            let tools = build_tool_list(&ctx);
+            let names = tool_names(&tools);
+
+            assert!(names.contains(&"get_agent_config_options"));
+            assert!(names.contains(&"configure_agent"));
+        }
+    }
+
+    #[test]
+    fn configure_agent_takes_the_human_config_option_fields() {
+        // configId/value are the SetSessionConfigOptionRequest fields. A
+        // renamed pair here would be a second vocabulary over one apply path.
+        let configure = build_tool_list(&context(true, 0))
+            .into_iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("configure_agent"))
+            .expect("configure_agent is advertised");
+
+        let required = configure
+            .pointer("/inputSchema/required")
+            .and_then(Value::as_array)
+            .expect("required list");
+        assert_eq!(required, &["sessionId", "configId", "value"]);
     }
 
     #[test]

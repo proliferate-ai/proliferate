@@ -652,47 +652,51 @@ fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
 }
 
 #[test]
-fn the_peer_send_takes_the_permit_before_the_target_workspace_lease() {
-    // The one dual-lock site outside `api/http/`: `send_agent_message` is the
-    // first product-MCP tool that can prompt an ARBITRARY session, so it takes
-    // the target session's permit and the TARGET workspace's write lease itself
-    // rather than through the route's `MUTATING_TOOL_NAMES` lease (which is the
-    // CALLER's workspace, and would be taken before the permit — the reversed
-    // order `reversed_order_deadlocks` proves hangs). Same guard as the handler
-    // rows above; separate because the function is private, so it has no
-    // `pub async fn` signature for `handler_body` to find.
+fn the_peer_tools_take_the_permit_before_the_target_workspace_lease() {
+    // The dual-lock sites outside `api/http/`: `send_agent_message` and
+    // `configure_agent` are the product-MCP tools that can perturb an ARBITRARY
+    // session, so each takes the target session's permit and the TARGET
+    // workspace's write lease itself rather than through the route's
+    // `MUTATING_TOOL_NAMES` lease (which is the CALLER's workspace, and would be
+    // taken before the permit — the reversed order `reversed_order_deadlocks`
+    // proves hangs). Same guard as the handler rows above; separate because the
+    // functions are private, so they have no `pub async fn` signature for
+    // `handler_body` to find.
     let rel_path = "src/domains/sessions/agent_ops/calls.rs";
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel_path);
     let text =
         std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("read {rel_path}: {error}"));
-    let signature = "async fn send_agent_message(";
-    let start = text
-        .find(signature)
-        .unwrap_or_else(|| panic!("{rel_path}: send_agent_message not found"));
-    let rest = &text[start..];
-    // Private items follow, so stop at this function's own closing brace rather
-    // than at the next `pub` item.
-    let end = rest
-        .find("\n}\n")
-        .map(|idx| idx + 3)
-        .unwrap_or(rest.len());
-    let body = &rest[..end];
 
-    let admit_at = body
-        .find("admit_peer_send(")
-        .expect("send_agent_message must acquire the target session's mutation permit");
-    let lease_at = body
-        .find("lease_target_workspace_for_send(")
-        .expect("send_agent_message must lease the TARGET workspace");
-    assert!(
-        admit_at < lease_at,
-        "send_agent_message: 'admit_peer_send' must come BEFORE \
-         'lease_target_workspace_for_send' — {LOCK_01_ORDER}"
-    );
-    // And the dispatch stays inside both: a permit dropped before the prompt is
-    // enqueued fences nothing.
-    let dispatch_at = body
-        .find("send_text_prompt_with_provenance(")
-        .expect("send_agent_message must dispatch the prompt");
-    assert!(lease_at < dispatch_at);
+    for (tool, dispatch) in [
+        ("send_agent_message", "send_text_prompt_with_provenance("),
+        ("configure_agent", "set_live_session_config_option("),
+    ] {
+        let signature = format!("async fn {tool}(");
+        let start = text
+            .find(&signature)
+            .unwrap_or_else(|| panic!("{rel_path}: {tool} not found"));
+        let rest = &text[start..];
+        // Private items follow, so stop at this function's own closing brace
+        // rather than at the next `pub` item.
+        let end = rest.find("\n}\n").map(|idx| idx + 3).unwrap_or(rest.len());
+        let body = &rest[..end];
+
+        let admit_at = body
+            .find("admit_peer_mutation(")
+            .unwrap_or_else(|| panic!("{tool} must acquire the target session's mutation permit"));
+        let lease_at = body
+            .find("lease_target_workspace_for_peer_write(")
+            .unwrap_or_else(|| panic!("{tool} must lease the TARGET workspace"));
+        assert!(
+            admit_at < lease_at,
+            "{tool}: 'admit_peer_mutation' must come BEFORE \
+             'lease_target_workspace_for_peer_write' — {LOCK_01_ORDER}"
+        );
+        // And the dispatch stays inside both: a permit dropped before the work
+        // lands fences nothing.
+        let dispatch_at = body
+            .find(dispatch)
+            .unwrap_or_else(|| panic!("{tool} must dispatch through {dispatch}"));
+        assert!(lease_at < dispatch_at, "{tool}: dispatch escaped the locks");
+    }
 }
