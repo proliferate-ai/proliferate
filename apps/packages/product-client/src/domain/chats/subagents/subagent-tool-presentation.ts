@@ -41,6 +41,12 @@ export function formatSubagentMcpActionLabel(toolName: string | null | undefined
     case "mcp__subagents__close_agent":
     case "mcp__subagents__close_subagent":
       return "Closed subagent";
+    case "mcp__subagents__send_agent_message":
+      return "Sent agent message";
+    case "mcp__subagents__list_agents":
+      return "Listed agents";
+    case "mcp__subagents__read_agent_transcript":
+      return "Read agent transcript";
     default:
       return null;
   }
@@ -76,6 +82,17 @@ export function formatSubagentHeaderVerb({
   }
   if (toolName === "mcp__subagents__close_agent" || toolName === "mcp__subagents__close_subagent") {
     return isRunning ? "Closing subagent" : "Subagent closed";
+  }
+  // Peer agent ops. Without their own entries these fall through to the
+  // creation verb below, which would claim a spawn that never happened.
+  if (toolName === "mcp__subagents__send_agent_message") {
+    return isRunning ? "Sending message to agent" : "Message sent to agent";
+  }
+  if (toolName === "mcp__subagents__list_agents") {
+    return isRunning ? "Listing agents" : "Agents listed";
+  }
+  if (toolName === "mcp__subagents__read_agent_transcript") {
+    return isRunning ? "Reading agent transcript" : "Agent transcript read";
   }
   if (executionState === "failed") {
     return "Subagent launch failed";

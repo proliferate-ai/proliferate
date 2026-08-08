@@ -61,6 +61,26 @@ describe("subagent tool presentation", () => {
     })).toBe("Subagent closed");
   });
 
+  it("names the peer agent ops tools instead of falling back to the creation verb", () => {
+    expect(formatSubagentMcpActionLabel("mcp__subagents__send_agent_message"))
+      .toBe("Sent agent message");
+    expect(formatSubagentMcpActionLabel("mcp__subagents__list_agents"))
+      .toBe("Listed agents");
+    expect(formatSubagentMcpActionLabel("mcp__subagents__read_agent_transcript"))
+      .toBe("Read agent transcript");
+
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__send_agent_message" },
+      executionState: "completed",
+      isRunning: false,
+    })).toBe("Message sent to agent");
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__read_agent_transcript" },
+      executionState: "running",
+      isRunning: true,
+    })).toBe("Reading agent transcript");
+  });
+
   it("derives concise status receipt presentation with the child target", () => {
     const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
       nativeToolName: "mcp__subagents__get_subagent_status",
