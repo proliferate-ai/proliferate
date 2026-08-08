@@ -554,9 +554,42 @@ The ACP runtime owns:
 - restoring persisted config after resume
 - emitting config updates when ACP changes the active surface
 
+### Who requests a config change
+
+Two callers reach the same `SessionRuntime::set_live_session_config_option`, and
+neither has its own apply machinery:
+
+- the human client, through
+  `POST /v1/sessions/{session_id}/config-options`
+- another agent, through the `configure_agent` tool on the agent ops MCP
+  (`domains/sessions/agent_ops/**`)
+
+The tool takes the same `configId`/`value` pair the route's request body does.
+It differs only in what it must establish before applying, because the session
+it mutates is not the one it was called on:
+
+- the options it validates against are composed for the TARGET session's
+  workspace (`resolved_workspace_launch_options` for that workspace, merged
+  with that session's live snapshot) — never the calling agent's workspace
+- it acquires the TARGET session's `SessionMutationKind::Config` admission
+  permit with an External source, so a workflow-controlled session refuses a
+  foreign change with the same stable conflict the HTTP route answers
+- it then takes the TARGET workspace's shared `SubagentWrite` operation lease,
+  unconditionally and with no same/different-workspace branch, in the canonical
+  `permit -> operation lease` order. There is nothing to reuse: `configure_agent`
+  is deliberately absent from `tools::MUTATING_TOOL_NAMES`, so the MCP endpoint
+  holds NO workspace lease for this call, and the route's lease would have been
+  the CALLER's workspace anyway — the wrong one to hold open against the target
+  workspace's retire preflight. `send_agent_message` works the same way; the
+  comment at `agent_ops/tools.rs` on `MUTATING_TOOL_NAMES` is the code-side
+  statement of it.
+- the caller's own workspace is still asserted mutable (an access-gate check,
+  no lease), because the route stopped doing it once the tool left
+  `MUTATING_TOOL_NAMES`
+
 ### End-to-end config flow
 
-1. client requests a config change
+1. client or peer agent requests a config change
 2. `SessionRuntime` ensures the actor is live
 3. the actor tries to apply the change through ACP
 4. if the session is busy, the change is queued durably

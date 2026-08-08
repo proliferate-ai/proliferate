@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod calls;
 mod calls_helpers;
+mod config_ops;
 pub mod context;
 pub mod definition;
 mod peer_ops;

@@ -40,6 +40,26 @@ impl SessionRuntime {
 
         // Config mutations go through the live ACP actor. If the actor is not
         // running yet, start or resume it and return its control handle.
+        //
+        // KNOWN SIDE EFFECT: this boots an idle session BEFORE anything below
+        // can decide the change is unappliable, so a request that ends in a
+        // rejection still leaves the agent running. It matters most for
+        // `configure_agent`, whose composed menu advertises the target
+        // workspace's whole catalog: a model in that catalog that this
+        // session's recorded auth contexts do not authorize is advertised,
+        // accepted by validation, boots the target here, and only then loses at
+        // the live actor with no relaunch fallback.
+        //
+        // The obvious fix — hoist `live_model_switch_authorized` above this —
+        // does NOT work and is deliberately not done. That call is made for
+        // every `config_id`, not only model ones, and returns false for any
+        // value that is not a catalog model (a mode or effort value always
+        // is). It is a "may we relaunch if the live actor refuses" flag, not an
+        // apply gate, so hoisting it changes nothing, and promoting it to a
+        // gate would refuse every non-model control change on the human route
+        // too. Narrowing the advertised set (or a pre-apply liveness-free
+        // authorization keyed on config_id) is the real fix, and is follow-up
+        // work rather than a reorder here.
         let handle = self
             .ensure_live_session_handle(&record, None)
             .await

@@ -266,7 +266,7 @@ impl SessionStore {
     ///   SKIPPED ENTIRELY — its row stays armed and fires at the target's next
     ///   finished turn after control releases. A pointer is a prompt, and every
     ///   other prompt path refuses a controlled session
-    ///   (`peer_ops::admit_peer_send`).
+    ///   (`peer_ops::admit_peer_mutation`).
     /// - a CLOSED watcher's row is deleted with NO prompt: a closed session
     ///   takes no input (ruling 6), so the schedule can never be fulfilled and
     ///   leaving it would strand the row forever.

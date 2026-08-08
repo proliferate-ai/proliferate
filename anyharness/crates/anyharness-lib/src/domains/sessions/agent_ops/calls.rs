@@ -1,23 +1,29 @@
 use std::collections::HashMap;
 
+use anyharness_contract::v1::ConfigApplyState;
 use serde_json::{json, Value};
 
 use super::calls_helpers::{
     default_model_for_agent, initial_config_string, launch_agents_to_json, mode_options_to_json,
     prompt_outcome_label, summaries_to_json,
 };
+use super::config_ops::{
+    compose_agent_config_options, controls_to_json, current_selection_to_json,
+    prepare_agent_config_change,
+};
 use super::context::AgentOpsMcpContext;
 use super::peer_ops::{
-    admit_peer_send, assert_workspace_can_be_mutated, authorize_transcript_read,
-    consume_reply_wake, lease_target_workspace_for_send, prepare_agent_message,
+    admit_peer_mutation, assert_workspace_can_be_mutated, authorize_transcript_read,
+    consume_reply_wake, lease_target_workspace_for_peer_write, prepare_agent_message,
+};
+use super::tools::{
+    canonical_tool_name, ChildSessionArgs, ConfigureAgentArgs, CreateSubagentArgs,
+    GetAgentConfigOptionsArgs, ListAgentsArgs, ReadAgentTranscriptArgs, ReadAgentTranscriptMode,
+    ReadSubagentEventsArgs, ReadSubagentLatestTurnsArgs, ScheduleAgentWakeArgs,
+    SearchSubagentTranscriptArgs, SendAgentMessageArgs, SendSubagentMessageArgs,
 };
 use super::AgentOpsPeerGates;
-use super::tools::{
-    canonical_tool_name, ChildSessionArgs, CreateSubagentArgs, ListAgentsArgs,
-    ReadAgentTranscriptArgs, ReadAgentTranscriptMode, ReadSubagentEventsArgs,
-    ReadSubagentLatestTurnsArgs, ScheduleAgentWakeArgs, SearchSubagentTranscriptArgs,
-    SendAgentMessageArgs, SendSubagentMessageArgs,
-};
+use crate::domains::sessions::admission::SessionMutationKind;
 use crate::domains::sessions::authorize::{authorize, AgentAccessIntent};
 use crate::domains::sessions::delegation::{
     parent_to_child_provenance, READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT,
@@ -73,6 +79,14 @@ pub async fn call_tool(
         "schedule_agent_wake" => {
             let args: ScheduleAgentWakeArgs = deserialize_args(arguments)?;
             schedule_agent_wake(wake_service, &ctx.parent_session_id, args)
+        }
+        "get_agent_config_options" => {
+            let args: GetAgentConfigOptionsArgs = deserialize_args(arguments)?;
+            get_agent_config_options(service, session_runtime, &ctx.parent_session_id, args)
+        }
+        "configure_agent" => {
+            let args: ConfigureAgentArgs = deserialize_args(arguments)?;
+            configure_agent(service, session_runtime, gates, ctx, args).await
         }
         "schedule_subagent_wake" => {
             let args: ChildSessionArgs = deserialize_args(arguments)?;
@@ -564,14 +578,19 @@ async fn send_agent_message(
     let caller_session_id = ctx.parent_session_id.as_str();
     // The caller's own workspace still has to be writable — the route used to
     // check this for us, and stopped once this tool started taking its own
-    // leases (see `lease_target_workspace_for_send`). No lease: nothing here
+    // leases (see `lease_target_workspace_for_peer_write`). No lease: nothing here
     // mutates the caller's workspace.
     assert_workspace_can_be_mutated(service.access_gate(), &ctx.workspace_id)?;
     // Canonical lock order, and the reason this tool is absent from
     // `MUTATING_TOOL_NAMES`: session mutation permit FIRST, then the target
     // workspace's write lease. Both are held across the dispatch below.
-    let _admission_permit = admit_peer_send(&gates.session_admission, &prepared.target.id).await?;
-    let _target_workspace_lease = lease_target_workspace_for_send(
+    let _admission_permit = admit_peer_mutation(
+        &gates.session_admission,
+        &prepared.target.id,
+        SessionMutationKind::Prompt,
+    )
+    .await?;
+    let _target_workspace_lease = lease_target_workspace_for_peer_write(
         &gates.workspace_operation_gate,
         service.access_gate(),
         &prepared.target.workspace_id,
@@ -718,6 +737,101 @@ fn schedule_agent_wake(
         } else {
             "the target's next turn finishes — it is idle now, so nothing fires until someone prompts it"
         },
+    }))
+}
+
+fn get_agent_config_options(
+    service: &SubagentService,
+    session_runtime: &SessionRuntime,
+    caller_session_id: &str,
+    args: GetAgentConfigOptionsArgs,
+) -> anyhow::Result<Value> {
+    let composed = compose_agent_config_options(
+        service.session_store(),
+        caller_session_id,
+        args.session_id.trim(),
+        // The TARGET's workspace, always: its catalog, readiness and auth
+        // contexts decide what it may run, and they need not match the
+        // caller's.
+        |workspace_id| session_runtime.resolved_workspace_launch_options(workspace_id),
+        |session_id| session_runtime.live_config_snapshot(session_id),
+    )?;
+    Ok(json!({
+        "sessionId": composed.target.id,
+        "workspaceId": composed.target.workspace_id,
+        "title": composed.target.title,
+        "agentKind": composed.target.agent_kind,
+        "status": composed.target.status,
+        "optionsWorkspaceId": composed.catalog_workspace_id,
+        "current": current_selection_to_json(&composed.target),
+        "configurable": controls_to_json(&composed.controls),
+        // The human client's exact live-config contract, verbatim: same
+        // rawConfigOptions / normalizedControls an operator sees.
+        "liveConfig": composed.live_config,
+        "notes": [
+            "Pass a configId and one of its values to configure_agent.",
+            "source=live means the agent's harness is advertising that value right now; source=workspace_catalog means the target's workspace authorizes it and applying may relaunch the agent to reach it.",
+            "A target that has never run reports no liveConfig; its model options still come from its workspace catalog.",
+        ],
+    }))
+}
+
+async fn configure_agent(
+    service: &SubagentService,
+    session_runtime: &SessionRuntime,
+    gates: &AgentOpsPeerGates,
+    ctx: &AgentOpsMcpContext,
+    args: ConfigureAgentArgs,
+) -> anyhow::Result<Value> {
+    // Read-only up to here: authorize, compose the target's universe, validate.
+    // A refusal costs no permit and no lease.
+    let prepared = prepare_agent_config_change(
+        service.session_store(),
+        &ctx.parent_session_id,
+        args.session_id.trim(),
+        &args.config_id,
+        &args.value,
+        |workspace_id| session_runtime.resolved_workspace_launch_options(workspace_id),
+        |session_id| session_runtime.live_config_snapshot(session_id),
+    )?;
+    // The caller's own workspace still has to be writable, exactly as for
+    // `send_agent_message`: the route stopped checking once this tool left
+    // `MUTATING_TOOL_NAMES`. No lease — nothing here mutates it.
+    assert_workspace_can_be_mutated(service.access_gate(), &ctx.workspace_id)?;
+    // Canonical lock order, and the reason this tool is absent from
+    // `MUTATING_TOOL_NAMES`: the TARGET's session mutation permit FIRST — a
+    // workflow-controlled agent refuses a foreign config change before any
+    // side effect — then the TARGET workspace's write lease, which is the one
+    // whose retire preflight has to see this work.
+    let _admission_permit = admit_peer_mutation(
+        &gates.session_admission,
+        &prepared.target.id,
+        SessionMutationKind::Config,
+    )
+    .await?;
+    let _target_workspace_lease = lease_target_workspace_for_peer_write(
+        &gates.workspace_operation_gate,
+        service.access_gate(),
+        &prepared.target.workspace_id,
+    )
+    .await?;
+    // The existing apply path, unchanged: it boots an idle target, queues
+    // behind an active turn, and persists requested_*/current_* so a relaunch
+    // converges on the new selection.
+    let (session, live_config, apply_state) = session_runtime
+        .set_live_session_config_option(&prepared.target.id, &prepared.config_id, &prepared.value)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+    Ok(json!({
+        "sessionId": session.id,
+        "workspaceId": session.workspace_id,
+        "title": session.title,
+        "configId": prepared.config_id,
+        "value": prepared.value,
+        "applyState": serde_json::to_value(&apply_state)?,
+        "queued": matches!(apply_state, ConfigApplyState::Queued),
+        "current": current_selection_to_json(&session),
+        "liveConfig": live_config,
     }))
 }
 

@@ -41,19 +41,62 @@ carried through `initialConfig`.
 
 `subagentId` is the handle for the subagent tool class only. The peer tools in
 the same MCP — `list_agents`, `send_agent_message`, `read_agent_transcript`,
-`schedule_agent_wake` — address any session in the runtime and take `sessionId`,
-because there is no link to derive a scoped handle from. A subagent addressed as
-a peer is addressed by its session id like any other agent.
+`schedule_agent_wake`, `get_agent_config_options`, `configure_agent` — address
+any session in the runtime and take `sessionId`, because there is no link to
+derive a scoped handle from. A subagent addressed as a peer is addressed by its
+session id like any other agent.
 
 "Any session in the runtime" means any session that is an *agent*. The
 peer-reachable set excludes dismissed sessions (deleted from the sidebar, and
 refused by the boot path), closed sessions unless explicitly asked for, the
 caller itself, and `internal_only` sessions — workflow and review plumbing the
 runtime drives, which are not agents the human is running. That is a discovery
-rule: `list_agents` hides them and `send_agent_message` /
-`read_agent_transcript` refuse them. It is not the execution fence — a session
-an active workflow run controls is refused a peer prompt by the same session
-mutation admission permit that fences the HTTP prompt route.
+rule: `list_agents` hides them. What REFUSES them depends on the intent
+(`domains/sessions/authorize.rs`): `internal_only` is refused for both reads and
+writes, so the two surfaces agree; self, closed and dismissed are refused only
+for writes, because a transcript outlives the agent and `read_agent_transcript`
+stays open on all three. It is not the execution fence — a session
+an active workflow run controls is refused a peer prompt or a peer config
+change by the same session mutation admission permit that fences the HTTP
+prompt and config routes.
+
+## Peer Configuration
+
+`get_agent_config_options` and `configure_agent` speak the same vocabulary as
+the human client's `POST /v1/sessions/{session_id}/config-options`: one
+`configId` and one `value`, where model, mode and thinking/effort are all just
+config ids. There is no second agent-facing vocabulary over one apply path.
+
+What differs from the human surface is whose universe the value is checked
+against. The options a peer tool reports are composed for the TARGET's
+workspace — its launch catalog, its readiness, its auth contexts — merged with
+the target's own live control snapshot, never the caller's workspace. Two
+agents in different workspaces can have entirely different menus, and a model
+only the caller's workspace can serve is refused. Values are tagged with where
+they came from: `live` means the target's harness is advertising the value now,
+`workspace_catalog` means the target's workspace authorizes it and applying may
+relaunch the agent to reach it (the same live-or-relaunch rule the human path
+uses; see
+[../../../../../anyharness/sessions.md](../../../../../anyharness/sessions.md)).
+
+Two refusals are specific to the peer form. A target in a TERMINAL state —
+closed, or dismissed — is rejected by both tools rather than answered with a
+menu: its actor never starts again (`runtime/launch_policy.rs` refuses to boot
+a dismissed session, and a closed one is gone), so every item on the composed
+menu is a change that can never be applied. Read and write are deliberately
+symmetric here, which is the one place peer configuration parts company with
+`read_agent_transcript`: a transcript outlives the agent and stays readable
+forever, but a config menu for a session that can never run again describes
+nothing, and advertising one an agent would then be refused is worse than
+saying so up front. And an agent may not target ITSELF with `configure_agent`:
+the change would be routed at the very actor blocked inside the tool call.
+Reading your own options is allowed.
+
+One control-level rule follows the same principle. Each reported control
+carries `settable`, and it is enforced, not advisory: a control whose only
+available value is already the current one accepts no change, because there is
+nothing to move to. A single-value control the target has NOT selected yet is
+still settable — applying it is a real change.
 
 ## Wake Race
 
