@@ -145,7 +145,8 @@ mod tests {
                     Arc::new(|_workspace_id: &str, _session_id: &str| Ok("token".to_string())),
                 );
 
-                let selected = select_product_mcps(&workspace, &session, &[registration])
+                let registrations = [registration];
+                let selected = select_product_mcps(&workspace, &session, &registrations)
                     .expect("select product MCPs");
 
                 assert_eq!(
