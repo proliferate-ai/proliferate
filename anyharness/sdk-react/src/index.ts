@@ -175,6 +175,7 @@ export {
   useSessionEventsQuery,
   useSessionSubagentsQuery,
   useScheduleSubagentWakeMutation,
+  usePromoteSubagentMutation,
   useCreateSessionMutation,
   useSetSessionConfigOptionMutation,
   usePromptSessionMutation,

@@ -229,6 +229,37 @@ export function useScheduleSubagentWakeMutation(options?: { workspaceId?: string
   });
 }
 
+/**
+ * Promote a subagent to a peer, as the human — ADR §4 puts the action in the
+ * agent detail header. Both sides of the link are refetched: the parent's
+ * fanout loses a subordinate, and the child's own context stops naming a
+ * subordinating parent.
+ */
+export function usePromoteSubagentMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const queryClient = useQueryClient();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: { sessionId: string; childSessionId: string }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.promoteSubagent(input.sessionId, input.childSessionId);
+    },
+    onSuccess: async (_response, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, variables.sessionId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, variables.childSessionId),
+        }),
+      ]);
+    },
+  });
+}
+
 export function useCreateSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();

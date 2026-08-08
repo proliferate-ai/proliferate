@@ -980,6 +980,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/subagents/{child_session_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["promote_subagent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/subagents/{child_session_id}/wake": {
         parameters: {
             query?: never;
@@ -3778,6 +3794,25 @@ export interface components {
             exitCode?: number | null;
             /** @enum {string} */
             status: "exited";
+        };
+        /**
+         * @description Promote one of this session's subagents to a peer, as the human. The same
+         *     idempotent write `promote_subagent` performs — §4 puts the action in the
+         *     agent detail header, and the parent can still do it by tool.
+         */
+        PromoteSubagentRequest: Record<string, never>;
+        PromoteSubagentResponse: {
+            /**
+             * @description `true` when the agent was already a peer. Promotion is one write and
+             *     idempotent, so a repeat is a success that changed nothing.
+             */
+            alreadyPromoted: boolean;
+            childSessionId: string;
+            parentSessionId: string;
+            promoted: boolean;
+            promotedAt: string;
+            sessionLinkId: string;
+            subagentId?: string | null;
         };
         /** @enum {string} */
         PromptAttachmentSource: "upload" | "paste";
@@ -8339,6 +8374,53 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    promote_subagent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent session ID — the owner */
+                session_id: string;
+                /** @description Child subagent session ID */
+                child_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteSubagentRequest"];
+            };
+        };
+        responses: {
+            /** @description Subagent promoted to a peer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromoteSubagentResponse"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace or ownership state blocks promotion */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

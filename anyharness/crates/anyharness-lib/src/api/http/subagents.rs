@@ -2,9 +2,9 @@ use crate::api::http::access::admit_session_mutation;
 use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{
     ChildSubagentSummary, OwnedAgentSummary, ParentSubagentLinkSummary, ProblemDetails,
-    ScheduleSubagentWakeRequest, ScheduleSubagentWakeResponse, SessionStatus,
-    SessionSubagentsResponse, SubagentCompletionSummary as ContractSubagentCompletionSummary,
-    SubagentTurnOutcome,
+    PromoteSubagentRequest, PromoteSubagentResponse, ScheduleSubagentWakeRequest,
+    ScheduleSubagentWakeResponse, SessionStatus, SessionSubagentsResponse,
+    SubagentCompletionSummary as ContractSubagentCompletionSummary, SubagentTurnOutcome,
 };
 use axum::{
     extract::{Path, State},
@@ -16,6 +16,7 @@ use super::error::ApiError;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::ownership::service::OwnershipError;
 use crate::domains::sessions::subagents::model::{
     ChildSubagentContext, OwnedAgentContext, ParentSubagentLinkContext, SessionSubagentsContext,
     SubagentCompletionSummary,
@@ -95,6 +96,108 @@ pub async fn schedule_subagent_wake(
         wake_scheduled: true,
         already_scheduled: !inserted,
     }))
+}
+
+/// Promote a subagent as the human.
+///
+/// ADR §4 puts Promote in the agent detail header, and ruling 7 says the parent
+/// OR the human may do it. This is the human half of the one write
+/// `agent_ops::calls::promote_subagent` performs — same ownership resolution,
+/// same idempotent stamp, so the two callers cannot diverge on what promotion
+/// means.
+///
+/// The fence differs from this file's other mutating route on purpose.
+/// `schedule_subagent_wake` queues a prompt on a session, so it takes that
+/// session's mutation permit before the workspace lease. Promotion touches no
+/// session at all — it is one indexed UPDATE against a link row — so it takes
+/// only the shared `SubagentWrite` lease, exactly as the agent tool does
+/// (`promote_subagent` is in `MUTATING_TOOL_NAMES` and takes no admission
+/// permit). Inventing a permit here would refuse a promotion while a workflow
+/// held the parent, for a write the workflow cannot conflict with.
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{session_id}/subagents/{child_session_id}/promote",
+    params(
+        ("session_id" = String, Path, description = "Parent session ID — the owner"),
+        ("child_session_id" = String, Path, description = "Child subagent session ID"),
+    ),
+    request_body = PromoteSubagentRequest,
+    responses(
+        (status = 200, description = "Subagent promoted to a peer", body = PromoteSubagentResponse),
+        (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Workspace or ownership state blocks promotion", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "sessions"
+)]
+pub async fn promote_subagent(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    Path((session_id, child_session_id)): Path<(String, String)>,
+    Json(_body): Json<PromoteSubagentRequest>,
+) -> Result<Json<PromoteSubagentResponse>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
+    let parent = state
+        .session_service
+        .get_session(&session_id)
+        .map_err(|error| ApiError::internal(error.to_string()))?
+        .ok_or_else(|| ApiError::not_found("Session not found", "SESSION_NOT_FOUND"))?;
+    let _operation = state
+        .workspace_operation_gate
+        .acquire_shared(&parent.workspace_id, WorkspaceOperationKind::SubagentWrite)
+        .await;
+    assert_workspace_mutable(&state, &parent.workspace_id)?;
+
+    let owned = state
+        .agent_ownership_service
+        .resolve_owned(&session_id, None, Some(&child_session_id))
+        .map_err(map_ownership_error)?;
+    let outcome = state
+        .agent_ownership_service
+        .promote(&owned)
+        .map_err(map_ownership_error)?;
+
+    Ok(Json(PromoteSubagentResponse {
+        parent_session_id: session_id,
+        subagent_id: outcome.link.public_id.clone(),
+        child_session_id: outcome.link.child_session_id.clone(),
+        session_link_id: outcome.link.id.clone(),
+        promoted: true,
+        already_promoted: outcome.already_promoted,
+        promoted_at: outcome.promoted_at,
+    }))
+}
+
+fn map_ownership_error(error: OwnershipError) -> ApiError {
+    match error {
+        OwnershipError::OwnerNotFound(id) | OwnershipError::TargetNotFound(id) => {
+            ApiError::not_found(format!("Session not found: {id}"), "SESSION_NOT_FOUND")
+        }
+        // Ownership is not reachability: an agent the caller does not own is a
+        // real session it simply may not promote, and saying so is not a
+        // disclosure — the caller already named it by id from its own tree.
+        OwnershipError::NotOwned => ApiError::conflict(
+            "This session does not own that agent.",
+            "SUBAGENT_NOT_OWNED",
+        ),
+        OwnershipError::NotASubagent => ApiError::conflict(
+            "That agent is already a top-level agent, not a subagent.",
+            "SUBAGENT_ALREADY_TOP_LEVEL",
+        ),
+        OwnershipError::Closed => {
+            ApiError::conflict("That agent is closed.", "SUBAGENT_CLOSED")
+        }
+        OwnershipError::SelfTarget => ApiError::bad_request(
+            "A session cannot promote itself.",
+            "INVALID_TARGET",
+        ),
+        OwnershipError::TargetRequired | OwnershipError::ConflictingTarget => {
+            ApiError::bad_request(
+                "childSessionId is required.",
+                "SUBAGENT_TARGET_REQUIRED",
+            )
+        }
+        other => ApiError::internal(other.to_string()),
+    }
 }
 
 #[allow(dead_code)]

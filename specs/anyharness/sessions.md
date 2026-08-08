@@ -131,7 +131,12 @@ read off one row:
 | Owned peer | `relation = 'owned_agent'` |
 
 Promotion stamps `promoted_at`; it does not change the relation, because the
-parent stays the owner. It is one idempotent write, and it is one-way.
+parent stays the owner. It is one idempotent write, and it is one-way. Two
+callers perform it: the parent agent's `promote_subagent` tool, and
+`POST /v1/sessions/{session_id}/subagents/{child_session_id}/promote` for the
+human. Both resolve ownership the same way and take the workspace's shared
+`SubagentWrite` lease without a session mutation permit — the write lands on a
+link row, not on a session.
 
 The two ownership relations are written by different tools and never converge.
 `spawn_subagent` writes `subagent` and `spawn_agent` writes `owned_agent`; a

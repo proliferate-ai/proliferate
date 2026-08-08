@@ -3577,6 +3577,76 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/subagents/{child_session_id}/promote": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "promote_subagent",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Parent session ID — the owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "child_session_id",
+            "in": "path",
+            "description": "Child subagent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteSubagentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Subagent promoted to a peer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromoteSubagentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Workspace or ownership state blocks promotion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/subagents/{child_session_id}/wake": {
       "post": {
         "tags": [
@@ -14165,6 +14235,48 @@
             }
           }
         ]
+      },
+      "PromoteSubagentRequest": {
+        "type": "object",
+        "description": "Promote one of this session's subagents to a peer, as the human. The same\nidempotent write `promote_subagent` performs — §4 puts the action in the\nagent detail header, and the parent can still do it by tool."
+      },
+      "PromoteSubagentResponse": {
+        "type": "object",
+        "required": [
+          "parentSessionId",
+          "childSessionId",
+          "sessionLinkId",
+          "promoted",
+          "alreadyPromoted",
+          "promotedAt"
+        ],
+        "properties": {
+          "alreadyPromoted": {
+            "type": "boolean",
+            "description": "`true` when the agent was already a peer. Promotion is one write and\nidempotent, so a repeat is a success that changed nothing."
+          },
+          "childSessionId": {
+            "type": "string"
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "promoted": {
+            "type": "boolean"
+          },
+          "promotedAt": {
+            "type": "string"
+          },
+          "sessionLinkId": {
+            "type": "string"
+          },
+          "subagentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
       },
       "PromptAttachmentSource": {
         "type": "string",

@@ -296,6 +296,28 @@ pub struct ScheduleAgentWakeResponse {
     pub already_scheduled: bool,
 }
 
+/// Promote one of this session's subagents to a peer, as the human. The same
+/// idempotent write `promote_subagent` performs — §4 puts the action in the
+/// agent detail header, and the parent can still do it by tool.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PromoteSubagentRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PromoteSubagentResponse {
+    pub parent_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subagent_id: Option<String>,
+    pub child_session_id: String,
+    pub session_link_id: String,
+    pub promoted: bool,
+    /// `true` when the agent was already a peer. Promotion is one write and
+    /// idempotent, so a repeat is a success that changed nothing.
+    pub already_promoted: bool,
+    pub promoted_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduleSubagentWakeRequest {}

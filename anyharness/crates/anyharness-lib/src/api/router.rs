@@ -419,6 +419,10 @@ pub fn build_router(state: AppState) -> Router {
             post(subagents::schedule_subagent_wake),
         )
         .route(
+            "/sessions/{session_id}/subagents/{child_session_id}/promote",
+            post(subagents::promote_subagent),
+        )
+        .route(
             "/sessions/{session_id}/wakes/{target_session_id}",
             post(sessions_wakes::schedule_agent_wake),
         )

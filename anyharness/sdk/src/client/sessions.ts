@@ -13,6 +13,8 @@ import type {
   McpElicitationUrlRevealResponse,
   PromptSessionRequest,
   PromptSessionResponse,
+  PromoteSubagentRequest,
+  PromoteSubagentResponse,
   ReorderPendingPromptsRequest,
   ResolveInteractionRequest,
   ResumeSessionRequest,
@@ -96,6 +98,27 @@ export class SessionsClient {
       `/v1/sessions/${encodeURIComponent(sessionId)}/subagents/${
         encodeURIComponent(childSessionId)
       }/wake`,
+      request,
+      options,
+    );
+  }
+
+  /**
+   * Promote a subagent to a peer, as the human. The same idempotent write the
+   * parent agent's `promote_subagent` performs: the link keeps its relation and
+   * its owner, and the child leaves the close cascade, the fanout cap and the
+   * spawn block behind.
+   */
+  async promoteSubagent(
+    sessionId: string,
+    childSessionId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<PromoteSubagentResponse> {
+    const request: PromoteSubagentRequest = {};
+    return this.transport.post<PromoteSubagentResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/subagents/${
+        encodeURIComponent(childSessionId)
+      }/promote`,
       request,
       options,
     );

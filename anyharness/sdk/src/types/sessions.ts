@@ -144,6 +144,10 @@ export type ScheduleAgentWakeRequest =
   components["schemas"]["ScheduleAgentWakeRequest"];
 export type ScheduleAgentWakeResponse =
   components["schemas"]["ScheduleAgentWakeResponse"];
+export type PromoteSubagentRequest =
+  components["schemas"]["PromoteSubagentRequest"];
+export type PromoteSubagentResponse =
+  components["schemas"]["PromoteSubagentResponse"];
 export type ScheduleSubagentWakeRequest =
   components["schemas"]["ScheduleSubagentWakeRequest"];
 export type ScheduleSubagentWakeResponse =

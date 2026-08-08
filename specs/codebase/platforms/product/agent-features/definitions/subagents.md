@@ -89,6 +89,17 @@ the parent still owns a promoted agent and may still close it deliberately. What
 promotion severs is subordination — the close cascade, the fanout slot, and the
 spawn block.
 
+A person promotes through
+`POST /v1/sessions/{session_id}/subagents/{child_session_id}/promote`, which
+resolves ownership and performs the same write, so the two callers cannot
+diverge on what promotion means. It takes the workspace's shared `SubagentWrite`
+lease and no session mutation permit — the same fence the tool takes, and for
+the same reason: promotion is one UPDATE against a link row and mutates no
+session, so refusing it while a workflow controls the parent would refuse a
+write the workflow cannot conflict with. That is deliberately unlike its
+neighbour `schedule_subagent_wake`, which queues a prompt and therefore does
+admit first.
+
 The spawn block is the visible consequence for the child. A spawned child is
 created with its session-level subagents policy OFF as well, which is the same
 subordination expressed on the session row; promotion lifts both, so a promoted

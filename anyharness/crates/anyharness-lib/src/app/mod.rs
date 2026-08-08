@@ -153,6 +153,10 @@ pub struct AppState {
     pub subagent_session_hooks: Arc<SubagentSessionHooks>,
     pub agent_wake_service: Arc<AgentWakeService>,
     pub agent_wake_session_hooks: Arc<AgentWakeSessionHooks>,
+    /// Who owns whom: the read behind promote/close rights. On the state
+    /// because the human client promotes through an HTTP route as well as the
+    /// parent agent through the MCP (ADR ruling 7).
+    pub agent_ownership_service: Arc<AgentOwnershipService>,
     pub review_service: Arc<ReviewService>,
     pub review_session_hooks: Arc<ReviewSessionHooks>,
     pub integration_gateway_session_launch_extension: Arc<IntegrationGatewaySessionLaunchExtension>,
@@ -643,6 +647,7 @@ impl AppState {
             subagent_session_hooks,
             agent_wake_service,
             agent_wake_session_hooks,
+            agent_ownership_service,
             review_service,
             review_session_hooks,
             integration_gateway_session_launch_extension,

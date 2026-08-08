@@ -252,6 +252,8 @@ export type {
   EditPendingPromptRequest,
   ReorderPendingPromptsRequest,
   SessionSubagentsResponse,
+  PromoteSubagentRequest,
+  PromoteSubagentResponse,
   ScheduleAgentWakeRequest,
   ScheduleAgentWakeResponse,
   ScheduleSubagentWakeRequest,
