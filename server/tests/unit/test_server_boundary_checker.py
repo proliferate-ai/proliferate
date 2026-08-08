@@ -403,6 +403,50 @@ def test_exception_ledger_excepts_one_site_without_hiding_its_sibling(
     assert stale == []
 
 
+def test_repeated_fingerprints_get_occurrence_ordinals(tmp_path: Path) -> None:
+    # Two hits of one rule can share a fingerprint (the same session method
+    # twice in one function). Without an ordinal the second would be excused by
+    # the first one's ledger entry, so the ledger would under-count by
+    # construction.
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "async def one(db) -> None:\n"
+        "    await db.commit()\n"
+        "    await db.commit()\n"
+        "    await db.commit()\n"
+    )
+
+    violations = module.disambiguate(module.check_paths([path]))
+
+    assert [item.site for item in violations] == [
+        "one::db.commit",
+        "one::db.commit#2",
+        "one::db.commit#3",
+    ]
+
+
+def test_ledgered_fingerprint_does_not_absorb_a_net_new_sibling_hit(
+    tmp_path: Path,
+) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "async def one(db) -> None:\n"
+        "    await db.commit()\n"
+        "    await db.commit()\n"
+    )
+    violations = module.disambiguate(module.check_paths([path]))
+    ledger = _ledger(module, [("SRV-SVC-4", path.as_posix(), "one::db.commit")])
+
+    failing, stale = module.apply_exceptions(violations, ledger)
+
+    assert [item.site for item in failing] == ["one::db.commit#2"]
+    assert stale == []
+
+
 def test_exception_ledger_reports_stale_entries(tmp_path: Path) -> None:
     module = _load_checker_module()
     path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"

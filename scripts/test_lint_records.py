@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import textwrap
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
@@ -115,6 +117,106 @@ class LoaderTests(unittest.TestCase):
         ruleset = self._load_with("server", {"test.toml": VALID_RULE})
         with self.assertRaises(SystemExit):
             ruleset.rule("SRV-NOPE-1")
+
+    def test_law_rule_with_a_ledger_entry_fails(self) -> None:
+        # `law` is a claim of zero exceptions; a ledger entry makes it a lie.
+        law = VALID_RULE.replace('status = "holds"', 'status = "law"')
+        with self.assertRaises(SystemExit) as ctx:
+            self._load_with(
+                "server", {"test.toml": law, "exceptions.toml": VALID_EXCEPTION}
+            )
+        message = str(ctx.exception)
+        self.assertIn("SRV-TEST-1", message)
+        self.assertIn("status 'law' means zero exceptions", message)
+        self.assertIn("(server/thing.py, handler::forbidden)", message)
+
+    def test_leaks_rule_without_a_gap_fails(self) -> None:
+        # `leaks` is a claim that the hole is tracked; no gap means it is not.
+        leaks = VALID_RULE.replace('status = "holds"', 'status = "leaks"')
+        with self.assertRaises(SystemExit) as ctx:
+            self._load_with("server", {"test.toml": leaks})
+        message = str(ctx.exception)
+        self.assertIn("SRV-TEST-1", message)
+        self.assertIn("must carry a gap", message)
+
+    def test_leaks_rule_with_a_gap_loads(self) -> None:
+        leaks = VALID_RULE.replace('status = "holds"', 'status = "leaks"').replace(
+            'mode = "lint"', 'mode = "lint"\ngap = "#1234"'
+        )
+        ruleset = self._load_with("server", {"test.toml": leaks})
+        self.assertEqual(ruleset.rule("SRV-TEST-1").gap, "#1234")
+
+    def test_prose_gap_fails(self) -> None:
+        # A gap is an issue reference, not a paragraph; prose belongs in `why`.
+        prose = VALID_RULE.replace(
+            'mode = "lint"', 'mode = "lint"\ngap = "the checker misses X"'
+        )
+        with self.assertRaises(SystemExit) as ctx:
+            self._load_with("server", {"test.toml": prose})
+        message = str(ctx.exception)
+        self.assertIn("SRV-TEST-1", message)
+        self.assertIn("issue reference", message)
+
+    def test_malformed_toml_fails_with_the_record_path(self) -> None:
+        with self.assertRaises(SystemExit) as ctx:
+            self._load_with("server", {"test.toml": "[[rule]\nid = "})
+        message = str(ctx.exception)
+        self.assertIn("test.toml", message)
+        self.assertIn("malformed TOML", message)
+
+
+class MainFloorTests(unittest.TestCase):
+    """`main()` must not be able to report success on an empty constitution."""
+
+    def _lints_root(self, owners: dict[str, str]) -> Path:
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        for owner, content in owners.items():
+            owner_dir = root / owner
+            owner_dir.mkdir(parents=True)
+            (owner_dir / "test.toml").write_text(content, encoding="utf-8")
+        return root
+
+    def _rule_for(self, owner: str, rule_id: str) -> str:
+        return VALID_RULE.replace('owner = "server"', f'owner = "{owner}"').replace(
+            'id = "SRV-TEST-1"', f'id = "{rule_id}"'
+        )
+
+    def test_missing_lints_tree_fails(self) -> None:
+        root = self._lints_root({})
+        with mock.patch.object(lint_records, "LINTS_ROOT", root / "gone"):
+            with self.assertRaises(SystemExit) as ctx:
+                lint_records.main()
+        self.assertIn("no rule records found", str(ctx.exception))
+
+    def test_owner_with_zero_records_fails(self) -> None:
+        root = self._lints_root(
+            {
+                "anyharness": self._rule_for("anyharness", "AH-TEST-1"),
+                "server": self._rule_for("server", "SRV-TEST-1"),
+                "frontend": self._rule_for("frontend", "FE-TEST-1"),
+            }
+        )
+        with mock.patch.object(lint_records, "LINTS_ROOT", root):
+            with self.assertRaises(SystemExit) as ctx:
+                lint_records.main()
+        self.assertIn("owners with zero rule records: product", str(ctx.exception))
+
+    def test_all_four_owners_present_passes(self) -> None:
+        root = self._lints_root(
+            {
+                "anyharness": self._rule_for("anyharness", "AH-TEST-1"),
+                "server": self._rule_for("server", "SRV-TEST-1"),
+                "frontend": self._rule_for("frontend", "FE-TEST-1"),
+                "product": self._rule_for("product", "PROD-TEST-1"),
+            }
+        )
+        with mock.patch.object(lint_records, "LINTS_ROOT", root), redirect_stdout(
+            StringIO()
+        ) as output:
+            self.assertEqual(lint_records.main(), 0)
+        self.assertIn("4 rules", output.getvalue())
 
 
 class DiagnosticTests(unittest.TestCase):

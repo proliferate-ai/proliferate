@@ -8,6 +8,7 @@ alternative, and the record path — never a bare "banned".
 
 from __future__ import annotations
 
+import re
 import sys
 import tomllib
 from dataclasses import dataclass, field
@@ -80,8 +81,21 @@ def _fail(path: Path, message: str) -> None:
     raise SystemExit(f"lint_records: {_display_path(path)}: {message}")
 
 
+def _parse_toml(path: Path) -> dict:
+    """Parse a record file, reporting syntax errors as loader failures.
+
+    A raw ``TOMLDecodeError`` traceback hides which record file is broken, so
+    every parse goes through here and surfaces the repo-relative path.
+    """
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as error:
+        _fail(path, f"malformed TOML: {error}")
+        raise  # unreachable; _fail raises
+
+
 def _load_rules_file(path: Path) -> list[Rule]:
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    data = _parse_toml(path)
     rules: list[Rule] = []
     for raw in data.get("rule", []):
         missing = [
@@ -120,7 +134,7 @@ def _load_rules_file(path: Path) -> list[Rule]:
 
 
 def _load_exceptions_file(path: Path) -> list[Exception_]:
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    data = _parse_toml(path)
     entries: list[Exception_] = []
     for raw in data.get("exception", []):
         missing = [key for key in ("rule", "path", "site", "reason") if key not in raw]
@@ -162,7 +176,43 @@ def load(owner: str | None = None) -> RuleSet:
         raise SystemExit(
             f"lint_records: exception ledger cites unknown rule ids: {sorted(dangling)}"
         )
+    _check_status_invariants(ruleset)
     return ruleset
+
+
+def _check_status_invariants(ruleset: RuleSet) -> None:
+    """Enforce what `status` promises: law has no exceptions, leaks names a gap.
+
+    The status field is the rule's public claim about itself (lints/README.md).
+    A `law` rule with a ledger entry and a `leaks` rule with no tracked gap are
+    both silent lies, so they fail the load rather than the reader.
+    """
+    excused: dict[str, list[tuple[str, str]]] = {}
+    for entry in ruleset.exceptions:
+        rule = ruleset.rules.get(entry.rule)
+        if rule is not None and rule.status == "law":
+            excused.setdefault(rule.id, []).append((entry.path, entry.site))
+    for rule_id, sites in sorted(excused.items()):
+        listed = ", ".join(f"({path}, {site})" for path, site in sorted(sites))
+        _fail(
+            REPO_ROOT / ruleset.rules[rule_id].source,
+            f"rule {rule_id}: status 'law' means zero exceptions, but the "
+            f"ledger excuses {listed} — either fix the sites or change the "
+            f"status to 'holds'",
+        )
+    for rule in sorted(ruleset.rules.values(), key=lambda item: item.id):
+        if rule.status == "leaks" and not rule.gap.strip():
+            _fail(
+                REPO_ROOT / rule.source,
+                f"rule {rule.id}: status 'leaks' means the hole is tracked, "
+                f"so the record must carry a gap",
+            )
+        if rule.gap and not re.fullmatch(r"#\d+", rule.gap):
+            _fail(
+                REPO_ROOT / rule.source,
+                f"rule {rule.id}: gap must be an issue reference like "
+                f"'#1234', got {rule.gap!r} — prose belongs in 'why'",
+            )
 
 
 def load_ratchets(owner: str) -> dict:
@@ -170,7 +220,7 @@ def load_ratchets(owner: str) -> dict:
     path = LINTS_ROOT / owner / "ratchets.toml"
     if not path.exists():
         return {}
-    return tomllib.loads(path.read_text(encoding="utf-8"))
+    return _parse_toml(path)
 
 
 def render_diagnostic(rule: Rule, location: str, detail: str = "") -> str:
@@ -195,6 +245,19 @@ def main() -> int:
     by_owner: dict[str, int] = {}
     for rule in ruleset.rules.values():
         by_owner[rule.owner] = by_owner.get(rule.owner, 0) + 1
+    # A missing or emptied lints/ tree would otherwise validate vacuously: zero
+    # records, zero complaints, green CI. Every owner must contribute rules.
+    if not ruleset.rules:
+        raise SystemExit(
+            f"lint_records: no rule records found under {_display_path(LINTS_ROOT)} — "
+            f"the constitution cannot be empty"
+        )
+    silent = [owner for owner in OWNERS if not by_owner.get(owner)]
+    if silent:
+        raise SystemExit(
+            f"lint_records: owners with zero rule records: {', '.join(silent)} — "
+            f"every owner in {_display_path(LINTS_ROOT)} carries rules"
+        )
     summary = ", ".join(f"{owner}: {count}" for owner, count in sorted(by_owner.items()))
     print(
         f"lint records OK — {len(ruleset.rules)} rules ({summary}), "

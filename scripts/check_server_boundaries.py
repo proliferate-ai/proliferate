@@ -1013,6 +1013,50 @@ def check_structure(repo_root: Path = REPO_ROOT) -> list[Violation]:
     return violations
 
 
+def disambiguate(
+    violations: list[Violation], repo_root: Path = REPO_ROOT
+) -> list[Violation]:
+    """Give repeated fingerprints an occurrence ordinal, in file order.
+
+    Two hits of the same rule can share a fingerprint — the same matched token
+    twice inside one function. The ledger keys on `(path, site)`, so without an
+    ordinal the second occurrence would be excused by the first one's entry.
+    The ordinal is an occurrence index, not a line number: reformatting does not
+    move it, and adding a hit only ever appends a new `#n` site.
+    """
+    grouped: dict[tuple[str, str, str], list[Violation]] = {}
+    for violation in violations:
+        grouped.setdefault(violation.key(repo_root), []).append(violation)
+    out: list[Violation] = []
+    for group in grouped.values():
+        if len(group) == 1:
+            out.extend(group)
+            continue
+        for ordinal, violation in enumerate(
+            sorted(group, key=lambda item: item.lineno), start=1
+        ):
+            out.append(
+                violation
+                if ordinal == 1
+                else Violation(
+                    rule_id=violation.rule_id,
+                    path=violation.path,
+                    lineno=violation.lineno,
+                    site=f"{violation.site}#{ordinal}",
+                    detail=violation.detail,
+                )
+            )
+    return sorted(
+        out,
+        key=lambda item: (
+            item.relative_path(repo_root),
+            item.lineno,
+            item.rule_id,
+            item.site,
+        ),
+    )
+
+
 def apply_exceptions(
     violations: list[Violation],
     ledger: lint_records.RuleSet | None = None,
@@ -1057,11 +1101,13 @@ def main() -> int:
 
     paths = [*iter_target_files(REPO_ROOT), *iter_migration_files(REPO_ROOT)]
     named_write_paths = iter_named_write_target_files(REPO_ROOT)
-    violations = [
-        *check_paths(paths),
-        *check_named_cross_domain_writes(named_write_paths),
-        *check_structure(REPO_ROOT),
-    ]
+    violations = disambiguate(
+        [
+            *check_paths(paths),
+            *check_named_cross_domain_writes(named_write_paths),
+            *check_structure(REPO_ROOT),
+        ]
+    )
     failing, stale = apply_exceptions(violations)
 
     if not failing and not stale:

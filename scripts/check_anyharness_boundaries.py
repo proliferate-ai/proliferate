@@ -1254,9 +1254,11 @@ def disambiguate(violations: list[Violation]) -> list[Violation]:
     The ordinal is an occurrence index, not a line number: reformatting does not
     move it, and adding a hit only ever appends a new `#n` site.
     """
-    grouped: dict[tuple[str, str], list[Violation]] = {}
+    grouped: dict[tuple[str, str, str], list[Violation]] = {}
     for violation in violations:
-        grouped.setdefault((violation.rule_id, violation.site), []).append(violation)
+        grouped.setdefault(
+            (violation.rule_id, violation.relative_path, violation.site), []
+        ).append(violation)
     out: list[Violation] = []
     for group in grouped.values():
         if len(group) == 1:

@@ -238,14 +238,14 @@ or persistence detail.
 
 | Failure mode | Grid rule | Prevention |
 | --- | --- | --- |
-| Foreign writes corrupt shared state | `SRV-STORE-3` | Only the owner's service writes |
-| Store changes surprise foreign readers | `SRV-STORE-2` | Exact consumer ledger makes reads queryable |
+| Foreign writes corrupt shared state | `SRV-STORE-5` | Only the owner's service writes |
+| Store changes surprise foreign readers | `SRV-STORE-6` | Exact consumer ledger makes reads queryable |
 | Errors vary by call site | `SRV-ERR-1` | Product errors plus one transport handler |
-| Shared code becomes a junk drawer | `SRV-LIB-2/4/5/6` | Three audiences, two-consumer entry ticket, and reverse ratchet |
+| Shared code becomes a junk drawer | `SRV-LIB-1` | Three audiences and a two-consumer entry ticket |
 | Auth decisions hide in orchestration | `SRV-SEAM-1` | Four endpoint-composed boundaries |
-| Background work has divergent failure models | `SRV-BG-3` | One Celery execution model |
-| Service cycles block refactors | `SRV-TOPO-3` | `GAP`: generated graph and acyclic-component gate are documented rules, not gates (gap 9) |
-| Third-party packages leak into product code | `SRV-PKG-2` | `GAP`: explicit package-audience map is a documented rule, not a gate (gap 9) |
+| Background work has divergent failure models | `SRV-BG-1` | One Celery execution model |
+| Service cycles block refactors | `SRV-TOPO-1` | `GAP`: generated graph and acyclic-component gate are documented rules, not gates (#1714) |
+| Third-party packages leak into product code | `SRV-PKG-1` | `GAP`: explicit package-audience map is a documented rule, not a gate (#1714) |
 
 ## Foreign-Read Doctrine
 
