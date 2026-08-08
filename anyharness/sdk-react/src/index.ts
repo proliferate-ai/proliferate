@@ -51,19 +51,12 @@ export {
   anyHarnessRepoRootDetectSetupKey,
   anyHarnessWorkspaceMobilityKey,
   anyHarnessWorkspaceMobilityPreflightKey,
-  anyHarnessCoworkStatusKey,
-  anyHarnessCoworkThreadsKey,
-  anyHarnessCoworkManagedWorkspacesKey,
-  anyHarnessCoworkManifestKey,
-  anyHarnessCoworkArtifactScopeKey,
-  anyHarnessCoworkArtifactKey,
   anyHarnessSessionsKey,
   anyHarnessSessionScopeKey,
   anyHarnessSessionKey,
   anyHarnessSessionLiveConfigKey,
   anyHarnessSessionEventsKey,
   anyHarnessSessionSubagentsKey,
-  anyHarnessSessionReviewsKey,
   anyHarnessPlansKey,
   anyHarnessPlanKey,
   anyHarnessPlanDocumentKey,
@@ -132,15 +125,6 @@ export {
   useInstallWorkspaceMobilityArchiveMutation,
   useDestroyWorkspaceMobilitySourceMutation,
 } from "./hooks/mobility.js";
-export {
-  useCoworkStatusQuery,
-  useCoworkThreadsQuery,
-  useCoworkManagedWorkspacesQuery,
-  useCoworkArtifactManifestQuery,
-  useCoworkArtifactQuery,
-  useEnableCoworkMutation,
-  useCreateCoworkThreadMutation,
-} from "./hooks/cowork.js";
 export {
   useRuntimeWorkspacesQuery,
   useWorkspaceQuery,
@@ -212,16 +196,6 @@ export {
   useRejectPlanMutation,
   useHandoffPlanMutation,
 } from "./hooks/plans.js";
-export {
-  useSessionReviewsQuery,
-  useReviewAssignmentCritiqueQuery,
-  useStartPlanReviewMutation,
-  useStartCodeReviewMutation,
-  useStopReviewMutation,
-  useRetryReviewAssignmentMutation,
-  useSendReviewFeedbackMutation,
-  useMarkReviewRevisionReadyMutation,
-} from "./hooks/reviews.js";
 export {
   useGitStatusQuery,
   useGitDiffQuery,

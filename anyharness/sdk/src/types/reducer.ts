@@ -10,7 +10,6 @@ import type {
   ProposedPlanDecisionContentPart,
   ErrorEventDetails,
   SessionEventEnvelope,
-  SessionLinkTurnCompletedEvent,
   SubagentTurnCompletedEvent,
   StopReason,
   TranscriptItemStatus,
@@ -61,7 +60,7 @@ export interface LinkCompletionMetadata {
   childSessionId: string;
   childTurnId: string;
   childLastEventSeq: number;
-  outcome: SubagentTurnCompletedEvent["outcome"] | SessionLinkTurnCompletedEvent["outcome"];
+  outcome: SubagentTurnCompletedEvent["outcome"];
   label: string | null;
   seq: number;
   timestamp: string;
@@ -228,7 +227,4 @@ export type ToolCallSemanticKind =
   | "fetch"
   | "hook"
   | "mode_switch"
-  | "cowork_artifact_create"
-  | "cowork_artifact_update"
-  | "cowork_coding"
   | "other";

@@ -203,67 +203,6 @@ export function anyHarnessWorkspaceMobilityRuntimeStateKey(
   return [...anyHarnessWorkspaceMobilityKey(cacheScopeKey, workspaceId), "runtime-state"] as const;
 }
 
-export function anyHarnessCoworkStatusKey(
-  runtimeUrl: string | null | undefined,
-  cacheScopeKey: string | null | undefined,
-) {
-  return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "cowork", "status"] as const;
-}
-
-export function anyHarnessCoworkThreadsKey(
-  runtimeUrl: string | null | undefined,
-  cacheScopeKey: string | null | undefined,
-) {
-  return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "cowork", "threads"] as const;
-}
-
-export function anyHarnessCoworkManagedWorkspacesKey(
-  runtimeUrl: string | null | undefined,
-  sessionId: string | null | undefined,
-  cacheScopeKey: string | null | undefined,
-) {
-  return [
-    ...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey),
-    "cowork",
-    "sessions",
-    sessionId ?? null,
-    "managed-workspaces",
-  ] as const;
-}
-
-export function anyHarnessCoworkManifestKey(
-  runtimeUrl: string | null | undefined,
-  workspaceId: string | null | undefined,
-  cacheScopeKey: string | null | undefined,
-) {
-  return [
-    ...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey),
-    "cowork",
-    workspaceId ?? null,
-    "manifest",
-  ] as const;
-}
-
-export function anyHarnessCoworkArtifactScopeKey(
-  runtimeUrl: string | null | undefined,
-  workspaceId: string | null | undefined,
-  cacheScopeKey: string | null | undefined,
-) {
-  return [...anyHarnessCoworkManifestKey(runtimeUrl, workspaceId, cacheScopeKey), "artifact"] as const;
-}
-
-export function anyHarnessCoworkArtifactKey(
-  runtimeUrl: string | null | undefined,
-  workspaceId: string | null | undefined,
-  artifactId: string | null | undefined,
-  cacheScopeKey: string | null | undefined,
-) {
-  return [
-    ...anyHarnessCoworkArtifactScopeKey(runtimeUrl, workspaceId, cacheScopeKey),
-    artifactId ?? null,
-  ] as const;
-}
-
 export function anyHarnessWorkspaceDetailKey(
   cacheScopeKey: string | null | undefined,
   workspaceId: string | null | undefined,
@@ -339,28 +278,6 @@ export function anyHarnessSessionSubagentsKey(
   sessionId: string | null | undefined,
 ) {
   return [...anyHarnessSessionKey(cacheScopeKey, workspaceId, sessionId), "subagents"] as const;
-}
-
-export function anyHarnessSessionReviewsKey(
-  cacheScopeKey: string | null | undefined,
-  workspaceId: string | null | undefined,
-  sessionId: string | null | undefined,
-) {
-  return [...anyHarnessSessionKey(cacheScopeKey, workspaceId, sessionId), "reviews"] as const;
-}
-
-export function anyHarnessReviewAssignmentCritiqueKey(
-  cacheScopeKey: string | null | undefined,
-  workspaceId: string | null | undefined,
-  reviewRunId: string | null | undefined,
-  assignmentId: string | null | undefined,
-) {
-  return [
-    ...anyHarnessWorkspaceKey(cacheScopeKey, workspaceId),
-    "review-critique",
-    reviewRunId ?? null,
-    assignmentId ?? null,
-  ] as const;
 }
 
 export function anyHarnessPlansKey(

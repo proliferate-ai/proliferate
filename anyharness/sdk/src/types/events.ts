@@ -21,10 +21,6 @@ type SessionStateUpdatePayload =
 type SessionInfoUpdatePayload = components["schemas"]["SessionInfoUpdatePayload"];
 type SubagentTurnCompletedPayload =
   components["schemas"]["SubagentTurnCompletedPayload"];
-type SessionLinkTurnCompletedPayload =
-  components["schemas"]["SessionLinkTurnCompletedPayload"];
-type ReviewRunUpdatedPayload =
-  components["schemas"]["ReviewRunUpdatedPayload"];
 type UsageUpdatePayload = components["schemas"]["UsageUpdatePayload"];
 type GoalUpdatedPayload = components["schemas"]["GoalUpdatedPayload"];
 type GoalMetPayload = components["schemas"]["GoalMetPayload"];
@@ -104,12 +100,6 @@ export type SessionInfoUpdateEvent = SessionInfoUpdatePayload & {
 };
 export type SubagentTurnCompletedEvent = SubagentTurnCompletedPayload & {
   type: "subagent_turn_completed";
-};
-export type SessionLinkTurnCompletedEvent = SessionLinkTurnCompletedPayload & {
-  type: "session_link_turn_completed";
-};
-export type ReviewRunUpdatedEvent = ReviewRunUpdatedPayload & {
-  type: "review_run_updated";
 };
 export type UsageUpdateEvent = UsageUpdatePayload & {
   type: "usage_update";
@@ -230,8 +220,6 @@ export type SessionEvent =
   | SessionStateUpdateEvent
   | SessionInfoUpdateEvent
   | SubagentTurnCompletedEvent
-  | SessionLinkTurnCompletedEvent
-  | ReviewRunUpdatedEvent
   | UsageUpdateEvent
   | GoalUpdatedEvent
   | GoalMetEvent

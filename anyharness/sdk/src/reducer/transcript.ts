@@ -227,15 +227,11 @@ function applyEvent(
       };
       break;
 
-    case "subagent_turn_completed":
-    case "session_link_turn_completed": {
-      const relation = evt.type === "subagent_turn_completed"
-        ? "subagent"
-        : evt.relation;
+    case "subagent_turn_completed": {
       s.linkCompletionsByCompletionId = {
         ...s.linkCompletionsByCompletionId,
         [evt.completionId]: {
-          relation,
+          relation: "subagent",
           completionId: evt.completionId,
           sessionLinkId: evt.sessionLinkId,
           parentSessionId: evt.parentSessionId,
@@ -254,9 +250,6 @@ function applyEvent(
       };
       break;
     }
-
-    case "review_run_updated":
-      break;
 
     case "usage_update":
       s.usageState = {
@@ -1387,37 +1380,6 @@ function deriveToolCallSemanticKind(
     title,
   );
 
-  if (normalizedEffectiveToolName === "mcp__cowork__create_artifact") {
-    return "cowork_artifact_create";
-  }
-  if (normalizedEffectiveToolName === "mcp__cowork__update_artifact") {
-    return "cowork_artifact_update";
-  }
-  if (
-    normalizedEffectiveToolName === "mcp__cowork__get_coding_workspace_launch_options"
-    || normalizedEffectiveToolName === "mcp__cowork__get_cowork_workspace_launch_options"
-    || normalizedEffectiveToolName === "mcp__cowork__create_coding_workspace"
-    || normalizedEffectiveToolName === "mcp__cowork__create_cowork_workspace"
-    || normalizedEffectiveToolName === "mcp__cowork__list_coding_workspaces"
-    || normalizedEffectiveToolName === "mcp__cowork__list_cowork_workspaces"
-    || normalizedEffectiveToolName === "mcp__cowork__get_coding_session_launch_options"
-    || normalizedEffectiveToolName === "mcp__cowork__get_cowork_agent_launch_options"
-    || normalizedEffectiveToolName === "mcp__cowork__create_coding_session"
-    || normalizedEffectiveToolName === "mcp__cowork__create_cowork_agent"
-    || normalizedEffectiveToolName === "mcp__cowork__send_coding_message"
-    || normalizedEffectiveToolName === "mcp__cowork__send_cowork_agent_message"
-    || normalizedEffectiveToolName === "mcp__cowork__schedule_coding_wake"
-    || normalizedEffectiveToolName === "mcp__cowork__schedule_cowork_agent_wake"
-    || normalizedEffectiveToolName === "mcp__cowork__get_coding_status"
-    || normalizedEffectiveToolName === "mcp__cowork__get_cowork_agent_status"
-    || normalizedEffectiveToolName === "mcp__cowork__read_coding_events"
-    || normalizedEffectiveToolName === "mcp__cowork__read_cowork_agent_events"
-    || normalizedEffectiveToolName === "mcp__cowork__read_cowork_agent_latest_turns"
-    || normalizedEffectiveToolName === "mcp__cowork__search_cowork_agent_transcript"
-    || normalizedEffectiveToolName === "mcp__cowork__close_cowork_agent"
-  ) {
-    return "cowork_coding";
-  }
   if (
     normalizedEffectiveToolName === "mcp__subagents__spawn_subagent"
     || normalizedEffectiveToolName === "mcp__subagents__create_subagent"

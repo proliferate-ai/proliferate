@@ -133,21 +133,6 @@ export type {
 } from "./types/mobility.js";
 
 export type {
-  CoworkRoot,
-  CoworkStatus,
-  CoworkArtifactType,
-  CoworkArtifactSummary,
-  CoworkArtifactManifestResponse,
-  CoworkArtifactDetailResponse,
-  CoworkThread,
-  CreateCoworkThreadRequest,
-  CreateCoworkThreadResponse,
-  CoworkManagedWorkspacesResponse,
-  CoworkManagedWorkspaceSummary,
-  CoworkCodingSessionSummary,
-} from "./types/cowork.js";
-
-export type {
   WorkspaceKind,
   WorkspaceAvailability,
   WorkspaceSurface,
@@ -304,27 +289,6 @@ export type {
   ProposedPlanDecisionState,
   ProposedPlanNativeResolutionState,
 } from "./types/plans.js";
-
-export type {
-  ReviewKind,
-  ReviewRunStatus,
-  ReviewRoundStatus,
-  ReviewAssignmentStatus,
-  ReviewFeedbackDeliveryState,
-  ReviewModeVerificationStatus,
-  ReviewPersonaRequest,
-  StartPlanReviewRequest,
-  StartCodeReviewRequest,
-  MarkReviewRevisionReadyRequest,
-  RetryReviewAssignmentRequest,
-  ReviewAssignmentDetail,
-  ReviewCritiqueResponse,
-  ReviewFeedbackDeliveryDetail,
-  ReviewRoundDetail,
-  ReviewRunDetail,
-  ReviewRunResponse,
-  SessionReviewsResponse,
-} from "./types/reviews.js";
 
 export type {
   SessionEventEnvelope,

@@ -260,70 +260,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cowork": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_cowork_status"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cowork/enable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["enable_cowork"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cowork/sessions/{session_id}/managed-workspaces": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_cowork_managed_workspaces"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cowork/threads": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_cowork_threads"];
-        put?: never;
-        post: operations["create_cowork_thread"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/replay/recordings": {
         parameters: {
             query?: never;
@@ -526,86 +462,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["materialize_workspace_at_ref"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/reviews/{review_run_id}/assignments/{assignment_id}/critique": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_review_assignment_critique"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/reviews/{review_run_id}/assignments/{assignment_id}/retry": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["retry_review_assignment"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/reviews/{review_run_id}/revision-ready": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["mark_review_revision_ready"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/reviews/{review_run_id}/send-feedback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["send_review_feedback"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/reviews/{review_run_id}/stop": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["stop_review"];
         delete?: never;
         options?: never;
         head?: never;
@@ -948,22 +804,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/sessions/{session_id}/reviews": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_session_reviews"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/sessions/{session_id}/subagents": {
         parameters: {
             query?: never;
@@ -1248,38 +1088,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["purge_workspace"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/cowork/artifacts/{artifact_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_cowork_artifact"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/cowork/manifest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_cowork_manifest"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1781,22 +1589,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_id}/plans/{plan_id}/review": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["start_plan_review"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/workspaces/{workspace_id}/processes/run": {
         parameters: {
             query?: never;
@@ -1887,22 +1679,6 @@ export interface paths {
         get: operations["retire_workspace_preflight"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/reviews/code": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["start_code_review"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2550,109 +2326,6 @@ export interface components {
             /** @enum {string} */
             type: "tool_result_text";
         };
-        CoworkArtifactDetailResponse: {
-            artifact: components["schemas"]["CoworkArtifactSummary"];
-            content: string;
-        };
-        CoworkArtifactManifestResponse: {
-            artifacts: components["schemas"]["CoworkArtifactSummary"][];
-            /** Format: int32 */
-            version: number;
-        };
-        CoworkArtifactSummary: {
-            createdAt: string;
-            description?: string | null;
-            exists: boolean;
-            id: string;
-            modifiedAt?: string | null;
-            path: string;
-            /** Format: int64 */
-            sizeBytes?: number | null;
-            title: string;
-            type: string;
-            updatedAt: string;
-        };
-        /** @enum {string} */
-        CoworkArtifactType: "text/markdown" | "text/html" | "image/svg+xml" | "application/vnd.proliferate.react";
-        CoworkCodingCompletionSummary: {
-            /** Format: int64 */
-            childLastEventSeq: number;
-            childTurnId: string;
-            completionId: string;
-            createdAt: string;
-            outcome: string;
-            /** Format: int64 */
-            parentEventSeq?: number | null;
-            /** Format: int64 */
-            parentPromptSeq?: number | null;
-        };
-        CoworkCodingSessionSummary: {
-            agentKind: string;
-            codingSessionId: string;
-            coworkAgentId?: string | null;
-            label?: string | null;
-            latestCompletion?: null | components["schemas"]["CoworkCodingCompletionSummary"];
-            linkClosedAt?: string | null;
-            linkCreatedAt: string;
-            modeId?: string | null;
-            modelId?: string | null;
-            sessionCreatedAt: string;
-            sessionLinkId: string;
-            status: components["schemas"]["SessionStatus"];
-            title?: string | null;
-            wakeScheduled: boolean;
-        };
-        CoworkManagedWorkspaceSummary: {
-            closedAt?: string | null;
-            coworkWorkspaceId?: string | null;
-            createdAt: string;
-            label?: string | null;
-            ownershipId: string;
-            sessions: components["schemas"]["CoworkCodingSessionSummary"][];
-            sourceWorkspaceId?: string | null;
-            workspaceId: string;
-        };
-        CoworkManagedWorkspacesResponse: {
-            workspaces: components["schemas"]["CoworkManagedWorkspaceSummary"][];
-        };
-        CoworkRoot: {
-            createdAt: string;
-            defaultBranch: string;
-            id: string;
-            repoRootId: string;
-            repoRootPath: string;
-            updatedAt: string;
-        };
-        CoworkStatus: {
-            enabled: boolean;
-            root?: null | components["schemas"]["CoworkRoot"];
-            threadCount: number;
-        };
-        CoworkThread: {
-            agentKind: string;
-            branchName: string;
-            createdAt: string;
-            id: string;
-            lastActivityAt?: string | null;
-            repoRootId: string;
-            requestedModelId?: string | null;
-            sessionId: string;
-            title?: string | null;
-            updatedAt: string;
-            workspaceDelegationEnabled: boolean;
-            workspaceId: string;
-        };
-        CreateCoworkThreadRequest: {
-            agentKind: string;
-            coworkWorkspaceDelegationEnabled?: boolean | null;
-            modeId?: string | null;
-            modelId?: string | null;
-        };
-        CreateCoworkThreadResponse: {
-            session: components["schemas"]["Session"];
-            thread: components["schemas"]["CoworkThread"];
-            workspace: components["schemas"]["Workspace"];
-        };
         CreatePullRequestRequest: {
             baseBranch: string;
             body?: string | null;
@@ -3237,9 +2910,6 @@ export interface components {
         LoopStatus: "active" | "cleared";
         LoopUpsertedPayload: {
             loop: components["schemas"]["Loop"];
-        };
-        MarkReviewRevisionReadyRequest: {
-            revisedPlanId?: string | null;
         };
         MaterializeRepoRootRequest: {
             /** @description Absolute destination path selected by the user-facing host. */
@@ -3910,13 +3580,6 @@ export interface components {
             /** @enum {string} */
             type: "linkWake";
         } | {
-            feedbackJobId: string;
-            label?: string | null;
-            reviewRoundId: string;
-            reviewRunId: string;
-            /** @enum {string} */
-            type: "reviewFeedback";
-        } | {
             label?: string | null;
             /** @enum {string} */
             type: "system";
@@ -4251,129 +3914,6 @@ export interface components {
             workspace: components["schemas"]["Workspace"];
         };
         ResumeSessionRequest: Record<string, never>;
-        RetryReviewAssignmentRequest: {
-            modelId?: string | null;
-        };
-        ReviewAssignmentDetail: {
-            actualModeId?: string | null;
-            agentKind: string;
-            createdAt: string;
-            critiqueArtifactPath?: string | null;
-            deadlineAt: string;
-            failureDetail?: string | null;
-            failureReason?: string | null;
-            hasCritique: boolean;
-            id: string;
-            modeVerificationStatus: components["schemas"]["ReviewModeVerificationStatus"];
-            modelId?: string | null;
-            pass?: boolean | null;
-            personaId: string;
-            personaLabel: string;
-            requestedModeId?: string | null;
-            reviewRoundId: string;
-            reviewRunId: string;
-            reviewerSessionId?: string | null;
-            sessionLinkId?: string | null;
-            status: components["schemas"]["ReviewAssignmentStatus"];
-            summary?: string | null;
-            updatedAt: string;
-        };
-        /** @enum {string} */
-        ReviewAssignmentStatus: "queued" | "launching" | "reviewing" | "reminded" | "retryable_failed" | "submitted" | "cancelled" | "timed_out" | "system_failed";
-        ReviewCritiqueResponse: {
-            assignmentId: string;
-            critiqueArtifactPath?: string | null;
-            critiqueMarkdown?: string | null;
-            pass?: boolean | null;
-            personaId: string;
-            personaLabel: string;
-            reviewRoundId: string;
-            reviewRunId: string;
-            submittedAt?: string | null;
-            summary?: string | null;
-        };
-        ReviewFeedbackDeliveryDetail: {
-            /** Format: int32 */
-            attemptCount: number;
-            failureDetail?: string | null;
-            failureReason?: string | null;
-            nextAttemptAt?: string | null;
-            state: components["schemas"]["ReviewFeedbackDeliveryState"];
-        };
-        /** @enum {string} */
-        ReviewFeedbackDeliveryState: "pending" | "sending" | "sent" | "failed";
-        /** @enum {string} */
-        ReviewKind: "plan" | "code";
-        /** @enum {string} */
-        ReviewModeVerificationStatus: "pending" | "verified" | "mismatch" | "not_checked";
-        ReviewPersonaRequest: {
-            agentKind: string;
-            label: string;
-            modeId?: string | null;
-            modelId?: string | null;
-            personaId: string;
-            prompt: string;
-        };
-        ReviewRoundDetail: {
-            assignments: components["schemas"]["ReviewAssignmentDetail"][];
-            createdAt: string;
-            failureDetail?: string | null;
-            failureReason?: string | null;
-            feedbackDelivery?: null | components["schemas"]["ReviewFeedbackDeliveryDetail"];
-            feedbackJobId?: string | null;
-            feedbackPromptSentAt?: string | null;
-            id: string;
-            reviewRunId: string;
-            /** Format: int32 */
-            roundNumber: number;
-            status: components["schemas"]["ReviewRoundStatus"];
-            targetPlanId?: string | null;
-            targetPlanSnapshotHash?: string | null;
-            updatedAt: string;
-        };
-        /** @enum {string} */
-        ReviewRoundStatus: "reviewing" | "completing" | "passed" | "feedback_pending" | "feedback_sent" | "completed_with_drift" | "cancelled" | "system_failed";
-        ReviewRunDetail: {
-            activeRoundId?: string | null;
-            autoIterate: boolean;
-            childSessionIds: string[];
-            createdAt: string;
-            /** Format: int32 */
-            currentRoundNumber: number;
-            failureDetail?: string | null;
-            failureReason?: string | null;
-            id: string;
-            kind: components["schemas"]["ReviewKind"];
-            /** Format: int32 */
-            maxRounds: number;
-            parentCanSignalRevisionViaMcp: boolean;
-            parentSessionId: string;
-            rounds: components["schemas"]["ReviewRoundDetail"][];
-            status: components["schemas"]["ReviewRunStatus"];
-            targetPlanId?: string | null;
-            targetPlanSnapshotHash?: string | null;
-            title: string;
-            updatedAt: string;
-            workspaceId: string;
-        };
-        ReviewRunResponse: {
-            run: components["schemas"]["ReviewRunDetail"];
-        };
-        /** @enum {string} */
-        ReviewRunStatus: "reviewing" | "feedback_ready" | "parent_revising" | "waiting_for_revision" | "passed" | "stopped" | "system_failed";
-        ReviewRunUpdatedPayload: {
-            activeRoundId?: string | null;
-            autoIterate: boolean;
-            /** Format: int32 */
-            currentRoundNumber: number;
-            kind: components["schemas"]["ReviewKind"];
-            /** Format: int32 */
-            maxRounds: number;
-            parentSessionId: string;
-            reviewRunId: string;
-            status: components["schemas"]["ReviewRunStatus"];
-            updatedAt: string;
-        };
         RunCommandRequest: {
             command: string[];
             cwd?: string | null;
@@ -4572,12 +4112,6 @@ export interface components {
         }) | (components["schemas"]["SubagentTurnCompletedPayload"] & {
             /** @enum {string} */
             type: "subagent_turn_completed";
-        }) | (components["schemas"]["SessionLinkTurnCompletedPayload"] & {
-            /** @enum {string} */
-            type: "session_link_turn_completed";
-        }) | (components["schemas"]["ReviewRunUpdatedPayload"] & {
-            /** @enum {string} */
-            type: "review_run_updated";
         }) | (components["schemas"]["UsageUpdatePayload"] & {
             /** @enum {string} */
             type: "usage_update";
@@ -4662,18 +4196,6 @@ export interface components {
             relation: string;
             workspaceRelation: string;
         };
-        SessionLinkTurnCompletedPayload: {
-            /** Format: int64 */
-            childLastEventSeq: number;
-            childSessionId: string;
-            childTurnId: string;
-            completionId: string;
-            label?: string | null;
-            outcome: components["schemas"]["SubagentTurnOutcome"];
-            parentSessionId: string;
-            relation: string;
-            sessionLinkId: string;
-        };
         /**
          * @description The current live session configuration snapshot persisted by AnyHarness.
          *
@@ -4752,9 +4274,6 @@ export interface components {
             seq: number;
             sessionId: string;
             timestamp: string;
-        };
-        SessionReviewsResponse: {
-            reviews: components["schemas"]["ReviewRunDetail"][];
         };
         SessionStartedEvent: {
             nativeSessionId: string;
@@ -4861,20 +4380,6 @@ export interface components {
             kind: string;
             label: string;
             message?: string | null;
-        };
-        StartCodeReviewRequest: {
-            autoIterate?: boolean;
-            /** Format: int32 */
-            maxRounds?: number;
-            parentSessionId: string;
-            reviewers: components["schemas"]["ReviewPersonaRequest"][];
-        };
-        StartPlanReviewRequest: {
-            autoIterate?: boolean;
-            /** Format: int32 */
-            maxRounds?: number;
-            parentSessionId: string;
-            reviewers: components["schemas"]["ReviewPersonaRequest"][];
         };
         StartTerminalCommandRequest: {
             command: string;
@@ -6304,131 +5809,6 @@ export interface operations {
             };
         };
     };
-    get_cowork_status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Cowork status */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CoworkStatus"];
-                };
-            };
-        };
-    };
-    enable_cowork: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Enabled cowork */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CoworkStatus"];
-                };
-            };
-        };
-    };
-    get_cowork_managed_workspaces: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Cowork parent session ID */
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Cowork-managed coding workspaces */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CoworkManagedWorkspacesResponse"];
-                };
-            };
-            /** @description Cowork thread not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    list_cowork_threads: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Cowork threads */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CoworkThread"][];
-                };
-            };
-        };
-    };
-    create_cowork_thread: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCoworkThreadRequest"];
-            };
-        };
-        responses: {
-            /** @description Created cowork thread */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreateCoworkThreadResponse"];
-                };
-            };
-            /** @description Cowork not enabled */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     list_replay_recordings: {
         parameters: {
             query?: never;
@@ -6978,214 +6358,6 @@ export interface operations {
                 };
             };
             /** @description Branch/head/dirty/busy/operation conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    get_review_assignment_critique: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Review run ID */
-                review_run_id: string;
-                /** @description Review assignment ID */
-                assignment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Review assignment critique */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewCritiqueResponse"];
-                };
-            };
-            /** @description Review or assignment not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    retry_review_assignment: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Review run ID */
-                review_run_id: string;
-                /** @description Review assignment ID */
-                assignment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RetryReviewAssignmentRequest"];
-            };
-        };
-        responses: {
-            /** @description Retried review assignment */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewRunResponse"];
-                };
-            };
-            /** @description Review or assignment not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Review assignment cannot be retried */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    mark_review_revision_ready: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Review run ID */
-                review_run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MarkReviewRevisionReadyRequest"];
-            };
-        };
-        responses: {
-            /** @description Started next review round */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewRunResponse"];
-                };
-            };
-            /** @description Revision is not ready or max rounds reached */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Session execution is controlled by an active workflow run */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    send_review_feedback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Review run ID */
-                review_run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Sent review feedback */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewRunResponse"];
-                };
-            };
-            /** @description Review feedback is not ready */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Session execution is controlled by an active workflow run */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    stop_review: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Review run ID */
-                review_run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Stopped review run */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewRunResponse"];
-                };
-            };
-            /** @description Review run not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Session execution is controlled by an active workflow run */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8343,38 +7515,6 @@ export interface operations {
             };
         };
     };
-    get_session_reviews: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Session ID */
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Session review runs */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionReviewsResponse"];
-                };
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     get_session_subagents: {
         parameters: {
             query?: never;
@@ -9316,81 +8456,6 @@ export interface operations {
                 };
             };
             /** @description Session execution is controlled by an active workflow run */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    get_cowork_artifact: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace id */
-                workspace_id: string;
-                /** @description Artifact id */
-                artifact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Cowork artifact detail */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CoworkArtifactDetailResponse"];
-                };
-            };
-            /** @description Artifact not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Artifact invalid */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    get_cowork_manifest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace id */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Cowork artifact manifest */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CoworkArtifactManifestResponse"];
-                };
-            };
-            /** @description Manifest invalid */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10658,62 +9723,6 @@ export interface operations {
             };
         };
     };
-    start_plan_review: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-                /** @description Plan ID */
-                plan_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StartPlanReviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Started plan review */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewRunResponse"];
-                };
-            };
-            /** @description Invalid review request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Plan or session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Session execution is controlled by an active workflow run */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     run_command: {
         parameters: {
             query?: never;
@@ -10928,51 +9937,6 @@ export interface operations {
             };
             /** @description Workspace not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    start_code_review: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StartCodeReviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Started code review */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewRunResponse"];
-                };
-            };
-            /** @description Invalid review request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Session execution is controlled by an active workflow run */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
