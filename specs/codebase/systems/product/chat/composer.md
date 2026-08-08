@@ -48,7 +48,7 @@ ChatView
     │     ├── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews and subagents)
     │     └── WorkspaceActivityComposerCard (Git/PR summary and source-control actions)
     ├── floatingSlot                        (absolutely positioned, reserves no layout space)
-    │     └── TodoProgressPill              (transient centered pill above ChatInput — Codex/Gemini plan progress)
+    │     └── TodoProgressPill              (transient centered pill above ChatInput — plan/todo progress, any agent)
     ├── ChatInput
     │   └── ChatComposerSurface
     │       └── form: ComposerCommandEditor + ModelSelector + SessionConfigControls + ChatComposerActions
@@ -387,8 +387,8 @@ dock inhabitants with a transient floating pill. It is mounted through
 centered directly above `ChatInput`, that reserves no layout space of its own
 and therefore never shifts the dock when it shows or hides.
 
-- **Data source unchanged.** Still driven by `useActiveTodoTracker()`
-  (Codex/Gemini structured plans only — see §3.4). `todo-progress-summary.ts`
+- **Data source.** Driven by `useActiveTodoTracker()`
+  (any agent's live plan, including Claude's TodoWrite — see §3.4). `todo-progress-summary.ts`
   reduces `PlanEntry[]` to a `{ completedCount, total, currentStepNumber, label }`
   summary (`"Step N/Total"`); `hasTodoStepAdvanced` compares two summaries to
   detect a step completing.
@@ -486,9 +486,9 @@ echoes it back as a `plan_reference` content part.
   source proposed plan. Approval state remains local to the session that
   received the original proposed-plan item.
 
-### 3.4 Todo tracker is Codex/Gemini only
+### 3.4 Todo tracker covers every agent's live plan
 
-`useActiveTodoTracker` narrows `deriveCanonicalPlan` to `sourceKind === "structured_plan"`. Claude's `plan` items are filtered out by the SDK (Claude's `TodoWrite` is internal bookkeeping, not a presented plan). Do not re-enable Claude's structured plans in the todo tracker — they belong elsewhere.
+`deriveActiveTodoTracker` reads `plan` items straight off the transcript (latest in-progress item with entries, any `sourceAgentKind`) instead of `deriveCanonicalPlan`. The SDK's canonical derivation excludes Claude's `TodoWrite` because the *formal plan UI* treats it as internal bookkeeping — but internal task tracking is exactly what the progress pill surfaces, so the tracker deliberately bypasses that gate. Keep the two derivations separate: the SDK exclusion still governs the formal plan surfaces, and the pill-side derivation must not feed them.
 
 ## 4. Visual rules (minimalist pattern)
 
@@ -643,7 +643,7 @@ These are patterns that were tried and rejected. Reintroducing them reopens know
   tool approvals go in `ApprovalCard`; formal plan decisions go in
   `ProposedPlanCard`.
 - **`!h-8 !px-2.5` style `!important` button overrides.** Fixed at the root by adding `tailwind-merge` to the `Button` primitive. Don't reintroduce `!` bangs.
-- **`useActivePlan` hook.** Renamed to `useActiveTodoTracker` and narrowed to `structured_plan` only. The old name and signature are gone.
+- **`useActivePlan` hook.** Renamed to `useActiveTodoTracker`; it now derives from raw `plan` items across all agents (see §3.4). The old name and signature are gone.
 - **Icons + label chips + separator + title stacked in a header.** The whole "RUN COMMAND · git push origin main" pattern was dropped. Just the title.
 
 ## 7. Iterating visually — the playground

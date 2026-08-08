@@ -73,7 +73,7 @@ describe("active todo tracker derivation", () => {
     });
   });
 
-  it("returns null for Claude mode-switch plans (they render in the transcript, not as a todo tracker)", () => {
+  it("ignores mode-switch tool calls — only plan items feed the tracker", () => {
     const transcript = transcriptWithItems({
       "tool-1": {
         kind: "tool_call",
