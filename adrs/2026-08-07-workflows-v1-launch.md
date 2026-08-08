@@ -290,7 +290,7 @@ Placement materializes `<managed-worktrees-root>/workflows/<runId>` on branch
 Local persistence is three SQLite tables — `workflow_runs`,
 `workflow_run_steps`, `workflow_workspace_materializations`, plus a
 partial-unique active-controller index — across migrations 0060–0064, snapshot
-in [anyharness-db-schema.sql](../specs/generated/anyharness-db-schema.sql).
+in [anyharness-db-schema.sql](../specs/GENERATED/anyharness-db-schema.sql).
 Steps are addressed as `(stage_index, step_index)`, a linear coordinate space
 with only `(0, 0)` ever materialized. Nothing resembling the requirement
 18–20 shared-context paths exists; run artifacts live only in session
