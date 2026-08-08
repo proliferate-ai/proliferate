@@ -35,9 +35,9 @@ Tool names follow the same law. A session's tool list is frozen at launch, so
 names, `create_subagent` and `close_subagent`. Aliases dispatch to the same
 implementation and are never advertised in `tools/list`.
 
-Subagents cannot create grandchildren. There are no top-level `modelId` or
-`modeId` fields in subagent tools; harness-specific launch configuration is
-carried through `initialConfig`.
+Subagents cannot create grandchildren *while they are subagents*. There are no
+top-level `modelId` or `modeId` fields in subagent tools; harness-specific
+launch configuration is carried through `initialConfig`.
 
 `subagentId` is the handle for the subagent tool class only. The peer tools in
 the same MCP — `list_agents`, `send_agent_message`, `read_agent_transcript`,
@@ -59,6 +59,39 @@ stays open on all three. It is not the execution fence — a session
 an active workflow run controls is refused a peer prompt or a peer config
 change by the same session mutation admission permit that fences the HTTP
 prompt and config routes.
+
+## Ownership And Promotion
+
+Ownership is a `session_links` row, not reachability. Every agent can reach every
+other agent — that is what the peer tools are for — but only the agent that
+spawned a subagent, or that owns an agent outright, may promote or close it.
+Ownership is read from the row and never inferred from the ability to send a
+message.
+
+An agent is in exactly one of three states, and the row says which:
+
+| State | Row | Can spawn | Closes with its owner | Counts against the owner's limit |
+| --- | --- | --- | --- | --- |
+| Subagent | `relation = 'subagent'`, `promoted_at IS NULL` | no | yes | yes |
+| Promoted | `relation = 'subagent'`, `promoted_at IS NOT NULL` | yes | no | no |
+| Owned peer | `relation = 'owned_agent'` | yes | no | no |
+
+`promote_subagent` moves a subagent to promoted. It is one write, idempotent,
+and one-way. The relation does not change, because the owner does not change:
+the parent still owns a promoted agent and may still close it deliberately. What
+promotion severs is subordination — the close cascade, the fanout slot, and the
+spawn block.
+
+The spawn block is the visible consequence for the child. An unpromoted subagent
+is offered no spawn-style tool at all — not `spawn_subagent`, not
+`get_subagent_launch_options`, not the `create_subagent` alias. That is stricter
+than the fanout cap, which merely refuses a spawn: a capped parent still sees
+its launch options, because the cap is a temporary condition of an agent that is
+allowed to think in terms of spawning. Subordination is not.
+
+Because tool lists are frozen at launch, the block is enforced at call time, on
+the wire name, against the caller's state at the moment it acts. `tools/list` is
+advertisement; dispatch is the gate.
 
 ## Peer Configuration
 
@@ -124,11 +157,32 @@ Closing is not transcript deletion. The child session and historical
 artifacts remain available through history/debug surfaces according to
 retention policy.
 
+`close_agent` closes any agent the caller owns, addressed by `sessionId` or by
+`subagentId`, with an optional `reason`. Its target is not confined to the
+caller's workspace, so it takes its own fence rather than the route's: the
+target session's mutation permit first, then the target workspace's write lease.
+A close is the most destructive session mutation there is; without the permit it
+would run straight through a workflow that had taken control of that session.
+
 Close ordering is intentionally retryable: the runtime closes the child
 session graph first, including any delegated descendants and product close
 hooks, then marks the parent-child link closed. If closing the live session
 fails, the active link remains discoverable so a later close call can retry
 rather than orphaning hidden work.
+
+The cascade skips promoted children. Closing an owner takes down the subagents
+still subordinate to it and leaves the agents it promoted running; their
+ownership rows survive, so they can still be closed individually.
+
+Closing an agent that is WORKING does not interrupt it. The call authorizes the
+close, records who closed it and why on the still-open ownership row, and
+returns "end requested"; the agent finishes the step it is on and the tree
+closes at turn finish. An idle agent closes immediately. The stamped-but-open
+row is the durable request, so the close survives a runtime restart mid-turn.
+
+`closedBySessionId` and `closeReason` are attribution, written once. A second
+close of an already-closed agent is a no-op that preserves the first close's
+record, and a close performed by a person through the UI leaves both unset.
 
 Cowork reuses this same close-ordering law for `close_cowork_agent`; see
 [cowork.md](cowork.md).

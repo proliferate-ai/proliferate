@@ -95,7 +95,8 @@ session events as the runtime truth for replay or rendering.
 
 It stores an advisory relationship between two existing sessions:
 
-- relation, currently `subagent`
+- relation: `subagent`, `owned_agent`, `fork`, `cowork_coding_session`, or
+  `review_agent`
 - parent session id
 - child session id
 - workspace relation, currently `same_workspace`
@@ -103,12 +104,39 @@ It stores an advisory relationship between two existing sessions:
 - optional creator turn id
 - optional creator tool-call id
 - created timestamp
+- optional promoted timestamp
+- optional closing session id and close reason
 
 The link service validates that parent and child sessions exist, rejects
 self-links, and enforces uniqueness for `(relation, parent_session_id,
 child_session_id)`. For `subagent` links, a child may have only one parent.
 Deleting a session removes any links where that session is the parent or child,
 including completion and wake-schedule rows attached to those links.
+
+#### Ownership
+
+`session_links` is also the ownership substrate. Two relations confer
+ownership — `subagent` and `owned_agent` — and an agent's ownership state is
+read off one row:
+
+| State | Row |
+| --- | --- |
+| Subagent | `relation = 'subagent'` and `promoted_at IS NULL` |
+| Promoted | `relation = 'subagent'` and `promoted_at IS NOT NULL` |
+| Owned peer | `relation = 'owned_agent'` |
+
+Promotion stamps `promoted_at`; it does not change the relation, because the
+parent stays the owner. It is one idempotent write, and it is one-way.
+
+`closed_by_session_id` and `close_reason` record which agent closed this one and
+why. Both stay `NULL` for a session a person closed through the UI or the HTTP
+close route — the columns record an *agent's* close, not every close.
+
+Ownership is deliberately separate from `authorize`
+(`domains/sessions/authorize.rs`), which answers reachability and is
+runtime-wide and unlinked. Reaching an agent and acting on its lifecycle are
+different questions; promotion and close resolve an ownership row first, they do
+not go through the reachability funnel.
 
 Session links are durable product state, but their creator turn/tool metadata is
 provenance only. It must not be used as an authorization, billing, or trust
@@ -186,9 +214,12 @@ The model is intentionally small:
 - `session_links` is the access-control check for every child-id-taking tool
 - PR2 does not cascade-delete child sessions when a parent is deleted; deleting
   either session removes only the link and attached completion/schedule rows
-- nested subagents are blocked; a session that is already a subagent child does
-  not receive subagent MCP tools
-- parents are limited to eight subagents
+- nested subagents are blocked; an UNPROMOTED subagent child receives no
+  spawn-style tools (`get_subagent_launch_options`, `spawn_subagent`, and the
+  deprecated `create_subagent` alias) and `validate_parent_can_spawn` refuses it
+  with a depth limit
+- parents are limited to eight *unpromoted* subagents at a time; promoted
+  children no longer occupy a slot
 - `subagents_enabled` is a durable create-time session policy. Missing legacy
   rows default enabled in the session store/read model. Resume reads the stored
   policy and does not silently re-enable disabled sessions.
@@ -233,6 +264,30 @@ Current tools:
 - `get_subagent_status`
 - `read_subagent_events`
 - `schedule_subagent_wake`
+- `promote_subagent`
+- `close_agent` (deprecated alias: `close_subagent`)
+
+Advertisement is not enforcement. A session's tool list is frozen at launch, so
+an agent promoted afterwards holds a list that never showed the spawn tools and
+one launched before its promotion holds a list that did. The spawn gate
+therefore runs again at dispatch in `agent_ops/calls.rs`, against the caller's
+state at the moment it acts, and matches the wire name so the deprecated
+`create_subagent` spelling cannot walk around it.
+
+`promote_subagent` promotes one of the caller's subagents to a peer. The agent
+keeps its transcript, its label and its owner, and gains the full tool surface
+including spawning its own agents; it stops closing when its owner closes, and
+stops counting against the owner's subagent limit. Only the owning parent may
+promote, and only its own child. It is one indexed UPDATE against a link row in
+the caller's own workspace and touches no session actor, so it takes the route's
+workspace write lease and no session mutation permit.
+
+`close_agent` closes any agent the caller owns, by `sessionId` or by
+`subagentId`, with an optional `reason`. Because the target may live in another
+workspace and because a close acts on the target session, it takes its own fence
+rather than the route's: the TARGET session's mutation permit first, then the
+TARGET workspace's write lease (PR1227-LOCK-01). Skipping the permit would let a
+close run straight through a workflow that had taken control of that session.
 
 `get_subagent_launch_options` is the discovery surface parent agents should use
 before choosing non-default `agentKind`, `modelId`, or `modeId` values. It
@@ -505,6 +560,45 @@ The runtime layer:
 
 Cancel and close follow the same pattern.
 
+#### Close cascade
+
+`close_live_session` closes a tree: children first, then the actor, then the
+inbound links. Which children go down with the parent is decided per link:
+
+- `subagent` cascades only while `promoted_at IS NULL`. Promotion severs the
+  cascade and nothing else — the row survives, so the former parent may still
+  close that agent deliberately.
+- `cowork_coding_session` and `review_agent` always cascade.
+- `owned_agent` never cascades: it is a peer by construction, so there is no
+  subordination to sever.
+- `fork` never cascades: a fork is a copy, not a dependent.
+
+When a session itself closes, every inbound ownership, cowork, and review link
+pointing at it closes with it, promoted or not.
+
+#### Soft close
+
+Closing an agent that is *working* does not interrupt it.
+
+- The target's execution phase is `Running`: the call authorizes the close,
+  stamps `closed_by_session_id`/`close_reason` on the still-open ownership row,
+  and returns `closeRequested`. That stamped-but-open row IS the durable
+  request. The agent finishes the step it is on; at turn finish
+  (`domains/sessions/ownership/hooks.rs`) the close tree runs. Because the
+  request is durable, a runtime that restarts mid-turn still owes the close and
+  the next finished turn pays it.
+- Any other phase closes immediately. `AwaitingInteraction` is a turn that
+  cannot finish without a human, so deferring would mean never; `Starting` has
+  no turn to finish and may never emit one.
+
+The deferred half re-takes the same two gates in the same order rather than
+carrying them, because the requesting call returned long ago and control can be
+acquired in between. A refusal there leaves the request armed for the next
+finished turn rather than dropping it.
+
+Attribution is written once. A second close of an already-closed agent leaves
+the first close's record alone, and returns idempotently before taking any gate.
+
 ### Interaction Resolution
 
 Interaction resolution also goes through `SessionRuntime`.
@@ -688,6 +782,12 @@ Code path:
 - Session event sequences are monotonic per session.
 - Durable records remain authoritative even when no live actor exists.
 - Config changes requested while busy must not be lost.
+- Only the owning parent may promote or close an agent, and ownership is read
+  from a `session_links` row — never from reachability.
+- Promotion is one-way and idempotent, and severs only the close cascade.
+- A close of a working agent never interrupts its in-flight step.
+- A close whose target is outside the caller's own link tree takes the target
+  session's mutation permit before any workspace lease.
 
 ## Extension Points
 
