@@ -554,9 +554,34 @@ The ACP runtime owns:
 - restoring persisted config after resume
 - emitting config updates when ACP changes the active surface
 
+### Who requests a config change
+
+Two callers reach the same `SessionRuntime::set_live_session_config_option`, and
+neither has its own apply machinery:
+
+- the human client, through
+  `POST /v1/sessions/{session_id}/config-options`
+- another agent, through the `configure_agent` tool on the agent ops MCP
+  (`domains/sessions/agent_ops/**`)
+
+The tool takes the same `configId`/`value` pair the route's request body does.
+It differs only in what it must establish before applying, because the session
+it mutates is not the one it was called on:
+
+- the options it validates against are composed for the TARGET session's
+  workspace (`resolved_workspace_launch_options` for that workspace, merged
+  with that session's live snapshot) — never the calling agent's workspace
+- it acquires the TARGET session's `SessionMutationKind::Config` admission
+  permit with an External source, so a workflow-controlled session refuses a
+  foreign change with the same stable conflict the HTTP route answers
+- when the target is in a different workspace than the caller, it also takes
+  that workspace's shared operation lease and access-gate check, in the
+  canonical `permit -> operation lease` order; a same-workspace target reuses
+  the lease the MCP endpoint already holds
+
 ### End-to-end config flow
 
-1. client requests a config change
+1. client or peer agent requests a config change
 2. `SessionRuntime` ensures the actor is live
 3. the actor tries to apply the change through ACP
 4. if the session is busy, the change is queued durably

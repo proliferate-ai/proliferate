@@ -41,9 +41,10 @@ carried through `initialConfig`.
 
 `subagentId` is the handle for the subagent tool class only. The peer tools in
 the same MCP — `list_agents`, `send_agent_message`, `read_agent_transcript`,
-`schedule_agent_wake` — address any session in the runtime and take `sessionId`,
-because there is no link to derive a scoped handle from. A subagent addressed as
-a peer is addressed by its session id like any other agent.
+`schedule_agent_wake`, `get_agent_config_options`, `configure_agent` — address
+any session in the runtime and take `sessionId`, because there is no link to
+derive a scoped handle from. A subagent addressed as a peer is addressed by its
+session id like any other agent.
 
 "Any session in the runtime" means any session that is an *agent*. The
 peer-reachable set excludes dismissed sessions (deleted from the sidebar, and
@@ -52,8 +53,35 @@ caller itself, and `internal_only` sessions — workflow and review plumbing the
 runtime drives, which are not agents the human is running. That is a discovery
 rule: `list_agents` hides them and `send_agent_message` /
 `read_agent_transcript` refuse them. It is not the execution fence — a session
-an active workflow run controls is refused a peer prompt by the same session
-mutation admission permit that fences the HTTP prompt route.
+an active workflow run controls is refused a peer prompt or a peer config
+change by the same session mutation admission permit that fences the HTTP
+prompt and config routes.
+
+## Peer Configuration
+
+`get_agent_config_options` and `configure_agent` speak the same vocabulary as
+the human client's `POST /v1/sessions/{session_id}/config-options`: one
+`configId` and one `value`, where model, mode and thinking/effort are all just
+config ids. There is no second agent-facing vocabulary over one apply path.
+
+What differs from the human surface is whose universe the value is checked
+against. The options a peer tool reports are composed for the TARGET's
+workspace — its launch catalog, its readiness, its auth contexts — merged with
+the target's own live control snapshot, never the caller's workspace. Two
+agents in different workspaces can have entirely different menus, and a model
+only the caller's workspace can serve is refused. Values are tagged with where
+they came from: `live` means the target's harness is advertising the value now,
+`workspace_catalog` means the target's workspace authorizes it and applying may
+relaunch the agent to reach it (the same live-or-relaunch rule the human path
+uses; see
+[../../../../../anyharness/sessions.md](../../../../../anyharness/sessions.md)).
+
+Two refusals are specific to the peer form. A CLOSED target is rejected for
+both tools rather than answered with an empty menu: its actor never starts
+again, so it has no configuration left to read or change — unlike
+`read_agent_transcript`, which stays readable forever. And an agent may not
+target ITSELF with `configure_agent`: the change would be routed at the very
+actor blocked inside the tool call. Reading your own options is allowed.
 
 ## Wake Race
 
