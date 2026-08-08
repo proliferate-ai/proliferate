@@ -1,14 +1,10 @@
 import type { Workspace } from "@anyharness/sdk";
 
 export interface MissingCheckoutCopy {
-  /** Panel header + sidebar tooltip. */
+  /** Sidebar tooltip. */
   title: string;
-  /** Panel body, default (non-confirming) state. */
-  body: string;
   /** Send-button tooltip and session-creation block reason. */
   sendBlockedReason: string;
-  /** Panel body while the inline delete confirmation is showing. */
-  deleteConfirmBody: string;
 }
 
 export function worktreeRestoreFailureCopy(
@@ -51,11 +47,29 @@ export function missingCheckoutCopy(kind: Workspace["kind"]): MissingCheckoutCop
   const noun = kind === "worktree" ? "Worktree" : "Workspace folder";
   return {
     title: `${noun} no longer exists`,
-    body: kind === "worktree"
-      ? "The local worktree was removed. Restore recreates committed files from the recorded branch; deleted uncommitted changes cannot be recovered. Your existing chat history stays attached to this workspace."
-      : "The local checkout for this workspace was removed. Your chat history is still available, but agents, files, and terminals can't run here.",
     sendBlockedReason: `${noun} no longer exists. Agents can't run in this workspace.`,
-    deleteConfirmBody:
-      "Delete this workspace? Its record and chat history are removed permanently. This cannot be undone.",
   };
+}
+
+// Composer-takeover status line (Blocked Status design): one sentence, no em
+// dashes. "Restore" only reads correctly when a restore action is actually
+// offered (worktree kind + eligible); otherwise the sentence points at
+// "Check again" instead, since there is no restore mutation for a plain
+// local checkout.
+// "Check again" feedback when the re-check finds the folder still gone. The
+// takeover itself doesn't change in that case, so without this the click
+// reads as a no-op.
+export function missingCheckoutStillMissingCopy(kind: Workspace["kind"]): string {
+  const noun = kind === "worktree" ? "Worktree folder" : "Workspace folder";
+  return `Checked again. ${noun} is still missing.`;
+}
+
+export function missingCheckoutComposerMessage(
+  kind: Workspace["kind"],
+  restoreEligible: boolean,
+): string {
+  const noun = kind === "worktree" ? "Worktree folder" : "Workspace folder";
+  return restoreEligible
+    ? `${noun} is missing. Chat is paused until it’s restored.`
+    : `${noun} is missing. Chat is paused until it’s back on disk.`;
 }

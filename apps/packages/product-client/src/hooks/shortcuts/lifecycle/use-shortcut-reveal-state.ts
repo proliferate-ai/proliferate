@@ -4,6 +4,11 @@ import { useShortcutRevealStore } from "#product/stores/shortcuts/shortcut-revea
 
 export const SHORTCUT_REVEAL_RESET_EVENT = "proliferate:shortcut-reveal-reset"
 
+// Reveal only after a deliberate hold. Chords like ⌘K press the modifier for
+// a few hundred milliseconds too; revealing on keydown makes every chord
+// flash the hints.
+export const SHORTCUT_REVEAL_HOLD_MS = 800
+
 function isPrimaryModifierKey(key: string, isApple: boolean): boolean {
   return isApple ? key === "Meta" : key === "Control"
 }
@@ -24,7 +29,17 @@ export function useShortcutRevealState(): boolean {
   const setStoreVisible = useShortcutRevealStore((state) => state.setVisible)
 
   useEffect(() => {
+    let holdTimer: ReturnType<typeof setTimeout> | null = null
+
+    const cancelPendingReveal = () => {
+      if (holdTimer !== null) {
+        clearTimeout(holdTimer)
+        holdTimer = null
+      }
+    }
+
     const clearReveal = () => {
+      cancelPendingReveal()
       setStoreVisible(false)
     }
 
@@ -33,7 +48,16 @@ export function useShortcutRevealState(): boolean {
       const primaryPressed = primaryModifierPressed(event, isApple)
 
       if (isPrimaryModifierKey(event.key, isApple)) {
-        setStoreVisible(primaryPressed)
+        if (!primaryPressed) {
+          clearReveal()
+          return
+        }
+        if (holdTimer === null) {
+          holdTimer = setTimeout(() => {
+            holdTimer = null
+            setStoreVisible(true)
+          }, SHORTCUT_REVEAL_HOLD_MS)
+        }
         return
       }
 

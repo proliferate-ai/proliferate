@@ -3,20 +3,9 @@ import { ApprovalCard } from "#product/components/workspace/chat/input/ApprovalC
 import { McpElicitationCard } from "#product/components/workspace/chat/input/McpElicitationCard";
 import { UserInputCard } from "#product/components/workspace/chat/input/UserInputCard";
 import { PlaygroundInteractionMotionFixture } from "#product/components/playground/composer-slots/PlaygroundInteractionMotionFixture";
-import { CloudRuntimeAttachedPanelView } from "#product/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
-import { WorkspaceArrivalCloudPanel } from "#product/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
 import { WorkspaceCreationReceiptView } from "#product/components/workspace/chat/transcript/WorkspaceCreationReceipt";
 import { presentWorkspaceCreationReceipt } from "#product/lib/domain/workspaces/creation/creation-receipt";
 import type { ScenarioKey } from "#product/config/playground";
-import {
-  CLOUD_RUNTIME_RECONNECT_ERROR,
-  CLOUD_RUNTIME_RECONNECTING,
-  CLOUD_STATUS_APPLYING_FILES,
-  CLOUD_STATUS_BLOCKED,
-  CLOUD_STATUS_ERROR,
-  CLOUD_STATUS_FIRST_RUNTIME,
-  CLOUD_STATUS_PROVISIONING,
-} from "#product/lib/domain/chat/__fixtures__/playground/panel-cloud-fixtures";
 import {
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
@@ -159,60 +148,16 @@ export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null 
           onRerun={noop}
         />
       );
+    // Cloud provisioning/runtime scenarios now render via the composer
+    // takeover (renderComposerBlockedSurface), not an attached panel.
     case "cloud-first-runtime":
-      return (
-        <WorkspaceArrivalCloudPanel
-          model={CLOUD_STATUS_FIRST_RUNTIME}
-          isPrimaryActionPending={false}
-          onPrimaryAction={noop}
-        />
-      );
     case "cloud-provisioning":
-      return (
-        <WorkspaceArrivalCloudPanel
-          model={CLOUD_STATUS_PROVISIONING}
-          isPrimaryActionPending={false}
-          onPrimaryAction={noop}
-        />
-      );
     case "cloud-applying-files":
-      return (
-        <WorkspaceArrivalCloudPanel
-          model={CLOUD_STATUS_APPLYING_FILES}
-          isPrimaryActionPending={false}
-          onPrimaryAction={noop}
-        />
-      );
     case "cloud-blocked":
-      return (
-        <WorkspaceArrivalCloudPanel
-          model={CLOUD_STATUS_BLOCKED}
-          isPrimaryActionPending={false}
-          onPrimaryAction={noop}
-        />
-      );
     case "cloud-error":
-      return (
-        <WorkspaceArrivalCloudPanel
-          model={CLOUD_STATUS_ERROR}
-          isPrimaryActionPending={false}
-          onPrimaryAction={noop}
-        />
-      );
     case "cloud-reconnecting":
-      return (
-        <CloudRuntimeAttachedPanelView
-          state={CLOUD_RUNTIME_RECONNECTING}
-          retry={noop}
-        />
-      );
     case "cloud-reconnect-error":
-      return (
-        <CloudRuntimeAttachedPanelView
-          state={CLOUD_RUNTIME_RECONNECT_ERROR}
-          retry={noop}
-        />
-      );
+      return null;
     case "user-input-single-option":
       return (
         <UserInputCard

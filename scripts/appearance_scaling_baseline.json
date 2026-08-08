@@ -75,7 +75,6 @@
     "apps/packages/product-client/src/components/workspace/chat/input/ChatInput.tsx|z-20": 1,
     "apps/packages/product-client/src/components/workspace/chat/input/workspace-status/StatusCardPrimitives.tsx|z-0": 1,
     "apps/packages/product-client/src/components/workspace/chat/input/workspace-status/StatusCardPrimitives.tsx|z-10": 1,
-    "apps/packages/product-client/src/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel.tsx|z-50": 2,
     "apps/packages/product-client/src/components/workspace/chat/tool-calls/CollapsedEditActionRows.tsx|z-0": 1,
     "apps/packages/product-client/src/components/workspace/chat/tool-calls/CollapsedEditActionRows.tsx|z-10": 1,
     "apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptRowListShared.tsx|z-10": 1,

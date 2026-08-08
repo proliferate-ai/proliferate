@@ -2,6 +2,38 @@ export interface SessionReasoningEffortPresentation {
   shortLabel: string | null;
 }
 
+export function reasoningLadderTopsOutAtUltra(
+  options: ReadonlyArray<{ value: string }>,
+): boolean {
+  if (options.length < 2) {
+    return false;
+  }
+  return options[options.length - 1]?.value.toLowerCase() === "ultra";
+}
+
+export type ReasoningEffortTierTone =
+  | "muted"
+  | "secondary"
+  | "foreground"
+  | "special"
+  | "ultra";
+
+const TIER_TONES: Readonly<Record<string, ReasoningEffortTierTone>> = {
+  minimal: "muted",
+  low: "muted",
+  medium: "secondary",
+  high: "foreground",
+  xhigh: "foreground",
+  max: "special",
+  ultra: "ultra",
+};
+
+export function resolveReasoningEffortTierTone(
+  value: string | null,
+): ReasoningEffortTierTone {
+  return TIER_TONES[value?.toLowerCase() ?? ""] ?? "secondary";
+}
+
 const TITLE_CASE_SPLIT = /[^a-z0-9]+/i;
 
 export function resolveReasoningEffortPresentation(

@@ -178,10 +178,16 @@ describe("playground scenarios", () => {
     expect(subagentComposerHtml).not.toMatch(/Codex|Claude|Grok|gpt-|sonnet|opus|model/i);
   });
 
-  it("renders cloud composer attached-slot scenarios", () => {
+  it("renders cloud scenarios through the composer takeover, not an attached panel", () => {
     for (const scenario of CLOUD_COMPOSER_SCENARIOS) {
-      expect(isValidElement(renderAttachedSlot(scenario))).toBe(true);
+      expect(renderAttachedSlot(scenario)).toBeNull();
+      expect(isValidElement(renderComposerSurfaceForScenario(scenario))).toBe(true);
     }
+  });
+
+  it("renders the worktree-missing scenario through the composer takeover", () => {
+    expect(Object.keys(SCENARIOS)).toContain("worktree-missing");
+    expect(isValidElement(renderComposerSurfaceForScenario("worktree-missing"))).toBe(true);
   });
 
   it("renders queued prompt scenarios through the outbound slot", () => {

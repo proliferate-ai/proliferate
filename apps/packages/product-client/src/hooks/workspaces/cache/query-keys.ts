@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type { Query, QueryClient } from "@tanstack/react-query";
 import type { WorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
 
 export function workspaceCollectionsRootKey() {
@@ -29,10 +29,26 @@ export function getWorkspaceCollectionsFromCache(
   runtimeUrl: string,
   authUserId: string | null = null,
 ): WorkspaceCollections | undefined {
-  const matchingQueries = queryClient.getQueryCache().findAll({
+  return pickFreshestCollections(queryClient.getQueryCache().findAll({
     queryKey: workspaceCollectionsUserScopeKey(runtimeUrl, authUserId),
-  });
+  }));
+}
 
+// Scope-level read: matches every collections query for the runtime
+// regardless of auth-user/cloud key segments, for callers that don't know
+// which variant is live.
+export function getAnyWorkspaceCollectionsFromCache(
+  queryClient: QueryClient,
+  runtimeUrl: string,
+): WorkspaceCollections | undefined {
+  return pickFreshestCollections(queryClient.getQueryCache().findAll({
+    queryKey: workspaceCollectionsScopeKey(runtimeUrl),
+  }));
+}
+
+function pickFreshestCollections(
+  matchingQueries: Query[],
+): WorkspaceCollections | undefined {
   return matchingQueries
     .map((query) => ({
       data: query.state.data,

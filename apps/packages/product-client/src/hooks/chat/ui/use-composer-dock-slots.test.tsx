@@ -5,10 +5,6 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useComposerDockSlots } from "./use-composer-dock-slots";
 
-const workspaceStatusPanelState = vi.hoisted(() => ({
-  value: { kind: "pending" } as unknown,
-}));
-
 const primaryPendingInteractionState = vi.hoisted(() => ({
   value: null as { kind: string; requestId: string } | null,
 }));
@@ -53,22 +49,6 @@ vi.mock("#product/stores/sessions/session-selection-store", () => ({
   ) => selector({ selectedWorkspaceId: selectedWorkspaceState.value }),
 }));
 
-vi.mock("#product/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
-  useSelectedCloudRuntimeState: () => ({ state: null }),
-}));
-
-vi.mock("#product/hooks/workspaces/derived/use-workspace-status-panel-state", () => ({
-  useWorkspaceStatusPanelState: () => workspaceStatusPanelState.value,
-}));
-
-vi.mock("#product/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel", () => ({
-  WorkspaceArrivalAttachedPanel: () => <div data-testid="workspace-status-panel" />,
-}));
-
-vi.mock("#product/components/workspace/chat/surface/CloudRuntimeAttachedPanel", () => ({
-  CloudRuntimeAttachedPanel: () => <div data-testid="cloud-runtime-panel" />,
-}));
-
 vi.mock("#product/components/workspace/chat/input/ApprovalCard", () => ({
   ConnectedApprovalCard: () => <div data-testid="approval-card" />,
 }));
@@ -98,7 +78,6 @@ vi.mock("#product/components/workspace/chat/input/UserInputCard", () => ({
 
 afterEach(() => {
   cleanup();
-  workspaceStatusPanelState.value = { kind: "pending" };
   primaryPendingInteractionState.value = null;
   pendingPromptsState.value = [];
   promptRecoveryState.value = [];
@@ -114,24 +93,6 @@ describe("useComposerDockSlots", () => {
     render(<>{result.current.outboundSlot}</>);
 
     expect(screen.getByTestId("pending-prompt-list")).not.toBeNull();
-  });
-
-  it("renders workspace status panels by default", () => {
-    const { result } = renderHook(() => useComposerDockSlots());
-
-    render(<>{result.current.attachedSlot}</>);
-
-    expect(screen.getByTestId("workspace-status-panel")).not.toBeNull();
-  });
-
-  it("suppresses workspace status panels when requested", () => {
-    const { result } = renderHook(() => useComposerDockSlots({
-      suppressWorkspaceStatusPanels: true,
-    }));
-
-    render(<>{result.current.attachedSlot}</>);
-
-    expect(screen.queryByTestId("workspace-status-panel")).toBeNull();
   });
 
   it("renders the interaction card as the active slot", () => {
