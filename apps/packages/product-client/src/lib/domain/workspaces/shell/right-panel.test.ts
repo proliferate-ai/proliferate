@@ -23,8 +23,8 @@ import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-t
 
 describe("right panel domain", () => {
   it("uses the same built-in tools for local and cloud workspaces", () => {
-    expect(availableRightPanelTools(false)).toEqual(["scratch", "git"]);
-    expect(availableRightPanelTools(true)).toEqual(["scratch", "git"]);
+    expect(availableRightPanelTools(false)).toEqual(["scratch", "git", "agents"]);
+    expect(availableRightPanelTools(true)).toEqual(["scratch", "git", "agents"]);
   });
 
   it("defaults to scratch for new right-panel state", () => {
@@ -34,6 +34,7 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "tool:scratch",
       "tool:git",
+      "tool:agents",
     ]);
   });
 
@@ -70,6 +71,7 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "tool:scratch",
       "tool:git",
+      "tool:agents",
     ]);
   });
 
@@ -83,7 +85,7 @@ describe("right panel domain", () => {
     );
 
     expect(state.activeEntryKey).toBe("tool:git");
-    expect(state.headerOrder).toEqual(["tool:scratch", "tool:git"]);
+    expect(state.headerOrder).toEqual(["tool:scratch", "tool:git", "tool:agents"]);
   });
 
   it("keeps a terminal active when no live terminal list is available", () => {
@@ -100,6 +102,7 @@ describe("right panel domain", () => {
       "terminal:t1",
       "tool:git",
       "tool:scratch",
+      "tool:agents",
     ]);
   });
 
@@ -119,6 +122,7 @@ describe("right panel domain", () => {
       "tool:git",
       "terminal:t2",
       "tool:scratch",
+      "tool:agents",
       "terminal:t1",
     ]);
     expect(state.activeEntryKey).toBe("tool:scratch");
@@ -139,6 +143,7 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "tool:git",
       "tool:scratch",
+      "tool:agents",
       "terminal:run",
     ]);
   });
@@ -159,6 +164,7 @@ describe("right panel domain", () => {
       "terminal:t2",
       "tool:git",
       "tool:scratch",
+      "tool:agents",
       "terminal:t1",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t2");
@@ -179,6 +185,7 @@ describe("right panel domain", () => {
       "terminal:t1",
       "terminal:t3",
       "tool:scratch",
+      "tool:agents",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t1");
   });
@@ -200,6 +207,7 @@ describe("right panel domain", () => {
       "terminal:t2",
       "tool:scratch",
       "tool:git",
+      "tool:agents",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t1");
   });
@@ -220,6 +228,7 @@ describe("right panel domain", () => {
       "terminal:t2",
       "tool:git",
       "tool:scratch",
+      "tool:agents",
     ]);
   });
 
@@ -237,6 +246,7 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "tool:scratch",
       "tool:git",
+      "tool:agents",
     ]);
     expect(state.activeEntryKey).toBe("tool:git");
   });
@@ -259,6 +269,7 @@ describe("right panel domain", () => {
       targetKey,
       "tool:scratch",
       "tool:git",
+      "tool:agents",
     ]);
     expect(state.activeEntryKey).toBe(targetKey);
   });

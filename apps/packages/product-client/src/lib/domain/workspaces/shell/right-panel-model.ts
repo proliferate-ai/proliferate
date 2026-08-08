@@ -5,7 +5,7 @@ import {
   type ViewerTargetKey,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
-export type RightPanelTool = "scratch" | "git";
+export type RightPanelTool = "scratch" | "git" | "agents";
 export type RightPanelHeaderEntryKey =
   | `tool:${RightPanelTool}`
   | `terminal:${string}`
@@ -64,6 +64,9 @@ export type RightPanelDragOutcome =
 export const DEFAULT_RIGHT_PANEL_TOOL_ORDER: RightPanelTool[] = [
   "scratch",
   "git",
+  // The agents pane is a panel tab so it survives tab switches: it is ONE
+  // global pane, and it never auto-follows the session in view.
+  "agents",
 ];
 export const DEFAULT_RIGHT_PANEL_HEADER_ORDER: RightPanelHeaderEntryKey[] =
   DEFAULT_RIGHT_PANEL_TOOL_ORDER.map((tool) => rightPanelToolHeaderKey(tool));

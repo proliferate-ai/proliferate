@@ -1,4 +1,7 @@
 import { PopoverButton } from "#product/primitives/PopoverButton";
+import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import { useAgentsPaneStore } from "#product/stores/agents/agents-pane-store";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
 import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 import type { DelegatedWorkComposerViewModel } from "#product/hooks/chat/facade/use-delegated-work-composer";
@@ -11,6 +14,18 @@ export function DelegatedWorkComposerControl({
   viewModel: DelegatedWorkComposerViewModel;
 }) {
   const singleAgent = viewModel.singleAgent;
+  const shellActions = useWorkspaceShellActions();
+  const activeSessionId = useActiveSessionId();
+  const openCluster = useAgentsPaneStore((state) => state.openCluster);
+  // The composer's "N working" cap IS the session's goal-bar cap: it opens
+  // THAT session's cluster, not the overview (ADR §4 entry points).
+  const clusterSessionId = viewModel.subagents?.parent?.parentSessionId ?? activeSessionId;
+  const openPane = clusterSessionId
+    ? () => {
+      openCluster(clusterSessionId);
+      shellActions?.openRightPanelTool("agents");
+    }
+    : undefined;
 
   return (
     <PopoverButton
@@ -47,6 +62,7 @@ export function DelegatedWorkComposerControl({
                 subagents={viewModel.subagents}
                 detail={viewModel.summary.label}
                 onClose={close}
+                onOpenPane={openPane}
               />
             )}
           </div>

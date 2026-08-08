@@ -1,3 +1,4 @@
+import { ConnectedAgentsPane } from "#product/components/workspace/agents-pane/ConnectedAgentsPane";
 import { FileEditorView } from "#product/components/workspace/files/FileEditorView";
 import { PromptAttachmentViewer } from "#product/components/workspace/files/PromptAttachmentViewer";
 import { GitPanel } from "#product/components/workspace/git/GitPanel";
@@ -80,6 +81,11 @@ export function RightPanelContent({
           {activeTool === "git" && (
             <div className="absolute inset-0">
               <GitPanel />
+            </div>
+          )}
+          {activeTool === "agents" && (
+            <div className="absolute inset-0">
+              <ConnectedAgentsPane />
             </div>
           )}
           {activeViewerTarget && (

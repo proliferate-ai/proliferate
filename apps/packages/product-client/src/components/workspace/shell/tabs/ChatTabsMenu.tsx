@@ -253,7 +253,9 @@ function computeFlyoutPosition(rect: DOMRect, childCount: number): FlyoutState["
 }
 
 function renderSubagentTrailing(child: HeaderSubagentChildRow): ReactNode {
-  // TODO(agent-ops-ux): closing reads as plain muted status text for now.
+  // Closing is calm on purpose (ADR §4 "Closing"): a requested close reads as
+  // muted status text, never as an alarm. It outranks the other trailing
+  // states because the agent is working its last step.
   if (child.closeRequestedLabel) {
     return (
       <span className="text-ui-sm leading-4 text-muted-foreground">

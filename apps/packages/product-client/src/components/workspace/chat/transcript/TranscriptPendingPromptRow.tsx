@@ -96,8 +96,9 @@ function PendingPromptBody({
   prompt: PendingPromptEntry;
 }) {
   // Both wake kinds queue as the same pointer row; the session-scoped one just
-  // falls back to a generic title because it names no delegation link.
-  // TODO(agent-ops-ux): visual treatment is the design pass.
+  // falls back to a generic title because it names no delegation link. Both
+  // render as the inbound receipt — quiet verb then chip, right-aligned,
+  // because a wake arrives FROM an agent (ADR §4 "Agent messages").
   if (isSubagentWakeProvenance(prompt.promptProvenance)) {
     return (
       <div className="flex justify-end">

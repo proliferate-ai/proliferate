@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import { Button } from "#product/primitives/Button";
 import { AppShellReviewIcon } from "#product/primitives/icons/app-shell";
-import { ScratchPadIcon } from "#product/primitives/icons/product";
+import { Robot, ScratchPadIcon } from "#product/primitives/icons/product";
 import type { IconProps } from "#product/primitives/icons/types";
 import type { RightPanelTool } from "#product/lib/domain/workspaces/shell/right-panel-model";
 
@@ -23,6 +23,7 @@ interface ToolConfig {
 const PANEL_TOOLS: Record<RightPanelTool, ToolConfig> = {
   scratch: { label: "Scratch", icon: ScratchPadIcon },
   git: { label: "Changes", icon: AppShellReviewIcon },
+  agents: { label: "Agents", icon: Robot },
 };
 
 export function ToolHeaderButton({
