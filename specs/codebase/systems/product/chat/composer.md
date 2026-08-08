@@ -240,6 +240,12 @@ this order:
 
 1. **`outboundSlot`** — queued outbound work: user prompts, queued wake prompts,
    review feedback prompts, and review-complete prompts.
+   The human's own queued prompts keep their full row with edit/delete/reorder.
+   Queued AGENT updates do not: they collapse into one quiet row
+   (`PendingAgentUpdatesRow`) carrying overlapping identity glyphs, a count and
+   `delivered next turn`. You see THAT, not WHAT — no bodies, no preview, no
+   edit, no delete. A glyph's hover reads `{title} · N queued updates — click
+   to open` and clicking it opens that agent's session.
 2. **`activeSlot`** — the active agent state. Permission approvals, user-input
    questions, and MCP elicitation forms take precedence. If there is no blocking
    request, this slot may show `TodoTrackerPanel`.
@@ -249,7 +255,11 @@ this order:
 
 Review status lives in `attachedSlot`, not in active state. The shared
 `DelegatedWorkComposerControl` owns the compact `Agents` summary-control +
-popover pattern for reviews and subagents. The review section owns reviewer
+popover pattern for reviews and subagents. That control is this session's
+"N working" cap, and it is one of the two entry points into the agents pane:
+`Open agents pane` in its popover opens THIS session's cluster in the right
+panel. The other entry point is the panel's own `Agents` tab, which opens the
+overview. The pane never auto-follows tab focus. The review section owns reviewer
 rows, critique links, stop, send-feedback, and review-revision actions. Review
 automation and linked subagents are parallel delegated work and must not make
 normal parent chat input unavailable by themselves. They should not displace

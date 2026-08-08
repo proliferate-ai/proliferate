@@ -158,33 +158,66 @@ apps/packages/product-client/src/domain/chats/transcript/transcript-presentation
   buildTranscriptDisplayBlocks
 ```
 
-Rules:
+Every agent that appears in someone else's transcript appears as the SAME
+chip: a 28px pill carrying the identity seal and the task-derived name,
+truncating at 288px, the name tinted with the agent's own colour token
+(`components/workspace/delegated-work/AgentChip.tsx`). The chip is the
+clickable agent. There is one chip component and one glyph component; a second
+implementation of either is a defect.
 
+- A chip carries the mono short id as a faint suffix only when the target was
+  addressed cross-session by id, because that is the only case where the id is
+  what the caller actually named.
+- A closed agent's chip is dimmed — muted text, dimmed glyph, transparent fill
+  — and stays clickable forever. It opens the read-only transcript.
+
+Spawn receipts:
+
+- A spawn run is a horizontal chip run between the prose. There is no
+  pre-state: each chip pops in as its subagent comes up.
+- The run carries ONE trailing quiet verb — `started working` while any agent
+  is still working, `finished` once they all settled, `didn't start` when none
+  came up.
+- A settled run keeps its chips forever. Only the verb changes.
 - Group only adjacent subagent creation receipts from the same assistant/tool
-  call cluster.
-- Do not group creation with send, wake, status, read, search, close, or
-  generic tool calls.
-- A single completed creation receipt collapses as `Subagent finished`.
-- Multiple adjacent completed creation receipts collapse as
-  `N subagents finished`.
-- Collapsed creation labels use the same muted, backgroundless collapsed-action
-  trigger treatment as normal transcript tool summaries such as
-  `Explored 1 listing`.
-- Expanded group rows use `GeneratedName — done` (or `— failed`) and stay on
-  one truncating line. Expanding a row shows only the clean structured result
-  summary, plus an `Open subagent session` action when a valid target exists;
-  raw orchestration receipts remain hidden.
+  call cluster. Do not group creation with send, wake, status, read, search,
+  close, or generic tool calls.
+- Agent-ops receipts never expose their raw result text. There is no expander:
+  the agent narrates what matters, and the chip opens the full thread.
 
 Communication receipts:
 
+- Messaging uses the spawn chip language: chip plus a quiet verb (`messaged`,
+  `read`, `wake scheduled`, `closing — finishing its current step`).
+- Direction gets a side. A receipt for an agent ACTING ON another agent renders
+  chip-then-verb; an inbound wake/completion receipt renders verb-then-chip,
+  right-aligned, where wake receipts always sat.
+- Message content never gets its own UI. The literal message lives in the
+  chip's hover card (`DelegatedAgentHoverCard`), nowhere else.
+- An agent spawned in another workspace carries `— in {workspace name}` after
+  its verb, resolved from the client-cached workspace collection.
 - Parent messages rendered inside a child session show
   `Sent by parent - {parent chat title}`.
-- Wake/completion receipts rendered in the parent transcript use one line:
-  `GeneratedName (title ID) finished a turn`.
 - Wake receipts source labels from prompt provenance plus
   `linkCompletionsByCompletionId`.
-- When a valid child target exists, the whole wake/completion receipt chip and
-  not a separate visible action or hover card, opens the child session.
+- When a valid child target exists, the chip itself — not a separate visible
+  action — opens the child session.
+
+Close receipts:
+
+- A HUMAN close leaves no transcript trace at all. Closing is a pane operation.
+- Only an agent-initiated `close_agent` writes a receipt, in the same chip
+  language: the chip, dimmed, with a plain trailing verb carrying `closeReason`
+  (`closed — superseded by the schema audit`).
+
+Workspace receipts:
+
+- A workspace an agent created is one quiet line, not a card:
+  `Created workspace billing-hotfix-dispatch — proliferate · worktree from main
+  · Open`. `Open` switches to that workspace.
+- The same idiom covers a run script the agent configured
+  (`· run script → pnpm i && pnpm test:webhooks`) and a failed creation
+  (`Could not create workspace …`, with nothing to open).
 
 Native harness subagents use the same durable item stream as the parent turn:
 

@@ -137,7 +137,7 @@ Avoid using one word for both action and state. For example, state is
 
 ## Surfaces
 
-Delegated work appears in five places.
+Delegated work appears in six places.
 
 ```text
 Tab strip
@@ -145,6 +145,9 @@ Tab strip
 
 Composer Agents popover
   active delegated-work inbox for the current session
+
+Agents pane
+  one global overview → cluster → agent drill, in the right panel
 
 Sidebar/session hierarchy
   durable relationship map and navigation
@@ -157,6 +160,80 @@ Details surface
 ```
 
 No surface should expose MCP mechanics as the user-facing concept.
+
+## Agents Pane
+
+One global pane, in the right panel, navigating overview → cluster → agent.
+`lib/domain/delegated-work/agents-pane-model.ts` holds every rule below as pure
+functions; the components render them and nothing more.
+
+Levels:
+
+```text
+Level 1 — overview
+  only sessions that are DELEGATING appear
+  row = title + live summary + its live agents as a glyph stack
+  header summary = "N sessions delegating · N agents"
+
+Level 2 — cluster
+  Working / Idle / Done / Closed, in that order, empty sections omitted
+  row = glyph + task title + ONE status line
+  header summary = "N working · N idle · N done"
+
+Level 3 — agent
+  glyph, title, status line, copyable short id
+  Parent prompt / Tool / latest Agent message
+  actions: Open as tab · Promote · Close
+  composer: "Message this agent — delivered on its next turn"
+```
+
+Rules:
+
+- Native harness work and terminals NEVER appear here. They are read-only and
+  live in the transcript and the terminal panel.
+- Section membership is derived from the reported status, with two overrides:
+  `Starting` counts as Working, and an agent whose close was requested stays
+  under Working until it stops — it is working its last step.
+- One status line per row, never two. A requested close outranks a promoted
+  stamp, which outranks an armed wake, which outranks the latest completion.
+- Entry points: the composer's "N working" cap opens THAT session's cluster;
+  the panel's `Agents` tab opens the overview. The pane never auto-follows tab
+  focus, so where it is pointed lives in `stores/agents/agents-pane-store.ts`
+  rather than in the pane's own state.
+- The overview's glyph stack shows live agents only. A closed agent is not on
+  it and is not counted by the overview summary.
+- Level 3 shows only what the read models carry. The session-subagents endpoint
+  reports the delegated task and the latest completion; it carries no tool
+  cursor and no message text, so those lines are absent rather than faked.
+- The "Wake me on reply" toggle renders DISABLED with a tooltip saying why:
+  `wakeOnReply` is a flag on the agents' own `send_agent_message` tool, and the
+  human prompt route carries no equivalent. It must not pretend to arm one.
+
+### Promotion
+
+- Promote lives in the agent detail header, and is offered only for an agent
+  that is still subordinate and not already closing. A peer has nothing to be
+  promoted out of.
+- One confirm, with exactly this sentence: "It becomes a top-level session in
+  this workspace's tabs, keeps its transcript, and can spawn its own
+  subagents."
+- Afterwards the agent carries the badge `Promoted · top-level session` and
+  renders as a normal top-level tab.
+
+### Closing
+
+- Closing is a PANE operation, not a transcript event. A human close leaves no
+  transcript trace at all.
+- Close sits on a cluster row's hover and in the agent detail header. An idle
+  or finished agent closes instantly; only work in flight asks, with exactly
+  this sentence: "It's mid-turn — it will finish the current step, then stop.
+  The transcript stays readable under Closed."
+- The confirm is calm. Nothing on it is destructive-styled — closing is
+  routine, not an alarm.
+- The pane names a closer only where the read models carry one. The subagents
+  endpoint returns OPEN links, so attribution exists exactly in the
+  close-requested window and in the transcript's close receipt. A landed close
+  gets `Closed · transcript is read-only` and no invented closer.
 
 ## Tool And Workflow Result Rendering
 
@@ -527,12 +604,25 @@ apps/desktop/src/components/workspace/shell/tabs/
 apps/desktop/src/components/workspace/shell/topbar/
   HeaderChatTab.tsx
 
-apps/desktop/src/components/workspace/chat/input/delegated-work/
+apps/packages/product-client/src/components/workspace/chat/input/delegated-work/
   DelegatedWorkComposerControl.tsx
   AgentsPopoverSubagentSection.tsx
   AgentsPopoverCoworkSection.tsx
   AgentsPopoverReviewSection.tsx
   PopoverSection.tsx
+
+apps/packages/product-client/src/components/workspace/delegated-work/
+  AgentChip.tsx
+  DelegatedAgentIdenticon.tsx
+
+apps/packages/product-client/src/components/workspace/agents-pane/
+  AgentsPane.tsx
+  AgentsPaneHeader.tsx
+  AgentsPaneOverview.tsx
+  AgentsPaneClusterSections.tsx
+  AgentsPaneAgentDetail.tsx
+  AgentsPaneConfirm.tsx
+  ConnectedAgentsPane.tsx
 
 apps/desktop/src/components/workspace/reviews/**
 apps/desktop/src/components/workspace/chat/plans/**
@@ -556,11 +646,12 @@ apps/desktop/src/hooks/workspaces/workflows/tabs/use-header-tabs-close-actions.t
 Pure domain logic:
 
 ```text
-apps/desktop/src/lib/domain/delegated-work/
+apps/packages/product-client/src/lib/domain/delegated-work/
   model.ts
   ordering.ts
   presentation.ts
   identity.ts
+  agents-pane-model.ts
 
 apps/desktop/src/lib/domain/chat/subagents/**
 apps/desktop/src/lib/domain/chat/tools/**
@@ -581,8 +672,9 @@ apps/desktop/src/lib/access/anyharness/plans.ts
 State:
 
 ```text
-apps/desktop/src/stores/reviews/**
-apps/desktop/src/stores/sessions/session-directory-store.ts
+apps/packages/product-client/src/stores/reviews/**
+apps/packages/product-client/src/stores/sessions/session-directory-store.ts
+apps/packages/product-client/src/stores/agents/agents-pane-store.ts
 ```
 
 ## Acceptance
@@ -599,3 +691,6 @@ Done when:
 - delete semantics are consistent and confirmed when active work will end
 - sidebar hierarchy is navigation, not the active-work inbox
 - transcript artifacts carry durable workflow results
+- every agent renders through ONE chip primitive and ONE identity glyph
+- a human close never writes to the transcript, and the pane never invents a
+  closer for a close that already landed
