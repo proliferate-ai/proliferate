@@ -223,10 +223,11 @@ The model is intentionally small:
   either session removes only the link and attached completion/schedule rows
 - nested subagents are blocked; an UNPROMOTED subagent child receives no
   spawn-style tools (`get_subagent_launch_options`, `spawn_subagent`, the
-  deprecated `create_subagent` alias, and `spawn_agent`), and both spawn gates
-  refuse it at the service as well: `validate_parent_can_spawn` with a depth
-  limit, `validate_caller_can_spawn_agent` as a subordinate caller. The tool
-  bodies read those gates, so the block does not rest on dispatch alone
+  deprecated `create_subagent` alias, `spawn_agent`, `get_workspace_options`
+  and `spawn_workspace`), and both spawn gates refuse it at the service as
+  well: `validate_parent_can_spawn` with a depth limit,
+  `validate_caller_can_spawn_agent` as a subordinate caller. The tool bodies
+  read those gates, so the block does not rest on dispatch alone
 - the cowork depth rule is narrower than either: `validate_parent_can_spawn`
   also refuses the child of a cowork coding session, and `spawn_agent` is
   outside that rule. Cowork is unused and slated for deletion, so the gap is
@@ -287,6 +288,8 @@ Current tools:
 - `schedule_subagent_wake`
 - `promote_subagent`
 - `close_agent` (deprecated alias: `close_subagent`)
+- `get_workspace_options`
+- `spawn_workspace`
 
 Advertisement is not enforcement. A session's tool list is frozen at launch, so
 an agent promoted afterwards holds a list that never showed the spawn tools and
@@ -297,10 +300,12 @@ state at the moment it acts, and matches the wire name so the deprecated
 
 `spawn_subagent` and `spawn_agent` are two modes of one routine,
 `create_agent_session` in `agent_ops/spawn_ops.rs`. Both create a durable
-session in the caller's workspace, inheriting the caller's agent kind, model and
-mode unless overridden, write the ownership link, arm the optional wake, start
-the runtime, and send the first prompt — unwinding the session, link and wake if
-any step fails. They differ in three places, all keyed off the ownership mode:
+session, inheriting the caller's agent kind, model and mode unless overridden,
+write the ownership link, arm the optional wake, start the runtime, and send the
+first prompt — unwinding the session, link and wake if any step fails. A
+subagent is always created in the caller's own workspace and has no argument to
+ask otherwise; `spawn_agent` takes an optional `workspaceId` and defaults to the
+caller's. They differ in three places, all keyed off the ownership mode:
 
 - the link relation, `subagent` or `owned_agent`
 - the wake: a subagent's is link-scoped, hung off the completion row, while a
@@ -313,9 +318,36 @@ any step fails. They differ in three places, all keyed off the ownership mode:
 
 A peer is created with the full tool surface, including the spawn tools, so it
 is never in the "unpromoted" state and needs no promotion. It also does not
-cascade: closing the owner does not close it. `spawn_agent` creates in the
-caller's own workspace, so it takes the route's workspace write lease and no
-target permit — there is no target yet.
+cascade: closing the owner does not close it.
+
+Because `spawn_agent` can create in a workspace that is not the caller's, it is
+absent from `MUTATING_TOOL_NAMES`: the route's lease is the CALLER's workspace,
+which is the wrong one. It takes the TARGET workspace's write lease in the call
+instead, held across creation, start and the first prompt, so a concurrent
+retire preflight on that workspace sees the session being built inside it. There
+is no admission permit and none is possible — the target session does not exist
+until the call creates it — so PR1227-LOCK-01 has no order to invert.
+
+The launch selection is resolved against the TARGET workspace's catalog, not the
+caller's. A harness that workspace cannot launch is refused, naming what it can;
+a model the caller NAMED that the target does not offer is refused; a model
+merely INHERITED from the caller is replaced by the target's default for that
+harness. A workspace whose catalog resolves to nothing is passed through
+unchanged, so an environment without resolvable readiness does not become
+un-spawnable.
+
+`get_workspace_options` and `spawn_workspace` let an agent create a workspace of
+its own. Both are spawn-style, so an unpromoted subagent gets neither.
+`get_workspace_options` is read-only: the configured repo roots, which of them
+this machine actually has, and the two creation modes. `spawn_workspace` takes
+only a repo root, a mode, a branch name and a label — everything else is
+server-side policy — and creates through the same runtimes the human routes use.
+It is absent from `MUTATING_TOOL_NAMES` for a different reason than
+`spawn_agent`: the workspace it creates does not exist yet, so there is nothing
+to lease. It gates the way the human worktree route gates, on
+`assert_can_mutate_for_repo_root` plus the caller's own workspace still being
+mutable. Retirement is not on this surface at all — see
+[workspaces.md](workspaces.md#agent-requested-creation).
 
 `promote_subagent` promotes one of the caller's subagents to a peer. The agent
 keeps its transcript, its label and its owner, and gains the full tool surface
