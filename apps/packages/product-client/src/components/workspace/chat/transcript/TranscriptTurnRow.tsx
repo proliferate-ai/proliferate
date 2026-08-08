@@ -7,6 +7,7 @@ import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { TurnDiffPanel } from "#product/components/workspace/chat/transcript/TurnDiffPanel";
 import { TranscriptPatchTurnDiffPanel } from "#product/components/workspace/chat/transcript/TranscriptPatchTurnDiffPanel";
 import {
+  ASSISTANT_ACTION_SLOT_HEIGHT,
   TurnAssistantActionRow,
   TURN_ITEM_GAP_CLASS,
   TurnGoalMetMarker,
@@ -175,6 +176,12 @@ export function TranscriptTurnRow({
     hasAssistantCopyContent: !!tailAssistantCopyContent,
     assistantRevealComplete,
   });
+  const frontierStatusMode = resolveTurnFrontierStatusMode({
+    hasTrailingStatus: trailingStatus !== null && trailingStatus !== undefined,
+    rowIsLastTurnRow: row.isLastTurnRow,
+    isLatestTurnInProgress,
+    assistantRevealComplete,
+  });
   const revertPatchesMutation = useRevertGitPatchesMutation({ workspaceId: selectedWorkspaceId });
   const showToast = useToastStore((state) => state.show);
   const [undoneTurnIds, setUndoneTurnIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -270,8 +277,13 @@ export function TranscriptTurnRow({
         }) && assistantEndResource && (
           <TurnDocumentReferenceCard resource={assistantEndResource} />
         )}
-        {assistantRevealComplete && trailingStatus && (
-          <div data-turn-frontier-status>{trailingStatus}</div>
+        {frontierStatusMode !== "hidden" && (
+          <div
+            data-turn-frontier-status
+            className={frontierStatusMode === "reserved" ? ASSISTANT_ACTION_SLOT_HEIGHT : undefined}
+          >
+            {trailingStatus}
+          </div>
         )}
         {assistantRevealComplete
           && shouldRenderStandaloneStoppedNotice(stoppedNotice, hasCompletedHistoryDisclosure) && (
@@ -340,6 +352,34 @@ export function resolveTurnAssistantFooterMode({
     return "copy";
   }
   return "reserved";
+}
+
+/**
+ * The frontier-status box stays mounted at fixed height ("reserved") for the
+ * whole live turn even while its content is hidden: "Thinking" yields to tool
+ * shimmers and returns between commands, and mounting/unmounting the box
+ * moved the transcript bottom by the slot + column gap every time. During an
+ * assistant prose reveal the streaming answer owns the frontier, so the box
+ * hides entirely — same single settle as before.
+ */
+export function resolveTurnFrontierStatusMode({
+  hasTrailingStatus,
+  rowIsLastTurnRow,
+  isLatestTurnInProgress,
+  assistantRevealComplete,
+}: {
+  hasTrailingStatus: boolean;
+  rowIsLastTurnRow: boolean;
+  isLatestTurnInProgress: boolean;
+  assistantRevealComplete: boolean;
+}): "status" | "reserved" | "hidden" {
+  if (!assistantRevealComplete) {
+    return "hidden";
+  }
+  if (hasTrailingStatus) {
+    return "status";
+  }
+  return rowIsLastTurnRow && isLatestTurnInProgress ? "reserved" : "hidden";
 }
 
 export function shouldRenderStandaloneStoppedNotice(

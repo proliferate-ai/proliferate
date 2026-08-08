@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveTurnAssistantFooterMode,
+  resolveTurnFrontierStatusMode,
   resolveTranscriptTurnDiffPanelKind,
   shouldRenderAssistantEndResource,
   shouldRenderStandaloneStoppedNotice,
@@ -83,6 +84,36 @@ describe("resolveTurnAssistantFooterMode", () => {
       hasAssistantCopyContent: true,
       assistantRevealComplete: false,
     })).toBe("reserved");
+  });
+});
+
+describe("frontier status box", () => {
+  const base = {
+    hasTrailingStatus: false,
+    rowIsLastTurnRow: true,
+    isLatestTurnInProgress: true,
+    assistantRevealComplete: true,
+  };
+
+  it("keeps the box reserved through mid-turn status gaps so the transcript bottom cannot bounce", () => {
+    expect(resolveTurnFrontierStatusMode(base)).toBe("reserved");
+    expect(resolveTurnFrontierStatusMode({ ...base, hasTrailingStatus: true })).toBe("status");
+    // Yield to a tool shimmer and return: reserved both times, never unmounted.
+    expect(resolveTurnFrontierStatusMode({ ...base, hasTrailingStatus: false })).toBe("reserved");
+  });
+
+  it("hides the box once the turn is no longer live", () => {
+    expect(resolveTurnFrontierStatusMode({ ...base, isLatestTurnInProgress: false })).toBe("hidden");
+    expect(resolveTurnFrontierStatusMode({ ...base, rowIsLastTurnRow: false })).toBe("hidden");
+  });
+
+  it("yields the frontier entirely to a streaming assistant reveal", () => {
+    expect(resolveTurnFrontierStatusMode({ ...base, assistantRevealComplete: false })).toBe("hidden");
+    expect(resolveTurnFrontierStatusMode({
+      ...base,
+      assistantRevealComplete: false,
+      hasTrailingStatus: true,
+    })).toBe("hidden");
   });
 });
 

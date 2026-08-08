@@ -24,7 +24,13 @@ import type { SessionViewState } from "#product/domain/sessions/activity";
 export type PendingInteractionMarkerKind = "permission" | "question";
 
 const TURN_HORIZONTAL_PADDING = "px-0";
-const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
+/**
+ * Fixed height shared by every trailing-status variant AND the reserved
+ * frontier keeper in TranscriptTurnRow: the status content may mount and
+ * unmount mid-turn (Thinking yields to tool shimmers and returns), but the
+ * box it lives in must not change size, or the transcript bottom bounces.
+ */
+export const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
 /**
  * Reference-ramp conversation-item rhythm shared by pending and materialized
  * turns. [CHAT-04] RULED block, retuned: that rhythm is the 16px
