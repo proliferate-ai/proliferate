@@ -48,6 +48,7 @@ import {
   resolveTurnTrailingStatus,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 import { TranscriptContextProviders, type TranscriptOpenSessionHandler } from "#product/components/workspace/chat/transcript/TranscriptContexts";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { ProposedPlanToolCallIdsProvider } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
 import { GoalTranscriptEventRow } from "#product/components/workspace/chat/transcript/GoalTranscriptEventRow";
 import { TranscriptPendingPromptRow } from "#product/components/workspace/chat/transcript/TranscriptPendingPromptRow";
@@ -298,6 +299,12 @@ export function MessageList({
       ),
     [],
   );
+  // Workspace-creation receipts offer an inline Open that switches to the
+  // workspace the agent made.
+  const { selectWorkspace } = useWorkspaceSelection();
+  const openWorkspace = useCallback((workspaceId: string) => {
+    void selectWorkspace(workspaceId);
+  }, [selectWorkspace]);
   const renderTurnTrailingStatusRow = useCallback(
     (input: ChatTranscriptTurnStatusInput) =>
       resolveTurnTrailingStatus(
@@ -315,6 +322,7 @@ export function MessageList({
           sessionId={activeSessionId}
           onOpenSession={onOpenSession}
           canOpenSession={canOpenSession}
+          onOpenWorkspace={openWorkspace}
         >
           <TranscriptScrollPriorityProvider
             isUserScrolling={isUserScrolling}

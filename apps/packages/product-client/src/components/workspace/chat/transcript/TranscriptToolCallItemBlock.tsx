@@ -16,9 +16,11 @@ import { FileReadCall } from "#product/components/workspace/chat/tool-calls/File
 import { GenericToolResultRow } from "#product/components/workspace/chat/tool-calls/GenericToolResultRow";
 import { SkillsToolResultRow } from "#product/components/workspace/chat/tool-calls/SkillsToolResultRow";
 import { SubagentToolActionRow } from "#product/components/workspace/chat/tool-calls/SubagentToolActionRow";
+import { WorkspaceOpsReceiptRow } from "#product/components/workspace/chat/tool-calls/WorkspaceOpsReceiptRow";
 import { useOpenCoworkCodingSession } from "#product/hooks/cowork/workflows/use-open-cowork-coding-session";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { deriveSubagentMcpReceiptPresentation } from "#product/domain/chats/subagents/subagent-tool-presentation";
+import { deriveWorkspaceOpsReceipt } from "#product/domain/chats/subagents/workspace-ops-presentation";
 import { deriveSkillsToolResultPresentation } from "#product/domain/chats/tools/skills-tool-result";
 import { describeToolCallDisplay } from "#product/domain/chats/tools/tool-call-display";
 import { normalizeToolResultText } from "#product/domain/chats/tools/tool-result-text";
@@ -92,6 +94,7 @@ export function TranscriptToolCallItemBlock({
   const status = mapStatus(item.status);
   const skillsToolResult = deriveSkillsToolResultPresentation(item, normalizedResultText);
   const subagentReceipt = deriveSubagentMcpReceiptPresentation(item);
+  const workspaceReceipt = deriveWorkspaceOpsReceipt(item);
   const visibleFileChanges = showAllFileChanges
     ? fileChanges
     : fileChanges.slice(0, CHAT_VISIBLE_FILE_CHANGE_LIMIT);
@@ -197,6 +200,12 @@ export function TranscriptToolCallItemBlock({
         presentation={skillsToolResult}
         status={status}
       />,
+    );
+  }
+
+  if (rows.length === 0 && workspaceReceipt) {
+    rows.push(
+      <WorkspaceOpsReceiptRow key="workspace-receipt" presentation={workspaceReceipt} />,
     );
   }
 
