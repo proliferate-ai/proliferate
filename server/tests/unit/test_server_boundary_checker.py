@@ -433,11 +433,7 @@ def test_ledgered_fingerprint_does_not_absorb_a_net_new_sibling_hit(
     module = _load_checker_module()
     path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"
     path.parent.mkdir(parents=True)
-    path.write_text(
-        "async def one(db) -> None:\n"
-        "    await db.commit()\n"
-        "    await db.commit()\n"
-    )
+    path.write_text("async def one(db) -> None:\n    await db.commit()\n    await db.commit()\n")
     violations = module.disambiguate(module.check_paths([path]))
     ledger = _ledger(module, [("SRV-SVC-4", path.as_posix(), "one::db.commit")])
 
