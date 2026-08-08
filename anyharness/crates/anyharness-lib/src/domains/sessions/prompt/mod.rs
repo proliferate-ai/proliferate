@@ -13,6 +13,7 @@ use crate::domains::sessions::service::attachments::read_prompt_attachment_conte
 use crate::domains::sessions::store::SessionStore;
 
 pub(crate) mod capabilities;
+pub(crate) mod envelope;
 pub(crate) mod prepare;
 pub(crate) mod provenance;
 pub(crate) mod render;
