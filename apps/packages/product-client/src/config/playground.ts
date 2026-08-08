@@ -4,7 +4,6 @@ export type ScenarioKey =
   | "todos-short"
   | "todos-mid"
   | "todos-long"
-  | "todo-strip-with-approval"
   | "execute-approval"
   | "edit-approval"
   | "interaction-motion"
@@ -123,7 +122,6 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "todos-short": { label: "Todos (3)" },
   "todos-mid": { label: "Todos (5)" },
   "todos-long": { label: "Todos (12)" },
-  "todo-strip-with-approval": { label: "Todo strip + approval" },
   "execute-approval": { label: "Execute approval" },
   "edit-approval": { label: "Edit approval" },
   "interaction-motion": { label: "Interaction motion" },
