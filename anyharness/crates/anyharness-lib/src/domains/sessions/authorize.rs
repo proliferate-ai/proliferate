@@ -4,10 +4,18 @@
 //! is no per-workspace or per-owner scoping to apply), and a closed session
 //! stays readable but takes no more input. **It enforces no ownership check at
 //! all** — any caller may `Read` or `Send` to any target, runtime-wide. The
-//! link-scoped ownership check that makes agent-ops safe today lives entirely
-//! in `SubagentService::resolve_target` (and
-//! `resolve_target_including_closed`), which every mutating call site still
+//! link-scoped ownership check that keeps the *subagent* tool class safe lives
+//! entirely in `SubagentService::resolve_target` (and
+//! `resolve_target_including_closed`), which every subagent call site still
 //! runs before reaching this funnel.
+//!
+//! The peer tools (`send_agent_message`, `read_agent_transcript`) are the
+//! deliberate exception: they have no link to resolve and are specified to
+//! reach any session in the runtime, so for them this funnel is the *whole*
+//! policy. That is a scope decision, not an oversight — a peer message is an
+//! inbox item the receiver can ignore, whereas closing or promoting a session
+//! acts on it. Keep new tools on the resolve path unless the same reasoning
+//! applies.
 //!
 //! PR 5 is expected to route `close_agent`/promote through `authorize` with an
 //! ownership-aware intent. Do not add a `Close`/`Promote` variant to
