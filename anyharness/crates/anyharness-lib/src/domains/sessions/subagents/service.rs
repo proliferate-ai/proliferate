@@ -1,5 +1,5 @@
 use super::model::{
-    normalized_session_status, ChildSubagentContext, ParentSubagentLinkContext,
+    normalized_session_status, ChildSubagentContext, OwnedAgentContext, ParentSubagentLinkContext,
     SessionSubagentsContext, SubagentCompletionRecord, SubagentEventSlice, SubagentLatestTurn,
     SubagentSummary, SubagentTranscriptSearchMatch, SubagentWakeScheduleRecord,
 };
@@ -418,10 +418,46 @@ impl SubagentService {
                 child_created_at: child.created_at,
                 latest_completion,
                 wake_scheduled,
+                promoted_at: link.promoted_at,
+                closed_by_session_id: link.closed_by_session_id,
+                close_reason: link.close_reason,
             });
         }
 
-        Ok(SessionSubagentsContext { parent, children })
+        // Peers the session owns. A separate query and a separate list: the
+        // relation is what makes an owned agent NOT a subagent, so it must not
+        // arrive inside `children` where every consumer reads a fanout.
+        let mut owned_agents = Vec::new();
+        for link in self
+            .link_service
+            .list_children_by_relation(SessionLinkRelation::OwnedAgent, session_id)?
+        {
+            let Some(agent) = self.session_store.find_by_id(&link.child_session_id)? else {
+                continue;
+            };
+            owned_agents.push(OwnedAgentContext {
+                agent_id: link.public_id.clone(),
+                session_link_id: link.id,
+                agent_session_id: agent.id.clone(),
+                title: agent.title.clone(),
+                label: link.label,
+                status: normalized_session_status(&agent.status).to_string(),
+                agent_kind: agent.agent_kind,
+                workspace_id: agent.workspace_id,
+                model_id: agent.current_model_id.or(agent.requested_model_id),
+                mode_id: agent.current_mode_id.or(agent.requested_mode_id),
+                link_created_at: link.created_at,
+                agent_created_at: agent.created_at,
+                closed_by_session_id: link.closed_by_session_id,
+                close_reason: link.close_reason,
+            });
+        }
+
+        Ok(SessionSubagentsContext {
+            parent,
+            children,
+            owned_agents,
+        })
     }
 
     pub fn find_subagent_parent(

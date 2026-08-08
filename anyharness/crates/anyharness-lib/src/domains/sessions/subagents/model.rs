@@ -30,6 +30,9 @@ pub struct SubagentSummary {
 pub struct SessionSubagentsContext {
     pub parent: Option<ParentSubagentLinkContext>,
     pub children: Vec<ChildSubagentContext>,
+    /// `relation = 'owned_agent'` rows: peers this session spawned. Kept apart
+    /// from `children` so a peer never reads as one of the session's subagents.
+    pub owned_agents: Vec<OwnedAgentContext>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +64,30 @@ pub struct ChildSubagentContext {
     pub child_created_at: String,
     pub latest_completion: Option<SubagentCompletionSummary>,
     pub wake_scheduled: bool,
+    /// The promotion stamp and the close attribution, read straight off the
+    /// link row. All three are `None` on an ordinary, unpromoted, unclosed
+    /// subagent; see `SessionLinkRecord` for what each one means.
+    pub promoted_at: Option<String>,
+    pub closed_by_session_id: Option<String>,
+    pub close_reason: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OwnedAgentContext {
+    pub agent_id: Option<String>,
+    pub session_link_id: String,
+    pub agent_session_id: String,
+    pub title: Option<String>,
+    pub label: Option<String>,
+    pub status: String,
+    pub agent_kind: String,
+    pub workspace_id: String,
+    pub model_id: Option<String>,
+    pub mode_id: Option<String>,
+    pub link_created_at: String,
+    pub agent_created_at: String,
+    pub closed_by_session_id: Option<String>,
+    pub close_reason: Option<String>,
 }
 
 #[derive(Debug, Clone)]

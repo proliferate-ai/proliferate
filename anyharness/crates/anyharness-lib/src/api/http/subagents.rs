@@ -1,9 +1,10 @@
 use crate::api::http::access::admit_session_mutation;
 use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{
-    ChildSubagentSummary, ParentSubagentLinkSummary, ProblemDetails, ScheduleSubagentWakeRequest,
-    ScheduleSubagentWakeResponse, SessionStatus, SessionSubagentsResponse,
-    SubagentCompletionSummary as ContractSubagentCompletionSummary, SubagentTurnOutcome,
+    ChildSubagentSummary, OwnedAgentSummary, ParentSubagentLinkSummary, ProblemDetails,
+    ScheduleSubagentWakeRequest, ScheduleSubagentWakeResponse, SessionStatus,
+    SessionSubagentsResponse, SubagentCompletionSummary as ContractSubagentCompletionSummary,
+    SubagentTurnOutcome,
 };
 use axum::{
     extract::{Path, State},
@@ -16,7 +17,7 @@ use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::domains::sessions::subagents::model::{
-    ChildSubagentContext, ParentSubagentLinkContext, SessionSubagentsContext,
+    ChildSubagentContext, OwnedAgentContext, ParentSubagentLinkContext, SessionSubagentsContext,
     SubagentCompletionSummary,
 };
 use crate::domains::sessions::subagents::service::SubagentError;
@@ -107,6 +108,11 @@ fn session_subagents_to_contract(context: SessionSubagentsContext) -> SessionSub
             .into_iter()
             .map(child_subagent_to_contract)
             .collect(),
+        owned_agents: context
+            .owned_agents
+            .into_iter()
+            .map(owned_agent_to_contract)
+            .collect(),
     }
 }
 
@@ -140,6 +146,28 @@ fn child_subagent_to_contract(child: ChildSubagentContext) -> ChildSubagentSumma
         child_created_at: child.child_created_at,
         latest_completion: child.latest_completion.map(subagent_completion_to_contract),
         wake_scheduled: child.wake_scheduled,
+        promoted_at: child.promoted_at,
+        closed_by_session_id: child.closed_by_session_id,
+        close_reason: child.close_reason,
+    }
+}
+
+fn owned_agent_to_contract(agent: OwnedAgentContext) -> OwnedAgentSummary {
+    OwnedAgentSummary {
+        agent_id: agent.agent_id,
+        session_link_id: agent.session_link_id,
+        agent_session_id: agent.agent_session_id,
+        title: agent.title,
+        label: agent.label,
+        status: session_status_to_contract(&agent.status),
+        agent_kind: agent.agent_kind,
+        workspace_id: agent.workspace_id,
+        model_id: agent.model_id,
+        mode_id: agent.mode_id,
+        link_created_at: agent.link_created_at,
+        agent_created_at: agent.agent_created_at,
+        closed_by_session_id: agent.closed_by_session_id,
+        close_reason: agent.close_reason,
     }
 }
 

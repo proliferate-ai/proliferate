@@ -272,6 +272,12 @@ pub struct SessionSubagentsResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<ParentSubagentLinkSummary>,
     pub children: Vec<ChildSubagentSummary>,
+    /// The peers this session owns without parenting them — `spawn_agent`
+    /// creations, `relation = 'owned_agent'`. They are a SEPARATE list on
+    /// purpose: an owned agent is nobody's subagent, so folding it into
+    /// `children` would show it inside a parent's fanout.
+    #[serde(default)]
+    pub owned_agents: Vec<OwnedAgentSummary>,
 }
 
 /// Arm a session-scoped wake as the human. Same table, same pointer, same
@@ -349,6 +355,53 @@ pub struct ChildSubagentSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_completion: Option<SubagentCompletionSummary>,
     pub wake_scheduled: bool,
+    /// Set once this child was promoted to a peer. The relation stays
+    /// `subagent` — the parent still owns it — so this stamp is the only thing
+    /// that tells a promoted agent from a subordinate one, and the client
+    /// renders a stamped row as a top-level agent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub promoted_at: Option<String>,
+    /// Who asked for this agent to close, and why. Both stay unset for a close
+    /// a person performed. Present while `link_closed_at` is still unset, they
+    /// are the "close requested" state: the agent is finishing its current step.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closed_by_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub close_reason: Option<String>,
+}
+
+/// A peer this session owns: born from `spawn_agent`, never subordinate.
+///
+/// It carries no `subagent_id` and no completion, because there is no
+/// delegation link to complete — the handle is the session id, exactly as the
+/// peer tools take it.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnedAgentSummary {
+    /// The ownership handle (`agent_…`), the subagent-vocabulary form of the
+    /// close tool. `agent_session_id` works there too.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    pub session_link_id: String,
+    pub agent_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub status: SessionStatus,
+    pub agent_kind: String,
+    /// The workspace it was spawned into, which need not be the owner's.
+    pub workspace_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode_id: Option<String>,
+    pub link_created_at: String,
+    pub agent_created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closed_by_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub close_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

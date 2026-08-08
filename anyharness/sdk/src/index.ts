@@ -258,6 +258,7 @@ export type {
   ScheduleSubagentWakeResponse,
   ParentSubagentLinkSummary,
   ChildSubagentSummary,
+  OwnedAgentSummary,
   SubagentCompletionSummary,
   InteractionDecision,
   ListSessionEventsOptions,

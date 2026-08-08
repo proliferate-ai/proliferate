@@ -8378,6 +8378,19 @@
           "childSessionId": {
             "type": "string"
           },
+          "closeReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closedBySessionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who asked for this agent to close, and why. Both stay unset for a close\na person performed. Present while `link_closed_at` is still unset, they\nare the \"close requested\" state: the agent is finishing its current step."
+          },
           "label": {
             "type": [
               "string",
@@ -8414,6 +8427,13 @@
               "string",
               "null"
             ]
+          },
+          "promotedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set once this child was promoted to a peer. The relation stays\n`subagent` — the parent still owns it — so this stamp is the only thing\nthat tells a promoted agent from a subordinate one, and the client\nrenders a stamped row as a top-level agent."
           },
           "sessionLinkId": {
             "type": "string"
@@ -13460,6 +13480,86 @@
           "system"
         ]
       },
+      "OwnedAgentSummary": {
+        "type": "object",
+        "description": "A peer this session owns: born from `spawn_agent`, never subordinate.\n\nIt carries no `subagent_id` and no completion, because there is no\ndelegation link to complete — the handle is the session id, exactly as the\npeer tools take it.",
+        "required": [
+          "sessionLinkId",
+          "agentSessionId",
+          "status",
+          "agentKind",
+          "workspaceId",
+          "linkCreatedAt",
+          "agentCreatedAt"
+        ],
+        "properties": {
+          "agentCreatedAt": {
+            "type": "string"
+          },
+          "agentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The ownership handle (`agent_…`), the subagent-vocabulary form of the\nclose tool. `agent_session_id` works there too."
+          },
+          "agentKind": {
+            "type": "string"
+          },
+          "agentSessionId": {
+            "type": "string"
+          },
+          "closeReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closedBySessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "linkCreatedAt": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionLinkId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceId": {
+            "type": "string",
+            "description": "The workspace it was spawned into, which need not be the owner's."
+          }
+        }
+      },
       "ParentSubagentLinkSummary": {
         "type": "object",
         "required": [
@@ -17972,6 +18072,13 @@
             "items": {
               "$ref": "#/components/schemas/ChildSubagentSummary"
             }
+          },
+          "ownedAgents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OwnedAgentSummary"
+            },
+            "description": "The peers this session owns without parenting them — `spawn_agent`\ncreations, `relation = 'owned_agent'`. They are a SEPARATE list on\npurpose: an owned agent is nobody's subagent, so folding it into\n`children` would show it inside a parent's fanout."
           },
           "parent": {
             "oneOf": [

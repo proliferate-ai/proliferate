@@ -152,6 +152,8 @@ export type ParentSubagentLinkSummary =
   components["schemas"]["ParentSubagentLinkSummary"];
 export type ChildSubagentSummary =
   components["schemas"]["ChildSubagentSummary"];
+export type OwnedAgentSummary =
+  components["schemas"]["OwnedAgentSummary"];
 export type SubagentCompletionSummary =
   components["schemas"]["SubagentCompletionSummary"];
 export type InteractionDecision = components["schemas"]["InteractionDecision"];

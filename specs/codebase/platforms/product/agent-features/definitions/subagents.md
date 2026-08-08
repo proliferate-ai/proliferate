@@ -125,6 +125,24 @@ there is no session-created event in its place, so a peer spawned by an agent
 appears on the next refresh rather than immediately. Closing that is client
 work, tracked with the rest of the client surface.
 
+The human client reads the same three states off one endpoint,
+`GET /v1/sessions/{session_id}/subagents`. `children` stays what it has always
+been — the session's `subagent` rows — and each one now carries `promotedAt`, so
+a promoted child is told apart from a subordinate one without a second request.
+`ownedAgents` is a second, separate list holding the `owned_agent` rows. It is
+separate rather than folded into `children` for the same reason the relation
+exists: every consumer of `children` reads it as a fanout, and a peer belongs in
+nobody's. A peer summary carries no `subagentId` and no completion, because
+there is no delegation link to complete; its handle is its session id and it
+names its own `workspaceId`, which need not be the owner's.
+
+Both lists are the OPEN rows. A closed link leaves the endpoint entirely, so
+`closedBySessionId` and `closeReason` appear there in exactly one situation:
+the close has been requested and the agent is still finishing its step. That is
+the state the client renders as pending. Attribution for an agent that has
+finished closing is carried by the `close_agent` receipt in the transcript, not
+by this endpoint.
+
 Because tool lists are frozen at launch, the block is enforced at call time, on
 the wire name, against the caller's state at the moment it acts. `tools/list` is
 advertisement; dispatch is the gate.

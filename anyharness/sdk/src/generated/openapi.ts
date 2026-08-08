@@ -2310,12 +2310,26 @@ export interface components {
             agentKind: string;
             childCreatedAt: string;
             childSessionId: string;
+            closeReason?: string | null;
+            /**
+             * @description Who asked for this agent to close, and why. Both stay unset for a close
+             *     a person performed. Present while `link_closed_at` is still unset, they
+             *     are the "close requested" state: the agent is finishing its current step.
+             */
+            closedBySessionId?: string | null;
             label?: string | null;
             latestCompletion?: null | components["schemas"]["SubagentCompletionSummary"];
             linkClosedAt?: string | null;
             linkCreatedAt: string;
             modeId?: string | null;
             modelId?: string | null;
+            /**
+             * @description Set once this child was promoted to a peer. The relation stays
+             *     `subagent` — the parent still owns it — so this stamp is the only thing
+             *     that tells a promoted agent from a subordinate one, and the client
+             *     renders a stamped row as a top-level agent.
+             */
+            promotedAt?: string | null;
             sessionLinkId: string;
             status: components["schemas"]["SessionStatus"];
             subagentId?: string | null;
@@ -3594,6 +3608,34 @@ export interface components {
         OriginEntrypoint: "desktop" | "cloud" | "local_runtime" | "cowork";
         /** @enum {string} */
         OriginKind: "human" | "cowork" | "api" | "system";
+        /**
+         * @description A peer this session owns: born from `spawn_agent`, never subordinate.
+         *
+         *     It carries no `subagent_id` and no completion, because there is no
+         *     delegation link to complete — the handle is the session id, exactly as the
+         *     peer tools take it.
+         */
+        OwnedAgentSummary: {
+            agentCreatedAt: string;
+            /**
+             * @description The ownership handle (`agent_…`), the subagent-vocabulary form of the
+             *     close tool. `agent_session_id` works there too.
+             */
+            agentId?: string | null;
+            agentKind: string;
+            agentSessionId: string;
+            closeReason?: string | null;
+            closedBySessionId?: string | null;
+            label?: string | null;
+            linkCreatedAt: string;
+            modeId?: string | null;
+            modelId?: string | null;
+            sessionLinkId: string;
+            status: components["schemas"]["SessionStatus"];
+            title?: string | null;
+            /** @description The workspace it was spawned into, which need not be the owner's. */
+            workspaceId: string;
+        };
         ParentSubagentLinkSummary: {
             label?: string | null;
             linkClosedAt?: string | null;
@@ -4669,6 +4711,13 @@ export interface components {
         SessionStatus: "starting" | "idle" | "running" | "completed" | "errored" | "closed";
         SessionSubagentsResponse: {
             children: components["schemas"]["ChildSubagentSummary"][];
+            /**
+             * @description The peers this session owns without parenting them — `spawn_agent`
+             *     creations, `relation = 'owned_agent'`. They are a SEPARATE list on
+             *     purpose: an owned agent is nobody's subagent, so folding it into
+             *     `children` would show it inside a parent's fanout.
+             */
+            ownedAgents?: components["schemas"]["OwnedAgentSummary"][];
             parent?: null | components["schemas"]["ParentSubagentLinkSummary"];
         };
         /** @description Request payload for changing a single live session config option. */
