@@ -114,6 +114,29 @@ describe("subagent tool presentation", () => {
     })).toBe("Subagent promoted");
   });
 
+  it("reads a peer spawn as a spawn without calling the new agent a subagent", () => {
+    expect(formatSubagentMcpActionLabel("mcp__subagents__spawn_agent"))
+      .toBe("Spawned agent");
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__spawn_agent" },
+      executionState: "running",
+      isRunning: true,
+    })).toBe("Spawning agent");
+    // The fallback verb is "Subagent created", so an unclassified spawn_agent
+    // would silently misreport a peer as somebody's subagent.
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__spawn_agent" },
+      executionState: "completed",
+      isRunning: false,
+    })).toBe("Agent spawned");
+  });
+
+  it("keeps a peer spawn out of the subagent launch ledger", () => {
+    expect(isSubagentProvisioningAction({
+      nativeToolName: "mcp__subagents__spawn_agent",
+    })).toBe(false);
+  });
+
   it("derives concise status receipt presentation with the child target", () => {
     const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
       nativeToolName: "mcp__subagents__get_subagent_status",
