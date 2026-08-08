@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde_json::{json, Value};
 
 use super::calls_helpers::{
@@ -5,7 +7,11 @@ use super::calls_helpers::{
     prompt_outcome_label, summaries_to_json,
 };
 use super::context::AgentOpsMcpContext;
-use super::peer_ops::{authorize_transcript_read, prepare_agent_message};
+use super::peer_ops::{
+    admit_peer_send, assert_workspace_can_be_mutated, authorize_transcript_read,
+    lease_target_workspace_for_send, prepare_agent_message,
+};
+use super::AgentOpsPeerGates;
 use super::tools::{
     canonical_tool_name, ChildSessionArgs, CreateSubagentArgs, ListAgentsArgs,
     ReadAgentTranscriptArgs, ReadAgentTranscriptMode, ReadSubagentEventsArgs,
@@ -30,6 +36,7 @@ use crate::origin::OriginContext;
 pub async fn call_tool(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
+    gates: &AgentOpsPeerGates,
     ctx: &AgentOpsMcpContext,
     name: &str,
     arguments: Option<Value>,
@@ -54,7 +61,7 @@ pub async fn call_tool(
         }
         "send_agent_message" => {
             let args: SendAgentMessageArgs = deserialize_args(arguments)?;
-            send_agent_message(service, session_runtime, &ctx.parent_session_id, args).await
+            send_agent_message(service, session_runtime, gates, ctx, args).await
         }
         "read_agent_transcript" => {
             let args: ReadAgentTranscriptArgs = deserialize_args(arguments)?;
@@ -454,10 +461,12 @@ fn list_agents(
     args: ListAgentsArgs,
 ) -> anyhow::Result<Value> {
     let decoded_cursor = match args.cursor.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
-        Some(token) => Some(
-            SessionSearchCursor::decode(token)
-                .ok_or_else(|| anyhow::anyhow!("cursor is not a cursor returned by list_agents"))?,
-        ),
+        Some(token) => Some(SessionSearchCursor::decode(token).ok_or_else(|| {
+            anyhow::anyhow!(
+                "cursor is malformed: pass the nextCursor value from the previous \
+                 list_agents response unchanged"
+            )
+        })?),
         None => None,
     };
     let limit = args
@@ -492,13 +501,24 @@ fn list_agents(
             .encode()
         });
 
+    // A linked subagent is best known by the label its parent gave it; a top
+    // level session by its own title. One query for the page, not one per row.
+    let session_ids = sessions
+        .iter()
+        .map(|session| session.id.clone())
+        .collect::<Vec<_>>();
+    let mut link_labels = service
+        .find_subagent_parents(&session_ids)?
+        .into_iter()
+        .filter_map(|link| {
+            let label = link.label?;
+            Some((link.child_session_id, label))
+        })
+        .collect::<HashMap<String, String>>();
+
     let mut agents = Vec::with_capacity(sessions.len());
     for session in sessions {
-        // A linked subagent is best known by the label its parent gave it; a
-        // top level session by its own title.
-        let link_label = service
-            .find_subagent_parent(&session.id)?
-            .and_then(|link| link.label);
+        let link_label = link_labels.remove(&session.id);
         agents.push(json!({
             "sessionId": session.id,
             "label": link_label.clone().or_else(|| session.title.clone()),
@@ -523,15 +543,31 @@ fn list_agents(
 async fn send_agent_message(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
-    caller_session_id: &str,
+    gates: &AgentOpsPeerGates,
+    ctx: &AgentOpsMcpContext,
     args: SendAgentMessageArgs,
 ) -> anyhow::Result<Value> {
     let prepared = prepare_agent_message(
         service.session_store(),
-        caller_session_id,
+        &ctx.parent_session_id,
         args.session_id.trim(),
         &args.message,
     )?;
+    // The caller's own workspace still has to be writable — the route used to
+    // check this for us, and stopped once this tool started taking its own
+    // leases (see `lease_target_workspace_for_send`). No lease: nothing here
+    // mutates the caller's workspace.
+    assert_workspace_can_be_mutated(service.access_gate(), &ctx.workspace_id)?;
+    // Canonical lock order, and the reason this tool is absent from
+    // `MUTATING_TOOL_NAMES`: session mutation permit FIRST, then the target
+    // workspace's write lease. Both are held across the dispatch below.
+    let _admission_permit = admit_peer_send(&gates.session_admission, &prepared.target.id).await?;
+    let _target_workspace_lease = lease_target_workspace_for_send(
+        &gates.workspace_operation_gate,
+        service.access_gate(),
+        &prepared.target.workspace_id,
+    )
+    .await?;
     // From here it is the ordinary prompt path: running targets queue, idle
     // ones boot. Nothing about an agent-sourced prompt is special to the queue.
     let outcome = session_runtime

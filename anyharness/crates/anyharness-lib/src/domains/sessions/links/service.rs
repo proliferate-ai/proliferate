@@ -233,6 +233,13 @@ impl SessionLinkService {
         self.store.find_subagent_parent(child_session_id)
     }
 
+    pub fn find_subagent_parents(
+        &self,
+        child_session_ids: &[String],
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.store.find_subagent_parents(child_session_ids)
+    }
+
     pub fn find_subagent_link(
         &self,
         parent_session_id: &str,

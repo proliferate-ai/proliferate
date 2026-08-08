@@ -146,6 +146,10 @@ Rules:
   UI renders from. The client never parses the envelope text
 - this is the only case where a raw session id belongs in prompt text: it is
   the handle the receiver must call back with
+- a peer send clears the same session-mutation admission fence as a human
+  prompt: it acquires the target session's `Prompt` permit with the external
+  source before dispatching, so a session a workflow run controls refuses a
+  peer message exactly as it refuses one from the HTTP prompt route
 
 Owner: `anyharness/crates/anyharness-lib/src/domains/sessions/prompt/envelope.rs`.
 

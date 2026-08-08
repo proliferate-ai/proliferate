@@ -40,6 +40,21 @@ impl SessionSearchCursor<'_> {
     }
 }
 
+/// Make a user-authored needle a literal for `LIKE ... ESCAPE '\'`. Without
+/// this, an agent searching for `deploy_checker` also matches `deployXchecker`
+/// and a bare `%` matches everything: the search string is a pattern the caller
+/// never asked to write.
+pub(crate) fn escape_like_pattern(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        if matches!(character, '\\' | '%' | '_') {
+            escaped.push('\\');
+        }
+        escaped.push(character);
+    }
+    escaped
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct SessionSearchQuery<'a> {
     /// Exact session-id lookup: how a bare id read out of a message envelope
@@ -170,16 +185,28 @@ impl SessionStore {
     /// cursor: a page ends at its last row and the next page resumes strictly
     /// after it, so rows can never be skipped or repeated when `updated_at`
     /// collides.
+    ///
+    /// This is the peer-reachable set, so it excludes rows that are not agents
+    /// the human is running: dismissed sessions (deleted from the sidebar, and
+    /// refused by the boot path, so advertising them as messageable is a lie),
+    /// closed sessions unless asked for, and `internal_only` sessions (workflow
+    /// and review plumbing — see the module note on
+    /// [`crate::domains::sessions::authorize`]).
     pub fn search_sessions(
         &self,
         query: &SessionSearchQuery<'_>,
     ) -> anyhow::Result<Vec<SessionRecord>> {
         let limit = query.limit.clamp(1, SESSION_SEARCH_MAX_LIMIT);
+        // Matching is ASCII-case-insensitive: SQLite's LIKE already folds ASCII
+        // on both sides, and folding in Rust instead would be worse than
+        // useless — `str::to_lowercase` is full-Unicode, so a needle lowercased
+        // here could never match a haystack SQLite folds only in ASCII (a
+        // session titled "École" would be unreachable by every query).
         let text_pattern = query
             .text
             .map(str::trim)
             .filter(|value| !value.is_empty())
-            .map(|value| format!("%{}%", value.to_lowercase()));
+            .map(|value| format!("%{}%", escape_like_pattern(value)));
         let session_id = query
             .session_id
             .map(str::trim)
@@ -194,14 +221,16 @@ impl SessionStore {
                    FROM sessions s
                   WHERE (?1 IS NULL OR s.id = ?1)
                     AND (?2 IS NULL OR s.workspace_id = ?2)
-                    AND (?3 = 1 OR s.closed_at IS NULL)
+                    AND (?3 = 1 OR (s.closed_at IS NULL AND s.status <> 'closed'))
+                    AND s.dismissed_at IS NULL
+                    AND s.mcp_binding_policy <> 'internal_only'
                     AND (
                       ?4 IS NULL
-                      OR LOWER(COALESCE(s.title, '')) LIKE ?4
+                      OR COALESCE(s.title, '') LIKE ?4 ESCAPE '\\'
                       OR EXISTS (
                         SELECT 1 FROM session_links l
                          WHERE l.child_session_id = s.id
-                           AND LOWER(COALESCE(l.label, '')) LIKE ?4
+                           AND COALESCE(l.label, '') LIKE ?4 ESCAPE '\\'
                       )
                     )
                     AND (

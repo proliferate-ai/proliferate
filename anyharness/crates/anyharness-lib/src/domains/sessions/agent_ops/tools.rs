@@ -15,12 +15,21 @@ pub const DEPRECATED_TOOL_ALIASES: &[(&str, &str)] = &[
 ];
 
 // Aliases are listed too: this is matched on the wire name to decide whether a
-// call takes the workspace write lease.
+// call takes the ROUTE's workspace write lease — the lease on the workspace in
+// the URL, which is always the caller's.
+//
+// `send_agent_message` is deliberately absent. It is the one tool here whose
+// target can live in another workspace, so the caller's lease is the wrong one
+// and it takes the TARGET workspace's lease itself
+// (`peer_ops::lease_target_workspace_for_send`), together with the target
+// session's mutation permit. That is also the only way to keep the canonical
+// `permit -> workspace lease` order: a route lease taken before the permit is
+// the reversed order `api/session_admission_tests.rs` proves deadlocks against
+// retire/purge. Absent here means "leases itself", never "mutates nothing".
 pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "spawn_subagent",
     "create_subagent",
     "send_subagent_message",
-    "send_agent_message",
     "schedule_subagent_wake",
     "close_agent",
     "close_subagent",
@@ -436,8 +445,15 @@ mod tests {
     }
 
     #[test]
-    fn send_agent_message_takes_the_workspace_write_lease() {
-        assert!(MUTATING_TOOL_NAMES.contains(&"send_agent_message"));
+    fn send_agent_message_leases_in_the_call_not_at_the_route() {
+        // Not a read tool: it takes the TARGET workspace's SubagentWrite lease
+        // and the target session's mutation permit inside the call, in that
+        // order. The route's lease is the caller's workspace and would have to
+        // be taken before the permit, which is the reversed lock order.
+        assert!(!MUTATING_TOOL_NAMES.contains(&"send_agent_message"));
+        // The link-scoped sibling still leases at the route: its target is
+        // always in the caller's workspace.
+        assert!(MUTATING_TOOL_NAMES.contains(&"send_subagent_message"));
         assert!(!MUTATING_TOOL_NAMES.contains(&"list_agents"));
         assert!(!MUTATING_TOOL_NAMES.contains(&"read_agent_transcript"));
     }

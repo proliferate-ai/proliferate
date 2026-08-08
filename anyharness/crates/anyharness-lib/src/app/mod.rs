@@ -549,6 +549,8 @@ impl AppState {
                 subagent_service: subagent_service.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_runtime: workspace_runtime.clone(),
+                session_admission: session_admission.clone(),
+                workspace_operation_gate: workspace_operation_gate.clone(),
                 agent_ops_mcp_auth,
                 cowork_artifact_runtime: cowork_artifact_runtime.clone(),
                 cowork_runtime: cowork_runtime.clone(),

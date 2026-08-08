@@ -354,8 +354,22 @@ impl SubagentService {
         self.link_service.find_subagent_parent(child_session_id)
     }
 
+    /// Batched form of [`Self::find_subagent_parent`] for a page of sessions.
+    pub fn find_subagent_parents(
+        &self,
+        child_session_ids: &[String],
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.link_service.find_subagent_parents(child_session_ids)
+    }
+
     pub fn session_store(&self) -> &SessionStore {
         &self.session_store
+    }
+
+    /// The workspace access gate this service already holds — the peer send
+    /// needs it for the TARGET workspace, which the route layer never sees.
+    pub fn access_gate(&self) -> &WorkspaceAccessGate {
+        &self.access_gate
     }
 
     pub fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {

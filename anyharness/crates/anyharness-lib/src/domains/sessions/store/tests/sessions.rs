@@ -491,6 +491,189 @@ fn session_search_clamps_the_page_size_to_the_maximum() {
 }
 
 #[test]
+fn session_search_hides_dismissed_sessions_from_the_peer_surface() {
+    let store = search_fixture();
+    let mut dismissed = session_record();
+    dismissed.id = "ses_dismissed".to_string();
+    dismissed.title = Some("Deploy Checker (dismissed)".to_string());
+    dismissed.updated_at = "2026-03-25T04:00:00Z".to_string();
+    dismissed.dismissed_at = Some("2026-03-25T04:30:00Z".to_string());
+    store.insert(&dismissed).expect("insert dismissed session");
+
+    // Not in the page, not resolvable by id, not resolvable with closed rows
+    // included: the boot path refuses a dismissed session, so it is not a
+    // messageable agent under any of the three ways in.
+    let listed = search_ids(
+        &store,
+        &SessionSearchQuery {
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert!(!listed.contains(&"ses_dismissed".to_string()));
+
+    for include_closed in [false, true] {
+        let by_id = search_ids(
+            &store,
+            &SessionSearchQuery {
+                session_id: Some("ses_dismissed"),
+                include_closed,
+                limit: SESSION_SEARCH_DEFAULT_LIMIT,
+                ..SessionSearchQuery::default()
+            },
+        );
+        assert!(by_id.is_empty(), "include_closed={include_closed}");
+    }
+
+    // Negative control: the same fixture still lists its open sessions.
+    assert_eq!(listed, vec!["ses_caller", "ses_peer", "ses_child"]);
+}
+
+#[test]
+fn session_search_hides_internal_only_sessions_from_the_peer_surface() {
+    let store = search_fixture();
+    let mut internal = session_record();
+    internal.id = "ses_internal".to_string();
+    internal.title = Some("Workflow step".to_string());
+    internal.updated_at = "2026-03-25T04:00:00Z".to_string();
+    internal.mcp_binding_policy =
+        crate::domains::sessions::model::SessionMcpBindingPolicy::InternalOnly;
+    store.insert(&internal).expect("insert internal session");
+
+    let listed = search_ids(
+        &store,
+        &SessionSearchQuery {
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert!(!listed.contains(&"ses_internal".to_string()));
+
+    let by_id = search_ids(
+        &store,
+        &SessionSearchQuery {
+            session_id: Some("ses_internal"),
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert!(by_id.is_empty());
+}
+
+#[test]
+fn session_search_treats_a_status_closed_row_as_closed() {
+    // `authorize::is_closed` is `closed_at.is_some() || status == "closed"`.
+    // Listing a row this predicate rejects would advertise a target that the
+    // send then refuses.
+    let store = search_fixture();
+    let mut status_closed = session_record();
+    status_closed.id = "ses_status_closed".to_string();
+    status_closed.status = "closed".to_string();
+    status_closed.closed_at = None;
+    status_closed.updated_at = "2026-03-25T04:00:00Z".to_string();
+    store.insert(&status_closed).expect("insert status-closed");
+
+    let listed = search_ids(
+        &store,
+        &SessionSearchQuery {
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert!(!listed.contains(&"ses_status_closed".to_string()));
+
+    let included = search_ids(
+        &store,
+        &SessionSearchQuery {
+            session_id: Some("ses_status_closed"),
+            include_closed: true,
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert_eq!(included, vec!["ses_status_closed"]);
+}
+
+#[test]
+fn session_search_matches_wildcard_characters_literally() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    let store = SessionStore::new(db);
+
+    let mut underscored = session_record();
+    underscored.id = "ses_underscore".to_string();
+    underscored.title = Some("deploy_checker".to_string());
+    underscored.updated_at = "2026-03-25T02:00:00Z".to_string();
+    store.insert(&underscored).expect("insert underscored");
+
+    let mut lookalike = session_record();
+    lookalike.id = "ses_lookalike".to_string();
+    lookalike.title = Some("deployXchecker".to_string());
+    lookalike.updated_at = "2026-03-25T01:00:00Z".to_string();
+    store.insert(&lookalike).expect("insert lookalike");
+
+    // `_` is a single-character wildcard in LIKE. The agent typed a name, not
+    // a pattern.
+    let literal = search_ids(
+        &store,
+        &SessionSearchQuery {
+            text: Some("deploy_checker"),
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert_eq!(literal, vec!["ses_underscore"]);
+
+    // Same for `%`: a bare one used to match every row.
+    let percent = search_ids(
+        &store,
+        &SessionSearchQuery {
+            text: Some("%"),
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert!(percent.is_empty());
+}
+
+#[test]
+fn session_search_folds_ascii_case_on_both_sides() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    let store = SessionStore::new(db);
+
+    let mut accented = session_record();
+    accented.id = "ses_accented".to_string();
+    accented.title = Some("École Deploy".to_string());
+    store.insert(&accented).expect("insert accented");
+
+    // ASCII case folds in both directions.
+    for query in ["DEPLOY", "deploy"] {
+        let ids = search_ids(
+            &store,
+            &SessionSearchQuery {
+                text: Some(query),
+                limit: SESSION_SEARCH_DEFAULT_LIMIT,
+                ..SessionSearchQuery::default()
+            },
+        );
+        assert_eq!(ids, vec!["ses_accented"], "query {query}");
+    }
+
+    // And a non-ASCII title is reachable by its own spelling, which the old
+    // Rust-side `to_lowercase` made impossible.
+    let exact = search_ids(
+        &store,
+        &SessionSearchQuery {
+            text: Some("École"),
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert_eq!(exact, vec!["ses_accented"]);
+}
+
+#[test]
 fn session_search_cursor_tokens_round_trip() {
     let cursor = SessionSearchCursor {
         updated_at: "2026-03-25T00:00:00Z",

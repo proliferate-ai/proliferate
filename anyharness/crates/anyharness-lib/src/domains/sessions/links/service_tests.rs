@@ -81,6 +81,61 @@ fn creates_and_lists_links_by_parent_and_child() {
 }
 
 #[test]
+fn subagent_parents_resolve_for_a_whole_page_in_one_query() {
+    // `list_agents` labels a page of sessions; doing it per row is a query per
+    // row. One call, only the linked children come back, and a closed link is
+    // as absent here as it is from `find_subagent_parent`.
+    let (_db, session_store, service) = service_fixture();
+    session_store
+        .insert(&session_record("child-2"))
+        .expect("insert second child");
+    session_store
+        .insert(&session_record("child-3"))
+        .expect("insert third child");
+    session_store
+        .insert(&session_record("loose-1"))
+        .expect("insert unlinked session");
+
+    let mut labelled = create_input("parent-1", "child-1");
+    labelled.label = Some("Schema audit".to_string());
+    service.create_link(labelled).expect("link child-1");
+    let mut second = create_input("parent-1", "child-2");
+    second.label = Some("Deploy checker".to_string());
+    service.create_link(second).expect("link child-2");
+    let closed = service
+        .create_link(create_input("parent-1", "child-3"))
+        .expect("link child-3");
+    service
+        .close_link(&closed.id, "2026-03-25T02:00:00Z")
+        .expect("close the third link");
+
+    let mut found = service
+        .find_subagent_parents(&[
+            "child-1".to_string(),
+            "child-2".to_string(),
+            "child-3".to_string(),
+            "loose-1".to_string(),
+        ])
+        .expect("batched parent lookup");
+    found.sort_by(|a, b| a.child_session_id.cmp(&b.child_session_id));
+
+    assert_eq!(
+        found
+            .iter()
+            .map(|link| (link.child_session_id.as_str(), link.label.as_deref()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("child-1", Some("Schema audit")),
+            ("child-2", Some("Deploy checker")),
+        ]
+    );
+    assert!(service
+        .find_subagent_parents(&[])
+        .expect("empty page")
+        .is_empty());
+}
+
+#[test]
 fn rejects_missing_parent_or_child() {
     let (_db, _session_store, service) = service_fixture();
 

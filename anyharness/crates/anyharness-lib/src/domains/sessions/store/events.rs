@@ -208,13 +208,27 @@ impl SessionStore {
                 cutoff_seq = turn_starts[selected_turn_count - 1].1;
             }
 
+            // The back-off above is a target, not a cap: it stops narrowing at
+            // one turn, so a single enormous turn would otherwise be returned
+            // whole. Bound the select by the same event budget and keep the
+            // NEWEST events (the turn_ended row carries the stop reason a
+            // summarizer needs). For every session whose window already fits the
+            // budget — which the loop guarantees unless it bottomed out at one
+            // turn — this LIMIT selects the identical rows.
             let mut stmt = conn.prepare(
                 "SELECT *
-                 FROM session_events
-                 WHERE session_id = ?1 AND seq >= ?2
+                 FROM (
+                   SELECT *
+                   FROM session_events
+                   WHERE session_id = ?1 AND seq >= ?2
+                   ORDER BY seq DESC
+                   LIMIT ?3
+                 )
                  ORDER BY seq ASC",
             )?;
-            let rows = stmt.query_map(params![session_id, cutoff_seq], |row| map_event(row))?;
+            let rows = stmt.query_map(params![session_id, cutoff_seq, event_limit], |row| {
+                map_event(row)
+            })?;
             rows.collect()
         })
     }
@@ -304,15 +318,23 @@ impl SessionStore {
                 cutoff_seq = turn_starts[selected_turn_count - 1].1;
             }
 
+            // Same hard cap as `list_events_for_latest_turns`: the back-off can
+            // bottom out at one turn, so the final select must not be unbounded.
             let mut stmt = conn.prepare(
                 "SELECT *
-                 FROM session_events
-                 WHERE session_id = ?1 AND seq >= ?2 AND seq < ?3
+                 FROM (
+                   SELECT *
+                   FROM session_events
+                   WHERE session_id = ?1 AND seq >= ?2 AND seq < ?3
+                   ORDER BY seq DESC
+                   LIMIT ?4
+                 )
                  ORDER BY seq ASC",
             )?;
-            let rows = stmt.query_map(params![session_id, cutoff_seq, before_seq], |row| {
-                map_event(row)
-            })?;
+            let rows = stmt.query_map(
+                params![session_id, cutoff_seq, before_seq, event_limit],
+                |row| map_event(row),
+            )?;
             rows.collect()
         })
     }

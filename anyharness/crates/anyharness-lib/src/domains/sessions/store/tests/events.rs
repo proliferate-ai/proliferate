@@ -296,6 +296,61 @@ fn latest_turn_reads_reduce_window_to_event_budget() {
 }
 
 #[test]
+fn one_enormous_turn_is_still_capped_at_the_event_budget() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    store.insert(&session_record()).expect("insert session");
+
+    // A single turn wider than the budget: the back-off loop cannot narrow past
+    // one turn, so without a hard LIMIT the whole turn comes back.
+    for seq in 1..=8 {
+        store
+            .append_event(&SessionEventRecord {
+                id: 0,
+                session_id: "session-1".to_string(),
+                seq,
+                timestamp: format!("2026-03-25T00:01:{seq:02}Z"),
+                event_type: if seq == 1 {
+                    "turn_started"
+                } else {
+                    "item_completed"
+                }
+                .to_string(),
+                turn_id: Some("turn-1".to_string()),
+                item_id: Some(format!("item-{seq}")),
+                payload_json: if seq == 1 {
+                    r#"{"type":"turn_started"}"#
+                } else {
+                    r#"{"type":"item_completed","item":{"kind":"assistant_message","status":"completed","sourceAgentKind":"codex","contentParts":[]}}"#
+                }
+                .to_string(),
+            })
+            .expect("append event");
+    }
+
+    let tail = store
+        .list_events_for_latest_turns("session-1", 3, 3)
+        .expect("list capped latest turns");
+
+    // The newest events, not the whole turn: a summarizer needs the tail (the
+    // stop reason lives there), and the budget must hold.
+    assert_eq!(
+        tail.iter().map(|event| event.seq).collect::<Vec<_>>(),
+        vec![6, 7, 8],
+    );
+
+    let older = store
+        .list_events_before_for_latest_turns("session-1", 8, 3, 3)
+        .expect("list capped older turns");
+    assert_eq!(
+        older.iter().map(|event| event.seq).collect::<Vec<_>>(),
+        vec![5, 6, 7],
+    );
+}
+
+#[test]
 fn older_turn_reads_return_complete_page_before_cutoff() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);

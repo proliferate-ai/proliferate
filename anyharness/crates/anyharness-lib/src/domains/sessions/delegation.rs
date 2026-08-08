@@ -6,7 +6,7 @@ use super::transcript_read::read_session_events;
 
 // The budgets belong to the session-scoped reads; a delegated read is the same
 // read with a link check in front of it.
-pub use super::transcript_read::{
+pub(crate) use super::transcript_read::{
     READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_BYTES, READ_EVENTS_MAX_LIMIT,
 };
 

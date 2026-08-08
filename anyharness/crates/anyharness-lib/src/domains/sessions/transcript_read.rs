@@ -17,15 +17,17 @@ use serde_json::json;
 use super::model::SessionEventRecord;
 use super::store::SessionStore;
 
-pub const READ_EVENTS_DEFAULT_LIMIT: usize = 50;
-pub const READ_EVENTS_MAX_LIMIT: usize = 100;
-pub const READ_EVENTS_MAX_BYTES: usize = 256 * 1024;
-pub const READ_LATEST_TURNS_DEFAULT_LIMIT: usize = 3;
-pub const READ_LATEST_TURNS_MAX_LIMIT: usize = 10;
-pub const SEARCH_TRANSCRIPT_DEFAULT_LIMIT: usize = 10;
-pub const SEARCH_TRANSCRIPT_MAX_LIMIT: usize = 25;
-pub const LATEST_TURN_EVENT_BUDGET: i64 = 200;
-pub const SEARCH_EVENT_BUDGET: i64 = 500;
+// The read budgets. Crate-internal: they are an implementation detail of these
+// reads and the tool schemas that advertise them, not a public surface.
+pub(crate) const READ_EVENTS_DEFAULT_LIMIT: usize = 50;
+pub(crate) const READ_EVENTS_MAX_LIMIT: usize = 100;
+pub(crate) const READ_EVENTS_MAX_BYTES: usize = 256 * 1024;
+pub(crate) const READ_LATEST_TURNS_DEFAULT_LIMIT: usize = 3;
+pub(crate) const READ_LATEST_TURNS_MAX_LIMIT: usize = 10;
+pub(crate) const SEARCH_TRANSCRIPT_DEFAULT_LIMIT: usize = 10;
+pub(crate) const SEARCH_TRANSCRIPT_MAX_LIMIT: usize = 25;
+pub(crate) const LATEST_TURN_EVENT_BUDGET: i64 = 200;
+pub(crate) const SEARCH_EVENT_BUDGET: i64 = 500;
 const ASSISTANT_TEXT_MAX_CHARS: usize = 4_000;
 const SEARCH_SNIPPET_CONTEXT_CHARS: usize = 120;
 
@@ -74,8 +76,13 @@ pub fn read_session_events(
         .unwrap_or(READ_EVENTS_DEFAULT_LIMIT)
         .min(READ_EVENTS_MAX_LIMIT);
     let after_seq = since_seq.unwrap_or(0);
-    let mut records = session_store.list_events_after(session_id, after_seq)?;
-    records.truncate(limit);
+    // SQL bounds the scan. Reading `sinceSeq: 0` on a long-lived session used to
+    // materialize every row of its event log to hand back 50.
+    let records = session_store.list_events_after_oldest_limited(
+        session_id,
+        after_seq,
+        limit as i64,
+    )?;
 
     let mut total_bytes = 0usize;
     let mut truncated = false;
@@ -572,6 +579,34 @@ mod tests {
             .err()
             .expect("blank query is rejected");
         assert!(error.to_string().contains("query is required"));
+    }
+
+    #[test]
+    fn reading_peer_events_never_scans_past_the_requested_page() {
+        let store = store_with_two_turns();
+
+        // The store call is the bounded one (`list_events_after_oldest_limited`),
+        // so a small page over a long log reads a small page — it does not load
+        // the log and throw most of it away.
+        let slice = read_session_events(&store, "peer-1", Some(0), Some(2)).expect("read events");
+
+        assert_eq!(
+            slice
+                .events
+                .iter()
+                .map(|event| event["seq"].as_i64().expect("seq"))
+                .collect::<Vec<_>>(),
+            vec![1, 2],
+        );
+        assert_eq!(slice.next_since_seq, Some(2));
+        assert!(!slice.truncated);
+
+        // Resuming from the cursor returns the rest, so bounding the scan did
+        // not bound what an agent can eventually read.
+        let rest = read_session_events(&store, "peer-1", slice.next_since_seq, Some(10))
+            .expect("read the rest");
+        assert_eq!(rest.events.len(), 3);
+        assert_eq!(rest.next_since_seq, Some(5));
     }
 
     #[test]

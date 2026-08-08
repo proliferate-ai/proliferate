@@ -5,11 +5,19 @@
 //! testable without a live actor. What follows a send is the ordinary
 //! pending-prompt path: a busy target queues, an idle open target boots.
 
+use crate::domains::sessions::admission::{
+    SessionMutationAdmission, SessionMutationConflict, SessionMutationKind, SessionMutationPermit,
+    SessionMutationSource,
+};
 use crate::domains::sessions::authorize::{authorize, AgentAccessError, AgentAccessIntent};
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::prompt::envelope::{agent_message, AgentMessageSender};
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::operation_gate::{
+    WorkspaceOperationGate, WorkspaceOperationKind, WorkspaceOperationLease,
+};
 
 /// Gate a transcript read. Read intent, always: an agent's transcript stays
 /// readable after it closes — closing removes the agent, not its record.
@@ -43,10 +51,13 @@ pub(super) struct PreparedAgentMessage {
     pub provenance: PromptProvenance,
 }
 
-/// Gate the send, then build the envelope. Any agent may message any agent:
-/// reach is runtime-wide and unlinked, so the only refusals here are an empty
-/// body, a session that does not exist, and a closed target — a closed session
-/// takes no more input and its actor is never spun up again.
+/// Gate the send, then build the envelope. Any agent may message any *other*
+/// agent: reach is runtime-wide and unlinked, so the refusals here are only the
+/// ones about whether a target is an agent at all — an empty body, a session
+/// that does not exist, itself, a closed or dismissed target (neither takes
+/// more input, and neither is ever spun up again), and an `internal_only`
+/// session (runtime plumbing, not a peer). Whether the target may be perturbed
+/// *right now* is a separate question, answered by [`admit_peer_send`].
 pub(super) fn prepare_agent_message(
     session_store: &SessionStore,
     caller_session_id: &str,
@@ -72,13 +83,119 @@ pub(super) fn prepare_agent_message(
     })
 }
 
+#[derive(Debug, thiserror::Error)]
+pub(super) enum PeerSendGateError {
+    #[error(
+        "that agent's execution is controlled by an active workflow run and cannot be \
+         prompted until the run finishes"
+    )]
+    ControlledByWorkflow,
+    #[error("session admission is unavailable")]
+    AdmissionUnavailable,
+    #[error("{0}")]
+    WorkspaceBlocked(String),
+}
+
+/// The session-mutation admission fence, on the peer send path (spec 2b).
+///
+/// `send_agent_message` is the first product-MCP tool that can prompt an
+/// ARBITRARY session, so it is the first that must clear this fence itself.
+/// Every other route into a session's prompt queue takes this permit
+/// (`api/http/sessions_prompt.rs`, the pending-prompt queue, goals/loops/
+/// plans/reviews/config/resume/replay). The older MCP prompt paths were exempt
+/// for a structural reason — they could only reach the far end of a
+/// `session_links` row, and a workflow-controlled session is never on either
+/// end — and runtime-wide peer reach deletes that argument.
+///
+/// The permit is held across the dispatch, so a workflow that takes control
+/// mid-send cannot interleave, and a peer send is visible to the destructive
+/// workspace paths that admit a whole workspace's session set.
+pub(super) async fn admit_peer_send(
+    admission: &SessionMutationAdmission,
+    target_session_id: &str,
+) -> Result<SessionMutationPermit, PeerSendGateError> {
+    admission
+        .acquire(
+            target_session_id,
+            SessionMutationKind::Prompt,
+            &SessionMutationSource::external(),
+        )
+        .await
+        .map_err(|conflict| match conflict {
+            SessionMutationConflict::ControlledByWorkflow { run_id } => {
+                tracing::info!(
+                    target_session_id = %target_session_id,
+                    controlling_run_id = %run_id,
+                    "peer message rejected: target session is controlled by a workflow"
+                );
+                PeerSendGateError::ControlledByWorkflow
+            }
+            SessionMutationConflict::Internal(error) => {
+                tracing::error!(
+                    target_session_id = %target_session_id,
+                    error = %error,
+                    "peer message admission lookup failed"
+                );
+                PeerSendGateError::AdmissionUnavailable
+            }
+        })
+}
+
+/// The workspace write lease for a peer send — on the TARGET's workspace.
+///
+/// The route layer leases the workspace in the URL, which for a cross-workspace
+/// send is the wrong one: the send mutates the TARGET workspace (it enqueues a
+/// durable row against a target session and can boot a harness child process
+/// inside the target's checkout), and it is the target workspace's retire
+/// preflight that has to see that work in progress
+/// (`workspaces/retire_preflight.rs` snapshots the gate for `SubagentWrite`).
+/// So `send_agent_message` takes no route lease at all — it is deliberately
+/// absent from `tools::MUTATING_TOOL_NAMES` — and takes this one instead.
+///
+/// MUST be called AFTER [`admit_peer_send`]. The canonical lock order is
+/// `session mutation permit -> workspace operation lease`
+/// (PR1227-LOCK-01); the reverse is the order
+/// `api/session_admission_tests.rs` proves deadlocks against retire/purge,
+/// which hold every session permit in a workspace and then reach for that
+/// workspace's exclusive lease. Exactly one workspace lease is taken here, so
+/// there is no second lease to order against either.
+pub(super) async fn lease_target_workspace_for_send(
+    operation_gate: &WorkspaceOperationGate,
+    access_gate: &WorkspaceAccessGate,
+    target_workspace_id: &str,
+) -> Result<WorkspaceOperationLease, PeerSendGateError> {
+    let lease = operation_gate
+        .acquire_shared(target_workspace_id, WorkspaceOperationKind::SubagentWrite)
+        .await;
+    // Same order the route uses: take the lease, then read the access state, so
+    // a workspace that goes read-only cannot slip between the two.
+    assert_workspace_can_be_mutated(access_gate, target_workspace_id)?;
+    Ok(lease)
+}
+
+/// Access-state check with no lease attached — the caller-side half of what the
+/// route used to do for this tool (`assert_workspace_mutable`).
+pub(super) fn assert_workspace_can_be_mutated(
+    access_gate: &WorkspaceAccessGate,
+    workspace_id: &str,
+) -> Result<(), PeerSendGateError> {
+    access_gate
+        .assert_can_mutate_for_workspace(workspace_id)
+        .map_err(|error| PeerSendGateError::WorkspaceBlocked(error.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::test_support;
+    use crate::domains::sessions::admission::{NoControllerPolicy, SessionControllerPolicy};
     use crate::domains::sessions::model::SessionMcpBindingPolicy;
     use crate::domains::sessions::prompt::PromptPayload;
+    use crate::domains::terminals::store::TerminalStore;
+    use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
+    use crate::live::terminals::TerminalService;
     use crate::persistence::Db;
+    use std::sync::Arc;
 
     fn session_record(id: &str, workspace_id: &str, title: Option<&str>) -> SessionRecord {
         SessionRecord {
@@ -157,6 +274,64 @@ mod tests {
             AgentMessageError::Access(AgentAccessError::TargetClosed)
         ));
         assert_eq!(error.to_string(), "target session is closed");
+    }
+
+    #[test]
+    fn a_dismissed_target_is_rejected_before_the_boot_path_can_fail_opaquely() {
+        let store = store_fixture();
+        let mut dismissed = session_record("ses_dismissed", "workspace-1", Some("Deleted"));
+        dismissed.dismissed_at = Some("2026-08-08T01:00:00Z".to_string());
+        store.insert(&dismissed).expect("insert dismissed target");
+
+        let error = prepare_agent_message(&store, "ses_caller", "ses_dismissed", "Ship it?")
+            .err()
+            .expect("dismissed target is rejected");
+
+        assert!(matches!(
+            error,
+            AgentMessageError::Access(AgentAccessError::TargetDismissed)
+        ));
+        // Readable, exactly like a closed one: dismissing removes the agent,
+        // not its record.
+        authorize_transcript_read(&store, "ses_caller", "ses_dismissed")
+            .expect("a dismissed agent's transcript stays readable");
+    }
+
+    #[test]
+    fn an_internal_only_target_is_not_a_peer() {
+        let store = store_fixture();
+        let mut internal = session_record("ses_internal", "workspace-1", Some("Workflow step"));
+        internal.mcp_binding_policy = SessionMcpBindingPolicy::InternalOnly;
+        store.insert(&internal).expect("insert internal target");
+
+        let error = prepare_agent_message(&store, "ses_caller", "ses_internal", "Ship it?")
+            .err()
+            .expect("internal-only target is rejected");
+        assert!(matches!(
+            error,
+            AgentMessageError::Access(AgentAccessError::TargetInternalOnly)
+        ));
+
+        // Hidden from discovery AND refused as a read target, so the two
+        // surfaces cannot disagree.
+        let read = authorize_transcript_read(&store, "ses_caller", "ses_internal")
+            .err()
+            .expect("internal-only target is not readable either");
+        assert!(matches!(read, AgentAccessError::TargetInternalOnly));
+    }
+
+    #[test]
+    fn an_agent_cannot_message_itself() {
+        let store = store_fixture();
+
+        let error = prepare_agent_message(&store, "ses_caller", "ses_caller", "Ship it?")
+            .err()
+            .expect("self send is rejected");
+
+        assert!(matches!(
+            error,
+            AgentMessageError::Access(AgentAccessError::SelfTarget)
+        ));
     }
 
     #[test]
@@ -245,5 +420,129 @@ mod tests {
             PromptPayload::text(prepared.text.clone()).with_provenance(prepared.provenance.clone());
         assert_eq!(payload.text_summary, prepared.text);
         assert!(payload.public_provenance().is_some());
+    }
+
+    /// A controller policy that hands one session to one run — the durable
+    /// lookup the Workflows domain implements in production.
+    struct ControlledSession {
+        session_id: &'static str,
+        run_id: &'static str,
+    }
+
+    impl SessionControllerPolicy for ControlledSession {
+        fn controlling_run_id(&self, session_id: &str) -> anyhow::Result<Option<String>> {
+            Ok((session_id == self.session_id).then(|| self.run_id.to_string()))
+        }
+    }
+
+    fn access_gate_fixture(db: &Db) -> WorkspaceAccessGate {
+        let runtime_home = std::env::temp_dir().join(format!(
+            "anyharness-peer-ops-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        WorkspaceAccessGate::new(
+            WorkspaceStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+            WorkspaceAccessStore::new(db.clone()),
+            Arc::new(TerminalService::new(
+                TerminalStore::new(db.clone()),
+                runtime_home,
+            )),
+        )
+    }
+
+    #[tokio::test]
+    async fn a_workflow_controlled_target_is_refused_and_an_ordinary_one_is_admitted() {
+        let admission = SessionMutationAdmission::new(Arc::new(ControlledSession {
+            session_id: "ses_controlled",
+            run_id: "run_7",
+        }));
+
+        let error = admit_peer_send(&admission, "ses_controlled")
+            .await
+            .err()
+            .expect("a workflow-controlled target refuses the send");
+        assert!(matches!(error, PeerSendGateError::ControlledByWorkflow));
+        // The calling agent has to be able to act on this, so it says what is
+        // wrong and when to retry — never the run id.
+        assert!(
+            error
+                .to_string()
+                .contains("controlled by an active workflow run"),
+            "unexpected message: {error}"
+        );
+        assert!(!error.to_string().contains("run_7"));
+
+        // Negative control: the same admission admits every other session, so
+        // the refusal above is the controller policy and not a blanket block.
+        let permit = admit_peer_send(&admission, "ses_target")
+            .await
+            .expect("an ordinary target is admitted");
+        drop(permit);
+    }
+
+    #[tokio::test]
+    async fn an_uncontrolled_runtime_admits_every_peer_send() {
+        let admission = SessionMutationAdmission::new(Arc::new(NoControllerPolicy));
+
+        let permit = admit_peer_send(&admission, "ses_target")
+            .await
+            .expect("no controller means no fence");
+
+        drop(permit);
+    }
+
+    #[tokio::test]
+    async fn a_cross_workspace_send_leases_the_targets_workspace_not_the_callers() {
+        let db = Db::open_in_memory().expect("open db");
+        test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace-1");
+        test_support::seed_workspace_with_repo_root(&db, "workspace-2", "local", "/tmp/workspace-2");
+        let access_gate = access_gate_fixture(&db);
+        let operation_gate = WorkspaceOperationGate::new();
+
+        // Caller in workspace-1, target in workspace-2.
+        let lease = lease_target_workspace_for_send(&operation_gate, &access_gate, "workspace-2")
+            .await
+            .expect("target workspace lease");
+
+        assert_eq!(
+            operation_gate
+                .snapshot("workspace-2")
+                .await
+                .count(WorkspaceOperationKind::SubagentWrite),
+            1,
+            "the target workspace's retire preflight must see this send"
+        );
+        assert_eq!(
+            operation_gate
+                .snapshot("workspace-1")
+                .await
+                .count(WorkspaceOperationKind::SubagentWrite),
+            0,
+            "the caller's workspace is not the one being mutated"
+        );
+
+        drop(lease);
+        assert_eq!(
+            operation_gate
+                .snapshot("workspace-2")
+                .await
+                .count(WorkspaceOperationKind::SubagentWrite),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn a_send_into_an_unknown_workspace_is_refused_cleanly() {
+        let db = Db::open_in_memory().expect("open db");
+        let access_gate = access_gate_fixture(&db);
+        let operation_gate = WorkspaceOperationGate::new();
+
+        let error = lease_target_workspace_for_send(&operation_gate, &access_gate, "workspace-gone")
+            .await
+            .err()
+            .expect("an unmutable target workspace refuses the send");
+
+        assert!(matches!(error, PeerSendGateError::WorkspaceBlocked(_)));
     }
 }

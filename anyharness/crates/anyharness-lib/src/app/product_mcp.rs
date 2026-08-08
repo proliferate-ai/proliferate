@@ -9,9 +9,10 @@ use crate::domains::reviews::mcp::{
     self as review_mcp, auth::ReviewMcpAuth, tools as review_mcp_tools, ReviewProductMcpServer,
 };
 use crate::domains::reviews::runtime::ReviewRuntime;
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::agent_ops::{
     self as agent_ops_mcp, auth::AgentOpsMcpAuth, tools as agent_ops_mcp_tools,
-    AgentOpsProductMcpServer,
+    AgentOpsPeerGates, AgentOpsProductMcpServer,
 };
 use crate::domains::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use crate::domains::sessions::mcp_bindings::product_launch::{
@@ -23,7 +24,7 @@ use crate::domains::sessions::mcp_bindings::product_registry::{
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::model::WorkspaceSurface;
-use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 
 pub(super) struct LaunchCatalogDeps {
@@ -40,6 +41,8 @@ pub(super) struct EndpointRegistryDeps {
     pub(super) subagent_service: Arc<SubagentService>,
     pub(super) session_runtime: Arc<SessionRuntime>,
     pub(super) workspace_runtime: Arc<WorkspaceRuntime>,
+    pub(super) session_admission: Arc<SessionMutationAdmission>,
+    pub(super) workspace_operation_gate: Arc<WorkspaceOperationGate>,
     pub(super) agent_ops_mcp_auth: Arc<AgentOpsMcpAuth>,
     pub(super) cowork_artifact_runtime: Arc<CoworkArtifactRuntime>,
     pub(super) cowork_runtime: Arc<CoworkRuntime>,
@@ -109,6 +112,8 @@ pub(super) fn build_product_mcp_endpoint_registry(
         subagent_service,
         session_runtime,
         workspace_runtime,
+        session_admission,
+        workspace_operation_gate,
         agent_ops_mcp_auth,
         cowork_artifact_runtime,
         cowork_runtime,
@@ -126,6 +131,10 @@ pub(super) fn build_product_mcp_endpoint_registry(
                 subagent_service.clone(),
                 session_runtime,
                 workspace_runtime.clone(),
+                AgentOpsPeerGates {
+                    session_admission,
+                    workspace_operation_gate,
+                },
                 agent_ops_mcp_auth,
             )),
             Some(WorkspaceOperationKind::SubagentWrite),
