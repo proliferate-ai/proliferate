@@ -1436,6 +1436,8 @@ function deriveToolCallSemanticKind(
     || normalizedEffectiveToolName === "mcp__subagents__list_agents"
     || normalizedEffectiveToolName === "mcp__subagents__read_agent_transcript"
     || normalizedEffectiveToolName === "mcp__subagents__schedule_agent_wake"
+    || normalizedEffectiveToolName === "mcp__subagents__get_agent_config_options"
+    || normalizedEffectiveToolName === "mcp__subagents__configure_agent"
   ) {
     return "subagent";
   }

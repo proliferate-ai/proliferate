@@ -1244,6 +1244,8 @@ describe("transcript reducer", () => {
     ["mcp__subagents__list_agents"],
     ["mcp__subagents__read_agent_transcript"],
     ["mcp__subagents__schedule_agent_wake"],
+    ["mcp__subagents__get_agent_config_options"],
+    ["mcp__subagents__configure_agent"],
   ])("classifies the renamed agent ops tool %s as subagent activity", (nativeToolName) => {
     const state = reduceEvents(
       [
