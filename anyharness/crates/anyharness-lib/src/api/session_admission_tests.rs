@@ -579,6 +579,12 @@ fn assert_source_order(rel_path: &str, fn_name: &str, first: &str, second: &str,
     );
 }
 
+/// Collapse every run of whitespace to a single space, so a source needle can
+/// span a `let` binding and its call without a rustfmt line wrap breaking it.
+fn squash_whitespace(source: &str) -> String {
+    source.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 const LOCK_01_ORDER: &str =
     "canonical LOCK-01 order: session mutation permit -> workspace operation lease";
 
@@ -679,21 +685,42 @@ fn the_peer_tools_take_the_permit_before_the_target_workspace_lease() {
         // Private items follow, so stop at this function's own closing brace
         // rather than at the next `pub` item.
         let end = rest.find("\n}\n").map(|idx| idx + 3).unwrap_or(rest.len());
-        let body = &rest[..end];
+        // Whitespace runs collapse to one space so a rustfmt wrap of the
+        // argument list cannot break a needle, and so the needles can span the
+        // `let` binding.
+        let body = squash_whitespace(&rest[..end]);
+        let body = body.as_str();
 
+        // The needles pin the BINDING, not just the call. Matching
+        // `admit_peer_mutation(` alone would pass on `let _ = admit_peer_mutation(..)`,
+        // which drops the permit at the end of that statement — textually
+        // identical ORDER, no fence at all across the dispatch below. What this
+        // test exists to prove is that both guards are still HELD when the work
+        // lands, so the named bindings are the thing to ratchet.
         let admit_at = body
-            .find("admit_peer_mutation(")
-            .unwrap_or_else(|| panic!("{tool} must acquire the target session's mutation permit"));
+            .find("let _admission_permit = admit_peer_mutation(")
+            .unwrap_or_else(|| {
+                panic!(
+                    "{tool} must BIND the target session's mutation permit as \
+                     `_admission_permit` — an unbound `let _ =` drops it immediately"
+                )
+            });
         let lease_at = body
-            .find("lease_target_workspace_for_peer_write(")
-            .unwrap_or_else(|| panic!("{tool} must lease the TARGET workspace"));
+            .find("let _target_workspace_lease = lease_target_workspace_for_peer_write(")
+            .unwrap_or_else(|| {
+                panic!(
+                    "{tool} must BIND the TARGET workspace lease as \
+                     `_target_workspace_lease` — an unbound `let _ =` drops it immediately"
+                )
+            });
         assert!(
             admit_at < lease_at,
             "{tool}: 'admit_peer_mutation' must come BEFORE \
              'lease_target_workspace_for_peer_write' — {LOCK_01_ORDER}"
         );
         // And the dispatch stays inside both: a permit dropped before the work
-        // lands fences nothing.
+        // lands fences nothing. Both bindings live to the end of the function,
+        // so a dispatch that appears after them is inside both.
         let dispatch_at = body
             .find(dispatch)
             .unwrap_or_else(|| panic!("{tool} must dispatch through {dispatch}"));

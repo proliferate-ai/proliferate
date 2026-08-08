@@ -574,10 +574,18 @@ it mutates is not the one it was called on:
 - it acquires the TARGET session's `SessionMutationKind::Config` admission
   permit with an External source, so a workflow-controlled session refuses a
   foreign change with the same stable conflict the HTTP route answers
-- when the target is in a different workspace than the caller, it also takes
-  that workspace's shared operation lease and access-gate check, in the
-  canonical `permit -> operation lease` order; a same-workspace target reuses
-  the lease the MCP endpoint already holds
+- it then takes the TARGET workspace's shared `SubagentWrite` operation lease,
+  unconditionally and with no same/different-workspace branch, in the canonical
+  `permit -> operation lease` order. There is nothing to reuse: `configure_agent`
+  is deliberately absent from `tools::MUTATING_TOOL_NAMES`, so the MCP endpoint
+  holds NO workspace lease for this call, and the route's lease would have been
+  the CALLER's workspace anyway — the wrong one to hold open against the target
+  workspace's retire preflight. `send_agent_message` works the same way; the
+  comment at `agent_ops/tools.rs` on `MUTATING_TOOL_NAMES` is the code-side
+  statement of it.
+- the caller's own workspace is still asserted mutable (an access-gate check,
+  no lease), because the route stopped doing it once the tool left
+  `MUTATING_TOOL_NAMES`
 
 ### End-to-end config flow
 

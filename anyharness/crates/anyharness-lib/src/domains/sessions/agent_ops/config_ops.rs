@@ -16,7 +16,7 @@ use anyharness_contract::v1::{NormalizedSessionControl, SessionLiveConfigSnapsho
 use serde_json::{json, Value};
 
 use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
-use crate::domains::sessions::authorize::{authorize, AgentAccessError, AgentAccessIntent};
+use crate::domains::sessions::authorize::{self, authorize, AgentAccessError, AgentAccessIntent};
 use crate::domains::sessions::live_config::ACP_MODEL_COMPAT_CONFIG_ID;
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::store::SessionStore;
@@ -36,10 +36,26 @@ pub(super) enum AgentConfigError {
     /// again, so its "what can I change now" answer is always "nothing".
     /// Saying so beats handing back an empty menu that reads like a harness
     /// with no controls.
-    #[error(
-        "target session is closed; a closed agent has no configuration left to read or change"
-    )]
+    ///
+    /// This is why the READ path refuses the SAME set the change path's `Send`
+    /// funnel refuses — closed here, and dismissed just below. Keeping the two
+    /// symmetric is the whole point: a read that answered a terminal target
+    /// would hand an agent a full menu and then refuse every item on it, which
+    /// is strictly worse than one refusal it can act on. Read/write symmetry
+    /// here is deliberate, not an accident of where the guard sits.
+    ///
+    /// Only the READ path raises this. On the change path the `Send` funnel
+    /// refuses a closed target first, with its own message — so this one talks
+    /// about reading, which is all it ever answers.
+    #[error("target session is closed; a closed agent's actor never starts again, so it has no configuration left to read")]
     TargetClosed,
+    /// The same refusal, for the same reason, on the other terminal state.
+    /// Dismissed is not closed — the row stays open — but `runtime/
+    /// launch_policy.rs` refuses to boot it, so its composed menu is a list of
+    /// changes that can never be applied. See `target_config_is_unreachable`
+    /// for why the read path refuses rather than advertising it.
+    #[error("target session was dismissed; a dismissed agent is never launched again, so it has no configuration left to read")]
+    TargetDismissed,
     /// An agent reconfiguring itself would route a config command at the very
     /// actor that is blocked inside this tool call, and would queue behind its
     /// own turn. Harness-native controls are the way to change your own model.
@@ -61,6 +77,16 @@ pub(super) enum AgentConfigError {
         config_id: String,
         value: String,
         available: String,
+    },
+    /// The write half of `ComposedControl::settable`. Without it `settable`
+    /// would be advisory-for-display only, and a single-value control would
+    /// accept its own current value — a "change" that moves nothing while the
+    /// read said it could not be changed at all.
+    #[error("configId {config_id:?} on session {session_id} is not settable: {value:?} is its only available value and is already current")]
+    ControlNotSettable {
+        session_id: String,
+        config_id: String,
+        value: String,
     },
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
@@ -87,8 +113,21 @@ pub(super) struct ComposedControl {
 }
 
 impl ComposedControl {
+    /// Whether asking for a change here can move anything. Two or more values
+    /// obviously can. A SINGLE value can too, when it is not the current one —
+    /// a harness advertising one option the session has not selected yet is a
+    /// real change. What is not settable is the dead end: the only value on
+    /// offer is already current, so every request is a no-op.
+    ///
+    /// `validate_change` ENFORCES this, so the `settable: false` an agent reads
+    /// from `get_agent_config_options` is a promise `configure_agent` keeps
+    /// rather than advice it is free to ignore.
     fn settable(&self) -> bool {
-        self.values.len() > 1
+        match self.values.as_slice() {
+            [] => false,
+            [only] => self.current_value.as_deref() != Some(only.value.as_str()),
+            _ => true,
+        }
     }
 
     fn push_value(&mut self, value: String, label: String, source: &'static str) {
@@ -137,8 +176,16 @@ pub(super) struct PreparedConfigChange {
     pub value: String,
 }
 
-/// Gate + compose a read. Any authorized caller may look at any open session's
-/// controls; a closed target is refused rather than answered with an empty menu.
+/// Gate + compose a read. Any authorized caller may look at any LIVE-able
+/// session's controls; a closed or dismissed target is refused rather than
+/// answered with a menu it can never act on.
+///
+/// Read and write stay SYMMETRIC on the terminal states on purpose. The change
+/// path's `Send` funnel already refuses both, so a read path that answered them
+/// would advertise a full menu and then refuse every single item on it — the
+/// advertised-then-refused trap, and the worst shape for an agent that has to
+/// decide what to do next from the read alone. A composed menu for a session
+/// that can never boot again describes nothing, so saying so IS the answer.
 pub(super) fn compose_agent_config_options<C, L>(
     session_store: &SessionStore,
     caller_session_id: &str,
@@ -157,8 +204,8 @@ where
         AgentAccessIntent::Read,
     )?
     .target;
-    if target_is_closed(&target) {
-        return Err(AgentConfigError::TargetClosed);
+    if let Some(error) = target_config_is_unreachable(&target) {
+        return Err(error);
     }
     compose(
         target,
@@ -376,19 +423,30 @@ fn validate_change(
             available: composed.config_ids(),
         });
     };
-    if control
+    if !control
         .values
         .iter()
         .any(|candidate| candidate.value == value)
     {
-        return Ok(());
+        return Err(AgentConfigError::ValueNotAvailable {
+            session_id: composed.target.id.clone(),
+            config_id: config_id.to_string(),
+            value: value.to_string(),
+            available: join_quoted(control.values.iter().map(|value| value.value.as_str())),
+        });
     }
-    Err(AgentConfigError::ValueNotAvailable {
-        session_id: composed.target.id.clone(),
-        config_id: config_id.to_string(),
-        value: value.to_string(),
-        available: join_quoted(control.values.iter().map(|value| value.value.as_str())),
-    })
+    // Value-membership first, so a bogus value still gets the precise "here is
+    // what IS available" error. Only a value that would have been accepted can
+    // reach the settability check, and by then the only way to fail it is the
+    // no-op: the one value on offer is already current.
+    if !control.settable() {
+        return Err(AgentConfigError::ControlNotSettable {
+            session_id: composed.target.id.clone(),
+            config_id: config_id.to_string(),
+            value: value.to_string(),
+        });
+    }
+    Ok(())
 }
 
 fn join_quoted<'a>(values: impl Iterator<Item = &'a str>) -> String {
@@ -403,12 +461,22 @@ fn join_quoted<'a>(values: impl Iterator<Item = &'a str>) -> String {
     }
 }
 
-/// Local copy of `authorize::is_closed`, which is private to that module. The
-/// funnel already refuses a closed target for `Send`; only the READ path needs
-/// this, and only because reading a config is the one read that a closed
-/// session cannot answer. Collapse the two if that predicate is ever exported.
-fn target_is_closed(session: &SessionRecord) -> bool {
-    session.closed_at.is_some() || session.status == "closed"
+/// The READ path's copy of the two terminal states the `Send` funnel already
+/// refuses (`authorize::authorize`). Reading a config is the one read that a
+/// terminal session cannot answer, so the read path takes the same decision
+/// deliberately rather than composing a menu nobody can apply.
+///
+/// `is_closed` is the funnel's own predicate, shared so "closed" means one
+/// thing everywhere; dismissed is checked here the same way the funnel checks
+/// it, off `dismissed_at`.
+fn target_config_is_unreachable(session: &SessionRecord) -> Option<AgentConfigError> {
+    if authorize::is_closed(session) {
+        Some(AgentConfigError::TargetClosed)
+    } else if session.dismissed_at.is_some() {
+        Some(AgentConfigError::TargetDismissed)
+    } else {
+        None
+    }
 }
 
 pub(super) fn controls_to_json(controls: &[ComposedControl]) -> Vec<Value> {
@@ -817,6 +885,63 @@ mod tests {
     }
 
     #[test]
+    fn a_dismissed_target_is_refused_for_both_reads_and_changes() {
+        // Read and write stay symmetric on the terminal states. The change path
+        // was always refused by the `Send` funnel; the READ path refuses too,
+        // because a dismissed session is never launched again
+        // (`runtime/launch_policy.rs`), so a composed menu for it is a list of
+        // changes that can never be applied — advertised, then refused.
+        let store = store_fixture();
+        let mut dismissed = session_record("ses_dismissed", "workspace-2");
+        dismissed.dismissed_at = Some("2026-08-08T01:00:00Z".to_string());
+        store.insert(&dismissed).expect("insert dismissed target");
+
+        let spy = CatalogSpy::new();
+        let read = compose_agent_config_options(
+            &store,
+            "ses_caller",
+            "ses_dismissed",
+            spy.resolver(),
+            no_live_config,
+        )
+        .err()
+        .expect("dismissed target has no options to read");
+        assert!(matches!(read, AgentConfigError::TargetDismissed));
+        // The refusal is about configuration, and it never composed anything to
+        // refuse — the catalog was not even consulted.
+        assert!(read.to_string().contains("configuration"));
+        assert!(spy.asked.borrow().is_empty());
+
+        let change = prepare_agent_config_change(
+            &store,
+            "ses_caller",
+            "ses_dismissed",
+            "model",
+            "target-only-model",
+            CatalogSpy::new().resolver(),
+            no_live_config,
+        )
+        .err()
+        .expect("dismissed target takes no changes");
+        assert!(matches!(
+            change,
+            AgentConfigError::Access(AgentAccessError::TargetDismissed)
+        ));
+
+        // Negative control: the same caller and the same catalog DO compose a
+        // menu for an ordinary target, so the refusals above are the terminal
+        // state and not a blanket block.
+        compose_agent_config_options(
+            &store,
+            "ses_caller",
+            "ses_target",
+            CatalogSpy::new().resolver(),
+            no_live_config,
+        )
+        .expect("an ordinary target still reads");
+    }
+
+    #[test]
     fn the_caller_cannot_configure_itself() {
         let store = store_fixture();
 
@@ -843,6 +968,98 @@ mod tests {
             no_live_config,
         )
         .expect("reading your own options is allowed");
+    }
+
+    #[test]
+    fn a_control_reported_unsettable_also_refuses_the_change() {
+        // `settable` is what the read advertises; this is the write keeping it.
+        // workspace-1's catalog offers exactly one model, and the target has
+        // already selected it — so the menu is a dead end and the only value it
+        // lists is a no-op.
+        let store = store_fixture();
+        let mut target = session_record("ses_single", "workspace-1");
+        target.current_model_id = Some("caller-only-model".to_string());
+        store.insert(&target).expect("insert single-option target");
+
+        let composed = compose_agent_config_options(
+            &store,
+            "ses_caller",
+            "ses_single",
+            CatalogSpy::new().resolver(),
+            no_live_config,
+        )
+        .expect("compose options");
+        let model = composed.control("model").expect("model control");
+        assert_eq!(model.values.len(), 1);
+        assert!(!model.settable(), "the only value is already current");
+
+        let error = prepare_agent_config_change(
+            &store,
+            "ses_caller",
+            "ses_single",
+            "model",
+            "caller-only-model",
+            CatalogSpy::new().resolver(),
+            no_live_config,
+        )
+        .err()
+        .expect("re-asserting the only value is refused, not silently applied");
+        assert!(matches!(
+            error,
+            AgentConfigError::ControlNotSettable { ref config_id, .. } if config_id == "model"
+        ));
+
+        // A value that is not on the menu at all still gets the more specific
+        // "here is what IS available" error, not this one.
+        let unknown_value = prepare_agent_config_change(
+            &store,
+            "ses_caller",
+            "ses_single",
+            "model",
+            "target-only-model",
+            CatalogSpy::new().resolver(),
+            no_live_config,
+        )
+        .err()
+        .expect("an off-menu value is refused");
+        assert!(matches!(
+            unknown_value,
+            AgentConfigError::ValueNotAvailable { .. }
+        ));
+    }
+
+    #[test]
+    fn a_single_value_control_is_settable_while_it_is_not_current() {
+        // The legitimate single-value change: the harness offers one option the
+        // session has not selected yet, so applying it moves something. A
+        // blanket `values.len() > 1` rule would have refused this.
+        let store = store_fixture();
+        let target = session_record("ses_unselected", "workspace-1");
+        store.insert(&target).expect("insert target");
+
+        let composed = compose_agent_config_options(
+            &store,
+            "ses_caller",
+            "ses_unselected",
+            CatalogSpy::new().resolver(),
+            no_live_config,
+        )
+        .expect("compose options");
+        let model = composed.control("model").expect("model control");
+        assert_eq!(model.values.len(), 1);
+        assert_eq!(model.current_value, None);
+        assert!(model.settable(), "one value, none selected yet");
+
+        prepare_agent_config_change(
+            &store,
+            "ses_caller",
+            "ses_unselected",
+            "model",
+            "caller-only-model",
+            CatalogSpy::new().resolver(),
+            no_live_config,
+        )
+        .expect("selecting the one option for the first time is a real change");
     }
 
     #[test]
@@ -892,21 +1109,43 @@ mod tests {
             .find("async fn configure_agent(")
             .expect("configure_agent is defined in calls.rs");
         let rest = &text[start..];
-        let body = &rest[..rest[1..]
-            .find("\nasync fn ")
-            .or_else(|| rest[1..].find("\nfn "))
-            .map_or(rest.len(), |at| at + 1)];
+        // The window ends at whichever item header comes FIRST. Taking the
+        // `async fn` position and only falling back to `fn` when there is none
+        // would swallow every plain `fn` in between, widening the window past
+        // this function and letting an out-of-order call in a later one satisfy
+        // the assertions below.
+        let after = &rest[1..];
+        let end = [after.find("\nasync fn "), after.find("\nfn ")]
+            .into_iter()
+            .flatten()
+            .min()
+            .map_or(rest.len(), |at| at + 1);
+        let body = &rest[..end];
+        // Whitespace runs collapse to one space so the needles can span a `let`
+        // binding without a rustfmt wrap breaking them.
+        let squashed = body.split_whitespace().collect::<Vec<_>>().join(" ");
+        let squashed = squashed.as_str();
 
-        let prepared_at = body
+        let prepared_at = squashed
             .find("prepare_agent_config_change(")
             .expect("configure_agent validates against the target's composed options");
-        let admitted_at = body
-            .find("admit_peer_mutation(")
-            .expect("configure_agent takes the target's session mutation permit");
-        let leased_at = body
-            .find("lease_target_workspace_for_peer_write(")
-            .expect("configure_agent leases the TARGET's workspace, not the route's");
-        let applied_at = body
+        // Pin the BINDING, not the call: `let _ = admit_peer_mutation(..)` drops
+        // the permit at the end of its own statement, and is indistinguishable
+        // from a held one if only the call substring is matched. Order alone is
+        // not the guarantee — the guards have to still be HELD at the apply.
+        let admitted_at = squashed
+            .find("let _admission_permit = admit_peer_mutation(")
+            .expect(
+                "configure_agent must BIND the target's session mutation permit as \
+                 `_admission_permit`; an unbound `let _ =` drops it immediately",
+            );
+        let leased_at = squashed
+            .find("let _target_workspace_lease = lease_target_workspace_for_peer_write(")
+            .expect(
+                "configure_agent must BIND the TARGET workspace lease as \
+                 `_target_workspace_lease`; an unbound `let _ =` drops it immediately",
+            );
+        let applied_at = squashed
             .find("set_live_session_config_option(")
             .expect("configure_agent applies through the existing runtime path");
 
@@ -926,14 +1165,14 @@ mod tests {
         );
         // The apply gets the VALIDATED triple, never the raw arguments: an
         // untrimmed/unvalidated configId or value would bypass the composed
-        // universe entirely. Whitespace is stripped from both sides so a
-        // reformat that wraps the argument list does not read as a regression.
-        let squashed = body
+        // universe entirely. Whitespace is stripped entirely from both sides so
+        // a reformat that wraps the argument list does not read as a regression.
+        let tight = body
             .chars()
             .filter(|c| !c.is_whitespace())
             .collect::<String>();
         assert!(
-            squashed.contains(
+            tight.contains(
                 "set_live_session_config_option(&prepared.target.id,&prepared.config_id,&prepared.value"
             ),
             "configure_agent must apply the validated target/configId/value, not the raw args"
@@ -946,7 +1185,7 @@ mod tests {
         // caller's, which for a cross-workspace target is the wrong workspace
         // to hold open against retire.
         assert!(
-            squashed.contains("&prepared.target.workspace_id,"),
+            tight.contains("&prepared.target.workspace_id,"),
             "the workspace lease must be taken on the TARGET's workspace"
         );
     }
