@@ -112,13 +112,18 @@ Examples:
 
 ```text
 domains/reviews/mcp/
-domains/sessions/subagents/mcp/
+domains/sessions/agent_ops/
 domains/artifacts/mcp/
 domains/computer_use/mcp/
 domains/browser/mcp/
 ```
 
-Product MCP code uses `mcp/`.
+Product MCP code uses `mcp/`, with one grandfathered exception:
+`domains/sessions/agent_ops/` holds the agent-ops product MCP directly (no
+nested `mcp/`), because the domain was renamed in place from
+`domains/sessions/subagents/mcp/` and the module was not also relocated to
+match. This documents the current layout; it is not a mandate to move the
+module. New product MCPs should still nest under `mcp/`.
 
 ## Shared Protocol Kit
 
@@ -510,8 +515,11 @@ Internal examples:
 review session
   receives reviews MCP with reviewer/parent scope
 
-parent session with subagent support
-  receives subagents MCP with parent-session scope
+every session
+  receives the agent ops MCP unconditionally at launch; the write-side tools
+  it advertises and the targets it can reach are computed per call from
+  subagent policy (enabled, depth, fanout, workspace surface) and
+  link-scoped target resolution, not from launch-time selection
 
 cowork session
   receives artifacts MCP with cowork thread/artifact scope
@@ -542,14 +550,16 @@ For local AnyHarness:
 ```text
 server name: product MCP id or stable display name
 transport: HTTP MCP
-url: /v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/{product_mcp_id}
+url: /v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/{route_slug}
 headers:
   authorization: Bearer <runtime token>          # when runtime auth is enabled
   x-anyharness-product-mcp-token: <capability token>
 ```
 
-The capability token is minted at launch and scoped to the selected product
-MCP. It is not durable user config.
+The URL is keyed by `route_slug`, not `id` — the two can differ (a product MCP
+may carry `legacy_route_slugs` while its `id` stays frozen for old tokens; see
+the Product MCP Definition fields above). The capability token in the header
+is minted at launch and scoped by `id`, not `route_slug`.
 
 The binding summary should make attached product MCPs visible without exposing
 secret headers.
@@ -559,7 +569,7 @@ secret headers.
 Preferred generic endpoint:
 
 ```text
-/v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/{product_mcp_id}
+/v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/{route_slug}
 ```
 
 Compatibility aliases:
@@ -768,6 +778,12 @@ endpoint returns valid JSON-RPC errors for unknown method/tool
 launch injection adds safe headers and binding summary
 ```
 
+A product MCP that deliberately attaches unconditionally (agent ops) does not
+have a "selection does not attach it" test to write; it instead needs a test
+proving call-time gating rejects out-of-policy calls with the same precision
+selection used to — e.g. surface, capability flags, depth/fanout, and
+link-scoped target resolution each independently blocking access.
+
 Shared integration tests should cover:
 
 ```text
@@ -820,6 +836,7 @@ The product MCP structure is complete when:
   `domains/sessions/mcp_bindings/product_catalog.rs` plus product auth wrappers.
 - the actor receives final concrete MCP server configs and has no product MCP
   policy branches.
-- endpoint routing dispatches by product MCP id through one shared path.
+- endpoint routing dispatches by route slug (current and legacy) through one
+  shared path, resolving to the product MCP's frozen id for token scope.
 - tests prove selection, injection, auth, tools/list, and tools/call behavior
   for every product MCP.

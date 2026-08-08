@@ -42,3 +42,16 @@ impl AgentOpsMcpAuth {
         self.inner.validate_capability_header(header, request)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SECRET_FILE_NAME;
+
+    #[test]
+    fn secret_file_name_stays_frozen_for_already_launched_sessions() {
+        // Renaming this rotates the HMAC secret and 401s every session that
+        // baked a token in before the restart. See the comment above the
+        // const.
+        assert_eq!(SECRET_FILE_NAME, "subagent-mcp-token.key");
+    }
+}

@@ -211,7 +211,7 @@ fn get_subagent_launch_options(
             "If harnessId or initialConfig.modelId/modeId are omitted, spawn_subagent inherits the current parent session values when available.",
             "harnessId and initialConfig.modelId are validated against the launch catalog before the child session is created.",
             "initialConfig.modeId is currently a launch hint stored on the child session; available mode options can only be inferred from the parent session's live config snapshot.",
-            "Subagents are same-workspace normal sessions. They cannot create grandchildren and do not inherit the parent's MCP bindings in this PR.",
+            "Subagents are same-workspace normal sessions. They cannot create grandchildren and do not inherit the parent's external/user MCP bindings; product MCPs like agent ops are mounted independently on every session, not inherited.",
             "Completions are passive by default. Pass wakeOnCompletion or call schedule_subagent_wake when you want to be prompted after the child's next completed turn."
         ]
     }))

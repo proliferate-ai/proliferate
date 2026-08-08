@@ -22,8 +22,7 @@ pub const ACP_SERVER_NAME: &str = "subagents";
 
 pub const INSTRUCTIONS: &str = concat!(
     "Use Proliferate agent ops tools to create, message, inspect, search, and close same-workspace child agent sessions. ",
-    "Prefer these tools over provider-native or internal subagent tools when same-workspace delegation overlaps. ",
-    "Detailed workflow guidance is provided by the proliferate.subagents.workflow skill when this MCP is mounted."
+    "Prefer these tools over provider-native or internal subagent tools when same-workspace delegation overlaps."
 );
 
 pub const DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
@@ -61,7 +60,11 @@ pub fn binding_summary() -> SessionMcpBindingSummary {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
+    use crate::domains::sessions::mcp_bindings::product_catalog::select_product_mcps;
+    use crate::domains::sessions::mcp_bindings::product_launch::ProductMcpLaunchRegistration;
     use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
     use crate::domains::workspaces::model::{
         WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
@@ -121,18 +124,36 @@ mod tests {
         }
     }
 
+    /// Exercises `should_attach` the way production actually calls it — through
+    /// a real `ProductMcpLaunchRegistration` and `select_product_mcps` — rather
+    /// than invoking `should_attach` directly. `should_attach` ignores its
+    /// argument, so calling it directly makes this assertion vacuously true
+    /// regardless of what the selector does; routing through selection at
+    /// least proves the registration/selection wiring itself doesn't
+    /// reintroduce filtering (e.g. a selector swapped in at the registration
+    /// call site) and would fail if `should_attach` ever went back to
+    /// returning `false` for any of these cases.
     #[test]
     fn mounts_for_sessions_the_subagents_mcp_used_to_skip() {
         for surface in [WorkspaceSurface::Standard, WorkspaceSurface::Cowork] {
             for subagents_enabled in [true, false] {
                 let workspace = workspace(surface);
                 let session = session(subagents_enabled);
+                let registration = ProductMcpLaunchRegistration::new(
+                    &DEFINITION,
+                    Arc::new(should_attach),
+                    Arc::new(|_workspace_id: &str, _session_id: &str| Ok("token".to_string())),
+                );
 
-                assert!(should_attach(ProductMcpSelectionContext {
-                    workspace: &workspace,
-                    session: &session,
-                })
-                .expect("selection"));
+                let selected = select_product_mcps(&workspace, &session, &[registration])
+                    .expect("select product MCPs");
+
+                assert_eq!(
+                    selected.len(),
+                    1,
+                    "expected agent ops to be selected for surface={surface:?} subagents_enabled={subagents_enabled}"
+                );
+                assert_eq!(selected[0].registration.definition().id, ID);
             }
         }
     }
@@ -142,5 +163,12 @@ mod tests {
         assert_eq!(DEFINITION.id, "subagents");
         assert!(DEFINITION.legacy_route_slugs.contains(&"subagents"));
         assert_eq!(DEFINITION.route_slug, "agent-ops");
+        // Wire-name prefix for every tool: renaming this rotates
+        // `mcp__subagents__*` to `mcp__agent_ops__*` for live sessions and
+        // breaks every SDK reducer / client presentation arm that keys on the
+        // old prefix, including for newly launched sessions (the tool-name
+        // alias table does not help here — the prefix, not the suffix, would
+        // have changed).
+        assert_eq!(ACP_SERVER_NAME, "subagents");
     }
 }

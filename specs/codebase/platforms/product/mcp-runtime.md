@@ -61,7 +61,7 @@ Current implementation shape:
 ```text
 domains/cowork/mcp/
 domains/reviews/mcp/
-domains/sessions/subagents/mcp/
+domains/sessions/agent_ops/
 ```
 
 Product tool behavior stays with the product domain.

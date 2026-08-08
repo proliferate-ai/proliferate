@@ -381,4 +381,21 @@ mod tests {
         assert_eq!(canonical_tool_name("close_agent"), "close_agent");
         assert_eq!(canonical_tool_name("unknown_tool"), "unknown_tool");
     }
+
+    /// `endpoint_operation_kind` matches `MUTATING_TOOL_NAMES` against the raw
+    /// wire name, not the canonicalized one, to decide whether a call takes
+    /// the workspace write lease. So every alias whose canonical target is
+    /// mutating must itself be listed — otherwise a call under the old name
+    /// skips `WorkspaceOperationKind::SubagentWrite` and the
+    /// `assert_workspace_mutable` check that only runs when a lease is taken.
+    #[test]
+    fn every_alias_of_a_mutating_tool_is_itself_mutating() {
+        for (alias, canonical) in DEPRECATED_TOOL_ALIASES {
+            assert_eq!(
+                MUTATING_TOOL_NAMES.contains(canonical),
+                MUTATING_TOOL_NAMES.contains(alias),
+                "alias {alias} and canonical {canonical} disagree on mutating status"
+            );
+        }
+    }
 }

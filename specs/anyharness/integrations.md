@@ -346,7 +346,7 @@ domains/cowork/mcp
 domains/reviews/mcp
   review tool behavior
 
-domains/sessions/subagents/mcp
+domains/sessions/agent_ops
   subagent tool behavior
 
 domains/sessions/mcp_bindings

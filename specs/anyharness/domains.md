@@ -432,7 +432,7 @@ Examples:
 ```text
 domains/cowork/mcp/
 domains/reviews/mcp/
-domains/sessions/subagents/mcp/
+domains/sessions/agent_ops/
 ```
 
 Generic MCP protocol/server mechanics do not belong in domains:

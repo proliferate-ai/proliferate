@@ -2,8 +2,21 @@
 //!
 //! Today it encodes exactly two rules: sessions are visible runtime-wide (there
 //! is no per-workspace or per-owner scoping to apply), and a closed session
-//! stays readable but takes no more input. Ownership and promotion rights land
-//! here too once `session_links` carries them.
+//! stays readable but takes no more input. **It enforces no ownership check at
+//! all** — any caller may `Read` or `Send` to any target, runtime-wide. The
+//! link-scoped ownership check that makes agent-ops safe today lives entirely
+//! in `SubagentService::resolve_target` (and
+//! `resolve_target_including_closed`), which every mutating call site still
+//! runs before reaching this funnel.
+//!
+//! PR 5 is expected to route `close_agent`/promote through `authorize` with an
+//! ownership-aware intent. Do not add a `Close`/`Promote` variant to
+//! `AgentAccessIntent` — or route existing callers through it — until this
+//! module actually carries the ownership/promotion check, backed by its own
+//! tests. Dropping the `SubagentService` resolve call in favor of a bare
+//! `authorize()` call before that lands would silently grant every session the
+//! ability to close/promote every other session, and the current test suite
+//! here would not catch it (it asserts runtime-wide access *is* allowed).
 
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::store::SessionStore;
