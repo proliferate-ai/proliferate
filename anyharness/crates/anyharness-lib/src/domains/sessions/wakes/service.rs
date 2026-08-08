@@ -14,7 +14,7 @@
 //! reason — a pointer is a PROMPT, and the prompt paths have rules:
 //! - a workflow-controlled watcher is skipped and its schedule left ARMED, so
 //!   the wake lands after the run releases control rather than being injected
-//!   into a session every other prompt path 409s (`peer_ops::admit_peer_send`).
+//!   into a session every other prompt path 409s (`peer_ops::admit_peer_mutation`).
 //!   The controller lookup is a pure read: no permit, no lease, no new edge in
 //!   the canonical `permit -> operation lease` order (PR1227-LOCK-01).
 //! - a closed watcher's schedule is dropped without a pointer (ruling 6: a
