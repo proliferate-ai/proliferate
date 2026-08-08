@@ -374,11 +374,6 @@ impl AppState {
             subagent_service.clone(),
             acp_manager.clone(),
         ));
-        let agent_wake_service = Arc::new(AgentWakeService::new(SessionStore::new(db.clone())));
-        let agent_wake_session_hooks = Arc::new(AgentWakeSessionHooks::new(
-            agent_wake_service.clone(),
-            acp_manager.clone(),
-        ));
         let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
         let review_session_hooks = Arc::new(ReviewSessionHooks::new(
             review_hook_event_tx,
@@ -428,6 +423,18 @@ impl AppState {
         // startup fencing, main-handle capture, completion extension.
         let workflow_wiring = workflows::wire_workflows_before_sessions(&db)?;
         let session_admission = workflow_wiring.admission.clone();
+        // Wakes are wired after the admission gate on purpose: consuming a
+        // schedule has to know which watchers a workflow controls, so the
+        // service takes the same admission the fenced routes take (read-only
+        // lookup — it never acquires a permit).
+        let agent_wake_service = Arc::new(AgentWakeService::new(
+            SessionStore::new(db.clone()),
+            session_admission.clone(),
+        ));
+        let agent_wake_session_hooks = Arc::new(AgentWakeSessionHooks::new(
+            agent_wake_service.clone(),
+            acp_manager.clone(),
+        ));
         let workflow_run_session_extension = workflow_wiring.session_extension.clone();
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,

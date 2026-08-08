@@ -63,11 +63,17 @@ should be tied to the prompt being sent, because it avoids the race where the
 child finishes before the parent schedules a separate wake via
 `schedule_subagent_wake`.
 
-The peer-scoped `schedule_agent_wake` has no such race, and that is the reason
-it exists as a standalone tool as well as a `wakeOnReply` flag. Its schedule is
-consumed when the target's turn FINISHES, not recorded against a turn that has
-to start afterwards, so a wake armed on a session whose turn is already running
-still fires at the end of that turn.
+The peer-scoped `schedule_agent_wake` closes the same race from the other side,
+and that is the reason it exists as a standalone tool as well as a
+`wakeOnReply` flag. Its schedule is consumed when the target's turn FINISHES,
+not recorded against a turn that has to start afterwards, so a wake armed on a
+session whose turn is already running still fires at the end of that turn.
+
+What it does not do is make an idle agent produce a turn. The contract is "the
+end of the target's NEXT FINISHED turn": if a turn is running, that turn; if the
+target is idle, nothing fires until someone prompts it. The tool result reports
+the target's status for exactly that decision — waiting on an idle agent means
+sending it a message, not scheduling a wake and hoping.
 
 ## Close Ordering
 

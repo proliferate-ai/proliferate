@@ -190,6 +190,13 @@ pub(super) fn assert_workspace_can_be_mutated(
 /// pointed at, so the schedule comes off rather than firing a redundant pointer
 /// at the caller's turn end.
 ///
+/// Only a REPLY arm is consumed. This runs after every send, and a send is not
+/// necessarily an answer — a courtesy "starting now" would otherwise cancel a
+/// standalone `schedule_agent_wake` and leave both agents idle forever. A
+/// `wakeOnReply` arm is by construction the safety net for an answer, so the
+/// answer consuming it is exactly its contract; an explicit schedule is a
+/// standing request that only the target's turn finish ends.
+///
 /// Ordering: this runs AFTER the send lands. Disarming first would lose the
 /// schedule if the send then failed — the watcher would be left waiting on
 /// nothing. Consuming after means a crash in the gap leaves the schedule armed,
@@ -201,7 +208,7 @@ pub(super) fn consume_reply_wake(
     replying_session_id: &str,
     recipient_session_id: &str,
 ) -> bool {
-    match wake_service.disarm(recipient_session_id, replying_session_id) {
+    match wake_service.consume_reply_arm(recipient_session_id, replying_session_id) {
         Ok(consumed) => consumed,
         Err(error) => {
             tracing::warn!(
@@ -223,6 +230,7 @@ mod tests {
     use crate::domains::sessions::extensions::SessionTurnOutcome;
     use crate::domains::sessions::model::SessionMcpBindingPolicy;
     use crate::domains::sessions::prompt::PromptPayload;
+    use crate::domains::sessions::store::agent_wakes::AgentWakeReason;
     use crate::domains::terminals::store::TerminalStore;
     use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
     use crate::live::terminals::TerminalService;
@@ -277,19 +285,29 @@ mod tests {
         store
     }
 
-    #[test]
-    fn a_reply_consumes_the_recipients_wake_so_no_pointer_follows_it() {
+    fn wake_service_fixture(store: &SessionStore) -> AgentWakeService {
+        AgentWakeService::new(
+            store.clone(),
+            Arc::new(SessionMutationAdmission::new(Arc::new(NoControllerPolicy))),
+        )
+    }
+
+    #[tokio::test]
+    async fn a_reply_consumes_the_recipients_wake_so_no_pointer_follows_it() {
         // ses_target armed a wake on ses_caller and is waiting. ses_caller
         // answers: the reply carries the content, so the schedule comes off and
         // ses_caller's turn end wakes nobody.
         let store = store_fixture();
-        let wakes = AgentWakeService::new(store.clone());
-        wakes.arm("ses_target", "ses_caller").expect("arm");
+        let wakes = wake_service_fixture(&store);
+        wakes
+            .arm("ses_target", "ses_caller", AgentWakeReason::Reply)
+            .expect("arm");
 
         assert!(consume_reply_wake(&wakes, "ses_caller", "ses_target"));
 
         assert!(wakes
             .consume_for_finished_turn("ses_caller", SessionTurnOutcome::Completed)
+            .await
             .expect("the reply's turn finishes")
             .is_empty());
         assert!(store
@@ -298,19 +316,50 @@ mod tests {
             .is_empty());
     }
 
-    #[test]
-    fn a_reply_leaves_the_other_directions_schedule_alone() {
+    #[tokio::test]
+    async fn a_send_that_is_not_a_reply_leaves_an_explicit_schedule_standing() {
+        // M2. `consume_reply_wake` runs after EVERY send, including a courtesy
+        // "starting now" that answers nothing. Only the arm that exists to be
+        // answered may come off — otherwise the watcher's standalone schedule
+        // vanishes and both agents wait forever.
+        let store = store_fixture();
+        let wakes = wake_service_fixture(&store);
+        wakes
+            .arm(
+                "ses_target",
+                "ses_caller",
+                AgentWakeReason::ExplicitSchedule,
+            )
+            .expect("ses_target schedules a wake on ses_caller");
+
+        assert!(!consume_reply_wake(&wakes, "ses_caller", "ses_target"));
+
+        let fired = wakes
+            .consume_for_finished_turn("ses_caller", SessionTurnOutcome::Completed)
+            .await
+            .expect("the sender's turn finishes");
+        assert_eq!(fired.len(), 1);
+        assert_eq!(fired[0].consumed.watcher_session_id, "ses_target");
+    }
+
+    #[tokio::test]
+    async fn a_reply_leaves_the_other_directions_schedule_alone() {
         // Both sides armed on each other. Answering one direction must not
         // silently cancel the other side's wait.
         let store = store_fixture();
-        let wakes = AgentWakeService::new(store.clone());
-        wakes.arm("ses_target", "ses_caller").expect("arm");
-        wakes.arm("ses_caller", "ses_target").expect("arm reverse");
+        let wakes = wake_service_fixture(&store);
+        wakes
+            .arm("ses_target", "ses_caller", AgentWakeReason::Reply)
+            .expect("arm");
+        wakes
+            .arm("ses_caller", "ses_target", AgentWakeReason::Reply)
+            .expect("arm reverse");
 
         consume_reply_wake(&wakes, "ses_caller", "ses_target");
 
         let fired = wakes
             .consume_for_finished_turn("ses_target", SessionTurnOutcome::Completed)
+            .await
             .expect("the recipient's own turn finishes");
         assert_eq!(fired.len(), 1);
         assert_eq!(fired[0].consumed.watcher_session_id, "ses_caller");
@@ -319,7 +368,7 @@ mod tests {
     #[test]
     fn a_message_to_an_agent_that_was_not_waiting_consumes_nothing() {
         let store = store_fixture();
-        let wakes = AgentWakeService::new(store.clone());
+        let wakes = wake_service_fixture(&store);
 
         assert!(!consume_reply_wake(&wakes, "ses_caller", "ses_target"));
     }

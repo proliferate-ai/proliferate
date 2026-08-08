@@ -211,7 +211,7 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
         ),
         tool_definition(
             "schedule_agent_wake",
-            "Wake yourself with a pointer when another agent finishes its next turn. Covers a turn that is already running. The pointer carries the target's label, session id and outcome — never its output; read the result with read_agent_transcript. Prefer wakeOnReply on send_agent_message when you are waiting on an answer.",
+            "Wake yourself with a pointer when another agent finishes its next turn. A turn already running is covered; an IDLE target finishes nothing until someone prompts it, so the result reports targetStatus and targetRunning — if it is idle and you need an answer, send_agent_message instead. The pointer carries the target's label, session id and outcome — never its output; read the result with read_agent_transcript. Prefer wakeOnReply on send_agent_message when you are waiting on an answer.",
             json!({
                 "type": "object",
                 "properties": {

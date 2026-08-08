@@ -217,7 +217,15 @@ read.
 A real reply is not a wake prompt — it is a message, and it carries the full
 content by itself. When an agent answers a peer that was waiting on it, the
 pending session-scoped schedule is consumed rather than fired: a pointer after a
-reply would only point at what the watcher already read.
+reply would only point at what the watcher already read. Only a schedule armed
+BY a `wakeOnReply` send is consumed this way. A standalone
+`schedule_agent_wake` is not waiting for that particular answer, so an
+incidental message from the target leaves it armed and it still fires at the
+target's turn end.
+
+A wake pointer is a prompt, so it obeys the prompt rules. A watcher whose
+execution a workflow controls is not sent one; its schedule stays armed until
+the run releases control. A closed watcher is never sent one at all.
 
 Wake copy has the same owner as message copy
 (`domains/sessions/prompt/envelope.rs`), for the same reason: text and the

@@ -311,6 +311,33 @@ impl SessionMutationAdmission {
         .map_err(|error| anyhow::anyhow!("controlled-session re-check task failed: {error}"))?
     }
 
+    /// The set form of [`Self::find_workflow_controlled_session`]: which of
+    /// `session_ids` a nonterminal workflow controls right now.
+    ///
+    /// Same properties, for the same reason — a PURE read-only controller-policy
+    /// lookup that acquires neither a keyed permit nor a workspace lease, so it
+    /// adds no edge to the canonical `run gate -> permit -> operation lease`
+    /// order and cannot deadlock. Its caller is the session-scoped wake
+    /// consumption, which needs the whole controlled subset (it fires a pointer
+    /// at every OTHER watcher) rather than the first offender.
+    pub async fn workflow_controlled_sessions(
+        &self,
+        session_ids: Vec<String>,
+    ) -> anyhow::Result<std::collections::HashSet<String>> {
+        let policy = self.policy.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut controlled = std::collections::HashSet::new();
+            for session_id in session_ids {
+                if policy.controlling_run_id(&session_id)?.is_some() {
+                    controlled.insert(session_id);
+                }
+            }
+            Ok(controlled)
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!("controlled-session lookup task failed: {error}"))?
+    }
+
     /// Reserve a NEW session id's gate before its row becomes visible
     /// (ruling 1). No policy lookup: there is no durable row yet, and the
     /// caller is by construction the creator. The returned permit is held

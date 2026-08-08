@@ -21,3 +21,5 @@ mod workflow_workspaces_tests;
 mod session_admission_tests;
 #[cfg(test)]
 mod review_admission_tests;
+#[cfg(test)]
+mod sessions_wakes_tests;

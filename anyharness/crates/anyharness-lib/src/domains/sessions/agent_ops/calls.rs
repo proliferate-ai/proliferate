@@ -23,6 +23,7 @@ use crate::domains::sessions::delegation::{
     parent_to_child_provenance, READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT,
 };
 use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::sessions::store::agent_wakes::AgentWakeReason;
 use crate::domains::sessions::store::{
     SessionSearchCursor, SessionSearchQuery, SESSION_SEARCH_DEFAULT_LIMIT, SESSION_SEARCH_MAX_LIMIT,
 };
@@ -583,7 +584,11 @@ async fn send_agent_message(
     // schedule behind, so the gates come first.
     let wake_created = if args.wake_on_reply {
         wake_service
-            .arm(caller_session_id, &prepared.target.id)?
+            .arm(
+                caller_session_id,
+                &prepared.target.id,
+                AgentWakeReason::Reply,
+            )?
             .created
     } else {
         false
@@ -600,9 +605,12 @@ async fn send_agent_message(
     {
         Ok(outcome) => outcome,
         Err(error) => {
-            // Only compensate a schedule this call created — a pre-existing one
-            // belongs to an earlier send that did land.
-            if wake_created {
+            // Compensation is by ROW STATE, not by "this call created it". A
+            // parallel send to the same target reuses the same row (the pair is
+            // the primary key), so `created` says nothing about whether another
+            // send that LANDED now depends on the schedule. Only an unconfirmed
+            // reply arm is taken away.
+            if args.wake_on_reply {
                 cleanup_agent_wake_after_failed_dispatch(
                     wake_service,
                     caller_session_id,
@@ -612,6 +620,11 @@ async fn send_agent_message(
             return Err(anyhow::anyhow!("{error:?}"));
         }
     };
+    // The send landed, so the schedule is now owed to this caller: confirm it
+    // before any other in-flight send can compensate the shared row away.
+    if args.wake_on_reply {
+        confirm_agent_wake_after_dispatch(wake_service, caller_session_id, &prepared.target.id);
+    }
     // The message just delivered content to the target. If the target was
     // waiting on this caller, that IS its wake.
     let consumed_reply_wake =
@@ -632,12 +645,18 @@ async fn send_agent_message(
     }))
 }
 
+/// Undo a `wakeOnReply` arm whose send then failed — and ONLY while no landed
+/// send relies on the row. Two sends to the same target share one schedule, so
+/// an unconditional delete here would take away the wake a parallel, successful
+/// send owes its watcher.
 fn cleanup_agent_wake_after_failed_dispatch(
     wake_service: &AgentWakeService,
     watcher_session_id: &str,
     target_session_id: &str,
 ) {
-    if let Err(error) = wake_service.disarm(watcher_session_id, target_session_id) {
+    if let Err(error) =
+        wake_service.discard_unconfirmed_reply_arm(watcher_session_id, target_session_id)
+    {
         tracing::warn!(
             watcher_session_id,
             target_session_id,
@@ -647,12 +666,43 @@ fn cleanup_agent_wake_after_failed_dispatch(
     }
 }
 
+/// Stamp the schedule as relied upon by a landed send. Best-effort: losing this
+/// write only re-opens the narrow window where a parallel failing send could
+/// compensate the row away, which the caller can re-arm.
+fn confirm_agent_wake_after_dispatch(
+    wake_service: &AgentWakeService,
+    watcher_session_id: &str,
+    target_session_id: &str,
+) {
+    if let Err(error) =
+        wake_service.confirm_reply_arm_dispatch(watcher_session_id, target_session_id)
+    {
+        tracing::warn!(
+            watcher_session_id,
+            target_session_id,
+            error = ?error,
+            "failed to confirm an agent wake schedule after a landed dispatch"
+        );
+    }
+}
+
 fn schedule_agent_wake(
     wake_service: &AgentWakeService,
     caller_session_id: &str,
     args: ScheduleAgentWakeArgs,
 ) -> anyhow::Result<Value> {
-    let armed = wake_service.arm(caller_session_id, args.session_id.trim())?;
+    let armed = wake_service.arm(
+        caller_session_id,
+        args.session_id.trim(),
+        AgentWakeReason::ExplicitSchedule,
+    )?;
+    // Liveness, said out loud. The schedule fires at the end of the target's
+    // next FINISHED turn: if one is running it covers that turn (ruling 10), but
+    // an idle target that nobody prompts finishes nothing and fires nothing. The
+    // caller has to be able to see that and send a message instead, so the
+    // target's live status is part of the result rather than something it has to
+    // infer from silence.
+    let target_running = armed.target.status == "running";
     Ok(json!({
         "sessionId": armed.target.id,
         "workspaceId": armed.target.workspace_id,
@@ -661,6 +711,13 @@ fn schedule_agent_wake(
         "scheduled": true,
         "alreadyScheduled": !armed.created,
         "wakeScope": "next_turn_finish",
+        "targetStatus": armed.target.status,
+        "targetRunning": target_running,
+        "firesWhen": if target_running {
+            "the turn already running finishes"
+        } else {
+            "the target's next turn finishes — it is idle now, so nothing fires until someone prompts it"
+        },
     }))
 }
 

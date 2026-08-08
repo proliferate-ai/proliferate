@@ -550,8 +550,11 @@ CREATE TABLE session_wake_schedules (
     watcher_session_id TEXT NOT NULL REFERENCES sessions(id),
     target_session_id TEXT NOT NULL REFERENCES sessions(id),
     created_at TEXT NOT NULL,
+    armed_for_reply INTEGER NOT NULL DEFAULT 0,
+    dispatch_confirmed_at TEXT,
     PRIMARY KEY (watcher_session_id, target_session_id),
-    CHECK (watcher_session_id != target_session_id)
+    CHECK (watcher_session_id != target_session_id),
+    CHECK (armed_for_reply IN (0, 1))
 );
 
 -- table: sessions
