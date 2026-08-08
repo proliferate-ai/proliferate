@@ -83,6 +83,19 @@ fn map_agent_access_error(error: AgentAccessError) -> ApiError {
             "Target session is closed and will not finish another turn".to_string(),
             "SESSION_CLOSED",
         ),
+        AgentAccessError::TargetDismissed => ApiError::conflict(
+            "Target session is dismissed and will not finish another turn".to_string(),
+            "SESSION_DISMISSED",
+        ),
+        // Same shape discovery presents: internal-only sessions are filtered
+        // from list/search, so access refusals must not reveal they exist.
+        AgentAccessError::TargetInternalOnly => {
+            ApiError::not_found("Session not found".to_string(), "SESSION_NOT_FOUND")
+        }
+        AgentAccessError::SelfTarget => ApiError::bad_request(
+            "A session cannot schedule a wake on itself".to_string(),
+            "INVALID_TARGET",
+        ),
         AgentAccessError::Internal(error) => {
             ApiError::bad_request(error.to_string(), "BAD_REQUEST")
         }

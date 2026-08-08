@@ -62,11 +62,6 @@ impl AgentWakeService {
             target_session_id,
             AgentAccessIntent::Send,
         )?;
-        if access.caller.id == access.target.id {
-            return Err(AgentAccessError::Internal(anyhow::anyhow!(
-                "a session cannot schedule a wake on itself"
-            )));
-        }
         let created = self
             .session_store
             .arm_agent_wake(&access.caller.id, &access.target.id)?;
@@ -338,7 +333,7 @@ mod tests {
             .err()
             .expect("self-wake is rejected");
 
-        assert!(matches!(error, AgentAccessError::Internal(_)));
+        assert!(matches!(error, AgentAccessError::SelfTarget));
     }
 
     #[test]
