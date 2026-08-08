@@ -137,6 +137,39 @@ describe("subagent tool presentation", () => {
     })).toBe(false);
   });
 
+  it("reads the workspace tools as workspace work, not as a subagent launch", () => {
+    expect(formatSubagentMcpActionLabel("mcp__subagents__get_workspace_options"))
+      .toBe("Read workspace options");
+    expect(formatSubagentMcpActionLabel("mcp__subagents__spawn_workspace"))
+      .toBe("Spawned workspace");
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__spawn_workspace" },
+      executionState: "running",
+      isRunning: true,
+    })).toBe("Spawning workspace");
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__get_workspace_options" },
+      executionState: "completed",
+      isRunning: false,
+    })).toBe("Workspace options read");
+    // The failure fallback is "Subagent launch failed", which would report a
+    // launch for a call that never touched an agent.
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__spawn_workspace" },
+      executionState: "failed",
+      isRunning: false,
+    })).toBe("Workspace spawned");
+  });
+
+  it("keeps a workspace spawn out of the subagent launch ledger", () => {
+    expect(isSubagentProvisioningAction({
+      nativeToolName: "mcp__subagents__spawn_workspace",
+    })).toBe(false);
+    expect(isSubagentProvisioningAction({
+      nativeToolName: "mcp__subagents__get_workspace_options",
+    })).toBe(false);
+  });
+
   it("derives concise status receipt presentation with the child target", () => {
     const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
       nativeToolName: "mcp__subagents__get_subagent_status",

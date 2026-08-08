@@ -1440,6 +1440,12 @@ function deriveToolCallSemanticKind(
     || normalizedEffectiveToolName === "mcp__subagents__schedule_agent_wake"
     || normalizedEffectiveToolName === "mcp__subagents__get_agent_config_options"
     || normalizedEffectiveToolName === "mcp__subagents__configure_agent"
+    // Workspace ops. Not agent operations at all, but they are served by the
+    // same agent-ops MCP and an unclassified one renders as a raw MCP call;
+    // "subagent" keeps them in the agent-activity group until the agent-ops
+    // client work gives them their own presentation.
+    || normalizedEffectiveToolName === "mcp__subagents__get_workspace_options"
+    || normalizedEffectiveToolName === "mcp__subagents__spawn_workspace"
   ) {
     return "subagent";
   }
