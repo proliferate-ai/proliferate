@@ -80,14 +80,21 @@ export function ComposerCommandEditor({
     plainText: markdown,
     anchorOffset: markdown.length,
     focusOffset: markdown.length,
+    selectionInCodeBlock: false,
   });
   const plainText = editorContext.plainText;
   const [searchSuppressed, setSearchSuppressed] = useState(false);
   const trigger = useMemo(() => (
-    searchSuppressed || disabled
+    searchSuppressed || disabled || editorContext.selectionInCodeBlock
       ? null
       : findComposerMenuTrigger(plainText, editorContext.focusOffset)
-  ), [disabled, editorContext.focusOffset, plainText, searchSuppressed]);
+  ), [
+    disabled,
+    editorContext.focusOffset,
+    editorContext.selectionInCodeBlock,
+    plainText,
+    searchSuppressed,
+  ]);
   commandTriggerRef.current = trigger;
   const slashTrigger = trigger?.kind === "slash" ? trigger : null;
   const mentionTrigger = trigger?.kind === "mention" ? trigger : null;
@@ -128,7 +135,7 @@ export function ComposerCommandEditor({
   // already followed it is absorbed so completing a trigger never leaves a
   // double space behind.
   const replaceEndFor = useCallback((activeTrigger: ComposerMenuTrigger) => (
-    /\s/u.test(plainText[activeTrigger.end] ?? "")
+    plainText[activeTrigger.end] === " "
       ? activeTrigger.end + 1
       : activeTrigger.end
   ), [plainText]);
@@ -203,7 +210,7 @@ export function ComposerCommandEditor({
   const handleCommandKey = useCallback((event: KeyboardEvent) => {
     if (!editorRef.current || event.defaultPrevented || event.isComposing) return false;
     const context = getComposerEditorContext(editorRef.current);
-    const activeTrigger = searchSuppressed || disabled
+    const activeTrigger = searchSuppressed || disabled || context.selectionInCodeBlock
       ? null
       : findComposerMenuTrigger(context.plainText, context.focusOffset);
     commandTriggerRef.current = activeTrigger;
