@@ -89,9 +89,11 @@ export function CollapsedActions({
                 : summary}
             </span>
           </span>
+          {/* A persistent layer keeps the fractional-em glyph on one raster
+              origin when the rotation transition reaches its endpoint. */}
           <ChevronRightActivity
             aria-hidden="true"
-            className={`icon-compact shrink-0 text-current transition-transform duration-disclosure ${
+            className={`icon-compact shrink-0 transform-gpu text-current transition-transform duration-disclosure will-change-transform ${
               expanded
                 ? "rotate-90 opacity-100"
                 : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"
@@ -99,7 +101,12 @@ export function CollapsedActions({
           />
         </Button>
       </div>
-      <AnimatedCollapsibleContent expanded={expanded}>
+      {/* The masked ledger stays on one layer through its opacity transition,
+          preventing its SVG glyphs from re-snapping after the fade settles. */}
+      <AnimatedCollapsibleContent
+        expanded={expanded}
+        className="transform-gpu will-change-[opacity]"
+      >
         <div className="mt-1 flex flex-col gap-1">
           {hasExpanded ? (
             <CollapsedActionsLedger
