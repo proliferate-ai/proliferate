@@ -61,6 +61,90 @@ impl AgentCloseSessionHooks {
     fn session_runtime(&self) -> Option<Arc<SessionRuntime>> {
         self.session_runtime.get().and_then(Weak::upgrade)
     }
+
+    /// Settle every close this runtime already owed when it started.
+    ///
+    /// The turn-finish hook can only pay a debt whose turn finishes. If the
+    /// runtime died mid-turn instead, nothing will ever finish that turn: the
+    /// agent was told it would stop after its current step, and would otherwise
+    /// sit there open forever, with the request still armed and nothing to fire
+    /// it. Worse, the only thing that COULD fire it is somebody prompting an
+    /// agent that has already been told to stop — which the turn-start fence
+    /// now (correctly) refuses.
+    ///
+    /// So the debt is settled here instead, at boot, through the ordinary close
+    /// path: same gates, same close tree, attribution untouched.
+    pub fn spawn_startup_pass(self: Arc<Self>) {
+        tokio::spawn(async move {
+            match self.reconcile_pending_closes().await {
+                Ok(0) => {}
+                Ok(settled) => tracing::info!(
+                    settled,
+                    "closed agents whose end was requested before this runtime started"
+                ),
+                Err(error) => {
+                    tracing::warn!(error = %error, "the requested-close startup pass failed")
+                }
+            }
+        });
+    }
+
+    /// The startup pass body. Returns how many closes it settled.
+    ///
+    /// A request whose target still has a LIVE handle is left alone: that agent
+    /// is running now, so its turn-finish hook owes the close and will pay it
+    /// without cutting a step short.
+    pub async fn reconcile_pending_closes(&self) -> anyhow::Result<usize> {
+        let Some(session_runtime) = self.session_runtime() else {
+            return Ok(0);
+        };
+        let mut settled = 0usize;
+        for request in self.ownership.pending_close_requests()? {
+            let Some(target) = self
+                .ownership
+                .session_store()
+                .find_by_id(&request.child_session_id)?
+            else {
+                continue;
+            };
+            if target.closed_at.is_some() || target.status == "closed" {
+                // The session went down but the row outlived it. Settle the row
+                // so the request stops being pending; nothing to shut down.
+                self.ownership
+                    .close_link(&request, &chrono::Utc::now().to_rfc3339())?;
+                settled += 1;
+                continue;
+            }
+            if session_runtime
+                .session_execution_summary(&target)
+                .await
+                .has_live_handle
+            {
+                continue;
+            }
+            match complete_close_request(
+                &self.ownership,
+                &session_runtime,
+                &self.session_admission,
+                &self.workspace_operation_gate,
+                &self.workspace_access_gate,
+                &target.id,
+                &target.workspace_id,
+                &request,
+            )
+            .await
+            {
+                Ok(true) => settled += 1,
+                Ok(false) => {}
+                Err(error) => tracing::warn!(
+                    session_id = %target.id,
+                    error = %error,
+                    "failed to settle a close owed from before this runtime started"
+                ),
+            }
+        }
+        Ok(settled)
+    }
 }
 
 impl SessionExtension for AgentCloseSessionHooks {
@@ -102,45 +186,6 @@ async fn complete_requested_close(
     let Some(request) = ownership.pending_close_request(&ctx.session_id)? else {
         return Ok(());
     };
-
-    // The same fence and the same order the synchronous close took
-    // (PR1227-LOCK-01: session mutation permit, THEN the workspace lease). It
-    // is re-taken rather than carried because the requesting call returned long
-    // ago — and because control can be acquired in between: a workflow that
-    // took this session over after the request must not have it closed out from
-    // under it. A refusal leaves the request armed for the next finished turn.
-    let _permit = match admit_peer_mutation(&admission, &ctx.session_id, SessionMutationKind::Close)
-        .await
-    {
-        Ok(permit) => permit,
-        Err(error) => {
-            tracing::info!(
-                session_id = %ctx.session_id,
-                error = %error,
-                "deferred agent close is still blocked; leaving the request armed"
-            );
-            return Ok(());
-        }
-    };
-    let _lease = match lease_target_workspace_for_peer_write(
-        &operation_gate,
-        &access_gate,
-        &ctx.workspace.id,
-    )
-    .await
-    {
-        Ok(lease) => lease,
-        Err(error) => {
-            tracing::info!(
-                session_id = %ctx.session_id,
-                workspace_id = %ctx.workspace.id,
-                error = %error,
-                "deferred agent close cannot write to the workspace; leaving the request armed"
-            );
-            return Ok(());
-        }
-    };
-
     tracing::info!(
         session_id = %ctx.session_id,
         session_link_id = %request.id,
@@ -148,16 +193,81 @@ async fn complete_requested_close(
         turn_id = %ctx.turn_id,
         "closing an agent whose end was requested mid-turn"
     );
+    complete_close_request(
+        &ownership,
+        &session_runtime,
+        &admission,
+        &operation_gate,
+        &access_gate,
+        &ctx.session_id,
+        &ctx.workspace.id,
+        &request,
+    )
+    .await?;
+    Ok(())
+}
+
+/// Shut the agent down and settle its ownership row. One body, two callers: the
+/// turn-finish hook above and the boot-time reconciliation pass, which owe the
+/// same close for the same reason and must therefore take the same gates and
+/// leave the same record.
+///
+/// `Ok(false)` means the gates refused and the request is still armed — never
+/// that the close is unnecessary.
+#[allow(clippy::too_many_arguments)]
+async fn complete_close_request(
+    ownership: &AgentOwnershipService,
+    session_runtime: &SessionRuntime,
+    admission: &SessionMutationAdmission,
+    operation_gate: &WorkspaceOperationGate,
+    access_gate: &WorkspaceAccessGate,
+    session_id: &str,
+    workspace_id: &str,
+    request: &crate::domains::sessions::links::model::SessionLinkRecord,
+) -> anyhow::Result<bool> {
+    // The same fence and the same order the synchronous close took
+    // (PR1227-LOCK-01: session mutation permit, THEN the workspace lease). It
+    // is re-taken rather than carried because the requesting call returned long
+    // ago — and because control can be acquired in between: a workflow that
+    // took this session over after the request must not have it closed out from
+    // under it. A refusal leaves the request armed for the next finished turn.
+    let _permit = match admit_peer_mutation(admission, session_id, SessionMutationKind::Close).await
+    {
+        Ok(permit) => permit,
+        Err(error) => {
+            tracing::info!(
+                session_id = %session_id,
+                error = %error,
+                "deferred agent close is still blocked; leaving the request armed"
+            );
+            return Ok(false);
+        }
+    };
+    let _lease =
+        match lease_target_workspace_for_peer_write(operation_gate, access_gate, workspace_id).await
+        {
+            Ok(lease) => lease,
+            Err(error) => {
+                tracing::info!(
+                    session_id = %session_id,
+                    workspace_id = %workspace_id,
+                    error = %error,
+                    "deferred agent close cannot write to the workspace; leaving the request armed"
+                );
+                return Ok(false);
+            }
+        };
+
     session_runtime
-        .close_live_session(&ctx.session_id)
+        .close_live_session(session_id)
         .await
         .map_err(|error| anyhow::anyhow!("{error:?}"))?;
     // The close cascade stamps the inbound ownership row, so the request is
     // consumed by the same path a synchronous close uses. Belt and braces for
     // the retryable case where the live close succeeded but the row did not.
-    let settled = ownership.reload_link(&request)?;
+    let settled = ownership.reload_link(request)?;
     if settled.closed_at.is_none() {
         ownership.close_link(&settled, &chrono::Utc::now().to_rfc3339())?;
     }
-    Ok(())
+    Ok(true)
 }

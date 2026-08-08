@@ -824,6 +824,30 @@ mod tests {
     }
 
     #[test]
+    fn every_advertised_spawn_tool_is_inside_the_spawn_gate() {
+        // `SPAWN_STYLE_TOOL_NAMES` is the whole of ruling 3's enforcement and
+        // it is hand-maintained. `spawn_agent` and `spawn_workspace` land in
+        // later steps; if one is advertised and not listed here, an unpromoted
+        // subagent silently regains a spawn tool and nothing fails. So the list
+        // is ratcheted against the advertisement: anything named `spawn_*` that
+        // a top-level caller is offered must be gated.
+        let advertised = build_tool_list(&context(true, 0));
+        for name in tool_names(&advertised) {
+            if name.starts_with("spawn_") {
+                assert!(
+                    is_spawn_style_tool(name),
+                    "{name} is advertised but missing from SPAWN_STYLE_TOOL_NAMES, so an \
+                     unpromoted subagent could call it"
+                );
+            }
+        }
+        // The gate is not vacuous: the current list really does hold one.
+        assert!(tool_names(&advertised)
+            .iter()
+            .any(|name| name.starts_with("spawn_")));
+    }
+
+    #[test]
     fn close_agent_leases_in_the_call_because_it_takes_the_targets_permit() {
         // A close acts on the TARGET session, so it takes that session's
         // mutation permit — which must be outside any workspace lease

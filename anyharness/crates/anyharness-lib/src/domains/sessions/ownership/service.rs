@@ -224,6 +224,13 @@ impl AgentOwnershipService {
         Ok(self.link_service.find_pending_close_request(session_id)?)
     }
 
+    /// Every close still owed, runtime-wide. Read once at boot: a request whose
+    /// turn never finished (the runtime died mid-turn) has nothing left to fire
+    /// it, so the startup pass settles it instead.
+    pub fn pending_close_requests(&self) -> Result<Vec<SessionLinkRecord>, OwnershipError> {
+        Ok(self.link_service.list_pending_close_requests()?)
+    }
+
     /// Whether `session_id` is an UNPROMOTED subagent child — ruling 3's
     /// predicate, and the only caller barred from the spawn tools.
     pub fn is_unpromoted_subagent(&self, session_id: &str) -> Result<bool, OwnershipError> {
@@ -583,6 +590,155 @@ mod tests {
         assert_eq!(
             after.close_reason.as_deref(),
             Some("superseded by the schema audit")
+        );
+    }
+
+    #[test]
+    fn the_first_requester_owns_the_attribution_for_the_whole_end_requested_window() {
+        // The window between "close requested" and "closed" is a whole turn
+        // wide, and the docstring promises attribution is written once. Without
+        // the `closed_by_session_id IS NULL` guard a second close inside that
+        // window silently rewrites who asked and why, and §4's
+        // "Closed by X · reason" then credits the wrong agent.
+        let fixture = fixture(&["ses_parent", "ses_child", "ses_other"]);
+        link(
+            &fixture,
+            SessionLinkRelation::Subagent,
+            "ses_parent",
+            "ses_child",
+        );
+        let owned = fixture
+            .ownership
+            .resolve_owned("ses_parent", None, Some("ses_child"))
+            .expect("resolve");
+
+        assert!(fixture
+            .ownership
+            .record_close_attribution(&owned, "ses_parent", Some("superseded"))
+            .expect("first requester stamps"));
+        // Still open, still requested — and a second close lands in that window.
+        assert!(!fixture
+            .ownership
+            .record_close_attribution(&owned, "ses_other", Some("me too"))
+            .expect("second requester is a no-op"));
+
+        let pending = fixture
+            .ownership
+            .pending_close_request("ses_child")
+            .expect("pending lookup")
+            .expect("still requested");
+        assert_eq!(pending.closed_by_session_id.as_deref(), Some("ses_parent"));
+        assert_eq!(pending.close_reason.as_deref(), Some("superseded"));
+    }
+
+    #[test]
+    fn a_close_owed_from_a_dead_runtime_is_still_findable_at_boot() {
+        // The turn-finish hook can only pay a debt whose turn finishes. If the
+        // process died mid-turn the request stays armed with nothing to fire
+        // it, so the startup pass reads it back — runtime-wide, not per child.
+        let fixture = fixture(&["ses_parent", "ses_child", "ses_other", "ses_quiet"]);
+        link(
+            &fixture,
+            SessionLinkRelation::Subagent,
+            "ses_parent",
+            "ses_child",
+        );
+        link(
+            &fixture,
+            SessionLinkRelation::OwnedAgent,
+            "ses_parent",
+            "ses_other",
+        );
+        // Un-requested: an ordinary open child is not swept.
+        link(
+            &fixture,
+            SessionLinkRelation::Subagent,
+            "ses_parent",
+            "ses_quiet",
+        );
+
+        for child in ["ses_child", "ses_other"] {
+            let owned = fixture
+                .ownership
+                .resolve_owned("ses_parent", None, Some(child))
+                .expect("resolve");
+            fixture
+                .ownership
+                .record_close_attribution(&owned, "ses_parent", None)
+                .expect("stamp");
+        }
+
+        let owed = fixture
+            .ownership
+            .pending_close_requests()
+            .expect("sweep the pending requests");
+        let mut children = owed
+            .iter()
+            .map(|link| link.child_session_id.as_str())
+            .collect::<Vec<_>>();
+        children.sort_unstable();
+        assert_eq!(children, vec!["ses_child", "ses_other"]);
+
+        // Settling one takes it out of the sweep; the other is still owed.
+        fixture
+            .ownership
+            .close_link(&owed[0], "2026-08-08T02:00:00Z")
+            .expect("settle one");
+        assert_eq!(
+            fixture
+                .ownership
+                .pending_close_requests()
+                .expect("sweep again")
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_promoted_child_frees_the_slot_the_advertised_limits_report() {
+        // The advertised `existingSubagentCount`/`remainingSubagents` and the
+        // spawn pre-check read this count, and the store's insert subselect IS
+        // the cap. All three must agree, or the tool tells an agent it is out
+        // of slots while `spawn_subagent` keeps succeeding.
+        let fixture = fixture(&["ses_parent", "ses_a", "ses_b", "ses_c"]);
+        for child in ["ses_a", "ses_b", "ses_c"] {
+            link(
+                &fixture,
+                SessionLinkRelation::Subagent,
+                "ses_parent",
+                child,
+            );
+        }
+        assert_eq!(
+            fixture
+                .links
+                .count_open_unpromoted_subagent_children("ses_parent")
+                .expect("count slots"),
+            3
+        );
+
+        let owned = fixture
+            .ownership
+            .resolve_owned("ses_parent", None, Some("ses_b"))
+            .expect("resolve");
+        fixture.ownership.promote(&owned).expect("promote");
+
+        assert_eq!(
+            fixture
+                .links
+                .count_open_unpromoted_subagent_children("ses_parent")
+                .expect("count slots after promotion"),
+            2,
+            "a promoted child keeps its ownership row but frees its slot"
+        );
+        // The row is still there — it is only the CAP that stopped counting it.
+        assert_eq!(
+            fixture
+                .links
+                .list_subagent_children("ses_parent")
+                .expect("list children")
+                .len(),
+            3
         );
     }
 

@@ -231,6 +231,14 @@ impl SessionLinkStore {
         })
     }
 
+    /// The one parent row of `child_session_id` for this relation.
+    ///
+    /// `UNIQUE(relation, parent, child)` permits two open rows naming the same
+    /// child from different parents, which `link_child` never creates today.
+    /// The order is still pinned rather than left to SQLite, because this row
+    /// decides `is_unpromoted_subagent` — and therefore whether the child may
+    /// spawn at all. Unpromoted rows sort first, so an ambiguous state fails
+    /// CLOSED (subordinate, no spawn tools) instead of by row order.
     pub fn find_parent_by_relation(
         &self,
         relation: SessionLinkRelation,
@@ -241,6 +249,7 @@ impl SessionLinkStore {
                 "SELECT * FROM session_links
                  WHERE relation = ?1 AND child_session_id = ?2
                    AND closed_at IS NULL
+                 ORDER BY (promoted_at IS NULL) DESC, created_at ASC, id ASC
                  LIMIT 1",
                 params![relation.as_str(), child_session_id],
                 map_session_link,
@@ -315,6 +324,34 @@ impl SessionLinkStore {
         self.list_children_by_relation(SessionLinkRelation::Subagent, parent_session_id)
     }
 
+    /// How many of the parent's eight delegation slots are occupied right now.
+    ///
+    /// This predicate is the fanout cap, so it is written ONCE and read by
+    /// everything that has an opinion about the cap: the spawn pre-check and
+    /// the numbers `get_subagent_launch_options` advertises. Its WHERE clause
+    /// is deliberately identical to the subselect in
+    /// [`Self::insert_subagent_with_child_limit`], which is the cap that
+    /// actually rejects an insert — an advertised count that disagreed with it
+    /// would tell an agent it is out of slots while `spawn_subagent` keeps
+    /// succeeding.
+    pub fn count_open_unpromoted_subagent_children(
+        &self,
+        parent_session_id: &str,
+    ) -> anyhow::Result<usize> {
+        self.db.with_conn(|conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*)
+                 FROM session_links
+                 WHERE relation = 'subagent' AND parent_session_id = ?1
+                   AND closed_at IS NULL
+                   AND promoted_at IS NULL",
+                [parent_session_id],
+                |row| row.get(0),
+            )?;
+            Ok(count.max(0) as usize)
+        })
+    }
+
     pub fn find_subagent_parent(
         &self,
         child_session_id: &str,
@@ -346,9 +383,14 @@ impl SessionLinkStore {
     ///
     /// On an open row this is the durable "end requested" record: the close was
     /// authorized and is now waiting for the target's in-flight turn to finish.
-    /// Guarded on `closed_at IS NULL` so a second close of an already-closed
-    /// agent cannot overwrite the original attribution — the first close is the
-    /// one that happened.
+    ///
+    /// Written once, and the FIRST requester is the one recorded. Both guards
+    /// are needed for that: `closed_at IS NULL` stops a second close of an
+    /// already-closed agent from rewriting history, and
+    /// `closed_by_session_id IS NULL` stops a second close during the
+    /// end-requested window — which is a whole turn wide — from doing the same.
+    /// Zero rows updated therefore means "already requested, or already
+    /// closed", which is exactly what the caller wants to report.
     pub fn record_close_attribution(
         &self,
         id: &str,
@@ -359,7 +401,7 @@ impl SessionLinkStore {
             let updated = conn.execute(
                 "UPDATE session_links
                  SET closed_by_session_id = ?1, close_reason = ?2
-                 WHERE id = ?3 AND closed_at IS NULL",
+                 WHERE id = ?3 AND closed_at IS NULL AND closed_by_session_id IS NULL",
                 params![closed_by_session_id, close_reason, id],
             )?;
             Ok(updated > 0)
@@ -428,6 +470,30 @@ impl SessionLinkStore {
                 map_session_link,
             )
             .optional()
+        })
+    }
+
+    /// Every close still owed, runtime-wide — the boot-time reconciliation read.
+    ///
+    /// A close request is durable precisely so a runtime that dies mid-turn
+    /// still owes it, but the turn-finish hook can only pay a debt whose turn
+    /// finishes. If the process died instead, nothing will ever finish that
+    /// turn and the agent would sit open forever, having been told to stop. The
+    /// startup pass sweeps these rows and settles them.
+    ///
+    /// Same predicate (and same partial index) as
+    /// [`Self::find_pending_close_request`], unfiltered by child.
+    pub fn list_pending_close_requests(&self) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM session_links
+                 WHERE closed_at IS NULL
+                   AND closed_by_session_id IS NOT NULL
+                   AND relation IN ('subagent', 'owned_agent')
+                 ORDER BY created_at ASC, id ASC",
+            )?;
+            let rows = stmt.query_map([], map_session_link)?;
+            rows.collect()
         })
     }
 

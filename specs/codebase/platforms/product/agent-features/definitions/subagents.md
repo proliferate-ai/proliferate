@@ -82,8 +82,11 @@ the parent still owns a promoted agent and may still close it deliberately. What
 promotion severs is subordination — the close cascade, the fanout slot, and the
 spawn block.
 
-The spawn block is the visible consequence for the child. An unpromoted subagent
-is offered no spawn-style tool at all — not `spawn_subagent`, not
+The spawn block is the visible consequence for the child. A spawned child is
+created with its session-level subagents policy OFF as well, which is the same
+subordination expressed on the session row; promotion lifts both, so a promoted
+agent can genuinely spawn rather than merely being offered the tools. An
+unpromoted subagent is offered no spawn-style tool at all — not `spawn_subagent`, not
 `get_subagent_launch_options`, not the `create_subagent` alias. That is stricter
 than the fanout cap, which merely refuses a spawn: a capped parent still sees
 its launch options, because the cap is a temporary condition of an agent that is
@@ -178,11 +181,25 @@ Closing an agent that is WORKING does not interrupt it. The call authorizes the
 close, records who closed it and why on the still-open ownership row, and
 returns "end requested"; the agent finishes the step it is on and the tree
 closes at turn finish. An idle agent closes immediately. The stamped-but-open
-row is the durable request, so the close survives a runtime restart mid-turn.
+row is the durable request, so the close survives a runtime restart mid-turn —
+a request left owing by a dead runtime is completed by a startup pass.
 
-`closedBySessionId` and `closeReason` are attribution, written once. A second
-close of an already-closed agent is a no-op that preserves the first close's
-record, and a close performed by a person through the UI leaves both unset.
+For the length of that window the agent takes no new work. A peer's
+`send_agent_message` or `send_subagent_message` is refused and told the target is
+finishing its final step before closing; reads are untouched, so the transcript
+stays readable throughout and afterwards. A person's prompt is still accepted and
+queued, but no queued prompt starts a turn once a close is requested — that is
+what keeps the final step from being killed by its own close. Prompts left in the
+queue are not deleted; they are simply never run.
+
+The guarantee covers the agent the close was aimed at. Descendants that go down
+with it are closed directly, working or not.
+
+`closedBySessionId` and `closeReason` are attribution, written once, and the
+first requester keeps them for the whole end-requested window. A second close —
+of an already-closed agent, or of one already finishing — is a no-op that
+preserves the first close's record, and a close performed by a person through the
+UI leaves both unset.
 
 Cowork reuses this same close-ordering law for `close_cowork_agent`; see
 [cowork.md](cowork.md).

@@ -24,6 +24,9 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
             store.clone(),
             attachment_storage,
         )),
+        // No link store here (the helper only takes a session store), so no
+        // soft-close fence. Tests that exercise the fence supply their own.
+        close_requests: None,
         observers: Vec::new(),
         permission_advisor: None,
     }

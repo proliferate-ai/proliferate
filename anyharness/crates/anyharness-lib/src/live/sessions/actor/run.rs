@@ -80,7 +80,14 @@ impl SessionActor {
             // mutation already accepted into the actor mailbox wins this
             // boundary, so startup and turn completion cannot capture and run
             // an obsolete head before reorder/steer is applied.
-            let queued_prompt = self.next_pending_prompt_for_drain();
+            //
+            // And it does not happen at all once a close has been requested for
+            // this agent: the soft close promises the in-flight step finishes
+            // and then the agent stops, so turn N+1 must never start into the
+            // window where the turn-finish hook is closing the tree.
+            let queued_prompt = self
+                .next_pending_prompt_for_drain()
+                .filter(|_| !self.new_turns_are_blocked_by_a_pending_close());
             let has_queued_prompt = queued_prompt.is_some();
             match select_idle_work(
                 command_rx,
@@ -159,7 +166,15 @@ impl SessionActor {
                 // The durable row may already have been selected by the idle
                 // drain, so never execute its copied payload directly here or
                 // a fast completed turn could be duplicated.
-                if from_queue_seq.is_some() || self.next_pending_prompt_for_drain().is_some() {
+                //
+                // The same soft-close fence as the drain above: a prompt that
+                // arrives after a close was requested is stored durably and
+                // acknowledged as queued, but it does not start a turn. This is
+                // the other turn-start site, so it needs the same check.
+                if from_queue_seq.is_some()
+                    || self.new_turns_are_blocked_by_a_pending_close()
+                    || self.next_pending_prompt_for_drain().is_some()
+                {
                     let result = self
                         .handle_busy_prompt_queue(payload, prompt_id, from_queue_seq)
                         .await;

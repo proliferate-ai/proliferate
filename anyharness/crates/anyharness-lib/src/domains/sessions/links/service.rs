@@ -239,6 +239,16 @@ impl SessionLinkService {
         self.store.find_subagent_parent(child_session_id)
     }
 
+    /// The occupied-slot count the fanout cap is defined by. One predicate,
+    /// shared by the spawn pre-check and the advertised limits.
+    pub fn count_open_unpromoted_subagent_children(
+        &self,
+        parent_session_id: &str,
+    ) -> anyhow::Result<usize> {
+        self.store
+            .count_open_unpromoted_subagent_children(parent_session_id)
+    }
+
     pub fn find_subagent_parents(
         &self,
         child_session_ids: &[String],
@@ -321,6 +331,10 @@ impl SessionLinkService {
         child_session_id: &str,
     ) -> anyhow::Result<Option<SessionLinkRecord>> {
         self.store.find_pending_close_request(child_session_id)
+    }
+
+    pub fn list_pending_close_requests(&self) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.store.list_pending_close_requests()
     }
 
     pub fn delete_link(&self, id: &str) -> anyhow::Result<bool> {

@@ -197,6 +197,19 @@ pub trait QueueDurable: Send + Sync {
     ) -> anyhow::Result<PendingPromptReorderOutcome>;
 }
 
+/// The durable "somebody asked this agent to stop" flag, as the actor needs it.
+///
+/// A soft close (`domains/sessions/ownership`) stamps an open ownership row and
+/// lets the in-flight step finish. Between that stamp and the turn-finish hook
+/// actually closing the tree, the actor is free to pick the next durable prompt
+/// off its queue and start turn N+1 — and the hook would then shut the actor
+/// down mid-step, which is precisely the thing the soft close promises will
+/// never happen. So the request is also a fence on STARTING work: while it is
+/// stamped, this actor finishes what it is doing and starts nothing new.
+pub trait PendingCloseRequests: Send + Sync {
+    fn has_pending_close_request(&self, session_id: &str) -> anyhow::Result<bool>;
+}
+
 /// Durable background-work tracker rows.
 pub trait BackgroundWorkDurable: Send + Sync {
     fn upsert_or_refresh_pending_background_work(
@@ -310,6 +323,9 @@ pub struct ActorCapabilities {
     pub background: Arc<dyn BackgroundWorkDurable>,
     pub state: Arc<dyn SessionStateDurable>,
     pub attachments: Arc<dyn AttachmentSource>,
+    /// Consulted before every turn START. `None` only in unit tests that wire
+    /// no link store; production always supplies it.
+    pub close_requests: Option<Arc<dyn PendingCloseRequests>>,
     /// Product reactors, registration order = dispatch order (plans before
     /// reviews). See the dispatch contract on [`SessionEventObserver`].
     pub observers: Vec<Arc<dyn SessionEventObserver>>,

@@ -85,6 +85,16 @@ impl SessionActor {
         }
     }
 
+    /// Whether this actor may START another turn.
+    ///
+    /// See [`new_turns_are_blocked_by_a_pending_close`]. Kept as a method so
+    /// both turn-start sites read the same sentence.
+    pub(in crate::live::sessions::actor) fn new_turns_are_blocked_by_a_pending_close(
+        &self,
+    ) -> bool {
+        new_turns_are_blocked_by_a_pending_close(&self.caps, &self.session_id)
+    }
+
     pub(in crate::live::sessions::actor) fn next_pending_prompt_for_drain(
         &self,
     ) -> Option<(PromptPayload, Option<String>, i64)> {
@@ -318,6 +328,51 @@ impl SessionActor {
         let mut sink = self.event_sink.lock().await;
         sink.pending_prompts_reordered(PendingPromptsReorderedPayload { pending_prompts });
         Ok(())
+    }
+}
+
+/// The soft-close fence on STARTING a turn.
+///
+/// `close_agent` on a working agent stamps the ownership row and returns; the
+/// turn-finish hook then closes the tree from a spawned task. Nothing stops the
+/// actor's idle loop from picking the next queued prompt off the durable queue
+/// in that gap, and a turn started there is killed mid-step by the close it
+/// raced — the exact interruption the soft close exists to prevent. So the
+/// stamp fences turn STARTS as well: the step in flight finishes, and nothing
+/// new begins.
+///
+/// Fail-closed. A lookup that errors is treated as "a close may be pending" and
+/// blocks the start, because the cost of being wrong that way is a prompt that
+/// waits, and the cost of being wrong the other way is an agent killed
+/// mid-tool-call.
+///
+/// Free function, not just a method, so the fence can be exercised against real
+/// rows without a live actor.
+pub(crate) fn new_turns_are_blocked_by_a_pending_close(
+    caps: &crate::live::sessions::model::ActorCapabilities,
+    session_id: &str,
+) -> bool {
+    let Some(close_requests) = caps.close_requests.as_ref() else {
+        return false;
+    };
+    match close_requests.has_pending_close_request(session_id) {
+        Ok(pending) => {
+            if pending {
+                tracing::info!(
+                    session_id = %session_id,
+                    "a close was requested for this agent; starting no further turns"
+                );
+            }
+            pending
+        }
+        Err(error) => {
+            tracing::warn!(
+                session_id = %session_id,
+                error = %error,
+                "could not read the pending-close request; refusing to start a turn"
+            );
+            true
+        }
     }
 }
 

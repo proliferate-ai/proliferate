@@ -47,10 +47,15 @@ pub fn resolve_context(
             "subagents are only available in standard workspaces",
         ));
     }
+    // Occupied SLOTS, not children: a promoted child keeps its ownership row
+    // but stopped counting against the cap, both in the spawn pre-check and in
+    // the store subselect that actually rejects the insert. Counting rows here
+    // would report `remainingSubagents: 0` to a parent `spawn_subagent` is
+    // still happy to serve — and the tool description tells agents to trust
+    // these numbers.
     let existing_subagent_count = service
-        .list_subagents(&request.session_id)
-        .map_err(|error| ProductMcpContextError::Internal(error.into()))?
-        .len();
+        .count_occupied_subagent_slots(&request.session_id)
+        .map_err(ProductMcpContextError::Internal)?;
     let create_block_reason = match service.validate_parent_can_spawn(&request.session_id) {
         Ok(_) => None,
         Err(error) => Some(resolve_create_block_reason(error)?),

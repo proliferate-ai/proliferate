@@ -13,8 +13,9 @@ use super::config_ops::{
 };
 use super::context::AgentOpsMcpContext;
 use super::peer_ops::{
-    admit_peer_mutation, assert_workspace_can_be_mutated, authorize_transcript_read,
-    consume_reply_wake, lease_target_workspace_for_peer_write, prepare_agent_message,
+    admit_peer_mutation, assert_target_still_takes_messages, assert_workspace_can_be_mutated,
+    authorize_transcript_read, consume_reply_wake, lease_target_workspace_for_peer_write,
+    prepare_agent_message,
 };
 use super::tools::{
     canonical_tool_name, is_spawn_style_tool, ChildSessionArgs, CloseAgentArgs, ConfigureAgentArgs,
@@ -455,6 +456,11 @@ async fn send_subagent_message(
         &link.child_session_id,
         AgentAccessIntent::Send,
     )?;
+    // The same refusal the peer send makes: a child whose end has been
+    // requested is finishing one last step and will never run another prompt.
+    // This is the tool a PARENT uses on its own child, which is exactly the
+    // agent most likely to be end-requested.
+    assert_target_still_takes_messages(service.link_service(), &link.child_session_id)?;
     let wake_scheduled = if args.wake_on_completion {
         service
             .schedule_wake_for_target(parent_session_id, args.subagent_id.as_deref(), None)?
@@ -593,6 +599,7 @@ async fn send_agent_message(
 ) -> anyhow::Result<Value> {
     let prepared = prepare_agent_message(
         service.session_store(),
+        service.link_service(),
         &ctx.parent_session_id,
         args.session_id.trim(),
         &args.message,
@@ -1113,7 +1120,11 @@ fn close_result(
         // `close_subagent` tool list reads the same shape back.
         "childSessionId": settled.child_session_id,
         "label": settled.label,
-        "closed": settled.closed_at.is_some(),
+        // The link OR the session: the pre-gate early return already treats
+        // either one as closed, and reporting only the link would claim a stop
+        // that did not happen if a repair path ever closed a link out from
+        // under a living session.
+        "closed": settled.closed_at.is_some() || owned.target.closed_at.is_some(),
         "closeRequested": close_requested,
         "alreadyClosed": owned.link.closed_at.is_some() || owned.target.closed_at.is_some(),
         "closedAt": settled.closed_at,

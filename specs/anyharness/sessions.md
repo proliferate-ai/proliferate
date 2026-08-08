@@ -222,7 +222,13 @@ The model is intentionally small:
   children no longer occupy a slot
 - `subagents_enabled` is a durable create-time session policy. Missing legacy
   rows default enabled in the session store/read model. Resume reads the stored
-  policy and does not silently re-enable disabled sessions.
+  policy and does not silently re-enable disabled sessions. `spawn_subagent`
+  creates every child with it OFF: that flag is how a spawned child carries its
+  subordination. Promotion lifts it — `validate_parent_can_spawn` treats a
+  promoted child as enabled — so promotion stays one durable fact on the link
+  rather than a second write to the session row that could diverge from it.
+- the advertised subagent count and remaining slots are the same predicate the
+  fanout cap enforces, so the numbers an agent is told match the answer it gets
 
 The subagent domain lives under
 `anyharness/crates/anyharness-lib/src/domains/sessions/subagents/**`.
@@ -576,6 +582,10 @@ inbound links. Which children go down with the parent is decided per link:
 When a session itself closes, every inbound ownership, cowork, and review link
 pointing at it closes with it, promoted or not.
 
+The cascade closes descendants directly. The soft close below is a guarantee for
+the agent a close was AIMED at, not for its subtree: a working subagent of a
+closing parent goes down with the parent, mid-step, as it always has.
+
 #### Soft close
 
 Closing an agent that is *working* does not interrupt it.
@@ -596,8 +606,44 @@ carrying them, because the requesting call returned long ago and control can be
 acquired in between. A refusal there leaves the request armed for the next
 finished turn rather than dropping it.
 
-Attribution is written once. A second close of an already-closed agent leaves
-the first close's record alone, and returns idempotently before taking any gate.
+Once a close is requested, no new turn may START. Otherwise the deferred close
+races the actor's own queue: turn N ends, the idle loop immediately takes the
+next durable prompt, and the close — landing a few milliseconds later from the
+turn-finish hook — kills turn N+1 in the middle of its step, which is exactly the
+interruption a soft close promises never happens. So the actor consults the
+durable request at both of its turn-start points (`live/sessions/actor/run.rs`:
+the queue drain, and the prompt command received while idle) and starts nothing
+while a request stands. The check is fail-closed — a lookup error blocks the
+turn — because a turn wrongly not started is recoverable and a step killed in
+the middle is not.
+
+Prompts aimed at an end-requested agent are therefore never delivered, and the
+paths differ in how they say so:
+
+- An agent's `send_agent_message` / `send_subagent_message` is refused outright,
+  told that the target is finishing its final step before closing and takes no
+  new messages. Reads are untouched: the transcript stays readable during the
+  window and after the close.
+- A prompt from a person on the HTTP route is accepted and stored durably,
+  exactly as a prompt to any busy session is. It simply never starts — the
+  actor's turn-start fence is the seam, and once the close lands the actor does
+  not run again. There is no separate refusal on the human route.
+- Prompts already queued behind the in-flight turn are kept, not cancelled. A
+  close marks the session closed and closes its links; it does not delete
+  `session_pending_prompts` rows. They stay visible as queued work that was
+  never run.
+
+A request whose agent never finishes another turn — the runtime died between the
+stamp and the turn end — is paid at boot. A startup pass sweeps the open
+ownership rows carrying a close request and, for any target with no live handle,
+completes the close through the same body the turn-finish hook uses. A target
+that IS live is left alone; its own turn finish still owes the close.
+
+Attribution is written once, and the first requester owns it for the whole
+end-requested window: a second close arriving while the request is still open
+neither overwrites the record nor re-stamps it. A close of an already-closed
+agent leaves the first close's record alone and returns idempotently before
+taking any gate.
 
 ### Interaction Resolution
 

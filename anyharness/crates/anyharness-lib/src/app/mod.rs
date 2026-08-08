@@ -486,6 +486,11 @@ impl AppState {
         // Ownership — phase 2: the close hook can now reach the runtime whose
         // extension list holds it. Weak, so this is not a reference cycle.
         agent_close_session_hooks.attach_session_runtime(&session_runtime);
+        // Closes this runtime already owed when it started: a request whose
+        // turn never finished because the process died has nothing left to fire
+        // it, so it is settled here instead of leaving the agent open forever.
+        #[cfg(not(test))]
+        agent_close_session_hooks.clone().spawn_startup_pass();
         // Workflow runs — phase 2 (after SessionRuntime): the async facades.
         let workflow_phase_two = workflows::wire_workflow_runtime(
             workflow_wiring,
