@@ -1,0 +1,143 @@
+# Frontend structure rules — enforced by scripts/report_frontend_structure.py.
+#
+# The reporter prints a grouped inventory; CI runs it as
+# `--strict --summary-only`, which turns any violation into exit code 1.
+#
+# FE-SIZE-1's measured size debt is a ratchet (ratchets.toml), not an exception
+# ledger: an allowance may only shrink. See lints/README.md.
+
+[[rule]]
+id = "FE-STRUCT-1"
+title = "raw DOM controls use a primitive instead"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/report_frontend_structure.py"
+mode = "lint"
+scope = "apps/desktop/src/**, apps/web/src/**, apps/packages/product-client/src/** (excluding primitives/**)"
+
+rule = """Raw DOM control elements must not be authored directly outside apps/packages/product-client/src/primitives/**."""
+alternative = """Use the corresponding primitive from the component library."""
+why = """Raw controls bypass the design system's sizing, focus, and theming contract."""
+
+[rule.example]
+bad = """`<button className="px-2 py-1">Save</button>` authored in a feature component"""
+good = """`<Button size="sm">Save</Button>`"""
+
+[[rule]]
+id = "FE-STRUCT-2"
+title = "primitives are defined in the component library"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/report_frontend_structure.py"
+mode = "lint"
+scope = "apps/desktop/src/**, apps/web/src/**, apps/packages/product-client/src/** (excluding primitives/**)"
+
+rule = """A design-system primitive must not be defined outside apps/packages/product-client/src/primitives/**: a primitive-shaped component name carrying a native DOM contract (HTML element attributes, element refs, or `ComponentProps<'button'|'input'|…>`) is a definition."""
+alternative = """Define the primitive under primitives/** and import it."""
+why = """Primitives defined locally fork the design system silently. The native-DOM-contract requirement keeps the category narrow: a product component that merely renders a control is reported by FE-STRUCT-1 instead."""
+
+[rule.example]
+bad = """a locally defined `Badge` in a feature folder typed with `ButtonHTMLAttributes`"""
+good = """`import { Badge } from "#product/primitives/badge";`"""
+
+[[rule]]
+id = "FE-STRUCT-3"
+title = "components/** is .tsx-only"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/report_frontend_structure.py"
+mode = "lint"
+scope = "apps/desktop/src/components/**, apps/web/src/components/**, apps/mobile/src/components/**, apps/packages/product-client/src/components/**"
+
+rule = """components/** is .tsx-only; a .ts file there is a violation."""
+alternative = """Move the module to config, copy, or lib/domain."""
+why = """A .ts file under components/ is logic hiding in the view tree, where nobody looks for it."""
+
+[rule.example]
+bad = """apps/packages/product-client/src/components/sessions/helpers.ts"""
+good = """apps/packages/product-client/src/lib/domain/sessions/session-labels.ts"""
+
+[[rule]]
+id = "FE-STRUCT-4"
+title = "hook files live under a responsibility folder"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/report_frontend_structure.py"
+mode = "lint"
+scope = "apps/desktop/src/hooks/**, apps/web/src/hooks/**, apps/mobile/src/hooks/**, apps/packages/product-client/src/hooks/**"
+
+rule = """A hook file must live under a responsibility folder inside its domain — cache, derived, facade, lifecycle, ui, or workflows — not directly in hooks/<domain>/. The hooks/access and hooks/ui roots are exempt."""
+alternative = """Move the hook into the responsibility folder that matches what it does."""
+why = """The folder name states the hook's responsibility; a flat hooks/<domain>/ directory hides responsibility entirely."""
+
+[rule.example]
+bad = """hooks/sessions/use-session-thing.ts sitting directly in the domain folder"""
+good = """hooks/sessions/workflows/use-session-thing.ts"""
+
+[[rule]]
+id = "FE-STRUCT-5"
+title = "hook responsibility folders come from the standard set"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/report_frontend_structure.py"
+mode = "lint"
+scope = "apps/desktop/src/hooks/**, apps/web/src/hooks/**, apps/mobile/src/hooks/**, apps/packages/product-client/src/hooks/**"
+
+rule = """A directory under hooks/<domain>/ must be one of cache, derived, facade, lifecycle, ui, workflows."""
+alternative = """Use an existing responsibility folder, or propose adding one to the closed set deliberately."""
+why = """Without a closed set, FE-STRUCT-4 is satisfiable by inventing a folder per hook."""
+
+[rule.example]
+bad = """hooks/sessions/misc/use-thing.ts"""
+good = """hooks/sessions/derived/use-thing.ts"""
+
+[[rule]]
+id = "FE-STRUCT-6"
+title = "no junk-drawer filenames"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/report_frontend_structure.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**"
+
+rule = """Junk-drawer filenames are not allowed: common, helper, helpers, misc, util, utils (.ts or .tsx)."""
+alternative = """Name the file after the concept it owns."""
+why = """A file named for its lack of a subject accumulates unrelated code and never gets deleted."""
+
+[rule.example]
+bad = """apps/packages/product-client/src/lib/utils.ts"""
+good = """apps/packages/product-client/src/lib/domain/text/truncate-middle.ts"""
+
+[[rule]]
+id = "FE-STRUCT-7"
+title = "shared packages obey their dependency matrix"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/report_frontend_structure.py"
+mode = "lint"
+scope = "apps/packages/design/src/**, apps/packages/product-client/src/**"
+
+rule = """A shared package may only import what its own row of the dependency matrix allows. Universally forbidden: app-root aliases (`@/…`), app internals (`apps/desktop/…`, `apps/web/…`, `apps/mobile/…`), `@tauri-apps/*`, `react-native`, and relative imports that resolve outside the package's own src/ tree. Then per package: `design` may not import React/react-dom, product package code, SDKs, or query clients; `product-client/primitives` may not import higher ProductClient layers, the connected ProductClient surface, SDKs, or query clients; `product-client/domain` is limited to Cloud SDK contract types and AnyHarness contract types plus the four approved pure helpers (no style assets); the connected `product-client` surface has no additional restriction beyond the universal ones."""
+alternative = """Import from the current shared-package entry point that your package's row allows, or move the dependency to a package that may hold it."""
+why = """The matrix is what keeps the fold reversible: each package's consumers can rely on what it will and will not drag in, and the retired entry points cannot come back."""
+
+[rule.example]
+bad = """`import { Panel } from "@/components/Panel";` inside apps/packages/design/src/**"""
+good = """`import { Panel } from "#product/primitives/panel";` from a package allowed to depend on primitives"""
+
+[[rule]]
+id = "FE-SIZE-1"
+title = "large frontend files are ratcheted, not accumulating"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/report_frontend_structure.py"
+mode = "lint"
+scope = "apps/desktop/src/**, apps/web/src/**, apps/mobile/src/**, apps/packages/design/src/**, apps/packages/product-client/src/**"
+
+rule = """A non-test frontend source file over 400 lines must carry a ratchet entry in lints/frontend/ratchets.toml `[[frontend_structure]]` at or above its observed count; past 600 lines the entry's reason must be a strong one. An entry whose file has dropped back under 400 lines, or is gone, is stale and fails too. Files already ratcheted for max-lines (any owner's `[[max_lines]]`) are left to scripts/check_max_lines.py."""
+alternative = """Split the file, or update its `[[frontend_structure]]` ratchet entry — with a reason — in the same PR that grows it."""
+why = """Two thresholds separate "needs a note" from "needs a real justification", and shrink-only allowances keep the ledger readable as debt rather than as permission."""
+
+[rule.example]
+bad = """a 640-line .tsx with no ratchet entry"""
+good = """a `[[frontend_structure]]` entry recording the observed count and why the file stays whole"""

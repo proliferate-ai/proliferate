@@ -106,12 +106,18 @@ owning spec or guide. For example:
 ## Boundary Ratchet
 
 CI runs `scripts/check_anyharness_boundaries.py` to keep AnyHarness dependency
-direction from regressing. Existing violations are count-based exceptions in
-`scripts/anyharness_boundaries_allowlist.txt`; new violations, increased
-counts, and stale allowlist entries fail the check.
+direction from regressing. The rules it enforces are records in
+`lints/anyharness/boundaries.toml` (AH-API-*, AH-DOMAIN-*, AH-LIVE-*, …), and
+each failure is rendered from its record, so the message carries the rule, the
+legal alternative, and the record path.
 
-When a change removes an allowlisted violation, reduce or delete that allowlist
-entry in the same change.
+Grandfathered violations live in `lints/anyharness/exceptions.toml`, one entry
+per site rather than a per-file count: a site is a content fingerprint, so a
+cleanup and a regression in the same file can no longer cancel out. New
+violations fail, and a listed site that no longer violates fails as stale.
+
+When a change removes a tolerated violation, delete that entry in the same
+change. Adding one is an amendment — see `lints/README.md`.
 
 ## Old Path Ratchets
 

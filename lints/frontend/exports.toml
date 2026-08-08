@@ -1,0 +1,163 @@
+# Mobile ↔ ProductClient export proof — enforced by
+# scripts/check_mobile_product_client_export.py.
+#
+# These rules are what make FE-MOBILE-1 real at the packaging layer: the import
+# shape check in check_frontend_boundaries.py only proves what the source says,
+# while these prove that Metro and TypeScript actually resolve the same thing and
+# that the shipped bundle contains nothing but domain modules.
+#
+# `--preflight` runs the config/edge rules (CI: Shared frontend packages job);
+# `--export-dir` runs the bundle-provenance rule against a built package.
+
+[[rule]]
+id = "FE-EXPORT-1"
+title = "mobile tsconfig declares no baseUrl and no paths"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_mobile_product_client_export.py"
+mode = "lint"
+scope = "apps/mobile/tsconfig.json"
+
+rule = """The mobile tsconfig must declare neither `baseUrl` nor `paths`."""
+alternative = """Rely on package exports for resolution instead of TypeScript path mapping."""
+why = """Path mapping lets TypeScript resolve modules Metro cannot, so types would pass while the bundle breaks."""
+
+[rule.example]
+bad = """`"paths": { "@/*": ["./src/*"] }` added to the mobile tsconfig"""
+good = """a compilerOptions block with neither key, resolving through package exports"""
+
+[[rule]]
+id = "FE-EXPORT-2"
+title = "Metro installs no custom resolver"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_mobile_product_client_export.py"
+mode = "lint"
+scope = "apps/mobile/metro.config.js"
+
+rule = """The Metro config's `resolver.resolveRequest` must be null — no custom resolver hook."""
+alternative = """Fix resolution through package exports and conditions, not a bespoke resolver."""
+why = """A custom resolver can paper over an illegal import shape, defeating FE-MOBILE-1."""
+
+[rule.example]
+bad = """a `resolveRequest` shim remapping product-client subpaths"""
+good = """the default resolver plus the pinned package-exports settings"""
+
+[[rule]]
+id = "FE-EXPORT-3"
+title = "Metro package-exports settings are pinned"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_mobile_product_client_export.py"
+mode = "lint"
+scope = "apps/mobile/metro.config.js"
+
+rule = """Metro must set `unstable_enablePackageExports` to true, `unstable_conditionNames` to `[]`, and `unstable_conditionsByPlatform` exactly to the expected mapping."""
+alternative = """Keep the pinned values; changing them is an amendment that needs a bundling rationale."""
+why = """These three settings decide whether mobile resolves the domain build or accidentally picks up a DOM-flavoured condition."""
+
+[rule.example]
+bad = """`unstable_conditionNames: ["browser"]` added to the mobile Metro config"""
+good = """the pinned trio, unchanged"""
+
+[[rule]]
+id = "FE-EXPORT-4"
+title = "product-client internal subpath maps types to source, runtime to dist"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_mobile_product_client_export.py"
+mode = "lint"
+scope = "apps/packages/product-client/package.json"
+
+rule = """product-client's `exports["./internal/*"]` must map `types` to `./src/*` and `default` to `./dist/*.js`."""
+alternative = """Keep the two-condition mapping so types come from source and runtime from the build."""
+why = """If default pointed at source, Metro would bundle untranspiled TypeScript; if types pointed at dist, editors would lose source navigation."""
+
+[rule.example]
+bad = """the internal subpath export collapsed to a single string"""
+good = """`{ "types": "./src/*", "default": "./dist/*.js" }`"""
+
+[[rule]]
+id = "FE-EXPORT-5"
+title = "every mobile edge names a concrete internal domain file"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_mobile_product_client_export.py"
+mode = "lint"
+scope = "apps/mobile/**"
+
+rule = """Every mobile→product-client edge must be spelled `@proliferate/product-client/internal/domain/<concrete-file>` and must resolve under dist/domain/**."""
+alternative = """Import a concrete domain file by name; no barrels, no directory imports."""
+why = """Concrete file edges make the mobile dependency surface enumerable and keep barrels from pulling in DOM code."""
+
+[rule.example]
+bad = """`from "@proliferate/product-client/internal/domain"` (barrel, no file)"""
+good = """`from "@proliferate/product-client/internal/domain/sessions/activity"`"""
+
+[[rule]]
+id = "FE-EXPORT-6"
+title = "each mobile edge has a built .js artifact"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_mobile_product_client_export.py"
+mode = "lint"
+scope = "apps/packages/product-client/dist/domain/**"
+
+rule = """Each mobile edge's built `.js` artifact must exist in dist."""
+alternative = """Build product-client before running the check; a missing artifact means the package build is stale."""
+why = """Catches the stale-dist failure class where mobile type-checks against source and crashes at runtime."""
+
+[rule.example]
+bad = """an edge importing a domain file whose dist output was never emitted"""
+good = """dist/domain/sessions/activity.js present for the edge that imports it"""
+
+[[rule]]
+id = "FE-EXPORT-7"
+title = "each mobile edge has an adjacent declaration"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_mobile_product_client_export.py"
+mode = "lint"
+scope = "apps/packages/product-client/dist/domain/**"
+
+rule = """Each mobile edge must have an adjacent `.d.ts` declaration alongside its built `.js`."""
+alternative = """Emit declarations in the product-client build."""
+why = """Without declarations the edge silently degrades to `any`, so the boundary stops being type-checked."""
+
+[rule.example]
+bad = """dist/domain/x.js present with no dist/domain/x.d.ts"""
+good = """both files emitted side by side"""
+
+[[rule]]
+id = "FE-EXPORT-8"
+title = "finding zero mobile edges is a failure"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_mobile_product_client_export.py"
+mode = "lint"
+scope = "apps/mobile/**"
+
+rule = """Finding zero product-client imports in mobile is itself a failure, not a pass."""
+alternative = """Nothing to do while mobile really consumes product-client; if it stops, retire this check deliberately."""
+why = """Fail-closed: a scan that silently matched nothing would report green forever after a rename."""
+
+[rule.example]
+bad = """a specifier rename that makes the scan match nothing, reported as a pass"""
+good = """the scan finding the real edge set, or failing loudly when it finds none"""
+
+[[rule]]
+id = "FE-EXPORT-9"
+title = "the shipped bundle contains only domain modules"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_mobile_product_client_export.py"
+mode = "lint"
+scope = "the --export-dir bundle built from apps/packages/product-client"
+
+rule = """In an exported bundle, source maps must be version 3, must contain ProductClient modules, and every `sources` entry must live under `src/domain/` or `dist/domain/`."""
+alternative = """Ship only domain-layer modules to mobile; anything else must not reach the bundle."""
+why = """Proves the boundary at the artifact level — the bundle itself testifies that no non-domain module was pulled in."""
+
+[rule.example]
+bad = """a bundled source map listing `src/primitives/button.tsx`"""
+good = """every source entry under dist/domain/**"""

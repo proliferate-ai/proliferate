@@ -1,0 +1,169 @@
+# Frontend measured size debt. A ratchet, not an exception ledger: max_lines
+# is the observed count allowed for this file and may only shrink. Growth
+# fails; so does a stale entry whose file is now under its allowance or gone.
+# Two tables, two readers: [[max_lines]] (PROD-SIZE-1, read by
+# scripts/check_max_lines.py) and [[frontend_structure]] (FE-SIZE-1, read by
+# scripts/report_frontend_structure.py) — the latter's files sit below
+# check_max_lines' caps, so they must not be listed under [[max_lines]].
+
+[[max_lines]]
+path = "apps/desktop/src-tauri/src/commands/ssh_tunnel.rs"
+max_lines = 729
+reason = "existing desktop native oversized file"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.test.tsx"
+max_lines = 1208
+reason = "C-train composition: C-2 ack-status UI coverage joins the B-4 cut; P3 runtime catalog extends All-Models coverage + add-key modal flow + switch disambiguation + surface store mock + ProductHost test-host wiring + authenticated-without-cloud-compute BYOK gating cases + C3 model-snapshot status mock stub + review-fix refresh mutation stub + C1 cursor api_key/CLI method + CURSOR_API_KEY persistence cases; F-040 dropped the client-refresh-with-payload cases (no callable cloud refresh remains); agent-auth.md §5 provider-picker two-write assertion (vault api_key + one selection row) replaces the prefill-only case; the §1–§7 pane rebuild adds the collapsed-model-list expansion helper; review-fix non-orphaning provider-picker cases (PUT-failure revoke + rollback, close-only-after-PUT, bound-env-var pass-through, key-shaped env var for multi-field providers); PR-review fixes add the P0 anonymous-local Authenticate-gate regression, the P1-a supportsLogin&&canRunLogin regression, and the P1-b gateway-capabilities-pending loading-state regression; design-handoff v2 rewrite (cards + merged header badge + providers section + saved-keys segment)"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/cloud/transcript-view.test.ts"
+max_lines = 1160
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/transcript/transcript-presentation.test.ts"
+max_lines = 868
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.test.ts"
+max_lines = 1144
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.ts"
+max_lines = 905
+reason = "relocated existing oversized domain source; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/sessions/activity.test.ts"
+max_lines = 660
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/sessions/intents/session-intent.test.ts"
+max_lines = 606
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/workspaces/cloud-work-inventory.test.ts"
+max_lines = 859
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts"
+max_lines = 840
+reason = "managed sandbox cloud workspace indicators + PR 5 explicit-materialization attachment cases extend existing oversized test file"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts"
+max_lines = 691
+reason = "workspace git-status threading extends existing oversized test file"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts"
+max_lines = 734
+reason = "product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred"
+
+# FE-SIZE-1 measured frontend size debt, read by
+# scripts/report_frontend_structure.py. Converted from the retired
+# scripts/frontend_structure_allowlist.txt; same paths, counts, and reasons.
+# Kept as its own table because these files sit below check_max_lines.py's caps,
+# so listing them under [[max_lines]] would register as stale entries there.
+# Same shrink-only contract as [[max_lines]]: growth fails, and so does an entry
+# whose file dropped back under the soft threshold or is gone.
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts"
+max_lines = 425
+reason = "workspace bootstrap actions + gateway billing-block capture into the status screen (C8); split on next growth"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx"
+max_lines = 525
+reason = "existing markdown transcript renderer pending split"
+
+# Relocated from apps/desktop/src by the Desktop-product move into product-client
+# (web-desktop-unification slice 04). Same files, same counts/reasons — relocation,
+# not gate-weakening; product-client/src is a structure-report scan root. Counts
+# for status-card/git-review files carry main's post-merge content sizes.
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/content/ui/diff/ChatDiffViewer.tsx"
+max_lines = 550
+reason = "chat diff viewer pending row-renderer split"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/content/ui/diff/SplitDiffViewer.tsx"
+max_lines = 465
+reason = "split diff viewer pending row-renderer split"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/content/ui/diff/UnifiedDiffViewer.tsx"
+max_lines = 414
+reason = "unified diff viewer pending row-renderer split"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx"
+max_lines = 430
+reason = "connected sidebar host; PR 5 availability-intent begin handler + round-2 Repositories section-collapse wiring threaded alongside existing repo/cloud actions; extraction pending"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx"
+max_lines = 433
+reason = "shared ordered-readiness continuation host for Cloud registration and retry-stable local clone; split by intent owner on next growth"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts"
+max_lines = 401
+reason = "session stream flush/apply pending reducer split"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts"
+max_lines = 408
+reason = "async ProductStorage hydration added to the in-memory tombstone model"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/sessions/workflows/use-session-creation-actions.ts"
+max_lines = 451
+reason = "session creation orchestrator (+lazy materialization and durable empty-create lifecycle, frozen-input replay, and acknowledgement seam); split deferred"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts"
+max_lines = 734
+reason = "product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/host/product-host.ts"
+max_lines = 420
+reason = "WDU slice 04 (G2/G4): host contract grew from getAnonymousInstallId + getSandboxGatewayAccessToken and their doc contracts"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/playground/WorkspaceStatusPlayground.tsx"
+max_lines = 450
+reason = "status-card playground fixtures pending scenario-module split (#1202 debt repair)"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/playground/GitReviewV2Playground.tsx"
+max_lines = 447
+reason = "git review playground fixtures pending scenario-module split; concrete icon-owner imports add two lines"
+
+[[frontend_structure]]
+path = "apps/packages/design/src/tokens.ts"
+max_lines = 2143
+reason = "single token authority: one entry per token with provenance by design; shape is a flat manifest, not logic"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/agents/workflows/use-harness-auth-editor.ts"
+max_lines = 410
+reason = "harness auth editor grew with v2 single-PUT replace semantics + provider-hint rows; split pending"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/primitives/icons/core.tsx"
+max_lines = 483
+reason = "existing consolidated icon module pending split"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/settings/panes/AccountPane.tsx"
+max_lines = 401
+reason = "existing account settings pane crossed the soft threshold by one line when icons split to concrete owners; split pending"

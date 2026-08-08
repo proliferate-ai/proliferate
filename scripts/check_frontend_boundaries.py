@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
+"""Frontend layer-boundary checker.
+
+The rules themselves are records under `lints/frontend/*.toml`; this file is only
+the engine. Diagnostics are rendered from the record (rule sentence, legal
+alternative, record path) via `scripts/lint_records.py`, and grandfathered
+violation sites live in `lints/frontend/exceptions.toml` as fine-grained
+`(path, site)` fingerprints — never counts.
+"""
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 import posixpath
@@ -29,6 +37,19 @@ except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
     )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    # Run as `python3 scripts/check_frontend_boundaries.py` from the repo root,
+    # sys.path[0] is scripts/ — the shared loader lives one level up.
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402  (path shim must precede the import)
+
+CHECKER = "scripts/check_frontend_boundaries.py"
+RULES = lint_records.load("frontend")
+OWNED_RULE_IDS = frozenset(
+    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
+)
+
 DESKTOP_SRC = REPO_ROOT / "apps" / "desktop" / "src"
 WEB_SRC = REPO_ROOT / "apps" / "web" / "src"
 MOBILE_SRC = REPO_ROOT / "apps" / "mobile" / "src"
@@ -36,7 +57,6 @@ DESIGN_SRC = REPO_ROOT / "apps" / "packages" / "design" / "src"
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
 PRODUCT_CLIENT_DOMAIN_SRC = PRODUCT_CLIENT_SRC / "domain"
 PRODUCT_CLIENT_PRIMITIVES_SRC = PRODUCT_CLIENT_SRC / "primitives"
-ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
 GENERATED_PREFIXES: set[str] = set()
 
@@ -74,6 +94,7 @@ WARNING_INK_RE = re.compile(
     r"|\b(?:bg|border)-warning/\d+(?![\w-])"
 )
 
+RADIX_SPECIFIER_RE = re.compile(r"@radix-ui/[A-Za-z0-9._/-]+")
 OPENAPI_CLIENT_VERB_RE = re.compile(r"\bclient\.(GET|POST|PUT|PATCH|DELETE)\s*\(")
 QUERY_CACHE_CALL_RE = re.compile(
     r"\bqueryClient\.("
@@ -169,19 +190,108 @@ PRODUCT_CLIENT_DOMAIN_FIXTURE_IMPORTS = {
 }
 
 
+# A violation's fingerprint is `<enclosing symbol>::<content anchor>` — never a
+# line number, so a grandfathered site survives reformatting and moves within its
+# file while a NEW hit in the same file gets its own site and fails. The symbol is
+# the nearest declaration above the hit; the anchor is the import specifier or the
+# matched token itself.
+SYMBOL_RES = (
+    (
+        re.compile(
+            r"^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*"
+            r"([A-Za-z_$][\w$]*)"
+        ),
+        "function",
+    ),
+    (
+        re.compile(r"^\s*(?:export\s+)?(?:declare\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)"),
+        "class",
+    ),
+    (
+        re.compile(r"^\s*(?:export\s+)?(?:type|interface|enum)\s+([A-Za-z_$][\w$]*)"),
+        "type",
+    ),
+    (
+        re.compile(r"^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)"),
+        "const",
+    ),
+)
+
+_LINES_CACHE: dict[tuple[str, int, int], list[str]] = {}
+
+
+def file_lines(path: Path) -> list[str]:
+    if not path.is_file():
+        return []
+    stat = path.stat()
+    key = (str(path), stat.st_mtime_ns, stat.st_size)
+    cached = _LINES_CACHE.get(key)
+    if cached is None:
+        cached = path.read_text().splitlines()
+        _LINES_CACHE[key] = cached
+    return cached
+
+
+def enclosing_symbol(path: Path, lineno: int) -> str:
+    """Nearest declaration above `lineno`, e.g. `function useThing`.
+
+    Import statements sit above every declaration, so a hit in the import block
+    fingerprints on its specifier alone — which is already unique per specifier.
+    """
+    lines = file_lines(path)
+    for index in range(min(lineno, len(lines)) - 1, -1, -1):
+        line = strip_line_comment(lines[index])
+        for pattern, kind in SYMBOL_RES:
+            match = pattern.search(line)
+            if match:
+                return f"{kind} {match.group(1)}"
+    return ""
+
+
+def fingerprint(path: Path, lineno: int, anchor: str) -> str:
+    symbol = enclosing_symbol(path, lineno)
+    return f"{symbol}::{anchor}" if symbol else anchor
+
+
+def line_anchor(path: Path, lineno: int, pattern: re.Pattern[str] | None = None) -> str:
+    """Anchor text for a line-scanned hit: the matched token, else the whole line."""
+    lines = file_lines(path)
+    if not 1 <= lineno <= len(lines):
+        return ""
+    line = strip_line_comment(lines[lineno - 1])
+    if pattern is not None:
+        match = pattern.search(line)
+        if match:
+            return re.sub(r"\s+", " ", match.group(0)).strip()
+    return re.sub(r"\s+", " ", line).strip()
+
+
 @dataclass(frozen=True)
 class Violation:
     rule_id: str
     path: Path
     lineno: int
-    message: str
+    site: str
+    detail: str
 
     @property
     def relative_path(self) -> str:
-        return self.path.relative_to(REPO_ROOT).as_posix()
+        try:
+            return self.path.relative_to(REPO_ROOT).as_posix()
+        except ValueError:
+            return self.path.as_posix()
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return (self.relative_path, self.site)
 
     def format(self) -> str:
-        return f"{self.relative_path}:{self.lineno}: [{self.rule_id}] {self.message}"
+        """The record-generated diagnostic: rule, alternative, record path."""
+        return lint_records.render_diagnostic(
+            RULES.rule(self.rule_id),
+            f"{self.relative_path}:{self.lineno}",
+            self.detail,
+        )
 
 
 @dataclass(frozen=True)
@@ -191,14 +301,6 @@ class ScopedLocalBinding:
     end: int
     namespace: bool = False
     tracked_import_start: int | None = None
-
-
-@dataclass(frozen=True)
-class AllowlistEntry:
-    rule_id: str
-    relative_path: str
-    count: int
-    reason: str
 
 
 def strip_line_comment(line: str) -> str:
@@ -339,6 +441,40 @@ def is_product_client_query_hook_owner(path: Path) -> bool:
     )
 
 
+def first_present(line: str, candidates: tuple[str, ...]) -> str:
+    """The first candidate substring present in `line` — the site anchor."""
+    for candidate in candidates:
+        if candidate in line:
+            return candidate
+    return ""
+
+
+def first_match(line: str, patterns: tuple[re.Pattern[str], ...]) -> str:
+    """The first pattern's matched text, whitespace-collapsed — the site anchor."""
+    for pattern in patterns:
+        match = pattern.search(line)
+        if match:
+            return re.sub(r"\s+", " ", match.group(0)).strip()
+    return ""
+
+
+SET_STATE_CALL_RE = re.compile(r"[A-Za-z_$][\w$.]*\.setState\s*\(")
+
+
+def set_state_anchor(path: Path, lineno: int) -> str:
+    """`<receiver>.setState` for a setState hit — the receiver names the store."""
+    return first_match(
+        strip_line_comment_safe(path, lineno), (SET_STATE_CALL_RE,)
+    ).removesuffix("(").strip() or "setState"
+
+
+def strip_line_comment_safe(path: Path, lineno: int) -> str:
+    lines = file_lines(path)
+    if not 1 <= lineno <= len(lines):
+        return ""
+    return strip_line_comment(lines[lineno - 1])
+
+
 def code_only_text(text: str, *, jsx: bool) -> str:
     masked = ["\n" if char == "\n" else " " for char in text]
     for token in tokenize_typescript(text, jsx=jsx):
@@ -398,10 +534,14 @@ def add_if(
     rule_id: str,
     path: Path,
     lineno: int,
-    message: str,
+    anchor: str,
+    detail: str,
 ) -> None:
+    """Record one violation, fingerprinted by enclosing symbol + content anchor."""
     if condition:
-        violations.append(Violation(rule_id, path, lineno, message))
+        violations.append(
+            Violation(rule_id, path, lineno, fingerprint(path, lineno, anchor), detail)
+        )
 
 
 def check_file(path: Path) -> list[Violation]:
@@ -440,51 +580,78 @@ def check_file(path: Path) -> list[Violation]:
         add_if(
             violations,
             in_desktop and contains_tauri_api and not is_tauri_access_path(rel),
-            "TAURI_API_OUTSIDE_ACCESS",
+            "FE-ACCESS-1",
             path,
             lineno,
-            "Tauri API imports must stay under apps/desktop/src/lib/access/tauri/**",
+            "@tauri-apps/api",
+            "@tauri-apps/api imported outside apps/desktop/src/lib/access/tauri/**",
         )
         add_if(
             violations,
             in_desktop
             and contains_anyharness_client
             and not is_anyharness_client_path(rel),
-            "ANYHARNESS_CLIENT_OUTSIDE_ACCESS",
+            "FE-ACCESS-2",
             path,
             lineno,
-            "getAnyHarnessClient must stay behind AnyHarness access boundaries",
+            "getAnyHarnessClient",
+            "getAnyHarnessClient referenced outside the AnyHarness access layer",
         )
         add_if(
             violations,
             (in_desktop or in_product_client)
             and contains_openapi_client_verb
             and not is_cloud_access_path(rel),
-            "CLOUD_OPENAPI_CLIENT_OUTSIDE_ACCESS",
+            "FE-ACCESS-3",
             path,
             lineno,
-            "raw OpenAPI client verbs must stay under apps/desktop/src/lib/access/cloud/**",
+            first_match(line, (OPENAPI_CLIENT_VERB_RE,)),
+            f"raw OpenAPI verb {first_match(line, (OPENAPI_CLIENT_VERB_RE,))!r} "
+            "outside lib/access/cloud/**",
         )
         add_if(
             violations,
             (in_desktop or in_product_client)
             and (contains_use_query_client or contains_query_cache_call)
             and not is_query_cache_owner_path(rel),
-            "QUERY_CLIENT_OUTSIDE_CACHE_OWNER",
+            "FE-CACHE-1",
             path,
             lineno,
-            "React Query client/cache shape must be owned by access hooks, product cache hooks, or lib/infra/query",
+            "useQueryClient"
+            if contains_use_query_client
+            else first_match(line, (QUERY_CACHE_CALL_RE,)),
+            "QueryClient use outside an access hook, a hooks/**/cache/** owner, "
+            "or lib/infra/query",
         )
         add_if(
             violations,
             in_desktop and contains_legacy_access,
-            "LEGACY_ACCESS_IMPORT",
+            "FE-ACCESS-4",
             path,
             lineno,
-            "legacy cloud/AnyHarness/Tauri access paths are not allowed",
+            first_present(
+                line,
+                (
+                    "@/platform/tauri",
+                    "@/lib/integrations/cloud",
+                    "@/lib/integrations/anyharness",
+                ),
+            ),
+            "import of a retired legacy access path",
         )
 
         if in_domain:
+            domain_anchor = first_present(
+                line,
+                (
+                    "@tanstack/react-query",
+                    "@/hooks/",
+                    "@/stores/",
+                    "@/lib/access/",
+                    "@/lib/integrations/",
+                    "@tauri-apps/api",
+                ),
+            ) or first_match(line, (REACT_IMPORT_RE,))
             add_if(
                 violations,
                 (
@@ -496,13 +663,23 @@ def check_file(path: Path) -> list[Violation]:
                     or "@/lib/integrations/" in line
                     or contains_tauri_api
                 ),
-                "DOMAIN_FORBIDDEN_IMPORT",
+                "FE-DOMAIN-1",
                 path,
                 lineno,
-                "lib/domain must stay pure: no React, hooks, stores, access, integrations, Tauri, or TanStack Query",
+                domain_anchor,
+                f"lib/domain imports {domain_anchor!r}",
             )
 
         if in_workflows:
+            workflow_anchor = first_present(
+                line,
+                (
+                    "@tanstack/react-query",
+                    "@/components/",
+                    "@/hooks/",
+                    "@tauri-apps/api",
+                ),
+            ) or first_match(line, (REACT_IMPORT_RE,))
             add_if(
                 violations,
                 (
@@ -512,13 +689,17 @@ def check_file(path: Path) -> list[Violation]:
                     or "@/hooks/" in line
                     or contains_tauri_api
                 ),
-                "WORKFLOW_FORBIDDEN_IMPORT",
+                "FE-DOMAIN-2",
                 path,
                 lineno,
-                "lib/workflows must not import React, components, hooks, Tauri, or TanStack Query",
+                workflow_anchor,
+                f"lib/workflows imports {workflow_anchor!r}",
             )
 
         if in_components:
+            component_anchor = first_present(
+                line, ("@/lib/access/", "@tauri-apps/api", "getAnyHarnessClient")
+            )
             add_if(
                 violations,
                 (
@@ -526,13 +707,23 @@ def check_file(path: Path) -> list[Violation]:
                     or contains_tauri_api
                     or contains_anyharness_client
                 ),
-                "COMPONENT_FORBIDDEN_ACCESS",
+                "FE-COMPONENT-1",
                 path,
                 lineno,
-                "components must not own raw access",
+                component_anchor,
+                f"component owns raw access via {component_anchor!r}",
             )
 
         if in_stores:
+            store_anchor = first_present(
+                line,
+                (
+                    "@tanstack/react-query",
+                    "@/lib/access/",
+                    "@tauri-apps/api",
+                    "getAnyHarnessClient",
+                ),
+            )
             add_if(
                 violations,
                 (
@@ -541,10 +732,11 @@ def check_file(path: Path) -> list[Violation]:
                     or contains_tauri_api
                     or contains_anyharness_client
                 ),
-                "STORE_FORBIDDEN_ACCESS",
+                "FE-STORE-1",
                 path,
                 lineno,
-                "stores must not import raw access, Tauri, TanStack Query, or AnyHarness clients",
+                store_anchor,
+                f"store imports {store_anchor!r}",
             )
 
     return violations
@@ -645,10 +837,11 @@ def find_product_client_domain_violations(path: Path) -> list[Violation]:
     if path.suffix == ".tsx":
         violations.append(
             Violation(
-                "PRODUCT_CLIENT_DOMAIN_TSX",
+                "FE-PC-1",
                 path,
                 1,
-                "ProductClient domain is plain TypeScript; JSX/TSX belongs outside src/domain",
+                path.name,
+                f"{path.name} is a .tsx file under src/domain",
             )
         )
 
@@ -658,10 +851,11 @@ def find_product_client_domain_violations(path: Path) -> list[Violation]:
         if Path(clean_source).suffix.lower() in PRODUCT_CLIENT_DOMAIN_STYLE_SUFFIXES:
             violations.append(
                 Violation(
-                    "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT",
+                    "FE-PC-2",
                     path,
                     statement.lineno,
-                    f"ProductClient domain must not import style asset {source!r}",
+                    fingerprint(path, statement.lineno, source),
+                    f"domain imports style asset {source!r}",
                 )
             )
             continue
@@ -675,13 +869,11 @@ def find_product_client_domain_violations(path: Path) -> list[Violation]:
                     continue
                 violations.append(
                     Violation(
-                        "PRODUCT_CLIENT_DOMAIN_RELATIVE_ESCAPE",
+                        "FE-PC-3",
                         path,
                         statement.lineno,
-                        (
-                            "ProductClient domain relative imports must stay within "
-                            "src/domain; only the four named contract fixtures may escape"
-                        ),
+                        fingerprint(path, statement.lineno, source),
+                        f"relative import {source!r} resolves outside src/domain",
                     )
                 )
             continue
@@ -696,15 +888,16 @@ def find_product_client_domain_violations(path: Path) -> list[Violation]:
             if raw_capabilities:
                 violations.append(
                     Violation(
-                        "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT",
+                        "FE-PC-2",
                         path,
                         statement.lineno,
-                        (
-                            "ProductClient domain may import SDK data contracts, not "
-                            "raw client, request, timing, or transport plumbing; "
-                            "forbidden imports: "
-                            f"{', '.join(sorted(raw_capabilities))}"
+                        fingerprint(
+                            path,
+                            statement.lineno,
+                            f"{source}:{','.join(sorted(raw_capabilities))}",
                         ),
+                        "domain imports raw client/request/timing/transport plumbing: "
+                        f"{', '.join(sorted(raw_capabilities))}",
                     )
                 )
                 continue
@@ -713,10 +906,17 @@ def find_product_client_domain_violations(path: Path) -> list[Violation]:
             if statement.runtime_imported_names:
                 violations.append(
                     Violation(
-                        "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT",
+                        "FE-PC-2",
                         path,
                         statement.lineno,
-                        "ProductClient domain may import Cloud SDK contract types, not runtime values",
+                        fingerprint(
+                            path,
+                            statement.lineno,
+                            f"{source}:"
+                            f"{','.join(sorted(statement.runtime_imported_names))}",
+                        ),
+                        "domain imports Cloud SDK runtime values, not just contract "
+                        f"types: {', '.join(sorted(statement.runtime_imported_names))}",
                     )
                 )
             continue
@@ -729,28 +929,29 @@ def find_product_client_domain_violations(path: Path) -> list[Violation]:
             if forbidden_runtime:
                 violations.append(
                     Violation(
-                        "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT",
+                        "FE-PC-2",
                         path,
                         statement.lineno,
-                        (
-                            "ProductClient domain may import AnyHarness contract types and "
-                            "the four approved pure helpers only; forbidden runtime imports: "
-                            f"{', '.join(sorted(forbidden_runtime))}"
+                        fingerprint(
+                            path,
+                            statement.lineno,
+                            f"{source}:{','.join(sorted(forbidden_runtime))}",
                         ),
+                        "domain imports AnyHarness runtime values beyond the approved "
+                        f"pure helpers: {', '.join(sorted(forbidden_runtime))}",
                     )
                 )
             continue
 
         violations.append(
             Violation(
-                "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT",
+                "FE-PC-2",
                 path,
                 statement.lineno,
-                (
-                    "ProductClient domain external imports are limited to Cloud SDK types, "
-                    "AnyHarness contract types/approved pure helpers, and test-only vitest; "
-                    f"found {source!r}"
-                ),
+                fingerprint(path, statement.lineno, source),
+                f"domain imports {source!r}, which is outside the allowed set "
+                "(Cloud SDK types, AnyHarness contract types/approved pure helpers, "
+                "test-only vitest)",
             )
         )
 
@@ -763,10 +964,11 @@ def find_product_client_domain_violations(path: Path) -> list[Violation]:
         ):
             violations.append(
                 Violation(
-                    "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_API",
+                    "FE-PC-4",
                     path,
                     token.lineno,
-                    f"ProductClient domain must not use browser/Tauri API {token.value!r}",
+                    fingerprint(path, token.lineno, token.value),
+                    f"domain references browser/Tauri global {token.value!r}",
                 )
             )
 
@@ -798,13 +1000,12 @@ def find_mobile_product_client_import_violations(path: Path) -> list[Violation]:
         if mobile_relative_import_targets_product_client(path, source):
             violations.append(
                 Violation(
-                    "MOBILE_PRODUCT_CLIENT_DOMAIN_ONLY",
+                    "FE-MOBILE-1",
                     path,
                     statement.lineno,
-                    (
-                        "Mobile must reach ProductClient through its package export, "
-                        f"not a relative source path; found {source!r}"
-                    ),
+                    fingerprint(path, statement.lineno, source),
+                    "Mobile must reach ProductClient through its package export, "
+                    f"not a relative source path; found {source!r}",
                 )
             )
             continue
@@ -813,13 +1014,12 @@ def find_mobile_product_client_import_violations(path: Path) -> list[Violation]:
         if not source.startswith(MOBILE_PRODUCT_CLIENT_DOMAIN_PREFIX):
             violations.append(
                 Violation(
-                    "MOBILE_PRODUCT_CLIENT_DOMAIN_ONLY",
+                    "FE-MOBILE-1",
                     path,
                     statement.lineno,
-                    (
-                        "Mobile may import ProductClient only through "
-                        f"{MOBILE_PRODUCT_CLIENT_DOMAIN_PREFIX}<concrete-file>; found {source!r}"
-                    ),
+                    fingerprint(path, statement.lineno, source),
+                    "Mobile may import ProductClient only through "
+                    f"{MOBILE_PRODUCT_CLIENT_DOMAIN_PREFIX}<concrete-file>; found {source!r}",
                 )
             )
             continue
@@ -838,13 +1038,12 @@ def find_mobile_product_client_import_violations(path: Path) -> list[Violation]:
         if not concrete:
             violations.append(
                 Violation(
-                    "MOBILE_PRODUCT_CLIENT_DOMAIN_ONLY",
+                    "FE-MOBILE-1",
                     path,
                     statement.lineno,
-                    (
-                        "Mobile ProductClient domain imports must name an existing concrete "
-                        f"src/domain TypeScript file; found {source!r}"
-                    ),
+                    fingerprint(path, statement.lineno, source),
+                    "Mobile ProductClient domain imports must name an existing concrete "
+                    f"src/domain TypeScript file; found {source!r}",
                 )
             )
 
@@ -2466,13 +2665,12 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         if is_product_client_forbidden_import(path, statement.source):
             violations.append(
                 Violation(
-                    "PRODUCT_CLIENT_FORBIDDEN_IMPORT",
+                    "FE-PC-5",
                     path,
                     statement.lineno,
-                    (
-                        "product-client must use its typed host boundary instead of "
-                        f"importing {statement.source!r}"
-                    ),
+                    fingerprint(path, statement.lineno, statement.source),
+                    "product-client must use its typed host boundary instead of "
+                    f"importing {statement.source!r}",
                 )
             )
             continue
@@ -2487,13 +2685,12 @@ def find_product_client_violations(path: Path) -> list[Violation]:
             edge_kind = "type-only" if statement.type_only else "runtime"
             violations.append(
                 Violation(
-                    "PRODUCT_CLIENT_LAYER_DIRECTION",
+                    "FE-PC-6",
                     path,
                     statement.lineno,
-                    (
-                        f"{edge_kind} {source_layer} -> {target_layer} import is upward; "
-                        "move the dependency or its owned type to the lower layer"
-                    ),
+                    fingerprint(path, statement.lineno, statement.source),
+                    f"{edge_kind} {source_layer} -> {target_layer} import is upward; "
+                    "move the dependency or its owned type to the lower layer",
                 )
             )
 
@@ -2547,15 +2744,17 @@ def find_product_client_violations(path: Path) -> list[Violation]:
             and identifiers.intersection(QUERY_HOOK_NAMES)
             and not is_product_client_query_hook_owner(path)
         ):
+            hook_names = sorted(identifiers.intersection(QUERY_HOOK_NAMES))
             violations.append(
                 Violation(
-                    "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE",
+                    "FE-CACHE-2",
                     path,
                     statement.lineno,
-                    (
-                        "React Query query/mutation hooks belong under hooks/access/** "
-                        "or a product hooks/**/cache/** owner"
+                    fingerprint(
+                        path, statement.lineno, f"{statement.source}:{','.join(hook_names)}"
                     ),
+                    f"Query hook(s) {', '.join(hook_names)} used outside hooks/access/** "
+                    "or a hooks/**/cache/** owner",
                 )
             )
 
@@ -2572,30 +2771,34 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         ):
             violations.append(
                 Violation(
-                    "ANYHARNESS_CLIENT_OUTSIDE_ACCESS",
+                    "FE-ACCESS-2",
                     path,
                     statement.lineno,
-                    "getAnyHarnessClient must stay behind AnyHarness access boundaries",
+                    fingerprint(path, statement.lineno, "getAnyHarnessClient"),
+                    f"getAnyHarnessClient imported from {statement.source!r} outside the "
+                    "AnyHarness access layer",
                 )
             )
 
         if source_layer == "components" and target is not None and target.startswith("lib/access/"):
             violations.append(
                 Violation(
-                    "COMPONENT_FORBIDDEN_ACCESS",
+                    "FE-COMPONENT-1",
                     path,
                     statement.lineno,
-                    "components must call hooks instead of importing lib/access directly",
+                    fingerprint(path, statement.lineno, statement.source),
+                    f"component imports lib/access module {statement.source!r} directly",
                 )
             )
 
         if internal_store_access:
             violations.append(
                 Violation(
-                    "STORE_FORBIDDEN_ACCESS",
+                    "FE-STORE-1",
                     path,
                     statement.lineno,
-                    "stores must receive access-owned values instead of importing lib/access",
+                    fingerprint(path, statement.lineno, statement.source),
+                    f"store imports lib/access module {statement.source!r}",
                 )
             )
 
@@ -2615,18 +2818,19 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         if runtime_access_import:
             violations.append(
                 Violation(
-                    "STORE_RUNTIME_ACCESS",
+                    "FE-STORE-2",
                     path,
                     statement.lineno,
-                    "stores must not import query/React SDK clients or raw client constructors",
+                    fingerprint(path, statement.lineno, statement.source),
+                    f"store imports runtime client surface {statement.source!r}",
                 )
             )
 
         if source_layer == "lib":
             rule_id = (
-                "DOMAIN_FORBIDDEN_IMPORT"
+                "FE-DOMAIN-1"
                 if lib_area == "domain"
-                else "WORKFLOW_FORBIDDEN_IMPORT"
+                else "FE-DOMAIN-2"
                 if lib_area == "workflows"
                 else None
             )
@@ -2643,7 +2847,8 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                         rule_id,
                         path,
                         statement.lineno,
-                        f"lib/{lib_area} must remain non-React and free of query/raw access imports",
+                        fingerprint(path, statement.lineno, statement.source),
+                        f"lib/{lib_area} imports {statement.source!r}",
                     )
                 )
 
@@ -2661,10 +2866,11 @@ def find_product_client_violations(path: Path) -> list[Violation]:
     ):
         violations.append(
             Violation(
-                "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER",
+                "FE-STORE-3",
                 path,
                 lineno,
-                "call an action owned by the store instead of mutating imported store state directly",
+                fingerprint(path, lineno, set_state_anchor(path, lineno)),
+                f"{set_state_anchor(path, lineno)} on an imported store",
             )
         )
 
@@ -2686,10 +2892,11 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         ):
             violations.append(
                 Violation(
-                    "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER",
+                    "FE-STORE-3",
                     path,
                     lineno,
-                    "call an action owned by the store instead of mutating imported store state directly",
+                    fingerprint(path, lineno, set_state_anchor(path, lineno)),
+                    f"{set_state_anchor(path, lineno)} on an imported store",
                 )
             )
 
@@ -2697,10 +2904,11 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         for lineno in direct_call_lines(text, "fetch", jsx=jsx):
             violations.append(
                 Violation(
-                    "STORE_RUNTIME_ACCESS",
+                    "FE-STORE-2",
                     path,
                     lineno,
-                    "stores must receive fetched values through actions instead of calling fetch directly",
+                    fingerprint(path, lineno, "fetch("),
+                    "store calls fetch( directly",
                 )
             )
 
@@ -2708,10 +2916,11 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         if token.kind == "identifier" and token.value.startswith("__TAURI"):
             violations.append(
                 Violation(
-                    "PRODUCT_CLIENT_FORBIDDEN_IMPORT",
+                    "FE-PC-5",
                     path,
                     token.lineno,
-                    "product-client must use its typed host boundary instead of raw __TAURI* globals",
+                    fingerprint(path, token.lineno, token.value),
+                    f"raw {token.value} global referenced in product-client",
                 )
             )
 
@@ -2745,16 +2954,14 @@ def find_radix_import_violations(
             if not line.strip():
                 continue
             if "@radix-ui/" in line:
+                anchor = first_match(line, (RADIX_SPECIFIER_RE,)) or "@radix-ui/"
                 violations.append(
                     Violation(
-                        "RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY",
+                        "FE-UI-1",
                         path,
                         lineno,
-                        (
-                            "@radix-ui/* imports must stay under "
-                            "root apps/packages/product-client/src/primitives/* "
-                            "files or its patterns/** tier"
-                        ),
+                        fingerprint(path, lineno, anchor),
+                        f"{anchor} imported outside the component library",
                     )
                 )
     return violations
@@ -2791,14 +2998,11 @@ def find_tailwind_merge_import_violations(
                 continue
             violations.append(
                 Violation(
-                    "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                    "FE-UI-2",
                     path,
                     statement.lineno,
-                    (
-                        "tailwind-merge may only be imported by "
-                        "apps/packages/product-client/src/primitives/utils/tw-merge.ts; "
-                        "use #product/primitives/utils/tw-merge"
-                    ),
+                    fingerprint(path, statement.lineno, statement.source),
+                    f"bare {statement.source!r} import outside the tw-merge wrapper",
                 )
             )
     return violations
@@ -2845,15 +3049,14 @@ def find_warning_ink_violations() -> list[Violation]:
                 )
                 violations.append(
                     Violation(
-                        "WARNING_TOKEN_AS_INK",
+                        "FE-UI-3",
                         path,
                         lineno,
-                        (
-                            f"`{utility}` uses the warning FILL token where the "
-                            f"purpose-built token belongs — use `{replacement}`. "
-                            "`--color-warning` is rgba(...,0.15) in dark mode, so "
-                            "this renders effectively invisible."
-                        ),
+                        fingerprint(path, lineno, utility),
+                        f"`{utility}` uses the warning FILL token where the "
+                        f"purpose-built token belongs — use `{replacement}`. "
+                        "`--color-warning` is rgba(...,0.15) in dark mode, so "
+                        "this renders effectively invisible.",
                     )
                 )
     return violations
@@ -2880,56 +3083,55 @@ def find_primitives_top_level_violations() -> list[Violation]:
             continue
         violations.append(
             Violation(
-                "PRODUCT_CLIENT_PRIMITIVES_TOP_LEVEL_ENTRY",
+                "FE-PC-7",
                 entry,
                 1,
-                (
-                    f"apps/packages/product-client/src/primitives/{entry.name} is not "
-                    "an allowed root source file or support directory per the "
-                    "component-library taxonomy in "
-                    "specs/DESIGN_SYSTEM.md "
-                    "(support directories: "
-                    f"{', '.join(sorted(PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES))})"
-                ),
+                entry.name,
+                f"primitives/{entry.name} is not an allowed root source file or "
+                "support directory per the component-library taxonomy "
+                "(support directories: "
+                f"{', '.join(sorted(PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES))})",
             )
         )
     return violations
 
 
-def load_allowlist() -> dict[tuple[str, str], AllowlistEntry]:
-    if not ALLOWLIST_PATH.exists():
-        return {}
-    entries: dict[tuple[str, str], AllowlistEntry] = {}
-    for lineno, raw_line in enumerate(ALLOWLIST_PATH.read_text().splitlines(), start=1):
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
+def disambiguate(violations: list[Violation]) -> list[Violation]:
+    """Give repeated fingerprints an occurrence ordinal, in file order.
+
+    Two hits of the same rule can share a fingerprint — the same matched token
+    twice inside one function. The ledger keys on `(path, site)`, so without an
+    ordinal the second occurrence would be excused by the first one's entry.
+    The ordinal is an occurrence index, not a line number: reformatting does not
+    move it, and adding a hit only ever appends a new `#n` site.
+    """
+    grouped: dict[tuple[str, str, str], list[Violation]] = {}
+    for violation in violations:
+        grouped.setdefault(
+            (violation.rule_id, violation.relative_path, violation.site), []
+        ).append(violation)
+    out: list[Violation] = []
+    for group in grouped.values():
+        if len(group) == 1:
+            out.extend(group)
             continue
-        parts = line.split(maxsplit=3)
-        if len(parts) < 4:
-            raise ValueError(
-                f"{ALLOWLIST_PATH.relative_to(REPO_ROOT)}:{lineno}: "
-                "expected: RULE_ID path count reason"
+        for ordinal, violation in enumerate(
+            sorted(group, key=lambda item: item.lineno), start=1
+        ):
+            out.append(
+                violation
+                if ordinal == 1
+                else Violation(
+                    violation.rule_id,
+                    violation.path,
+                    violation.lineno,
+                    f"{violation.site}#{ordinal}",
+                    violation.detail,
+                )
             )
-        rule_id, relative_path, count_raw, reason = parts
-        try:
-            count = int(count_raw)
-        except ValueError as error:
-            raise ValueError(
-                f"{ALLOWLIST_PATH.relative_to(REPO_ROOT)}:{lineno}: "
-                f"invalid count {count_raw!r}"
-            ) from error
-        if count < 1:
-            raise ValueError(
-                f"{ALLOWLIST_PATH.relative_to(REPO_ROOT)}:{lineno}: count must be >= 1"
-            )
-        key = (rule_id, relative_path)
-        if key in entries:
-            raise ValueError(
-                f"{ALLOWLIST_PATH.relative_to(REPO_ROOT)}:{lineno}: duplicate allowlist entry "
-                f"for {rule_id} {relative_path}"
-            )
-        entries[key] = AllowlistEntry(rule_id, relative_path, count, reason)
-    return entries
+    return sorted(
+        out, key=lambda item: (item.relative_path, item.lineno, item.rule_id, item.site)
+    )
 
 
 def collect_violations() -> list[Violation]:
@@ -2959,54 +3161,58 @@ def collect_violations() -> list[Violation]:
     )
     violations.extend(find_primitives_top_level_violations())
     violations.extend(find_warning_ink_violations())
-    return violations
+    return disambiguate(violations)
+
+
+def tolerated_sites() -> dict[str, set[tuple[str, str]]]:
+    """The grandfathered sites this checker owns, per rule id."""
+    return {rule_id: RULES.exception_sites(rule_id) for rule_id in OWNED_RULE_IDS}
+
+
+def apply_exceptions(
+    violations: list[Violation],
+    tolerated: dict[str, set[tuple[str, str]]] | None = None,
+) -> tuple[list[Violation], list[str]]:
+    """Split violations into failures and report exception entries gone stale."""
+    ledger = tolerated_sites() if tolerated is None else tolerated
+    observed: dict[str, set[tuple[str, str]]] = {}
+    failures: list[Violation] = []
+    for violation in violations:
+        observed.setdefault(violation.rule_id, set()).add(violation.key)
+        if violation.key not in ledger.get(violation.rule_id, set()):
+            failures.append(violation)
+
+    stale: list[str] = []
+    for rule_id, sites in sorted(ledger.items()):
+        for path, site in sorted(sites - observed.get(rule_id, set())):
+            stale.append(
+                f"{path}: [{rule_id}] site '{site}' no longer violates the rule — "
+                f"delete this entry from lints/frontend/exceptions.toml"
+            )
+    return failures, stale
 
 
 def main() -> int:
-    allowlist = load_allowlist()
     violations = collect_violations()
+    failures, stale = apply_exceptions(violations)
 
-    grouped: dict[tuple[str, str], list[Violation]] = defaultdict(list)
-    for violation in violations:
-        grouped[(violation.rule_id, violation.relative_path)].append(violation)
-
-    failures: list[str] = []
-    stale_entries: list[str] = []
-
-    for key, items in sorted(grouped.items()):
-        allowed_count = allowlist.get(key).count if key in allowlist else 0
-        if len(items) <= allowed_count:
-            continue
-        excess = items[allowed_count:]
-        for violation in excess:
-            failures.append(
-                f"{violation.format()} (observed {len(items)}, allowed {allowed_count})"
-            )
-
-    observed_counts = Counter((violation.rule_id, violation.relative_path) for violation in violations)
-    for key, entry in sorted(allowlist.items()):
-        observed = observed_counts.get(key, 0)
-        if observed < entry.count:
-            stale_entries.append(
-                f"{entry.relative_path}:1: [{entry.rule_id}] stale allowlist count "
-                f"(observed {observed}, allowed {entry.count})"
-            )
-
-    if not failures and not stale_entries:
+    if not failures and not stale:
         print("Frontend boundary check passed.")
         return 0
 
     if failures:
-        print("Frontend boundary violations:")
-        for failure in failures:
-            print(f"  {failure}")
-
-    if stale_entries:
-        if failures:
+        print("Frontend boundary violations without a grandfathered exception:")
+        for violation in sorted(
+            failures,
+            key=lambda item: (item.relative_path, item.lineno, item.rule_id, item.site),
+        ):
+            print(violation.format())
             print()
-        print("Stale frontend boundary allowlist entries:")
-        for stale in stale_entries:
-            print(f"  {stale}")
+
+    if stale:
+        print("Stale frontend exception entries:")
+        for entry in stale:
+            print(f"  {entry}")
 
     return 1
 

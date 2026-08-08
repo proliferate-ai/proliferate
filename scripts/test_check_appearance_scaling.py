@@ -26,6 +26,49 @@ from scripts.check_appearance_scaling import (
     unsanctioned_growth,
 )
 
+class RecordCoverageTest(unittest.TestCase):
+    """Every rule this checker claims must have a record, and vice versa.
+
+    The checker no longer carries remedy prose, so this is the assertion that
+    the diagnostics still say anything at all: an id with no record would raise
+    at render time, and a record with no id would be a rule nothing enforces.
+    """
+
+    RULE_IDS = frozenset(f"PROD-SCALE-{index}" for index in range(1, 35))
+
+    def test_checker_owns_exactly_the_prod_scale_records(self) -> None:
+        self.assertEqual(check_module.OWNED_RULE_IDS, self.RULE_IDS)
+
+    def test_every_rule_id_constant_is_owned(self) -> None:
+        constants = {
+            name: value
+            for name, value in vars(check_module).items()
+            if name.endswith("_RULE") or name == "CENSUS_SLACK_RULE_ID"
+        }
+        self.assertEqual(len(constants), 34, "one constant per record")
+        self.assertEqual(set(constants.values()), self.RULE_IDS)
+
+    def test_every_staged_rule_has_a_record(self) -> None:
+        self.assertTrue(STAGED_RULE_IDS.issubset(self.RULE_IDS))
+
+    def test_diagnostic_cites_the_rule_and_the_record(self) -> None:
+        diagnostic = Violation(
+            "PROD-SCALE-1", Path("/repo/apps/desktop/src/A.tsx"), 7, "text-sm"
+        ).format(Path("/repo"))
+        self.assertIn("apps/desktop/src/A.tsx:7", diagnostic)
+        self.assertIn("PROD-SCALE-1", diagnostic)
+        self.assertIn("found: text-sm", diagnostic)
+        self.assertIn("lints/product/appearance-scaling.toml", diagnostic)
+        self.assertIn("  instead:", diagnostic)
+
+    def test_a_diagnostic_carries_no_hardcoded_remedy(self) -> None:
+        """The old checker wrote the remedy twice — once in the record, once in a
+        message string beside the pattern. Evidence stays in `detail`; advice is
+        the record's job, so `detail` must be the matched text only."""
+        violations = check_source(Path("/repo/A.tsx"), 'const cls = "text-sm";\n')
+        self.assertEqual([violation.detail for violation in violations], ["text-sm"])
+
+
 class AppearanceScalingGuardTest(unittest.TestCase):
     def test_rejects_fixed_text_and_imported_icon_sizes(self) -> None:
         source = '''
@@ -40,7 +83,7 @@ export function Example() {
         violations = check_source(Path("Example.tsx"), source)
         self.assertEqual(
             {violation.rule_id for violation in violations},
-            {"fixed-stock-text-utility", "fixed-text-utility", "fixed-font-size-property", "fixed-glyph-utility", "fixed-glyph-attribute"},
+            {"PROD-SCALE-1", "PROD-SCALE-2", "PROD-SCALE-3", "PROD-SCALE-7", "PROD-SCALE-5"},
         )
 
     def test_accepts_semantic_text_and_glyph_tiers(self) -> None:
@@ -71,7 +114,7 @@ export function Example() {
 }
 '''
         violations = check_source(Path("Example.tsx"), source)
-        self.assertEqual([violation.rule_id for violation in violations], ["fixed-status-glyph-utility"])
+        self.assertEqual([violation.rule_id for violation in violations], ["PROD-SCALE-12"])
 
     def test_rejects_fixed_inline_svg_geometry_but_not_wrapper_geometry(self) -> None:
         source = '''
@@ -81,8 +124,8 @@ export function Example() {
 '''
         violations = check_source(Path("Example.tsx"), source)
         self.assertEqual([violation.rule_id for violation in violations], [
-            "fixed-glyph-attribute",
-            "fixed-glyph-attribute",
+            "PROD-SCALE-5",
+            "PROD-SCALE-5",
         ])
 
     def test_discovers_only_supported_icon_import_sources(self) -> None:
@@ -99,7 +142,7 @@ import { Minus } from "#product/primitives/icons/core";
 export function Control() { return <Minus className="size-3.5" />; }
 '''
         violations = check_source(Path("Control.tsx"), source)
-        self.assertEqual([violation.rule_id for violation in violations], ["fixed-glyph-utility"])
+        self.assertEqual([violation.rule_id for violation in violations], ["PROD-SCALE-7"])
 
     def test_rejects_fixed_icon_nested_inside_component_prop(self) -> None:
         source = '''
@@ -109,7 +152,7 @@ export function Control() {
 }
 '''
         violations = check_source(Path("Control.tsx"), source)
-        self.assertEqual([violation.rule_id for violation in violations], ["fixed-glyph-utility"])
+        self.assertEqual([violation.rule_id for violation in violations], ["PROD-SCALE-7"])
 
     def test_rejects_fixed_svg_descendant_utility(self) -> None:
         source = '''
@@ -120,7 +163,7 @@ export function Control({ icon }) {
         violations = check_source(Path("Control.tsx"), source)
         self.assertEqual(
             [violation.rule_id for violation in violations],
-            ["fixed-svg-descendant-utility"],
+            ["PROD-SCALE-11"],
         )
 
     def test_rejects_fixed_glyph_class_indirections(self) -> None:
@@ -134,9 +177,9 @@ export function TargetIcon({ size = "size-3.5" }) {
         self.assertEqual(
             {violation.rule_id for violation in violations},
             {
-                "fixed-glyph-alias-utility",
-                "fixed-glyph-component-default",
-                "fixed-glyph-prop-utility",
+                "PROD-SCALE-9",
+                "PROD-SCALE-10",
+                "PROD-SCALE-8",
             },
         )
 
@@ -151,7 +194,7 @@ export function TargetIcon({ size = "size-3.5" }) {
         violations = check_design_css_source(Path("product.css"), source)
         self.assertEqual(
             [violation.rule_id for violation in violations],
-            ["fixed-glyph-css-variable", "authored-root-token"],
+            ["PROD-SCALE-13", "PROD-SCALE-31"],
         )
 
     def test_rejects_closed_foundation_literal_vocabularies(self) -> None:
@@ -169,16 +212,16 @@ export function Example() {
         self.assertEqual(
             {violation.rule_id for violation in violations},
             {
-                "fixed-stock-text-utility",
-                "fixed-text-utility",
-                "arbitrary-radius",
-                "arbitrary-z",
-                "arbitrary-gap",
-                "arbitrary-size",
-                "retired-shadow",
-                "retired-accent-state",
-                "foreground-alpha-foundation",
-                "numeric-duration",
+                "PROD-SCALE-1",
+                "PROD-SCALE-2",
+                "PROD-SCALE-14",
+                "PROD-SCALE-15",
+                "PROD-SCALE-16",
+                "PROD-SCALE-17",
+                "PROD-SCALE-18",
+                "PROD-SCALE-19",
+                "PROD-SCALE-20",
+                "PROD-SCALE-21",
             },
         )
 
@@ -190,7 +233,7 @@ export function Example() {
 '''
         self.assertEqual(
             {violation.rule_id for violation in check_source(Path("Example.tsx"), source)},
-            {"retired-shadow", "foreground-alpha-foundation"},
+            {"PROD-SCALE-18", "PROD-SCALE-20"},
         )
 
     def test_rejects_every_retired_shadow_spelling(self) -> None:
@@ -214,7 +257,7 @@ export function Example() {
                 source = f'const cls = "rounded-lg {utility} border";\n'
                 self.assertEqual(
                     [violation.rule_id for violation in check_source(Path("E.tsx"), source)],
-                    ["retired-shadow"],
+                    ["PROD-SCALE-18"],
                 )
 
     def test_accepts_semantic_and_unrelated_shadow_names(self) -> None:
@@ -241,7 +284,7 @@ export function Example() {
                 source = f'const cls = "{utility} rounded-lg";\n'
                 self.assertEqual(
                     [violation.rule_id for violation in check_source(Path("E.tsx"), source)],
-                    ["foreground-alpha-foundation"],
+                    ["PROD-SCALE-20"],
                 )
 
     def test_accepts_opaque_foreground_fills(self) -> None:
@@ -291,7 +334,7 @@ const style = { transition: "opacity 150ms cubic-bezier(0.4, 0, 0.2, 1)" };
         rule_ids = {violation.rule_id for violation in check_source(Path("motion.ts"), source)}
         self.assertEqual(
             rule_ids,
-            {"inline-js-motion-literal", "inline-motion-literal", "inline-easing"},
+            {"PROD-SCALE-24", "PROD-SCALE-23", "PROD-SCALE-22"},
         )
 
     def test_allows_one_marked_activity_declaration(self) -> None:
@@ -311,7 +354,7 @@ const ORBIT_DELAYS = [
         self.assertFalse(raw_hex_scope_excluded(Path("components/Demo.test.tsx")))
 
         rejected = check_source(Path("components/Demo.test.tsx"), 'const color = "#abcdef";')
-        self.assertEqual([violation.rule_id for violation in rejected], ["raw-hex"])
+        self.assertEqual([violation.rule_id for violation in rejected], ["PROD-SCALE-29"])
         self.assertEqual(
             check_source(Path("components/Demo.test.tsx"), 'expect(css).not.toContain("#232323");'),
             [],
@@ -337,10 +380,10 @@ const ORBIT_DELAYS = [
         self.assertEqual(
             {violation.rule_id for violation in check_design_css_source(Path("product.css"), source)},
             {
-                "authored-theme-block",
-                "authored-root-token",
-                "design-finite-motion-literal",
-                "unowned-backdrop-filter",
+                "PROD-SCALE-30",
+                "PROD-SCALE-31",
+                "PROD-SCALE-25",
+                "PROD-SCALE-28",
             },
         )
 
@@ -369,7 +412,7 @@ const ORBIT_DELAYS = [
                         violation.rule_id
                         for violation in check_design_css_source(Path("product.css"), source)
                     ],
-                    ["unowned-backdrop-filter"],
+                    ["PROD-SCALE-28"],
                 )
 
     def test_authored_backdrop_filter_in_product_source_covers_both_spellings(self) -> None:
@@ -381,7 +424,7 @@ const ORBIT_DELAYS = [
                         violation.rule_id
                         for violation in check_source(Path("Panel.tsx"), source)
                     ],
-                    ["authored-backdrop-filter"],
+                    ["PROD-SCALE-27"],
                 )
 
     def test_backdrop_filter_rule_ignores_unrelated_custom_properties(self) -> None:
@@ -407,7 +450,7 @@ const ORBIT_DELAYS = [
 '''
         self.assertEqual(
             [violation.rule_id for violation in check_design_css_source(Path("product.css"), source)],
-            ["authored-root-token"],
+            ["PROD-SCALE-31"],
         )
 
     def test_rejects_numeric_z_and_unvirtualized_long_list_additions(self) -> None:
@@ -424,7 +467,7 @@ const ORBIT_DELAYS = [
         )
         self.assertEqual(
             {violation.rule_id for violation in violations},
-            {"standard-z-addition", "unvirtualized-long-list-addition"},
+            {"PROD-SCALE-32", "PROD-SCALE-33"},
         )
 
         baseline = {
@@ -437,17 +480,17 @@ const ORBIT_DELAYS = [
         """The staging contract: pre-migration hits are frozen per file, additions fail."""
         path = Path("/repo/apps/packages/product-client/src/primitives/Legacy.tsx")
         legacy = [
-            Violation("fixed-stock-text-utility", path, 4, "m"),
-            Violation("fixed-stock-text-utility", path, 9, "m"),
+            Violation("PROD-SCALE-1", path, 4, "m"),
+            Violation("PROD-SCALE-1", path, 9, "m"),
         ]
         census = staged_census(legacy, Path("/repo"))
-        self.assertEqual(census, {"apps/packages/product-client/src/primitives/Legacy.tsx|fixed-stock-text-utility": 2})
+        self.assertEqual(census, {"apps/packages/product-client/src/primitives/Legacy.tsx|PROD-SCALE-1": 2})
         self.assertEqual(apply_staged_baseline(legacy, census, Path("/repo")), [])
 
-        regressed = [*legacy, Violation("fixed-stock-text-utility", path, 14, "m")]
+        regressed = [*legacy, Violation("PROD-SCALE-1", path, 14, "m")]
         reported = apply_staged_baseline(regressed, census, Path("/repo"))
         self.assertEqual([violation.lineno for violation in reported], [14])
-        self.assertIn("frozen census is 2", reported[0].message)
+        self.assertIn("frozen census is 2", reported[0].detail)
 
     def test_slack_census_entry_fails_and_names_the_ratchet_command(self) -> None:
         """Absorption is anonymous, so a freed slot is a live allowance.
@@ -455,29 +498,30 @@ const ORBIT_DELAYS = [
         `apply_staged_baseline` matches on (file, rule) and never on the site
         that earned the slot, so a census entry allocating more than its file
         now uses would silently absorb the NEXT new violation there. Slack must
-        therefore fail, and the message must point at the one remedy that
-        cannot paper over a regression (`--write-baseline` refuses growth).
+        therefore fail, and the diagnostic must point at the one remedy that
+        cannot paper over a regression (`--write-baseline` refuses growth) —
+        which now comes from the record's `alternative`, not a string here.
         """
         path = Path("/repo/apps/packages/product-client/src/primitives/Legacy.tsx")
-        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|fixed-stock-text-utility": 3}
-        remaining = [Violation("fixed-stock-text-utility", path, 4, "m")]
+        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|PROD-SCALE-1": 3}
+        remaining = [Violation("PROD-SCALE-1", path, 4, "m")]
 
         # Bounded from above: the surviving hit is still absorbed.
         self.assertEqual(apply_staged_baseline(remaining, census, Path("/repo")), [])
 
         reported = census_slack(remaining, census, Path("/repo"))
         self.assertEqual([violation.rule_id for violation in reported], [CENSUS_SLACK_RULE_ID])
-        self.assertIn("frozen at 3 here but the file now has 1", reported[0].message)
-        self.assertIn("--write-baseline", reported[0].message)
+        self.assertIn("frozen at 3 here but the file now has 1", reported[0].detail)
+        self.assertIn("--write-baseline", reported[0].format(Path("/repo")))
 
     def test_a_fixed_site_cannot_shield_a_new_violation_of_the_same_rule(self) -> None:
         """The exact leak: migrate 2 of 3 sites, add 1 brand-new one, and the
         per-file count is unchanged so the upper bound sees nothing."""
         path = Path("/repo/apps/packages/product-client/src/primitives/Legacy.tsx")
-        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|fixed-stock-text-utility": 3}
+        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|PROD-SCALE-1": 3}
         after = [
-            Violation("fixed-stock-text-utility", path, 4, "m"),
-            Violation("fixed-stock-text-utility", path, 40, "brand new"),
+            Violation("PROD-SCALE-1", path, 4, "m"),
+            Violation("PROD-SCALE-1", path, 40, "brand new"),
         ]
         self.assertEqual(apply_staged_baseline(after, census, Path("/repo")), [])
         self.assertEqual(
@@ -489,12 +533,12 @@ const ORBIT_DELAYS = [
         """After --write-baseline the entry equals the surviving hits: no slack,
         and the next new violation in that file fails on the upper bound."""
         path = Path("/repo/apps/packages/product-client/src/primitives/Legacy.tsx")
-        remaining = [Violation("fixed-stock-text-utility", path, 4, "m")]
+        remaining = [Violation("PROD-SCALE-1", path, 4, "m")]
         ratcheted = staged_census(remaining, Path("/repo"))
-        self.assertEqual(ratcheted, {"apps/packages/product-client/src/primitives/Legacy.tsx|fixed-stock-text-utility": 1})
+        self.assertEqual(ratcheted, {"apps/packages/product-client/src/primitives/Legacy.tsx|PROD-SCALE-1": 1})
         self.assertEqual(census_slack(remaining, ratcheted, Path("/repo")), [])
 
-        regressed = [*remaining, Violation("fixed-stock-text-utility", path, 40, "new")]
+        regressed = [*remaining, Violation("PROD-SCALE-1", path, 40, "new")]
         self.assertEqual(
             [violation.lineno for violation in apply_staged_baseline(regressed, ratcheted, Path("/repo"))],
             [40],
@@ -504,10 +548,10 @@ const ORBIT_DELAYS = [
     def test_a_fully_migrated_file_must_lose_its_census_entry(self) -> None:
         """Zero surviving hits is the strongest slack: the whole entry is dead
         allowance and the file should be back under an absolute ban."""
-        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|retired-shadow": 2}
+        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|PROD-SCALE-18": 2}
         reported = census_slack([], census, Path("/repo"))
         self.assertEqual([violation.rule_id for violation in reported], [CENSUS_SLACK_RULE_ID])
-        self.assertIn("frozen at 2 here but the file now has 0", reported[0].message)
+        self.assertIn("frozen at 2 here but the file now has 0", reported[0].detail)
         self.assertEqual(census_slack([], {}, Path("/repo")), [])
 
     def test_slack_is_only_judged_for_files_that_were_actually_scanned(self) -> None:
@@ -516,11 +560,11 @@ const ORBIT_DELAYS = [
         reporting every censused file in the repository as slack."""
         path = Path("/repo/apps/packages/product-client/src/primitives/Touched.tsx")
         census = {
-            "apps/packages/product-client/src/primitives/Touched.tsx|retired-shadow": 1,
-            "apps/packages/product-client/src/primitives/Untouched.tsx|retired-shadow": 2,
+            "apps/packages/product-client/src/primitives/Touched.tsx|PROD-SCALE-18": 1,
+            "apps/packages/product-client/src/primitives/Untouched.tsx|PROD-SCALE-18": 2,
         }
         touched_only = {"apps/packages/product-client/src/primitives/Touched.tsx"}
-        surviving = [Violation("retired-shadow", path, 3, "m")]
+        surviving = [Violation("PROD-SCALE-18", path, 3, "m")]
 
         self.assertEqual(
             census_slack(surviving, census, Path("/repo"), scope=touched_only),
@@ -555,7 +599,7 @@ const ORBIT_DELAYS = [
     def test_the_default_ci_path_reports_census_slack(self) -> None:
         """The whole finding was that NOTHING ever failed on slack, so the wiring
         is the assertion: the entry point CI runs must surface it."""
-        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|retired-shadow": 2}
+        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|PROD-SCALE-18": 2}
         with (
             mock.patch.object(check_module, "collect_raw_violations", return_value=[]),
             mock.patch.object(
@@ -570,13 +614,13 @@ const ORBIT_DELAYS = [
     def test_unstaged_rules_are_never_absorbed_by_the_census(self) -> None:
         """Rules outside STAGED_RULE_IDS fail on their first hit, census or not."""
         path = Path("/repo/apps/packages/design/src/css/product.css")
-        unstaged = Violation("authored-root-token", path, 1, "m")
-        self.assertNotIn("authored-root-token", STAGED_RULE_IDS)
+        unstaged = Violation("PROD-SCALE-31", path, 1, "m")
+        self.assertNotIn("PROD-SCALE-31", STAGED_RULE_IDS)
         self.assertEqual(staged_census([unstaged], Path("/repo")), {})
         self.assertEqual(
             apply_staged_baseline(
                 [unstaged],
-                {"apps/packages/design/src/css/product.css|authored-root-token": 5},
+                {"apps/packages/design/src/css/product.css|PROD-SCALE-31": 5},
                 Path("/repo"),
             ),
             [unstaged],
@@ -585,7 +629,7 @@ const ORBIT_DELAYS = [
     def test_emptied_census_family_becomes_an_absolute_ban(self) -> None:
         """A staged rule with no census entries behaves exactly like a hard rule."""
         path = Path("/repo/apps/packages/product-client/src/primitives/Clean.tsx")
-        violation = Violation("retired-shadow", path, 3, "m")
+        violation = Violation("PROD-SCALE-18", path, 3, "m")
         self.assertEqual(
             [reported.lineno for reported in apply_staged_baseline([violation], {}, Path("/repo"))],
             [3],
@@ -621,17 +665,17 @@ const ORBIT_DELAYS = [
         unrelated file cannot ride in on another file's justification.
         """
         sanctions = {
-            "retired-shadow": {
+            "PROD-SCALE-18": {
                 SANCTION_FILES_KEY: {"apps/packages/product-client/src/primitives/Sonner.tsx": 1},
                 SANCTION_JUSTIFICATION_KEY: "x" * 81,
             }
         }
-        previous = {"apps/packages/product-client/src/primitives/Sonner.tsx|retired-shadow": 0}
+        previous = {"apps/packages/product-client/src/primitives/Sonner.tsx|PROD-SCALE-18": 0}
 
         self.assertEqual(
             unsanctioned_growth(
                 previous,
-                {"apps/packages/product-client/src/primitives/Sonner.tsx|retired-shadow": 1},
+                {"apps/packages/product-client/src/primitives/Sonner.tsx|PROD-SCALE-18": 1},
                 sanctions,
             ),
             [],
@@ -639,27 +683,27 @@ const ORBIT_DELAYS = [
         self.assertEqual(
             unsanctioned_growth(
                 previous,
-                {"apps/packages/product-client/src/primitives/Sonner.tsx|retired-shadow": 2},
+                {"apps/packages/product-client/src/primitives/Sonner.tsx|PROD-SCALE-18": 2},
                 sanctions,
             ),
-            ["apps/packages/product-client/src/primitives/Sonner.tsx|retired-shadow: 0 -> 2"],
+            ["apps/packages/product-client/src/primitives/Sonner.tsx|PROD-SCALE-18: 0 -> 2"],
         )
         self.assertEqual(
             unsanctioned_growth(
                 previous,
-                {"apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.tsx|retired-shadow": 1},
+                {"apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.tsx|PROD-SCALE-18": 1},
                 sanctions,
             ),
-            ["apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.tsx|retired-shadow: 0 -> 1"],
+            ["apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.tsx|PROD-SCALE-18: 0 -> 1"],
         )
 
     def test_census_growth_is_refused_for_an_unsanctioned_family(self) -> None:
         self.assertEqual(
-            unsanctioned_growth({"a.tsx|arbitrary-z": 1}, {"a.tsx|arbitrary-z": 2}, {}),
-            ["a.tsx|arbitrary-z: 1 -> 2"],
+            unsanctioned_growth({"a.tsx|PROD-SCALE-15": 1}, {"a.tsx|PROD-SCALE-15": 2}, {}),
+            ["a.tsx|PROD-SCALE-15: 1 -> 2"],
         )
         self.assertEqual(
-            unsanctioned_growth({"a.tsx|arbitrary-z": 3}, {"a.tsx|arbitrary-z": 1}, {}),
+            unsanctioned_growth({"a.tsx|PROD-SCALE-15": 3}, {"a.tsx|PROD-SCALE-15": 1}, {}),
             [],
             "shrinking is always free",
         )
@@ -680,7 +724,7 @@ const ORBIT_DELAYS = [
         """The keystone regression: a removed token's utility must be deleted at
         the call site, never absorbed by the census."""
         census = load_baselines()[STAGED_CENSUS_KEY]
-        button = "apps/packages/product-client/src/primitives/Button.tsx|retired-shadow"
+        button = "apps/packages/product-client/src/primitives/Button.tsx|PROD-SCALE-18"
         self.assertNotIn(button, census)
 
     def test_scanned_roots_cover_every_root_tailwind_compiles(self) -> None:

@@ -1,0 +1,75 @@
+# proliferate-worker crate structure (AH-WORKER) — the layout of the separate
+# worker binary crate (anyharness/crates/proliferate-worker, the agent-side
+# process), distinct from the anyharness-lib crate the boundary rules cover.
+# These records keep its completed restructure permanent: retired paths stay
+# dead, the required modules stay present, and neither imports nor `mod`
+# declarations may resurrect the old layout. Enforced by
+# scripts/check_proliferate_worker_structure.py.
+
+[[rule]]
+id = "AH-WORKER-1"
+title = "retired proliferate-worker paths stay retired"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_proliferate_worker_structure.py"
+mode = "lint"
+scope = "anyharness/crates/proliferate-worker/src/**"
+
+rule = """The proliferate-worker crate's retired directories and files must not exist."""
+alternative = """Use the post-restructure worker layout captured in REQUIRED_FILES."""
+why = """Same permanence argument as AH-PATHS-1, applied to the worker crate."""
+
+[rule.example]
+bad = """a resurrected worker `commands/` directory"""
+good = """the code lives at its post-restructure worker coordinate"""
+
+[[rule]]
+id = "AH-WORKER-2"
+title = "the proliferate-worker layout is present"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_proliferate_worker_structure.py"
+mode = "lint"
+scope = "anyharness/crates/proliferate-worker/src/**"
+
+rule = """All 16 files in REQUIRED_FILES must be present in the proliferate-worker crate."""
+alternative = """Keep the named module files in place; a real deletion is an amendment, not a refactor."""
+why = """Pins the target worker layout positively, not just negatively, so the shape cannot erode by deletion."""
+
+[rule.example]
+bad = """one of the 16 required worker modules deleted or renamed without updating the checker"""
+good = """cloud_client/, identity/, lifecycle/, store/ and the named root modules exist"""
+
+[[rule]]
+id = "AH-WORKER-3"
+title = "worker code does not import retired top-level modules"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_proliferate_worker_structure.py"
+mode = "lint"
+scope = "anyharness/crates/proliferate-worker/src/**"
+
+rule = """Worker code must not import the retired top-level modules `crate::commands`, `crate::sync`, `crate::updates`, `crate::control`, `crate::tail`, or `crate::inventory`."""
+alternative = """Import from the new module coordinate the code moved to."""
+why = """Blocks the import path back to the old layout even if the file itself is new."""
+
+[rule.example]
+bad = """`use crate::sync::poll;` in a worker module"""
+good = """use crate::lifecycle::heartbeat — the new module coordinate"""
+
+[[rule]]
+id = "AH-WORKER-4"
+title = "worker main.rs declares no retired top-level module"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_proliferate_worker_structure.py"
+mode = "lint"
+scope = "anyharness/crates/proliferate-worker/src/main.rs"
+
+rule = """The worker's main.rs must not declare any of the retired top-level modules."""
+alternative = """Declare only the modules of the current layout."""
+why = """The mod declaration is the other half of AH-WORKER-3 — a module can exist without being imported by path."""
+
+[rule.example]
+bad = """`mod control;` re-added to the worker main.rs"""
+good = """main.rs declares only the modules of the current layout"""

@@ -10,6 +10,28 @@ from unittest.mock import patch
 from scripts import check_docs
 
 
+def rendered(findings: list[check_docs.Finding]) -> list[str]:
+    """The record-generated diagnostics, which is what CI actually prints."""
+    return [finding.format() for finding in findings]
+
+
+class RecordCoverageTest(unittest.TestCase):
+    """Every rule this checker claims must have a record, and vice versa."""
+
+    def test_checker_owns_exactly_the_prod_docs_records(self) -> None:
+        self.assertEqual(
+            check_docs.OWNED_RULE_IDS,
+            frozenset(f"PROD-DOCS-{index}" for index in range(1, 10)),
+        )
+
+    def test_every_owned_rule_renders_a_diagnostic_naming_its_record(self) -> None:
+        for rule_id in sorted(check_docs.OWNED_RULE_IDS):
+            diagnostic = check_docs.Finding(rule_id, "somewhere.md:1", "detail").format()
+            self.assertIn(rule_id, diagnostic)
+            self.assertIn("lints/product/docs.toml", diagnostic)
+            self.assertIn("  instead:", diagnostic)
+
+
 class DocumentationIntegrityTest(unittest.TestCase):
     def valid_env_var_entry(self, **overrides: object) -> dict[str, object]:
         entry: dict[str, object] = {
@@ -103,12 +125,13 @@ class DocumentationIntegrityTest(unittest.TestCase):
             errors = check_docs.check_developing_roots()
 
         self.assertEqual(len(errors), 1)
-        self.assertIn(
-            "unexpected Developing documentation root: specs/developing/notes",
-            errors[0],
-        )
+        self.assertEqual(errors[0].rule_id, "PROD-DOCS-2")
+        diagnostic = errors[0].format()
+        self.assertIn("specs/developing/notes: PROD-DOCS-2", diagnostic)
+        self.assertIn("unexpected Developing documentation root", diagnostic)
+        self.assertIn("lints/product/docs.toml", diagnostic)
 
-    def markdown_errors(self, files: dict[str, str]) -> list[str]:
+    def markdown_errors(self, files: dict[str, str]) -> list[check_docs.Finding]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             paths: list[Path] = []
@@ -153,8 +176,21 @@ class DocumentationIntegrityTest(unittest.TestCase):
 """
             }
         )
-        self.assertTrue(any("missing-inline.md" in error for error in errors))
-        self.assertTrue(any("missing-reference.md" in error for error in errors))
+        self.assertEqual({error.rule_id for error in errors}, {"PROD-DOCS-5"})
+        diagnostics = rendered(errors)
+        self.assertTrue(any("missing-inline.md" in error for error in diagnostics))
+        self.assertTrue(any("missing-reference.md" in error for error in diagnostics))
+        self.assertTrue(all("lints/product/docs.toml" in error for error in diagnostics))
+
+    def test_absolute_repository_link_fails(self) -> None:
+        errors = self.markdown_errors(
+            {
+                "nested/README.md": "[absolute](/nested/guide.md)\n",
+                "nested/guide.md": "# Guide\n",
+            }
+        )
+        self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-3"])
+        self.assertIn("/nested/guide.md", errors[0].format())
 
     def test_atx_setext_and_duplicate_anchors(self) -> None:
         errors = self.markdown_errors(
@@ -185,8 +221,14 @@ Setext Heading
                 "nested/guide.md": "# Present\n",
             }
         )
-        self.assertTrue(any("missing Markdown anchor" in error for error in errors))
-        self.assertTrue(any("leaves repository" in error for error in errors))
+        self.assertEqual(
+            {error.rule_id for error in errors}, {"PROD-DOCS-6", "PROD-DOCS-4"}
+        )
+        diagnostics = rendered(errors)
+        self.assertTrue(any("missing heading anchor" in error for error in diagnostics))
+        self.assertTrue(
+            any("leaves the repository" in error for error in diagnostics)
+        )
 
     def test_structured_data(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -211,7 +253,8 @@ Setext Heading
                 errors = check_docs.check_structured_data()
 
         self.assertEqual(len(errors), 1)
-        self.assertIn("invalid JSON", errors[0])
+        self.assertEqual(errors[0].rule_id, "PROD-DOCS-7")
+        self.assertIn("invalid JSON", errors[0].format())
 
     def test_valid_env_var_catalog(self) -> None:
         self.assertEqual(
@@ -286,7 +329,8 @@ Setext Heading
                 errors = check_docs.check_structured_data()
 
         self.assertEqual(len(errors), 1)
-        self.assertIn("invalid YAML", errors[0])
+        self.assertEqual(errors[0].rule_id, "PROD-DOCS-8")
+        self.assertIn("invalid YAML", errors[0].format())
 
     @unittest.skipUnless(shutil.which("ruby"), "Ruby is required for YAML validation")
     def test_ruby_object_yaml_is_rejected(self) -> None:
@@ -310,7 +354,8 @@ Setext Heading
                 errors = check_docs.check_structured_data()
 
         self.assertEqual(len(errors), 1)
-        self.assertIn("invalid YAML", errors[0])
+        self.assertEqual(errors[0].rule_id, "PROD-DOCS-8")
+        self.assertIn("invalid YAML", errors[0].format())
 
 
 if __name__ == "__main__":

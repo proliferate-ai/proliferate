@@ -1,6 +1,6 @@
 {
   "censusGrowthSanctions": {
-    "foreground-alpha-foundation": {
+    "PROD-SCALE-20": {
       "files": {
         "apps/packages/product-client/src/components/playground/loading/PlaygroundThinkingTimingControls.tsx": 2,
         "apps/packages/product-client/src/components/playground/subagents-ux/full-flow/FullFlowChatViews.tsx": 1,
@@ -24,28 +24,28 @@
         "apps/packages/product-client/src/components/workspace/repo-setup/WorkspaceInventory.tsx": 5,
         "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx": 1
       },
-      "justification": "v2 4.2 widened FOREGROUND_ALPHA_RE to every Tailwind alpha spelling in every variant position (bg-foreground/5, /[0.04], /[8%]). The 82 static plain-numeric sites the prior regex could not see are pre-existing and are censused here so Workflow 2 has a ratchet target for them; the ban is at full strength for anything new. The single apps/packages/product-surfaces/ site is newly visible for a different reason \u2014 see the R-V2-1 census-completion trail on fixed-stock-text-utility \u2014 and migrates with the rest."
+      "justification": "v2 4.2 widened FOREGROUND_ALPHA_RE to every Tailwind alpha spelling in every variant position (bg-foreground/5, /[0.04], /[8%]). The 82 static plain-numeric sites the prior regex could not see are pre-existing and are censused here so Workflow 2 has a ratchet target for them; the ban is at full strength for anything new. The single apps/packages/product-surfaces/ site is newly visible for a different reason \u2014 see the R-V2-1 census-completion trail on PROD-SCALE-1 \u2014 and migrates with the rest."
     }
   },
   "stagedViolations": {
-    "apps/packages/product-client/src/components/playground/PlaygroundAttachmentFixtures.tsx|fixed-glyph-attribute": 2,
-    "apps/packages/product-client/src/components/playground/loading/PlaygroundThinkingTimingControls.tsx|foreground-alpha-foundation": 2,
-    "apps/packages/product-client/src/components/playground/subagents-ux/full-flow/FullFlowChatViews.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/playground/subagents-ux/identity-receipts/IdentityReceiptsPrototype.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/playground/subagents-ux/identity-receipts/SubagentCreationReceipt.tsx|foreground-alpha-foundation": 2,
-    "apps/packages/product-client/src/components/settings/panes/AccountPane.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/settings/panes/OrganizationBudgetsPane.tsx|foreground-alpha-foundation": 2,
-    "apps/packages/product-client/src/components/settings/panes/OrganizationModelPolicyPane.tsx|foreground-alpha-foundation": 3,
-    "apps/packages/product-client/src/components/settings/panes/OrganizationPane.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/settings/panes/OrganizationSsoSettingsSurface.tsx|foreground-alpha-foundation": 3,
-    "apps/packages/product-client/src/components/settings/panes/environments/WorktreeStorageSection.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/settings/panes/organization/GitHubAppInstallationSection.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/settings/panes/organization/OrganizationBillingLinkSection.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/settings/panes/organization/OrganizationLogo.tsx|foreground-alpha-foundation": 2,
-    "apps/packages/product-client/src/components/settings/panes/organization/OrganizationSettingsCard.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/workspace/chat/plans/PlanHandoffDialog.tsx|foreground-alpha-foundation": 2,
-    "apps/packages/product-client/src/components/workspace/repo-setup/WorkspaceInventory.tsx|foreground-alpha-foundation": 5,
-    "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx|foreground-alpha-foundation": 1
+    "apps/packages/product-client/src/components/playground/PlaygroundAttachmentFixtures.tsx|PROD-SCALE-5": 2,
+    "apps/packages/product-client/src/components/playground/loading/PlaygroundThinkingTimingControls.tsx|PROD-SCALE-20": 2,
+    "apps/packages/product-client/src/components/playground/subagents-ux/full-flow/FullFlowChatViews.tsx|PROD-SCALE-20": 1,
+    "apps/packages/product-client/src/components/playground/subagents-ux/identity-receipts/IdentityReceiptsPrototype.tsx|PROD-SCALE-20": 1,
+    "apps/packages/product-client/src/components/playground/subagents-ux/identity-receipts/SubagentCreationReceipt.tsx|PROD-SCALE-20": 2,
+    "apps/packages/product-client/src/components/settings/panes/AccountPane.tsx|PROD-SCALE-20": 1,
+    "apps/packages/product-client/src/components/settings/panes/OrganizationBudgetsPane.tsx|PROD-SCALE-20": 2,
+    "apps/packages/product-client/src/components/settings/panes/OrganizationModelPolicyPane.tsx|PROD-SCALE-20": 3,
+    "apps/packages/product-client/src/components/settings/panes/OrganizationPane.tsx|PROD-SCALE-20": 1,
+    "apps/packages/product-client/src/components/settings/panes/OrganizationSsoSettingsSurface.tsx|PROD-SCALE-20": 3,
+    "apps/packages/product-client/src/components/settings/panes/environments/WorktreeStorageSection.tsx|PROD-SCALE-20": 1,
+    "apps/packages/product-client/src/components/settings/panes/organization/GitHubAppInstallationSection.tsx|PROD-SCALE-20": 1,
+    "apps/packages/product-client/src/components/settings/panes/organization/OrganizationBillingLinkSection.tsx|PROD-SCALE-20": 1,
+    "apps/packages/product-client/src/components/settings/panes/organization/OrganizationLogo.tsx|PROD-SCALE-20": 2,
+    "apps/packages/product-client/src/components/settings/panes/organization/OrganizationSettingsCard.tsx|PROD-SCALE-20": 1,
+    "apps/packages/product-client/src/components/workspace/chat/plans/PlanHandoffDialog.tsx|PROD-SCALE-20": 2,
+    "apps/packages/product-client/src/components/workspace/repo-setup/WorkspaceInventory.tsx|PROD-SCALE-20": 5,
+    "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx|PROD-SCALE-20": 1
   },
   "standardNumericZ": {
     "apps/packages/product-client/src/components/auth/AuthGate.tsx|z-50": 1,

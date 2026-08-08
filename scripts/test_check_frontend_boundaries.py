@@ -70,7 +70,7 @@ class RadixImportBoundaryTest(unittest.TestCase):
         self.assertEqual(len(violations), 3)
         self.assertEqual(
             {violation.rule_id for violation in violations},
-            {"RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY"},
+            {"FE-UI-1"},
         )
 
     def test_radix_import_outside_ui_component_library_fails(self) -> None:
@@ -98,7 +98,7 @@ class RadixImportBoundaryTest(unittest.TestCase):
 
                 self.assertEqual(
                     {violation.rule_id for violation in violations},
-                    {"RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY"},
+                    {"FE-UI-1"},
                 )
                 self.assertEqual(len(violations), 2)
                 relative_paths = {violation.relative_path for violation in violations}
@@ -249,7 +249,7 @@ class TailwindMergeImportBoundaryTest(unittest.TestCase):
                     [
                         (
                             relative_path,
-                            "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                            "FE-UI-2",
                             1,
                         )
                     ],
@@ -287,7 +287,7 @@ class TailwindMergeImportBoundaryTest(unittest.TestCase):
                     [
                         (
                             relative_path,
-                            "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                            "FE-UI-2",
                             1,
                         )
                     ],
@@ -347,13 +347,13 @@ class ProductClientPrimitivesTopLevelShapeTest(unittest.TestCase):
                 self.assertEqual(len(violations), 1)
                 violation = violations[0]
                 self.assertEqual(
-                    violation.rule_id, "PRODUCT_CLIENT_PRIMITIVES_TOP_LEVEL_ENTRY"
+                    violation.rule_id, "FE-PC-7"
                 )
                 self.assertEqual(
                     violation.relative_path,
                     "apps/packages/product-client/src/primitives/kit",
                 )
-                self.assertIn("component-library taxonomy", violation.message)
+                self.assertIn("component-library taxonomy", violation.detail)
 
     def test_missing_primitives_directory_produces_no_violations(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -402,8 +402,8 @@ class WarningInkBoundaryTest(unittest.TestCase):
         violations = self.run_rule('const tone = "text-warning";\n')
 
         self.assertEqual(len(violations), 1)
-        self.assertEqual(violations[0].rule_id, "WARNING_TOKEN_AS_INK")
-        self.assertIn("text-warning-foreground", violations[0].message)
+        self.assertEqual(violations[0].rule_id, "FE-UI-3")
+        self.assertIn("text-warning-foreground", violations[0].detail)
 
     def test_purpose_built_tokens_pass(self) -> None:
         violations = self.run_rule(
@@ -417,7 +417,7 @@ class WarningInkBoundaryTest(unittest.TestCase):
 
         self.assertEqual(len(violations), 2)
         self.assertEqual(
-            {violation.rule_id for violation in violations}, {"WARNING_TOKEN_AS_INK"}
+            {violation.rule_id for violation in violations}, {"FE-UI-3"}
         )
 
     def test_solid_fill_is_allowed(self) -> None:
@@ -1076,7 +1076,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         layer_violations = [
             violation
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_LAYER_DIRECTION"
+            if violation.rule_id == "FE-PC-6"
         ]
         self.assertEqual(len(layer_violations), 2 * len(forbidden_pairs))
 
@@ -1105,7 +1105,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         layer_violations = [
             violation
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_LAYER_DIRECTION"
+            if violation.rule_id == "FE-PC-6"
         ]
         self.assertEqual(
             {violation.path.name for violation in layer_violations},
@@ -1128,7 +1128,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         self.assertNotIn(
-            "PRODUCT_CLIENT_LAYER_DIRECTION",
+            "FE-PC-6",
             {violation.rule_id for violation in violations},
         )
 
@@ -1147,11 +1147,11 @@ class ProductClientBoundaryTest(unittest.TestCase):
         layer_violations = [
             violation
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_LAYER_DIRECTION"
+            if violation.rule_id == "FE-PC-6"
         ]
         self.assertEqual([violation.lineno for violation in layer_violations], [2, 3])
-        self.assertIn("type-only", layer_violations[0].message)
-        self.assertIn("runtime", layer_violations[1].message)
+        self.assertIn("type-only", layer_violations[0].detail)
+        self.assertIn("runtime", layer_violations[1].detail)
 
     def test_fixture_host_text_passes_but_real_host_import_and_tauri_global_fail(self) -> None:
         files = {
@@ -1171,7 +1171,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         forbidden = [
             violation
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_FORBIDDEN_IMPORT"
+            if violation.rule_id == "FE-PC-5"
         ]
         self.assertEqual(len(forbidden), 2)
         self.assertTrue(all(violation.path.name == "host-import.ts" for violation in forbidden))
@@ -1194,7 +1194,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         set_state = [
             violation
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+            if violation.rule_id == "FE-STORE-3"
         ]
         self.assertEqual(len(set_state), 1)
         self.assertEqual(set_state[0].lineno, 2)
@@ -1245,7 +1245,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         set_state = [
             violation
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+            if violation.rule_id == "FE-STORE-3"
         ]
         self.assertEqual(
             [violation.lineno for violation in set_state],
@@ -1274,7 +1274,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         set_state = [
             violation
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+            if violation.rule_id == "FE-STORE-3"
         ]
         self.assertEqual([violation.lineno for violation in set_state], [5, 11])
 
@@ -1307,7 +1307,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         set_state = [
             violation
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+            if violation.rule_id == "FE-STORE-3"
         ]
         self.assertEqual(
             [violation.lineno for violation in set_state],
@@ -1340,7 +1340,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         set_state = [
             violation
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+            if violation.rule_id == "FE-STORE-3"
         ]
         self.assertEqual(
             [violation.lineno for violation in set_state],
@@ -1377,7 +1377,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         set_state = [
             (violation.path.name, violation.lineno)
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+            if violation.rule_id == "FE-STORE-3"
         ]
         self.assertEqual(
             set_state,
@@ -1413,7 +1413,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         query_violations = [
             violation
             for violation in violations
-            if violation.rule_id == "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE"
+            if violation.rule_id == "FE-CACHE-2"
         ]
         self.assertEqual(len(query_violations), 2)
         self.assertEqual(
@@ -1439,7 +1439,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         query_paths = {
             violation.path.as_posix().split("/src/", 1)[1]
             for violation in violations
-            if violation.rule_id == "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE"
+            if violation.rule_id == "FE-CACHE-2"
         }
         self.assertEqual(
             query_paths,
@@ -1453,7 +1453,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             for violation in violations
             if violation.path.as_posix().endswith("lib/domain/chat/query.ts")
         ]
-        self.assertEqual(domain_rules, ["DOMAIN_FORBIDDEN_IMPORT"])
+        self.assertEqual(domain_rules, ["FE-DOMAIN-1"])
 
     def test_store_runtime_access_fails_but_contract_types_and_pure_sdk_helpers_pass(self) -> None:
         files = {
@@ -1485,7 +1485,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         runtime_access = [
             violation
             for violation in violations
-            if violation.rule_id == "STORE_RUNTIME_ACCESS"
+            if violation.rule_id == "FE-STORE-2"
         ]
         self.assertEqual(
             {violation.path.name for violation in runtime_access},
@@ -1517,7 +1517,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         runtime_paths = {
             violation.path.name
             for violation in violations
-            if violation.rule_id == "STORE_RUNTIME_ACCESS"
+            if violation.rule_id == "FE-STORE-2"
         }
         self.assertEqual(runtime_paths, {"mixed.ts", "type-named-runtime.ts"})
 
@@ -1555,7 +1555,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         runtime_paths = {
             violation.path.name
             for violation in violations
-            if violation.rule_id == "STORE_RUNTIME_ACCESS"
+            if violation.rule_id == "FE-STORE-2"
         }
         self.assertEqual(
             runtime_paths,
@@ -1574,7 +1574,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
 
         self.assertEqual(
             [violation.rule_id for violation in violations],
-            ["STORE_FORBIDDEN_ACCESS"],
+            ["FE-STORE-1"],
         )
 
     def test_dynamic_and_namespace_imports_preserve_identifier_sensitive_rules(self) -> None:
@@ -1609,7 +1609,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         query_paths = {
             violation.path.name
             for violation in violations
-            if violation.rule_id == "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE"
+            if violation.rule_id == "FE-CACHE-2"
         }
         self.assertEqual(
             query_paths,
@@ -1621,7 +1621,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             if violation.path.name == "dynamic-client.ts"
         }
         self.assertTrue(
-            {"ANYHARNESS_CLIENT_OUTSIDE_ACCESS", "STORE_RUNTIME_ACCESS"}
+            {"FE-ACCESS-2", "FE-STORE-2"}
             <= dynamic_client_rules
         )
         dynamic_store_rules = [
@@ -1630,7 +1630,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             if violation.path.name == "dynamic-store.ts"
         ]
         self.assertIn(
-            "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER",
+            "FE-STORE-3",
             dynamic_store_rules,
         )
 
@@ -1676,7 +1676,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         query_paths = {
             violation.path.name
             for violation in violations
-            if violation.rule_id == "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE"
+            if violation.rule_id == "FE-CACHE-2"
         }
         self.assertEqual(
             query_paths,
@@ -1690,10 +1690,10 @@ class ProductClientBoundaryTest(unittest.TestCase):
         self.assertEqual(
             raw_rules,
             {
-                ("raw-string-name.ts", "ANYHARNESS_CLIENT_OUTSIDE_ACCESS"),
-                ("raw-string-name.ts", "STORE_RUNTIME_ACCESS"),
-                ("raw-dynamic-member.ts", "ANYHARNESS_CLIENT_OUTSIDE_ACCESS"),
-                ("raw-dynamic-member.ts", "STORE_RUNTIME_ACCESS"),
+                ("raw-string-name.ts", "FE-ACCESS-2"),
+                ("raw-string-name.ts", "FE-STORE-2"),
+                ("raw-dynamic-member.ts", "FE-ACCESS-2"),
+                ("raw-dynamic-member.ts", "FE-STORE-2"),
             },
         )
 
@@ -1735,7 +1735,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         query_paths = {
             violation.path.name
             for violation in violations
-            if violation.rule_id == "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE"
+            if violation.rule_id == "FE-CACHE-2"
         }
         self.assertEqual(
             query_paths,
@@ -1824,7 +1824,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         set_state_paths = {
             violation.path.name
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+            if violation.rule_id == "FE-STORE-3"
         }
         self.assertEqual(
             set_state_paths,
@@ -1860,7 +1860,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         set_state = [
             (violation.path.name, violation.lineno)
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+            if violation.rule_id == "FE-STORE-3"
         ]
         self.assertEqual(set_state, [("comma-result.ts", 3)])
 
@@ -1883,15 +1883,15 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violation.rule_id
             for violation in violations
             if violation.rule_id
-            in {"DOMAIN_FORBIDDEN_IMPORT", "WORKFLOW_FORBIDDEN_IMPORT"}
+            in {"FE-DOMAIN-1", "FE-DOMAIN-2"}
         ]
         self.assertEqual(
             purity_rules,
             [
-                "DOMAIN_FORBIDDEN_IMPORT",
-                "DOMAIN_FORBIDDEN_IMPORT",
-                "WORKFLOW_FORBIDDEN_IMPORT",
-                "WORKFLOW_FORBIDDEN_IMPORT",
+                "FE-DOMAIN-1",
+                "FE-DOMAIN-1",
+                "FE-DOMAIN-2",
+                "FE-DOMAIN-2",
             ],
         )
 
@@ -1936,13 +1936,13 @@ class ProductClientBoundaryTest(unittest.TestCase):
         query_paths = {
             violation.path.name
             for violation in violations
-            if violation.rule_id == "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE"
+            if violation.rule_id == "FE-CACHE-2"
         }
         self.assertEqual(query_paths, {"for-query.ts"})
         set_state = [
             (violation.path.name, violation.lineno)
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+            if violation.rule_id == "FE-STORE-3"
         ]
         self.assertEqual(set_state, [("for-store.ts", 3), ("var-store.ts", 6)])
 
@@ -1970,7 +1970,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violation
             for violation in violations
             if violation.rule_id
-            in {"PRODUCT_CLIENT_LAYER_DIRECTION", "PRODUCT_CLIENT_FORBIDDEN_IMPORT"}
+            in {"FE-PC-6", "FE-PC-5"}
         ]
         self.assertEqual(len(relevant), 5)
         self.assertEqual(
@@ -2004,11 +2004,11 @@ class ProductClientBoundaryTest(unittest.TestCase):
         counts: dict[str, int] = {}
         for violation in violations:
             counts[violation.rule_id] = counts.get(violation.rule_id, 0) + 1
-        self.assertEqual(counts.get("COMPONENT_FORBIDDEN_ACCESS"), 1)
-        self.assertEqual(counts.get("STORE_FORBIDDEN_ACCESS"), 1)
-        self.assertEqual(counts.get("ANYHARNESS_CLIENT_OUTSIDE_ACCESS"), 1)
-        self.assertEqual(counts.get("DOMAIN_FORBIDDEN_IMPORT"), 2)
-        self.assertEqual(counts.get("WORKFLOW_FORBIDDEN_IMPORT"), 2)
+        self.assertEqual(counts.get("FE-COMPONENT-1"), 1)
+        self.assertEqual(counts.get("FE-STORE-1"), 1)
+        self.assertEqual(counts.get("FE-ACCESS-2"), 1)
+        self.assertEqual(counts.get("FE-DOMAIN-1"), 2)
+        self.assertEqual(counts.get("FE-DOMAIN-2"), 2)
 
     def test_exact_junk_drawer_names_fail_but_descriptive_helpers_pass(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2066,33 +2066,67 @@ class ProductClientBoundaryTest(unittest.TestCase):
                 (violation.path.name, violation.rule_id, violation.lineno)
                 for violation in violations
             ],
-            [("runtime.ts", "FORBIDDEN_SHARED_PACKAGE_IMPORT", 2)],
+            [("runtime.ts", "FE-STRUCT-7", 2)],
         )
 
-    def test_allowlist_overage_and_stale_count_both_fail(self) -> None:
+    def test_new_site_in_grandfathered_file_and_stale_entry_both_fail(self) -> None:
+        """The property a per-file count could not express.
+
+        A count of 1 for this file tolerated any single hit, so repairing the
+        listed site and introducing a different one netted to zero. Site-level
+        entries make each half fail on its own: the unlisted site is a failure
+        even though its file is grandfathered, and the listed site going quiet is
+        a stale entry.
+        """
+        rule_id = "FE-PC-6"
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             path = root / "apps/packages/product-client/src/hooks/chat/sample.ts"
             path.parent.mkdir(parents=True)
             path.write_text("export {};\n", encoding="utf-8")
-            entry = check_module.AllowlistEntry("RULE", path.relative_to(root).as_posix(), 1, "debt")
+            relative_path = path.relative_to(root).as_posix()
+            granted = "#product/components/chat/Listed"
+            ledger = {rule_id: {(relative_path, granted)}}
+
+            listed = check_module.Violation(rule_id, path, 1, granted, "listed")
+            unlisted = check_module.Violation(
+                rule_id, path, 2, "#product/components/chat/New", "new"
+            )
+
+            # Both sites present: the grandfathered one passes, the new one fails.
             with patch.multiple(
                 check_module,
                 REPO_ROOT=root,
-                load_allowlist=lambda: {("RULE", entry.relative_path): entry},
-                collect_violations=lambda: [
-                    check_module.Violation("RULE", path, 1, "old"),
-                    check_module.Violation("RULE", path, 2, "new"),
-                ],
-            ), redirect_stdout(StringIO()):
+                tolerated_sites=lambda: ledger,
+                collect_violations=lambda: [listed, unlisted],
+            ), redirect_stdout(StringIO()) as output:
                 self.assertEqual(check_module.main(), 1)
+            printed = output.getvalue()
+            self.assertIn(rule_id, printed)
+            # The unlisted site is reported; the grandfathered one is silent.
+            self.assertIn("found: new", printed)
+            self.assertNotIn("found: listed", printed)
+
+            # Listed site repaired, nothing left: its entry is now stale.
             with patch.multiple(
                 check_module,
                 REPO_ROOT=root,
-                load_allowlist=lambda: {("RULE", entry.relative_path): entry},
+                tolerated_sites=lambda: ledger,
                 collect_violations=lambda: [],
-            ), redirect_stdout(StringIO()):
+            ), redirect_stdout(StringIO()) as output:
                 self.assertEqual(check_module.main(), 1)
+            printed = output.getvalue()
+            self.assertIn("Stale frontend exception entries:", printed)
+            self.assertIn(granted, printed)
+
+            # Only the listed site: clean, which is what carry-forward means.
+            with patch.multiple(
+                check_module,
+                REPO_ROOT=root,
+                tolerated_sites=lambda: ledger,
+                collect_violations=lambda: [listed],
+            ), redirect_stdout(StringIO()):
+                self.assertEqual(check_module.main(), 0)
 
 
 class ModuleSpecifierCollectorTest(unittest.TestCase):
@@ -2537,9 +2571,9 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
             violations = self.run_domain_rules(Path(directory).resolve(), files)
 
         rule_ids = {violation.rule_id for violation in violations}
-        self.assertIn("PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT", rule_ids)
-        self.assertIn("PRODUCT_CLIENT_DOMAIN_FORBIDDEN_API", rule_ids)
-        self.assertIn("PRODUCT_CLIENT_DOMAIN_TSX", rule_ids)
+        self.assertIn("FE-PC-2", rule_ids)
+        self.assertIn("FE-PC-4", rule_ids)
+        self.assertIn("FE-PC-1", rule_ids)
         self.assertTrue(
             {
                 "react.ts",
@@ -2584,7 +2618,7 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
         escapes = [
             violation
             for violation in violations
-            if violation.rule_id == "PRODUCT_CLIENT_DOMAIN_RELATIVE_ESCAPE"
+            if violation.rule_id == "FE-PC-3"
         ]
         self.assertEqual(len(escapes), 3)
 
@@ -2745,7 +2779,7 @@ class MobileProductClientBoundaryTest(unittest.TestCase):
         self.assertEqual(len(violations), 20)
         self.assertEqual(
             {violation.rule_id for violation in violations},
-            {"MOBILE_PRODUCT_CLIENT_DOMAIN_ONLY"},
+            {"FE-MOBILE-1"},
         )
 
 

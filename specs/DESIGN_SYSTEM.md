@@ -747,9 +747,9 @@ components and `design` tokens. It does not invent new visual vocabulary:
   resolve to a root file directly under `product-client/src/primitives/` or any
   file under `product-client/src/primitives/patterns/**`. Radix stays illegal in
   `icons/**`, `utils/**`, `overlays/**`, `__tests__/**`, and higher layers.
-  Enforced by `RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY` in
-  [check_frontend_boundaries.py](../scripts/check_frontend_boundaries.py),
-  scanned across every frontend package and app.
+  Enforced by `FE-UI-1` in
+  [check_frontend_boundaries.py](../scripts/check_frontend_boundaries.py), scanned
+  across every frontend package and app.
 - **No hardcoded style values.** Colors, spacing, radii, shadows, and motion
   come from `design` tokens through library components, never as arbitrary
   Tailwind brackets or raw hex/duration values at a feature callsite. Enforced by
@@ -1051,8 +1051,8 @@ that gets deleted at the call site.
 | A banned class lands (arbitrary radius/z/gap/size, non-token shadow, `bg-foreground/<alpha>` ≤ 10%, `text-[…]`/`leading-[…]`, numeric duration, fixed glyph size) | `check_appearance_scaling.py` fails in pre-commit and CI, naming file and match | Replace with the semantic token utility, or obtain a written sanction — baseline growth is not a fix. |
 | A hard-coded value lands in `product.css` instead of `tokens.ts` | The token-declaration case is gated: `check_design_css_source` emits `authored-root-token` for any `--x:` in a global `:root` block and `authored-theme-block` for any `@theme`. Only a non-token literal inside a component rule (e.g. `background: #212121` in `.foo`) escapes, since `RAW_HEX_RE` is not run over design CSS — that one silently becomes a second source of truth and diverges mode-to-mode | Move the value into `tokens.ts` and regenerate. |
 | A raw `ms`/`s` literal or inline bezier lands in design CSS | `checkRawMotionAuthority` in `check-theme.mjs` fails, naming the owning rule and declaration | Use a `--duration-*`/`--ease-*`/`--activity-*` variable, or add the `/* activity-motion */` marker if it is genuinely an infinite loop. |
-| A `@radix-ui/*` import lands outside a root primitive file or `product-client/src/primitives/patterns/**` | `RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY` fails in `check_frontend_boundaries.py`, naming file and line | Move the wrapper into the legal tier, or compose the existing library primitive. |
-| A non-source file or unsupported directory is added at the primitives root | `PRODUCT_CLIENT_PRIMITIVES_TOP_LEVEL_ENTRY` fails, naming the offending entry | Move it to a root primitive file or the `patterns`, `icons`, `utils`, `overlays`, or `__tests__` owner. |
+| A `@radix-ui/*` import lands outside a root primitive file or `product-client/src/primitives/patterns/**` | `FE-UI-1` fails in `check_frontend_boundaries.py`, naming file and line | Move the wrapper into the legal tier, or compose the existing library primitive. |
+| A non-source file or unsupported directory is added at the primitives root | `FE-PC-7` fails, naming the offending entry | Move it to a root primitive file or the `patterns`, `icons`, `utils`, `overlays`, or `__tests__` owner. |
 | A styled component ships outside the library with no library equivalent and gets reused across surfaces | No mechanical check catches this — review only | Promote it into the matching tier per "How to add a component". |
 | Hook not installed (fresh clone, `core.hooksPath` unset) | Local commits skip both gates; failure surfaces only in CI | Run the `git-hooks` Makefile target. |
 

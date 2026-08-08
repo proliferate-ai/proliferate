@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
+"""AnyHarness layer-boundary checker.
+
+The rules themselves are records under `lints/anyharness/boundaries.toml`; this
+file is only the engine. Diagnostics are rendered from the record (rule
+sentence, legal alternative, record path) via `scripts/lint_records.py`, and
+grandfathered violation sites live in `lints/anyharness/exceptions.toml` as
+fine-grained `(path, site)` fingerprints — never counts.
+"""
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,9 +17,21 @@ import re
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    # Run as `python3 scripts/check_anyharness_boundaries.py` from the repo root,
+    # sys.path[0] is scripts/ — the shared loader lives one level up.
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402  (path shim must precede the import)
+
 LIB_SRC_RELATIVE = ("anyharness", "crates", "anyharness-lib", "src")
 LIB_SRC = REPO_ROOT.joinpath(*LIB_SRC_RELATIVE)
-ALLOWLIST_PATH = REPO_ROOT / "scripts" / "anyharness_boundaries_allowlist.txt"
+CHECKER = "scripts/check_anyharness_boundaries.py"
+
+RULES = lint_records.load("anyharness")
+OWNED_RULE_IDS = frozenset(
+    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
+)
 
 # Tests point the scan at a fabricated tree via `scan_root(...)` (or by calling
 # `check_file`/`collect_violations` with an explicit root). When no override is
@@ -86,7 +105,7 @@ TOKEN_RE = re.compile(r"r#[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*|::|[{}()
 USE_START_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\b")
 # A re-export specifically, not a private import: `pub use ..`, `pub(crate) use ..`.
 PUB_USE_START_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+use\b")
-SESSION_COMMAND_USE_RE = re.compile(
+SESSION_COMMAND_QUALIFIED_PATH_RE = re.compile(
     r"(?:\bSessionCommand|crate::live::sessions::actor::command::SessionCommand)\s*::"
 )
 COMMAND_TX_ACCESS_RE = re.compile(r"\.command_tx\b")
@@ -132,17 +151,18 @@ STORE_CONSTRUCTOR_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*Store::new\b")
 # mentioned on the line. AppState carries exactly one `*_store` field today,
 # `agent_seed_store`, and it is NOT a DB store -- it is an in-memory
 # `Arc<RwLock<AgentSeedHealth>>` snapshot that merely follows the naming law. So
-# today's single match is a benign false positive, seeded in the allowlist rather
-# than special-cased: the field-name shape is the durable signal we want to hold,
-# and a real `*_store` field added later would be caught for the right reason.
-# The pattern is bound to the identifier `state`, which every one of api/**'s
-# handler params is spelled as today (`State(state)`); an `app_state.foo_store` or
-# a rebound clone evades it. That is judgment territory, like the rest of the
-# AppState-field surface noted in the allowlist's Known scope limits stanza.
+# today's single match is a benign false positive, carried as an exception site
+# rather than special-cased: the field-name shape is the durable signal we want to
+# hold, and a real `*_store` field added later would be caught for the right
+# reason. The pattern is bound to the identifier `state`, which every one of
+# api/**'s handler params is spelled as today (`State(state)`); an
+# `app_state.foo_store` or a rebound clone evades it. That is judgment territory,
+# like the rest of the AppState-field surface noted in the known scope limits at
+# the head of lints/anyharness/exceptions.toml.
 APP_STATE_STORE_FIELD_RE = re.compile(r"\bstate\.[a-z_]*_store\b")
 # Inline `anyharness_contract::` path uses (fn signatures, struct literals,
-# turbofish) that no use-statement declares. Mirrors DOMAIN_LIVE_VALVE's
-# import-pass + line-pass pairing.
+# turbofish) that no use-statement declares. Mirrors AH-LIVE-5's import-pass +
+# line-pass pairing.
 CONTRACT_INLINE_PATH_RE = re.compile(r"\banyharness_contract::")
 POLICY_IMPURITY_RES = (
     re.compile(r"\bUtc::now\b"),
@@ -195,36 +215,52 @@ SQL_RES = (
     re.compile(r"\bDROP TABLE\b"),
 )
 
-DOMAIN_LIVE_VALVE_MESSAGE = (
-    "domain code may reach live/ only through the domain's runtime valve "
-    "(runtime.rs, runtime/**, live_ports.rs) — promote this use case to the "
-    "runtime; see anyharness-structure.md"
+# A violation's fingerprint is `<enclosing symbol>::<content anchor>` — never a
+# line number, so a site survives reformatting and moves within its file. The
+# symbol is the nearest declaration above the hit; the anchor is the import path
+# or the matched token itself.
+SYMBOL_RES = (
+    (re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)"), "fn"),
+    (re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)"), "mod"),
+    (re.compile(r"^\s*impl\b[^{]*?\bfor\s+([A-Za-z_][A-Za-z0-9_]*)"), "impl"),
+    (re.compile(r"^\s*impl\b[^{]*?\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*\{"), "impl"),
+    (
+        re.compile(
+            r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|trait|type)\s+"
+            r"([A-Za-z_][A-Za-z0-9_]*)"
+        ),
+        "type",
+    ),
 )
-LIVE_DOMAIN_STORE_MESSAGE = (
-    "live/ never fetches — pass facts in the launch bundle or add a capability "
-    "trait wired in app/"
-)
-API_STORE_ESCAPE_MESSAGE = (
-    "handlers call domain facades, never stores — add a facade method; "
-    "see anyharness-structure.md"
-)
-POLICY_PURITY_MESSAGE = (
-    "policy files are pure: facts in, decisions out — no clock, no ids, no "
-    "store; mint in execute"
-)
-DOMAIN_SQL_OUTSIDE_STORE_MESSAGE = (
-    "SQL belongs in the domain's store — move this query into store.rs/store/**; "
-    "see anyharness-structure.md"
-)
-DOMAIN_CONTRACT_IMPORT_MESSAGE = (
-    "domain code must not import wire contract types below the API mapper "
-    "boundary — use a domain twin; see anyharness-structure.md"
-)
-DOMAIN_VALVE_LIVE_REEXPORT_MESSAGE = (
-    "the runtime valve may hold live/ powers but must not re-export them — a "
-    "`pub use crate::live::..` republishes the power domain-wide; expose a domain "
-    "port instead; see anyharness-structure.md"
-)
+
+_LINES_CACHE: dict[tuple[str, int, int], list[str]] = {}
+
+
+def file_lines(path: Path) -> list[str]:
+    stat = path.stat()
+    key = (str(path), stat.st_mtime_ns, stat.st_size)
+    cached = _LINES_CACHE.get(key)
+    if cached is None:
+        cached = path.read_text().splitlines()
+        _LINES_CACHE[key] = cached
+    return cached
+
+
+def enclosing_symbol(path: Path, lineno: int) -> str:
+    """Nearest declaration above `lineno`, e.g. `fn append` or `mod tests`."""
+    lines = file_lines(path)
+    for index in range(min(lineno, len(lines)) - 1, -1, -1):
+        line = strip_line_comment(lines[index])
+        for pattern, kind in SYMBOL_RES:
+            match = pattern.search(line)
+            if match:
+                return f"{kind} {match.group(1)}"
+    return ""
+
+
+def fingerprint(path: Path, lineno: int, anchor: str) -> str:
+    symbol = enclosing_symbol(path, lineno)
+    return f"{symbol}::{anchor}" if symbol else anchor
 
 
 def path_relative_to_root(path: Path) -> str:
@@ -240,7 +276,8 @@ class Violation:
     rule_id: str
     path: Path
     lineno: int
-    message: str
+    site: str
+    detail: str
 
     def __post_init__(self) -> None:
         # Resolved at construction so a violation keeps its reported path after a
@@ -251,16 +288,17 @@ class Violation:
     def relative_path(self) -> str:
         return self._relative_path  # type: ignore[attr-defined]
 
+    @property
+    def key(self) -> tuple[str, str]:
+        return (self.relative_path, self.site)
+
     def format(self) -> str:
-        return f"{self.relative_path}:{self.lineno}: [{self.rule_id}] {self.message}"
-
-
-@dataclass(frozen=True)
-class AllowlistEntry:
-    rule_id: str
-    relative_path: str
-    count: int
-    reason: str
+        """The record-generated diagnostic: rule, alternative, record path."""
+        return lint_records.render_diagnostic(
+            RULES.rule(self.rule_id),
+            f"{self.relative_path}:{self.lineno}",
+            self.detail,
+        )
 
 
 @dataclass(frozen=True)
@@ -633,16 +671,45 @@ class UseTreeParser:
             self.advance()
 
 
+def import_anchor(import_path: ImportPath) -> str:
+    return "::".join(import_path.parts)
+
+
 def add_if(
     violations: list[Violation],
     condition: bool,
     rule_id: str,
     path: Path,
     lineno: int,
-    message: str,
+    anchor: str,
+    detail: str,
 ) -> None:
+    """Record one violation, fingerprinted by enclosing symbol + content anchor."""
     if condition:
-        violations.append(Violation(rule_id, path, lineno, message))
+        violations.append(
+            Violation(rule_id, path, lineno, fingerprint(path, lineno, anchor), detail)
+        )
+
+
+def add_import_if(
+    violations: list[Violation],
+    condition: bool,
+    rule_id: str,
+    path: Path,
+    lineno: int,
+    import_path: ImportPath,
+) -> None:
+    anchor = import_anchor(import_path)
+    add_if(violations, condition, rule_id, path, lineno, anchor, f"use {anchor}")
+
+
+def first_match(patterns, line: str) -> str:
+    """The first pattern's matched text, whitespace-collapsed — the line anchor."""
+    for pattern in patterns:
+        match = pattern.search(line)
+        if match:
+            return re.sub(r"\s+", " ", match.group(0)).strip()
+    return ""
 
 
 def check_api_import(
@@ -650,14 +717,14 @@ def check_api_import(
     path: Path,
     import_path: ImportPath,
 ) -> None:
-    add_if(
+    add_import_if(
         violations,
         import_path.crate_root in LIVE_RUNTIME_ROOTS
         or is_acp_runtime_import(import_path),
-        "API_LIVE_RUNTIME_IMPORT",
+        "AH-API-1",
         path,
         import_path.crate_root_line,
-        "api/** must not import live runtime internals directly",
+        import_path,
     )
 
 
@@ -666,13 +733,13 @@ def check_domains_import(
     path: Path,
     import_path: ImportPath,
 ) -> None:
-    add_if(
+    add_import_if(
         violations,
         import_path.starts_with_crate("api"),
-        "DOMAINS_API_IMPORT",
+        "AH-DOMAIN-1",
         path,
         import_path.crate_root_line,
-        "domains/** must not import api/**",
+        import_path,
     )
 
 
@@ -681,13 +748,13 @@ def check_core_domain_import(
     path: Path,
     import_path: ImportPath,
 ) -> None:
-    add_if(
+    add_import_if(
         violations,
         is_product_surface_domain_import(import_path),
-        "CORE_DOMAIN_PRODUCT_IMPORT",
+        "AH-DOMAIN-2",
         path,
         import_path.crate_root_line,
-        "core domains must not directly import product surface domains",
+        import_path,
     )
 
 
@@ -697,29 +764,29 @@ def check_adapters_import(
     import_path: ImportPath,
 ) -> None:
     crate_root = import_path.crate_root
-    add_if(
+    add_import_if(
         violations,
         crate_root in PRODUCT_DOMAIN_ROOTS,
-        "ADAPTERS_PRODUCT_DOMAIN_IMPORT",
+        "AH-ADAPTER-1",
         path,
         import_path.crate_root_line,
-        "adapters/** must not import product/domain layers",
+        import_path,
     )
-    add_if(
+    add_import_if(
         violations,
         crate_root in LIVE_RUNTIME_ROOTS or is_acp_runtime_import(import_path),
-        "ADAPTERS_LIVE_RUNTIME_IMPORT",
+        "AH-ADAPTER-2",
         path,
         import_path.crate_root_line,
-        "adapters/** must not import live runtime internals",
+        import_path,
     )
-    add_if(
+    add_import_if(
         violations,
         import_path.starts_with_crate("api") or import_path.root in HTTP_TRANSPORT_ROOTS,
-        "ADAPTERS_API_IMPORT",
+        "AH-ADAPTER-3",
         path,
         import_path.crate_root_line,
-        "adapters/** must not import API or HTTP transport layers",
+        import_path,
     )
 
 
@@ -729,21 +796,21 @@ def check_integrations_import(
     import_path: ImportPath,
 ) -> None:
     crate_root = import_path.crate_root
-    add_if(
+    add_import_if(
         violations,
         crate_root in PRODUCT_DOMAIN_ROOTS,
-        "INTEGRATIONS_PRODUCT_IMPORT",
+        "AH-INTEG-1",
         path,
         import_path.crate_root_line,
-        "integrations/** must not import product/domain layers",
+        import_path,
     )
-    add_if(
+    add_import_if(
         violations,
         import_path.starts_with_crate("api") or import_path.root in HTTP_TRANSPORT_ROOTS,
-        "INTEGRATIONS_API_IMPORT",
+        "AH-INTEG-2",
         path,
         import_path.crate_root_line,
-        "integrations/** must not import API or HTTP transport layers",
+        import_path,
     )
 
 
@@ -753,23 +820,22 @@ def check_domain_store_import(
     import_path: ImportPath,
 ) -> None:
     """Generalized from the sessions-only rule: every domain store is a leaf."""
-    add_if(
+    add_import_if(
         violations,
         import_path.starts_with_crate("api"),
-        "DOMAIN_STORE_API_IMPORT",
+        "AH-STORE-1",
         path,
         import_path.crate_root_line,
-        "domain store code must not import api/** — stores are persistence leaves",
+        import_path,
     )
-    add_if(
+    add_import_if(
         violations,
         import_path.crate_root in DOMAIN_STORE_FORBIDDEN_ROOTS
         or is_acp_runtime_import(import_path),
-        "DOMAIN_STORE_LIVE_IMPORT",
+        "AH-STORE-2",
         path,
         import_path.crate_root_line,
-        "domain store code must not import live/integrations::acp runtime modules "
-        "— stores are persistence leaves",
+        import_path,
     )
 
 
@@ -778,21 +844,21 @@ def check_event_sink_import(
     path: Path,
     import_path: ImportPath,
 ) -> None:
-    add_if(
+    add_import_if(
         violations,
         import_path.starts_with_crate("api"),
-        "EVENT_SINK_API_IMPORT",
+        "AH-SINK-1",
         path,
         import_path.crate_root_line,
-        "session event sink code must not import api/**",
+        import_path,
     )
-    add_if(
+    add_import_if(
         violations,
         import_path.root in HTTP_TRANSPORT_ROOTS,
-        "EVENT_SINK_HTTP_TRANSPORT_IMPORT",
+        "AH-SINK-2",
         path,
         import_path.lines[0] if import_path.lines else 1,
-        "session event sink code must not import HTTP transport crates",
+        import_path,
     )
 
 
@@ -802,29 +868,29 @@ def check_persistence_import(
     import_path: ImportPath,
 ) -> None:
     crate_root = import_path.crate_root
-    add_if(
+    add_import_if(
         violations,
         crate_root in PRODUCT_DOMAIN_ROOTS,
-        "PERSISTENCE_PRODUCT_IMPORT",
+        "AH-PERSIST-1",
         path,
         import_path.crate_root_line,
-        "persistence/** must not import product/domain layers",
+        import_path,
     )
-    add_if(
+    add_import_if(
         violations,
         crate_root in LIVE_RUNTIME_ROOTS or is_acp_runtime_import(import_path),
-        "PERSISTENCE_RUNTIME_IMPORT",
+        "AH-PERSIST-2",
         path,
         import_path.crate_root_line,
-        "persistence/** must not import live runtime layers",
+        import_path,
     )
-    add_if(
+    add_import_if(
         violations,
         import_path.starts_with_crate("api") or import_path.root in HTTP_TRANSPORT_ROOTS,
-        "PERSISTENCE_API_IMPORT",
+        "AH-PERSIST-3",
         path,
         import_path.crate_root_line,
-        "persistence/** must not import API or HTTP transport layers",
+        import_path,
     )
 
 
@@ -834,21 +900,21 @@ def check_live_session_private_import(
     import_path: ImportPath,
 ) -> None:
     rel = relative(path)
-    add_if(
+    add_import_if(
         violations,
         not in_live_sessions(rel) and is_live_session_private_import(import_path),
-        "LIVE_SESSION_PRIVATE_IMPORT",
+        "AH-LIVE-1",
         path,
         import_path.crate_root_line,
-        "live session actor/driver internals must stay inside live/sessions/**",
+        import_path,
     )
-    add_if(
+    add_import_if(
         violations,
         not in_live_sessions(rel) and is_session_command_import(import_path),
-        "SESSION_COMMAND_IMPORT",
+        "AH-LIVE-2",
         path,
         import_path.lines[-1] if import_path.lines else import_path.crate_root_line,
-        "SessionCommand is a private actor command and must not be imported outside live/sessions/**",
+        import_path,
     )
 
 
@@ -858,15 +924,15 @@ def check_app_state_import(
     import_path: ImportPath,
 ) -> None:
     rel = relative(path)
-    add_if(
+    add_import_if(
         violations,
         not in_api_or_app(rel)
         and import_path.starts_with_crate("app")
         and import_path.leaf == "AppState",
-        "APP_STATE_IMPORT",
+        "AH-STATE-1",
         path,
         import_path.lines[-1] if import_path.lines else import_path.crate_root_line,
-        "AppState must stay at the API/app/test-support boundary",
+        import_path,
     )
 
 
@@ -876,13 +942,13 @@ def check_domain_contract_import(
     import_path: ImportPath,
 ) -> None:
     rel = relative(path)
-    add_if(
+    add_import_if(
         violations,
         is_domain_path(rel) and is_contract_request_response_import(import_path),
-        "DOMAIN_CONTRACT_REQUEST_RESPONSE",
+        "AH-CONTRACT-2",
         path,
         import_path.lines[-1] if import_path.lines else 1,
-        "domain code must not use contract request/response types below the API mapper boundary",
+        import_path,
     )
 
 
@@ -891,13 +957,13 @@ def check_domain_live_valve_import(
     path: Path,
     import_path: ImportPath,
 ) -> None:
-    add_if(
+    add_import_if(
         violations,
         import_path.crate_root == "live" and not is_live_model_import(import_path),
-        "DOMAIN_LIVE_VALVE",
+        "AH-LIVE-5",
         path,
         import_path.crate_root_line,
-        DOMAIN_LIVE_VALVE_MESSAGE,
+        import_path,
     )
 
 
@@ -906,13 +972,13 @@ def check_live_domain_store_import(
     path: Path,
     import_path: ImportPath,
 ) -> None:
-    add_if(
+    add_import_if(
         violations,
         is_domain_store_or_service_import(import_path),
-        "LIVE_DOMAIN_STORE_IMPORT",
+        "AH-STORE-4",
         path,
         import_path.crate_root_line,
-        LIVE_DOMAIN_STORE_MESSAGE,
+        import_path,
     )
 
 
@@ -921,13 +987,13 @@ def check_api_store_escape_import(
     path: Path,
     import_path: ImportPath,
 ) -> None:
-    add_if(
+    add_import_if(
         violations,
         is_domain_store_import(import_path),
-        "API_STORE_ESCAPE",
+        "AH-API-2",
         path,
         import_path.crate_root_line,
-        API_STORE_ESCAPE_MESSAGE,
+        import_path,
     )
 
 
@@ -936,13 +1002,13 @@ def check_policy_purity_import(
     path: Path,
     import_path: ImportPath,
 ) -> None:
-    add_if(
+    add_import_if(
         violations,
         has_segment(import_path, STORE_SEGMENTS) or import_path.crate_root == "adapters",
-        "POLICY_PURITY",
+        "AH-POLICY-1",
         path,
         import_path.crate_root_line,
-        POLICY_PURITY_MESSAGE,
+        import_path,
     )
 
 
@@ -952,23 +1018,40 @@ def check_domain_contract_crate_import(
     start_line: int,
     import_paths: list[ImportPath],
 ) -> None:
-    """One violation per use-statement, matching the engine's import granularity."""
+    """One violation per use-statement, matching the engine's import granularity.
+
+    The statement's fingerprint is its first contract leaf, so a group import
+    keeps one stable site even when later leaves are added or removed.
+    """
+    contract_paths = [
+        import_path
+        for import_path in import_paths
+        if import_path.root == CONTRACT_CRATE_ROOT
+    ]
+    if not contract_paths:
+        return
+    anchor = import_anchor(contract_paths[0])
     add_if(
         violations,
-        any(import_path.root == CONTRACT_CRATE_ROOT for import_path in import_paths),
-        "DOMAIN_CONTRACT_IMPORT",
+        True,
+        "AH-CONTRACT-1",
         path,
         start_line,
-        DOMAIN_CONTRACT_IMPORT_MESSAGE,
+        anchor,
+        f"use {anchor}",
     )
 
 
-def has_non_model_live_use(line: str) -> bool:
-    """An inline `crate::live::..` path use that is not a live model shape."""
+def non_model_live_use_anchor(line: str) -> str:
+    """The first inline `crate::live::..` path use that is not a model shape."""
     for match in LIVE_INLINE_PATH_RE.finditer(line):
         if match.group("second") != LIVE_MODEL_SEGMENT:
-            return True
-    return False
+            return match.group(0)
+    return ""
+
+
+def has_non_model_live_use(line: str) -> bool:
+    return bool(non_model_live_use_anchor(line))
 
 
 def is_non_model_live_reexport(import_path: ImportPath) -> bool:
@@ -994,13 +1077,22 @@ def check_domain_valve_live_reexport(
     """
     if not PUB_USE_START_RE.search(" ".join(line.strip() for line in lines)):
         return
+    reexports = [
+        import_path
+        for import_path in import_paths
+        if is_non_model_live_reexport(import_path)
+    ]
+    if not reexports:
+        return
+    anchor = import_anchor(reexports[0])
     add_if(
         violations,
-        any(is_non_model_live_reexport(import_path) for import_path in import_paths),
-        "DOMAIN_VALVE_LIVE_REEXPORT",
+        True,
+        "AH-LIVE-6",
         path,
         start_line,
-        DOMAIN_VALVE_LIVE_REEXPORT_MESSAGE,
+        anchor,
+        f"pub use {anchor}",
     )
 
 
@@ -1032,94 +1124,62 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
         # of a use statement, head or continuation.
         inside_use_statement = lineno in import_pass_linenos
         if check_live_valve and not inside_use_statement:
+            anchor = non_model_live_use_anchor(line)
             add_if(
                 violations,
-                has_non_model_live_use(line),
-                "DOMAIN_LIVE_VALVE",
+                bool(anchor),
+                "AH-LIVE-5",
                 path,
                 lineno,
-                DOMAIN_LIVE_VALVE_MESSAGE,
+                anchor,
+                anchor,
             )
         if check_api_store_escape and not inside_use_statement:
-            add_if(
-                violations,
-                STORE_METHOD_CALL_RE.search(line) is not None
-                or STORE_CONSTRUCTOR_RE.search(line) is not None
-                or APP_STATE_STORE_FIELD_RE.search(line) is not None,
-                "API_STORE_ESCAPE",
-                path,
-                lineno,
-                API_STORE_ESCAPE_MESSAGE,
+            anchor = first_match(
+                (STORE_METHOD_CALL_RE, STORE_CONSTRUCTOR_RE, APP_STATE_STORE_FIELD_RE),
+                line,
             )
+            add_if(violations, bool(anchor), "AH-API-2", path, lineno, anchor, anchor)
         if check_live_store_line and not inside_use_statement:
-            add_if(
-                violations,
-                STORE_METHOD_CALL_RE.search(line) is not None
-                or STORE_CONSTRUCTOR_RE.search(line) is not None,
-                "LIVE_DOMAIN_STORE_IMPORT",
-                path,
-                lineno,
-                LIVE_DOMAIN_STORE_MESSAGE,
-            )
+            anchor = first_match((STORE_METHOD_CALL_RE, STORE_CONSTRUCTOR_RE), line)
+            add_if(violations, bool(anchor), "AH-STORE-4", path, lineno, anchor, anchor)
         if check_contract_inline and not inside_use_statement:
+            match = CONTRACT_INLINE_PATH_RE.search(line)
+            # The anchor carries the named type, not the bare crate prefix, so two
+            # different inline contract types in one function stay distinct sites.
+            anchor = (
+                re.match(r"anyharness_contract(?:::[A-Za-z_][A-Za-z0-9_]*)*", line[match.start() :])
+                .group(0)
+                if match
+                else ""
+            )
             add_if(
-                violations,
-                CONTRACT_INLINE_PATH_RE.search(line) is not None,
-                "DOMAIN_CONTRACT_IMPORT",
-                path,
-                lineno,
-                DOMAIN_CONTRACT_IMPORT_MESSAGE,
+                violations, bool(anchor), "AH-CONTRACT-1", path, lineno, anchor, anchor
             )
         if check_policy_purity and not inside_use_statement:
-            add_if(
-                violations,
-                any(pattern.search(line) is not None for pattern in POLICY_IMPURITY_RES),
-                "POLICY_PURITY",
-                path,
-                lineno,
-                POLICY_PURITY_MESSAGE,
-            )
+            anchor = first_match(POLICY_IMPURITY_RES, line)
+            add_if(violations, bool(anchor), "AH-POLICY-1", path, lineno, anchor, anchor)
         if check_domain_sql:
-            add_if(
-                violations,
-                any(pattern.search(line) is not None for pattern in SQL_RES),
-                "DOMAIN_SQL_OUTSIDE_STORE",
-                path,
-                lineno,
-                DOMAIN_SQL_OUTSIDE_STORE_MESSAGE,
-            )
-        add_if(
-            violations,
-            not allow_session_private and SESSION_COMMAND_USE_RE.search(line) is not None,
-            "SESSION_COMMAND_USE",
-            path,
-            lineno,
-            "SessionCommand construction/use must stay behind the live session handle",
-        )
-        add_if(
-            violations,
-            not allow_command_tx and COMMAND_TX_ACCESS_RE.search(line) is not None,
-            "LIVE_SESSION_COMMAND_TX_ACCESS",
-            path,
-            lineno,
-            "LiveSessionHandle.command_tx must not be accessed outside the live session boundary",
-        )
+            anchor = first_match(SQL_RES, line)
+            add_if(violations, bool(anchor), "AH-STORE-3", path, lineno, anchor, anchor)
+        anchor = "" if allow_session_private else first_match((SESSION_COMMAND_QUALIFIED_PATH_RE,), line)
+        add_if(violations, bool(anchor), "AH-LIVE-3", path, lineno, anchor, anchor)
+        anchor = "" if allow_command_tx else first_match((COMMAND_TX_ACCESS_RE,), line)
+        add_if(violations, bool(anchor), "AH-LIVE-4", path, lineno, anchor, anchor)
         add_if(
             violations,
             not allow_app_state and not is_use_line and "crate::app::AppState" in line,
-            "APP_STATE_IMPORT",
+            "AH-STATE-1",
             path,
             lineno,
-            "AppState must stay at the API/app/test-support boundary",
+            "crate::app::AppState",
+            "crate::app::AppState",
         )
         if check_contract_types and not is_use_line:
+            match = CONTRACT_REQUEST_RESPONSE_RE.search(line)
+            anchor = match.group(1) if match else ""
             add_if(
-                violations,
-                CONTRACT_REQUEST_RESPONSE_RE.search(line) is not None,
-                "DOMAIN_CONTRACT_REQUEST_RESPONSE",
-                path,
-                lineno,
-                "domain code must not use contract request/response types below the API mapper boundary",
+                violations, bool(anchor), "AH-CONTRACT-2", path, lineno, anchor, anchor
             )
 
 
@@ -1185,117 +1245,101 @@ def _check_file(path: Path) -> list[Violation]:
     return violations
 
 
-def load_allowlist(allowlist_path: Path | None = None) -> dict[tuple[str, str], AllowlistEntry]:
-    path = ALLOWLIST_PATH if allowlist_path is None else Path(allowlist_path)
-    if not path.exists():
-        return {}
-    try:
-        label = path.relative_to(REPO_ROOT).as_posix()
-    except ValueError:
-        label = path.as_posix()
-    entries: dict[tuple[str, str], AllowlistEntry] = {}
-    for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
+def disambiguate(violations: list[Violation]) -> list[Violation]:
+    """Give repeated fingerprints an occurrence ordinal, in file order.
+
+    Two hits of the same rule can share a fingerprint — the same matched token
+    twice inside one function. The ledger keys on `(path, site)`, so without an
+    ordinal the second occurrence would be excused by the first one's entry.
+    The ordinal is an occurrence index, not a line number: reformatting does not
+    move it, and adding a hit only ever appends a new `#n` site.
+    """
+    grouped: dict[tuple[str, str, str], list[Violation]] = {}
+    for violation in violations:
+        grouped.setdefault(
+            (violation.rule_id, violation.relative_path, violation.site), []
+        ).append(violation)
+    out: list[Violation] = []
+    for group in grouped.values():
+        if len(group) == 1:
+            out.extend(group)
             continue
-        parts = line.split(maxsplit=3)
-        if len(parts) != 4:
-            raise ValueError(f"{label}:{lineno}: expected RULE_ID path count reason")
-        rule_id, relative_path, count_raw, reason = parts
-        try:
-            count = int(count_raw)
-        except ValueError as error:
-            raise ValueError(f"{label}:{lineno}: count must be an integer") from error
-        if count < 1:
-            raise ValueError(f"{label}:{lineno}: count must be positive")
-        key = (rule_id, relative_path)
-        if key in entries:
-            raise ValueError(f"{label}:{lineno}: duplicate allowlist entry")
-        entries[key] = AllowlistEntry(rule_id, relative_path, count, reason)
-    return entries
+        for ordinal, violation in enumerate(
+            sorted(group, key=lambda item: item.lineno), start=1
+        ):
+            out.append(
+                violation
+                if ordinal == 1
+                else Violation(
+                    violation.rule_id,
+                    violation.path,
+                    violation.lineno,
+                    f"{violation.site}#{ordinal}",
+                    violation.detail,
+                )
+            )
+    return sorted(out, key=lambda item: (item.relative_path, item.lineno, item.rule_id))
 
 
 def collect_violations(root: Path | None = None) -> list[Violation]:
     with scan_root(root):
         violations: list[Violation] = []
         for path in iter_anyharness_files():
-            violations.extend(_check_file(path))
+            violations.extend(disambiguate(_check_file(path)))
         return violations
 
 
-def apply_allowlist(
+def tolerated_sites() -> dict[str, set[tuple[str, str]]]:
+    """The grandfathered sites this checker owns, per rule id."""
+    return {rule_id: RULES.exception_sites(rule_id) for rule_id in OWNED_RULE_IDS}
+
+
+def apply_exceptions(
     violations: list[Violation],
-    allowlist: dict[tuple[str, str], AllowlistEntry],
+    tolerated: dict[str, set[tuple[str, str]]] | None = None,
 ) -> tuple[list[Violation], list[str]]:
-    grouped: dict[tuple[str, str], list[Violation]] = defaultdict(list)
-    for violation in violations:
-        grouped[(violation.rule_id, violation.relative_path)].append(violation)
-
+    """Split violations into failures and report exception entries gone stale."""
+    ledger = tolerated_sites() if tolerated is None else tolerated
+    observed: dict[str, set[tuple[str, str]]] = {}
     failures: list[Violation] = []
+    for violation in violations:
+        observed.setdefault(violation.rule_id, set()).add(violation.key)
+        if violation.key not in ledger.get(violation.rule_id, set()):
+            failures.append(violation)
+
     stale: list[str] = []
-
-    for key, group in sorted(grouped.items()):
-        entry = allowlist.get(key)
-        allowed_count = entry.count if entry else 0
-        if len(group) > allowed_count:
-            failures.extend(group[allowed_count:])
-
-    observed_counts = Counter((violation.rule_id, violation.relative_path) for violation in violations)
-    for key, entry in sorted(allowlist.items()):
-        observed = observed_counts.get(key, 0)
-        if observed < entry.count:
+    for rule_id, sites in sorted(ledger.items()):
+        for path, site in sorted(sites - observed.get(rule_id, set())):
             stale.append(
-                f"{entry.relative_path}:1: [{entry.rule_id}] stale allowlist count "
-                f"(observed {observed}, allowed {entry.count})"
+                f"{path}: [{rule_id}] site '{site}' no longer violates the rule — "
+                f"delete this entry from lints/anyharness/exceptions.toml"
             )
-
     return failures, stale
 
 
-def print_summary(
-    violations: list[Violation],
-    allowlist: dict[tuple[str, str], AllowlistEntry],
-) -> None:
-    observed = Counter((violation.rule_id, violation.relative_path) for violation in violations)
-    if not observed:
-        return
-    print("Observed AnyHarness boundary debt:")
-    for (rule_id, path), count in sorted(observed.items()):
-        entry = allowlist.get((rule_id, path))
-        suffix = f" allowlisted={entry.count}" if entry else " unallowlisted"
-        print(f"  {rule_id} {path}: {count}{suffix}")
-    print()
-
-
 def main() -> int:
-    allowlist = load_allowlist()
     violations = collect_violations()
-    failures, stale = apply_allowlist(violations, allowlist)
+    failures, stale = apply_exceptions(violations)
 
     if not failures and not stale:
         print("AnyHarness boundary check passed.")
         return 0
 
-    print_summary(violations, allowlist)
-
     if failures:
-        print("AnyHarness boundary violations not covered by allowlist:")
-        for violation in sorted(failures, key=lambda item: item.format()):
+        print("AnyHarness boundary violations without a grandfathered exception:")
+        for violation in sorted(
+            failures, key=lambda item: (item.relative_path, item.lineno, item.rule_id)
+        ):
             print(violation.format())
+            print()
 
     if stale:
-        if failures:
-            print()
-        print("Stale AnyHarness boundary allowlist entries:")
-        for entry in sorted(stale):
+        print("Stale AnyHarness exception entries:")
+        for entry in stale:
             print(f"  {entry}")
 
     return 1
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except ValueError as error:
-        print(error, file=sys.stderr)
-        raise SystemExit(2)
+    raise SystemExit(main())
