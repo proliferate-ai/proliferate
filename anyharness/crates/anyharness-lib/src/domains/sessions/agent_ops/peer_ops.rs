@@ -524,6 +524,16 @@ mod tests {
             !body[..gate_at].contains("canonical_tool_name(name)"),
             "the spawn gate must match the wire name, not the canonicalized one"
         );
+        // Order alone would still be satisfied by a gate that logs and falls
+        // through, so the block between the check and the dispatch has to
+        // actually construct the refusal. Nothing in the crate calls
+        // `call_tool`, so this needle is what stands in for exercising it.
+        let gate_body = &body[gate_at..dispatch_at];
+        assert!(
+            gate_body.contains("return Err(anyhow::anyhow!(")
+                && gate_body.contains("is not available to a subagent"),
+            "the spawn gate must REFUSE, not merely notice: {gate_body}"
+        );
     }
 
     #[test]

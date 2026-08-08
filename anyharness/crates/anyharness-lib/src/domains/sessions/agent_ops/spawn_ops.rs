@@ -14,7 +14,7 @@
 //! | --- | --- | --- |
 //! | link row | `relation = 'subagent'`, capped at insert | `relation = 'owned_agent'`, uncapped (ruling 9) |
 //! | first prompt | a parent delegating (link-scoped provenance) | a peer talking (envelope, ADR §3.4) |
-//! | wake | link-scoped, on the child's next completion | session-scoped, the same table `schedule_agent_wake` writes |
+//! | wake | link-scoped, on the child's next completion | session-scoped and reply-consumable, the same row a `wakeOnReply` send arms |
 //!
 //! Everything else — inheritance of the caller's harness/model/mode, the
 //! compensating cleanup, the shape of the result — is shared, which is the
@@ -319,14 +319,16 @@ fn arm_spawn_wake(
         // A peer has no link the wake machinery reads, so it uses the
         // session-scoped table — the same row `schedule_agent_wake` would
         // write, which is what makes "interact with it afterward like any
-        // peer" true of the wake too. `ExplicitSchedule`, not `Reply`: nothing
-        // has been replied to, so no later message may consume it.
+        // peer" true of the wake too. The reason is `Reply`, because a spawn
+        // IS a send awaiting an answer: the first prompt is the question, and
+        // the peer's reply is the answer that makes the pointer redundant.
+        // `ExplicitSchedule` would survive that reply and wake the owner a
+        // second time with a contentless pointer to a message it already has —
+        // and, because a re-arm keeps the STRONGER reason, would swallow any
+        // `wakeOnReply` the owner armed on the same peer before that first
+        // turn finished, disabling its consumption too.
         AgentSessionOwnership::OwnedAgent => Ok(wake_service
-            .arm(
-                &caller.id,
-                child_session_id,
-                AgentWakeReason::ExplicitSchedule,
-            )?
+            .arm(&caller.id, child_session_id, AgentWakeReason::Reply)?
             .created),
     }
 }
@@ -392,8 +394,15 @@ fn cleanup_child_session_after_failed_launch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::test_support;
+    use crate::domains::sessions::admission::{NoControllerPolicy, SessionMutationAdmission};
+    use crate::domains::sessions::agent_ops::peer_ops::consume_reply_wake;
     use crate::domains::sessions::agent_ops::tools::SpawnAgentArgs;
+    use crate::domains::sessions::extensions::SessionTurnOutcome;
+    use crate::domains::sessions::store::SessionStore;
+    use crate::persistence::Db;
     use serde_json::json;
+    use std::sync::Arc;
 
     fn session(id: &str) -> SessionRecord {
         SessionRecord {
@@ -603,6 +612,185 @@ mod tests {
         assert_eq!(
             AgentSessionOwnership::OwnedAgent.relation(),
             SessionLinkRelation::OwnedAgent
+        );
+    }
+
+    /// The wake half of the spawn, over real stores.
+    ///
+    /// Both writers this function chooses between are store-backed, so the
+    /// choice is provable without a runtime: arm through the production
+    /// `arm_spawn_wake` and read the rows back. `ses_owner` spawns, `ses_peer`
+    /// is the agent it spawns.
+    struct WakeFixture {
+        subagents: SubagentService,
+        wakes: AgentWakeService,
+        sessions: SessionStore,
+        owner: SessionRecord,
+    }
+
+    fn wake_fixture() -> WakeFixture {
+        let db = Db::open_in_memory().expect("open db");
+        test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace-1");
+        let fixture = test_support::subagent_service_fixture(&db);
+        let owner = session("ses_owner");
+        fixture.sessions.insert(&owner).expect("insert owner");
+        fixture
+            .sessions
+            .insert(&session("ses_peer"))
+            .expect("insert peer");
+        let wakes = AgentWakeService::new(
+            fixture.sessions.clone(),
+            Arc::new(SessionMutationAdmission::new(Arc::new(NoControllerPolicy))),
+        );
+        WakeFixture {
+            subagents: fixture.service,
+            wakes,
+            sessions: fixture.sessions,
+            owner,
+        }
+    }
+
+    fn peer_request(wake_on_completion: bool) -> CreateAgentSessionRequest {
+        CreateAgentSessionRequest::owned_agent(
+            &session("ses_owner"),
+            SpawnAgentArgs {
+                wake_on_completion,
+                ..spawn_agent_args()
+            },
+        )
+        .expect("build request")
+    }
+
+    #[tokio::test]
+    async fn the_peers_reply_consumes_the_wake_its_spawn_armed() {
+        // The arg description promises exactly this: "its reply already wakes
+        // you with the full message; this is the safety net for one that
+        // answers nobody". Only a REPLY arm behaves that way — an explicit
+        // schedule survives the reply and fires a second, contentless pointer
+        // at the same turn's end, so the owner burns a turn on a pointer to a
+        // message it already has.
+        let fixture = wake_fixture();
+
+        assert!(arm_spawn_wake(
+            &fixture.subagents,
+            &fixture.wakes,
+            &fixture.owner,
+            "ses_peer",
+            &peer_request(true),
+        )
+        .expect("arm the spawn wake"));
+
+        let armed = fixture
+            .sessions
+            .list_agent_wakes_for_target("ses_peer")
+            .expect("read the armed row");
+        assert_eq!(armed.len(), 1);
+        assert_eq!(armed[0].watcher_session_id, "ses_owner");
+        assert!(
+            armed[0].armed_for_reply,
+            "a spawn wake must be consumable by the peer's reply"
+        );
+
+        // The peer answers its owner: the schedule comes off...
+        assert!(consume_reply_wake(&fixture.wakes, "ses_peer", "ses_owner"));
+        // ...so the turn that carried the reply wakes nobody, and no pointer
+        // is queued behind the message the owner already received.
+        assert!(fixture
+            .wakes
+            .consume_for_finished_turn("ses_peer", SessionTurnOutcome::Completed)
+            .await
+            .expect("the peer's first turn finishes")
+            .is_empty());
+        assert!(fixture
+            .sessions
+            .list_pending_prompts("ses_owner")
+            .expect("owner's pending prompts")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_peer_that_answers_nobody_still_wakes_its_owner_at_turn_finish() {
+        // The other half of the same contract: the safety net has to actually
+        // catch. Nothing replied, so the schedule is still armed when the turn
+        // ends and the owner gets its pointer.
+        let fixture = wake_fixture();
+        arm_spawn_wake(
+            &fixture.subagents,
+            &fixture.wakes,
+            &fixture.owner,
+            "ses_peer",
+            &peer_request(true),
+        )
+        .expect("arm the spawn wake");
+
+        let fired = fixture
+            .wakes
+            .consume_for_finished_turn("ses_peer", SessionTurnOutcome::Completed)
+            .await
+            .expect("the peer's first turn finishes");
+
+        assert_eq!(fired.len(), 1);
+        assert_eq!(fired[0].consumed.watcher_session_id, "ses_owner");
+    }
+
+    #[tokio::test]
+    async fn a_spawn_that_asked_for_no_wake_arms_nothing() {
+        // `wakeOnCompletion: false` must leave the table empty — otherwise the
+        // owner is woken about an agent it said it did not need to hear from.
+        let fixture = wake_fixture();
+
+        assert!(!arm_spawn_wake(
+            &fixture.subagents,
+            &fixture.wakes,
+            &fixture.owner,
+            "ses_peer",
+            &peer_request(false),
+        )
+        .expect("no wake asked for"));
+
+        assert!(fixture
+            .sessions
+            .list_agent_wakes_for_target("ses_peer")
+            .expect("read schedules")
+            .is_empty());
+    }
+
+    #[test]
+    fn a_subagent_spawn_takes_the_link_scoped_wake_and_writes_no_session_row() {
+        // The other side of the mode split. A subagent's wake hangs off the
+        // link completion row, so the session-scoped table must stay empty —
+        // if both were written the parent would be woken twice, and if the
+        // peer branch leaked into this one the wake would fire off a
+        // completion record that never arrives.
+        let fixture = wake_fixture();
+        fixture
+            .sessions
+            .insert(&session("ses_child"))
+            .expect("insert child");
+        fixture
+            .subagents
+            .link_child("ses_owner", "ses_child", None, None, None)
+            .expect("link the subagent");
+
+        let mut request = peer_request(true);
+        request.ownership = AgentSessionOwnership::Subagent;
+
+        assert!(arm_spawn_wake(
+            &fixture.subagents,
+            &fixture.wakes,
+            &fixture.owner,
+            "ses_child",
+            &request,
+        )
+        .expect("arm the subagent wake"));
+
+        assert!(
+            fixture
+                .sessions
+                .list_agent_wakes_for_target("ses_child")
+                .expect("read schedules")
+                .is_empty(),
+            "a subagent's wake is link-scoped and must not write a session-scoped row"
         );
     }
 

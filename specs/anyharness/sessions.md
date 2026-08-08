@@ -223,8 +223,14 @@ The model is intentionally small:
   either session removes only the link and attached completion/schedule rows
 - nested subagents are blocked; an UNPROMOTED subagent child receives no
   spawn-style tools (`get_subagent_launch_options`, `spawn_subagent`, the
-  deprecated `create_subagent` alias, and `spawn_agent`) and
-  `validate_parent_can_spawn` refuses it with a depth limit
+  deprecated `create_subagent` alias, and `spawn_agent`), and both spawn gates
+  refuse it at the service as well: `validate_parent_can_spawn` with a depth
+  limit, `validate_caller_can_spawn_agent` as a subordinate caller. The tool
+  bodies read those gates, so the block does not rest on dispatch alone
+- the cowork depth rule is narrower than either: `validate_parent_can_spawn`
+  also refuses the child of a cowork coding session, and `spawn_agent` is
+  outside that rule. Cowork is unused and slated for deletion, so the gap is
+  disclosed rather than closed
 - parents are limited to eight *unpromoted* subagents at a time; promoted
   children no longer occupy a slot. The cap counts subagents only: an owner
   sitting at the cap may still spawn owned agents, which are uncapped
@@ -298,7 +304,10 @@ any step fails. They differ in three places, all keyed off the ownership mode:
 
 - the link relation, `subagent` or `owned_agent`
 - the wake: a subagent's is link-scoped, hung off the completion row, while a
-  peer has no link completion to wait on and so takes a session-scoped wake
+  peer has no link completion to wait on and so takes a session-scoped wake.
+  The peer's is armed as a REPLY wake, the same kind `wakeOnReply` arms on a
+  send: the first prompt is a question, so the peer's answer consumes the
+  schedule and only a peer that answers nobody produces the pointer
 - the first prompt: a subagent's carries parent-to-child provenance with the
   `session_link_id`, a peer's is an envelope-wrapped peer message with none
 

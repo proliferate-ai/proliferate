@@ -108,11 +108,30 @@ refused `spawn_subagent` and still offered `spawn_agent`.
 `spawn_agent` creates a peer in the caller's own workspace and returns the new
 `sessionId` and an `agentId`. It reports no `subagentId`, because there is no
 subagent: the handle for a peer is its session id, the same one the peer tools
-take.
+take. Its launch vocabulary is `spawn_subagent`'s, deliberately: the same
+`harnessId` and the same open `initialConfig` object, of which `modelId` and
+`modeId` are read. `appliedInitialConfig` in the result reports what the new
+agent actually launched with, so a key that was not honoured is visibly absent
+rather than silently dropped. Whether to close that object is a decision for
+both spawn tools together, not one of them.
+
+The client does not yet learn about a peer spawn from the stream. The
+subagent-mutation invalidation deliberately does not list `spawn_agent` — the
+new agent is not a subagent and does not belong in a parent's fanout — and
+there is no session-created event in its place, so a peer spawned by an agent
+appears on the next refresh rather than immediately. Closing that is client
+work, tracked with the rest of the client surface.
 
 Because tool lists are frozen at launch, the block is enforced at call time, on
 the wire name, against the caller's state at the moment it acts. `tools/list` is
 advertisement; dispatch is the gate.
+
+Subordination is also refused one layer down, by the gate each spawn tool reads
+before it creates anything: the subagent gate answers with a depth limit, the
+peer gate with a subordinate caller. Both are the same predicate — an open
+subagent link naming the caller as the child, not yet promoted — so an
+unpromoted subagent is refused whichever way it is reached, and no path into a
+spawn depends on dispatch having checked first.
 
 ## Peer Configuration
 
@@ -164,6 +183,14 @@ child finishes before the parent schedules a separate wake via
 arms a different mechanism. A subagent's wake hangs off the link completion row;
 a peer has no link completion to wait on, so its wake is session-scoped and
 fires at the end of the new agent's next finished turn.
+
+It is armed as a reply wake, the kind `wakeOnReply` arms on a send, because a
+spawn is a send awaiting an answer. If the peer replies, the reply carries the
+content and consumes the schedule, so no pointer follows it; if the peer answers
+nobody, the pointer fires when its turn ends. Arming it as a standing schedule
+instead would wake the owner twice for one turn, and — because a re-arm keeps
+the stronger reason — would also swallow the consumption of any `wakeOnReply`
+the owner armed on that peer before its first turn finished.
 
 The peer-scoped `schedule_agent_wake` closes the same race from the other side,
 and that is the reason it exists as a standalone tool as well as a

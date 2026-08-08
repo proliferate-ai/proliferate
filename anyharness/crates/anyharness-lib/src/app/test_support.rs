@@ -1,11 +1,24 @@
 use std::ffi::OsString;
 use std::sync::{Arc, Mutex, OnceLock};
 
+use crate::domains::repo_roots::service::RepoRootService;
+use crate::domains::repo_roots::store::RepoRootStore;
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::deletion::SessionDeleteWorkflow;
+use crate::domains::sessions::links::service::SessionLinkService;
+use crate::domains::sessions::links::store::SessionLinkStore;
 use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::subagents::service::SubagentService;
+use crate::domains::sessions::subagents::store::SubagentStore;
+use crate::domains::terminals::store::TerminalStore;
+use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
+use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
 use crate::live::sessions::model::ActorCapabilities;
+use crate::live::terminals::TerminalService;
 use crate::persistence::Db;
 
 /// Store-backed [`ActorCapabilities`] for tests: the same wiring as
@@ -161,6 +174,59 @@ pub(crate) fn insert_session_row(
         origin: Some(crate::origin::OriginContext::system_local_runtime()),
     };
     store.insert(&record).expect("insert session row");
+}
+
+/// A store-backed [`SubagentService`] and the link service behind it.
+///
+/// The spawn gates (`validate_parent_can_spawn`,
+/// `validate_caller_can_spawn_agent`) read the session store, the link store,
+/// the workspace record and the access gate together, so proving what they
+/// refuse needs the real wiring rather than a stub — this is the same
+/// composition `app/mod.rs` builds, over an in-memory db. The link service is
+/// handed back because the state those gates read (a subagent link, a promoted
+/// one, eight of them) is written through it.
+pub(crate) struct SubagentServiceFixture {
+    pub service: SubagentService,
+    pub links: SessionLinkService,
+    pub sessions: SessionStore,
+}
+
+pub(crate) fn subagent_service_fixture(db: &Db) -> SubagentServiceFixture {
+    let sessions = SessionStore::new(db.clone());
+    let links = SessionLinkService::new(SessionLinkStore::new(db.clone()), sessions.clone());
+    let session_delete_workflow = SessionDeleteWorkflow::new(db.clone());
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-subagent-service-test-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace_runtime = Arc::new(WorkspaceRuntime::new(
+        WorkspaceStore::new(db.clone()),
+        WorkspaceDeleteWorkflow::new(db.clone(), session_delete_workflow.clone()),
+        RepoRootService::new(RepoRootStore::new(db.clone())),
+        runtime_home.clone(),
+    ));
+    let access_gate = Arc::new(WorkspaceAccessGate::new(
+        WorkspaceStore::new(db.clone()),
+        sessions.clone(),
+        WorkspaceAccessStore::new(db.clone()),
+        Arc::new(TerminalService::new(
+            TerminalStore::new(db.clone()),
+            runtime_home,
+        )),
+    ));
+    let service = SubagentService::new(
+        sessions.clone(),
+        session_delete_workflow,
+        links.clone(),
+        SubagentStore::new(db.clone()),
+        workspace_runtime,
+        access_gate,
+    );
+    SubagentServiceFixture {
+        service,
+        links,
+        sessions,
+    }
 }
 
 pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &str, path: &str) {

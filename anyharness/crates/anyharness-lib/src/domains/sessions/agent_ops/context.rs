@@ -14,7 +14,10 @@ pub struct AgentOpsMcpContext {
     /// Whether this session may spawn a PEER agent. Separate from `can_create`
     /// because the fanout cap is the difference between them: an owner sitting
     /// at eight subagents may still spawn an owned agent (ruling 9), so
-    /// deriving one from the other would apply a cap the ADR removed.
+    /// deriving one from the other would apply a cap the ADR removed. It is
+    /// NOT a weaker flag: an unpromoted subagent has it false, exactly as it
+    /// has `can_create` false, because `validate_caller_can_spawn_agent` reads
+    /// subordination too.
     pub can_spawn_agent: bool,
     pub spawn_agent_block_reason: Option<String>,
     pub existing_subagent_count: usize,
@@ -93,6 +96,7 @@ fn resolve_create_block_reason(error: SubagentError) -> Result<String, ProductMc
     match error {
         reason @ (SubagentError::Disabled
         | SubagentError::DepthLimit
+        | SubagentError::Subordinate
         | SubagentError::FanoutLimit
         | SubagentError::MutationBlocked(_)) => Ok(reason.to_string()),
         not_found @ (SubagentError::ParentNotFound(_)

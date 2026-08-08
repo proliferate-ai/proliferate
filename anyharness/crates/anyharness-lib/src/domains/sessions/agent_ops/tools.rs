@@ -388,12 +388,20 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
                     "prompt": { "type": "string", "description": "First message, delivered inside an envelope naming you and your session id so the agent can reply." },
                     "label": { "type": "string", "description": "Short name for the agent, shown wherever it appears." },
                     "harnessId": { "type": "string", "description": "Defaults to your own harness. See get_subagent_launch_options for what this workspace can launch." },
+                    // Open, and open for the same reason `spawn_subagent` is:
+                    // one launch vocabulary across both spawns, so an agent
+                    // that learned one does not meet a stricter second. Only
+                    // `modelId` and `modeId` are read; `appliedInitialConfig`
+                    // in the result is what the new agent actually launched
+                    // with, so anything else passed is visibly absent there
+                    // rather than silently honoured. Tightening it is a change
+                    // to make on both tools at once or not at all.
                     "initialConfig": {
                         "type": "object",
                         "additionalProperties": true,
                         "properties": {
-                            "modelId": { "type": "string" },
-                            "modeId": { "type": "string" }
+                            "modelId": { "type": "string", "description": "Defaults to your current model." },
+                            "modeId": { "type": "string", "description": "Defaults to your current mode." }
                         }
                     },
                     "wakeOnCompletion": { "type": "boolean", "description": "Wake you when the new agent finishes its first turn. Its reply already wakes you with the full message; this is the safety net for one that answers nobody." },
