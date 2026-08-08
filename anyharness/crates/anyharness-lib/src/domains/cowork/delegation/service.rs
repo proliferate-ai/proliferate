@@ -276,6 +276,9 @@ impl CoworkDelegationService {
             created_by_tool_call_id: None,
             created_at: chrono::Utc::now().to_rfc3339(),
             closed_at: None,
+            promoted_at: None,
+            closed_by_session_id: None,
+            close_reason: None,
         };
         let inserted = self
             .cowork_service

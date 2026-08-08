@@ -105,6 +105,9 @@ impl SessionLinkService {
             created_by_tool_call_id: input.created_by_tool_call_id,
             created_at: chrono::Utc::now().to_rfc3339(),
             closed_at: None,
+            promoted_at: None,
+            closed_by_session_id: None,
+            close_reason: None,
         };
         self.store.insert(&record).map_err(|error| {
             if is_unique_constraint_error(&error) {
@@ -176,6 +179,9 @@ impl SessionLinkService {
             created_by_tool_call_id: input.created_by_tool_call_id,
             created_at: chrono::Utc::now().to_rfc3339(),
             closed_at: None,
+            promoted_at: None,
+            closed_by_session_id: None,
+            close_reason: None,
         };
         let outcome = self
             .store
@@ -278,6 +284,43 @@ impl SessionLinkService {
 
     pub fn close_link(&self, id: &str, closed_at: &str) -> anyhow::Result<bool> {
         self.store.close_link(id, closed_at)
+    }
+
+    pub fn promote_link(&self, id: &str, promoted_at: &str) -> anyhow::Result<bool> {
+        self.store.promote_link(id, promoted_at)
+    }
+
+    pub fn record_close_attribution(
+        &self,
+        id: &str,
+        closed_by_session_id: &str,
+        close_reason: Option<&str>,
+    ) -> anyhow::Result<bool> {
+        self.store
+            .record_close_attribution(id, closed_by_session_id, close_reason)
+    }
+
+    pub fn find_owned_link_including_closed(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> anyhow::Result<Option<SessionLinkRecord>> {
+        self.store
+            .find_owned_link_including_closed(parent_session_id, child_session_id)
+    }
+
+    pub fn list_owned_children(
+        &self,
+        parent_session_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.store.list_owned_children(parent_session_id)
+    }
+
+    pub fn find_pending_close_request(
+        &self,
+        child_session_id: &str,
+    ) -> anyhow::Result<Option<SessionLinkRecord>> {
+        self.store.find_pending_close_request(child_session_id)
     }
 
     pub fn delete_link(&self, id: &str) -> anyhow::Result<bool> {

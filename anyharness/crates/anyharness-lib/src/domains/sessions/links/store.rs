@@ -27,8 +27,9 @@ impl SessionLinkStore {
                 "INSERT INTO session_links (
                     id, public_id, relation, parent_session_id, child_session_id,
                     workspace_relation, label, created_by_turn_id,
-                    created_by_tool_call_id, created_at, closed_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                    created_by_tool_call_id, created_at, closed_at,
+                    promoted_at, closed_by_session_id, close_reason
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                 params![
                     record.id,
                     record.public_id,
@@ -41,6 +42,9 @@ impl SessionLinkStore {
                     record.created_by_tool_call_id,
                     record.created_at,
                     record.closed_at,
+                    record.promoted_at,
+                    record.closed_by_session_id,
+                    record.close_reason,
                 ],
             )?;
             Ok(())
@@ -54,18 +58,23 @@ impl SessionLinkStore {
     ) -> anyhow::Result<InsertSubagentLinkOutcome> {
         self.db.with_conn(|conn| {
             let inserted = conn.execute(
+                // The cap counts LINKED children only. A promoted child is a
+                // peer that keeps its ownership row, not one of the eight
+                // delegation slots its former parent may fill.
                 "INSERT INTO session_links (
                     id, public_id, relation, parent_session_id, child_session_id,
                     workspace_relation, label, created_by_turn_id,
-                    created_by_tool_call_id, created_at, closed_at
+                    created_by_tool_call_id, created_at, closed_at,
+                    promoted_at, closed_by_session_id, close_reason
                  )
-                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14
                  WHERE (
                     SELECT COUNT(*)
                     FROM session_links
                     WHERE relation = 'subagent' AND parent_session_id = ?4
                       AND closed_at IS NULL
-                 ) < ?12",
+                      AND promoted_at IS NULL
+                 ) < ?15",
                 params![
                     record.id,
                     record.public_id,
@@ -78,6 +87,9 @@ impl SessionLinkStore {
                     record.created_by_tool_call_id,
                     record.created_at,
                     record.closed_at,
+                    record.promoted_at,
+                    record.closed_by_session_id,
+                    record.close_reason,
                     max_children as i64,
                 ],
             )?;
@@ -310,6 +322,115 @@ impl SessionLinkStore {
         self.find_parent_by_relation(SessionLinkRelation::Subagent, child_session_id)
     }
 
+    /// Promotion is one idempotent write. The guard, not a `COALESCE`, is what
+    /// makes it idempotent AND reportable: zero rows updated means "already
+    /// promoted, or closed", so the caller can say so instead of silently
+    /// re-dating the row.
+    ///
+    /// The relation stays `'subagent'`. The row is still the ownership fact
+    /// that lets the former parent close this agent individually; what changes
+    /// is that the cascade stops following it and the spawn tools unlock.
+    pub fn promote_link(&self, id: &str, promoted_at: &str) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let updated = conn.execute(
+                "UPDATE session_links
+                 SET promoted_at = ?1
+                 WHERE id = ?2 AND promoted_at IS NULL AND closed_at IS NULL",
+                params![promoted_at, id],
+            )?;
+            Ok(updated > 0)
+        })
+    }
+
+    /// Stamp who asked for this close and why, WITHOUT closing the link.
+    ///
+    /// On an open row this is the durable "end requested" record: the close was
+    /// authorized and is now waiting for the target's in-flight turn to finish.
+    /// Guarded on `closed_at IS NULL` so a second close of an already-closed
+    /// agent cannot overwrite the original attribution — the first close is the
+    /// one that happened.
+    pub fn record_close_attribution(
+        &self,
+        id: &str,
+        closed_by_session_id: &str,
+        close_reason: Option<&str>,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let updated = conn.execute(
+                "UPDATE session_links
+                 SET closed_by_session_id = ?1, close_reason = ?2
+                 WHERE id = ?3 AND closed_at IS NULL",
+                params![closed_by_session_id, close_reason, id],
+            )?;
+            Ok(updated > 0)
+        })
+    }
+
+    /// The one link that makes `parent_session_id` the owner of
+    /// `child_session_id`, across BOTH ownership relations. Open rows win over
+    /// closed ones so a re-linked pair resolves to the live relationship.
+    pub fn find_owned_link_including_closed(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> anyhow::Result<Option<SessionLinkRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM session_links
+                 WHERE parent_session_id = ?1
+                   AND child_session_id = ?2
+                   AND relation IN ('subagent', 'owned_agent')
+                 ORDER BY (closed_at IS NULL) DESC, created_at DESC, id DESC
+                 LIMIT 1",
+                params![parent_session_id, child_session_id],
+                map_session_link,
+            )
+            .optional()
+        })
+    }
+
+    /// Every session `parent_session_id` owns, open rows only — the set
+    /// `close_agent` may target.
+    pub fn list_owned_children(
+        &self,
+        parent_session_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM session_links
+                 WHERE parent_session_id = ?1
+                   AND relation IN ('subagent', 'owned_agent')
+                   AND closed_at IS NULL
+                 ORDER BY created_at ASC, id ASC",
+            )?;
+            let rows = stmt.query_map([parent_session_id], map_session_link)?;
+            rows.collect()
+        })
+    }
+
+    /// The soft-close read, run once for every session that finishes a turn: is
+    /// there an open ownership link naming this session as end-requested?
+    /// Served by `idx_session_links_pending_close_request`.
+    pub fn find_pending_close_request(
+        &self,
+        child_session_id: &str,
+    ) -> anyhow::Result<Option<SessionLinkRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM session_links
+                 WHERE child_session_id = ?1
+                   AND closed_at IS NULL
+                   AND closed_by_session_id IS NOT NULL
+                   AND relation IN ('subagent', 'owned_agent')
+                 ORDER BY created_at ASC, id ASC
+                 LIMIT 1",
+                [child_session_id],
+                map_session_link,
+            )
+            .optional()
+        })
+    }
+
     /// One query for a whole page of children. `list_agents` renders a subagent
     /// by the label its parent gave it, and doing that per row is a query per
     /// row; the page size is bounded but the shape is not.
@@ -387,6 +508,9 @@ fn map_session_link(row: &rusqlite::Row) -> rusqlite::Result<SessionLinkRecord> 
         created_by_tool_call_id: row.get("created_by_tool_call_id")?,
         created_at: row.get("created_at")?,
         closed_at: row.get("closed_at")?,
+        promoted_at: row.get("promoted_at")?,
+        closed_by_session_id: row.get("closed_by_session_id")?,
+        close_reason: row.get("close_reason")?,
     })
 }
 

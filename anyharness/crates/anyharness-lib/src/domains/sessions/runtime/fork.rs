@@ -147,6 +147,9 @@ impl SessionRuntime {
             created_by_tool_call_id: None,
             created_at: now,
             closed_at: None,
+            promoted_at: None,
+            closed_by_session_id: None,
+            close_reason: None,
         };
         let insert_result = if child_actor_forks {
             self.session_service

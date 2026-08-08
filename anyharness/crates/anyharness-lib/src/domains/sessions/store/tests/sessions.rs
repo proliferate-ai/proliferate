@@ -287,6 +287,9 @@ fn subagent_link_record(
         created_by_tool_call_id: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
         closed_at: None,
+        promoted_at: None,
+        closed_by_session_id: None,
+        close_reason: None,
     }
 }
 

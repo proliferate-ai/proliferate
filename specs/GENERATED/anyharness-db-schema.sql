@@ -486,7 +486,7 @@ CREATE TABLE session_links (
     workspace_relation TEXT NOT NULL,
     created_by_turn_id TEXT,
     created_by_tool_call_id TEXT,
-    created_at TEXT NOT NULL, label TEXT, public_id TEXT, closed_at TEXT,
+    created_at TEXT NOT NULL, label TEXT, public_id TEXT, closed_at TEXT, promoted_at TEXT, closed_by_session_id TEXT, close_reason TEXT,
     UNIQUE(relation, parent_session_id, child_session_id),
     CHECK(parent_session_id != child_session_id)
 );
@@ -848,6 +848,11 @@ CREATE INDEX idx_session_links_open_parent_relation
 -- index: idx_session_links_parent
 CREATE INDEX idx_session_links_parent
     ON session_links(parent_session_id);
+
+-- index: idx_session_links_pending_close_request
+CREATE INDEX idx_session_links_pending_close_request
+    ON session_links(child_session_id)
+    WHERE closed_at IS NULL AND closed_by_session_id IS NOT NULL;
 
 -- index: idx_session_links_public_id
 CREATE UNIQUE INDEX idx_session_links_public_id
