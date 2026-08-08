@@ -5,16 +5,25 @@ use super::calls_helpers::{
     prompt_outcome_label, summaries_to_json,
 };
 use super::context::AgentOpsMcpContext;
+use super::messaging::prepare_agent_message;
 use super::tools::{
-    canonical_tool_name, ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs,
-    ReadSubagentLatestTurnsArgs, SearchSubagentTranscriptArgs, SendSubagentMessageArgs,
+    canonical_tool_name, ChildSessionArgs, CreateSubagentArgs, ListAgentsArgs,
+    ReadAgentTranscriptArgs, ReadAgentTranscriptMode, ReadSubagentEventsArgs,
+    ReadSubagentLatestTurnsArgs, SearchSubagentTranscriptArgs, SendAgentMessageArgs,
+    SendSubagentMessageArgs,
 };
 use crate::domains::sessions::authorize::{authorize, AgentAccessIntent};
 use crate::domains::sessions::delegation::{
     parent_to_child_provenance, READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT,
 };
 use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::sessions::store::{
+    SessionSearchCursor, SessionSearchQuery, SESSION_SEARCH_DEFAULT_LIMIT, SESSION_SEARCH_MAX_LIMIT,
+};
 use crate::domains::sessions::subagents::service::SubagentService;
+use crate::domains::sessions::transcript_read::{
+    read_session_events, read_session_latest_turns, search_session_transcript,
+};
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::origin::OriginContext;
 
@@ -38,6 +47,18 @@ pub async fn call_tool(
         "send_subagent_message" => {
             let args: SendSubagentMessageArgs = deserialize_args(arguments)?;
             send_subagent_message(service, session_runtime, &ctx.parent_session_id, args).await
+        }
+        "list_agents" => {
+            let args: ListAgentsArgs = deserialize_args(arguments)?;
+            list_agents(service, &ctx.parent_session_id, args)
+        }
+        "send_agent_message" => {
+            let args: SendAgentMessageArgs = deserialize_args(arguments)?;
+            send_agent_message(service, session_runtime, &ctx.parent_session_id, args).await
+        }
+        "read_agent_transcript" => {
+            let args: ReadAgentTranscriptArgs = deserialize_args(arguments)?;
+            read_agent_transcript(service, &ctx.parent_session_id, args)
         }
         "schedule_subagent_wake" => {
             let args: ChildSessionArgs = deserialize_args(arguments)?;
@@ -425,6 +446,175 @@ async fn send_subagent_message(
         "wakeScope": if args.wake_on_completion { Some("next_completion") } else { None::<&str> },
         "status": prompt_outcome_label(&outcome),
     }))
+}
+
+fn list_agents(
+    service: &SubagentService,
+    caller_session_id: &str,
+    args: ListAgentsArgs,
+) -> anyhow::Result<Value> {
+    let decoded_cursor = match args.cursor.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        Some(token) => Some(
+            SessionSearchCursor::decode(token)
+                .ok_or_else(|| anyhow::anyhow!("cursor is not a cursor returned by list_agents"))?,
+        ),
+        None => None,
+    };
+    let limit = args
+        .limit
+        .unwrap_or(SESSION_SEARCH_DEFAULT_LIMIT)
+        .clamp(1, SESSION_SEARCH_MAX_LIMIT);
+    let sessions = service.session_store().search_sessions(&SessionSearchQuery {
+        session_id: args.session_id.as_deref(),
+        text: args.query.as_deref(),
+        workspace_id: args.workspace_id.as_deref(),
+        include_closed: args.include_closed,
+        cursor: decoded_cursor
+            .as_ref()
+            .map(|(updated_at, id)| SessionSearchCursor {
+                updated_at,
+                id,
+            }),
+        limit,
+    })?;
+
+    // A full page may or may not have more behind it; handing back a cursor
+    // costs one extra empty call at worst, and dropping it would silently lose
+    // rows.
+    let next_cursor = (sessions.len() == limit)
+        .then(|| sessions.last())
+        .flatten()
+        .map(|session| {
+            SessionSearchCursor {
+                updated_at: &session.updated_at,
+                id: &session.id,
+            }
+            .encode()
+        });
+
+    let mut agents = Vec::with_capacity(sessions.len());
+    for session in sessions {
+        // A linked subagent is best known by the label its parent gave it; a
+        // top level session by its own title.
+        let link_label = service
+            .find_subagent_parent(&session.id)?
+            .and_then(|link| link.label);
+        agents.push(json!({
+            "sessionId": session.id,
+            "label": link_label.clone().or_else(|| session.title.clone()),
+            "title": session.title,
+            "subagentLabel": link_label,
+            "workspaceId": session.workspace_id,
+            "agentKind": session.agent_kind,
+            "status": session.status,
+            "closed": session.closed_at.is_some(),
+            "closedAt": session.closed_at,
+            "isCaller": session.id == caller_session_id,
+            "createdAt": session.created_at,
+            "updatedAt": session.updated_at,
+        }));
+    }
+    Ok(json!({
+        "agents": agents,
+        "nextCursor": next_cursor,
+    }))
+}
+
+async fn send_agent_message(
+    service: &SubagentService,
+    session_runtime: &SessionRuntime,
+    caller_session_id: &str,
+    args: SendAgentMessageArgs,
+) -> anyhow::Result<Value> {
+    let prepared = prepare_agent_message(
+        service.session_store(),
+        caller_session_id,
+        args.session_id.trim(),
+        &args.message,
+    )?;
+    // From here it is the ordinary prompt path: running targets queue, idle
+    // ones boot. Nothing about an agent-sourced prompt is special to the queue.
+    let outcome = session_runtime
+        .send_text_prompt_with_provenance(
+            &prepared.target.id,
+            prepared.text.clone(),
+            prepared.provenance,
+        )
+        .await
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+    Ok(json!({
+        "sessionId": prepared.target.id,
+        "workspaceId": prepared.target.workspace_id,
+        "title": prepared.target.title,
+        "senderLabel": prepared.sender_label,
+        "deliveredText": prepared.text,
+        "status": prompt_outcome_label(&outcome),
+    }))
+}
+
+fn read_agent_transcript(
+    service: &SubagentService,
+    caller_session_id: &str,
+    args: ReadAgentTranscriptArgs,
+) -> anyhow::Result<Value> {
+    let session_id = args.session_id.trim();
+    // Read intent: a closed agent's transcript stays readable forever.
+    let target = authorize(
+        service.session_store(),
+        caller_session_id,
+        session_id,
+        AgentAccessIntent::Read,
+    )?
+    .target;
+    let store = service.session_store();
+    match args.mode {
+        ReadAgentTranscriptMode::LatestTurns => {
+            let turns = read_session_latest_turns(store, &target.id, args.limit)?;
+            Ok(json!({
+                "sessionId": target.id,
+                "mode": "latest_turns",
+                "turns": turns.into_iter().map(|turn| json!({
+                    "turnId": turn.turn_id,
+                    "outcome": turn.outcome,
+                    "stopReason": turn.stop_reason,
+                    "startedAt": turn.started_at,
+                    "lastEventSeq": turn.last_event_seq,
+                    "assistantText": turn.assistant_text,
+                    "toolErrors": turn.tool_errors,
+                    "eventCount": turn.event_count,
+                })).collect::<Vec<_>>(),
+            }))
+        }
+        ReadAgentTranscriptMode::Search => {
+            let query = args
+                .query
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("query is required when mode is search"))?;
+            let matches = search_session_transcript(store, &target.id, query, args.limit)?;
+            Ok(json!({
+                "sessionId": target.id,
+                "mode": "search",
+                "query": query,
+                "matches": matches.into_iter().map(|entry| json!({
+                    "seq": entry.seq,
+                    "timestamp": entry.timestamp,
+                    "turnId": entry.turn_id,
+                    "itemId": entry.item_id,
+                    "snippet": entry.snippet,
+                })).collect::<Vec<_>>(),
+            }))
+        }
+        ReadAgentTranscriptMode::Events => {
+            let slice = read_session_events(store, &target.id, args.since_seq, args.limit)?;
+            Ok(json!({
+                "sessionId": slice.session_id,
+                "mode": "events",
+                "events": slice.events,
+                "nextSinceSeq": slice.next_since_seq,
+                "truncated": slice.truncated,
+            }))
+        }
+    }
 }
 
 fn schedule_subagent_wake(
