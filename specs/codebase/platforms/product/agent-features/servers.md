@@ -44,7 +44,7 @@ decide which product MCPs are enabled.
 Current internal product MCPs:
 
 ```text
-domains/sessions/subagents/mcp
+domains/sessions/agent_ops
 domains/reviews/mcp
 domains/cowork/mcp
 ```
@@ -170,6 +170,10 @@ owner_domain
 
 route_slug
   stable endpoint segment when routed through the generic product MCP endpoint
+
+legacy_route_slugs
+  slugs the product used to be served under; sessions bake the MCP URL in at
+  launch and never refresh it, so a renamed product keeps answering on them
 
 visibility
   internal or user_selectable

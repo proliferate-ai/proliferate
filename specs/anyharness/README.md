@@ -315,7 +315,7 @@ which guide to read and where the code belongs.
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [adapters.md](adapters.md) |
 | Terminal durable records, PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/domains/terminals/**`, `anyharness-lib/src/live/terminals/**` | durable `domains/terminals/**` plus live `live/terminals/**` | [live-runtime.md](live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/domains/sessions/mcp_bindings/**` | `domains/sessions/mcp_bindings/**` | [../codebase/platforms/product/mcp-runtime.md](../codebase/platforms/product/mcp-runtime.md), [domains.md](domains.md) |
-| Product MCP tool servers for artifacts, reviews, subagents | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/subagents/**` | owning product domain | [../codebase/platforms/product/agent-features/servers.md](../codebase/platforms/product/agent-features/servers.md), [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md), [domains.md](domains.md) |
+| Product MCP tool servers for artifacts, reviews, agent ops | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/agent_ops/**` | owning product domain | [../codebase/platforms/product/agent-features/servers.md](../codebase/platforms/product/agent-features/servers.md), [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md), [domains.md](domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [integrations.md](integrations.md), [../codebase/platforms/product/mcp-runtime.md](../codebase/platforms/product/mcp-runtime.md) |
 | Artifact durable model, manifest, protection, or runtime behavior | `anyharness-lib/src/domains/artifacts/**` | `domains/artifacts/**` | [domains.md](domains.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [domains.md](domains.md), [../codebase/systems/product/agents/cowork-artifacts.md](../codebase/systems/product/agents/cowork-artifacts.md) |
@@ -326,7 +326,7 @@ which guide to read and where the code belongs.
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [repo-shape.md](repo-shape.md) |
 
 If a task appears to belong in two places, split by ownership. Example: a new
-subagent MCP tool puts product behavior in `domains/sessions/subagents/**`,
+subagent MCP tool puts product behavior in `domains/sessions/agent_ops/**`,
 shared JSON-RPC/capability helpers in `integrations/mcp/**`, and the HTTP route
 adapter in `api/http/**`.
 
