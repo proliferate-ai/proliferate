@@ -7,7 +7,10 @@ import type {
   SessionSubagentsResponse,
 } from "@anyharness/sdk";
 import { formatSubagentLabel } from "#product/domain/chats/subagents/provenance";
-import { closeRequestedLabel } from "#product/domain/chats/subagents/ownership";
+import {
+  closeRequestedLabel,
+  isSubordinateChild,
+} from "#product/domain/chats/subagents/ownership";
 import type { SubagentSessionRelationshipHint } from "#product/domain/chats/subagents/session-relationship-hints";
 import {
   reviewAssignmentHeaderStatusLabel,
@@ -68,7 +71,10 @@ export function buildWorkspaceHeaderSubagentHierarchy({
     }
 
     if (data) {
-      if (data.parent) {
+      // A promoted session keeps its parent link — ownership outlives promotion
+      // — but it stops being a child in the tree. Reading the stamp here is what
+      // makes the session's own view agree with the parent's.
+      if (data.parent && isSubordinateChild(data.parent)) {
         const parentSessionId = resolveClientSessionId(data.parent.parentSessionId);
         childToParent.set(sessionId, parentSessionId);
         parentRowsBySessionId.set(
@@ -77,10 +83,15 @@ export function buildWorkspaceHeaderSubagentHierarchy({
         );
       }
 
-      if (data.children.length > 0) {
+      // Promotion severs subordination: a promoted child keeps its ownership
+      // row so its owner can still close it, but it renders as a normal
+      // top-level session from then on, not inside this parent's fanout. Owned
+      // peers (`ownedAgents`) never entered the fanout in the first place.
+      const subordinateChildren = data.children.filter(isSubordinateChild);
+      if (subordinateChildren.length > 0) {
         childrenByParentSessionId.set(
           sessionId,
-          data.children.map((child, childIndex) =>
+          subordinateChildren.map((child, childIndex) =>
             buildChildRow({
               child,
               parentSessionId: sessionId,
@@ -89,7 +100,7 @@ export function buildWorkspaceHeaderSubagentHierarchy({
             })
           ),
         );
-        for (const child of data.children) {
+        for (const child of subordinateChildren) {
           childToParent.set(resolveClientSessionId(child.childSessionId), sessionId);
         }
       }

@@ -46,14 +46,40 @@ export function AgentsPopoverSubagentSection({
             key={row.sessionLinkId}
             row={row}
             isSchedulingWake={subagents.isSchedulingWake}
+            isPromoting={subagents.isPromoting}
             onOpen={() => {
               subagents.openSubagent(row.childSessionId);
               onClose();
             }}
             onScheduleWake={() => subagents.scheduleWake(row.childSessionId)}
+            onPromote={() => subagents.promote(row.childSessionId)}
           />
         ))}
       </div>
+      {/* Owned peers are a SEPARATE list, never folded into the fanout above:
+          a peer is nobody's subagent, and a promoted subagent has stopped being
+          one. TODO(agent-ops-ux): section chrome is the design pass. */}
+      {subagents.ownedAgents.length > 0 && (
+        <div className="mt-1 space-y-0.5">
+          <div className="flex h-7 items-center px-2">
+            <span className="text-ui font-medium text-foreground">Agents</span>
+          </div>
+          {subagents.ownedAgents.map((row) => (
+            <SubagentPopoverRow
+              key={row.sessionLinkId}
+              row={row}
+              isSchedulingWake={subagents.isSchedulingWake}
+              isPromoting={subagents.isPromoting}
+              onOpen={() => {
+                subagents.openOwnedAgent(row.childSessionId);
+                onClose();
+              }}
+              onScheduleWake={() => subagents.scheduleWake(row.childSessionId)}
+              onPromote={() => subagents.promote(row.childSessionId)}
+            />
+          ))}
+        </div>
+      )}
     </PopoverSection>
   );
 }
@@ -61,13 +87,17 @@ export function AgentsPopoverSubagentSection({
 function SubagentPopoverRow({
   row,
   isSchedulingWake,
+  isPromoting,
   onOpen,
   onScheduleWake,
+  onPromote,
 }: {
   row: SubagentRow;
   isSchedulingWake: boolean;
+  isPromoting: boolean;
   onOpen: () => void;
   onScheduleWake: () => void;
+  onPromote: () => void;
 }) {
   // A requested close outranks the other secondary lines: the agent is still
   // working, but it is working its last step.
@@ -99,19 +129,40 @@ function SubagentPopoverRow({
           </span>
         </span>
       </Button>
-      {!row.wakeScheduled && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2"
-          loading={isSchedulingWake}
-          aria-label={`Schedule wake for ${row.identity.displayName}`}
-          onClick={onScheduleWake}
-        >
-          Wake
-        </Button>
-      )}
+      <span className="flex items-center gap-1">
+        {/* Promotion is offered only for an agent that is still subordinate:
+            a peer has nothing to be promoted out of.
+            TODO(agent-ops-ux): the confirm step and badge are the design pass. */}
+        {row.ownership === "subagent" && !row.closeRequested && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            loading={isPromoting}
+            aria-label={`Promote ${row.identity.displayName}`}
+            onClick={onPromote}
+          >
+            Promote
+          </Button>
+        )}
+        {/* A wake armed from here is LINK-scoped, so it is only offered where a
+            delegation link exists. An owned peer has none; waking one is the
+            agents' session-scoped tool, which no human route exposes. */}
+        {row.ownership !== "owned_agent" && !row.wakeScheduled && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            loading={isSchedulingWake}
+            aria-label={`Schedule wake for ${row.identity.displayName}`}
+            onClick={onScheduleWake}
+          >
+            Wake
+          </Button>
+        )}
+      </span>
     </div>
   );
 }

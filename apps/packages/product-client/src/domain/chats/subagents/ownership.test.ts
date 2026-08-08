@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { closeRequestedLabel, isCloseRequested } from "./ownership";
+import {
+  childOwnershipState,
+  closeRequestedLabel,
+  isCloseRequested,
+  isSubordinateChild,
+} from "./ownership";
 
 describe("isCloseRequested", () => {
   it("reads a named closer as a close that has not landed yet", () => {
@@ -28,5 +33,23 @@ describe("closeRequestedLabel", () => {
 
   it("says nothing about an agent nobody asked to close", () => {
     expect(closeRequestedLabel({ closeReason: "superseded" })).toBeNull();
+  });
+});
+
+describe("childOwnershipState", () => {
+  it("reads a promotion stamp as promoted even though the relation stays subagent", () => {
+    expect(childOwnershipState({ promotedAt: "2026-08-08T01:00:00Z" })).toBe("promoted");
+  });
+
+  it("treats an unstamped child as subordinate", () => {
+    expect(childOwnershipState({ promotedAt: null })).toBe("subagent");
+    expect(childOwnershipState({})).toBe("subagent");
+  });
+});
+
+describe("isSubordinateChild", () => {
+  it("excludes a promoted child, which renders as a top-level agent", () => {
+    expect(isSubordinateChild({ promotedAt: "2026-08-08T01:00:00Z" })).toBe(false);
+    expect(isSubordinateChild({})).toBe(true);
   });
 });

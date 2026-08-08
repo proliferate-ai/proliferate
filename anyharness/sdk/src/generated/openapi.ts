@@ -3660,6 +3660,13 @@ export interface components {
             parentModelId?: string | null;
             parentSessionId: string;
             parentTitle?: string | null;
+            /**
+             * @description Set once THIS session was promoted out of subordination. The parent link
+             *     survives promotion because the parent still owns the session, so without
+             *     this stamp a promoted agent asking about itself cannot tell that it is
+             *     no longer somebody's subagent.
+             */
+            promotedAt?: string | null;
             sessionLinkId: string;
             subagentId?: string | null;
         };

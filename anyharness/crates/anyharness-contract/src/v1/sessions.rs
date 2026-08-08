@@ -351,6 +351,12 @@ pub struct ParentSubagentLinkSummary {
     pub link_created_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link_closed_at: Option<String>,
+    /// Set once THIS session was promoted out of subordination. The parent link
+    /// survives promotion because the parent still owns the session, so without
+    /// this stamp a promoted agent asking about itself cannot tell that it is
+    /// no longer somebody's subagent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub promoted_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

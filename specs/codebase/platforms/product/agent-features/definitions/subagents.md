@@ -129,12 +129,13 @@ agent actually launched with, so a key that was not honoured is visibly absent
 rather than silently dropped. Whether to close that object is a decision for
 both spawn tools together, not one of them.
 
-The client does not yet learn about a peer spawn from the stream. The
-subagent-mutation invalidation deliberately does not list `spawn_agent` — the
-new agent is not a subagent and does not belong in a parent's fanout — and
-there is no session-created event in its place, so a peer spawned by an agent
-appears on the next refresh rather than immediately. Closing that is client
-work, tracked with the rest of the client surface.
+No stream event announces a peer spawn, so the client learns about one from the
+completed `spawn_agent` receipt: it refreshes the workspace collections and the
+agents read model, and records NO parent-child relationship from it. The
+distinction the server draws is kept on the client — the new agent becomes
+visible without belonging to anybody's fanout. `spawn_workspace` refreshes the
+workspace collections for the same reason: a workspace an agent created is
+otherwise invisible until a manual refresh.
 
 The human client reads the same three states off one endpoint,
 `GET /v1/sessions/{session_id}/subagents`. `children` stays what it has always
@@ -146,6 +147,20 @@ exists: every consumer of `children` reads it as a fanout, and a peer belongs in
 nobody's. A peer summary carries no `subagentId` and no completion, because
 there is no delegation link to complete; its handle is its session id and it
 names its own `workspaceId`, which need not be the owner's.
+
+The parent summary carries `promotedAt` as well, and it is the same stamp read
+from the other side. A promoted session keeps its parent link, because its
+parent still owns it; without the stamp the session asking about ITSELF could
+not tell that it is no longer subordinate, and would keep rendering under a
+parent its own parent no longer lists. With it, both directions agree: a
+promoted agent is a top-level session in the tabs and in the tree, and it moves
+out of its parent's fanout and in with the peers, which is what makes a promoted
+subagent indistinguishable from one born a peer.
+
+Promotion is also a human action, not only a tool call:
+`POST /v1/sessions/{session_id}/subagents/{child_session_id}/promote` performs
+it from the client, and it is offered only on a row that is still subordinate —
+there is nothing to promote a peer out of.
 
 Both lists are the OPEN rows. A closed link leaves the endpoint entirely, so
 `closedBySessionId` and `closeReason` appear there in exactly one situation:

@@ -14,13 +14,17 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
   const subagents = args.subagentRows
     ? {
       rows: args.subagentRows,
+      ownedAgents: [],
       parent: null,
       summary: buildPlaygroundSubagentSummary(args.subagentRows),
       overflowCount: 0,
       openSubagent: noop,
+      openOwnedAgent: noop,
       openParent: noop,
       scheduleWake: noop,
       isSchedulingWake: false,
+      promote: noop,
+      isPromoting: false,
     }
     : null;
   const summary = subagents

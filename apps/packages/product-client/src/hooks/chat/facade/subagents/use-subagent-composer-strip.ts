@@ -1,6 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useSessionSubagentsQuery } from "@anyharness/sdk-react";
-import type { ChildSubagentSummary, ParentSubagentLinkSummary } from "@anyharness/sdk";
+import type {
+  ChildSubagentSummary,
+  OwnedAgentSummary,
+  ParentSubagentLinkSummary,
+} from "@anyharness/sdk";
 import {
   useActiveSessionId,
   useActiveSessionWorkspaceId,
@@ -11,8 +15,11 @@ import { isPendingSessionId } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { formatSubagentLabel } from "#product/domain/chats/subagents/provenance";
 import {
+  childOwnershipState,
   closeRequestedLabel,
   isCloseRequested,
+  isSubordinateChild,
+  type AgentOwnershipState,
 } from "#product/domain/chats/subagents/ownership";
 import type {
   DelegatedAgentIdentity,
@@ -24,6 +31,7 @@ import {
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 
 const EMPTY_CHILDREN: ChildSubagentSummary[] = [];
+const EMPTY_OWNED_AGENTS: OwnedAgentSummary[] = [];
 
 export interface SubagentComposerStripRow {
   sessionLinkId: string;
@@ -40,14 +48,28 @@ export interface SubagentComposerStripRow {
    */
   closeRequested: boolean;
   closeRequestedLabel: string | null;
+  /** Subordinate, promoted, or a peer this session merely owns. */
+  ownership: AgentOwnershipState;
+  /**
+   * Set for owned peers, which can live in a workspace of their own — opening
+   * one has to go to ITS workspace, not the owner's.
+   */
+  workspaceId: string | null;
 }
 
 export interface SubagentComposerStripViewModel {
   rows: SubagentComposerStripRow[];
+  /**
+   * Peers this session owns without parenting them. A SEPARATE list, never
+   * folded into `rows`: `rows` is the parent's fanout, and an owned agent is
+   * nobody's subagent.
+   */
+  ownedAgents: SubagentComposerStripRow[];
   parent: SubagentComposerParent | null;
   summary: SubagentComposerStripSummary;
   overflowCount: number;
   openSubagent: (childSessionId: string) => void;
+  openOwnedAgent: (agentSessionId: string) => void;
   openParent: (parentSessionId: string) => void;
 }
 
@@ -76,7 +98,13 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
     enabled: !!materializedSessionId && !isPendingSessionId(materializedSessionId),
     workspaceId: activeWorkspaceId,
   });
-  const parentSessionId = subagentsQuery.data?.parent?.parentSessionId ?? null;
+  // A promoted session keeps its parent link because its parent still owns it,
+  // but it is no longer subordinate: no parent chip, and no sibling strip read
+  // off a fanout it left.
+  const parentLink = isSubordinateChild(subagentsQuery.data?.parent)
+    ? subagentsQuery.data?.parent ?? null
+    : null;
+  const parentSessionId = parentLink?.parentSessionId ?? null;
   // The session subagents endpoint intentionally returns only the requested
   // session's direct parent and direct children, so child sessions read the
   // parent's context to render the sibling strip.
@@ -85,14 +113,29 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
     workspaceId: activeWorkspaceId,
   });
 
-  const children = parentSubagentsQuery.data?.children
+  const allChildren = parentSubagentsQuery.data?.children
     ?? subagentsQuery.data?.children
     ?? EMPTY_CHILDREN;
+  // Promotion moves a child out of the fanout and in with the peers, because a
+  // promoted subagent is meant to be indistinguishable from one born a peer.
+  const children = useMemo(
+    () => allChildren.filter(isSubordinateChild),
+    [allChildren],
+  );
+  const promotedChildren = useMemo(
+    () => allChildren.filter((child) => !isSubordinateChild(child)),
+    [allChildren],
+  );
   const childParentSessionId = parentSessionId ?? activeSessionId;
   const childBySessionId = useMemo(
-    () => new Map(children.map((child) => [child.childSessionId, child])),
-    [children],
+    () => new Map(allChildren.map((child) => [child.childSessionId, child])),
+    [allChildren],
   );
+
+  // Owned peers are read off the ACTIVE session only. The sibling fallback
+  // above exists so a child can see its siblings; a child does not inherit its
+  // parent's peers, because it does not own them.
+  const ownedAgentSummaries = subagentsQuery.data?.ownedAgents ?? EMPTY_OWNED_AGENTS;
 
   const rows = useMemo(
     () => children.map((child, index) => (
@@ -100,9 +143,18 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
     )),
     [children],
   );
+  const ownedAgents = useMemo(
+    () => [
+      ...promotedChildren.map((child, index) => buildSubagentRow(child, index + 1)),
+      ...ownedAgentSummaries.map((agent, index) => (
+        buildOwnedAgentRow(agent, promotedChildren.length + index + 1)
+      )),
+    ],
+    [ownedAgentSummaries, promotedChildren],
+  );
   const parent = useMemo(
-    () => buildParent(subagentsQuery.data?.parent ?? null),
-    [subagentsQuery.data?.parent],
+    () => buildParent(parentLink),
+    [parentLink],
   );
   const summary = useMemo(
     () => buildSummary(rows, parent),
@@ -124,6 +176,19 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
       source: "subagent-composer-strip",
     });
   }, [activateChatTab, activeWorkspaceId, childBySessionId, childParentSessionId]);
+  // Peers get no subagent relationship hint: they are nobody's subagent, and a
+  // hint would file one under this session's fanout.
+  const openOwnedAgent = useCallback((agentSessionId: string) => {
+    const workspaceId = ownedAgents
+      .find((row) => row.childSessionId === agentSessionId)?.workspaceId
+      ?? activeWorkspaceId;
+    if (!workspaceId) return;
+    void activateChatTab({
+      workspaceId,
+      sessionId: agentSessionId,
+      source: "subagent-composer-strip",
+    });
+  }, [activateChatTab, activeWorkspaceId, ownedAgents]);
   const openParent = useCallback((parentSessionId: string) => {
     if (!activeWorkspaceId) return;
     void activateChatTab({
@@ -133,16 +198,18 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
     });
   }, [activateChatTab, activeWorkspaceId]);
 
-  if (!activeSessionId || children.length === 0) {
+  if (!activeSessionId || (children.length === 0 && ownedAgents.length === 0)) {
     return null;
   }
 
   return {
     rows,
+    ownedAgents,
     parent,
     summary,
     overflowCount: 0,
     openSubagent,
+    openOwnedAgent,
     openParent,
   };
 }
@@ -214,6 +281,37 @@ function buildSubagentRow(
     wakeScheduled: child.wakeScheduled,
     closeRequested: isCloseRequested(child),
     closeRequestedLabel: closeRequestedLabel(child),
+    ownership: childOwnershipState(child),
+    workspaceId: null,
+  };
+}
+
+function buildOwnedAgentRow(
+  agent: OwnedAgentSummary,
+  ordinal: number,
+): SubagentComposerStripRow {
+  const label = formatSubagentLabel(agent.label ?? agent.title, ordinal);
+  const statusLabel = formatSessionStatus(agent.status);
+  return {
+    sessionLinkId: agent.sessionLinkId,
+    childSessionId: agent.agentSessionId,
+    label,
+    identity: buildDelegatedAgentIdentity({
+      id: agent.sessionLinkId,
+      title: label,
+      sessionId: agent.agentSessionId,
+      sessionLinkId: agent.sessionLinkId,
+    }),
+    statusLabel,
+    statusCategory: delegatedWorkStatusCategoryFromLabel({ statusLabel }),
+    // A peer has no delegation link, so there is no link completion to report
+    // and no link-scoped wake to have armed.
+    latestCompletionLabel: null,
+    wakeScheduled: false,
+    closeRequested: isCloseRequested(agent),
+    closeRequestedLabel: closeRequestedLabel(agent),
+    ownership: "owned_agent",
+    workspaceId: agent.workspaceId,
   };
 }
 

@@ -230,6 +230,7 @@ fn parent_subagent_to_contract(parent: ParentSubagentLinkContext) -> ParentSubag
         label: parent.label,
         link_created_at: parent.link_created_at,
         link_closed_at: parent.link_closed_at,
+        promoted_at: parent.promoted_at,
     }
 }
 

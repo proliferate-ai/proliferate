@@ -379,6 +379,7 @@ impl SubagentService {
                     label: link.label,
                     link_created_at: link.created_at,
                     link_closed_at: link.closed_at,
+                    promoted_at: link.promoted_at,
                 })
         } else {
             None

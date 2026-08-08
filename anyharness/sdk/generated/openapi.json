@@ -13672,6 +13672,13 @@
               "null"
             ]
           },
+          "promotedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set once THIS session was promoted out of subordination. The parent link\nsurvives promotion because the parent still owns the session, so without\nthis stamp a promoted agent asking about itself cannot tell that it is\nno longer somebody's subagent."
+          },
           "sessionLinkId": {
             "type": "string"
           },

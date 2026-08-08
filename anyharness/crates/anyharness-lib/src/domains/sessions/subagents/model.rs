@@ -46,6 +46,9 @@ pub struct ParentSubagentLinkContext {
     pub label: Option<String>,
     pub link_created_at: String,
     pub link_closed_at: Option<String>,
+    /// Set once this session was promoted; the parent link outlives promotion
+    /// because ownership does.
+    pub promoted_at: Option<String>,
 }
 
 #[derive(Debug, Clone)]
