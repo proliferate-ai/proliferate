@@ -130,6 +130,9 @@ pub enum SessionMutationKind {
     Plan,
     Review,
     SubagentWake,
+    /// Arming a session-scoped wake: the mutation lands on the WATCHER's
+    /// future prompt queue, which is the session the permit is taken for.
+    AgentWake,
     ReplayAdvance,
     WorkspacePurge,
     WorkspaceRetire,
@@ -158,6 +161,7 @@ impl SessionMutationKind {
             Self::Plan => "plan",
             Self::Review => "review",
             Self::SubagentWake => "subagent_wake",
+            Self::AgentWake => "agent_wake",
             Self::ReplayAdvance => "replay_advance",
             Self::WorkspacePurge => "workspace_purge",
             Self::WorkspaceRetire => "workspace_retire",

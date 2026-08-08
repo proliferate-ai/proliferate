@@ -34,6 +34,10 @@ fn delete_session_removes_cross_domain_dependents() {
     assert_eq!(count_all(&db, "session_link_wake_schedules"), 0);
     assert_eq!(count_all(&db, "session_link_completions"), 0);
     assert_eq!(count_all(&db, "session_links"), 0);
+    // Session-scoped wake schedules reference sessions from both sides, so the
+    // deleted session takes the rows it watches AND the rows watching it. Both
+    // seeded rows name session-1; the surviving child keeps none of them.
+    assert_eq!(count_all(&db, "session_wake_schedules"), 0);
 }
 
 fn test_delete_workflow(db: Db) -> SessionDeleteWorkflow {
@@ -114,6 +118,18 @@ fn seed_cross_domain_dependents(db: &Db) {
             "INSERT INTO session_link_wake_schedules (session_link_id)
              VALUES ('link-1')",
             [],
+        )?;
+        conn.execute(
+            "INSERT INTO session_wake_schedules (
+                watcher_session_id, target_session_id, created_at
+             ) VALUES ('session-1', 'session-child', ?1)",
+            ["2026-03-25T00:01:03Z"],
+        )?;
+        conn.execute(
+            "INSERT INTO session_wake_schedules (
+                watcher_session_id, target_session_id, created_at
+             ) VALUES ('session-child', 'session-1', ?1)",
+            ["2026-03-25T00:01:03Z"],
         )?;
         conn.execute(
             "INSERT INTO review_runs (

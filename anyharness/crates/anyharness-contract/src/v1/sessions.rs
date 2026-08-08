@@ -274,6 +274,22 @@ pub struct SessionSubagentsResponse {
     pub children: Vec<ChildSubagentSummary>,
 }
 
+/// Arm a session-scoped wake as the human. Same table, same pointer, same
+/// one-shot consumption the agent tools use — the pane composer's "Wake me on
+/// reply" is not a second mechanism.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleAgentWakeRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleAgentWakeResponse {
+    pub watcher_session_id: String,
+    pub target_session_id: String,
+    pub wake_scheduled: bool,
+    pub already_scheduled: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduleSubagentWakeRequest {}

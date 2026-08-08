@@ -18,6 +18,15 @@ pub(crate) enum PromptProvenance {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    /// A session-scoped wake pointer. Unlike `SubagentWake`/`LinkWake` there is
+    /// no link and no completion row to name: the schedule is keyed on the
+    /// session pair, so the target's id is the whole identity.
+    #[serde(rename_all = "camelCase")]
+    AgentWake {
+        target_session_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
     #[serde(rename_all = "camelCase")]
     SubagentWake {
         session_link_id: String,
@@ -58,6 +67,13 @@ impl PromptProvenance {
             } => Some(PublicPromptProvenance::AgentSession {
                 source_session_id: source_session_id.clone(),
                 session_link_id: session_link_id.clone(),
+                label: label.clone(),
+            }),
+            PromptProvenance::AgentWake {
+                target_session_id,
+                label,
+            } => Some(PublicPromptProvenance::AgentWake {
+                target_session_id: target_session_id.clone(),
                 label: label.clone(),
             }),
             PromptProvenance::SubagentWake {

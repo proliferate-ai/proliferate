@@ -643,6 +643,10 @@ pub(crate) fn delete_session_rows_in_tx(
         [id],
     )?;
     conn.execute("DELETE FROM session_events WHERE session_id = ?1", [id])?;
+    // Session-scoped wake schedules reference sessions from BOTH sides, so a
+    // deleted session has to take the rows where it is the watcher and the rows
+    // where it is the target with it.
+    super::agent_wakes::delete_agent_wake_rows_for_session_in_tx(conn, id)?;
     conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
     Ok(())
 }

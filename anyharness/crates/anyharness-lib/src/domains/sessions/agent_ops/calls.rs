@@ -9,14 +9,14 @@ use super::calls_helpers::{
 use super::context::AgentOpsMcpContext;
 use super::peer_ops::{
     admit_peer_send, assert_workspace_can_be_mutated, authorize_transcript_read,
-    lease_target_workspace_for_send, prepare_agent_message,
+    consume_reply_wake, lease_target_workspace_for_send, prepare_agent_message,
 };
 use super::AgentOpsPeerGates;
 use super::tools::{
     canonical_tool_name, ChildSessionArgs, CreateSubagentArgs, ListAgentsArgs,
     ReadAgentTranscriptArgs, ReadAgentTranscriptMode, ReadSubagentEventsArgs,
-    ReadSubagentLatestTurnsArgs, SearchSubagentTranscriptArgs, SendAgentMessageArgs,
-    SendSubagentMessageArgs,
+    ReadSubagentLatestTurnsArgs, ScheduleAgentWakeArgs, SearchSubagentTranscriptArgs,
+    SendAgentMessageArgs, SendSubagentMessageArgs,
 };
 use crate::domains::sessions::authorize::{authorize, AgentAccessIntent};
 use crate::domains::sessions::delegation::{
@@ -30,11 +30,13 @@ use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::transcript_read::{
     read_session_events, read_session_latest_turns, search_session_transcript,
 };
+use crate::domains::sessions::wakes::service::AgentWakeService;
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::origin::OriginContext;
 
 pub async fn call_tool(
     service: &SubagentService,
+    wake_service: &AgentWakeService,
     session_runtime: &SessionRuntime,
     gates: &AgentOpsPeerGates,
     ctx: &AgentOpsMcpContext,
@@ -61,11 +63,15 @@ pub async fn call_tool(
         }
         "send_agent_message" => {
             let args: SendAgentMessageArgs = deserialize_args(arguments)?;
-            send_agent_message(service, session_runtime, gates, ctx, args).await
+            send_agent_message(service, wake_service, session_runtime, gates, ctx, args).await
         }
         "read_agent_transcript" => {
             let args: ReadAgentTranscriptArgs = deserialize_args(arguments)?;
             read_agent_transcript(service, &ctx.parent_session_id, args)
+        }
+        "schedule_agent_wake" => {
+            let args: ScheduleAgentWakeArgs = deserialize_args(arguments)?;
+            schedule_agent_wake(wake_service, &ctx.parent_session_id, args)
         }
         "schedule_subagent_wake" => {
             let args: ChildSessionArgs = deserialize_args(arguments)?;
@@ -542,6 +548,7 @@ fn list_agents(
 
 async fn send_agent_message(
     service: &SubagentService,
+    wake_service: &AgentWakeService,
     session_runtime: &SessionRuntime,
     gates: &AgentOpsPeerGates,
     ctx: &AgentOpsMcpContext,
@@ -553,6 +560,7 @@ async fn send_agent_message(
         args.session_id.trim(),
         &args.message,
     )?;
+    let caller_session_id = ctx.parent_session_id.as_str();
     // The caller's own workspace still has to be writable — the route used to
     // check this for us, and stopped once this tool started taking its own
     // leases (see `lease_target_workspace_for_send`). No lease: nothing here
@@ -568,16 +576,46 @@ async fn send_agent_message(
         &prepared.target.workspace_id,
     )
     .await?;
+    // Armed BEFORE the send but AFTER the gates: the target may already be
+    // mid-turn, and a schedule that exists when that turn finishes fires at its
+    // end (ruling 10) — arming after the send would leave a window where the
+    // answer-less turn ends first. A send the fence rejects must not leave a
+    // schedule behind, so the gates come first.
+    let wake_created = if args.wake_on_reply {
+        wake_service
+            .arm(caller_session_id, &prepared.target.id)?
+            .created
+    } else {
+        false
+    };
     // From here it is the ordinary prompt path: running targets queue, idle
     // ones boot. Nothing about an agent-sourced prompt is special to the queue.
-    let outcome = session_runtime
+    let outcome = match session_runtime
         .send_text_prompt_with_provenance(
             &prepared.target.id,
             prepared.text.clone(),
             prepared.provenance,
         )
         .await
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+    {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            // Only compensate a schedule this call created — a pre-existing one
+            // belongs to an earlier send that did land.
+            if wake_created {
+                cleanup_agent_wake_after_failed_dispatch(
+                    wake_service,
+                    caller_session_id,
+                    &prepared.target.id,
+                );
+            }
+            return Err(anyhow::anyhow!("{error:?}"));
+        }
+    };
+    // The message just delivered content to the target. If the target was
+    // waiting on this caller, that IS its wake.
+    let consumed_reply_wake =
+        consume_reply_wake(wake_service, caller_session_id, &prepared.target.id);
     Ok(json!({
         "sessionId": prepared.target.id,
         "workspaceId": prepared.target.workspace_id,
@@ -585,6 +623,44 @@ async fn send_agent_message(
         "senderLabel": prepared.sender_label,
         "deliveredText": prepared.text,
         "status": prompt_outcome_label(&outcome),
+        "wake": {
+            "scheduled": args.wake_on_reply,
+            "created": wake_created,
+            "scope": if args.wake_on_reply { Some("next_turn_finish") } else { None::<&str> },
+        },
+        "consumedPendingWake": consumed_reply_wake,
+    }))
+}
+
+fn cleanup_agent_wake_after_failed_dispatch(
+    wake_service: &AgentWakeService,
+    watcher_session_id: &str,
+    target_session_id: &str,
+) {
+    if let Err(error) = wake_service.disarm(watcher_session_id, target_session_id) {
+        tracing::warn!(
+            watcher_session_id,
+            target_session_id,
+            error = ?error,
+            "failed to clean up an agent wake schedule after dispatch failure"
+        );
+    }
+}
+
+fn schedule_agent_wake(
+    wake_service: &AgentWakeService,
+    caller_session_id: &str,
+    args: ScheduleAgentWakeArgs,
+) -> anyhow::Result<Value> {
+    let armed = wake_service.arm(caller_session_id, args.session_id.trim())?;
+    Ok(json!({
+        "sessionId": armed.target.id,
+        "workspaceId": armed.target.workspace_id,
+        "title": armed.target.title,
+        "watcherSessionId": armed.watcher_session_id,
+        "scheduled": true,
+        "alreadyScheduled": !armed.created,
+        "wakeScope": "next_turn_finish",
     }))
 }
 

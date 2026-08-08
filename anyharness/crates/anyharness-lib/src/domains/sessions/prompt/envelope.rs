@@ -99,6 +99,54 @@ pub(crate) fn agent_message(sender: &AgentMessageSender, body: &str) -> Envelope
     }
 }
 
+/// What a finished turn wakes a session-scoped watcher with.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct AgentWakePointer<'a> {
+    pub target_session_id: &'a str,
+    pub label: Option<&'a str>,
+    pub outcome: SessionTurnOutcome,
+}
+
+impl<'a> AgentWakePointer<'a> {
+    /// Resolve the label the same way an agent message resolves its sender, so
+    /// one agent is called the same thing whichever way it reaches you.
+    pub(crate) fn for_session(session: &'a SessionRecord, outcome: SessionTurnOutcome) -> Self {
+        Self {
+            target_session_id: &session.id,
+            label: session
+                .title
+                .as_deref()
+                .map(str::trim)
+                .filter(|title| !title.is_empty())
+                .or(Some(session.agent_kind.as_str())),
+            outcome,
+        }
+    }
+}
+
+/// The session-scoped wake pointer: label, id, outcome, next tool, and nothing
+/// else. `schedule_agent_wake` and `wakeOnReply` produce exactly this text —
+/// they differ only in when the schedule was armed, never in what fires.
+///
+/// It carries no turn output on purpose. Output can be arbitrarily large, the
+/// read tools have budgets for exactly that, and a wake has to stay the same
+/// size no matter what the target did.
+pub(crate) fn agent_wake(pointer: AgentWakePointer<'_>) -> EnvelopedPrompt {
+    let label = pointer.label.unwrap_or("agent");
+    let session_id = pointer.target_session_id;
+    let text = format!(
+        "Agent \"{label}\" (session {session_id}) completed a turn. Outcome: {outcome}.\n\nUse read_agent_transcript with sessionId \"{session_id}\" for the result, or send_agent_message to follow up.",
+        outcome = pointer.outcome.as_str(),
+    );
+    EnvelopedPrompt {
+        text,
+        provenance: PromptProvenance::AgentWake {
+            target_session_id: session_id.to_string(),
+            label: pointer.label.map(ToString::to_string),
+        },
+    }
+}
+
 /// What a subagent completion wakes its parent with.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SubagentWakePointer<'a> {
@@ -224,6 +272,76 @@ mod tests {
                 .expect("provenance present"),
             r#"{"kind":"agent_session","sourceSessionId":"ses_abc","label":"Deploy Checker"}"#
         );
+    }
+
+    #[test]
+    fn the_agent_wake_pointer_names_the_target_its_outcome_and_both_next_tools() {
+        let enveloped = agent_wake(AgentWakePointer::for_session(
+            &session("ses_xyz", Some("Deploy Checker")),
+            SessionTurnOutcome::Completed,
+        ));
+
+        assert_eq!(
+            enveloped.text(),
+            "Agent \"Deploy Checker\" (session ses_xyz) completed a turn. Outcome: completed.\n\nUse read_agent_transcript with sessionId \"ses_xyz\" for the result, or send_agent_message to follow up."
+        );
+        assert_eq!(
+            enveloped.provenance(),
+            &PromptProvenance::AgentWake {
+                target_session_id: "ses_xyz".to_string(),
+                label: Some("Deploy Checker".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn the_agent_wake_pointer_is_constant_shaped_across_outcomes_and_labels() {
+        // Ruling 1: a wake is a pointer. The only things that vary are the
+        // label, the id and the outcome word — never the size, and never any
+        // of the target's output.
+        for (title, expected_label) in [
+            (Some("Deploy Checker"), "Deploy Checker"),
+            (Some("   "), "claude"),
+            (None, "claude"),
+        ] {
+            for outcome in [
+                SessionTurnOutcome::Completed,
+                SessionTurnOutcome::Failed,
+                SessionTurnOutcome::Cancelled,
+            ] {
+                let enveloped = agent_wake(AgentWakePointer::for_session(
+                    &session("ses_xyz", title),
+                    outcome,
+                ));
+
+                assert_eq!(
+                    enveloped.text(),
+                    format!(
+                        "Agent \"{expected_label}\" (session ses_xyz) completed a turn. Outcome: {}.\n\nUse read_agent_transcript with sessionId \"ses_xyz\" for the result, or send_agent_message to follow up.",
+                        outcome.as_str()
+                    )
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_agent_wake_provenance_survives_the_public_contract() {
+        let payload = agent_wake(AgentWakePointer::for_session(
+            &session("ses_xyz", Some("Deploy Checker")),
+            SessionTurnOutcome::Failed,
+        ))
+        .into_payload();
+
+        assert_eq!(
+            payload
+                .provenance_json()
+                .expect("provenance json")
+                .expect("provenance present"),
+            r#"{"kind":"agent_wake","targetSessionId":"ses_xyz","label":"Deploy Checker"}"#
+        );
+        // The UI renders the chip from provenance, never by parsing the text.
+        assert!(payload.public_provenance().is_some());
     }
 
     #[test]

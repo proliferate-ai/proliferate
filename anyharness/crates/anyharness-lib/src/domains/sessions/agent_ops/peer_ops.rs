@@ -14,6 +14,7 @@ use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::prompt::envelope::{agent_message, AgentMessageSender};
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::wakes::service::AgentWakeService;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::operation_gate::{
     WorkspaceOperationGate, WorkspaceOperationKind, WorkspaceOperationLease,
@@ -184,11 +185,42 @@ pub(super) fn assert_workspace_can_be_mutated(
         .map_err(|error| PeerSendGateError::WorkspaceBlocked(error.to_string()))
 }
 
+/// The reply IS the wake (ADR flow 2). When the caller answers an agent that was
+/// waiting on it, the answer carried everything the pointer would only have
+/// pointed at, so the schedule comes off rather than firing a redundant pointer
+/// at the caller's turn end.
+///
+/// Ordering: this runs AFTER the send lands. Disarming first would lose the
+/// schedule if the send then failed — the watcher would be left waiting on
+/// nothing. Consuming after means a crash in the gap leaves the schedule armed,
+/// which costs the watcher one redundant pointer; that is the cheap side of the
+/// trade, and it is why this is not (and cannot be) inside the send's own
+/// transaction: the send is a runtime call that may boot an actor, not a write.
+pub(super) fn consume_reply_wake(
+    wake_service: &AgentWakeService,
+    replying_session_id: &str,
+    recipient_session_id: &str,
+) -> bool {
+    match wake_service.disarm(recipient_session_id, replying_session_id) {
+        Ok(consumed) => consumed,
+        Err(error) => {
+            tracing::warn!(
+                replying_session_id,
+                recipient_session_id,
+                error = ?error,
+                "failed to consume the recipient's wake schedule after a reply"
+            );
+            false
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::test_support;
     use crate::domains::sessions::admission::{NoControllerPolicy, SessionControllerPolicy};
+    use crate::domains::sessions::extensions::SessionTurnOutcome;
     use crate::domains::sessions::model::SessionMcpBindingPolicy;
     use crate::domains::sessions::prompt::PromptPayload;
     use crate::domains::terminals::store::TerminalStore;
@@ -243,6 +275,53 @@ mod tests {
             .insert(&session_record("ses_target", "workspace-2", Some("Schema audit")))
             .expect("insert target");
         store
+    }
+
+    #[test]
+    fn a_reply_consumes_the_recipients_wake_so_no_pointer_follows_it() {
+        // ses_target armed a wake on ses_caller and is waiting. ses_caller
+        // answers: the reply carries the content, so the schedule comes off and
+        // ses_caller's turn end wakes nobody.
+        let store = store_fixture();
+        let wakes = AgentWakeService::new(store.clone());
+        wakes.arm("ses_target", "ses_caller").expect("arm");
+
+        assert!(consume_reply_wake(&wakes, "ses_caller", "ses_target"));
+
+        assert!(wakes
+            .consume_for_finished_turn("ses_caller", SessionTurnOutcome::Completed)
+            .expect("the reply's turn finishes")
+            .is_empty());
+        assert!(store
+            .list_pending_prompts("ses_target")
+            .expect("pending prompts")
+            .is_empty());
+    }
+
+    #[test]
+    fn a_reply_leaves_the_other_directions_schedule_alone() {
+        // Both sides armed on each other. Answering one direction must not
+        // silently cancel the other side's wait.
+        let store = store_fixture();
+        let wakes = AgentWakeService::new(store.clone());
+        wakes.arm("ses_target", "ses_caller").expect("arm");
+        wakes.arm("ses_caller", "ses_target").expect("arm reverse");
+
+        consume_reply_wake(&wakes, "ses_caller", "ses_target");
+
+        let fired = wakes
+            .consume_for_finished_turn("ses_target", SessionTurnOutcome::Completed)
+            .expect("the recipient's own turn finishes");
+        assert_eq!(fired.len(), 1);
+        assert_eq!(fired[0].consumed.watcher_session_id, "ses_caller");
+    }
+
+    #[test]
+    fn a_message_to_an_agent_that_was_not_waiting_consumes_nothing() {
+        let store = store_fixture();
+        let wakes = AgentWakeService::new(store.clone());
+
+        assert!(!consume_reply_wake(&wakes, "ses_caller", "ses_target"));
     }
 
     #[test]

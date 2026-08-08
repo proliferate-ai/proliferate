@@ -67,6 +67,8 @@ use crate::domains::sessions::store::SessionStore;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
+use crate::domains::sessions::wakes::hooks::AgentWakeSessionHooks;
+use crate::domains::sessions::wakes::service::AgentWakeService;
 use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
@@ -147,6 +149,8 @@ pub struct AppState {
     pub cowork_runtime: Arc<CoworkRuntime>,
     pub subagent_service: Arc<SubagentService>,
     pub subagent_session_hooks: Arc<SubagentSessionHooks>,
+    pub agent_wake_service: Arc<AgentWakeService>,
+    pub agent_wake_session_hooks: Arc<AgentWakeSessionHooks>,
     pub review_service: Arc<ReviewService>,
     pub review_session_hooks: Arc<ReviewSessionHooks>,
     pub integration_gateway_session_launch_extension: Arc<IntegrationGatewaySessionLaunchExtension>,
@@ -370,6 +374,11 @@ impl AppState {
             subagent_service.clone(),
             acp_manager.clone(),
         ));
+        let agent_wake_service = Arc::new(AgentWakeService::new(SessionStore::new(db.clone())));
+        let agent_wake_session_hooks = Arc::new(AgentWakeSessionHooks::new(
+            agent_wake_service.clone(),
+            acp_manager.clone(),
+        ));
         let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
         let review_session_hooks = Arc::new(ReviewSessionHooks::new(
             review_hook_event_tx,
@@ -425,6 +434,7 @@ impl AppState {
         > = vec![
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
+            agent_wake_session_hooks.clone(),
             review_session_hooks.clone(),
             integration_gateway_session_launch_extension.clone(),
             goal_session_hooks,
@@ -547,6 +557,7 @@ impl AppState {
                 review_runtime: review_runtime.clone(),
                 review_mcp_auth,
                 subagent_service: subagent_service.clone(),
+                agent_wake_service: agent_wake_service.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_runtime: workspace_runtime.clone(),
                 session_admission: session_admission.clone(),
@@ -595,6 +606,8 @@ impl AppState {
             cowork_runtime,
             subagent_service,
             subagent_session_hooks,
+            agent_wake_service,
+            agent_wake_session_hooks,
             review_service,
             review_session_hooks,
             integration_gateway_session_launch_extension,
