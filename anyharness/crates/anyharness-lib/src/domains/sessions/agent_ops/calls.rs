@@ -5,7 +5,7 @@ use super::calls_helpers::{
     prompt_outcome_label, summaries_to_json,
 };
 use super::context::AgentOpsMcpContext;
-use super::messaging::prepare_agent_message;
+use super::peer_ops::{authorize_transcript_read, prepare_agent_message};
 use super::tools::{
     canonical_tool_name, ChildSessionArgs, CreateSubagentArgs, ListAgentsArgs,
     ReadAgentTranscriptArgs, ReadAgentTranscriptMode, ReadSubagentEventsArgs,
@@ -557,16 +557,8 @@ fn read_agent_transcript(
     caller_session_id: &str,
     args: ReadAgentTranscriptArgs,
 ) -> anyhow::Result<Value> {
-    let session_id = args.session_id.trim();
-    // Read intent: a closed agent's transcript stays readable forever.
-    let target = authorize(
-        service.session_store(),
-        caller_session_id,
-        session_id,
-        AgentAccessIntent::Read,
-    )?
-    .target;
     let store = service.session_store();
+    let target = authorize_transcript_read(store, caller_session_id, args.session_id.trim())?;
     match args.mode {
         ReadAgentTranscriptMode::LatestTurns => {
             let turns = read_session_latest_turns(store, &target.id, args.limit)?;

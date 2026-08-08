@@ -1,8 +1,8 @@
-//! Everything `send_agent_message` decides before the prompt queue takes over.
+//! What the peer tools decide before they touch the runtime.
 //!
-//! Split out from the dispatch call so the whole decision — who may be
+//! Split out from the dispatch calls so the whole decision — who may be
 //! reached, what the target receives, and what is stored beside it — is
-//! testable without a live actor. What follows this is the ordinary
+//! testable without a live actor. What follows a send is the ordinary
 //! pending-prompt path: a busy target queues, an idle open target boots.
 
 use crate::domains::sessions::authorize::{authorize, AgentAccessError, AgentAccessIntent};
@@ -10,6 +10,22 @@ use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::prompt::envelope::{agent_message, AgentMessageSender};
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::sessions::store::SessionStore;
+
+/// Gate a transcript read. Read intent, always: an agent's transcript stays
+/// readable after it closes — closing removes the agent, not its record.
+pub(super) fn authorize_transcript_read(
+    session_store: &SessionStore,
+    caller_session_id: &str,
+    target_session_id: &str,
+) -> Result<SessionRecord, AgentAccessError> {
+    Ok(authorize(
+        session_store,
+        caller_session_id,
+        target_session_id,
+        AgentAccessIntent::Read,
+    )?
+    .target)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum AgentMessageError {
@@ -155,6 +171,42 @@ mod tests {
             error,
             AgentMessageError::Access(AgentAccessError::TargetNotFound(ref id)) if id == "ses_ghost"
         ));
+    }
+
+    #[test]
+    fn a_closed_agents_transcript_stays_readable() {
+        let store = store_fixture();
+        let mut closed = session_record("ses_closed", "workspace-1", Some("Retired"));
+        closed.closed_at = Some("2026-08-08T01:00:00Z".to_string());
+        closed.status = "closed".to_string();
+        store.insert(&closed).expect("insert closed target");
+
+        // The same target that refuses a send.
+        prepare_agent_message(&store, "ses_caller", "ses_closed", "Ship it?")
+            .err()
+            .expect("closed target refuses sends");
+        let target = authorize_transcript_read(&store, "ses_caller", "ses_closed")
+            .expect("closed target stays readable");
+
+        assert_eq!(target.id, "ses_closed");
+    }
+
+    #[test]
+    fn a_transcript_read_still_needs_a_live_caller_and_a_real_target() {
+        let store = store_fixture();
+
+        let missing = authorize_transcript_read(&store, "ses_caller", "ses_ghost")
+            .err()
+            .expect("unknown target is rejected");
+        assert!(matches!(missing, AgentAccessError::TargetNotFound(ref id) if id == "ses_ghost"));
+
+        let mut closed_caller = session_record("ses_gone", "workspace-1", None);
+        closed_caller.closed_at = Some("2026-08-08T01:00:00Z".to_string());
+        store.insert(&closed_caller).expect("insert closed caller");
+        let closed = authorize_transcript_read(&store, "ses_gone", "ses_target")
+            .err()
+            .expect("closed caller is rejected");
+        assert!(matches!(closed, AgentAccessError::CallerClosed));
     }
 
     #[test]

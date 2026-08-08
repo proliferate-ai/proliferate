@@ -3,7 +3,7 @@ pub mod calls;
 mod calls_helpers;
 pub mod context;
 pub mod definition;
-mod messaging;
+mod peer_ops;
 pub mod tools;
 
 use std::sync::Arc;
