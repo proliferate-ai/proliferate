@@ -1,14 +1,14 @@
-use anyharness_contract::v1::SessionEvent;
-use serde_json::json;
-
 use super::links::model::{SessionLinkRecord, SessionLinkRelation};
 use super::links::service::SessionLinkService;
 use super::prompt::provenance::PromptProvenance;
 use super::store::SessionStore;
+use super::transcript_read::read_session_events;
 
-pub const READ_EVENTS_DEFAULT_LIMIT: usize = 50;
-pub const READ_EVENTS_MAX_LIMIT: usize = 100;
-pub const READ_EVENTS_MAX_BYTES: usize = 256 * 1024;
+// The budgets belong to the session-scoped reads; a delegated read is the same
+// read with a link check in front of it.
+pub use super::transcript_read::{
+    READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_BYTES, READ_EVENTS_MAX_LIMIT,
+};
 
 #[derive(Debug, Clone)]
 pub struct DelegatedEventSlice {
@@ -53,93 +53,12 @@ pub fn read_child_events(
     link_service
         .find_link_by_relation_including_closed(relation, parent_session_id, child_session_id)?
         .ok_or_else(|| anyhow::anyhow!("child session is not owned by parent"))?;
-    let limit = limit
-        .unwrap_or(READ_EVENTS_DEFAULT_LIMIT)
-        .min(READ_EVENTS_MAX_LIMIT);
-    let after_seq = since_seq.unwrap_or(0);
-    let mut records = session_store.list_events_after(child_session_id, after_seq)?;
-    records.truncate(limit);
-
-    let mut total_bytes = 0usize;
-    let mut truncated = false;
-    let mut events = Vec::with_capacity(records.len());
-    let mut next_since_seq = None;
-    for record in records {
-        let seq = record.seq;
-        let oversized_placeholder = oversized_event_placeholder(&record);
-        let event = sanitize_event_record(record)?;
-        let event_bytes = serde_json::to_vec(&event)?.len();
-        if total_bytes.saturating_add(event_bytes) > READ_EVENTS_MAX_BYTES {
-            truncated = true;
-            if events.is_empty() {
-                events.push(oversized_placeholder);
-                next_since_seq = Some(seq);
-            }
-            break;
-        }
-        total_bytes += event_bytes;
-        next_since_seq = Some(seq);
-        events.push(event);
-    }
-
+    let slice = read_session_events(session_store, child_session_id, since_seq, limit)?;
     Ok(DelegatedEventSlice {
-        child_session_id: child_session_id.to_string(),
-        events,
-        next_since_seq,
-        truncated,
-    })
-}
-
-fn sanitize_event_record(
-    record: super::model::SessionEventRecord,
-) -> anyhow::Result<serde_json::Value> {
-    let event: SessionEvent = serde_json::from_str(&record.payload_json)?;
-    if matches!(event, SessionEvent::ItemDelta(_)) {
-        return Ok(json!({
-            "seq": record.seq,
-            "timestamp": record.timestamp,
-            "turnId": record.turn_id,
-            "itemId": record.item_id,
-            "type": "item_delta_redacted",
-        }));
-    }
-    let mut event_value = serde_json::to_value(event)?;
-    redact_tool_io(&mut event_value);
-    Ok(json!({
-        "seq": record.seq,
-        "timestamp": record.timestamp,
-        "turnId": record.turn_id,
-        "itemId": record.item_id,
-        "event": event_value,
-    }))
-}
-
-fn redact_tool_io(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Object(map) => {
-            map.remove("rawInput");
-            map.remove("rawOutput");
-            for value in map.values_mut() {
-                redact_tool_io(value);
-            }
-        }
-        serde_json::Value::Array(items) => {
-            for value in items {
-                redact_tool_io(value);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn oversized_event_placeholder(record: &super::model::SessionEventRecord) -> serde_json::Value {
-    json!({
-        "seq": record.seq,
-        "timestamp": record.timestamp.clone(),
-        "turnId": record.turn_id.clone(),
-        "itemId": record.item_id.clone(),
-        "eventType": record.event_type.clone(),
-        "type": "event_oversized_redacted",
+        child_session_id: slice.session_id,
+        events: slice.events,
+        next_since_seq: slice.next_since_seq,
+        truncated: slice.truncated,
     })
 }
 
@@ -215,44 +134,6 @@ mod tests {
             item_id: Some("item-1".to_string()),
             payload_json: payload_json.to_string(),
         }
-    }
-
-    #[test]
-    fn read_event_sanitizer_redacts_streaming_deltas() {
-        let sanitized = sanitize_event_record(event_record(
-            7,
-            "item_delta",
-            r#"{"type":"item_delta","delta":{"appendText":"secret"}}"#,
-        ))
-        .expect("sanitize event");
-
-        assert_eq!(sanitized["type"], "item_delta_redacted");
-        assert!(sanitized.get("event").is_none());
-    }
-
-    #[test]
-    fn read_event_sanitizer_removes_raw_tool_io() {
-        let sanitized = sanitize_event_record(event_record(
-            7,
-            "item_completed",
-            r#"{
-                "type": "item_completed",
-                "item": {
-                    "kind": "tool_invocation",
-                    "status": "completed",
-                    "sourceAgentKind": "claude",
-                    "rawInput": { "token": "secret" },
-                    "rawOutput": { "result": "secret" },
-                    "contentParts": []
-                }
-            }"#,
-        ))
-        .expect("sanitize event");
-
-        let item = &sanitized["event"]["item"];
-        assert!(item.get("rawInput").is_none());
-        assert!(item.get("rawOutput").is_none());
-        assert_eq!(item["kind"], "tool_invocation");
     }
 
     #[test]

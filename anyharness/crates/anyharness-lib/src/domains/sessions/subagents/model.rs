@@ -98,11 +98,7 @@ pub struct SubagentLatestTurn {
     pub event_count: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct SubagentTranscriptSearchMatch {
-    pub seq: i64,
-    pub timestamp: String,
-    pub turn_id: Option<String>,
-    pub item_id: Option<String>,
-    pub snippet: String,
-}
+/// A subagent transcript search hit is a session transcript search hit — the
+/// link only decides which session is read.
+pub type SubagentTranscriptSearchMatch =
+    crate::domains::sessions::transcript_read::TranscriptSearchMatch;
