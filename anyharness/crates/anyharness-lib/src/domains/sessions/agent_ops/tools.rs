@@ -33,15 +33,21 @@ pub const DEPRECATED_TOOL_ALIASES: &[(&str, &str)] = &[
 // takes that session's mutation permit, which has to be OUTSIDE any workspace
 // lease.
 //
-// `spawn_agent` IS here, and for the opposite reason to `close_agent`: a spawn
-// has no target yet, so there is no target session permit to take and no other
-// workspace involved. What it mutates is the CALLER's workspace — it creates a
-// session in it — which is precisely the workspace the route's lease covers,
-// exactly as for `spawn_subagent`.
+// `spawn_agent` is ALSO absent, since `spawn_workspace` gave it somewhere else
+// to spawn into. It creates a session in the TARGET workspace — which is the
+// workspace whose retire preflight has to see that work — so it takes that
+// workspace's write lease itself, exactly like `send_agent_message`. It has no
+// permit to order against (there is no target session until it makes one), so
+// it holds one lease and nothing else.
+//
+// `spawn_workspace` is absent for a different reason again: the workspace it
+// mutates does not exist yet, so there is nothing to lease at all. It gates on
+// the repo root's ACCESS state instead — the same thing the human worktree
+// route (`api/http/workspaces_worktrees.rs`) does, and for the same reason.
+// `get_workspace_options` is read-only, like every other `get_*` here.
 pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "spawn_subagent",
     "create_subagent",
-    "spawn_agent",
     "send_subagent_message",
     "schedule_subagent_wake",
     "schedule_agent_wake",
@@ -59,6 +65,12 @@ pub const SPAWN_STYLE_TOOL_NAMES: &[&str] = &[
     "spawn_subagent",
     "create_subagent",
     "spawn_agent",
+    // Ruling 3 names workspaces explicitly: an unpromoted subagent "cannot call
+    // ANY spawn-style tool (subagent, agent, workspace)". `get_workspace_options`
+    // joins its `get_subagent_launch_options` sibling for the same reason — the
+    // shape of a spawn it may not perform is not information it can act on.
+    "get_workspace_options",
+    "spawn_workspace",
 ];
 
 pub fn is_spawn_style_tool(name: &str) -> bool {
@@ -89,9 +101,9 @@ pub struct CreateSubagentArgs {
 
 /// `spawn_agent`'s arguments. Deliberately the same shape as
 /// `CreateSubagentArgs` — the launch vocabulary an agent already knows — plus
-/// `workspaceId`, which ADR §3.4 names. Until `spawn_workspace` lands there is
-/// only one workspace this tool can use, so naming a different one is refused
-/// rather than ignored (`spawn_ops::CreateAgentSessionRequest::owned_agent`).
+/// `workspaceId`, which ADR §3.4 names. It defaults to the caller's own
+/// workspace and accepts any other: naming one is the second step of ADR §5's
+/// flow 4, after `spawn_workspace` returned it.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpawnAgentArgs {
@@ -106,6 +118,28 @@ pub struct SpawnAgentArgs {
     pub wake_on_completion: bool,
     #[serde(default)]
     pub workspace_id: Option<String>,
+}
+
+/// `spawn_workspace`'s arguments — the three ADR §3.4 allows, plus a label for
+/// the provenance stamp. Everything else about workspace creation (base branch,
+/// name-conflict policy, setup script, checkout mode, surface) is server-side
+/// policy: §3.1's alternatives section rejects exposing the full creation
+/// surface to agents.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpawnWorkspaceArgs {
+    /// Defaults to the caller's own repo root — "the same git repo" of ADR §1
+    /// requirement 7.
+    #[serde(default)]
+    pub repo_root_id: Option<String>,
+    /// `worktree` (default) or `local`.
+    #[serde(default)]
+    pub mode: Option<String>,
+    /// Required iff `mode` is `worktree`.
+    #[serde(default)]
+    pub branch_name: Option<String>,
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -275,6 +309,11 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
             "Describe subagent creation defaults, limits, supported agent/model choices, and available parent mode hints.",
             json!({ "type": "object", "properties": {} }),
         ));
+        tools.push(tool_definition(
+            "get_workspace_options",
+            "Describe the workspaces you could spawn: every git repo configured on this machine (id, name, path, default and current branch) and, per repo, the two ways to open one — a new branch in its own checkout (worktree) or the existing checkout in place (local). Repos this machine does not actually have are listed as unavailable with the reason. Read this before spawn_workspace.",
+            json!({ "type": "object", "properties": {} }),
+        ));
     }
 
     tools.extend([
@@ -405,9 +444,32 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
                         }
                     },
                     "wakeOnCompletion": { "type": "boolean", "description": "Wake you when the new agent finishes its first turn. Its reply already wakes you with the full message; this is the safety net for one that answers nobody." },
-                    "workspaceId": { "type": "string", "description": "Must be your own workspace. Spawning into another workspace is not available yet." }
+                    "workspaceId": { "type": "string", "description": "Where to put the agent. Defaults to your own workspace; pass the workspaceId from spawn_workspace to put it somewhere new. The harness and model are checked against THAT workspace's catalog, not yours." }
                 },
                 "required": ["prompt"]
+            }),
+        ));
+        tools.push(tool_definition(
+            "spawn_workspace",
+            "Create a new workspace on this machine and get back its workspaceId, so you can \
+             spawn_agent into it. mode=worktree (the default) makes a new branch in its own \
+             checkout and leaves every existing checkout alone; mode=local opens a repo's \
+             existing checkout in place, sharing files and git state with whoever else is in it. \
+             Call get_workspace_options first for the repos you can use. Base branch, name \
+             collisions and the setup script are handled for you. Workspaces you spawn cannot be \
+             removed by you or any other agent — only a person can retire one.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "repoRootId": { "type": "string", "description": "Repo to open, from get_workspace_options. Defaults to the repo your own workspace is in." },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["worktree", "local"],
+                        "description": "Defaults to worktree."
+                    },
+                    "branchName": { "type": "string", "description": "Branch to create. Required for mode=worktree, ignored for mode=local. A name already in use gets a numeric suffix rather than failing." },
+                    "label": { "type": "string", "description": "Short note recorded with the workspace, shown to whoever looks at where it came from." }
+                }
             }),
         ));
     }
@@ -985,13 +1047,154 @@ mod tests {
     }
 
     #[test]
-    fn spawn_agent_leases_at_the_route_because_it_creates_in_the_callers_workspace() {
-        // The mirror of `close_agent`: a close acts on an existing target
-        // session somewhere else, so it fences itself. A spawn has no target
-        // yet — what it mutates is the caller's own workspace, which is exactly
-        // what the route leased.
-        assert!(MUTATING_TOOL_NAMES.contains(&"spawn_agent"));
+    fn spawn_agent_leases_in_the_call_because_it_can_create_in_another_workspace() {
+        // It used to lease at the route, back when the only workspace it could
+        // reach was the caller's. `spawn_workspace` changed that: the session it
+        // creates lands in the TARGET workspace, and it is the TARGET's retire
+        // preflight that has to see the work — so it takes that lease itself,
+        // like `send_agent_message`. Re-adding it here would take the CALLER's
+        // lease, which for a cross-workspace spawn fences the wrong workspace.
+        assert!(!MUTATING_TOOL_NAMES.contains(&"spawn_agent"));
+        // `spawn_subagent` still leases at the route: a subagent is always in
+        // the caller's own workspace, which is the one in the URL.
         assert!(MUTATING_TOOL_NAMES.contains(&"spawn_subagent"));
+        assert!(MUTATING_TOOL_NAMES.contains(&"create_subagent"));
+    }
+
+    // --- workspace spawn (ADR §3.4, §6 step 7) ---------------------------
+
+    #[test]
+    fn spawning_a_workspace_takes_no_route_lease_because_there_is_nothing_to_lease() {
+        // A workspace operation lease is keyed by workspace id, and the
+        // workspace this creates has no id until it exists. The route would
+        // therefore lease the CALLER's workspace, which is not what is being
+        // mutated. It gates on the repo root's access state in-call instead —
+        // the same thing `POST /v1/workspaces/worktrees` does.
+        assert!(!MUTATING_TOOL_NAMES.contains(&"spawn_workspace"));
+        // Read-only, like every other `get_*` on this server.
+        assert!(!MUTATING_TOOL_NAMES.contains(&"get_workspace_options"));
+    }
+
+    #[test]
+    fn both_workspace_tools_are_spawn_style() {
+        // Ruling 3 lists workspaces alongside subagents and agents, and the
+        // gate that binds is the dispatch one, so both wire names must be here.
+        assert!(is_spawn_style_tool("spawn_workspace"));
+        assert!(is_spawn_style_tool("get_workspace_options"));
+    }
+
+    #[test]
+    fn spawn_workspace_takes_the_three_arguments_the_adr_allows() {
+        let spawn = build_tool_list(&context(true, 0))
+            .into_iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("spawn_workspace"))
+            .expect("spawn_workspace is advertised");
+
+        for field in ["repoRootId", "mode", "branchName"] {
+            assert!(
+                spawn
+                    .pointer(&format!("/inputSchema/properties/{field}"))
+                    .is_some(),
+                "spawn_workspace does not accept {field}"
+            );
+        }
+        // Everything else about workspace creation is server-side policy: the
+        // ADR rejects exposing conflict policy, checkout mode or the setup
+        // script to agents, so their presence here would be a scope leak.
+        for withheld in [
+            "setupScript",
+            "nameConflictPolicy",
+            "checkoutMode",
+            "baseBranch",
+            "targetPath",
+            "surface",
+        ] {
+            assert!(
+                spawn
+                    .pointer(&format!("/inputSchema/properties/{withheld}"))
+                    .is_none(),
+                "spawn_workspace exposes {withheld}, which is server-side policy"
+            );
+        }
+        // Every argument is optional: the default is a worktree off the
+        // caller's own repo.
+        assert!(spawn.pointer("/inputSchema/required").is_none());
+        assert_eq!(
+            spawn
+                .pointer("/inputSchema/properties/mode/enum")
+                .and_then(Value::as_array)
+                .map(|values| values.iter().filter_map(Value::as_str).collect::<Vec<_>>()),
+            Some(vec!["worktree", "local"])
+        );
+    }
+
+    #[test]
+    fn an_unpromoted_subagent_is_offered_no_way_to_spawn_a_workspace() {
+        let names = tool_names(&build_tool_list(&unpromoted_subagent_context()))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        assert!(!names.iter().any(|name| name == "spawn_workspace"));
+        assert!(!names.iter().any(|name| name == "get_workspace_options"));
+    }
+
+    #[test]
+    fn a_capped_parent_can_still_spawn_a_workspace() {
+        // The fanout cap bounds LINKED children (ruling 9). A workspace is not
+        // one, so the cap must not reach it.
+        let names = tool_names(&build_tool_list(&context(false, 8)))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        assert!(names.iter().any(|name| name == "spawn_workspace"));
+        assert!(names.iter().any(|name| name == "get_workspace_options"));
+    }
+
+    /// Ruling 11: workspaces an agent spawns are retired by PEOPLE. Nothing on
+    /// this server may undo one, and this is the ratchet that says so — a tool
+    /// named for removal would have to be added here deliberately, which is the
+    /// point at which somebody has to re-read the ruling.
+    #[test]
+    fn no_agent_ops_tool_can_retire_or_delete_a_workspace() {
+        let advertised = tool_names(&build_tool_list(&context(true, 3)))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let every_name = advertised
+            .iter()
+            .map(String::as_str)
+            .chain(MUTATING_TOOL_NAMES.iter().copied())
+            .chain(SPAWN_STYLE_TOOL_NAMES.iter().copied())
+            .chain(DEPRECATED_TOOL_ALIASES.iter().map(|(alias, _)| *alias));
+
+        for name in every_name {
+            for forbidden in ["retire", "purge", "delete_workspace", "remove_workspace"] {
+                assert!(
+                    !name.contains(forbidden),
+                    "agent ops advertises {name}, which looks like workspace removal — ruling 11 \
+                     keeps retirement human-only"
+                );
+            }
+        }
+        // And the dispatch surface itself never reaches the destruction paths.
+        let calls = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/domains/sessions/agent_ops/workspace_ops.rs"),
+        )
+        .expect("read workspace_ops.rs");
+        for forbidden in [
+            "retire_workspace",
+            "WorkspaceRetireService",
+            "WorkspacePurgeService",
+            "delete_workspace",
+        ] {
+            assert!(
+                !calls.contains(forbidden),
+                "workspace_ops.rs references {forbidden}; ruling 11 keeps retirement human-only"
+            );
+        }
     }
 
     #[test]

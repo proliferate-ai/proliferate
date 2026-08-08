@@ -14,6 +14,10 @@ pub(crate) mod peer_ops;
 // cannot drift apart on anything that is not about ownership (ADR §3.3).
 mod spawn_ops;
 pub mod tools;
+// Where an agent may put a NEW workspace, and how one gets made — the
+// local-only gate, the creator stamp, and the server-side creation defaults
+// (ADR §3.3/§3.4). Retirement is deliberately absent: ruling 11.
+mod workspace_ops;
 
 use std::sync::Arc;
 
@@ -22,6 +26,7 @@ use serde_json::Value;
 
 use self::auth::AgentOpsMcpAuth;
 use self::context::AgentOpsMcpContext;
+use crate::domains::repo_roots::service::RepoRootService;
 use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::ownership::service::AgentOwnershipService;
 use crate::domains::sessions::runtime::SessionRuntime;
@@ -29,6 +34,7 @@ use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::wakes::service::AgentWakeService;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition, ProductMcpRequestContext,
     ProductMcpServer, ProductMcpTokenValidation,
@@ -45,12 +51,25 @@ pub struct AgentOpsPeerGates {
     pub workspace_operation_gate: Arc<WorkspaceOperationGate>,
 }
 
+/// Everything the workspace tools need to describe and create one, bundled
+/// because they are the SAME dependencies the human creation surfaces use — the
+/// worktree runtime behind `POST /v1/workspaces/worktrees`, the workspace
+/// runtime behind `POST /v1/workspaces`, and the repo-root service behind the
+/// picker. Bundled rather than added as three more constructor arguments so the
+/// point stays legible: this is the human creation path, borrowed.
+#[derive(Clone)]
+pub struct AgentOpsWorkspaceOps {
+    pub workspace_runtime: Arc<WorkspaceRuntime>,
+    pub worktree_runtime: Arc<WorkspaceWorktreeRuntime>,
+    pub repo_roots: Arc<RepoRootService>,
+}
+
 #[derive(Clone)]
 pub struct AgentOpsProductMcpServer {
     service: Arc<SubagentService>,
     wake_service: Arc<AgentWakeService>,
     session_runtime: Arc<SessionRuntime>,
-    workspace_runtime: Arc<WorkspaceRuntime>,
+    workspaces: AgentOpsWorkspaceOps,
     ownership: Arc<AgentOwnershipService>,
     peer_gates: AgentOpsPeerGates,
     auth: Arc<AgentOpsMcpAuth>,
@@ -62,7 +81,7 @@ impl AgentOpsProductMcpServer {
         service: Arc<SubagentService>,
         wake_service: Arc<AgentWakeService>,
         session_runtime: Arc<SessionRuntime>,
-        workspace_runtime: Arc<WorkspaceRuntime>,
+        workspaces: AgentOpsWorkspaceOps,
         ownership: Arc<AgentOwnershipService>,
         peer_gates: AgentOpsPeerGates,
         auth: Arc<AgentOpsMcpAuth>,
@@ -71,7 +90,7 @@ impl AgentOpsProductMcpServer {
             service,
             wake_service,
             session_runtime,
-            workspace_runtime,
+            workspaces,
             ownership,
             peer_gates,
             auth,
@@ -99,7 +118,7 @@ impl ProductMcpServer for AgentOpsProductMcpServer {
         &self,
         request: &ProductMcpRequestContext,
     ) -> Result<Self::Context, ProductMcpContextError> {
-        context::resolve_context(&self.service, &self.workspace_runtime, request)
+        context::resolve_context(&self.service, &self.workspaces.workspace_runtime, request)
     }
 
     fn tools(&self, ctx: &Self::Context) -> Vec<Value> {
@@ -118,6 +137,7 @@ impl ProductMcpServer for AgentOpsProductMcpServer {
             &self.session_runtime,
             &self.ownership,
             &self.peer_gates,
+            &self.workspaces,
             ctx,
             name,
             arguments,

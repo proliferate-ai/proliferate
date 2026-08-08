@@ -5,14 +5,15 @@ use crate::domains::cowork::mcp::{
     self as cowork_mcp, auth::CoworkMcpAuth, tools as cowork_mcp_tools, CoworkProductMcpServer,
 };
 use crate::domains::cowork::runtime::CoworkRuntime;
+use crate::domains::repo_roots::service::RepoRootService;
 use crate::domains::reviews::mcp::{
     self as review_mcp, auth::ReviewMcpAuth, tools as review_mcp_tools, ReviewProductMcpServer,
 };
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::agent_ops::{
-    self as agent_ops_mcp, auth::AgentOpsMcpAuth, tools as agent_ops_mcp_tools,
-    AgentOpsPeerGates, AgentOpsProductMcpServer,
+    self as agent_ops_mcp, auth::AgentOpsMcpAuth, tools as agent_ops_mcp_tools, AgentOpsPeerGates,
+    AgentOpsProductMcpServer, AgentOpsWorkspaceOps,
 };
 use crate::domains::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use crate::domains::sessions::ownership::service::AgentOwnershipService;
@@ -28,6 +29,7 @@ use crate::domains::sessions::wakes::service::AgentWakeService;
 use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::domains::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 
 pub(super) struct LaunchCatalogDeps {
     pub(super) runtime_base_url: String,
@@ -44,6 +46,10 @@ pub(super) struct EndpointRegistryDeps {
     pub(super) agent_wake_service: Arc<AgentWakeService>,
     pub(super) session_runtime: Arc<SessionRuntime>,
     pub(super) workspace_runtime: Arc<WorkspaceRuntime>,
+    // The agent ops server creates workspaces through the very services the
+    // human routes use; see `AgentOpsWorkspaceOps`.
+    pub(super) workspace_worktree_runtime: Arc<WorkspaceWorktreeRuntime>,
+    pub(super) repo_root_service: Arc<RepoRootService>,
     pub(super) agent_ownership_service: Arc<AgentOwnershipService>,
     pub(super) session_admission: Arc<SessionMutationAdmission>,
     pub(super) workspace_operation_gate: Arc<WorkspaceOperationGate>,
@@ -117,6 +123,8 @@ pub(super) fn build_product_mcp_endpoint_registry(
         agent_wake_service,
         session_runtime,
         workspace_runtime,
+        workspace_worktree_runtime,
+        repo_root_service,
         agent_ownership_service,
         session_admission,
         workspace_operation_gate,
@@ -137,7 +145,11 @@ pub(super) fn build_product_mcp_endpoint_registry(
                 subagent_service.clone(),
                 agent_wake_service,
                 session_runtime,
-                workspace_runtime.clone(),
+                AgentOpsWorkspaceOps {
+                    workspace_runtime: workspace_runtime.clone(),
+                    worktree_runtime: workspace_worktree_runtime,
+                    repo_roots: repo_root_service,
+                },
                 agent_ownership_service,
                 AgentOpsPeerGates {
                     session_admission,
