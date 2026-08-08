@@ -325,6 +325,47 @@ mod tests {
     }
 
     #[test]
+    fn send_agent_message_arms_before_the_dispatch_and_consumes_after_it() {
+        // The three tests above prove what `consume_reply_wake` DOES; none of
+        // them prove `send_agent_message` calls it, because the send itself
+        // needs a live runtime. This is the same source-order guard the
+        // dual-lock handlers use (`api/session_admission_tests.rs`), for the
+        // same reason: the ordering IS the guarantee.
+        //
+        // Arm before the dispatch, or a target that is already mid-turn
+        // finishes that turn before the schedule exists and the wake is lost
+        // (ruling 10). Consume after it, or a send that then FAILS would have
+        // already cancelled a wake the watcher still needs.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/domains/sessions/agent_ops/calls.rs");
+        let text = std::fs::read_to_string(&path).expect("read calls.rs");
+        let start = text
+            .find("async fn send_agent_message(")
+            .expect("send_agent_message is defined in calls.rs");
+        let rest = &text[start..];
+        let body = &rest[..rest[1..].find("\nasync fn ").map_or(rest.len(), |at| at + 1)];
+
+        let armed_at = body
+            .find(".arm(")
+            .expect("send_agent_message arms the wakeOnReply schedule");
+        let dispatched_at = body
+            .find("send_text_prompt_with_provenance(")
+            .expect("send_agent_message dispatches the prompt");
+        let consumed_at = body
+            .find("consume_reply_wake(")
+            .expect("send_agent_message consumes the recipient's pending wake");
+
+        assert!(
+            armed_at < dispatched_at,
+            "wakeOnReply must be armed BEFORE the prompt dispatch"
+        );
+        assert!(
+            dispatched_at < consumed_at,
+            "the recipient's wake must be consumed AFTER the send lands"
+        );
+    }
+
+    #[test]
     fn an_open_target_in_another_workspace_is_reachable() {
         let store = store_fixture();
 
