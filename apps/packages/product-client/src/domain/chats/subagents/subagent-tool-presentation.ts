@@ -38,6 +38,7 @@ export function formatSubagentMcpActionLabel(toolName: string | null | undefined
       return "Read subagent turns";
     case "mcp__subagents__search_subagent_transcript":
       return "Searched subagent transcript";
+    case "mcp__subagents__close_agent":
     case "mcp__subagents__close_subagent":
       return "Closed subagent";
     default:
@@ -73,7 +74,7 @@ export function formatSubagentHeaderVerb({
   if (toolName === "mcp__subagents__search_subagent_transcript") {
     return isRunning ? "Searching subagent transcript" : "Subagent transcript searched";
   }
-  if (toolName === "mcp__subagents__close_subagent") {
+  if (toolName === "mcp__subagents__close_agent" || toolName === "mcp__subagents__close_subagent") {
     return isRunning ? "Closing subagent" : "Subagent closed";
   }
   if (executionState === "failed") {
@@ -87,10 +88,13 @@ export function isSubagentProvisioningAction(item: ToolNameOwner): boolean {
 }
 
 export function isSubagentCreationAction(item: ToolNameOwner): boolean {
-  // Only the product-MCP create_subagent receipt collapses into a creation
-  // group. Native subagent calls stay as durable transcript items throughout
-  // their lifecycle and must not match here.
-  return normalizeToolName(item.nativeToolName) === "mcp__subagents__create_subagent";
+  // Only the product-MCP spawn receipt collapses into a creation group (the
+  // create_subagent name is its pre-agent-ops alias). Native subagent calls
+  // stay as durable transcript items throughout their lifecycle and must not
+  // match here.
+  const toolName = normalizeToolName(item.nativeToolName);
+  return toolName === "mcp__subagents__spawn_subagent"
+    || toolName === "mcp__subagents__create_subagent";
 }
 
 export function deriveSubagentMcpReceiptPresentation(
@@ -159,6 +163,7 @@ function receiptActionFromToolName(toolName: string | null | undefined): Subagen
       return "read";
     case "mcp__subagents__search_subagent_transcript":
       return "search";
+    case "mcp__subagents__close_agent":
     case "mcp__subagents__close_subagent":
       return "close";
     default:

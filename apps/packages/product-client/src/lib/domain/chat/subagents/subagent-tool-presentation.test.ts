@@ -48,6 +48,19 @@ describe("subagent tool presentation", () => {
     })).toBe(false);
   });
 
+  it("treats the pre-agent-ops tool names as aliases of the renamed tools", () => {
+    expect(isSubagentProvisioningAction({
+      nativeToolName: "mcp__subagents__spawn_subagent",
+    })).toBe(true);
+    expect(formatSubagentMcpActionLabel("mcp__subagents__close_agent"))
+      .toBe(formatSubagentMcpActionLabel("mcp__subagents__close_subagent"));
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__close_agent" },
+      executionState: "completed",
+      isRunning: false,
+    })).toBe("Subagent closed");
+  });
+
   it("derives concise status receipt presentation with the child target", () => {
     const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
       nativeToolName: "mcp__subagents__get_subagent_status",
