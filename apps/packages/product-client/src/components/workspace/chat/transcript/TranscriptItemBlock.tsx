@@ -13,6 +13,7 @@ import {
 import { deriveModeSwitchDisplay } from "#product/domain/chats/tools/mode-switch-display";
 import {
   isAgentSessionProvenance,
+  isAgentWakeProvenance,
   isSubagentWakeProvenance,
 } from "#product/domain/chats/subagents/provenance";
 import {
@@ -130,6 +131,32 @@ export function TranscriptItemBlock({
                   });
                   openSession(targetSessionId, childRole);
                 }
+                : undefined}
+            />
+          </div>
+        );
+      }
+
+      // A session-scoped wake pointer. It names a target session but no link, so
+      // there is no completion row to read an outcome off and no relation to
+      // claim — the target may be a peer this session does not parent, and
+      // asserting parentage here would put a peer inside a parent's fanout.
+      // TODO(agent-ops-ux): visual treatment (glyph/chip) is the design pass.
+      if (isAgentWakeProvenance(item.promptProvenance)) {
+        const wakeProvenance = item.promptProvenance;
+        const targetSessionId = wakeProvenance.targetSessionId;
+        const canOpenTarget = !!openSession
+          && (canOpenSession?.(targetSessionId, "generic") ?? true);
+        return (
+          <div className="flex justify-end">
+            <SubagentWakeBadge
+              label={wakeProvenance.label ?? null}
+              childSessionId={targetSessionId}
+              outcome={null}
+              titleFallback="Agent"
+              parentTitle={transcript.sessionMeta.title}
+              onOpenChild={canOpenTarget
+                ? (sessionIdToOpen) => openSession(sessionIdToOpen, "generic")
                 : undefined}
             />
           </div>

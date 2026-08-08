@@ -2,8 +2,10 @@ import type { ContentPart, PromptProvenance } from "@anyharness/sdk";
 import { summarizeContentParts } from "../composer/prompt-display-parts";
 import type { PromptOutboxDeliveryState } from "../../sessions/intents/session-intent-model";
 import {
+  formatAgentWakePromptQueueText,
   formatReviewFeedbackQueueText,
   formatWakePromptQueueText,
+  isAgentWakeProvenance,
   isSubagentWakeProvenance,
 } from "../subagents/provenance";
 
@@ -53,15 +55,19 @@ export function derivePendingPromptQueueRow(
   const isSending =
     entry.localOutboxDeliveryState === "preparing"
     || entry.localOutboxDeliveryState === "dispatching";
-  const wakeProvenance = isSubagentWakeProvenance(entry.promptProvenance)
-    ? entry.promptProvenance
-    : null;
-  if (wakeProvenance) {
+  // Both wake kinds queue as the same row: a pointer is a pointer whether the
+  // schedule hung off a delegation link or off a session pair.
+  const wakeLabel = isSubagentWakeProvenance(entry.promptProvenance)
+    ? formatWakePromptQueueText(entry.promptProvenance)
+    : isAgentWakeProvenance(entry.promptProvenance)
+      ? formatAgentWakePromptQueueText(entry.promptProvenance)
+      : null;
+  if (wakeLabel) {
     return {
       key,
       seq: entry.seq,
       promptId: entry.promptId ?? null,
-      label: collapseQueueLabel(formatWakePromptQueueText(wakeProvenance)),
+      label: collapseQueueLabel(wakeLabel),
       kind: "wake",
       isBeingEdited: entry.isBeingEdited,
       isSending,

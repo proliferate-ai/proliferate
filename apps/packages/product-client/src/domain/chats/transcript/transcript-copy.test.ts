@@ -117,6 +117,24 @@ describe("buildTranscriptCopyText", () => {
     expect(copied).not.toContain("Hidden wake instructions");
   });
 
+  it("copies a session-scoped wake pointer as its badge text", () => {
+    const user = {
+      ...userItem("agent-wake", "turn-1", 1),
+      text: "Hidden pointer body naming the target session",
+      promptProvenance: {
+        type: "agentWake",
+        targetSessionId: "target-1",
+        label: "billing-webhooks",
+      } satisfies PromptProvenance,
+    };
+    const transcript = makeTranscript([user], ["agent-wake"]);
+
+    const copied = copyText({ transcript });
+
+    expect(copied).toBe("billing-webhooks finished");
+    expect(copied).not.toContain("Hidden pointer body");
+  });
+
   it("copies review-feedback provenance as transcript chrome instead of raw feedback prompt text", () => {
     const user = {
       ...userItem("review", "turn-1", 1),

@@ -188,6 +188,28 @@ describe("derivePendingPromptQueueRow", () => {
     expect(row.label).not.toContain("Child session");
   });
 
+  it("hides session-scoped agent wake prompt bodies", () => {
+    const row = derivePendingPromptQueueRow(entry({
+      text: [
+        'Agent "billing-webhooks" finished a turn.',
+        "Target session: target-1",
+      ].join("\n"),
+      promptProvenance: {
+        type: "agentWake",
+        targetSessionId: "target-1",
+        label: "billing-webhooks",
+      },
+    }));
+
+    expect(row).toMatchObject({
+      kind: "wake",
+      label: "billing-webhooks finished",
+      canEdit: false,
+      canDelete: true,
+    });
+    expect(row.label).not.toContain("Target session");
+  });
+
   it("formats review feedback ready rows from the first line", () => {
     const row = derivePendingPromptQueueRow(entry({
       text: "Review feedback is ready.\n\nHidden critique body",

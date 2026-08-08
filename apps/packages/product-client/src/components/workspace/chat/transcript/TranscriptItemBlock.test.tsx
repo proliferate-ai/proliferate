@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   thoughtItem,
   toolItem,
+  userItem,
 } from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
 import { ProposedPlanToolCallIdsProvider } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
 import { TranscriptItemBlock } from "#product/components/workspace/chat/transcript/TranscriptItemBlock";
@@ -156,6 +157,39 @@ describe("TranscriptItemBlock", () => {
     // Completed reasoning is labeled "Thought" so the animated status owns
     // the live word "Thinking".
     expect(container.textContent).toContain("Thought");
+  });
+
+  it("renders a session-scoped agent wake pointer as a wake receipt, not prompt text", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = {
+      ...userItem("agent-wake", "turn-1", 1),
+      text: "Hidden pointer body naming the target session",
+      promptProvenance: {
+        type: "agentWake" as const,
+        targetSessionId: "target-1",
+        label: "billing-webhooks",
+      },
+    };
+    transcript.itemsById = { [item.itemId]: item };
+
+    const { container } = render(
+      <ProposedPlanToolCallIdsProvider value={new Set()}>
+        <TranscriptItemBlock
+          item={item}
+          transcript={transcript}
+          workspaceId={null}
+          onOpenArtifact={() => {}}
+        />
+      </ProposedPlanToolCallIdsProvider>,
+    );
+
+    // The receipt shows the shared delegated-agent identity (a generated name
+    // keyed on the target session), and never an outcome: a session-scoped
+    // pointer carries no completion row to read one from.
+    expect(container.textContent).toContain("finished a turn");
+    expect(container.textContent).not.toContain("Hidden pointer body");
+    expect(container.querySelector("[title]")?.getAttribute("title"))
+      .toContain("billing-webhooks");
   });
 });
 

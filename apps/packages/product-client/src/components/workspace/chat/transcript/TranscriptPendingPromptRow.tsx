@@ -13,6 +13,7 @@ import {
   TurnShell,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 import {
+  isAgentWakeProvenance,
   isSubagentWakeProvenance,
 } from "#product/domain/chats/subagents/provenance";
 import {
@@ -94,11 +95,24 @@ function PendingPromptBody({
   activeSessionId: string;
   prompt: PendingPromptEntry;
 }) {
+  // Both wake kinds queue as the same pointer row; the session-scoped one just
+  // falls back to a generic title because it names no delegation link.
+  // TODO(agent-ops-ux): visual treatment is the design pass.
   if (isSubagentWakeProvenance(prompt.promptProvenance)) {
     return (
       <div className="flex justify-end">
         <SubagentWakeBadge
           label={prompt.promptProvenance.label ?? null}
+        />
+      </div>
+    );
+  }
+  if (isAgentWakeProvenance(prompt.promptProvenance)) {
+    return (
+      <div className="flex justify-end">
+        <SubagentWakeBadge
+          label={prompt.promptProvenance.label ?? null}
+          titleFallback="Agent"
         />
       </div>
     );

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatAgentWakePromptQueueText,
+  formatAgentWakePromptTranscriptText,
   formatWakePromptQueueText,
   formatSubagentLabel,
+  isAgentWakeProvenance,
   isSubagentWakeProvenance,
   resolveReviewFeedbackPromptReference,
   shortSessionId,
@@ -58,6 +61,49 @@ describe("formatWakePromptQueueText", () => {
       sessionLinkId: "link-1",
       completionId: "completion-1",
     })).toBe("Coding session finished");
+  });
+});
+
+describe("isAgentWakeProvenance", () => {
+  it("accepts session-scoped wake pointers", () => {
+    expect(isAgentWakeProvenance({
+      type: "agentWake",
+      targetSessionId: "target-1",
+      label: "billing-webhooks",
+    })).toBe(true);
+  });
+
+  it("rejects link-scoped wakes so they keep their completion-aware copy", () => {
+    expect(isAgentWakeProvenance({
+      type: "subagentWake",
+      sessionLinkId: "link-1",
+      completionId: "completion-1",
+    })).toBe(false);
+  });
+});
+
+describe("formatAgentWakePromptQueueText", () => {
+  it("uses the pointer label", () => {
+    expect(formatAgentWakePromptQueueText({
+      type: "agentWake",
+      targetSessionId: "target-1",
+      label: "billing-webhooks",
+    })).toBe("billing-webhooks finished");
+  });
+
+  it("falls back to a generic agent title when the pointer carries no label", () => {
+    expect(formatAgentWakePromptQueueText({
+      type: "agentWake",
+      targetSessionId: "target-1",
+    })).toBe("Agent finished");
+  });
+
+  it("never reports an outcome because the pointer has no completion row", () => {
+    expect(formatAgentWakePromptTranscriptText({
+      type: "agentWake",
+      targetSessionId: "target-1",
+      label: "billing-webhooks",
+    })).toBe("billing-webhooks finished");
   });
 });
 

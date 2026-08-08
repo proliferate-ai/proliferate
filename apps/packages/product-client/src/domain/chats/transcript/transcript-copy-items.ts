@@ -14,7 +14,9 @@ import { describeToolCallDisplay } from "../tools/tool-call-display";
 import { normalizeToolResultText } from "../tools/tool-result-text";
 import {
   formatReviewFeedbackTranscriptText,
+  formatAgentWakePromptTranscriptText,
   formatWakePromptTranscriptText,
+  isAgentWakeProvenance,
   isSubagentWakeProvenance,
   resolveReviewFeedbackPromptReference,
 } from "../subagents/provenance";
@@ -75,6 +77,12 @@ export function serializeUserPromptContent({
         promptProvenance,
         transcript.linkCompletionsByCompletionId[promptProvenance.completionId] ?? null,
       ),
+    ]);
+  }
+
+  if (isAgentWakeProvenance(promptProvenance)) {
+    return normalizeCopySections([
+      formatAgentWakePromptTranscriptText(promptProvenance),
     ]);
   }
 

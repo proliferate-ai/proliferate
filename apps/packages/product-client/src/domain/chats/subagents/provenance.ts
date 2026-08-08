@@ -6,6 +6,17 @@ export type WakePromptProvenance =
   | Extract<PromptProvenance, { type: "subagentWake" }>
   | Extract<PromptProvenance, { type: "linkWake" }>;
 
+/**
+ * A session-scoped wake pointer. Armed on a session PAIR rather than on a
+ * delegation link, so unlike `subagentWake` it carries no link id and no
+ * completion id — the target session id and its label are all there is, and
+ * the outcome the badge would otherwise report is not available here.
+ */
+export type AgentWakePromptProvenance = Extract<
+  PromptProvenance,
+  { type: "agentWake" }
+>;
+
 export type ReviewFeedbackPromptProvenance = Extract<
   PromptProvenance,
   { type: "reviewFeedback" }
@@ -51,6 +62,30 @@ export function formatWakePromptTranscriptText(
         : "Subagent"
     );
   return formatWakeTitle(title, completion?.outcome ?? null);
+}
+
+export function isAgentWakeProvenance(
+  provenance: PromptProvenance | null | undefined,
+): provenance is AgentWakePromptProvenance {
+  return provenance?.type === "agentWake";
+}
+
+/**
+ * A pointer says only that the target finished a turn — never how it went.
+ * The link-scoped wake can read an outcome off its completion row; this one has
+ * no row to read, so the copy stops at "finished".
+ */
+export function formatAgentWakePromptQueueText(
+  provenance: AgentWakePromptProvenance,
+): string {
+  const label = provenance.label?.trim();
+  return label && label.length > 0 ? `${label} finished` : "Agent finished";
+}
+
+export function formatAgentWakePromptTranscriptText(
+  provenance: AgentWakePromptProvenance,
+): string {
+  return formatAgentWakePromptQueueText(provenance);
 }
 
 export function isReviewFeedbackProvenance(

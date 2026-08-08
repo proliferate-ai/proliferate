@@ -307,6 +307,16 @@ target is idle, nothing fires until someone prompts it. The tool result reports
 the target's status for exactly that decision — waiting on an idle agent means
 sending it a message, not scheduling a wake and hoping.
 
+When a session-scoped wake fires, the pointer prompt it queues carries
+`agentWake` provenance: a target session id and a label, and nothing else. The
+client renders it with the same wake receipt a link-scoped wake uses — in the
+transcript, in the pending-prompt queue, and in copied transcript text — but it
+reports no outcome. A link wake reads "finished / failed / cancelled" off its
+completion row; a pointer has no such row, so the receipt stops at "finished a
+turn". The pointer also asserts no parentage when the receipt is opened: the
+target may be a peer this session does not parent, and recording a subagent
+relationship hint for it would place a peer inside a parent's fanout.
+
 ## Close Ordering
 
 Closing is not transcript deletion. The child session and historical
