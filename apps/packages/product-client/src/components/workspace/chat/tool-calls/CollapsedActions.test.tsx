@@ -107,6 +107,8 @@ describe("CollapsedActions", () => {
     expect(motionShell?.getAttribute("data-expanded")).toBe("false");
     expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
     expect(motionShell?.className).toContain("opacity-0");
+    expect(motionShell?.className).toContain("transform-gpu");
+    expect(motionShell?.className).toContain("will-change-[opacity]");
 
     act(() => {
       pendingFrames.shift()?.(0);
@@ -115,6 +117,8 @@ describe("CollapsedActions", () => {
     expect(motionShell?.getAttribute("data-expanded")).toBe("true");
     expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("1fr");
     expect(motionShell?.className).toContain("opacity-100");
+    expect(motionShell?.className).toContain("transform-gpu");
+    expect(motionShell?.className).toContain("will-change-[opacity]");
     expect(motionShell?.className).toContain("duration-disclosure");
 
     fireEvent.click(header);
@@ -158,6 +162,8 @@ describe("CollapsedActions", () => {
     expect(disclosureChevron?.getAttribute("class")).toContain("icon-compact");
     expect(disclosureChevron?.getAttribute("class")).toContain("transition-transform");
     expect(disclosureChevron?.getAttribute("class")).toContain("duration-disclosure");
+    expect(disclosureChevron?.getAttribute("class")).toContain("transform-gpu");
+    expect(disclosureChevron?.getAttribute("class")).toContain("will-change-transform");
     expect(disclosureChevron?.getAttribute("viewBox")).toBe("0 0 20 20");
     expect(disclosureChevron?.querySelector("path")?.getAttribute("d")).toContain("7.52925 3.7793");
     expect(disclosureChevron?.getAttribute("class")).toContain("opacity-0");
