@@ -1,7 +1,13 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { AnyHarnessError } from "@anyharness/sdk";
 import { useRestoreWorktreeWorkspaceMutation } from "@anyharness/sdk-react";
-import { worktreeRestoreFailureCopy } from "#product/copy/workspaces/workspace-availability-copy";
+import {
+  missingCheckoutStillMissingCopy,
+  worktreeRestoreFailureCopy,
+} from "#product/copy/workspaces/workspace-availability-copy";
+import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/availability";
+import { getAnyWorkspaceCollectionsFromCache } from "#product/hooks/workspaces/cache/query-keys";
 import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -11,6 +17,7 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 // read, so the takeover clears on its own once the directory is back.
 export function useWorktreeMissingActions(args: { workspaceId: string }) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const queryClient = useQueryClient();
   const refresh = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const restoreMutation = useRestoreWorktreeWorkspaceMutation();
   const showToast = useToastStore((state) => state.show);
@@ -25,7 +32,14 @@ export function useWorktreeMissingActions(args: { workspaceId: string }) {
     } finally {
       setIsCheckingAgain(false);
     }
-  }, [refresh]);
+    // A still-missing result leaves the takeover exactly as it was, which
+    // reads as the button doing nothing — say so.
+    const workspace = getAnyWorkspaceCollectionsFromCache(queryClient, runtimeUrl)
+      ?.allWorkspaces.find((candidate) => candidate.id === args.workspaceId);
+    if (workspace && isWorkspaceDirectoryMissing(workspace)) {
+      showToast(missingCheckoutStillMissingCopy(workspace.kind));
+    }
+  }, [args.workspaceId, queryClient, refresh, runtimeUrl, showToast]);
 
   const restoreWorktree = useCallback(async (): Promise<boolean> => {
     setRestoreError(null);

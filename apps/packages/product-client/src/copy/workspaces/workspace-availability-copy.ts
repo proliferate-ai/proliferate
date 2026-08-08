@@ -56,6 +56,14 @@ export function missingCheckoutCopy(kind: Workspace["kind"]): MissingCheckoutCop
 // offered (worktree kind + eligible); otherwise the sentence points at
 // "Check again" instead, since there is no restore mutation for a plain
 // local checkout.
+// "Check again" feedback when the re-check finds the folder still gone. The
+// takeover itself doesn't change in that case, so without this the click
+// reads as a no-op.
+export function missingCheckoutStillMissingCopy(kind: Workspace["kind"]): string {
+  const noun = kind === "worktree" ? "Worktree folder" : "Workspace folder";
+  return `Checked again. ${noun} is still missing.`;
+}
+
 export function missingCheckoutComposerMessage(
   kind: Workspace["kind"],
   restoreEligible: boolean,
