@@ -8,8 +8,9 @@ import {
 import { UserInputCard } from "#product/components/workspace/chat/input/UserInputCard";
 import { PlaygroundInteractionMotionFixture } from "#product/components/playground/composer-slots/PlaygroundInteractionMotionFixture";
 import { CloudRuntimeAttachedPanelView } from "#product/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
-import { WorkspaceArrivalAttachedPanelView } from "#product/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
 import { WorkspaceArrivalCloudPanel } from "#product/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
+import { WorkspaceCreationReceiptView } from "#product/components/workspace/chat/transcript/WorkspaceCreationReceipt";
+import { presentWorkspaceCreationReceipt } from "#product/lib/domain/workspaces/creation/creation-receipt";
 import type { ScenarioKey } from "#product/config/playground";
 import {
   CLOUD_RUNTIME_RECONNECT_ERROR,
@@ -19,7 +20,6 @@ import {
   CLOUD_STATUS_ERROR,
   CLOUD_STATUS_FIRST_RUNTIME,
   CLOUD_STATUS_PROVISIONING,
-  WORKSPACE_ARRIVAL_CREATED,
 } from "#product/lib/domain/chat/__fixtures__/playground/panel-cloud-fixtures";
 import {
   EDIT_OPTIONS,
@@ -149,14 +149,45 @@ export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null 
           onDeny={noop}
         />
       );
-    case "workspace-arrival-created":
+    case "workspace-receipt-setup-succeeded":
       return (
-        <WorkspaceArrivalAttachedPanelView
-          viewModel={WORKSPACE_ARRIVAL_CREATED}
+        <WorkspaceCreationReceiptView
+          presentation={presentWorkspaceCreationReceipt({
+            phase: "created",
+            noun: "worktree",
+            workspacePath: "/Users/pablo/.proliferate/worktrees/proliferate/prism",
+            materializedWorkspaceId: "workspace-receipt-setup-succeeded",
+            setup: {
+              command: "pnpm install",
+              status: "succeeded",
+              failureSummary: null,
+              terminalId: null,
+            },
+          })}
+          expanded={false}
+          onToggleExpanded={noop}
+        />
+      );
+    case "workspace-receipt-setup-failed":
+      return (
+        <WorkspaceCreationReceiptView
+          presentation={presentWorkspaceCreationReceipt({
+            phase: "created",
+            noun: "worktree",
+            workspacePath: "/Users/pablo/.proliferate/worktrees/proliferate/prism",
+            materializedWorkspaceId: "workspace-receipt-setup-failed",
+            setup: {
+              command: "pnpm install",
+              status: "failed",
+              failureSummary: "Setup failed with exit code 1: pnpm ERR! ENOENT",
+              terminalId: "terminal-playground",
+            },
+          })}
           expanded
           onToggleExpanded={noop}
-          onDismiss={noop}
-          onSetupAction={noop}
+          showSeeTerminal
+          onSeeTerminal={noop}
+          onRerun={noop}
         />
       );
     case "cloud-first-runtime":

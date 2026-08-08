@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import type { Workspace } from "@anyharness/sdk";
-import { useSetupStatusQuery } from "@anyharness/sdk-react";
 import type { CloudWorkspaceStatusScreenModel } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import {
   buildCloudWorkspaceStatusScreenModel,
@@ -12,29 +11,23 @@ import {
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import {
-  buildPendingWorkspaceArrivalViewModel,
-  summarizeSetupFailure,
-} from "#product/lib/domain/workspaces/creation/arrival";
-import {
   canRestoreMissingWorktree,
   isWorkspaceDirectoryMissing,
 } from "#product/lib/domain/workspaces/availability";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
-import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
-import { useWorkspaceArrivalState } from "#product/hooks/workspaces/derived/use-workspace-arrival-state";
-import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
-import { resolveWithWorkspaceFallback } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
-import type { WorkspaceArrivalViewModel } from "#product/lib/domain/workspaces/creation/arrival";
-import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
 import {
   useCloudWorkspaceBillingBlockStore,
 } from "#product/stores/workspaces/cloud-workspace-billing-block-store";
 
 export type WorkspaceStatusPanelState =
   | {
+    /**
+     * Cloud/cowork provisioning only — local and worktree creations render
+     * the workspace-creation transcript receipt instead (see
+     * `use-workspace-creation-receipt.ts`).
+     */
     kind: "pending";
     entry: PendingWorkspaceEntry;
     badgeLabel: string;
@@ -42,7 +35,6 @@ export type WorkspaceStatusPanelState =
     subtitle: string;
     detail: string | null;
     isFailed: boolean;
-    arrivalViewModel: WorkspaceArrivalViewModel | null;
     workspacePath: string | null;
     sourceRepoRootPath: string | null;
   }
@@ -50,22 +42,6 @@ export type WorkspaceStatusPanelState =
     kind: "cloud-status";
     workspaceId: string;
     model: CloudWorkspaceStatusScreenModel;
-  }
-  | {
-    kind: "arrival";
-    viewModel: WorkspaceArrivalViewModel;
-    workspacePath: string | null;
-    sourceRepoRootPath: string | null;
-    setupTerminalId: string | null;
-  }
-  | {
-    kind: "setup-failure";
-    workspaceUiKey: string;
-    materializedWorkspaceId: string;
-    command: string;
-    summary: string;
-    detail: string | null;
-    terminalId: string | null;
   }
   | {
     /**
@@ -81,6 +57,13 @@ export type WorkspaceStatusPanelState =
     currentBranch: string | null;
     restoreEligible: boolean;
   };
+
+function isPanelPendingSource(entry: PendingWorkspaceEntry | null): entry is PendingWorkspaceEntry {
+  // Local and worktree creations render the transcript receipt instead of
+  // this attached panel.
+  return !!entry
+    && (entry.source === "cloud-created" || entry.source === "cowork-created");
+}
 
 function buildPendingSubtitle(entry: PendingWorkspaceEntry): string {
   if (entry.stage === "failed") {
@@ -131,15 +114,8 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
-  const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
-    selectedLogicalWorkspaceId,
-    materializedWorkspaceId: selectedWorkspaceId,
-  });
-  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const { data: workspaceCollections } = useWorkspaces();
-  const arrival = useWorkspaceArrivalState();
-  const dismissedSetupFailures = useWorkspaceUiStore((s) => s.dismissedSetupFailures);
   const pendingSourceRepoRootPath = useMemo(() => {
     if (!pendingWorkspaceEntry) {
       return null;
@@ -155,12 +131,6 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
       (repoRoot) => repoRoot.id === request.input.repoRootId,
     )?.path ?? null;
   }, [pendingWorkspaceEntry, workspaceCollections?.repoRoots]);
-  const pendingConfiguredSetupScript = useRepoPreferencesStore((state) => {
-    if (!pendingSourceRepoRootPath) {
-      return "";
-    }
-    return state.repoConfigs[pendingSourceRepoRootPath]?.setupScript?.trim() ?? "";
-  });
   const selectedWorkspace = workspaceCollections?.workspaces.find(
     (workspace) => workspace.id === selectedWorkspaceId,
   ) ?? null;
@@ -168,27 +138,6 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     ? workspaceCollections?.repoRoots.find((repoRoot) => repoRoot.id === selectedWorkspace.repoRootId)
       ?? null
     : null;
-  const selectedSourceRepoRootPath = selectedRepoRoot?.path?.trim()
-    || selectedWorkspace?.path?.trim()
-    || null;
-  const configuredSetupScript = useRepoPreferencesStore((state) => {
-    if (!selectedSourceRepoRootPath) {
-      return "";
-    }
-    return state.repoConfigs[selectedSourceRepoRootPath]?.setupScript?.trim() ?? "";
-  });
-
-  // Query setup status for the selected workspace. Used to show persistent
-  // failure banners on workspace re-entry (after the arrival event is gone).
-  const { data: setupStatus } = useSetupStatusQuery({
-    workspaceId: materializedWorkspaceId,
-    enabled:
-      !!materializedWorkspaceId
-      && !arrival.viewModel
-      && !hotPaintPending
-      && configuredSetupScript.length > 0,
-    refetchWhileRunning: false,
-  });
 
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const selectedCloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
@@ -210,7 +159,11 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
       && !isCloudWorkspacePostReadyPending(selectedCloudWorkspace),
     );
 
-    if (pendingWorkspaceEntry && !staleCloudReadyPendingEntry) {
+    if (
+      pendingWorkspaceEntry
+      && isPanelPendingSource(pendingWorkspaceEntry)
+      && !staleCloudReadyPendingEntry
+    ) {
       return {
         kind: "pending",
         entry: pendingWorkspaceEntry,
@@ -219,10 +172,6 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
         subtitle: buildPendingSubtitle(pendingWorkspaceEntry),
         detail: buildPendingDetail(pendingWorkspaceEntry),
         isFailed: pendingWorkspaceEntry.stage === "failed",
-        arrivalViewModel: buildPendingWorkspaceArrivalViewModel({
-          entry: pendingWorkspaceEntry,
-          configuredSetupScript: pendingConfiguredSetupScript,
-        }),
         workspacePath: pendingWorkspaceEntry.request.kind === "local"
           ? pendingWorkspaceEntry.request.sourceRoot
           : pendingWorkspaceEntry.request.kind === "worktree"
@@ -233,8 +182,8 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     }
 
     // Detected on workspace load/select via the collections query — not only
-    // when a send fails. Outranks arrival/setup states: nothing else about
-    // the workspace is actionable while the checkout is gone.
+    // when a send fails. Outranks the cloud-status screen: nothing else
+    // about the workspace is actionable while the checkout is gone.
     if (
       selectedWorkspaceId
       && selectedWorkspace
@@ -274,64 +223,15 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
       };
     }
 
-    if (arrival.viewModel) {
-      return {
-        kind: "arrival",
-        viewModel: arrival.viewModel,
-        workspacePath: arrival.workspacePath,
-        sourceRepoRootPath: arrival.sourceRepoRootPath,
-        setupTerminalId: arrival.setupTerminalId,
-      };
-    }
-
-    // Persistent setup failure banner: shown on workspace re-entry when the
-    // arrival event is gone but the runtime still has a failed setup result
-    // and the user hasn't dismissed it yet.
-    if (
-      workspaceUiKey
-      && materializedWorkspaceId
-      && setupStatus?.status === "failed"
-      && !resolveWithWorkspaceFallback(
-        dismissedSetupFailures,
-        workspaceUiKey,
-        materializedWorkspaceId,
-      ).value
-    ) {
-      const fullOutput = `${setupStatus.stderr ?? ""}\n${setupStatus.stdout ?? ""}`.trim();
-      return {
-        kind: "setup-failure",
-        workspaceUiKey,
-        materializedWorkspaceId,
-        command: setupStatus.command,
-        summary: summarizeSetupFailure({
-          command: setupStatus.command,
-          status: "failed",
-          exitCode: setupStatus.exitCode ?? -1,
-          stdout: setupStatus.stdout ?? "",
-          stderr: setupStatus.stderr ?? "",
-          durationMs: setupStatus.durationMs ?? 0,
-        }),
-        detail: fullOutput || null,
-        terminalId: setupStatus.terminalId ?? null,
-      };
-    }
-
     return null;
   }, [
-    arrival.sourceRepoRootPath,
-    arrival.viewModel,
-    arrival.workspacePath,
-    dismissedSetupFailures,
-    pendingConfiguredSetupScript,
     pendingSourceRepoRootPath,
     pendingWorkspaceEntry,
     selectedCloudWorkspace,
     selectedCloudBillingBlock,
     selectedLogicalWorkspaceId,
+    selectedRepoRoot,
     selectedWorkspace,
     selectedWorkspaceId,
-    setupStatus,
-    workspaceUiKey,
-    materializedWorkspaceId,
   ]);
 }

@@ -12,6 +12,7 @@ import { Switch } from "#product/primitives/Switch";
 import {
   READABLE_CODE_FONT_SIZE_LABELS,
   READABLE_CODE_FONT_SIZE_OPTIONS,
+  readableCodeFontSizeDetail,
   UI_FONT_SIZE_LABELS,
   UI_FONT_SIZE_OPTIONS,
   WINDOW_ZOOM_LABELS,
@@ -153,6 +154,7 @@ export function AppearancePane() {
                 options: READABLE_CODE_FONT_SIZE_OPTIONS.map((option) => ({
                   id: option.id,
                   label: option.label,
+                  detail: readableCodeFontSizeDetail(option.id, uiFontSizeId),
                   selected: option.id === readableCodeFontSizeId,
                   onSelect: () => setPreference("readableCodeFontSizeId", option.id),
                 })),

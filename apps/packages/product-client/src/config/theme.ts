@@ -60,7 +60,10 @@ export function applyAppearancePreference({
   const resolvedReadableCodeFontSizeId = resolveAppearanceSizeId(readableCodeFontSizeId);
   const resolvedWindowZoomId = resolveWindowZoomId(windowZoomId);
   const uiScale = resolveUiFontScale(resolvedUiFontSizeId);
-  const readableCodeScale = resolveReadableCodeFontScale(resolvedReadableCodeFontSizeId);
+  const readableCodeScale = resolveReadableCodeFontScale(
+    resolvedReadableCodeFontSizeId,
+    resolvedUiFontSizeId,
+  );
   const windowZoomScale = resolveWindowZoomScale(resolvedWindowZoomId);
 
   root.dataset.uiFontSize = resolvedUiFontSizeId;

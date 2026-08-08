@@ -74,6 +74,7 @@ export function useChatTranscriptViewModel({
     history,
     layout,
     goalEvents = EMPTY_GOAL_EVENTS,
+    workspaceReceiptKey = null,
   } = state;
   const hasOlderHistory = history?.hasOlderHistory ?? false;
   const isLoadingOlderHistory = history?.isLoadingOlderHistory ?? false;
@@ -142,6 +143,10 @@ export function useChatTranscriptViewModel({
     latestTurnId,
     latestTurnHasAssistantRenderableContent,
     goalEvents,
+    // The receipt pins to the absolute top of history; while older pages
+    // remain unloaded the top of the loaded window isn't the top of the
+    // transcript, so the row must not render there.
+    workspaceReceiptKey: hasOlderHistory ? null : workspaceReceiptKey,
   });
   const visibleTurnIds = useMemo(
     () => collectVisibleTurnIds(virtualRows),

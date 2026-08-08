@@ -14,7 +14,8 @@ import { noop } from "#product/components/playground/PlaygroundComposerActions";
 export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
   const contextPanel = (() => {
     switch (scenario) {
-      case "workspace-arrival-created":
+      case "workspace-receipt-setup-succeeded":
+      case "workspace-receipt-setup-failed":
       case "cloud-first-runtime":
       case "cloud-provisioning":
       case "cloud-applying-files":

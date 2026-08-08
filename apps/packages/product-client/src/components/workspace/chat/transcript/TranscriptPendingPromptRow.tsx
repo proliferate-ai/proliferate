@@ -37,6 +37,7 @@ export function TranscriptPendingPromptRow({
   outboxEntry,
   optimisticTrailingStatus,
   outboxActions,
+  workspaceReceipt = null,
 }: {
   activeSessionId: string;
   rowIndex: number;
@@ -44,6 +45,16 @@ export function TranscriptPendingPromptRow({
   outboxEntry: PromptOutboxEntry | null;
   optimisticTrailingStatus: ReactNode;
   outboxActions: OutboxActionHandlers;
+  /**
+   * The workspace-creation receipt, when this row hosts it (no turn exists
+   * yet to host it inline — see `hostsWorkspaceReceipt` on the row model).
+   * Takes precedence over both `optimisticTrailingStatus` and the outbox
+   * trailing status: while the workspace is still being created, "Thinking"/
+   * "Sending…" are false claims (no session exists yet to think or send),
+   * so the receipt — with its own spinner and failure states — replaces
+   * them in the frontier slot instead of rendering alongside/below them.
+   */
+  workspaceReceipt?: ReactNode;
 }) {
   if (outboxEntry?.deliveryState === "failed_before_dispatch") {
     return (
@@ -56,9 +67,9 @@ export function TranscriptPendingPromptRow({
     );
   }
 
-  const trailingStatus = outboxEntry
+  const trailingStatus = workspaceReceipt ?? (outboxEntry
     ? <OutboxPromptTrailingStatus entry={outboxEntry} />
-    : optimisticTrailingStatus;
+    : optimisticTrailingStatus);
   const outboxControls = outboxEntry
     ? renderOutboxPromptControls(outboxEntry, outboxActions)
     : null;

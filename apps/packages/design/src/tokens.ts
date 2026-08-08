@@ -961,13 +961,15 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--diffs-font-size": {
-    dark: "14px",
-    light: "14px",
+    // Coupled to the "Reading & code" default: follows the 14px UI-text
+    // default minus 1px for mono optics (ui-foundation appearance ruling).
+    dark: "13px",
+    light: "13px",
     provenance: "[SHIPPED]",
   },
   "--diffs-line-height": {
-    dark: "calc(var(--diffs-font-size, 14px) * 1.8)",
-    light: "calc(var(--diffs-font-size, 14px) * 1.8)",
+    dark: "calc(var(--diffs-font-size, 13px) * 1.8)",
+    light: "calc(var(--diffs-font-size, 13px) * 1.8)",
     provenance: "[SHIPPED]",
   },
   "--diffs-min-number-column-width": {
@@ -1189,8 +1191,10 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--readable-code-font-size": {
-    dark: "14px",
-    light: "14px",
+    // Coupled to the "Reading & code" default: follows the 14px UI-text
+    // default minus 1px for mono optics (ui-foundation appearance ruling).
+    dark: "13px",
+    light: "13px",
     provenance: "[SHIPPED]",
   },
   "--readable-code-line-height": {

@@ -28,7 +28,8 @@ export type ScenarioKey =
   | "slash-command-empty"
   | "file-mention-search"
   | "file-mention-empty"
-  | "workspace-arrival-created"
+  | "workspace-receipt-setup-succeeded"
+  | "workspace-receipt-setup-failed"
   | "cloud-first-runtime"
   | "cloud-provisioning"
   | "cloud-applying-files"
@@ -145,7 +146,8 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "slash-command-empty": { label: "Slash commands empty" },
   "file-mention-search": { label: "File mentions" },
   "file-mention-empty": { label: "File mentions empty" },
-  "workspace-arrival-created": { label: "Workspace arrival" },
+  "workspace-receipt-setup-succeeded": { label: "Creation receipt (setup succeeded)" },
+  "workspace-receipt-setup-failed": { label: "Creation receipt (setup failed)" },
   "cloud-first-runtime": { label: "Cloud first runtime" },
   "cloud-provisioning": { label: "Cloud provisioning" },
   "cloud-applying-files": { label: "Cloud applying files" },

@@ -10,6 +10,7 @@ import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows
 import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useCoworkManagedWorkspaces } from "#product/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
+import { useWorkspaceCreationReceiptKey } from "#product/hooks/workspaces/derived/use-workspace-creation-receipt";
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import {
   resolveTranscriptOpenSessionWorkspaceId,
@@ -50,6 +51,7 @@ export function SessionTranscriptPane({
   const { data: workspaceCollections } = useWorkspaces();
   const [olderHistoryLoadingSessionId, setOlderHistoryLoadingSessionId] = useState<string | null>(null);
   const immediatePaneState = useActiveTranscriptPaneState();
+  const workspaceReceiptKey = useWorkspaceCreationReceiptKey();
   // STARVATION GUARD: only the session IDENTITY is deferred — never the
   // transcript content. Deferring the whole pane state meant every stream
   // batch restarted the in-flight deferred render; once per-batch renders got
@@ -274,6 +276,7 @@ export function SessionTranscriptPane({
       <MessageList
         activeSessionId={activeSessionId}
         selectedWorkspaceId={selectedWorkspaceId}
+        workspaceReceiptKey={workspaceReceiptKey}
         optimisticPrompt={optimisticPrompt}
         outboxEntries={outboxEntries}
         transcript={transcript}

@@ -50,6 +50,7 @@ import {
 import { TranscriptContextProviders, type TranscriptOpenSessionHandler } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { ProposedPlanToolCallIdsProvider } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
 import { GoalTranscriptEventRow } from "#product/components/workspace/chat/transcript/GoalTranscriptEventRow";
+import { WorkspaceCreationReceipt } from "#product/components/workspace/chat/transcript/WorkspaceCreationReceipt";
 import { TranscriptPendingPromptRow } from "#product/components/workspace/chat/transcript/TranscriptPendingPromptRow";
 import { TranscriptTurnRow } from "#product/components/workspace/chat/transcript/TranscriptTurnRow";
 import { TranscriptEntryMotionProvider } from "#product/components/workspace/chat/transcript/TranscriptEntryMotionContext";
@@ -79,6 +80,7 @@ interface MessageListProps {
   transcript: TranscriptState;
   sessionViewState: SessionViewState;
   goalEvents?: readonly GoalTranscriptEvent[];
+  workspaceReceiptKey?: string | null;
   hasOlderHistory?: boolean;
   isLoadingOlderHistory?: boolean;
   olderHistoryCursor?: number | null;
@@ -98,6 +100,7 @@ export function MessageList({
   transcript,
   sessionViewState,
   goalEvents = EMPTY_GOAL_EVENTS,
+  workspaceReceiptKey = null,
   hasOlderHistory = false,
   isLoadingOlderHistory = false,
   olderHistoryCursor = null,
@@ -127,6 +130,7 @@ export function MessageList({
     transcript,
     sessionViewState,
     goalEvents,
+    workspaceReceiptKey,
     history: {
       hasOlderHistory,
       isLoadingOlderHistory,
@@ -151,6 +155,7 @@ export function MessageList({
     selectedWorkspaceId,
     sessionViewState,
     transcript,
+    workspaceReceiptKey,
   ]);
   const deferredTranscriptViewState = useDeferredValue(transcriptViewState);
   const typingActive = useTypingActivityStore((state) => state.typingActive);
@@ -257,6 +262,7 @@ export function MessageList({
       outboxEntry={input.outboxEntry}
       optimisticTrailingStatus={input.optimisticTrailingStatus}
       outboxActions={input.outboxActions}
+      workspaceReceipt={input.row.hostsWorkspaceReceipt ? <WorkspaceCreationReceipt /> : null}
     />
   ), []);
 
@@ -277,6 +283,7 @@ export function MessageList({
       onOpenTurnChanges={() => openGitReviewPane({ mode: "last_turn" })}
       onOpenArtifact={openArtifact}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+      workspaceReceipt={input.row.hostsWorkspaceReceipt ? <WorkspaceCreationReceipt /> : null}
     />
   ), [
     onHandOffPlanToNewSession,

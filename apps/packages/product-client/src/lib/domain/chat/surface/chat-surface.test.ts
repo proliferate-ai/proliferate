@@ -14,6 +14,7 @@ function surfaceInput(
     selectedWorkspaceId: "workspace-1",
     hasPendingWorkspaceEntry: false,
     activeLaunchIntentId: null,
+    launchIntentInFlight: false,
     launchIntentSessionId: null,
     selectedLocalWorkspace: null,
     isArrivalWorkspace: false,
@@ -106,12 +107,42 @@ describe("chat surface", () => {
     }))).toEqual({ kind: "session-empty", sessionId: null });
   });
 
-  it("shows a pending projected session before the launch-intent pane", () => {
+  it("keeps the launch-intent pane while a projected pending session has no content", () => {
+    // The queued prompt has not landed in the projected session yet: the pane
+    // already shows the prompt bubble + frontier at final transcript geometry,
+    // so session-empty here would double-mount the creation receipt (canvas
+    // topSlot, then pending-prompt frontier) and jump the transcript.
     expect(resolveChatSurfaceState(surfaceInput({
       selectedWorkspaceId: null,
       hasPendingWorkspaceEntry: true,
       activeLaunchIntentId: "launch-1",
+      launchIntentInFlight: true,
       launchIntentSessionId: "session-1",
+      activeSessionId: "session-1",
+      hasContent: false,
+      isEmpty: true,
+    }))).toEqual({ kind: "launch-intent", intentId: "launch-1" });
+  });
+
+  it("shows a failed pending projected session as session-empty, not the pane", () => {
+    // The pending entry's creation receipt owns retry/back for failed
+    // local/worktree creations; a failed intent must not steal that surface.
+    expect(resolveChatSurfaceState(surfaceInput({
+      selectedWorkspaceId: null,
+      hasPendingWorkspaceEntry: true,
+      activeLaunchIntentId: "launch-1",
+      launchIntentInFlight: false,
+      launchIntentSessionId: "session-1",
+      activeSessionId: "session-1",
+      hasContent: false,
+      isEmpty: true,
+    }))).toEqual({ kind: "session-empty", sessionId: "session-1" });
+  });
+
+  it("shows a pending projected session without a launch intent as session-empty", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      selectedWorkspaceId: null,
+      hasPendingWorkspaceEntry: true,
       activeSessionId: "session-1",
       hasContent: false,
       isEmpty: true,

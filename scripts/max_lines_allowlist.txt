@@ -67,8 +67,8 @@ apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
 apps/packages/product-client/src/domain/chats/cloud/transcript-view.test.ts 1160 relocated existing oversized domain test; no growth
-apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.test.ts 1144 relocated existing oversized domain test; no growth
-apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.ts 905 relocated existing oversized domain source; no growth
+apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.test.ts 1363 relocated existing oversized domain test; +workspace-creation-receipt row coverage incl. after-first-user-message placement cases (composer-dock-receipt); receipt folded into first turn's Worked-for group; +frontier-hosting coverage on the last pending/outbox prompt row now that the standalone workspace_receipt row kind is gone (composer-dock-receipt placement fix)
+apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.ts 1017 relocated existing oversized domain source; receipt folded into first turn's Worked-for group; the standalone workspace_receipt row kind is deleted — before any turn exists the receipt instead hosts via hostsWorkspaceReceipt on the last pending/outbox prompt row (composer-dock-receipt placement fix)
 apps/packages/product-client/src/domain/chats/transcript/transcript-presentation.test.ts 868 relocated existing oversized domain test; no growth
 apps/packages/product-client/src/domain/workspaces/cloud-work-inventory.test.ts 859 relocated existing oversized domain test; no growth
 apps/packages/product-client/src/domain/sessions/activity.test.ts 660 relocated existing oversized domain test; no growth
