@@ -1,7 +1,7 @@
 import {
   TERMINAL_OUTPUT_GAP_MESSAGE,
   type TerminalReplayEntry,
-} from "#product/lib/infra/terminals/terminal-stream-registry";
+} from "#product/lib/infra/terminals/terminal-replay-buffer";
 
 interface TerminalWriteTarget {
   write(data: Uint8Array): void;

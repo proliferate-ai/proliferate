@@ -12,9 +12,9 @@ import {
   sendInput,
   sendResize,
   subscribeWithReplay,
-  type TerminalReplayEntry,
   type TerminalStreamIdentity,
 } from "#product/lib/infra/terminals/terminal-stream-registry";
+import type { TerminalReplayEntry } from "#product/lib/infra/terminals/terminal-replay-buffer";
 import {
   clearTerminalIntentionalClose,
   isTerminalIntentionalClose,

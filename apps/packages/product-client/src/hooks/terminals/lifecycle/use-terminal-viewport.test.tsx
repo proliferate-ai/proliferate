@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TerminalRecord } from "@anyharness/sdk";
 import { useTerminalViewport } from "#product/hooks/terminals/lifecycle/use-terminal-viewport";
 import type {
-  TerminalReplayEntry,
   TerminalStreamIdentity,
 } from "#product/lib/infra/terminals/terminal-stream-registry";
+import type { TerminalReplayEntry } from "#product/lib/infra/terminals/terminal-replay-buffer";
 
 const mockState = vi.hoisted(() => ({
   ensureTabConnection: vi.fn(),

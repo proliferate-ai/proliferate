@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createTerminalReplayWriter,
 } from "#product/lib/infra/terminals/terminal-replay-writer";
-import type { TerminalReplayEntry } from "#product/lib/infra/terminals/terminal-stream-registry";
+import type { TerminalReplayEntry } from "#product/lib/infra/terminals/terminal-replay-buffer";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
