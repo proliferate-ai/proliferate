@@ -170,10 +170,8 @@ describe("session debug primitive contracts", () => {
       normalizedEvents: [
         envelope(80, { type: "usage_update", size: 81, used: 82, required: true }),
         envelope(83, {
-          type: "review_run_updated",
-          autoIterate: true,
-          currentRoundNumber: 84,
-          maxRounds: 85,
+          type: "subagent_turn_completed",
+          childLastEventSeq: 84,
           size: 86,
         }),
         envelope(87, {
@@ -192,6 +190,15 @@ describe("session debug primitive contracts", () => {
           type: "loop_fired",
           firedAtMs: 93,
           loop: loop(94),
+        }),
+        // Retired event types fail closed. `review_run_updated` left the
+        // SessionEvent contract with reviews, so it is no longer a safe `type`
+        // value and declares no primitives: every field it carries redacts.
+        envelope(95, {
+          type: "review_run_updated",
+          autoIterate: true,
+          currentRoundNumber: 96,
+          maxRounds: 97,
         }),
       ],
       rawNotifications: [{ seq: 100, notification: { private: true } }],
@@ -241,14 +248,20 @@ describe("session debug primitive contracts", () => {
       },
       normalizedEvents: [
         { seq: 80, event: { size: 81, used: 82, required: marker } },
-        {
-          seq: 83,
-          event: { autoIterate: true, currentRoundNumber: 84, maxRounds: 85, size: marker },
-        },
+        { seq: 83, event: { childLastEventSeq: 84, size: marker } },
         { seq: 87, event: { details: { limit: 88 } } },
         { seq: 89, event: { details: { limit: marker } } },
         { seq: 91, event: { delta: { isTransient: true } } },
         { seq: 92, event: { firedAtMs: 93, loop: loop(94) } },
+        {
+          seq: 95,
+          event: {
+            type: "[redacted:18]",
+            autoIterate: marker,
+            currentRoundNumber: marker,
+            maxRounds: marker,
+          },
+        },
       ],
       rawNotifications: [{ seq: 100, notification: marker }],
       liveConfig: { liveConfig: liveConfig(110) },

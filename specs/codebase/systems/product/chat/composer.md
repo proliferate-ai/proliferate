@@ -218,6 +218,7 @@ Permission/access mode and every other unclaimed configuration control render
 only under the rightmost three-dot configuration menu. A reasoning-level
 control with two or more ordered values remains visible in the combined picker
 when the runtime reports it as non-settable, but its choices are disabled.
+
 ## 2. Dock Regions
 
 `resolveComposerDockSlots`

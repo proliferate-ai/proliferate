@@ -148,8 +148,8 @@ pub fn export_recording(
 
     let mut envelopes = records
         .into_iter()
-        .map(event_record_to_envelope)
-        .collect::<Result<Vec<_>, _>>()?;
+        .filter_map(event_record_to_envelope)
+        .collect::<Vec<_>>();
     envelopes.sort_by_key(|event| event.seq);
     validate_recording_events(&envelopes)?;
 
@@ -192,8 +192,7 @@ pub fn load_recording(
         return Err(ReplayError::RecordingTooLarge);
     }
     let bytes = fs::read(&path).map_err(|error| ReplayError::Internal(error.into()))?;
-    let mut events = serde_json::from_slice::<Vec<SessionEventEnvelope>>(&bytes)
-        .map_err(|error| ReplayError::InvalidJson(error.to_string()))?;
+    let mut events = parse_recording_bytes(&bytes)?;
     events.sort_by_key(|event| event.seq);
     validate_recording_events(&events)?;
     Ok(events)
@@ -341,16 +340,22 @@ fn load_recording_from_path(path: &Path) -> Result<Vec<SessionEventEnvelope>, Re
         return Err(ReplayError::RecordingTooLarge);
     }
     let bytes = fs::read(path).map_err(|error| ReplayError::Internal(error.into()))?;
-    serde_json::from_slice::<Vec<SessionEventEnvelope>>(&bytes)
-        .map_err(|error| ReplayError::InvalidJson(error.to_string()))
+    parse_recording_bytes(&bytes)
 }
 
-fn event_record_to_envelope(
-    record: SessionEventRecord,
-) -> Result<SessionEventEnvelope, ReplayError> {
-    let event = serde_json::from_str::<SessionEvent>(&record.payload_json)
-        .map_err(|error| ReplayError::InvalidJson(error.to_string()))?;
-    Ok(SessionEventEnvelope {
+/// Drops rows the current `SessionEvent` contract cannot parse, exactly like
+/// the HTTP and SSE read paths (`api/http/sessions_events.rs`,
+/// `api/sse/sessions.rs`) do.
+///
+/// WHY: retired event types live in shipped rows forever. `session_events` is
+/// durable and append-only, so variants deleted from the contract — today
+/// `session_link_turn_completed` and `review_run_updated`, tomorrow whatever
+/// else retires — are still on disk in every pre-deletion session. Propagating
+/// the parse error instead would make export fail outright for those sessions
+/// rather than emit a recording of the events that still exist.
+fn event_record_to_envelope(record: SessionEventRecord) -> Option<SessionEventEnvelope> {
+    let event = serde_json::from_str::<SessionEvent>(&record.payload_json).ok()?;
+    Some(SessionEventEnvelope {
         session_id: record.session_id,
         seq: record.seq,
         timestamp: record.timestamp,
@@ -358,6 +363,18 @@ fn event_record_to_envelope(
         item_id: record.item_id,
         event,
     })
+}
+
+/// Same tolerance for recordings already written to disk: a file captured
+/// before an event type retired must still load, minus the retired envelopes.
+/// A file that is not a JSON array at all is still a hard `InvalidJson`.
+fn parse_recording_bytes(bytes: &[u8]) -> Result<Vec<SessionEventEnvelope>, ReplayError> {
+    let values = serde_json::from_slice::<Vec<serde_json::Value>>(bytes)
+        .map_err(|error| ReplayError::InvalidJson(error.to_string()))?;
+    Ok(values
+        .into_iter()
+        .filter_map(|value| serde_json::from_value::<SessionEventEnvelope>(value).ok())
+        .collect())
 }
 
 fn validate_recording_events(events: &[SessionEventEnvelope]) -> Result<(), ReplayError> {
@@ -376,79 +393,5 @@ fn validate_recording_events(events: &[SessionEventEnvelope]) -> Result<(), Repl
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use anyharness_contract::v1::SessionStartedEvent;
-
-    #[test]
-    fn validate_speed_rejects_negative_and_nan() {
-        assert_eq!(validate_speed(None).expect("default speed"), 1.0);
-        assert_eq!(validate_speed(Some(0.0)).expect("instant speed"), 0.0);
-        assert!(matches!(
-            validate_speed(Some(-1.0)),
-            Err(ReplayError::InvalidSpeed)
-        ));
-        assert!(matches!(
-            validate_speed(Some(f32::NAN)),
-            Err(ReplayError::InvalidSpeed)
-        ));
-    }
-
-    #[test]
-    fn validate_recording_id_rejects_unsafe_paths() {
-        assert!(validate_relative_json_path("session.json").is_ok());
-        assert!(validate_relative_json_path("nested/session.json").is_ok());
-        assert!(matches!(
-            validate_relative_json_path("../session.json"),
-            Err(ReplayError::InvalidRecordingId(_))
-        ));
-        assert!(matches!(
-            validate_relative_json_path("/tmp/session.json"),
-            Err(ReplayError::InvalidRecordingId(_))
-        ));
-        assert!(matches!(
-            validate_relative_json_path("session.txt"),
-            Err(ReplayError::InvalidRecordingId(_))
-        ));
-    }
-
-    #[test]
-    fn validate_recording_events_rejects_empty_and_invalid_timestamps() {
-        assert!(matches!(
-            validate_recording_events(&[]),
-            Err(ReplayError::EmptyRecording)
-        ));
-        let events = vec![SessionEventEnvelope {
-            session_id: "old-session".to_string(),
-            seq: 1,
-            timestamp: "not-a-date".to_string(),
-            turn_id: None,
-            item_id: None,
-            event: SessionEvent::SessionStarted(SessionStartedEvent {
-                native_session_id: "native".to_string(),
-                source_agent_kind: "codex".to_string(),
-            }),
-        }];
-        assert!(matches!(
-            validate_recording_events(&events),
-            Err(ReplayError::InvalidTimestamp { seq: 1, .. })
-        ));
-    }
-
-    #[test]
-    fn derive_source_agent_kind_reads_session_started() {
-        let events = vec![SessionEventEnvelope {
-            session_id: "old-session".to_string(),
-            seq: 1,
-            timestamp: "2026-04-16T18:00:00Z".to_string(),
-            turn_id: None,
-            item_id: None,
-            event: SessionEvent::SessionStarted(SessionStartedEvent {
-                native_session_id: "native".to_string(),
-                source_agent_kind: "claude".to_string(),
-            }),
-        }];
-
-        assert_eq!(derive_source_agent_kind(&events).as_deref(), Some("claude"));
-    }
-}
+#[path = "replay_tests.rs"]
+mod tests;

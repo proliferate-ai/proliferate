@@ -133,9 +133,22 @@ mod tests {
     /// reintroduce filtering (e.g. a selector swapped in at the registration
     /// call site) and would fail if `should_attach` ever went back to
     /// returning `false` for any of these cases.
+    ///
+    /// The surface sweep is coverage-pinned below rather than left as a bare
+    /// literal: narrowing it (dropping the retired-but-still-loadable `Cowork`
+    /// surface, say) would otherwise silently stop testing a live case instead
+    /// of failing.
     #[test]
     fn mounts_for_sessions_the_subagents_mcp_used_to_skip() {
-        for surface in [WorkspaceSurface::Standard] {
+        let mut covered_standard = false;
+        let mut covered_cowork = false;
+        for surface in [WorkspaceSurface::Standard, WorkspaceSurface::Cowork] {
+            // Exhaustive: adding a `WorkspaceSurface` variant stops this
+            // compiling until the sweep above covers it too.
+            match surface {
+                WorkspaceSurface::Standard => covered_standard = true,
+                WorkspaceSurface::Cowork => covered_cowork = true,
+            }
             for subagents_enabled in [true, false] {
                 let workspace = workspace(surface);
                 let session = session(subagents_enabled);
@@ -157,6 +170,17 @@ mod tests {
                 assert_eq!(selected[0].registration.definition().id, ID);
             }
         }
+        assert!(
+            covered_standard,
+            "the surface sweep must still cover WorkspaceSurface::Standard"
+        );
+        assert!(
+            covered_cowork,
+            "the surface sweep must still cover WorkspaceSurface::Cowork: \
+             cowork is deleted but the surface value is retained and legacy \
+             cowork workspaces are ordinary, reachable workspaces, so a \
+             session in one is a live mount case"
+        );
     }
 
     #[test]

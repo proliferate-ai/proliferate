@@ -51,7 +51,13 @@ It includes:
 - `kind`
 - `repo_root_id`
 - `path`
-- `surface`
+- `surface`: `standard`, plus a RETIRED `cowork` value. Cowork is deleted and
+  nothing writes `cowork` any more, but the parser still accepts it so
+  historical rows load. A legacy `cowork` row is an ordinary workspace: no read
+  path filters on the surface, so those workspaces are matched, launched into
+  and grouped for repo-target resolution like any other. The one place the
+  value still decides anything is `workspace_can_purge`, which refuses every
+  non-standard surface
 - original branch
 - current branch
 - display name

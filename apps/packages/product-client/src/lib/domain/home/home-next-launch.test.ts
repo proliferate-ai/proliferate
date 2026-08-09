@@ -166,6 +166,24 @@ describe("findHomeNextMatchingWorkspace", () => {
     expect(match?.id).toBe("match");
   });
 
+  // Inverted from the pre-deletion pin: cowork is gone, so a `surface:
+  // "cowork"` row is just a legacy ordinary workspace. Home used to skip it,
+  // which made those workspaces invisible on the launch path; it now matches
+  // them like any other. Re-adding a `surface !== "cowork"` filter fails here.
+  it("matches a legacy cowork-surface workspace like any other workspace", () => {
+    const match = findHomeNextMatchingWorkspace({
+      repoRootId: "repo-root-1",
+      branchName: "feature/raw-name",
+      archivedWorkspaceIds: [],
+      workspaceLastInteracted: {},
+      workspaces: [
+        workspace({ id: "cowork", surface: "cowork", currentBranch: "feature/raw-name" }),
+      ],
+    });
+
+    expect(match?.id).toBe("cowork");
+  });
+
   it("treats local-slot aliases as archived workspace ids", () => {
     const archivedSlotId = buildLocalSlotLogicalWorkspaceId("slot-archived");
     const match = findHomeNextMatchingWorkspace({
@@ -232,6 +250,21 @@ describe("findHomeNextLocalWorkspace", () => {
     });
 
     expect(match?.id).toBe("local");
+  });
+
+  // Same widening as `findHomeNextMatchingWorkspace`: the surface filter is
+  // gone, so a legacy cowork local checkout is a candidate again.
+  it("selects a legacy cowork-surface local checkout", () => {
+    const match = findHomeNextLocalWorkspace({
+      repoRootId: "repo-root-1",
+      archivedWorkspaceIds: [],
+      workspaceLastInteracted: {},
+      workspaces: [
+        workspace({ id: "cowork-local", kind: "local", surface: "cowork" }),
+      ],
+    });
+
+    expect(match?.id).toBe("cowork-local");
   });
 });
 

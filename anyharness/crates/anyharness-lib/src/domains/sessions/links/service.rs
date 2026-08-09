@@ -350,15 +350,6 @@ impl SessionLinkService {
             .list_children_by_relation(relation, parent_session_id)
     }
 
-    pub fn find_parent_by_relation(
-        &self,
-        relation: SessionLinkRelation,
-        child_session_id: &str,
-    ) -> anyhow::Result<Option<SessionLinkRecord>> {
-        self.store
-            .find_parent_by_relation(relation, child_session_id)
-    }
-
     pub fn import_link(&self, record: &SessionLinkRecord) -> anyhow::Result<()> {
         let mut record = record.clone();
         if record.public_id.is_none() {

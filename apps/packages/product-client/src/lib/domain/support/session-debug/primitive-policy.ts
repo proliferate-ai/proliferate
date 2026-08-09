@@ -132,11 +132,6 @@ const CONTENT_PART_CONTRACTS: Readonly<Record<string, PrimitiveContract>> = {
 
 const EVENT_CONTRACTS: Readonly<Record<string, PrimitiveContract>> = {
   subagent_turn_completed: { numbers: new Set(["childLastEventSeq"]) },
-  session_link_turn_completed: { numbers: new Set(["childLastEventSeq"]) },
-  review_run_updated: {
-    booleans: new Set(["autoIterate"]),
-    numbers: new Set(["currentRoundNumber", "maxRounds"]),
-  },
   usage_update: { numbers: new Set(["size", "used"]) },
   loop_fired: { numbers: new Set(["firedAtMs"]) },
   pending_prompt_added: { numbers: new Set(["seq"]) },
