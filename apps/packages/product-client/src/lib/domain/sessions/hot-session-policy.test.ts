@@ -18,7 +18,7 @@ describe("resolveHotSessionTargets", () => {
       promptActivityBySessionId: state.promptActivity,
       selectedWorkspaceId: "workspace-1",
       visibleChatSessionIds: ["selected", "visible"],
-      workspaceSessionIds: ["selected", "visible"],
+      candidateSessionIds: ["selected", "visible"],
     });
 
     expect(targets.map((target) => [target.clientSessionId, target.reason])).toEqual([
@@ -41,7 +41,7 @@ describe("resolveHotSessionTargets", () => {
       promptActivityBySessionId: state.promptActivity,
       selectedWorkspaceId: "workspace-1",
       visibleChatSessionIds: ["selected", "queued", "running", "visible"],
-      workspaceSessionIds: ["selected", "queued", "running", "visible"],
+      candidateSessionIds: ["selected", "queued", "running", "visible"],
     });
 
     expect(targets.map((target) => [target.clientSessionId, target.reason])).toEqual([
@@ -62,7 +62,7 @@ describe("resolveHotSessionTargets", () => {
       promptActivityBySessionId: state.promptActivity,
       selectedWorkspaceId: "workspace-1",
       visibleChatSessionIds: ["a", "b", "c"],
-      workspaceSessionIds: ["a", "b", "c"],
+      candidateSessionIds: ["a", "b", "c"],
     });
 
     expect(targets.map((target) => target.clientSessionId)).toEqual(["c", "a"]);
@@ -77,7 +77,7 @@ describe("resolveHotSessionTargets", () => {
       promptActivityBySessionId: state.promptActivity,
       selectedWorkspaceId: "workspace-1",
       visibleChatSessionIds: ["projected"],
-      workspaceSessionIds: ["projected"],
+      candidateSessionIds: ["projected"],
     });
 
     expect(targets).toMatchObject([{
@@ -86,6 +86,63 @@ describe("resolveHotSessionTargets", () => {
       reason: "selected",
       streamable: false,
     }]);
+  });
+
+  it("keeps a running session hot while another workspace is selected", () => {
+    const state = fixtures(["selected", "background"]);
+    state.directory.background = {
+      ...state.directory.background!,
+      workspaceId: "workspace-2",
+      streamConnectionState: "open",
+      activity: {
+        ...state.directory.background!.activity,
+        isStreaming: true,
+      },
+    };
+
+    const targets = resolveHotSessionTargets({
+      activeSessionId: "selected",
+      candidateSessionIds: ["selected", "background"],
+      directoryEntriesById: state.directory,
+      promptActivityBySessionId: state.promptActivity,
+      selectedWorkspaceId: "workspace-1",
+      visibleChatSessionIds: ["selected"],
+    });
+
+    expect(targets.map((target) => [target.clientSessionId, target.reason])).toEqual([
+      ["selected", "selected"],
+      ["background", "running"],
+    ]);
+  });
+
+  it("keeps only active background work hot when no workspace is selected", () => {
+    const state = fixtures(["running", "idle"]);
+    state.directory.running = {
+      ...state.directory.running!,
+      workspaceId: "workspace-2",
+      streamConnectionState: "open",
+      activity: {
+        ...state.directory.running!.activity,
+        isStreaming: true,
+      },
+    };
+    state.directory.idle = {
+      ...state.directory.idle!,
+      workspaceId: "workspace-3",
+    };
+
+    const targets = resolveHotSessionTargets({
+      activeSessionId: null,
+      candidateSessionIds: ["running", "idle"],
+      directoryEntriesById: state.directory,
+      promptActivityBySessionId: state.promptActivity,
+      selectedWorkspaceId: null,
+      visibleChatSessionIds: [],
+    });
+
+    expect(targets.map((target) => [target.clientSessionId, target.reason])).toEqual([
+      ["running", "running"],
+    ]);
   });
 });
 

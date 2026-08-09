@@ -39,7 +39,7 @@ export interface ResolveHotSessionTargetsInput {
   selectedWorkspaceId: string | null;
   activeSessionId: string | null;
   visibleChatSessionIds: readonly string[];
-  workspaceSessionIds: readonly string[];
+  candidateSessionIds: readonly string[];
   directoryEntriesById: Record<string, HotSessionDirectoryEntry | undefined>;
   promptActivityBySessionId: Record<string, number | undefined>;
   maxHotSessionStreams?: number;
@@ -56,20 +56,24 @@ const PRIORITY_BY_REASON: Record<HotSessionReason, number> = {
 export function resolveHotSessionTargets(
   input: ResolveHotSessionTargetsInput,
 ): HotSessionTarget[] {
-  if (!input.selectedWorkspaceId) {
-    return [];
-  }
-
   const candidates = new Map<string, HotSessionTarget>();
   const maxHotSessionStreams = input.maxHotSessionStreams ?? MAX_HOT_SESSION_STREAMS;
 
-  const maybeAdd = (sessionId: string | null | undefined, reason: HotSessionReason) => {
+  const maybeAdd = (
+    sessionId: string | null | undefined,
+    reason: HotSessionReason,
+    selectedWorkspaceOnly = false,
+  ) => {
     if (!sessionId) {
       return;
     }
     const entry = input.directoryEntriesById[sessionId];
     const workspaceId = entry?.workspaceId ?? null;
-    if (!entry || !workspaceId || workspaceId !== input.selectedWorkspaceId) {
+    if (
+      !entry
+      || !workspaceId
+      || (selectedWorkspaceOnly && workspaceId !== input.selectedWorkspaceId)
+    ) {
       return;
     }
 
@@ -89,16 +93,18 @@ export function resolveHotSessionTargets(
     });
   };
 
-  maybeAdd(input.activeSessionId, "selected");
+  maybeAdd(input.activeSessionId, "selected", true);
 
   const visibleSet = new Set(input.visibleChatSessionIds);
   for (const sessionId of input.visibleChatSessionIds) {
-    maybeAdd(sessionId, "open_tab");
+    maybeAdd(sessionId, "open_tab", true);
   }
 
-  for (const sessionId of input.workspaceSessionIds) {
+  // Live work remains hot across workspace and route navigation; otherwise
+  // disconnecting its stream can make an idle summary mask active streaming.
+  for (const sessionId of input.candidateSessionIds) {
     const entry = input.directoryEntriesById[sessionId];
-    if (!entry || entry.workspaceId !== input.selectedWorkspaceId) {
+    if (!entry) {
       continue;
     }
 
@@ -120,7 +126,7 @@ export function resolveHotSessionTargets(
     } else if (viewState === "working") {
       maybeAdd(sessionId, "running");
     } else if (visibleSet.has(sessionId)) {
-      maybeAdd(sessionId, "open_tab");
+      maybeAdd(sessionId, "open_tab", true);
     }
   }
 

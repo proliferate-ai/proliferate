@@ -40,20 +40,20 @@ export function useHotSessionIngest(): void {
       materializedWorkspaceId,
     ).value ?? EMPTY_SESSION_IDS
   );
-  const workspaceSessionIds = useSessionDirectoryStore((state) =>
-    selectedWorkspaceId
-      ? state.sessionIdsByWorkspaceId[selectedWorkspaceId] ?? EMPTY_SESSION_IDS
-      : EMPTY_SESSION_IDS
+  const allDirectoryEntriesById = useSessionDirectoryStore((state) => state.entriesById);
+  const candidateSessionIds = useMemo(
+    () => Object.keys(allDirectoryEntriesById),
+    [allDirectoryEntriesById],
   );
   const relevantSessionIds = useMemo(() =>
     uniqueSessionIds([
       activeSessionId,
       ...visibleChatSessionIds,
-      ...workspaceSessionIds,
+      ...candidateSessionIds,
     ]), [
     activeSessionId,
+    candidateSessionIds,
     visibleChatSessionIds,
-    workspaceSessionIds,
   ]);
   const directoryEntriesById = useSessionDirectoryStore(useShallow((state) =>
     Object.fromEntries(
@@ -74,18 +74,18 @@ export function useHotSessionIngest(): void {
   ));
   const targets = useMemo(() => resolveHotSessionTargets({
     activeSessionId,
+    candidateSessionIds,
     directoryEntriesById,
     promptActivityBySessionId,
     selectedWorkspaceId,
     visibleChatSessionIds,
-    workspaceSessionIds,
   }), [
     activeSessionId,
+    candidateSessionIds,
     directoryEntriesById,
     promptActivityBySessionId,
     selectedWorkspaceId,
     visibleChatSessionIds,
-    workspaceSessionIds,
   ]);
   const {
     closeSessionSlotStream,
