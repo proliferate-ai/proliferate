@@ -6,6 +6,7 @@ import {
   $isRangeSelection,
   COMMAND_PRIORITY_HIGH,
   PASTE_COMMAND,
+  type RangeSelection,
 } from "lexical";
 import { $createLinkNode, $toggleLink } from "@lexical/link";
 import {
@@ -13,6 +14,14 @@ import {
   type Transformer,
 } from "@lexical/markdown";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import {
+  containsCompleteComposerCodeFence,
+  isComposerOffsetInsideOpenCodeFence,
+} from "#product/components/workspace/chat/input/ComposerCodeFenceMarkdown";
+import {
+  isComposerSelectionPointInsideCode,
+  selectComposerContinuationAfter,
+} from "#product/components/workspace/chat/input/ComposerEditorDocument";
 
 const EXACT_HTTPS_URL = /^https:\/\/[^\s]+$/u;
 const MARKDOWN_HTTPS_LINK =
@@ -67,8 +76,19 @@ export function isComposerMarkdownListPaste(value: string): boolean {
   return MARKDOWN_LIST_ITEM.test(value);
 }
 
+export function isComposerMarkdownCodeBlockPaste(value: string): boolean {
+  return containsCompleteComposerCodeFence(value);
+}
+
+function isComposerIncompleteCodeFencePaste(value: string): boolean {
+  return isComposerOffsetInsideOpenCodeFence(value, value.length);
+}
+
 export function isComposerFormattedPaste(value: string): boolean {
-  return isComposerLinkPaste(value) || isComposerMarkdownListPaste(value);
+  return isComposerLinkPaste(value)
+    || isComposerMarkdownListPaste(value)
+    || isComposerMarkdownCodeBlockPaste(value)
+    || isComposerIncompleteCodeFencePaste(value);
 }
 
 export function ComposerLinkPastePlugin({
@@ -82,14 +102,29 @@ export function ComposerLinkPastePlugin({
     const unregisterCommand = editor.registerCommand(PASTE_COMMAND, (event) => {
       if (event.defaultPrevented) return false;
       const clipboard = "clipboardData" in event ? event.clipboardData : null;
+      if ((clipboard?.files?.length ?? 0) > 0) return false;
       const value = clipboard?.getData("text/plain") ?? "";
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) return false;
+      if (composerSelectionIsInsideCode(selection)) {
+        event.preventDefault();
+        selection.insertRawText(value);
+        return true;
+      }
+
       const markdownParts = parseMarkdownHttpsComposerPaste(value);
       const isExactUrl = isExactHttpsComposerPaste(value);
       const isMarkdownList = isComposerMarkdownListPaste(value);
-      if (!isExactUrl && markdownParts === null && !isMarkdownList) return false;
+      const isMarkdownCodeBlock = isComposerMarkdownCodeBlockPaste(value);
+      const isIncompleteCodeFence = isComposerIncompleteCodeFencePaste(value);
+      if (
+        !isExactUrl
+        && markdownParts === null
+        && !isMarkdownList
+        && !isMarkdownCodeBlock
+        && !isIncompleteCodeFence
+      ) return false;
 
-      const selection = $getSelection();
-      if (!$isRangeSelection(selection)) return false;
       event.preventDefault();
 
       if (isExactUrl) {
@@ -104,17 +139,16 @@ export function ComposerLinkPastePlugin({
         return true;
       }
 
-      // A pasted Markdown list is an authored block, not a typed shortcut in
-      // progress. Import the complete fragment so list structure and any inline
-      // emphasis/links arrive together. Typed Markdown still follows the normal
-      // shortcut contract because this path is paste-only.
-      if (isMarkdownList) {
+      // Import authored block fragments together. The code transformer keeps
+      // an incomplete fence in one paragraph with soft line breaks, so typing
+      // its closing fence later can still promote the whole fragment.
+      if (isMarkdownList || isMarkdownCodeBlock || isIncompleteCodeFence) {
         const nodes = $generateNodesFromMarkdownString(
           value,
           markdownTransformers,
         );
         $insertNodes(nodes);
-        nodes[nodes.length - 1]?.selectEnd();
+        selectComposerContinuationAfter(nodes);
         return true;
       }
 
@@ -135,8 +169,15 @@ export function ComposerLinkPastePlugin({
     // Lexical already handled the event.
     const handleNativePaste = (event: ClipboardEvent) => {
       if (event.defaultPrevented) return;
+      if ((event.clipboardData?.files?.length ?? 0) > 0) return;
       const value = event.clipboardData?.getData("text/plain") ?? "";
-      if (!isComposerFormattedPaste(value)) return;
+      let selectionInsideCode = false;
+      editor.getEditorState().read(() => {
+        const selection = $getSelection();
+        selectionInsideCode = $isRangeSelection(selection)
+          && composerSelectionIsInsideCode(selection);
+      });
+      if (!selectionInsideCode && !isComposerFormattedPaste(value)) return;
       if (editor.dispatchCommand(PASTE_COMMAND, event)) {
         event.stopPropagation();
       }
@@ -153,4 +194,16 @@ export function ComposerLinkPastePlugin({
   }, [editor, markdownTransformers]);
 
   return null;
+}
+
+function composerSelectionIsInsideCode(
+  selection: RangeSelection,
+): boolean {
+  return isComposerSelectionPointInsideCode(
+    selection.anchor.getNode(),
+    selection.anchor.offset,
+  ) || isComposerSelectionPointInsideCode(
+    selection.focus.getNode(),
+    selection.focus.offset,
+  );
 }

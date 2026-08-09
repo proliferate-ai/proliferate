@@ -88,14 +88,18 @@ Home and queued-edit state retain the same opaque snapshot locally while their
 Markdown draft is live. Empty drafts, plain-text compatibility writes, and
 external draft replacements discard the snapshot.
 
-The live editor recognizes `*`/`_` emphasis, `**`/`__` strong emphasis, and
-line-leading unordered and ordered list shortcuts. Cmd/Ctrl-B and Cmd/Ctrl-I
-toggle marks through the rich-text command layer. Tab/Shift-Tab indent or
-outdent only when the selection is inside a list item. Every composer surface —
-workspace, Home, and queued edits — submits on plain Enter or Cmd/Ctrl-Enter,
-including from a list item, and Shift-Enter inserts a newline without
-submitting. Queued edits use the workspace editor's minimum height, row cap,
-and overflow scrolling.
+The live editor recognizes `*`/`_` emphasis, `**`/`__` strong emphasis,
+line-leading unordered and ordered list shortcuts, and triple-backtick fenced
+code blocks. A typed fence becomes a code block only after a matching closing
+fence exists on its own line; an incomplete fence remains literal text. A
+complete pasted fence is imported as the same editable code block. The editor
+serializes that block back to fenced Markdown, so draft and submission
+boundaries remain unchanged. Cmd/Ctrl-B and Cmd/Ctrl-I toggle marks through the
+rich-text command layer. Tab/Shift-Tab indent or outdent only when the selection
+is inside a list item. Every composer surface — workspace, Home, and queued
+edits — submits on plain Enter or Cmd/Ctrl-Enter, including from a list item or
+code block, and Shift-Enter inserts a newline without submitting. Queued edits
+use the workspace editor's minimum height, row cap, and overflow scrolling.
 
 Lexical's high-priority Enter and Tab commands own this decision before native
 editor mutation. The surface applies the shared submit contract exactly once;
