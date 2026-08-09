@@ -108,7 +108,6 @@ pub async fn ensure_desktop_dispatch_worker(
         .enrollment_token
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
-
     let Some(mut lifecycle) = lifecycle::lock_for_worker_start(&worker_state).await else {
         let config_path = worker_paths(&target_id)?.config;
         return Ok(EnsureDesktopDispatchWorkerResult {
@@ -130,13 +129,18 @@ pub async fn ensure_desktop_dispatch_worker(
             config_path: config_path.to_string_lossy().into_owned(),
         });
     }
-
-    let launcher = find_proliferate_worker_launcher()
-        .ok_or_else(|| "Proliferate Worker binary was not found.".to_string())?;
     let paths = worker_paths(&target_id)?;
     let mut mutation_lock = None;
     if enrollment_token.is_some() {
-        mutation_lock = Some(acquire_worker_database_lock(&paths.database)?);
+        mutation_lock = lock_for_fresh_enrollment(&paths.database)?;
+        if mutation_lock.is_none() {
+            tracing::info!("Reusing untracked Proliferate Worker with persisted credentials");
+            return Ok(EnsureDesktopDispatchWorkerResult {
+                target_id,
+                status: "already_running_elsewhere",
+                config_path: paths.config.to_string_lossy().into_owned(),
+            });
+        }
     } else {
         if worker_database_lock_is_held(&paths.database)? {
             return Ok(EnsureDesktopDispatchWorkerResult {
@@ -152,6 +156,8 @@ pub async fn ensure_desktop_dispatch_worker(
             );
         }
     }
+    let launcher = find_proliferate_worker_launcher()
+        .ok_or_else(|| "Proliferate Worker binary was not found.".to_string())?;
     if enrollment_token.is_some() && paths.database.exists() {
         std::fs::remove_file(&paths.database).map_err(|error| {
             format!(
@@ -359,6 +365,19 @@ fn worker_database_lock_is_held(database_path: &Path) -> Result<bool, String> {
     match acquire_worker_database_lock(database_path) {
         Ok(_lock) => Ok(false),
         Err(error) if error == WORKER_CREDENTIALS_LOCKED_ERROR => Ok(true),
+        Err(error) => Err(error),
+    }
+}
+
+// Ticket issuance leaves an enrolled lock holder valid until consumption.
+fn lock_for_fresh_enrollment(database_path: &Path) -> Result<Option<WorkerDatabaseLock>, String> {
+    match acquire_worker_database_lock(database_path) {
+        Ok(lock) => Ok(Some(lock)),
+        Err(error) if error == WORKER_CREDENTIALS_LOCKED_ERROR => {
+            worker_identity_exists(database_path)?
+                .then_some(None)
+                .ok_or(error)
+        }
         Err(error) => Err(error),
     }
 }
