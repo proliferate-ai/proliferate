@@ -28,7 +28,7 @@ use crate::api::http::access::admit_session_mutation;
 use crate::app::AppState;
 use crate::domains::sessions::admission::SessionMutationKind;
 use crate::domains::sessions::authorize::AgentAccessError;
-use crate::domains::sessions::store::agent_wakes::AgentWakeReason;
+use crate::domains::sessions::wakes::AgentWakeReason;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(

@@ -10,3 +10,9 @@
 
 pub mod hooks;
 pub mod service;
+
+// Facade name for the wake vocabulary. The reason enum is defined next to
+// the rows it is persisted in, but callers outside the domain — the HTTP
+// handler, the agent-ops tools — name it here: handlers call domain
+// facades, never stores.
+pub use crate::domains::sessions::store::agent_wakes::AgentWakeReason;

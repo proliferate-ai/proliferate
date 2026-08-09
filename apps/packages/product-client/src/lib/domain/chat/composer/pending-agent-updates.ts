@@ -10,6 +10,15 @@ import type { PendingPromptQueueRow } from "#product/domain/chats/pending-prompt
  * source agent plus a count — no bodies, no previews, no per-entry rows, and
  * no edit or delete. The human's own queued messages are not agent-sourced and
  * never reach here; they keep their full row.
+ *
+ * It lives in `lib/domain` rather than the `src/domain` cell it was first
+ * written into because it names the delegated-agent identity vocabulary, and
+ * that vocabulary lives here. `src/domain` is the Mobile-safe core: it may
+ * import SDK contracts and its own siblings, nothing else. Reaching up into
+ * `lib/domain/delegated-work` from inside it would punch a hole in that
+ * boundary for one file. Hoisting the identity vocabulary down into
+ * `src/domain` instead would be the other honest fix, but it is a ~30-caller
+ * move and belongs in its own change.
  */
 
 export interface PendingAgentUpdateGroup {

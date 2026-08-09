@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   toolItem,
   userItem,
-} from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
+} from "../transcript/transcript-presentation-test-fixtures";
 import {
   agentInboundMessageVerb,
-} from "#product/domain/chats/subagents/agent-message-direction";
+} from "./agent-message-direction";
 
 const PEER = "peer-session-1";
 const OTHER = "peer-session-2";

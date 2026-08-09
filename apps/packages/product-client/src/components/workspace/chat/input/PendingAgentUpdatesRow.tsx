@@ -1,6 +1,6 @@
 import { Button } from "#product/primitives/Button";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
-import type { PendingAgentUpdates } from "#product/domain/chats/pending-prompts/pending-agent-updates";
+import type { PendingAgentUpdates } from "#product/lib/domain/chat/composer/pending-agent-updates";
 
 /**
  * The queued agent updates row (Pending Updates canvas page).

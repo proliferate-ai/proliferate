@@ -8,7 +8,7 @@ import { usePendingPromptQueue } from "#product/hooks/chat/ui/use-pending-prompt
 import { useSubagentComposerStrip } from "#product/hooks/chat/facade/subagents/use-subagent-composer-strip";
 import { useVerticalReorder } from "#product/hooks/chat/ui/use-vertical-reorder";
 import type { PendingPromptQueueRow } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
-import { groupPendingAgentUpdates } from "#product/domain/chats/pending-prompts/pending-agent-updates";
+import { groupPendingAgentUpdates } from "#product/lib/domain/chat/composer/pending-agent-updates";
 import { PendingAgentUpdatesRow } from "#product/components/workspace/chat/input/PendingAgentUpdatesRow";
 
 export interface PendingPromptListProps {

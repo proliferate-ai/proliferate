@@ -3,7 +3,7 @@ import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueEntry,
 } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
-import { groupPendingAgentUpdates } from "#product/domain/chats/pending-prompts/pending-agent-updates";
+import { groupPendingAgentUpdates } from "#product/lib/domain/chat/composer/pending-agent-updates";
 
 function entry(
   seq: number,

@@ -30,6 +30,7 @@ loops::edit_session_loop fenced loop edit
 loops::clear_session_loops fenced loop clear (all)
 loops::clear_session_loop fenced loop clear (one)
 subagents::schedule_subagent_wake fenced subagent wake targeting the parent session
+sessions_wakes::schedule_agent_wake fenced agent-ops sibling of the wake above: it arms a wake that queues a prompt on the watcher session, so it is admitted against that session's other mutations before the arm
 replay::advance_replay_session fenced replay advance (replay sessions cannot be controlled; fenced per inventory)
 plans::approve_plan fenced plan decision mutates the owning session projection
 plans::reject_plan fenced plan decision mutates the owning session projection
@@ -61,6 +62,7 @@ mobility::preflight_workspace_mobility read-like preflight computation only
 sessions_interactions::reveal_mcp_elicitation_url read-like inspection action per spec allowed list
 repo_roots::resolve_repo_root read-like resolves/registers a repo root record
 workspaces::resolve_workspace read-like resolves a workspace record
+subagents::promote_subagent read-like mutating verb, no session-execution effect: promotion is one indexed UPDATE of `promoted_at` on a `session_links` row and touches no session. It deliberately takes NO permit while its neighbour schedule_subagent_wake does — a permit would refuse promotion whenever a workflow held the parent, for a write the workflow cannot conflict with. It still holds the shared SubagentWrite workspace lease across the write. The asymmetry is ratcheted in api/session_admission_tests.rs::the_human_promote_route_takes_no_admission_permit_and_says_why
 
 # ── workspace-scoped (workspace/infra mutations outside session execution) ──
 git::commit workspace-scoped workspace git operation
