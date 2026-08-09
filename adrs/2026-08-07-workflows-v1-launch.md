@@ -39,8 +39,8 @@ support engineering, ticket triage, on-call response, bug fixes, and email.
 - Executing workflows in a cloud sandbox. V1 execution is local only.
 - Conditional routing, authored branches, cycles, parallel nodes, or a
   `choice` node.
-- User-authored `succeed` or `fail` nodes. Success and failure are run outcomes,
-  not workflow-definition nodes.
+- `succeed` or `fail` nodes. Success and failure are run outcomes, not 
+  workflow-definition nodes.
 
 ### Requirements
 
@@ -51,10 +51,8 @@ support engineering, ticket triage, on-call response, bug fixes, and email.
    `stages[].steps[]` representation and `(stageIndex, stepIndex)` execution
    coordinates; it does not introduce an authored edge model or a branching
    graph schema.
-2. Branching is deferred in full. V1 does not pre-build choice expressions,
-   authored edges, terminal nodes, graph traversal, or compatibility seams for a
-   future branching schema. A later decision may replace or version the linear
-   contract.
+2. Branching is deferred in V1; V1 does not support choice expressions or
+   loops.
 3. A user can create a workflow manually in a linear graph UI. Node order is
    the workflow order; connectors are derived from adjacent nodes and are not
    authorable definition data.
