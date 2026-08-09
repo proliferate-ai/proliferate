@@ -49,6 +49,7 @@ interface TerminalRegistryEntry {
   nextOrder: number;
   replayEntries: TerminalReplayEntry[];
   replayDataBytes: number;
+  replayFloorOrder: number;
   overflowMarkedSinceReplay: boolean;
   readOnly: boolean;
   exited: boolean;
@@ -134,9 +135,17 @@ export function ensureConnected(options: EnsureConnectedOptions): boolean {
 export function subscribeWithReplay(
   identity: TerminalStreamIdentity,
   listener: (entry: TerminalReplayEntry) => void,
+  options: { afterOrder?: number } = {},
 ): () => void {
   const entry = getOrCreateEntry(identity);
-  const replayEntries = [...entry.replayEntries];
+  const afterOrder = options.afterOrder ?? 0;
+  const missedBufferedOutput = afterOrder < entry.replayFloorOrder;
+  const replayEntries = entry.replayEntries.filter((replayEntry) => {
+    if (replayEntry.type === "local-overflow") {
+      return missedBufferedOutput;
+    }
+    return replayEntry.order > afterOrder;
+  });
   for (const replayEntry of replayEntries) {
     listener(replayEntry);
   }
@@ -250,6 +259,7 @@ function getOrCreateEntry(identity: TerminalStreamIdentity): TerminalRegistryEnt
     nextOrder: 0,
     replayEntries: [],
     replayDataBytes: 0,
+    replayFloorOrder: 0,
     overflowMarkedSinceReplay: false,
     readOnly: false,
     exited: false,
@@ -324,6 +334,9 @@ function trimReplayEntries(entry: TerminalRegistryEntry): void {
       break;
     }
     lostEntries = true;
+    if (removed.type !== "local-overflow") {
+      entry.replayFloorOrder = Math.max(entry.replayFloorOrder, removed.order);
+    }
     if (removed.type === "data") {
       entry.replayDataBytes -= removed.data.byteLength;
     }
@@ -335,6 +348,9 @@ function trimReplayEntries(entry: TerminalRegistryEntry): void {
 
   while (entry.replayEntries.length >= MAX_REPLAY_ENTRIES) {
     const removed = removeOldestReplayEntry(entry);
+    if (removed && removed.type !== "local-overflow") {
+      entry.replayFloorOrder = Math.max(entry.replayFloorOrder, removed.order);
+    }
     if (removed?.type === "data") {
       entry.replayDataBytes -= removed.data.byteLength;
     }
