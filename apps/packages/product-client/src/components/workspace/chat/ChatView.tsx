@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type DragEvent,
   type JSX,
 } from "react";
@@ -258,6 +259,9 @@ export const ChatView = memo(function ChatView({
         ref={rootRef}
         data-focus-zone="chat"
         tabIndex={-1}
+        style={{
+          "--chat-composer-safe-area": `${dockSafeAreaPx}px`,
+        } as CSSProperties}
         className="chat-selection-root relative flex h-full min-h-0 flex-1 flex-col select-none overflow-hidden outline-none"
         onPointerDownCapture={handleRootPointerDownCapture}
         onDragEnter={handleFileDrag}

@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { Button } from "#product/primitives/Button";
 import { IconButton } from "#product/primitives/IconButton";
@@ -63,6 +63,8 @@ export function WorkspaceCreationReceiptView({
 }: WorkspaceCreationReceiptViewProps) {
   const labels = WORKSPACE_CREATION_RECEIPT_LABELS;
   const logId = useId();
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const previousExpandedRef = useRef(expanded);
   const hasLog = presentation.logLines.length > 0;
   const showActions = expanded
     && (presentation.showRerun || presentation.showCreationRetry || showSeeTerminal);
@@ -75,8 +77,29 @@ export function WorkspaceCreationReceiptView({
       });
   }, [presentation.logLines]);
 
+  useEffect(() => {
+    const wasExpanded = previousExpandedRef.current;
+    previousExpandedRef.current = expanded;
+    // Historical failures can mount expanded; only a user expansion should move the viewport.
+    if (!expanded || wasExpanded) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      receiptRef.current?.scrollIntoView?.({
+        block: "nearest",
+        inline: "nearest",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [expanded]);
+
   return (
-    <div data-workspace-creation-receipt className="min-w-0 py-1 text-chat">
+    <div
+      ref={receiptRef}
+      data-workspace-creation-receipt
+      className="min-w-0 py-1 text-chat"
+      style={{ scrollMarginBlockEnd: "var(--chat-composer-safe-area, 40px)" }}
+    >
       <Button
         variant="ghost"
         size="sm"

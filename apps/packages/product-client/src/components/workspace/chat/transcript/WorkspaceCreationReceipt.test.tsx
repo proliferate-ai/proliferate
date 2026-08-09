@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { useState, type CSSProperties } from "react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceCreationReceiptView } from "#product/components/workspace/chat/transcript/WorkspaceCreationReceipt";
 import type { WorkspaceCreationReceiptPresentation } from "#product/lib/domain/workspaces/creation/creation-receipt";
 
@@ -32,7 +33,35 @@ function renderReceipt(overrides: Partial<WorkspaceCreationReceiptPresentation>)
   );
 }
 
-afterEach(cleanup);
+let originalScrollIntoView: PropertyDescriptor | undefined;
+const scrollIntoView = vi.fn();
+
+beforeEach(() => {
+  originalScrollIntoView = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "scrollIntoView",
+  );
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: scrollIntoView,
+  });
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  });
+  vi.stubGlobal("cancelAnimationFrame", vi.fn());
+});
+
+afterEach(() => {
+  cleanup();
+  scrollIntoView.mockReset();
+  vi.unstubAllGlobals();
+  if (originalScrollIntoView) {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScrollIntoView);
+  } else {
+    delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  }
+});
 
 describe("WorkspaceCreationReceiptView", () => {
   // The busy phases change the label text ("Creating worktree" →
@@ -66,5 +95,54 @@ describe("WorkspaceCreationReceiptView", () => {
 
     expect(container.querySelector("[data-loading-spinner]")).toBeNull();
     expect(container.querySelector("svg")).not.toBeNull();
+  });
+
+  it("reveals an expanded receipt above the measured composer safe area", () => {
+    function Harness() {
+      const [expanded, setExpanded] = useState(false);
+      return (
+        <div style={{ "--chat-composer-safe-area": "156px" } as CSSProperties}>
+          <WorkspaceCreationReceiptView
+            presentation={presentation({
+              line: "Worktree created",
+              logLines: [{ tone: "default", text: "Created at /workspace/feature" }],
+              showRerun: true,
+            })}
+            expanded={expanded}
+            onToggleExpanded={() => setExpanded((current) => !current)}
+            onRerun={() => {}}
+          />
+        </div>
+      );
+    }
+
+    const { container, getByRole } = render(<Harness />);
+    const receipt = container.querySelector<HTMLElement>("[data-workspace-creation-receipt]");
+
+    expect(receipt?.style.scrollMarginBlockEnd).toBe(
+      "var(--chat-composer-safe-area, 40px)",
+    );
+    fireEvent.click(getByRole("button", { name: /Worktree created/ }));
+
+    expect(getByRole("button", { name: "Rerun setup" })).toBeTruthy();
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: "nearest",
+      inline: "nearest",
+    });
+  });
+
+  it("does not move the transcript when a historical receipt mounts expanded", () => {
+    render(
+      <WorkspaceCreationReceiptView
+        presentation={presentation({
+          line: "Worktree created",
+          logLines: [{ tone: "destructive", text: "Setup failed" }],
+        })}
+        expanded
+        onToggleExpanded={() => {}}
+      />,
+    );
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });
