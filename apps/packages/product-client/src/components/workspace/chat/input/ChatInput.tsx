@@ -56,6 +56,7 @@ import { Input } from "#product/primitives/Input";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
 import { useChatInputPaste } from "#product/hooks/chat/ui/use-chat-input-paste";
+import { useChatComposerFocusRequest } from "#product/hooks/chat/ui/use-chat-composer-focus-request";
 import type { PromptAttachmentPreviewHandler } from "#product/components/workspace/chat/content/PromptContentRenderer";
 
 const CHAT_INPUT_ATTACHMENT_ACCEPT =
@@ -325,33 +326,7 @@ export function ChatInput({
     wasBlockedRef.current = isBlocked;
   }, [blockedPresentation, focusComposer, suppressAutoFocus]);
 
-  useEffect(() => {
-    if (focusRequestNonce === 0) {
-      return;
-    }
-
-    let timer: number | null = null;
-    let attempts = 0;
-    let cancelled = false;
-    const attemptFocus = () => {
-      if (cancelled) {
-        return;
-      }
-      attempts += 1;
-      if (focusComposer() || attempts >= 8) {
-        return;
-      }
-      timer = window.setTimeout(attemptFocus, 25);
-    };
-
-    timer = window.setTimeout(attemptFocus, 0);
-    return () => {
-      cancelled = true;
-      if (timer !== null) {
-        window.clearTimeout(timer);
-      }
-    };
-  }, [focusComposer, focusRequestNonce]);
+  useChatComposerFocusRequest({ focusRequestNonce, focusComposer });
 
   return (
     <DebugProfiler id="chat-composer">
