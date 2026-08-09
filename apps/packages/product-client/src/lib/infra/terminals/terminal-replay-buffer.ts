@@ -1,5 +1,5 @@
-const MAX_REPLAY_DATA_BYTES = 256 * 1024;
-const MAX_REPLAY_ENTRIES = 1000;
+export const TERMINAL_REPLAY_MAX_DATA_BYTES = 256 * 1024;
+export const TERMINAL_REPLAY_MAX_ENTRIES = 1000;
 
 export const TERMINAL_OUTPUT_GAP_MESSAGE = "[terminal output gap: earlier output was discarded]";
 
@@ -43,8 +43,8 @@ export function nextTerminalReplayOrder(entry: Pick<TerminalReplayBufferState, "
 export function trimTerminalReplayEntries(entry: TerminalReplayBufferState): void {
   let lostEntries = false;
   while (
-    entry.replayEntries.length > MAX_REPLAY_ENTRIES
-    || entry.replayDataBytes > MAX_REPLAY_DATA_BYTES
+    entry.replayEntries.length > TERMINAL_REPLAY_MAX_ENTRIES
+    || entry.replayDataBytes > TERMINAL_REPLAY_MAX_DATA_BYTES
   ) {
     const removed = removeOldestReplayEntry(entry);
     if (!removed) {
@@ -58,7 +58,7 @@ export function trimTerminalReplayEntries(entry: TerminalReplayBufferState): voi
     return;
   }
 
-  while (entry.replayEntries.length >= MAX_REPLAY_ENTRIES) {
+  while (entry.replayEntries.length >= TERMINAL_REPLAY_MAX_ENTRIES) {
     const removed = removeOldestReplayEntry(entry);
     if (removed) {
       recordRemovedEntry(entry, removed);

@@ -1,5 +1,7 @@
 import {
   TERMINAL_OUTPUT_GAP_MESSAGE,
+  TERMINAL_REPLAY_MAX_DATA_BYTES,
+  TERMINAL_REPLAY_MAX_ENTRIES,
   type TerminalReplayEntry,
 } from "#product/lib/infra/terminals/terminal-replay-buffer";
 
@@ -26,11 +28,21 @@ export function createTerminalReplayWriter(
 ): TerminalReplayWriter {
   let frameHandle: number | null = null;
   let pendingEntries: TerminalReplayEntry[] = [];
+  let pendingDataBytes = 0;
+  let outputGapRequired = false;
+  let overflowMarkerOrder = 0;
 
   const flush = () => {
     frameHandle = null;
-    const entries = pendingEntries;
+    const queuedEntries = pendingEntries;
     pendingEntries = [];
+    pendingDataBytes = 0;
+    const entries: TerminalReplayEntry[] = outputGapRequired
+      && queuedEntries[0]?.type !== "local-overflow"
+      ? [{ type: "local-overflow", order: overflowMarkerOrder }, ...queuedEntries]
+      : queuedEntries;
+    outputGapRequired = false;
+    overflowMarkerOrder = 0;
     if (entries.length === 0) {
       return;
     }
@@ -41,6 +53,23 @@ export function createTerminalReplayWriter(
   return {
     enqueue(entry) {
       pendingEntries.push(entry);
+      if (entry.type === "data") {
+        pendingDataBytes += entry.data.byteLength;
+      }
+      while (
+        pendingEntries.length > TERMINAL_REPLAY_MAX_ENTRIES
+        || pendingDataBytes > TERMINAL_REPLAY_MAX_DATA_BYTES
+      ) {
+        const removed = pendingEntries.shift();
+        if (!removed) {
+          break;
+        }
+        outputGapRequired = true;
+        overflowMarkerOrder = Math.max(overflowMarkerOrder, removed.order);
+        if (removed.type === "data") {
+          pendingDataBytes -= removed.data.byteLength;
+        }
+      }
       frameHandle ??= scheduler.request(flush);
     },
     dispose() {
@@ -49,6 +78,9 @@ export function createTerminalReplayWriter(
         frameHandle = null;
       }
       pendingEntries = [];
+      pendingDataBytes = 0;
+      outputGapRequired = false;
+      overflowMarkerOrder = 0;
     },
   };
 }

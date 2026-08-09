@@ -49,6 +49,46 @@ describe("terminal replay writer", () => {
     expect(scheduler.cancel).toHaveBeenCalledTimes(1);
     expect(terminal.write).not.toHaveBeenCalled();
   });
+
+  it("bounds entry backlog while animation frames are stalled", () => {
+    const terminal = { write: vi.fn() };
+    const scheduler = createTestScheduler();
+    const onFlush = vi.fn();
+    const writer = createTerminalReplayWriter(terminal, scheduler, onFlush);
+
+    for (let order = 1; order <= 1_010; order += 1) {
+      writer.enqueue(dataEntry(order, "."));
+    }
+    expect(scheduler.request).toHaveBeenCalledTimes(1);
+
+    scheduler.flush();
+
+    const flushedEntries = onFlush.mock.calls[0]?.[0] as TerminalReplayEntry[];
+    expect(flushedEntries[0]?.type).toBe("local-overflow");
+    expect(flushedEntries.filter((entry) => entry.type === "data")).toHaveLength(1_000);
+    expect(flushedEntries[1]?.order).toBe(11);
+    expect(flushedEntries.at(-1)?.order).toBe(1_010);
+    expect(decoder.decode(terminal.write.mock.calls[0]?.[0])).toMatch(
+      /^\r\n\[terminal output gap: earlier output was discarded\]\r\n\.{1000}$/,
+    );
+  });
+
+  it("bounds byte backlog while animation frames are stalled", () => {
+    const terminal = { write: vi.fn() };
+    const scheduler = createTestScheduler();
+    const onFlush = vi.fn();
+    const writer = createTerminalReplayWriter(terminal, scheduler, onFlush);
+    const largeChunk = new Uint8Array(200 * 1024).fill("x".charCodeAt(0));
+
+    writer.enqueue({ type: "data", order: 1, seq: 1, data: largeChunk });
+    writer.enqueue({ type: "data", order: 2, seq: 2, data: largeChunk });
+    scheduler.flush();
+
+    const flushedEntries = onFlush.mock.calls[0]?.[0] as TerminalReplayEntry[];
+    expect(flushedEntries.map((entry) => entry.type)).toEqual(["local-overflow", "data"]);
+    expect(flushedEntries[1]?.order).toBe(2);
+    expect(terminal.write.mock.calls[0]?.[0].byteLength).toBeLessThan(256 * 1024);
+  });
 });
 
 function dataEntry(order: number, value: string): TerminalReplayEntry {

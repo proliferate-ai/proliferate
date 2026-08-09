@@ -21,7 +21,8 @@
 - Visible output is coalesced in arrival order and written to xterm once per
   animation frame. Gap and exit markers share the same ordered batch, so output
   bursts cannot monopolize the main thread with one render write per runtime
-  frame.
+  frame. The pending render batch shares the registry replay byte and entry
+  bounds, so a backgrounded window cannot accumulate an unbounded frame.
 - If a hidden viewport falls behind the bounded client replay floor, its next
   render starts with one output-gap marker followed by the retained output.
 
