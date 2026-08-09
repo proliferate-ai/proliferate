@@ -16,6 +16,7 @@ import {
 } from "#product/stores/sessions/session-records";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
   finishMeasurementOperation,
   finishOrCancelMeasurementOperation,
@@ -68,6 +69,8 @@ export function runHotWorkspaceReopen(
     logicalWorkspace,
     initialActiveSessionId: request.options?.initialActiveSessionId ?? null,
     lastViewedSessionByWorkspace: useWorkspaceUiStore.getState().lastViewedSessionByWorkspace,
+    clientSessionIdByMaterializedSessionId:
+      useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId,
     sessionSlots: getSessionRecords(),
     isPendingSessionId,
   });

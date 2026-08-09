@@ -154,6 +154,44 @@ describe("useWorkspaceShellActivation", () => {
     );
   });
 
+  it("opens a materialized session by focusing its existing client tab", async () => {
+    putSessionRecord(createEmptySessionRecord("client-session:codex:existing", "codex", {
+      materializedSessionId: "runtime-session-existing",
+      workspaceId: "workspace-1",
+    }));
+    const { result } = renderHook(() => useWorkspaceShellActivation());
+
+    let activationPromise!: Promise<unknown>;
+    act(() => {
+      activationPromise = result.current.activateChatTab({
+        workspaceId: "workspace-1",
+        sessionId: "runtime-session-existing",
+      });
+    });
+
+    expect(
+      useWorkspaceUiStore.getState().pendingChatActivationByWorkspace["workspace-1"],
+    ).toMatchObject({
+      sessionId: "client-session:codex:existing",
+      intent: "chat:client-session:codex:existing",
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(180);
+      hookMocks.scheduledCallbacks.shift()?.();
+      await activationPromise;
+    });
+
+    expect(hookMocks.selectSession).toHaveBeenCalledWith(
+      "client-session:codex:existing",
+      expect.any(Object),
+    );
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["workspace-1"])
+      .toBe("chat:client-session:codex:existing");
+    expect(useSessionDirectoryStore.getState().entriesById["runtime-session-existing"])
+      .toBeUndefined();
+  });
+
   it("resolves stale without real selection when superseded before phase two", async () => {
     const { result } = renderHook(() => useWorkspaceShellActivation());
 

@@ -23,6 +23,7 @@ import type {
   SelectSessionOptionsWithoutGuard,
 } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
 import { runDeferredChatTabActivation } from "#product/hooks/workspaces/workflows/tabs/chat-tab-activation-runner";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 export type { SelectSessionOptionsWithoutGuard };
 
@@ -49,7 +50,7 @@ export function useChatTabActivation() {
   return useCallback(({
     workspaceId,
     shellWorkspaceId,
-    sessionId,
+    sessionId: requestedSessionId,
     selection,
   }: {
     workspaceId: string;
@@ -59,6 +60,10 @@ export function useChatTabActivation() {
     source?: string;
     selection?: SelectSessionOptionsWithoutGuard;
   }): Promise<SessionActivationOutcome> => {
+    const sessionId =
+      useSessionDirectoryStore.getState()
+        .clientSessionIdByMaterializedSessionId[requestedSessionId]
+      ?? requestedSessionId;
     const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
     const guard = beginSessionActivationIntent(workspaceId);
     const intent = chatWorkspaceShellTabKey(sessionId);

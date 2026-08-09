@@ -44,11 +44,18 @@ export function resolveHotReopenCandidate(input: {
   logicalWorkspace: LogicalWorkspace | null;
   initialActiveSessionId?: string | null;
   lastViewedSessionByWorkspace: Record<string, string>;
+  clientSessionIdByMaterializedSessionId: Record<string, string>;
   sessionSlots: Record<string, HotReopenSessionSlotSnapshot>;
   isPendingSessionId: (sessionId: string) => boolean;
 }): HotReopenCandidate | null {
-  const slotFor = (sessionId: string | null | undefined) =>
-    sessionId ? input.sessionSlots[sessionId] ?? null : null;
+  const slotFor = (sessionId: string | null | undefined) => {
+    if (!sessionId) {
+      return null;
+    }
+    const projectedSessionId =
+      input.clientSessionIdByMaterializedSessionId[sessionId] ?? sessionId;
+    return input.sessionSlots[projectedSessionId] ?? null;
+  };
   const toCandidate = (
     sessionId: string | null | undefined,
     source: HotReopenCandidate["source"],

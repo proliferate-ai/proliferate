@@ -6,6 +6,7 @@ import {
   putSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import {
   findLogicalWorkspace,
@@ -82,6 +83,8 @@ export async function runWorkspaceSelection(
         workspaceUiKeys: [request.workspaceId],
         options: request.options,
         workspaceUiState,
+        clientSessionIdByMaterializedSessionId:
+          useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId,
       }, INITIAL_SESSION_DEPS);
       deps.cache.cancelPreviousWorkspaceDisplayQueries({
         runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
@@ -191,6 +194,8 @@ export async function runWorkspaceSelection(
         workspaceUiKeys: [directWorkspace.id],
         options: request.options,
         workspaceUiState,
+        clientSessionIdByMaterializedSessionId:
+          useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId,
       }, INITIAL_SESSION_DEPS);
       deps.cache.cancelPreviousWorkspaceDisplayQueries({
         runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
@@ -287,6 +292,8 @@ export async function runWorkspaceSelection(
     workspaceUiKeys: logicalWorkspaceRelatedIds(logicalWorkspace),
     options: request.options,
     workspaceUiState,
+    clientSessionIdByMaterializedSessionId:
+      useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId,
   }, INITIAL_SESSION_DEPS);
   deps.cache.cancelPreviousWorkspaceDisplayQueries({
     runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,

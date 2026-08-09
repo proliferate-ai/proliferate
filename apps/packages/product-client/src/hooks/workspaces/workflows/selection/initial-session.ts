@@ -38,6 +38,7 @@ export function resolveInitialActiveSessionId(
       lastViewedSessionByWorkspace: Record<string, string>;
       visibleChatSessionIdsByWorkspace: Record<string, string[]>;
     };
+    clientSessionIdByMaterializedSessionId: Record<string, string>;
   },
   deps: Pick<InitialSessionRecordDeps, "getSessionRecord" | "logLatency">,
 ): string | null {
@@ -54,25 +55,27 @@ export function resolveInitialActiveSessionId(
     return null;
   }
 
-  const cachedSlot = deps.getSessionRecord(candidate);
+  const projectedCandidate =
+    input.clientSessionIdByMaterializedSessionId[candidate] ?? candidate;
+  const cachedSlot = deps.getSessionRecord(projectedCandidate);
   if (!cachedSlot?.workspaceId || cachedSlot.workspaceId === input.workspaceId) {
-    return candidate;
+    return projectedCandidate;
   }
 
   const shouldPreservePendingProjection =
     input.options?.preservePending === true
-    && isTransientClientSessionId(candidate)
+    && isTransientClientSessionId(projectedCandidate)
     && !cachedSlot.materializedSessionId
     && isPendingWorkspaceUiKey(cachedSlot.workspaceId);
   if (shouldPreservePendingProjection) {
     deps.logLatency("workspace.select.projected_initial_session_preserved", {
       workspaceId: input.workspaceId,
       workspaceUiKey: input.workspaceUiKey,
-      sessionId: candidate,
+      sessionId: projectedCandidate,
       existingWorkspaceId: cachedSlot.workspaceId,
       reason: "preserve_pending_projection",
     });
-    return candidate;
+    return projectedCandidate;
   }
 
   return null;
