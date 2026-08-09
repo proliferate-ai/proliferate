@@ -31,6 +31,7 @@ import {
 } from "./TranscriptRowListShared";
 import { useTranscriptStickToBottom } from "#product/hooks/chat/ui/use-transcript-stick-to-bottom";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
+import { TranscriptElementRevealBoundary } from "./TranscriptElementRevealContext";
 
 type TranscriptRowRenderer = (
   row: TranscriptVirtualRow,
@@ -270,26 +271,33 @@ export function FullTranscriptRowList({
           data-transcript-virtualization-setting={virtualizationMode}
           data-transcript-virtualization-fallback={fallbackReason ?? undefined}
         >
-          <div
-            ref={selectionRootRef}
-            data-chat-transcript-root="true"
-            tabIndex={-1}
-            className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
+          <TranscriptElementRevealBoundary
+            bottomInsetPx={bottomInsetPx}
+            notifyProgrammaticScroll={notifyProgrammaticScroll}
+            scrollRef={scrollRef}
+            setPinned={setPinned}
           >
-            {TRANSCRIPT_TOP_PADDING_PX > 0 && (
-              <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
-            )}
-            {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
-            {rows.map((row, rowIndex) => (
-              <MemoizedFullTranscriptRow
-                key={row.key}
-                row={row}
-                rowIndex={rowIndex}
-                renderRow={renderRow}
-                renderRevision={getRowRenderRevision?.(row) ?? renderRow}
-              />
-            ))}
-          </div>
+            <div
+              ref={selectionRootRef}
+              data-chat-transcript-root="true"
+              tabIndex={-1}
+              className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
+            >
+              {TRANSCRIPT_TOP_PADDING_PX > 0 && (
+                <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
+              )}
+              {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
+              {rows.map((row, rowIndex) => (
+                <MemoizedFullTranscriptRow
+                  key={row.key}
+                  row={row}
+                  rowIndex={rowIndex}
+                  renderRow={renderRow}
+                  renderRevision={getRowRenderRevision?.(row) ?? renderRow}
+                />
+              ))}
+            </div>
+          </TranscriptElementRevealBoundary>
         </div>
         {structuralBottomInsetPx > 0 && (
           <div

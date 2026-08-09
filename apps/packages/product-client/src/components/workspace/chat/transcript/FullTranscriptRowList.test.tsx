@@ -1,10 +1,12 @@
 /* @vitest-environment jsdom */
 
-import { createRef } from "react";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { createRef, useState } from "react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
+import { WorkspaceCreationReceiptView } from "./WorkspaceCreationReceipt";
 import { FullTranscriptRowList } from "./FullTranscriptRowList";
+import type { WorkspaceCreationReceiptPresentation } from "#product/lib/domain/workspaces/creation/creation-receipt";
 
 const ROWS: TranscriptVirtualRow[] = [
   {
@@ -12,6 +14,30 @@ const ROWS: TranscriptVirtualRow[] = [
     key: "pending-prompt:session-1",
   },
 ];
+
+const RECEIPT_PRESENTATION: WorkspaceCreationReceiptPresentation = {
+  line: "Worktree created",
+  busyLabel: null,
+  showSpinner: false,
+  logLines: [{ tone: "default", text: "Created at /workspace/feature" }],
+  defaultExpanded: false,
+  showRerun: true,
+  rerunDisabled: false,
+  rerunLabel: "Rerun setup",
+  showCreationRetry: false,
+};
+
+function ExpandableReceipt() {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <WorkspaceCreationReceiptView
+      presentation={RECEIPT_PRESENTATION}
+      expanded={expanded}
+      onToggleExpanded={() => setExpanded((current) => !current)}
+      onRerun={() => {}}
+    />
+  );
+}
 
 beforeEach(() => {
   class TestResizeObserver {
@@ -151,6 +177,69 @@ describe("FullTranscriptRowList", () => {
     expect(viewport.scrollTop).toBe(840);
   });
 
+  it("reveals a receipt above a growing composer through transcript scroll accounting", () => {
+    const onScrollSample = vi.fn();
+    const props = {
+      ...makeProps(vi.fn(), 50),
+      bottomInsetPx: 96,
+      nonDisplacingBottomInsetPx: 96,
+      onScrollSample,
+      renderRow: () => <ExpandableReceipt />,
+    };
+    const rendered = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(rendered.container);
+    Object.defineProperties(viewport, {
+      clientHeight: { configurable: true, value: 480 },
+      scrollHeight: { configurable: true, value: 1_000 },
+    });
+    viewport.scrollTop = 100;
+    viewport.scrollLeft = 0;
+    viewport.getBoundingClientRect = () => makeRect(0, 0, 320, 480);
+
+    rendered.rerender(
+      <FullTranscriptRowList
+        {...props}
+        bottomInsetPx={156}
+        nonDisplacingBottomInsetPx={156}
+      />,
+    );
+    const receipt = rendered.container.querySelector<HTMLElement>(
+      "[data-workspace-creation-receipt]",
+    );
+    expect(receipt).toBeTruthy();
+    receipt!.getBoundingClientRect = () => makeRect(
+      12,
+      560 - viewport.scrollTop,
+      296,
+      receipt?.querySelector("[aria-expanded='true']") ? 180 : 40,
+    );
+    const fallbackReveal = vi.fn();
+    receipt!.scrollIntoView = fallbackReveal;
+
+    const frames: FrameRequestCallback[] = [];
+    vi.mocked(window.requestAnimationFrame).mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    fireEvent.click(rendered.getByRole("button", { name: /Worktree created/ }));
+    act(() => {
+      frames.shift()?.(0);
+    });
+
+    expect(viewport.scrollTop).toBe(416);
+    expect(receipt!.getBoundingClientRect().bottom).toBe(324);
+    expect(viewport.scrollLeft).toBe(0);
+    expect(
+      rendered.container.querySelector<HTMLElement>(
+        "[data-transcript-bottom-overlay-inset]",
+      )?.style.height,
+    ).toBe("156px");
+    expect(fallbackReveal).not.toHaveBeenCalled();
+
+    fireEvent.scroll(viewport);
+    expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: true });
+  });
+
   it("top-aligns a short transcript above the structural inset", () => {
     const { container } = render(
       <FullTranscriptRowList
@@ -250,4 +339,18 @@ function getViewport(container: HTMLElement): HTMLDivElement {
   const viewport = container.querySelector<HTMLDivElement>(".scrollbar-none");
   expect(viewport).toBeTruthy();
   return viewport!;
+}
+
+function makeRect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    bottom: top + height,
+    height,
+    left,
+    right: left + width,
+    top,
+    width,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  } as DOMRect;
 }

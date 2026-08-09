@@ -97,7 +97,7 @@ describe("WorkspaceCreationReceiptView", () => {
     expect(container.querySelector("svg")).not.toBeNull();
   });
 
-  it("reveals an expanded receipt above the measured composer safe area", () => {
+  it("reveals an expanded pre-transcript receipt above the measured composer safe area", () => {
     function Harness() {
       const [expanded, setExpanded] = useState(false);
       return (
