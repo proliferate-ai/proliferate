@@ -145,6 +145,40 @@ Rules:
 - Web falls back to unhighlighted (identically styled) code blocks; shiki stays
   out of the web bundle.
 
+## Contextual Assistant-Text Actions
+
+A non-empty native text selection wholly contained by one assistant prose
+block opens the selected-response action menu. The transcript selection hook
+owns detection and dismissal; the menu owns only presentation and keyboard
+navigation.
+
+Rules:
+
+- Preserve native selection and copy behavior. Assistant prose may be selected
+  across inline links and code. Transcript controls marked as ignored chrome,
+  user prompts, tool rows, and selections spanning multiple assistant responses
+  do not qualify.
+- Pointer selection opens the menu after pointer-up. Keyboard selection opens
+  it after the browser's `selectionchange`; Context Menu or Shift+F10 moves
+  focus into its roving menu items without changing the selected text.
+- The menu uses the native range rectangle as a virtual anchor and collision
+  handling keeps it in the viewport. Scrolling updates the anchor while any of
+  the selection remains visible and dismisses the menu after it leaves the
+  viewport.
+- Clearing the selection, clicking outside, Escape, or choosing an action
+  dismisses the menu. Escape restores transcript focus; pointer dismissal does
+  not steal focus.
+- `Add to chat` attaches the exact selected text to the current workspace
+  composer and focuses the editor. `More details` sends a quoted follow-up to
+  the current chat. `Ask in side chat` starts a separate normal chat tab with
+  the current launch identity. Both immediate-send actions preserve any draft
+  already in the composer and surface the existing availability reason when a
+  send is blocked.
+
+The selected text is serialized as one quoted context section. Transport text,
+prompt blocks, and optimistic content are parallel representations of that one
+prompt, not separate context inserts.
+
 ## Delegated-Work Receipts
 
 Subagent creation, parent/child communication, and wake/completion receipts are

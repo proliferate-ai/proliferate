@@ -10,12 +10,16 @@ import {
   type DraftAttachmentPreviewListProps,
   type PromptAttachmentPreviewHandler,
 } from "#product/components/workspace/chat/content/PromptContentRenderer";
-import { useChatDraftValue } from "#product/hooks/chat/ui/use-chat-draft-state";
+import {
+  useChatDraftValue,
+  useChatSelectedResponseContexts,
+} from "#product/hooks/chat/ui/use-chat-draft-state";
 import { ComposerCommandEditor } from "#product/components/workspace/chat/input/ComposerCommandEditor";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
 import { QueuedPromptEditBanner } from "#product/components/workspace/chat/input/QueuedPromptEditBanner";
 import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
+import { SelectedResponseContextList } from "#product/components/workspace/chat/input/SelectedResponseContextList";
 
 interface ChatInputDraftAreaProps {
   /** Picks the follow-up placeholder once the session transcript has turns. */
@@ -39,6 +43,7 @@ interface ChatInputDraftAreaProps {
   draftAttachments: DraftAttachmentPreviewListProps["attachments"];
   onRemoveDraftAttachment: DraftAttachmentPreviewListProps["onRemove"];
   onOpenDraftAttachment: PromptAttachmentPreviewHandler;
+  onRemoveSelectedResponseContext: (id: string) => void;
   overlayHostElement: HTMLElement | null;
   onCancelEdit: () => void;
 }
@@ -60,6 +65,7 @@ export function ChatInputDraftArea({
   draftAttachments,
   onRemoveDraftAttachment,
   onOpenDraftAttachment,
+  onRemoveSelectedResponseContext,
   overlayHostElement,
   onCancelEdit,
 }: ChatInputDraftAreaProps) {
@@ -73,6 +79,7 @@ export function ChatInputDraftArea({
     ? editEditorState.snapshot
     : undefined;
   const draft = useChatDraftValue(workspaceUiKey);
+  const selectedResponseContexts = useChatSelectedResponseContexts(workspaceUiKey);
   const placeholder = hasSessionTurns
     ? CHAT_COMPOSER_LABELS.followUpPlaceholder
     : CHAT_COMPOSER_LABELS.placeholder;
@@ -118,6 +125,10 @@ export function ChatInputDraftArea({
         onRemove={onRemoveDraftAttachment}
         onOpenAttachment={onOpenDraftAttachment}
       />
+      <SelectedResponseContextList
+        contexts={selectedResponseContexts}
+        onRemove={onRemoveSelectedResponseContext}
+      />
       <ComposerCommandEditor
         draft={draft}
         onDraftChange={onDraftChange}
@@ -126,7 +137,7 @@ export function ChatInputDraftArea({
         disabled={isDisabled}
         onSubmit={onSubmit}
         onKeyDown={onKeyDown}
-        topInset={hasDraftAttachments ? "none" : "standard"}
+        topInset={hasDraftAttachments || selectedResponseContexts.length > 0 ? "none" : "standard"}
         overlayHostElement={overlayHostElement}
       />
     </>

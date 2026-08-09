@@ -88,6 +88,16 @@ Home and queued-edit state retain the same opaque snapshot locally while their
 Markdown draft is live. Empty drafts, plain-text compatibility writes, and
 external draft replacements discard the snapshot.
 
+Assistant-response excerpts added from the transcript are workspace-scoped
+composer context, stored separately from `ChatComposerDraft`. Each excerpt is
+shown above the editor as a removable quoted preview; preview truncation is
+visual only, and submission includes the full selected text exactly once in
+the serialized prompt. An excerpt makes an otherwise empty composer
+submittable. After a successful direct submit, `ChatInput` clears only the
+excerpt ids captured by that submission so context attached during the
+in-flight send is retained. Immediate transcript follow-ups do not clear or
+replace the current composer draft.
+
 The live editor recognizes `*`/`_` emphasis, `**`/`__` strong emphasis,
 line-leading unordered and ordered list shortcuts, and triple-backtick fenced
 code blocks. A typed fence becomes a code block only after a matching closing

@@ -6,8 +6,11 @@ import {
   isChatDraftEmpty,
   type ChatComposerDraft,
 } from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import type { SelectedResponseContext } from "#product/domain/chats/transcript/selected-response-context";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+
+const EMPTY_SELECTED_RESPONSE_CONTEXTS: readonly SelectedResponseContext[] = [];
 
 /**
  * Live draft value for the composer editor.
@@ -22,6 +25,17 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 export function useChatDraftValue(workspaceUiKey: string | null): ChatComposerDraft {
   return useChatInputStore((state) =>
     workspaceUiKey ? state.draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT : EMPTY_CHAT_DRAFT,
+  );
+}
+
+export function useChatSelectedResponseContexts(
+  workspaceUiKey: string | null,
+): readonly SelectedResponseContext[] {
+  return useChatInputStore((state) =>
+    workspaceUiKey
+      ? state.selectedResponseContextsByWorkspaceId[workspaceUiKey]
+        ?? EMPTY_SELECTED_RESPONSE_CONTEXTS
+      : EMPTY_SELECTED_RESPONSE_CONTEXTS,
   );
 }
 
@@ -51,10 +65,21 @@ export function useChatDraftControls() {
       ? isChatDraftEmpty(state.draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT)
       : true,
   );
+  const hasSelectedResponseContexts = useChatInputStore((state) =>
+    workspaceUiKey
+      ? (state.selectedResponseContextsByWorkspaceId[workspaceUiKey]?.length ?? 0) > 0
+      : false,
+  );
   const setDraftForWorkspace = useChatInputStore((state) => state.setDraft);
   const setDraftTextForWorkspace = useChatInputStore((state) => state.setDraftText);
   const appendDraftTextForWorkspace = useChatInputStore((state) => state.appendDraftText);
   const clearDraftForWorkspace = useChatInputStore((state) => state.clearDraft);
+  const removeSelectedResponseContextForWorkspace = useChatInputStore(
+    (state) => state.removeSelectedResponseContext,
+  );
+  const clearSelectedResponseContextsForWorkspace = useChatInputStore(
+    (state) => state.clearSelectedResponseContexts,
+  );
 
   const getDraft = useCallback((): ChatComposerDraft => {
     if (!workspaceUiKey) {
@@ -95,14 +120,41 @@ export function useChatDraftControls() {
     clearDraftForWorkspace(workspaceUiKey);
   }, [clearDraftForWorkspace, workspaceUiKey]);
 
+  const getSelectedResponseContexts = useCallback((): readonly SelectedResponseContext[] => {
+    if (!workspaceUiKey) {
+      return EMPTY_SELECTED_RESPONSE_CONTEXTS;
+    }
+    return useChatInputStore.getState()
+      .selectedResponseContextsByWorkspaceId[workspaceUiKey]
+      ?? EMPTY_SELECTED_RESPONSE_CONTEXTS;
+  }, [workspaceUiKey]);
+
+  const removeSelectedResponseContext = useCallback((id: string) => {
+    if (!workspaceUiKey) {
+      return;
+    }
+    removeSelectedResponseContextForWorkspace(workspaceUiKey, id);
+  }, [removeSelectedResponseContextForWorkspace, workspaceUiKey]);
+
+  const clearSelectedResponseContexts = useCallback((ids?: readonly string[]) => {
+    if (!workspaceUiKey) {
+      return;
+    }
+    clearSelectedResponseContextsForWorkspace(workspaceUiKey, ids);
+  }, [clearSelectedResponseContextsForWorkspace, workspaceUiKey]);
+
   return {
     workspaceUiKey,
     materializedWorkspaceId,
     getDraft,
+    getSelectedResponseContexts,
     setDraft,
     setDraftText,
     appendDraftText,
     clearDraft,
+    removeSelectedResponseContext,
+    clearSelectedResponseContexts,
     isEmpty,
+    hasSelectedResponseContexts,
   };
 }

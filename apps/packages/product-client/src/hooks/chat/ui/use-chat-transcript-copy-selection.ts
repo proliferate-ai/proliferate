@@ -5,7 +5,10 @@ import type {
 } from "#product/domain/chats/transcript/chat-transcript-state";
 import { collectToolCallIdsWithProposedPlan } from "#product/domain/chats/transcript/transcript-rendering";
 import { buildTranscriptCopyText } from "#product/domain/chats/transcript/transcript-copy";
-import { useChatTranscriptSelection } from "./chat-transcript-selection";
+import {
+  useChatTranscriptSelection,
+  type ChatTranscriptSelectionState,
+} from "./chat-transcript-selection";
 
 export function useChatTranscriptCopySelection({
   selectionRootRef,
@@ -17,7 +20,7 @@ export function useChatTranscriptCopySelection({
   transcript: TranscriptState;
   visibleTurnIds: readonly string[];
   visibleOptimisticPrompt: PendingPromptEntry | null;
-}): void {
+}): ChatTranscriptSelectionState {
   const getTranscriptCopyText = useCallback(() => buildTranscriptCopyText({
     transcript,
     visibleTurnIds,
@@ -29,7 +32,7 @@ export function useChatTranscriptCopySelection({
     visibleOptimisticPrompt,
   ]);
 
-  useChatTranscriptSelection({
+  return useChatTranscriptSelection({
     rootRef: selectionRootRef,
     getCopyText: getTranscriptCopyText,
   });
