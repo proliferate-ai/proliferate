@@ -10,6 +10,7 @@ describe("chat input store", () => {
   beforeEach(() => {
     useChatInputStore.setState({
       draftByWorkspaceId: {},
+      selectedResponseContextsByWorkspaceId: {},
       editDraftBySessionId: {},
       editingQueueSeqBySessionId: {},
       focusRequestNonce: 0,
@@ -90,6 +91,47 @@ describe("chat input store", () => {
     expect(serializeChatDraftToPrompt(
       useChatInputStore.getState().draftByWorkspaceId["workspace-1"]!,
     )).toBe("hello");
+  });
+
+  it("keeps matching contexts distinct when one is already submitting", () => {
+    const store = useChatInputStore.getState();
+    store.addSelectedResponseContext("workspace-1", "selected response");
+    const submitting = useChatInputStore.getState()
+      .selectedResponseContextsByWorkspaceId["workspace-1"]![0]!;
+    store.addSelectedResponseContext("workspace-1", "selected response");
+    store.clearSelectedResponseContexts("workspace-1", [submitting.id]);
+
+    expect(useChatInputStore.getState().selectedResponseContextsByWorkspaceId["workspace-1"])
+      .toEqual([expect.objectContaining({ text: "selected response" })]);
+  });
+
+  it("clears only the submitted response contexts", () => {
+    const store = useChatInputStore.getState();
+    store.addSelectedResponseContext("workspace-1", "first response");
+    store.addSelectedResponseContext("workspace-1", "second response");
+    const contexts = useChatInputStore.getState()
+      .selectedResponseContextsByWorkspaceId["workspace-1"]!;
+
+    store.clearSelectedResponseContexts("workspace-1", [contexts[0]!.id]);
+
+    expect(useChatInputStore.getState().selectedResponseContextsByWorkspaceId["workspace-1"])
+      .toEqual([contexts[1]]);
+  });
+
+  it("removes response contexts without changing the text draft", () => {
+    const store = useChatInputStore.getState();
+    store.setDraftText("workspace-1", "keep this draft");
+    store.addSelectedResponseContext("workspace-1", "selected response");
+    const context = useChatInputStore.getState()
+      .selectedResponseContextsByWorkspaceId["workspace-1"]![0]!;
+
+    store.removeSelectedResponseContext("workspace-1", context.id);
+
+    expect(useChatInputStore.getState().selectedResponseContextsByWorkspaceId["workspace-1"])
+      .toBeUndefined();
+    expect(serializeChatDraftToPrompt(
+      useChatInputStore.getState().draftByWorkspaceId["workspace-1"]!,
+    )).toBe("keep this draft");
   });
 
   it("tracks queued-message edits by stable queue seq", () => {

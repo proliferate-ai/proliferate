@@ -8,6 +8,7 @@ import { ChatContentSearchQueryContext } from "./ChatContentSearchContext";
 import { useChatTranscriptCopySelection } from "#product/hooks/chat/ui/use-chat-transcript-copy-selection";
 import { useChatTranscriptRowRenderer } from "#product/hooks/chat/ui/use-chat-transcript-row-renderer";
 import { useChatTranscriptViewModel } from "#product/hooks/chat/ui/use-chat-transcript-view-model";
+import { ConnectedSelectedResponseActionMenu } from "#product/components/workspace/chat/transcript/SelectedResponseActionMenu";
 
 const noop = () => {};
 const NOOP_OUTBOX_ACTIONS: ChatTranscriptOutboxActions = {
@@ -35,7 +36,7 @@ export function ChatTranscriptView({
     renderTurnTrailingStatus,
   });
 
-  useChatTranscriptCopySelection({
+  const transcriptSelection = useChatTranscriptCopySelection({
     selectionRootRef,
     transcript: model.transcript,
     visibleTurnIds: model.visibleTurnIds,
@@ -89,6 +90,13 @@ export function ChatTranscriptView({
         gutterClassName={model.gutterClassName}
         scrollHandleRef={scrollHandleRef}
       />
+      {transcriptSelection.selectedResponse ? (
+        <ConnectedSelectedResponseActionMenu
+          selection={transcriptSelection.selectedResponse}
+          focusRequestNonce={transcriptSelection.menuFocusRequestNonce}
+          onDismiss={transcriptSelection.dismissSelectedResponse}
+        />
+      ) : null}
     </ChatContentSearchQueryContext.Provider>
   );
 }

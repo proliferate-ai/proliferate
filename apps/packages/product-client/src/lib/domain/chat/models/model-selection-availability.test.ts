@@ -51,6 +51,12 @@ describe("launch selection availability", () => {
       kind: "codex",
       modelId: "gpt-5.4",
     });
+    expect(resolveAvailableLaunchSelection(
+      agents,
+      { kind: "claude", modelId: "sonnet" },
+      { kind: "codex", modelId: "gpt-5.4" },
+      { requirePreferredSelection: true },
+    )).toBeNull();
   });
 
   it("keeps the active session selection when the target can launch it", () => {

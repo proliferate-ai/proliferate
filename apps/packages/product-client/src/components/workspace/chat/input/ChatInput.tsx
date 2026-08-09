@@ -30,6 +30,7 @@ import {
 import { focusChatInput } from "#product/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import { promptAttachmentSnapshotsToContentParts } from "#product/domain/chats/composer/prompt-attachment-snapshot";
+import { buildPromptWithSelectedResponseContexts } from "#product/domain/chats/transcript/selected-response-context";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "#product/lib/domain/chat/session-controls/session-controls";
 import { buildComposerSessionControlGroups } from "#product/lib/domain/chat/session-controls/composer-control-groups";
@@ -93,8 +94,17 @@ export function ChatInput({
   // PERF: no draft-content subscription here — a keystroke must not re-render
   // the whole composer dock. The draft area subscribes to the live draft
   // itself; this component only needs the isEmpty gate + a submit-time reader.
-  const { workspaceUiKey, materializedWorkspaceId, getDraft, setDraft, isEmpty } =
-    useChatDraftControls();
+  const {
+    workspaceUiKey,
+    materializedWorkspaceId,
+    getDraft,
+    getSelectedResponseContexts,
+    setDraft,
+    removeSelectedResponseContext,
+    clearSelectedResponseContexts,
+    isEmpty,
+    hasSelectedResponseContexts,
+  } = useChatDraftControls();
   const { isDisabled, sendBlockedReason, areRuntimeControlsDisabled } = useChatAvailabilityState({
     activeSessionId: activeSessionIdForUi,
   });
@@ -140,7 +150,7 @@ export function ChatInput({
     attachments.hasSupportedAttachments || planAttachments.hasPlans;
   const effectiveIsEmpty = effectiveIsEditingQueuedPrompt
     ? editDraft.trim().length === 0
-    : isEmpty && !hasSubmittableDraftAttachments;
+    : isEmpty && !hasSubmittableDraftAttachments && !hasSelectedResponseContexts;
   const canSubmit =
     !effectiveIsEmpty && !isDisabled && !sendBlockedReason && !isSubmitting;
   const canAcceptPastedAttachments =
@@ -171,11 +181,15 @@ export function ChatInput({
       // Serialized at submit time (imperative read) so typing keystrokes never
       // re-render this component just to keep promptText fresh.
       const promptText = serializeChatDraftToPrompt(getDraft());
-      const trimmedPromptText = promptText.trim();
+      const selectedResponseContexts = [...getSelectedResponseContexts()];
+      const contextualPrompt = buildPromptWithSelectedResponseContexts(
+        promptText,
+        selectedResponseContexts,
+      );
       const blockPrepareStartedAt = performance.now();
       const attachmentSnapshots = attachments.snapshotForSubmit();
       const blocks = [
-        ...(trimmedPromptText ? [{ type: "text" as const, text: trimmedPromptText }] : []),
+        ...contextualPrompt.blocks,
         ...planAttachments.blocks,
       ];
       recordMeasurementWorkflowStep({
@@ -186,16 +200,21 @@ export function ChatInput({
         count: blocks.length + attachmentSnapshots.length,
       });
       const optimisticContentParts = [
-        ...(trimmedPromptText ? [{ type: "text" as const, text: trimmedPromptText }] : []),
+        ...contextualPrompt.optimisticContentParts,
         ...promptAttachmentSnapshotsToContentParts(attachmentSnapshots),
         ...planAttachments.contentParts,
       ];
       const submitted = await handleSubmit({
-        text: promptText,
+        text: contextualPrompt.text,
         blocks,
         attachmentSnapshots,
         optimisticContentParts,
         measurementOperationId,
+        onSubmitted: () => {
+          clearSelectedResponseContexts(
+            selectedResponseContexts.map((context) => context.id),
+          );
+        },
       });
       if (!submitted) {
         finishOrCancelMeasurementOperation(measurementOperationId, "aborted");
@@ -211,7 +230,9 @@ export function ChatInput({
     attachments,
     commitEdit,
     effectiveIsEditingQueuedPrompt,
+    clearSelectedResponseContexts,
     getDraft,
+    getSelectedResponseContexts,
     handleSubmit,
     planAttachments,
     runSubmit,
@@ -392,6 +413,7 @@ export function ChatInput({
                     draftAttachments={[...attachments.attachments, ...planAttachments.attachments]}
                     onRemoveDraftAttachment={handleRemoveDraftAttachment}
                     onOpenDraftAttachment={handleOpenDraftAttachment}
+                    onRemoveSelectedResponseContext={removeSelectedResponseContext}
                     overlayHostElement={composerOverlayHost}
                     onCancelEdit={cancelEdit}
                   />

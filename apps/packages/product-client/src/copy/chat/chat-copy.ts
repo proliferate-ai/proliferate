@@ -5,6 +5,19 @@ export const CHAT_COMPOSER_LABELS = {
   stop: "Stop run",
 } as const;
 
+export const CHAT_SELECTED_RESPONSE_ACTIONS = {
+  menuLabel: "Selected response actions",
+  addToChat: "Add to chat",
+  moreDetails: "More details",
+  askInSideChat: "Ask in side chat",
+  moreDetailsPrompt: "Explain this selected response text in more detail.",
+  sideChatPrompt: "Help me understand this selected response text.",
+} as const;
+
+export const CHAT_PROMPT_FEEDBACK = {
+  currentModelUnavailable: "The current chat model isn't available for a new conversation.",
+} as const;
+
 // Labels for the animated streaming/status indicator. Dispatch and agent work
 // both read as "Thinking" — the send/queue distinction is plumbing the user
 // shouldn't have to care about, and one voice keeps the status line calm.

@@ -1,7 +1,9 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type RefObject,
 } from "react";
 import {
@@ -14,6 +16,13 @@ import {
   type TranscriptSelectionClampEdge,
   type TranscriptTargetFacts,
 } from "#product/domain/chats/transcript/transcript-selection";
+import type {
+  SelectedResponseSelection,
+} from "#product/domain/chats/transcript/selected-response-context";
+import {
+  getSelectedAssistantResponse,
+  isSelectedResponseInViewport,
+} from "#product/hooks/chat/ui/selected-response-selection";
 
 interface UseChatTranscriptSelectionArgs {
   rootRef: RefObject<HTMLElement | null>;
@@ -27,13 +36,24 @@ interface TranscriptSelectionListenerTargets {
 
 interface TranscriptSelectionListenerHandlers {
   pointerdown: (event: PointerEvent) => void;
+  pointerup: () => void;
   keydown: (event: KeyboardEvent) => void;
   copy: (event: ClipboardEvent) => void;
   selectionchange: () => void;
+  scroll: () => void;
 }
 
 interface MutableBooleanRef {
   current: boolean;
+}
+
+export interface ChatTranscriptSelectionState {
+  selectedResponse: SelectedResponseSelection | null;
+  menuFocusRequestNonce: number;
+  dismissSelectedResponse: (options?: {
+    clearNativeSelection?: boolean;
+    restoreTranscriptFocus?: boolean;
+  }) => void;
 }
 
 interface ChatTranscriptSelectionHandlerArgs {
@@ -41,6 +61,7 @@ interface ChatTranscriptSelectionHandlerArgs {
   getCopyText: () => string;
   transcriptOwnedRef: MutableBooleanRef;
   allTranscriptSelectedRef: MutableBooleanRef;
+  pointerSelectingRef: MutableBooleanRef;
   getActiveElement: () => EventTarget | null;
   getSelection: () => Selection | null;
   getTargetFactsForEvent: (
@@ -58,6 +79,18 @@ interface ChatTranscriptSelectionHandlerArgs {
     root: HTMLElement,
     edge: TranscriptSelectionClampEdge,
   ) => void;
+  getSelectedResponse: (
+    selection: Selection,
+    root: HTMLElement,
+  ) => SelectedResponseSelection | null;
+  isSelectedResponseVisible: (
+    selection: SelectedResponseSelection,
+    root: HTMLElement,
+  ) => boolean;
+  setSelectedResponse: (selection: SelectedResponseSelection | null) => void;
+  hasSelectedResponse: () => boolean;
+  requestSelectedResponseMenuFocus: () => void;
+  dismissSelectedResponse: (restoreTranscriptFocus: boolean) => void;
 }
 
 export function attachChatTranscriptSelectionListeners(
@@ -65,14 +98,20 @@ export function attachChatTranscriptSelectionListeners(
   handlers: TranscriptSelectionListenerHandlers,
 ): () => void {
   targets.windowTarget.addEventListener("pointerdown", handlers.pointerdown, { capture: true });
+  targets.windowTarget.addEventListener("pointerup", handlers.pointerup, { capture: true });
+  targets.windowTarget.addEventListener("pointercancel", handlers.pointerup, { capture: true });
   targets.windowTarget.addEventListener("keydown", handlers.keydown, { capture: true });
   targets.windowTarget.addEventListener("copy", handlers.copy, { capture: true });
+  targets.windowTarget.addEventListener("scroll", handlers.scroll, { capture: true });
   targets.documentTarget.addEventListener("selectionchange", handlers.selectionchange);
 
   return () => {
     targets.windowTarget.removeEventListener("pointerdown", handlers.pointerdown, { capture: true });
+    targets.windowTarget.removeEventListener("pointerup", handlers.pointerup, { capture: true });
+    targets.windowTarget.removeEventListener("pointercancel", handlers.pointerup, { capture: true });
     targets.windowTarget.removeEventListener("keydown", handlers.keydown, { capture: true });
     targets.windowTarget.removeEventListener("copy", handlers.copy, { capture: true });
+    targets.windowTarget.removeEventListener("scroll", handlers.scroll, { capture: true });
     targets.documentTarget.removeEventListener("selectionchange", handlers.selectionchange);
   };
 }
@@ -82,6 +121,7 @@ export function createChatTranscriptSelectionHandlers({
   getCopyText,
   transcriptOwnedRef,
   allTranscriptSelectedRef,
+  pointerSelectingRef,
   getActiveElement,
   getSelection,
   getTargetFactsForEvent,
@@ -92,6 +132,12 @@ export function createChatTranscriptSelectionHandlers({
   nodeInsideRoot: nodeInsideRootForRoot,
   getSelectionDirection: getSelectionDirectionForSelection,
   clampSelectionToRoot: clampSelectionToRootForSelection,
+  getSelectedResponse,
+  isSelectedResponseVisible,
+  setSelectedResponse,
+  hasSelectedResponse,
+  requestSelectedResponseMenuFocus,
+  dismissSelectedResponse,
 }: ChatTranscriptSelectionHandlerArgs): TranscriptSelectionListenerHandlers {
   const clearSelectionState = () => {
     transcriptOwnedRef.current = false;
@@ -102,16 +148,60 @@ export function createChatTranscriptSelectionHandlers({
     const root = rootRef.current;
     const targetFacts = getTargetFactsForEvent(event.target, root);
     const action = resolvePointerOwnership(targetFacts);
+    if (action === "ignore") {
+      return;
+    }
+    if (action === "track-selection") {
+      pointerSelectingRef.current = true;
+      setSelectedResponse(null);
+      clearSelectionState();
+      return;
+    }
     if (action === "set-owned" && root) {
+      pointerSelectingRef.current = true;
       transcriptOwnedRef.current = true;
       allTranscriptSelectedRef.current = false;
+      setSelectedResponse(null);
       focusRoot(root);
       return;
     }
+    pointerSelectingRef.current = false;
+    setSelectedResponse(null);
     clearSelectionState();
   };
 
+  const publishSelectedResponse = () => {
+    const root = rootRef.current;
+    const selection = getSelection();
+    setSelectedResponse(
+      root && selection
+        ? getSelectedResponse(selection, root)
+        : null,
+    );
+  };
+
+  const pointerup = () => {
+    if (!pointerSelectingRef.current) {
+      return;
+    }
+    pointerSelectingRef.current = false;
+    publishSelectedResponse();
+  };
+
   const keydown = (event: KeyboardEvent) => {
+    if (hasSelectedResponse() && event.key === "Escape") {
+      event.preventDefault();
+      dismissSelectedResponse(true);
+      return;
+    }
+    if (
+      hasSelectedResponse()
+      && (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey))
+    ) {
+      event.preventDefault();
+      requestSelectedResponseMenuFocus();
+      return;
+    }
     const root = rootRef.current;
     const action = resolvePrimaryAAction({
       owned: transcriptOwnedRef.current,
@@ -144,6 +234,7 @@ export function createChatTranscriptSelectionHandlers({
     const selection = getSelection();
     if (!root || !selection || selection.rangeCount === 0) {
       allTranscriptSelectedRef.current = false;
+      setSelectedResponse(null);
       return;
     }
 
@@ -151,6 +242,7 @@ export function createChatTranscriptSelectionHandlers({
       allTranscriptSelectedRef.current
       && isFullSelectionMarker(selection, root)
     ) {
+      setSelectedResponse(null);
       return;
     }
 
@@ -169,6 +261,25 @@ export function createChatTranscriptSelectionHandlers({
     if (action.clampEdge) {
       clampSelectionToRootForSelection(selection, root, action.clampEdge);
     }
+    if (!pointerSelectingRef.current) {
+      publishSelectedResponse();
+    }
+  };
+
+  const scroll = () => {
+    if (!hasSelectedResponse()) {
+      return;
+    }
+    const root = rootRef.current;
+    const selection = getSelection();
+    const selectedResponse = root && selection
+      ? getSelectedResponse(selection, root)
+      : null;
+    setSelectedResponse(
+      selectedResponse && root && isSelectedResponseVisible(selectedResponse, root)
+        ? selectedResponse
+        : null,
+    );
   };
 
   const copy = (event: ClipboardEvent) => {
@@ -200,19 +311,48 @@ export function createChatTranscriptSelectionHandlers({
 
   return {
     pointerdown,
+    pointerup,
     keydown,
     copy,
     selectionchange,
+    scroll,
   };
 }
 
 export function useChatTranscriptSelection({
   rootRef,
   getCopyText,
-}: UseChatTranscriptSelectionArgs): void {
+}: UseChatTranscriptSelectionArgs): ChatTranscriptSelectionState {
   const getCopyTextRef = useRef(getCopyText);
   const transcriptOwnedRef = useRef(false);
   const allTranscriptSelectedRef = useRef(false);
+  const pointerSelectingRef = useRef(false);
+  const [selectedResponse, setSelectedResponse] = useState<SelectedResponseSelection | null>(null);
+  const selectedResponseRef = useRef<SelectedResponseSelection | null>(null);
+  const [menuFocusRequestNonce, setMenuFocusRequestNonce] = useState(0);
+
+  const commitSelectedResponse = useCallback((selection: SelectedResponseSelection | null) => {
+    selectedResponseRef.current = selection;
+    setSelectedResponse(selection);
+    if (!selection) {
+      setMenuFocusRequestNonce(0);
+    }
+  }, []);
+
+  const dismissSelectedResponse = useCallback((options?: {
+    clearNativeSelection?: boolean;
+    restoreTranscriptFocus?: boolean;
+  }) => {
+    commitSelectedResponse(null);
+    if (options?.clearNativeSelection) {
+      document.getSelection()?.removeAllRanges();
+    }
+    if (options?.restoreTranscriptFocus) {
+      window.requestAnimationFrame(() => {
+        rootRef.current?.focus({ preventScroll: true });
+      });
+    }
+  }, [commitSelectedResponse, rootRef]);
 
   useLayoutEffect(() => {
     getCopyTextRef.current = getCopyText;
@@ -224,6 +364,7 @@ export function useChatTranscriptSelection({
       getCopyText: () => getCopyTextRef.current(),
       transcriptOwnedRef,
       allTranscriptSelectedRef,
+      pointerSelectingRef,
       getActiveElement: () => document.activeElement,
       getSelection: () => document.getSelection(),
       getTargetFactsForEvent: getTargetFacts,
@@ -234,6 +375,16 @@ export function useChatTranscriptSelection({
       nodeInsideRoot,
       getSelectionDirection,
       clampSelectionToRoot,
+      getSelectedResponse: getSelectedAssistantResponse,
+      isSelectedResponseVisible: isSelectedResponseInViewport,
+      setSelectedResponse: commitSelectedResponse,
+      hasSelectedResponse: () => selectedResponseRef.current !== null,
+      requestSelectedResponseMenuFocus: () => {
+        setMenuFocusRequestNonce((nonce) => nonce + 1);
+      },
+      dismissSelectedResponse: (restoreTranscriptFocus) => {
+        dismissSelectedResponse({ restoreTranscriptFocus });
+      },
     });
 
     const detach = attachChatTranscriptSelectionListeners({
@@ -244,9 +395,16 @@ export function useChatTranscriptSelection({
     return () => {
       transcriptOwnedRef.current = false;
       allTranscriptSelectedRef.current = false;
+      pointerSelectingRef.current = false;
       detach();
     };
-  }, [rootRef]);
+  }, [commitSelectedResponse, dismissSelectedResponse, rootRef]);
+
+  return {
+    selectedResponse,
+    menuFocusRequestNonce,
+    dismissSelectedResponse,
+  };
 }
 
 function getTargetFacts(
@@ -260,6 +418,8 @@ function getTargetFacts(
 
   return {
     insideRoot: root.contains(element),
+    contextualActions: !!element.closest("[data-selected-response-actions]"),
+    selectableInteractiveText: !!element.closest('a, [role="link"]'),
     textEntry: isTextEntryElement(element),
     terminalZone: !!element.closest('[data-focus-zone="terminal"]'),
     ignoredChrome: !!element.closest("[data-chat-transcript-ignore]"),
