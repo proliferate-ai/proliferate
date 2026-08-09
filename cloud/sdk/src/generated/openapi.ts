@@ -4715,6 +4715,11 @@ export interface components {
              * @constant
              */
             pendingTicketPolicy: "newest_wins";
+            /**
+             * Reusableworkerid
+             * @description Exact online Worker identity that this authenticated Desktop enrollment may reuse.
+             */
+            reusableWorkerId?: string | null;
         };
         /** DesktopWorkerRevokeRequest */
         DesktopWorkerRevokeRequest: {

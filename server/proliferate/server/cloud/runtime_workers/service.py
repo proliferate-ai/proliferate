@@ -199,6 +199,12 @@ async def create_desktop_enrollment(
         db,
         desktop_install_id=desktop_install_id,
     )
+    active_worker = await store.get_active_desktop_worker_for_identity(
+        db,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        desktop_install_id=desktop_install_id,
+    )
     token = secrets.token_urlsafe(_TOKEN_BYTES)
     expires_at = utcnow() + timedelta(seconds=CLOUD_RUNTIME_WORKER_DESKTOP_ENROLLMENT_TTL_SECONDS)
     await store.create_enrollment(
@@ -215,6 +221,9 @@ async def create_desktop_enrollment(
     return DesktopWorkerEnrollmentResponse(
         enrollment_token=token,
         expires_at=expires_at,
+        reusable_worker_id=(
+            str(active_worker.id) if active_worker is not None and active_worker.online else None
+        ),
     )
 
 

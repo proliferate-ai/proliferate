@@ -410,11 +410,16 @@ describe("worker", () => {
     mocks.ensureDesktopDispatchWorker.mockResolvedValue(status);
 
     await expect(
-      desktopBridge.worker.ensure({ targetId: "t1", enrollmentToken: "tok" }),
+      desktopBridge.worker.ensure({
+        targetId: "t1",
+        enrollmentToken: "tok",
+        reusableWorkerId: "worker-1",
+      }),
     ).resolves.toEqual(status);
     expect(mocks.ensureDesktopDispatchWorker).toHaveBeenCalledWith({
       targetId: "t1",
       enrollmentToken: "tok",
+      reusableWorkerId: "worker-1",
     });
   });
 

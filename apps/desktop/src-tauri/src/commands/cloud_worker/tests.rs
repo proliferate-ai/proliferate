@@ -200,7 +200,7 @@ async fn credential_rotation_retains_owned_worker_after_stop_failure_and_retries
 }
 
 #[tokio::test]
-async fn fresh_enrollment_reuses_an_untracked_worker_only_after_identity_persists() {
+async fn fresh_enrollment_reuses_untracked_worker_only_with_matching_server_proof() {
     let root = env::temp_dir().join(format!(
         "proliferate-worker-untracked-reuse-{}",
         uuid::Uuid::new_v4()
@@ -232,7 +232,7 @@ async fn fresh_enrollment_reuses_an_untracked_worker_only_after_identity_persist
         sleep(Duration::from_millis(20)).await;
     }
 
-    let error = match lock_for_fresh_enrollment(&database_path) {
+    let error = match lock_for_fresh_enrollment(&database_path, Some("worker-1")) {
         Ok(_) => panic!("an unenrolled lock holder must not be reused"),
         Err(error) => error,
     };
@@ -252,7 +252,18 @@ async fn fresh_enrollment_reuses_an_untracked_worker_only_after_identity_persist
         .expect("persist worker identity");
     drop(connection);
 
-    assert!(lock_for_fresh_enrollment(&database_path)
+    let error = match lock_for_fresh_enrollment(&database_path, None) {
+        Ok(_) => panic!("an enrolled lock holder needs a server reuse proof"),
+        Err(error) => error,
+    };
+    assert_eq!(error, WORKER_CREDENTIALS_LOCKED_ERROR);
+    let error = match lock_for_fresh_enrollment(&database_path, Some("worker-2")) {
+        Ok(_) => panic!("a mismatched worker reuse proof must be rejected"),
+        Err(error) => error,
+    };
+    assert_eq!(error, WORKER_CREDENTIALS_LOCKED_ERROR);
+
+    assert!(lock_for_fresh_enrollment(&database_path, Some("worker-1"))
         .expect("reuse enrolled untracked worker")
         .is_none());
     assert!(worker_database_lock_is_held(&database_path).expect("worker remains running"));

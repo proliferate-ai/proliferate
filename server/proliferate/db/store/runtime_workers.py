@@ -490,6 +490,28 @@ async def get_active_desktop_worker_for_user(
     return _worker_value(row) if row is not None else None
 
 
+async def get_active_desktop_worker_for_identity(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    organization_id: UUID | None,
+    desktop_install_id: str,
+) -> RuntimeWorkerValue | None:
+    """Load the non-revoked worker for one exact Desktop identity scope."""
+    row = (
+        await db.execute(
+            select(CloudRuntimeWorker).where(
+                CloudRuntimeWorker.owner_user_id == owner_user_id,
+                CloudRuntimeWorker.organization_id == organization_id,
+                CloudRuntimeWorker.desktop_install_id == desktop_install_id,
+                CloudRuntimeWorker.runtime_kind == "desktop",
+                CloudRuntimeWorker.status != "revoked",
+            )
+        )
+    ).scalar_one_or_none()
+    return _worker_value(row) if row is not None else None
+
+
 async def touch_worker_heartbeat(
     db: AsyncSession,
     *,

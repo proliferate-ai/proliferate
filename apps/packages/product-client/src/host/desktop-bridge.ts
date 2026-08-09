@@ -220,6 +220,7 @@ export interface DesktopConnectBridge {
 export interface WorkerConfiguration {
   targetId: string;
   enrollmentToken?: string | null;
+  reusableWorkerId?: string | null;
 }
 
 export interface WorkerStatus {

@@ -56,6 +56,13 @@ otherwise:
 
 A durable identity always wins over an enrollment token still present in the configuration. An invalid or revoked durable token does not trigger automatic re-enrollment.
 
+Desktop ticket issuance also returns a nullable reuse proof for an existing
+Worker. The proof is present only when Cloud sees that exact Worker as online,
+non-revoked, and scoped to the authenticated user, requested organization, and
+Desktop install. The native launcher may treat an untracked database lock as a
+successful reuse only when the persisted `worker_id` matches that proof;
+otherwise the fresh ticket retains the normal fail-closed rotation path.
+
 The integration-gateway authorization value is distinct from `worker_token`. On fresh enrollment it is written atomically to `integration-gateway.json` with private directory/file permissions. That process retains the response in memory and, after each successful authenticated heartbeat, restores the file only when it differs. This converges a delayed predecessor write. A heartbeat that succeeded immediately before revocation can race one final stale write; after rejection the predecessor stops writing, and the active successor repairs that race on its next successful heartbeat.
 
 Source: [`proliferate-worker/src/identity/`](../../anyharness/crates/proliferate-worker/src/identity/), [`store/identity.rs`](../../anyharness/crates/proliferate-worker/src/store/identity.rs), [`integration_gateway.rs`](../../anyharness/crates/proliferate-worker/src/integration_gateway.rs)
