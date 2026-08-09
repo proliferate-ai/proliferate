@@ -73,6 +73,18 @@ describe("AgentsPane", () => {
     cleanup();
   });
 
+  it("paints its own opaque panel surface", () => {
+    const { container } = renderPane();
+
+    // The right-panel frame is translucent under desktop vibrancy, so the
+    // pane must paint `bg-sidebar` itself, exactly as the scratch panel does.
+    // (This regressed once as an unknown `bg-surface` class: the pane
+    // rendered see-through with the transcript bleeding into it.)
+    const root = container.querySelector("[data-agents-pane]");
+    expect(root?.className).toContain("bg-sidebar");
+    expect(root?.className).not.toContain("bg-surface");
+  });
+
   it("level 1 lists delegating sessions with a live summary and a glyph stack", () => {
     const onOpenCluster = vi.fn();
     const { container } = renderPane({ onOpenCluster });

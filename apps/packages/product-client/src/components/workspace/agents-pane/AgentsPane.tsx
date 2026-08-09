@@ -82,7 +82,14 @@ export function AgentsPane({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-surface" data-agents-pane>
+    // `bg-sidebar` matters: the right-panel frame is translucent under desktop
+    // vibrancy, so each panel paints its own surface exactly as ScratchPadPanel
+    // does. An unknown class here renders the pane see-through over the
+    // transcript.
+    <div
+      className="flex h-full min-h-0 flex-col bg-sidebar text-sidebar-foreground"
+      data-agents-pane
+    >
       {agent ? (
         <AgentsPaneAgentDetail
           agent={agent}
