@@ -1607,6 +1607,12 @@ body {
   );
 }
 
+/* A revealed shortcut participates in the button's flex row, so its own
+   width replaces the status reservation and the title truncates before it. */
+.workspace-shell-tab[data-has-shortcut="true"] .workspace-shell-tab__label {
+  padding-right: 0;
+}
+
 .workspace-shell-tab__status {
   position: absolute;
   right: var(--workspace-shell-tab-inline-padding);
