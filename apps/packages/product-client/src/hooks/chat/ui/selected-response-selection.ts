@@ -20,6 +20,7 @@ export function getSelectedAssistantResponse(
     || !endElement
     || startElement.closest("[data-chat-transcript-ignore]")
     || endElement.closest("[data-chat-transcript-ignore]")
+    || range.cloneContents().querySelector("[data-chat-transcript-ignore]")
   ) {
     return null;
   }

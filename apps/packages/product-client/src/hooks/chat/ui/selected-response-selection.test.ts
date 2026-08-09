@@ -43,6 +43,16 @@ describe("getSelectedAssistantResponse", () => {
     expect(getSelectedAssistantResponse(selection, root)).toBeNull();
   });
 
+  it("rejects selections that span ignored transcript controls", () => {
+    const root = transcriptRoot();
+    const start = root.querySelector("[data-start]")!.firstChild!;
+    const end = root.querySelector("[data-end]")!.firstChild!;
+    const selection = selectRange(start, 0, end, end.textContent!.length);
+
+    expect(selection.toString()).toContain("Copy");
+    expect(getSelectedAssistantResponse(selection, root)).toBeNull();
+  });
+
   it("rejects user text, ignored controls, and collapsed selections", () => {
     const root = transcriptRoot();
     const userText = root.querySelector("[data-user]")!.firstChild!;
@@ -100,7 +110,7 @@ describe("isSelectedResponseInViewport", () => {
 function transcriptRoot(): HTMLDivElement {
   const root = document.createElement("div");
   root.innerHTML = [
-    '<div data-assistant-prose><span data-start>Alpha </span><a href="#details">linked</a> <code>code</code><button data-chat-transcript-ignore>Copy</button></div>',
+    '<div data-assistant-prose><span data-start>Alpha </span><a href="#details">linked</a> <code>code</code><button data-chat-transcript-ignore>Copy</button><span data-end> Omega</span></div>',
     "<div data-assistant-prose>Second response</div>",
     "<div data-user>User prompt</div>",
   ].join("");
