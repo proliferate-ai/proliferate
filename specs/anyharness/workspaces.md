@@ -53,11 +53,13 @@ It includes:
 - `path`
 - `surface`: `standard`, plus a RETIRED `cowork` value. Cowork is deleted and
   nothing writes `cowork` any more, but the parser still accepts it so
-  historical rows load. A legacy `cowork` row is an ordinary workspace: no read
-  path filters on the surface, so those workspaces are matched, launched into
-  and grouped for repo-target resolution like any other. The one place the
-  value still decides anything is `workspace_can_purge`, which refuses every
-  non-standard surface
+  historical rows load. A legacy `cowork` row is reachable but never offered:
+  the client's repositories rail hides `cowork`-surface workspaces (and the
+  `managed` repo root that held cowork checkouts) via
+  `buildStandardRepoProjection`, while resolution, launch matching and
+  repo-target grouping treat it like any other workspace, so anything that
+  refers to one still opens. Server-side the one place the value still decides
+  anything is `workspace_can_purge`, which refuses every non-standard surface
 - original branch
 - current branch
 - display name
