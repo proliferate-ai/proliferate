@@ -3,6 +3,7 @@ import {
   type SessionDirectoryEntry,
 } from "#product/lib/domain/sessions/directory/directory-entry";
 import {
+  reconcileMaterializedIndex,
   removeMaterializedIndexEntry,
   removeSessionFromWorkspaceIndex,
   updateMaterializedIndex,
@@ -45,12 +46,16 @@ export function putDirectoryEntry<TState extends SessionDirectoryReducerState>(
   const relationshipHintsBySessionId = state.relationshipHintsBySessionId[entry.sessionId]
     ? removeRecordKey(state.relationshipHintsBySessionId, entry.sessionId)
     : state.relationshipHintsBySessionId;
-  const clientSessionIdByMaterializedSessionId = updateMaterializedIndex(
+  const updatedMaterializedIndex = updateMaterializedIndex(
     state.clientSessionIdByMaterializedSessionId,
     previous?.materializedSessionId ?? null,
     entry.materializedSessionId,
     entry.sessionId,
   );
+  const clientSessionIdByMaterializedSessionId = previous
+    && previous.materializedSessionId !== entry.materializedSessionId
+    ? reconcileMaterializedIndex(updatedMaterializedIndex, entriesById)
+    : updatedMaterializedIndex;
   const sessionIdsByWorkspaceId = updateWorkspaceIndex(
     state.sessionIdsByWorkspaceId,
     previous?.workspaceId ?? null,
@@ -83,9 +88,13 @@ export function removeDirectoryEntry<TState extends SessionDirectoryReducerState
     return state;
   }
   const { [sessionId]: _removed, ...entriesById } = state.entriesById;
-  const clientSessionIdByMaterializedSessionId = removeMaterializedIndexEntry(
-    state.clientSessionIdByMaterializedSessionId,
-    entry.materializedSessionId,
+  const clientSessionIdByMaterializedSessionId = reconcileMaterializedIndex(
+    removeMaterializedIndexEntry(
+      state.clientSessionIdByMaterializedSessionId,
+      entry.materializedSessionId,
+      sessionId,
+    ),
+    entriesById,
   );
   const { [sessionId]: _removedHint, ...relationshipHintsBySessionId } =
     state.relationshipHintsBySessionId;
@@ -118,10 +127,13 @@ export function removeWorkspaceDirectoryEntries<TState extends SessionDirectoryR
   const entriesById: Record<string, SessionDirectoryEntry> = Object.fromEntries(
     Object.entries(state.entriesById).filter(([sessionId]) => !removed.has(sessionId)),
   );
-  const clientSessionIdByMaterializedSessionId: Record<string, string> = Object.fromEntries(
-    Object.entries(state.clientSessionIdByMaterializedSessionId).filter(([, clientSessionId]) =>
-      !removed.has(clientSessionId)
+  const clientSessionIdByMaterializedSessionId = reconcileMaterializedIndex(
+    Object.fromEntries(
+      Object.entries(state.clientSessionIdByMaterializedSessionId).filter(
+        ([, clientSessionId]) => !removed.has(clientSessionId),
+      ),
     ),
+    entriesById,
   );
   const relationshipHintsBySessionId: Record<string, SessionChildRelationship> = Object.fromEntries(
     Object.entries(state.relationshipHintsBySessionId).filter(([sessionId, hint]) =>

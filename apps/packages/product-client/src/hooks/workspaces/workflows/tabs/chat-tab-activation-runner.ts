@@ -14,7 +14,9 @@ import { clearPendingHotSwitchMeasurement } from "#product/hooks/workspaces/work
 import type {
   SelectSessionOptionsWithoutGuard,
 } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
+import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 type WorkspaceUiStoreState = ReturnType<typeof useWorkspaceUiStore.getState>;
@@ -23,8 +25,9 @@ export async function runDeferredChatTabActivation({
   clearPendingChatActivation,
   guard,
   hotOperationId,
-  intent,
   pending,
+  replaceShellIntent,
+  requestedSessionId,
   reuseHotOperationInSelect,
   rollbackShellIntent,
   selectSession,
@@ -36,8 +39,9 @@ export async function runDeferredChatTabActivation({
   clearPendingChatActivation: WorkspaceUiStoreState["clearPendingChatActivation"];
   guard: SessionActivationGuard;
   hotOperationId: MeasurementOperationId | null;
-  intent: `chat:${string}`;
   pending: PendingChatActivation;
+  replaceShellIntent: WorkspaceUiStoreState["replaceShellIntent"];
+  requestedSessionId: string;
   reuseHotOperationInSelect: boolean;
   rollbackShellIntent: WorkspaceUiStoreState["rollbackShellIntent"];
   selectSession: ReturnType<typeof useSessionSelectionActions>["selectSession"];
@@ -63,10 +67,29 @@ export async function runDeferredChatTabActivation({
     };
   }
 
+  const resolvedSessionId =
+    useSessionDirectoryStore.getState()
+      .clientSessionIdByMaterializedSessionId[requestedSessionId]
+    ?? requestedSessionId;
+  const resolvedIntent = chatWorkspaceShellTabKey(resolvedSessionId);
+  const resolvedPending = resolvedSessionId === sessionId
+    ? pending
+    : {
+      ...pending,
+      sessionId: resolvedSessionId,
+      intent: resolvedIntent,
+    };
+  if (resolvedPending !== pending) {
+    useWorkspaceUiStore.getState().setPendingChatActivation({
+      workspaceId: shellStateKey,
+      pending: resolvedPending,
+    });
+  }
+
   const durableStartedAt = performance.now();
   const previousWrite = writeShellIntent({
     workspaceId: shellStateKey,
-    intent,
+    intent: resolvedIntent,
   });
   recordMeasurementWorkflowStep({
     operationId: hotOperationId,
@@ -81,7 +104,7 @@ export async function runDeferredChatTabActivation({
       targetOptions: SelectSessionOptionsWithoutGuard & { guard: SessionActivationGuard },
     ) => Promise<SessionActivationOutcome | void>;
     const selectStartedAt = performance.now();
-    const outcome = await guardedSelectSession(sessionId, {
+    const outcome = await guardedSelectSession(resolvedSessionId, {
       ...selection,
       guard,
       measurementOperationId: hotOperationId ?? selection?.measurementOperationId ?? null,
@@ -97,8 +120,8 @@ export async function runDeferredChatTabActivation({
     if (outcome?.result === "stale") {
       rollbackPendingDurableIntent({
         hotOperationId,
-        intent,
-        pending,
+        intent: resolvedIntent,
+        pending: resolvedPending,
         previousWrite,
         rollbackShellIntent,
         shellStateKey,
@@ -106,31 +129,57 @@ export async function runDeferredChatTabActivation({
       clearMatchingPending({
         clearPendingChatActivation,
         hotOperationId,
-        pending,
+        pending: resolvedPending,
         shellStateKey,
         step: "workspace.shell.pending_clear",
       });
       return outcome;
     }
 
+    let completedPending = resolvedPending;
+    if (outcome?.result === "completed" && outcome.sessionId !== resolvedSessionId) {
+      const completedIntent = chatWorkspaceShellTabKey(outcome.sessionId);
+      const currentPending = useWorkspaceUiStore.getState()
+        .pendingChatActivationByWorkspace[shellStateKey] ?? null;
+      if (currentPending?.attemptId === resolvedPending.attemptId) {
+        const replacement = replaceShellIntent({
+          workspaceId: shellStateKey,
+          expectedIntent: resolvedIntent,
+          expectedEpoch: previousWrite.epoch,
+          nextIntent: completedIntent,
+        });
+        if (replacement.replaced || replacement.currentIntent === completedIntent) {
+          completedPending = {
+            ...resolvedPending,
+            sessionId: outcome.sessionId,
+            intent: completedIntent,
+          };
+          useWorkspaceUiStore.getState().setPendingChatActivation({
+            workspaceId: shellStateKey,
+            pending: completedPending,
+          });
+        }
+      }
+    }
+
     clearMatchingPending({
       clearPendingChatActivation,
       hotOperationId,
-      pending,
+      pending: completedPending,
       shellStateKey,
       step: "workspace.shell.pending_clear",
     });
     return outcome ?? {
       result: "completed",
-      sessionId,
+      sessionId: resolvedSessionId,
       guard,
       activeSessionVersion: useSessionSelectionStore.getState().activeSessionVersion,
     };
   } catch (error) {
     rollbackPendingDurableIntent({
       hotOperationId,
-      intent,
-      pending,
+      intent: resolvedIntent,
+      pending: resolvedPending,
       previousWrite,
       rollbackShellIntent,
       shellStateKey,
@@ -138,7 +187,7 @@ export async function runDeferredChatTabActivation({
     clearMatchingPending({
       clearPendingChatActivation,
       hotOperationId,
-      pending,
+      pending: resolvedPending,
       shellStateKey,
       step: "workspace.shell.pending_clear",
     });

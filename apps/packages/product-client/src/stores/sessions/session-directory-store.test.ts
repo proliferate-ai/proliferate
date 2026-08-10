@@ -61,6 +61,85 @@ describe("session directory store invariants", () => {
     expect(after.sessionIdsByWorkspaceId).toBe(before.sessionIdsByWorkspaceId);
   });
 
+  it("preserves a valid materialized index owner across another claimant's updates", () => {
+    const store = useSessionDirectoryStore.getState();
+    store.upsertEntry({
+      sessionId: "client-a",
+      materializedSessionId: "runtime-shared",
+      workspaceId: "workspace-a",
+      agentKind: "codex",
+    });
+    store.upsertEntry({
+      sessionId: "client-b",
+      materializedSessionId: "runtime-shared",
+      workspaceId: "workspace-a",
+      agentKind: "codex",
+    });
+
+    store.patchEntry("client-a", { title: "Updated title" });
+
+    expect(useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId)
+      .toEqual({ "runtime-shared": "client-b" });
+
+    store.patchEntry("client-a", { materializedSessionId: "runtime-a" });
+
+    expect(useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId)
+      .toEqual({
+        "runtime-a": "client-a",
+        "runtime-shared": "client-b",
+      });
+
+    store.removeEntry("client-a");
+
+    expect(useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId)
+      .toEqual({ "runtime-shared": "client-b" });
+  });
+
+  it("promotes a remaining claimant when the materialized index owner is rebound", () => {
+    const store = useSessionDirectoryStore.getState();
+    store.upsertEntry({
+      sessionId: "client-a",
+      materializedSessionId: "runtime-shared",
+      workspaceId: "workspace-a",
+      agentKind: "codex",
+    });
+    store.upsertEntry({
+      sessionId: "client-b",
+      materializedSessionId: "runtime-shared",
+      workspaceId: "workspace-a",
+      agentKind: "codex",
+    });
+
+    store.patchEntry("client-b", { materializedSessionId: "runtime-b" });
+
+    expect(useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId)
+      .toEqual({
+        "runtime-b": "client-b",
+        "runtime-shared": "client-a",
+      });
+  });
+
+  it("promotes a remaining claimant when the materialized index owner is removed", () => {
+    const store = useSessionDirectoryStore.getState();
+    store.upsertEntry({
+      sessionId: "client-a",
+      materializedSessionId: "runtime-shared",
+      workspaceId: "workspace-a",
+      agentKind: "codex",
+    });
+    store.upsertEntry({
+      sessionId: "client-b",
+      materializedSessionId: "runtime-shared",
+      workspaceId: "workspace-a",
+      agentKind: "codex",
+    });
+
+    store.removeEntry("client-b");
+
+    expect(useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId)
+      .toEqual({ "runtime-shared": "client-a" });
+  });
+
   it("applies relationship hints once and prunes stale workspace hints", () => {
     const store = useSessionDirectoryStore.getState();
     store.recordRelationshipHint("child-a", {

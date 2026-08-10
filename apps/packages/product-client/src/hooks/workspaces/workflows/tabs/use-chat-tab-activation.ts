@@ -44,6 +44,7 @@ export function useChatTabActivation() {
   const writeShellIntent = useWorkspaceUiStore((state) => state.writeShellIntent);
   const setPendingChatActivation = useWorkspaceUiStore((state) => state.setPendingChatActivation);
   const clearPendingChatActivation = useWorkspaceUiStore((state) => state.clearPendingChatActivation);
+  const replaceShellIntent = useWorkspaceUiStore((state) => state.replaceShellIntent);
   const rollbackShellIntent = useWorkspaceUiStore((state) => state.rollbackShellIntent);
   const { selectSession } = useSessionSelectionActions();
 
@@ -123,8 +124,9 @@ export function useChatTabActivation() {
           clearPendingChatActivation,
           guard,
           hotOperationId,
-          intent,
           pending,
+          replaceShellIntent,
+          requestedSessionId,
           reuseHotOperationInSelect: hotMeasurement.reuseInSelect,
           rollbackShellIntent,
           selectSession,
@@ -144,6 +146,7 @@ export function useChatTabActivation() {
     });
   }, [
     clearPendingChatActivation,
+    replaceShellIntent,
     rollbackShellIntent,
     selectSession,
     setPendingChatActivation,

@@ -186,6 +186,30 @@ describe("session activation guard", () => {
       .toBeUndefined();
   });
 
+  it("rewrites guarded shell selection to the client identity returned by selection", async () => {
+    selectWorkspace("materialized-workspace", "logical-workspace");
+
+    const outcome = await selectSessionWithShellIntentRollback({
+      workspaceId: "materialized-workspace",
+      sessionId: "runtime-session",
+      selectSession: async (_sessionId, options) => ({
+        result: "completed",
+        sessionId: "client-session:codex:existing",
+        guard: options!.guard!,
+        activeSessionVersion: 1,
+      }),
+    });
+
+    expect(outcome).toMatchObject({
+      result: "completed",
+      sessionId: "client-session:codex:existing",
+    });
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["logical-workspace"])
+      .toBe("chat:client-session:codex:existing");
+    expect(useWorkspaceUiStore.getState().pendingChatActivationByWorkspace["logical-workspace"])
+      .toBeNull();
+  });
+
   it("guards backend reuse shell selection and rolls back logical shell intent on stale", async () => {
     selectWorkspace("materialized-workspace", "logical-workspace");
     useWorkspaceUiStore.getState().writeShellIntent({

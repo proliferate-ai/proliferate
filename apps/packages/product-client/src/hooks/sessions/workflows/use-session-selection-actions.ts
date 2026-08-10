@@ -29,6 +29,7 @@ import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-a
 import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
 import {
   createEmptySessionRecord,
+  findClientSessionIdByMaterializedSessionId,
   getSessionRecord,
   isPendingSessionId,
   patchSessionRecord,
@@ -57,16 +58,24 @@ export function useSessionSelectionWorkflowActions({
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
 
   const selectSession = useCallback(async (
-    sessionId: string,
+    requestedSessionId: string,
     options?: SessionLatencyFlowOptions,
   ): Promise<SessionActivationOutcome | void> => {
+    let sessionId =
+      findClientSessionIdByMaterializedSessionId(requestedSessionId)
+      ?? requestedSessionId;
+    let committedSessionId: string | null = null;
     const guard = options?.guard ?? null;
     const commitSelection = (): SessionActivationOutcome | null => {
       if (!guard) {
         activateSession(sessionId);
+        committedSessionId = sessionId;
         return null;
       }
       const outcome = commitActiveSession(sessionId, guard);
+      if (outcome.result === "completed") {
+        committedSessionId = sessionId;
+      }
       return outcome;
     };
     const staleSelection = (
@@ -106,7 +115,7 @@ export function useSessionSelectionWorkflowActions({
       return staleSelection("intent-replaced");
     }
 
-    const sessionSelectionRelationship = classifyTrustedSessionSelection(sessionId);
+    let sessionSelectionRelationship = classifyTrustedSessionSelection(sessionId);
     if (existingSlot?.sessionRelationship.kind === "pending") {
       existingSlot = {
         ...existingSlot,
@@ -179,6 +188,7 @@ export function useSessionSelectionWorkflowActions({
         if (hotOperationId) {
           markOperationForNextCommit(hotOperationId, SESSION_SWITCH_MEASUREMENT_SURFACES);
         }
+        const hotSlot = existingSlot;
         scheduleAfterNextPaint(() => {
           const currentState = useSessionSelectionStore.getState();
           if (
@@ -193,12 +203,12 @@ export function useSessionSelectionWorkflowActions({
             finishMeasurementOperation(hotOperationId, "completed");
           }
           const selection = useSessionSelectionStore.getState();
-          const viewedSessionId = existingSlot.materializedSessionId ?? sessionId;
+          const viewedSessionId = hotSlot.materializedSessionId ?? sessionId;
           rememberLastViewedSession(
             resolveWorkspaceUiKey(
               selection.selectedLogicalWorkspaceId,
-              existingSlot.workspaceId!,
-            ) ?? existingSlot.workspaceId!,
+              hotSlot.workspaceId!,
+            ) ?? hotSlot.workspaceId!,
             viewedSessionId,
           );
         });
@@ -268,6 +278,19 @@ export function useSessionSelectionWorkflowActions({
     if (guard && !isSessionActivationCurrent(guard)) {
       return staleSelection("intent-replaced");
     }
+    const projectedSessionId =
+      findClientSessionIdByMaterializedSessionId(requestedSessionId);
+    const currentSlot = getSessionRecord(sessionId);
+    const latestSessionId = projectedSessionId
+      ?? (
+        sessionId === requestedSessionId
+        || currentSlot?.materializedSessionId === requestedSessionId
+          ? sessionId
+          : requestedSessionId
+      );
+    sessionId = latestSessionId;
+    sessionSelectionRelationship = classifyTrustedSessionSelection(sessionId);
+    existingSlot = getSessionRecord(sessionId);
     recordMeasurementWorkflowStep({
       operationId: measurementOperationId,
       step: "session.select.ensure_sessions",
@@ -282,7 +305,9 @@ export function useSessionSelectionWorkflowActions({
       elapsedMs: elapsedMs(sessionsLoadStartedAt),
       totalElapsedMs: elapsedMs(startedAt),
     });
-    const sessionMeta = sessions.find((session) => session.id === sessionId) ?? null;
+    const metadataSessionId = existingSlot?.materializedSessionId
+      ?? (sessionId === requestedSessionId ? sessionId : requestedSessionId);
+    const sessionMeta = sessions.find((session) => session.id === metadataSessionId) ?? null;
     const agentKind = existingSlot?.agentKind ?? sessionMeta?.agentKind ?? "unknown";
 
     if (!existingSlot) {
@@ -290,6 +315,7 @@ export function useSessionSelectionWorkflowActions({
       putSessionRecord({
         ...createEmptySessionRecord(sessionId, agentKind, {
           workspaceId,
+          materializedSessionId: metadataSessionId,
           modelId: sessionMeta?.modelId ?? null,
           requestedModelId: sessionMeta?.requestedModelId ?? sessionMeta?.modelId ?? null,
           modeId: sessionMeta?.modeId ?? null,
@@ -319,10 +345,6 @@ export function useSessionSelectionWorkflowActions({
         startedAt: storeStartedAt,
         outcome: "cache_miss",
       });
-      const commitOutcome = commitSelection();
-      if (commitOutcome?.result === "stale") {
-        return commitOutcome;
-      }
     } else {
       const storeStartedAt = performance.now();
       patchSessionRecord(sessionId, {
@@ -359,6 +381,13 @@ export function useSessionSelectionWorkflowActions({
         startedAt: storeStartedAt,
         outcome: "cache_hit",
       });
+    }
+
+    if (committedSessionId !== sessionId) {
+      const commitOutcome = commitSelection();
+      if (commitOutcome?.result === "stale") {
+        return commitOutcome;
+      }
     }
 
     const completedSlot = getSessionRecord(sessionId);

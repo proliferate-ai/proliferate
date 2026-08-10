@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createEmptySessionRecord,
   getSessionRecord,
+  patchSessionRecord,
   putSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
@@ -127,6 +128,52 @@ describe("guarded query-only session selection", () => {
       reason: "intent-replaced",
     });
     expect(getSessionRecord("runtime-reloaded-codex")).toBeNull();
+    expect(activateSession).not.toHaveBeenCalled();
+  });
+
+  it("focuses the client slot when it materializes during the session-list load", async () => {
+    const clientSessionId = "client-session:codex:materializing";
+    const materializedSessionId = "runtime-session-materializing";
+    putSessionRecord(createEmptySessionRecord(clientSessionId, "codex", {
+      materializedSessionId: null,
+      workspaceId: "workspace-1",
+    }));
+    const sessionsGate = deferred<WorkspaceSession[]>();
+    const ensureWorkspaceSessions = vi.fn(() => sessionsGate.promise);
+    const activateSession = vi.fn();
+    const { result } = renderHook(() => useSessionSelectionWorkflowActions({
+      activateSession,
+      ensureWorkspaceSessions,
+    }));
+    const guard = beginSessionActivationIntent("workspace-1");
+
+    const selection = result.current.selectSession(materializedSessionId, { guard });
+    await vi.waitFor(() => expect(ensureWorkspaceSessions).toHaveBeenCalledOnce());
+
+    patchSessionRecord(clientSessionId, { materializedSessionId });
+    sessionsGate.resolve([{
+      id: materializedSessionId,
+      workspaceId: "workspace-1",
+      agentKind: "codex",
+      modelId: "gpt-5",
+      status: "idle",
+      title: "Materialized session",
+      lastPromptAt: null,
+    } as WorkspaceSession]);
+
+    await expect(selection).resolves.toMatchObject({
+      result: "completed",
+      sessionId: clientSessionId,
+    });
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe(clientSessionId);
+    expect(getSessionRecord(clientSessionId)).toMatchObject({
+      materializedSessionId,
+      sessionRelationship: { kind: "root" },
+      title: "Materialized session",
+    });
+    expect(getSessionRecord(materializedSessionId)).toBeNull();
+    expect(Object.keys(useSessionDirectoryStore.getState().entriesById))
+      .toEqual([clientSessionId]);
     expect(activateSession).not.toHaveBeenCalled();
   });
 });
