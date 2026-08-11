@@ -51,6 +51,13 @@ impl CompletionDeliveryWorker {
     }
 
     async fn process_available(&self) {
+        if let Err(error) = self.repair_retired_subagent_turns().await {
+            tracing::warn!(
+                result_class = "subagent_turn_repair_failed",
+                error_class = error_chain_class(&error),
+                "retired subagent turn repair deferred"
+            );
+        }
         for _ in 0..MAX_DELIVERIES_PER_PASS {
             let now = chrono::Utc::now();
             let lease_expires = now + chrono::Duration::seconds(LEASE_DURATION_SECONDS);
@@ -94,11 +101,21 @@ impl CompletionDeliveryWorker {
         }
     }
 
+    async fn repair_retired_subagent_turns(&self) -> anyhow::Result<u32> {
+        let Some(runtime) = self.session_runtime.upgrade() else {
+            return Ok(0);
+        };
+        runtime
+            .repair_retired_subagent_turns(MAX_DELIVERIES_PER_PASS)
+            .await
+    }
+
     async fn process_claimed(
         &self,
         delivery: &CompletionDeliveryRecord,
         lease_token: &str,
     ) -> anyhow::Result<()> {
+        self.delivery_store.ensure_completion_projection(delivery)?;
         let prompt_id = delivery.prompt_id();
         if let Some((turn_id, _)) = self
             .session_store
@@ -222,14 +239,5 @@ fn timestamp_age_ms(start: &str, end: &str) -> i64 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::retry_delay_seconds;
-
-    #[test]
-    fn enqueued_backoff_increases_and_caps_at_sixty_seconds() {
-        assert_eq!(
-            (1..=8).map(retry_delay_seconds).collect::<Vec<_>>(),
-            vec![2, 4, 8, 16, 32, 60, 60, 60]
-        );
-    }
-}
+#[path = "runtime/tests.rs"]
+mod tests;

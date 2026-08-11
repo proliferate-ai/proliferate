@@ -1,9 +1,22 @@
 use rusqlite::{params, OptionalExtension};
 
-use crate::domains::sessions::extensions::{SessionTurnFinishedContext, SessionTurnOutcome};
+use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::model::SessionEventRecord;
+use crate::domains::sessions::store::events::insert_event_row;
 use crate::persistence::Db;
 
 pub(crate) mod queue;
+
+#[derive(Debug, Clone)]
+pub(crate) struct DurableTerminalTurn {
+    pub terminal_id: String,
+    pub session_id: String,
+    pub turn_id: String,
+    pub outcome: SessionTurnOutcome,
+    pub assistant_text: Option<String>,
+    pub events: Vec<SessionEventRecord>,
+    pub completed_at: String,
+}
 
 #[derive(Debug, thiserror::Error)]
 #[error("invalid completion delivery value: {0}")]
@@ -75,22 +88,6 @@ impl CompletionDeliveryRecord {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct CaptureCompletionDeliveryInput {
-    pub turn: SessionTurnFinishedContext,
-    pub assistant_text: Option<String>,
-    pub captured_at: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CaptureCompletionDeliveryOutcome {
-    NotSubagent,
-    Captured {
-        delivery: CompletionDeliveryRecord,
-        was_existing: bool,
-    },
-}
-
 #[derive(Clone)]
 pub struct CompletionDeliveryStore {
     db: Db,
@@ -99,108 +96,6 @@ pub struct CompletionDeliveryStore {
 impl CompletionDeliveryStore {
     pub fn new(db: Db) -> Self {
         Self { db }
-    }
-
-    /// Atomically records terminal child completion and its independent
-    /// delivery snapshot. The relationship lookup shares this transaction
-    /// with both inserts, making promotion versus completion capture ordered.
-    pub fn capture(
-        &self,
-        input: &CaptureCompletionDeliveryInput,
-    ) -> anyhow::Result<CaptureCompletionDeliveryOutcome> {
-        self.db.with_tx(|tx| {
-            if let Some(delivery) =
-                find_by_child_turn(tx, &input.turn.session_id, &input.turn.turn_id)?
-            {
-                return Ok(CaptureCompletionDeliveryOutcome::Captured {
-                    delivery,
-                    was_existing: true,
-                });
-            }
-
-            let link = tx
-                .query_row(
-                    "SELECT id, parent_session_id, child_session_id, public_id, label
-                     FROM session_links
-                     WHERE relation = 'subagent' AND child_session_id = ?1
-                       AND closed_at IS NULL",
-                    [input.turn.session_id.as_str()],
-                    |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, String>(2)?,
-                            row.get::<_, Option<String>>(3)?,
-                            row.get::<_, Option<String>>(4)?,
-                        ))
-                    },
-                )
-                .optional()?;
-            let Some((link_id, parent_id, child_id, public_id, label)) = link else {
-                return Ok(CaptureCompletionDeliveryOutcome::NotSubagent);
-            };
-
-            let completion_id = uuid::Uuid::new_v4().to_string();
-            tx.execute(
-                "INSERT OR IGNORE INTO session_link_completions (
-                    completion_id, session_link_id, child_turn_id, child_last_event_seq, outcome,
-                    parent_event_seq, parent_prompt_seq, created_at, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, ?6, ?6)",
-                params![
-                    completion_id,
-                    link_id,
-                    input.turn.turn_id,
-                    input.turn.last_event_seq,
-                    input.turn.outcome.as_str(),
-                    input.captured_at,
-                ],
-            )?;
-            let completion_id: String = tx.query_row(
-                "SELECT completion_id FROM session_link_completions
-                 WHERE session_link_id = ?1 AND child_turn_id = ?2",
-                params![link_id, input.turn.turn_id],
-                |row| row.get(0),
-            )?;
-            let notification_text = notification_text(
-                label.as_deref(),
-                public_id.as_deref(),
-                input.turn.outcome,
-                input.assistant_text.as_deref(),
-            );
-            let delivery_id = uuid::Uuid::new_v4().to_string();
-            tx.execute(
-                "INSERT OR IGNORE INTO session_link_completion_deliveries (
-                    delivery_id, completion_id, session_link_id, parent_session_id,
-                    child_session_id, subagent_public_id, label, child_turn_id,
-                    child_last_event_seq, outcome, assistant_text, notification_text,
-                    state, next_attempt_at, created_at, updated_at
-                 ) VALUES (
-                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
-                    'pending', ?13, ?13, ?13
-                 )",
-                params![
-                    delivery_id,
-                    completion_id,
-                    link_id,
-                    parent_id,
-                    child_id,
-                    public_id,
-                    label,
-                    input.turn.turn_id,
-                    input.turn.last_event_seq,
-                    input.turn.outcome.as_str(),
-                    input.assistant_text,
-                    notification_text,
-                    input.captured_at,
-                ],
-            )?;
-            let delivery = find_by_child_turn(tx, &child_id, &input.turn.turn_id)?
-                .expect("capture inserted or found a completion delivery");
-            Ok(CaptureCompletionDeliveryOutcome::Captured {
-                delivery,
-                was_existing: false,
-            })
-        })
     }
 
     pub fn find(&self, delivery_id: &str) -> anyhow::Result<Option<CompletionDeliveryRecord>> {
@@ -213,6 +108,349 @@ impl CompletionDeliveryStore {
             .optional()
         })
     }
+
+    /// Materialize the legacy relationship completion ledger from the
+    /// independent delivery intent before delivery begins. Promotion may have
+    /// removed the relationship after terminal capture; in that ordering the
+    /// outbox remains authoritative and no projection is recreated.
+    pub fn ensure_completion_projection(
+        &self,
+        delivery: &CompletionDeliveryRecord,
+    ) -> anyhow::Result<bool> {
+        self.db.with_tx(|tx| {
+            let link_exists: bool = tx.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM session_links
+                    WHERE id = ?1 AND relation = 'subagent'
+                      AND child_session_id = ?2 AND closed_at IS NULL
+                 )",
+                params![delivery.session_link_id, delivery.child_session_id],
+                |row| row.get(0),
+            )?;
+            if !link_exists {
+                return Ok(false);
+            }
+            if let Some(existing) =
+                find_completion_projection(tx, &delivery.session_link_id, &delivery.child_turn_id)?
+            {
+                adopt_valid_completion_projection(tx, delivery, &existing)?;
+                return Ok(true);
+            }
+            tx.execute(
+                "INSERT OR IGNORE INTO session_link_completions (
+                    completion_id, session_link_id, child_turn_id, child_last_event_seq, outcome,
+                    parent_event_seq, parent_prompt_seq, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, ?6, ?6)",
+                params![
+                    delivery.completion_id,
+                    delivery.session_link_id,
+                    delivery.child_turn_id,
+                    delivery.child_last_event_seq,
+                    delivery.outcome.as_str(),
+                    delivery.created_at,
+                ],
+            )?;
+            let projected =
+                find_completion_projection(tx, &delivery.session_link_id, &delivery.child_turn_id)?
+                    .ok_or_else(|| {
+                        rusqlite::Error::ToSqlConversionFailure(Box::new(
+                    CompletionDeliveryParseError(
+                        "completion projection insert was suppressed by a conflicting identity"
+                            .to_string(),
+                    ),
+                ))
+                    })?;
+            adopt_valid_completion_projection(tx, delivery, &projected)?;
+            Ok(true)
+        })
+    }
+}
+
+type CompletionProjection = (String, i64, String);
+
+fn find_completion_projection(
+    conn: &rusqlite::Connection,
+    session_link_id: &str,
+    child_turn_id: &str,
+) -> rusqlite::Result<Option<CompletionProjection>> {
+    conn.query_row(
+        "SELECT completion_id, child_last_event_seq, outcome
+         FROM session_link_completions
+         WHERE session_link_id = ?1 AND child_turn_id = ?2",
+        params![session_link_id, child_turn_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )
+    .optional()
+}
+
+fn adopt_valid_completion_projection(
+    tx: &rusqlite::Connection,
+    delivery: &CompletionDeliveryRecord,
+    projection: &CompletionProjection,
+) -> rusqlite::Result<()> {
+    let (completion_id, last_seq, outcome) = projection;
+    if *last_seq != delivery.child_last_event_seq || outcome != delivery.outcome.as_str() {
+        return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
+            CompletionDeliveryParseError(
+                "completion projection conflicts with captured delivery".to_string(),
+            ),
+        )));
+    }
+    if completion_id != &delivery.completion_id {
+        tx.execute(
+            "UPDATE session_link_completion_deliveries
+             SET completion_id = ?2
+             WHERE delivery_id = ?1",
+            params![delivery.delivery_id, completion_id],
+        )?;
+    }
+    Ok(())
+}
+
+pub(crate) fn persist_terminal_turn_in_tx(
+    tx: &rusqlite::Connection,
+    input: &DurableTerminalTurn,
+) -> rusqlite::Result<()> {
+    // Idempotent retry after a committed terminal tx must resolve the durable
+    // intent before consulting current relationship state. Promotion may have
+    // removed the link after the first commit.
+    let existing_delivery = find_by_child_turn(tx, &input.session_id, &input.turn_id)?;
+    let last_event_seq = validate_terminal_batch(tx, input, existing_delivery.is_some())?;
+    if let Some(existing) = existing_delivery.as_ref() {
+        validate_terminal_retry(existing, input, last_event_seq)?;
+    }
+    let link = if existing_delivery.is_none() {
+        tx.query_row(
+            "SELECT id, parent_session_id, child_session_id, public_id, label
+             FROM session_links
+             WHERE relation = 'subagent' AND child_session_id = ?1
+               AND closed_at IS NULL",
+            [input.session_id.as_str()],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                ))
+            },
+        )
+        .optional()?
+    } else {
+        None
+    };
+
+    for event in &input.events {
+        let existing = tx
+            .query_row(
+                "SELECT event_type, turn_id, item_id, payload_json
+                 FROM session_events WHERE session_id = ?1 AND seq = ?2",
+                params![event.session_id, event.seq],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                },
+            )
+            .optional()?;
+        if let Some(existing) = existing {
+            let expected = (
+                event.event_type.clone(),
+                event.turn_id.clone(),
+                event.item_id.clone(),
+                event.payload_json.clone(),
+            );
+            if existing != expected {
+                return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
+                    CompletionDeliveryParseError(format!(
+                        "terminal retry conflicts at {}:{}",
+                        event.session_id, event.seq
+                    )),
+                )));
+            }
+            continue;
+        }
+        if existing_delivery.is_some() {
+            return Err(completion_delivery_error(
+                "captured terminal retry is missing a durable event",
+            ));
+        }
+        insert_event_row(tx, event)?;
+    }
+
+    if existing_delivery.is_some() {
+        return Ok(());
+    }
+    let Some((link_id, parent_id, child_id, public_id, label)) = link else {
+        return Ok(());
+    };
+    let outcome = input.outcome;
+    let notification_text = notification_text(
+        label.as_deref(),
+        public_id.as_deref(),
+        outcome,
+        input.assistant_text.as_deref(),
+    );
+    let existing_projection = tx
+        .query_row(
+            "SELECT completion_id, child_last_event_seq, outcome
+             FROM session_link_completions
+             WHERE session_link_id = ?1 AND child_turn_id = ?2",
+            params![link_id, input.turn_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            },
+        )
+        .optional()?;
+    let completion_id = match existing_projection {
+        Some((completion_id, projected_last_seq, projected_outcome)) => {
+            if projected_last_seq != last_event_seq || projected_outcome != outcome.as_str() {
+                return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
+                    CompletionDeliveryParseError(
+                        "existing completion projection conflicts with terminal turn".to_string(),
+                    ),
+                )));
+            }
+            completion_id
+        }
+        None => input.terminal_id.clone(),
+    };
+    tx.execute(
+        "INSERT INTO session_link_completion_deliveries (
+            delivery_id, completion_id, session_link_id, parent_session_id,
+            child_session_id, subagent_public_id, label, child_turn_id,
+            child_last_event_seq, outcome, assistant_text, notification_text,
+            state, next_attempt_at, created_at, updated_at
+         ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+            'pending', ?13, ?13, ?13
+         )",
+        params![
+            input.terminal_id,
+            completion_id,
+            link_id,
+            parent_id,
+            child_id,
+            public_id,
+            label,
+            input.turn_id,
+            last_event_seq,
+            outcome.as_str(),
+            input.assistant_text,
+            notification_text,
+            input.completed_at,
+        ],
+    )?;
+    Ok(())
+}
+
+fn validate_terminal_batch(
+    tx: &rusqlite::Connection,
+    input: &DurableTerminalTurn,
+    is_captured_retry: bool,
+) -> rusqlite::Result<i64> {
+    let Some(first) = input.events.first() else {
+        return Err(rusqlite::Error::InvalidParameterName(
+            "empty terminal batch".into(),
+        ));
+    };
+    if input.terminal_id.is_empty() || input.session_id.is_empty() || input.turn_id.is_empty() {
+        return Err(completion_delivery_error(
+            "terminal identity fields must not be empty",
+        ));
+    }
+    for (index, event) in input.events.iter().enumerate() {
+        let expected_seq = first
+            .seq
+            .checked_add(index as i64)
+            .ok_or_else(|| completion_delivery_error("terminal sequence overflow"))?;
+        if event.seq != expected_seq
+            || event.session_id != input.session_id
+            || event.turn_id.as_deref() != Some(input.turn_id.as_str())
+        {
+            return Err(completion_delivery_error(
+                "terminal events must be contiguous and belong to the frozen session turn",
+            ));
+        }
+    }
+    if !is_captured_retry {
+        let next_durable_seq: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(seq), 0) + 1
+             FROM session_events WHERE session_id = ?1",
+            [input.session_id.as_str()],
+            |row| row.get(0),
+        )?;
+        if first.seq != next_durable_seq {
+            return Err(completion_delivery_error(
+                "terminal batch does not begin at the next durable sequence",
+            ));
+        }
+    }
+    let last = input
+        .events
+        .last()
+        .expect("nonempty terminal batch was checked");
+    let terminal_shape_matches = match input.outcome {
+        SessionTurnOutcome::Completed => {
+            last.event_type == "turn_ended"
+                && persisted_stop_reason(last).as_deref() != Some("cancelled")
+        }
+        SessionTurnOutcome::Cancelled => last.event_type == "turn_ended",
+        SessionTurnOutcome::Failed => matches!(last.event_type.as_str(), "turn_ended" | "error"),
+    };
+    if !terminal_shape_matches {
+        return Err(completion_delivery_error(
+            "terminal event shape conflicts with terminal outcome",
+        ));
+    }
+    Ok(last.seq)
+}
+
+fn completion_delivery_error(message: &str) -> rusqlite::Error {
+    rusqlite::Error::ToSqlConversionFailure(Box::new(CompletionDeliveryParseError(
+        message.to_string(),
+    )))
+}
+
+fn validate_terminal_retry(
+    delivery: &CompletionDeliveryRecord,
+    input: &DurableTerminalTurn,
+    last_event_seq: i64,
+) -> rusqlite::Result<()> {
+    let outcome = input.outcome;
+    let expected_notification = notification_text(
+        delivery.label.as_deref(),
+        delivery.subagent_public_id.as_deref(),
+        outcome,
+        input.assistant_text.as_deref(),
+    );
+    let matches = delivery.delivery_id == input.terminal_id
+        && delivery.child_session_id == input.session_id
+        && delivery.child_turn_id == input.turn_id
+        && delivery.child_last_event_seq == last_event_seq
+        && delivery.outcome == outcome
+        && delivery.assistant_text == input.assistant_text
+        && delivery.notification_text == expected_notification
+        && delivery.created_at == input.completed_at;
+    if !matches {
+        return Err(completion_delivery_error(
+            "terminal retry conflicts with captured delivery",
+        ));
+    }
+    Ok(())
+}
+
+fn persisted_stop_reason(event: &SessionEventRecord) -> Option<String> {
+    let value = serde_json::from_str::<serde_json::Value>(&event.payload_json).ok()?;
+    value.get("stopReason")?.as_str().map(str::to_string)
 }
 
 fn find_by_child_turn(
@@ -296,299 +534,5 @@ fn notification_text(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::test_support;
-    use crate::domains::workspaces::model::{
-        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
-        WorkspaceSurface,
-    };
-
-    pub(super) fn seed_link(db: &Db, relationship_closed: bool) {
-        test_support::seed_workspace_with_repo_root(
-            db,
-            "workspace-1",
-            "local",
-            "/tmp/completion-delivery",
-        );
-        db.with_conn(|conn| {
-            for id in ["parent-1", "child-1"] {
-                conn.execute(
-                    "INSERT INTO sessions (
-                        id, workspace_id, agent_kind, status, created_at, updated_at,
-                        subagents_enabled
-                     ) VALUES (?1, 'workspace-1', 'claude', 'idle', ?2, ?2, 1)",
-                    params![id, "2026-08-11T00:00:00Z"],
-                )?;
-            }
-            conn.execute(
-                "INSERT INTO session_links (
-                    id, public_id, relation, parent_session_id, child_session_id,
-                    workspace_relation, label, created_at, subagent_closed_at
-                 ) VALUES (
-                    'link-1', 'subagent-1', 'subagent', 'parent-1', 'child-1',
-                    'same_workspace', 'Researcher', ?1, ?2
-                 )",
-                params![
-                    "2026-08-11T00:00:00Z",
-                    relationship_closed.then_some("2026-08-11T00:01:00Z")
-                ],
-            )?;
-            Ok(())
-        })
-        .expect("seed subagent relationship");
-    }
-
-    fn workspace() -> WorkspaceRecord {
-        WorkspaceRecord {
-            id: "workspace-1".to_string(),
-            kind: WorkspaceKind::Local,
-            repo_root_id: "repo-root-workspace-1".to_string(),
-            path: "/tmp/completion-delivery".to_string(),
-            surface: WorkspaceSurface::Standard,
-            original_branch: None,
-            current_branch: None,
-            display_name: None,
-            origin: None,
-            creator_context: None,
-            lifecycle_state: WorkspaceLifecycleState::Active,
-            cleanup_state: WorkspaceCleanupState::None,
-            cleanup_operation: None,
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
-            created_at: "2026-08-11T00:00:00Z".to_string(),
-            updated_at: "2026-08-11T00:00:00Z".to_string(),
-        }
-    }
-
-    pub(super) fn capture_input(turn_id: &str) -> CaptureCompletionDeliveryInput {
-        CaptureCompletionDeliveryInput {
-            turn: SessionTurnFinishedContext {
-                workspace: workspace(),
-                session_id: "child-1".to_string(),
-                turn_id: turn_id.to_string(),
-                prompt_id: Some("prompt-1".to_string()),
-                outcome: SessionTurnOutcome::Completed,
-                stop_reason: Some("end_turn".to_string()),
-                last_event_seq: 42,
-                error_details: None,
-            },
-            assistant_text: Some("Useful answer".to_string()),
-            captured_at: "2026-08-11T00:02:00Z".to_string(),
-        }
-    }
-
-    #[test]
-    fn capture_is_atomic_stable_and_accepts_relationship_closed() {
-        let db = Db::open_in_memory().expect("open db");
-        seed_link(&db, true);
-        let store = CompletionDeliveryStore::new(db.clone());
-
-        let first = store.capture(&capture_input("turn-1")).expect("capture");
-        let CaptureCompletionDeliveryOutcome::Captured {
-            delivery: first,
-            was_existing: false,
-        } = first
-        else {
-            panic!("expected first capture");
-        };
-        let second = store
-            .capture(&capture_input("turn-1"))
-            .expect("duplicate capture");
-        let CaptureCompletionDeliveryOutcome::Captured {
-            delivery: second,
-            was_existing: true,
-        } = second
-        else {
-            panic!("expected stable duplicate capture");
-        };
-        assert_eq!(first.delivery_id, second.delivery_id);
-        assert_eq!(first.completion_id, second.completion_id);
-        assert_eq!(first.state, CompletionDeliveryState::Pending);
-        assert_eq!(
-            first.notification_text,
-            "Subagent update\nAgent: Researcher (subagent-1)\nOutcome: completed\n\nFinal output:\nUseful answer"
-        );
-        db.with_conn(|conn| {
-            let completions: i64 =
-                conn.query_row("SELECT COUNT(*) FROM session_link_completions", [], |row| {
-                    row.get(0)
-                })?;
-            let deliveries: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM session_link_completion_deliveries",
-                [],
-                |row| row.get(0),
-            )?;
-            assert_eq!((completions, deliveries), (1, 1));
-            Ok(())
-        })
-        .expect("count rows");
-    }
-
-    #[test]
-    fn promotion_orders_against_capture_and_snapshot_survives_cascade() {
-        let db = Db::open_in_memory().expect("open db");
-        seed_link(&db, false);
-        let store = CompletionDeliveryStore::new(db.clone());
-        let captured = store.capture(&capture_input("turn-1")).expect("capture");
-        let CaptureCompletionDeliveryOutcome::Captured { delivery, .. } = captured else {
-            panic!("expected capture");
-        };
-        db.with_conn(|conn| {
-            conn.execute("DELETE FROM session_links WHERE id = 'link-1'", [])?;
-            Ok(())
-        })
-        .expect("promote child");
-        assert!(store
-            .find(&delivery.delivery_id)
-            .expect("find delivery")
-            .is_some());
-        assert!(matches!(
-            store
-                .capture(&capture_input("turn-2"))
-                .expect("capture after promotion"),
-            CaptureCompletionDeliveryOutcome::NotSubagent
-        ));
-        let duplicate = store
-            .capture(&capture_input("turn-1"))
-            .expect("duplicate after promotion");
-        assert!(matches!(
-            duplicate,
-            CaptureCompletionDeliveryOutcome::Captured {
-                was_existing: true,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn failed_outbox_insert_rolls_back_completion() {
-        let db = Db::open_in_memory().expect("open db");
-        seed_link(&db, false);
-        db.with_conn(|conn| {
-            conn.execute_batch(
-                "CREATE TRIGGER fail_delivery_insert
-                 BEFORE INSERT ON session_link_completion_deliveries
-                 BEGIN SELECT RAISE(ABORT, 'failpoint'); END;",
-            )?;
-            Ok(())
-        })
-        .expect("install failpoint");
-        let store = CompletionDeliveryStore::new(db.clone());
-        assert!(store.capture(&capture_input("turn-1")).is_err());
-        db.with_conn(|conn| {
-            let count: i64 =
-                conn.query_row("SELECT COUNT(*) FROM session_link_completions", [], |row| {
-                    row.get(0)
-                })?;
-            assert_eq!(count, 0);
-            Ok(())
-        })
-        .expect("verify rollback");
-    }
-
-    #[test]
-    fn expiring_claim_allows_only_one_worker_then_recovers() {
-        let db = Db::open_in_memory().expect("open db");
-        seed_link(&db, false);
-        let store = CompletionDeliveryStore::new(db);
-        store.capture(&capture_input("turn-1")).expect("capture");
-
-        let first = store
-            .claim_next_due("2026-08-11T00:02:00Z", "2026-08-11T00:03:00Z", "worker-1")
-            .expect("first claim")
-            .expect("delivery claimed");
-        assert_eq!(first.attempt_count, 1);
-        assert!(store
-            .claim_next_due("2026-08-11T00:02:30Z", "2026-08-11T00:03:30Z", "worker-2",)
-            .expect("parallel claim")
-            .is_none());
-
-        let recovered = store
-            .claim_next_due("2026-08-11T00:03:00Z", "2026-08-11T00:04:00Z", "worker-2")
-            .expect("expired claim recovery")
-            .expect("delivery reclaimed");
-        assert_eq!(recovered.delivery_id, first.delivery_id);
-        assert_eq!(recovered.attempt_count, 2);
-    }
-
-    #[test]
-    fn mobility_round_trip_preserves_enqueued_delivery_after_promotion() {
-        let source = Db::open_in_memory().expect("open source db");
-        seed_link(&source, false);
-        let source_store = CompletionDeliveryStore::new(source.clone());
-        let captured = source_store
-            .capture(&capture_input("turn-1"))
-            .expect("capture delivery");
-        let CaptureCompletionDeliveryOutcome::Captured { delivery, .. } = captured else {
-            panic!("expected captured delivery");
-        };
-        source_store
-            .claim_next_due("2026-08-11T00:02:00Z", "2026-08-11T00:03:00Z", "worker-1")
-            .expect("claim delivery")
-            .expect("delivery claimed");
-        assert!(source_store
-            .mark_enqueued(
-                &delivery.delivery_id,
-                "worker-1",
-                11,
-                "2026-08-11T00:02:01Z",
-                "2026-08-11T00:02:02Z",
-            )
-            .expect("mark enqueued"));
-        source
-            .with_conn(|conn| {
-                conn.execute("DELETE FROM session_links WHERE id = 'link-1'", [])?;
-                Ok(())
-            })
-            .expect("promote child");
-
-        let exported = source_store
-            .list_for_parent_sessions(&["parent-1".to_string()])
-            .expect("export deliveries");
-        assert_eq!(exported.len(), 1);
-        assert_eq!(exported[0].state, CompletionDeliveryState::Enqueued);
-
-        let destination = Db::open_in_memory().expect("open destination db");
-        test_support::seed_workspace_with_repo_root(
-            &destination,
-            "workspace-1",
-            "local",
-            "/tmp/completion-delivery-destination",
-        );
-        destination
-            .with_conn(|conn| {
-                conn.execute(
-                    "INSERT INTO sessions (
-                        id, workspace_id, agent_kind, status, created_at, updated_at,
-                        subagents_enabled
-                     ) VALUES ('parent-1', 'workspace-1', 'claude', 'idle', ?1, ?1, 1)",
-                    ["2026-08-11T00:00:00Z"],
-                )?;
-                Ok(())
-            })
-            .expect("seed destination parent");
-        let destination_store = CompletionDeliveryStore::new(destination.clone());
-        destination_store
-            .import(&exported[0])
-            .expect("import delivery without link or child");
-        let imported = destination_store
-            .find(&delivery.delivery_id)
-            .expect("find imported delivery")
-            .expect("delivery imported");
-        assert_eq!(imported, exported[0]);
-        destination
-            .with_conn(|conn| {
-                let links: i64 =
-                    conn.query_row("SELECT COUNT(*) FROM session_links", [], |row| row.get(0))?;
-                let completions: i64 =
-                    conn.query_row("SELECT COUNT(*) FROM session_link_completions", [], |row| {
-                        row.get(0)
-                    })?;
-                assert_eq!((links, completions), (0, 0));
-                Ok(())
-            })
-            .expect("verify independent delivery import");
-    }
-}
+#[path = "completion_deliveries/tests.rs"]
+mod tests;

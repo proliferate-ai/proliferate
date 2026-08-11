@@ -42,7 +42,50 @@ impl SessionRuntime {
                     SubagentLifecycleError::Internal(error)
                 }
             })?;
+        // A bounded actor-side terminal write may have exhausted while the
+        // provider was being cancelled. The exact handle is retired now, so
+        // startup cannot race this durable repair and Close cannot report
+        // success while the child still has an open turn.
+        let repair = self
+            .acp_manager
+            .run_if_session_absent(child_session_id, || {
+                self.session_service
+                    .store()
+                    .repair_unclosed_turns(child_session_id)
+            })
+            .await
+            .ok_or_else(|| {
+                SubagentLifecycleError::Internal(anyhow::anyhow!(
+                    "subagent actor restarted before Close repair"
+                ))
+            })?;
+        repair.map_err(SubagentLifecycleError::Internal)?;
         self.current_subagent_session(child_session_id)
+    }
+
+    /// Crash-safe backstop for a current subagent whose actor retired before
+    /// its terminal transaction committed. Open and reversibly Closed links
+    /// are eligible; promoted/no-link sessions are not. The live manager
+    /// serializes each repair against actor installation.
+    pub(crate) async fn repair_retired_subagent_turns(&self, limit: usize) -> anyhow::Result<u32> {
+        let session_ids = self
+            .session_link_service
+            .list_current_subagent_children_with_unclosed_turns(limit)?;
+        let mut repaired = 0u32;
+        for session_id in session_ids {
+            if let Some(result) = self
+                .acp_manager
+                .run_if_session_absent(&session_id, || {
+                    self.session_service
+                        .store()
+                        .repair_unclosed_turns(&session_id)
+                })
+                .await
+            {
+                repaired = repaired.saturating_add(result?);
+            }
+        }
+        Ok(repaired)
     }
 
     /// Re-open the same durable/native conversation. Startup completes while

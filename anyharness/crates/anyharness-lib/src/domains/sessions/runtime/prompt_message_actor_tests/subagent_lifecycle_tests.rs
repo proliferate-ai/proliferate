@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use super::*;
 use crate::domains::agent_operations::model::{AgentRole, ListAgentsInput};
+use crate::domains::sessions::subagents::delivery::CompletionDeliveryStore;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn reversible_open_cold_starts_the_same_native_conversation_without_replay() {
@@ -186,6 +187,82 @@ async fn live_promotion_preserves_the_running_turn_and_removes_all_parent_behavi
         .unwrap()
         .iter()
         .any(|event| event.event_type == "subagent_turn_completed"));
+
+    stop_target_actor(&state).await;
+    drop(state);
+    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn startup_refuses_an_unrepaired_turn_then_starts_after_atomic_repair() {
+    let _env_lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let runtime_home = temp_runtime_home("startup-repair-gate");
+    let script = write_scripted_agent(&runtime_home);
+    let (_program, _args) = install_scripted_agent_env(&script);
+    let state = build_state(&runtime_home, Db::open_in_memory().expect("db"), true);
+    let parent = session("repair-parent", "workspace-b", "idle", "Parent");
+    state
+        .session_service
+        .store()
+        .insert(&parent)
+        .expect("parent");
+    state
+        .subagent_service
+        .link_child("repair-parent", "target", Some("worker".into()), None, None)
+        .expect("link");
+    state
+        .session_service
+        .store()
+        .append_event(&crate::domains::sessions::model::SessionEventRecord {
+            id: 0,
+            session_id: "target".into(),
+            seq: 1,
+            timestamp: "2026-08-11T00:01:00Z".into(),
+            event_type: "turn_started".into(),
+            turn_id: Some("turn-unrepaired".into()),
+            item_id: None,
+            payload_json: r#"{"type":"turn_started"}"#.into(),
+        })
+        .expect("open turn");
+    state
+        .db
+        .with_conn(|conn| {
+            conn.execute_batch(
+                "CREATE TRIGGER reject_startup_repair_delivery
+                 BEFORE INSERT ON session_link_completion_deliveries
+                 BEGIN SELECT RAISE(ABORT, 'repair blocked'); END;",
+            )
+        })
+        .expect("install failpoint");
+
+    assert!(state
+        .session_runtime
+        .ensure_live_session("target", None)
+        .await
+        .is_err());
+    assert!(state.acp_manager.get_handle("target").await.is_none());
+    assert!(CompletionDeliveryStore::new(state.db.clone())
+        .list_all_for_test()
+        .expect("deliveries")
+        .is_empty());
+
+    state
+        .db
+        .with_conn(|conn| conn.execute_batch("DROP TRIGGER reject_startup_repair_delivery;"))
+        .expect("remove failpoint");
+    state
+        .session_runtime
+        .ensure_live_session("target", None)
+        .await
+        .expect("start after repair");
+    assert!(state.acp_manager.get_ready_handle("target").await.is_some());
+    let deliveries = CompletionDeliveryStore::new(state.db.clone())
+        .list_all_for_test()
+        .expect("deliveries");
+    assert_eq!(deliveries.len(), 1);
+    assert_eq!(deliveries[0].child_turn_id, "turn-unrepaired");
 
     stop_target_actor(&state).await;
     drop(state);

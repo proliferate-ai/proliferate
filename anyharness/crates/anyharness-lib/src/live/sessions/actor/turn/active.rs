@@ -321,6 +321,14 @@ impl SessionActor {
 
             self.resume_replay_filter.disable();
 
+            if broken_session && exit_after_prompt.is_none() {
+                // Terminal persistence exhausted its bounded retry while the
+                // exact frozen batch remains in the sink. Retire this actor
+                // before it can re-enter idle and accept any event-producing
+                // work; the no-live-handle subagent recovery pass owns the
+                // durable open turn from here.
+                exit_after_prompt = Some(ActorExitDisposition::Unload);
+            }
             if exit_after_prompt.is_some() || broken_session {
                 break 'drain;
             }

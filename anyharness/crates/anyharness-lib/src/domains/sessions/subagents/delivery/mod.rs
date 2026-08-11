@@ -5,6 +5,5 @@ mod runtime;
 pub use runtime::CompletionDeliveryWorker;
 
 pub use crate::domains::sessions::store::completion_deliveries::{
-    CaptureCompletionDeliveryInput, CaptureCompletionDeliveryOutcome, CompletionDeliveryRecord,
-    CompletionDeliveryState, CompletionDeliveryStore,
+    CompletionDeliveryRecord, CompletionDeliveryState, CompletionDeliveryStore,
 };

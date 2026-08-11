@@ -157,6 +157,35 @@ pub trait EventPersist: Send + Sync {
         timestamp: &str,
         payload_json: &str,
     ) -> anyhow::Result<()>;
+    fn persist_terminal_turn(&self, input: &TerminalTurnPersistenceInput) -> anyhow::Result<()>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalTurnOutcome {
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+impl TerminalTurnOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TerminalTurnPersistenceInput {
+    pub terminal_id: String,
+    pub session_id: String,
+    pub turn_id: String,
+    pub outcome: TerminalTurnOutcome,
+    pub assistant_text: Option<String>,
+    pub events: Vec<SessionEventEnvelope>,
+    pub completed_at: String,
 }
 
 /// Durable pending-prompt queue rows.

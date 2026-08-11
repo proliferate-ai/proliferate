@@ -306,6 +306,14 @@ impl SessionLinkService {
             .collect())
     }
 
+    pub fn list_current_subagent_children_with_unclosed_turns(
+        &self,
+        limit: usize,
+    ) -> anyhow::Result<Vec<String>> {
+        self.store
+            .list_current_subagent_children_with_unclosed_turns(limit)
+    }
+
     pub fn find_subagent_parent(
         &self,
         child_session_id: &str,

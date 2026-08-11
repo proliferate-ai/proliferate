@@ -244,21 +244,16 @@ pub(crate) fn delete_parent_deliveries_in_tx(
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::{capture_input, seed_link};
-    use super::super::{
-        CaptureCompletionDeliveryOutcome, CompletionDeliveryState, CompletionDeliveryStore,
-    };
+    use super::super::tests::{persist_delivery, seed_link};
+    use super::super::{CompletionDeliveryState, CompletionDeliveryStore};
     use crate::persistence::Db;
 
     #[test]
     fn enqueued_backoff_is_persisted_and_retries_when_due() {
         let db = Db::open_in_memory().expect("open db");
         seed_link(&db, false);
-        let store = CompletionDeliveryStore::new(db);
-        let captured = store.capture(&capture_input("turn-1")).expect("capture");
-        let CaptureCompletionDeliveryOutcome::Captured { delivery, .. } = captured else {
-            panic!("expected captured delivery");
-        };
+        let store = CompletionDeliveryStore::new(db.clone());
+        let delivery = persist_delivery(&db, "turn-1");
         let claimed = store
             .claim_next_due("2026-08-11T00:02:00Z", "2026-08-11T00:02:30Z", "worker-1")
             .expect("claim")

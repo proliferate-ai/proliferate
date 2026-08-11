@@ -8,6 +8,7 @@
 use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
 
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::domains::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PendingPromptReorderOutcome,
     PromptAttachmentRecord, PromptAttachmentState, SessionBackgroundWorkRecord,
@@ -16,9 +17,12 @@ use crate::domains::sessions::model::{
 use crate::domains::sessions::prompt::{
     load_prompt_attachments, PromptPayload, PromptValidationError, ResolvedParts,
 };
+use crate::domains::sessions::store::completion_deliveries::DurableTerminalTurn;
+use crate::domains::sessions::store::persisted_payloads::sanitize_session_event_for_sqlite;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::model::{
     AttachmentSource, BackgroundWorkDurable, EventPersist, QueueDurable, SessionStateDurable,
+    TerminalTurnOutcome, TerminalTurnPersistenceInput,
 };
 
 impl EventPersist for SessionStore {
@@ -64,6 +68,43 @@ impl EventPersist for SessionStore {
             notification_kind,
             timestamp,
             payload_json,
+        )
+    }
+
+    fn persist_terminal_turn(&self, input: &TerminalTurnPersistenceInput) -> anyhow::Result<()> {
+        let events = input
+            .events
+            .iter()
+            .map(|envelope| {
+                let event = sanitize_session_event_for_sqlite(&envelope.event);
+                Ok(SessionEventRecord {
+                    id: 0,
+                    session_id: envelope.session_id.clone(),
+                    seq: envelope.seq,
+                    timestamp: envelope.timestamp.clone(),
+                    event_type: event.event_type().to_string(),
+                    turn_id: envelope.turn_id.clone(),
+                    item_id: envelope.item_id.clone(),
+                    payload_json: serde_json::to_string(&event)?,
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let outcome = match input.outcome {
+            TerminalTurnOutcome::Completed => SessionTurnOutcome::Completed,
+            TerminalTurnOutcome::Failed => SessionTurnOutcome::Failed,
+            TerminalTurnOutcome::Cancelled => SessionTurnOutcome::Cancelled,
+        };
+        SessionStore::persist_terminal_turn_record(
+            self,
+            &DurableTerminalTurn {
+                terminal_id: input.terminal_id.clone(),
+                session_id: input.session_id.clone(),
+                turn_id: input.turn_id.clone(),
+                outcome,
+                assistant_text: input.assistant_text.clone(),
+                events,
+                completed_at: input.completed_at.clone(),
+            },
         )
     }
 }
