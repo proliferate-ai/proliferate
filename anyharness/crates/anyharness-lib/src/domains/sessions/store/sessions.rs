@@ -325,6 +325,7 @@ impl SessionStore {
     pub fn pop_last_dismissed_in_workspace(
         &self,
         workspace_id: &str,
+        expected_session_id: Option<&str>,
         now: &str,
     ) -> anyhow::Result<Option<SessionRecord>> {
         self.db.with_tx(|conn| {
@@ -342,6 +343,9 @@ impl SessionStore {
             let Some(record) = record else {
                 return Ok(None);
             };
+            if expected_session_id.is_some_and(|expected| record.id != expected) {
+                return Ok(None);
+            }
 
             conn.execute(
                 "UPDATE sessions SET dismissed_at = NULL, updated_at = ?1 WHERE id = ?2",
@@ -545,7 +549,7 @@ pub(super) fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord
     })
 }
 
-pub(super) fn insert_session_row(
+pub(crate) fn insert_session_row(
     conn: &rusqlite::Connection,
     record: &SessionRecord,
 ) -> rusqlite::Result<()> {

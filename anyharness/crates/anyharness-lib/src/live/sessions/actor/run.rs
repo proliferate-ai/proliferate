@@ -272,6 +272,12 @@ impl SessionActor {
                 let _ = respond_to.send(Ok(()));
                 Some(ActorExitDisposition::Dismiss)
             }
+            SessionCommand::Unload { respond_to } => {
+                self.resolve_pending_interactions(Resolution::Cancelled)
+                    .await;
+                let _ = respond_to.send(Ok(()));
+                Some(ActorExitDisposition::Unload)
+            }
             SessionCommand::Close { respond_to } => {
                 self.resolve_pending_interactions(Resolution::Cancelled)
                     .await;

@@ -40,6 +40,12 @@ pub(super) fn wire_agent_operations(deps: AgentOperationsWiringDeps) -> Arc<Agen
             deps.session_admission.clone(),
             deps.workspace_operation_gate.clone(),
         )
+        .with_subagent_lifecycle(
+            deps.session_runtime.clone(),
+            deps.workspace_option_runtime.clone(),
+            deps.session_admission.clone(),
+            deps.workspace_operation_gate.clone(),
+        )
         .with_messaging(
             deps.session_runtime,
             deps.workspace_option_runtime,

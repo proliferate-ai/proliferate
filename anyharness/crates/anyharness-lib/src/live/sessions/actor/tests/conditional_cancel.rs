@@ -15,15 +15,19 @@ use std::time::Duration;
 
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
-    SessionActionCapabilities, SessionEventEnvelope, SessionExecutionPhase,
+    SessionActionCapabilities, SessionEvent, SessionEventEnvelope, SessionExecutionPhase,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use crate::app::test_support::{actor_capabilities_for_store, seed_workspace_with_repo_root};
+use crate::app::AppState;
+use crate::domains::agents::installer::seed::AgentSeedStore;
+use crate::domains::sessions::extensions::{SessionExtension, SessionTurnFinishedContext};
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::live::sessions::actor::command::{
     ConditionalCancelOutcome, PromptAcceptance, SessionCommand,
 };
@@ -40,6 +44,8 @@ use crate::live::sessions::model::{SessionHooks, SystemPromptAppends};
 use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
 use crate::live::sessions::sink::SessionEventSink;
 use crate::persistence::Db;
+
+mod unload;
 
 type DuplexRead = tokio::io::ReadHalf<tokio::io::DuplexStream>;
 type DuplexWrite = tokio::io::WriteHalf<tokio::io::DuplexStream>;
@@ -60,6 +66,9 @@ struct Harness {
     prompt_responder_rx: mpsc::UnboundedReceiver<acp::Responder<acp::schema::PromptResponse>>,
     /// Every `session/cancel` the fake agent received.
     cancel_rx: mpsc::UnboundedReceiver<acp::schema::CancelNotification>,
+    /// Sends real ACP transcript notifications from the fake agent while its
+    /// prompt response remains pending.
+    agent_notification_tx: mpsc::UnboundedSender<acp::schema::SessionNotification>,
     /// Kept alive so the in-memory database outlives the actor.
     _store: SessionStore,
 }
@@ -104,6 +113,14 @@ async fn spawn_harness() -> Harness {
     let store = SessionStore::new(db.clone());
     let session = test_session_record();
     store.insert(&session).expect("insert session");
+    spawn_harness_with_store(store, SessionHooks::default()).await
+}
+
+async fn spawn_harness_with_store(store: SessionStore, hooks: SessionHooks) -> Harness {
+    let session = store
+        .find_by_id(SESSION_ID)
+        .expect("read session")
+        .expect("session exists");
     let caps = actor_capabilities_for_store(&store);
 
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);
@@ -160,7 +177,8 @@ async fn spawn_harness() -> Harness {
     let (prompt_responder_tx, prompt_responder_rx) =
         mpsc::unbounded_channel::<acp::Responder<acp::schema::PromptResponse>>();
     let (cancel_tx, cancel_rx) = mpsc::unbounded_channel::<acp::schema::CancelNotification>();
-    spawn_fake_agent(agent_write, agent_read, prompt_responder_tx, cancel_tx);
+    let agent_notification_tx =
+        spawn_fake_agent(agent_write, agent_read, prompt_responder_tx, cancel_tx);
 
     // A live child process guard the actor owns and drops on exit; never spoken
     // to (the ACP transport is the duplex above).
@@ -194,7 +212,7 @@ async fn spawn_harness() -> Harness {
         supports_native_close: false,
         conn,
         caps,
-        hooks: SessionHooks::default(),
+        hooks,
         interaction_broker,
         handle: handle.clone(),
         _acp_shutdown: acp_shutdown,
@@ -209,6 +227,7 @@ async fn spawn_harness() -> Harness {
         handle,
         prompt_responder_rx,
         cancel_rx,
+        agent_notification_tx,
         _store: store,
     }
 }
@@ -304,7 +323,9 @@ fn spawn_fake_agent(
     read: DuplexRead,
     prompt_responder_tx: mpsc::UnboundedSender<acp::Responder<acp::schema::PromptResponse>>,
     cancel_tx: mpsc::UnboundedSender<acp::schema::CancelNotification>,
-) {
+) -> mpsc::UnboundedSender<acp::schema::SessionNotification> {
+    let (notification_tx, mut notification_rx) =
+        mpsc::unbounded_channel::<acp::schema::SessionNotification>();
     let transport = acp::ByteStreams::new(write.compat_write(), read.compat());
     let connect_future = acp::Agent
         .builder()
@@ -329,8 +350,10 @@ fn spawn_fake_agent(
         )
         .connect_with(
             transport,
-            move |_cx: acp::ConnectionTo<acp::Client>| async move {
-                std::future::pending::<()>().await;
+            move |cx: acp::ConnectionTo<acp::Client>| async move {
+                while let Some(notification) = notification_rx.recv().await {
+                    cx.send_notification(notification)?;
+                }
                 Ok(())
             },
         );
@@ -338,6 +361,7 @@ fn spawn_fake_agent(
     tokio::task::spawn_local(async move {
         let _ = connect_future.await;
     });
+    notification_tx
 }
 
 /// Start the real turn loop on a local task, returning the minted active turn id
@@ -362,6 +386,7 @@ async fn start_turn(
         handle,
         mut prompt_responder_rx,
         cancel_rx,
+        agent_notification_tx,
         _store,
     } = harness;
 
@@ -376,6 +401,7 @@ async fn start_turn(
     let actor_task = tokio::task::spawn_local(async move {
         // `_store` must outlive the actor's use of the in-memory database.
         let _store = _store;
+        let _agent_notification_tx = agent_notification_tx;
         actor
             .run_turn(
                 request,

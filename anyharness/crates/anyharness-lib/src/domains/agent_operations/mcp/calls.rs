@@ -250,6 +250,21 @@ pub async fn call_tool(
             let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
             serialize(operations.interrupt_agent(&ctx.caller, &target).await)
         }
+        "close_subagent" => {
+            let args = parse::<TargetArgs>(arguments)?;
+            let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
+            serialize(operations.close_subagent(&ctx.caller, &target).await)
+        }
+        "open_subagent" => {
+            let args = parse::<TargetArgs>(arguments)?;
+            let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
+            serialize(operations.open_subagent(&ctx.caller, &target).await)
+        }
+        "promote_subagent" => {
+            let args = parse::<TargetArgs>(arguments)?;
+            let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
+            serialize(operations.promote_subagent(&ctx.caller, &target).await)
+        }
         "get_task_output" => {
             let args = parse::<TaskOutputArgs>(arguments)?;
             let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);

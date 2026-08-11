@@ -68,6 +68,15 @@ Connections never escape upward; row types and SQL never escape the store.
 In-repo exemplar: `domains/sessions/store/**`; cross-domain atomic deletes use
 the participant-trait pattern (`domains/sessions/deletion.rs`).
 
+Subagent lifecycle provides two additional exemplars. Creation inserts the
+child session and its fanout-capped relationship in one transaction, preventing
+an unlinked child from becoming visible as an ordinary session. Reversible
+Close sets `session_links.subagent_closed_at`, deletes the child's pending
+prompts, and removes its one-shot wake schedule in one transaction. Actor
+cancellation/unload happens only after that transaction returns; no database
+transaction is held across an actor await. Completion-ledger rows and durable
+session history are deliberately not deleted.
+
 Rules:
 
 - low-level transaction helpers live with the relevant store when they are

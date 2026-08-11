@@ -4,6 +4,7 @@ mod error;
 mod messaging;
 mod ordinary;
 mod ports;
+mod subagent_lifecycle;
 mod target_access;
 mod workspaces;
 
@@ -11,6 +12,8 @@ mod workspaces;
 mod messaging_tests;
 #[cfg(test)]
 mod ordinary_tests;
+#[cfg(test)]
+mod subagent_lifecycle_tests;
 #[cfg(test)]
 mod tests;
 
@@ -22,7 +25,7 @@ pub(crate) use ports::AgentMessageQueue;
 pub use ports::{
     AgentCatalogReads, AgentConfigMutationState, AgentExecutionReads, AgentLaunchOptionReads,
     AgentSessionMutations, AgentSessionReads, AgentTaskOutputReads, AgentWorkspaceOperations,
-    SubagentRelationshipReads,
+    SubagentLifecycleMutations, SubagentRelationshipReads,
 };
 
 use crate::domains::agent_operations::model::{
@@ -47,6 +50,7 @@ pub struct AgentOperations {
     launch_options: Option<Arc<dyn AgentLaunchOptionReads>>,
     catalog: Option<Arc<dyn AgentCatalogReads>>,
     mutations: Option<Arc<dyn AgentSessionMutations>>,
+    subagent_lifecycle: Option<Arc<dyn SubagentLifecycleMutations>>,
     message_queue: Option<Arc<dyn AgentMessageQueue>>,
     task_output: Option<Arc<dyn AgentTaskOutputReads>>,
     session_admission: Option<Arc<SessionMutationAdmission>>,
@@ -69,6 +73,7 @@ impl AgentOperations {
             launch_options: None,
             catalog: None,
             mutations: None,
+            subagent_lifecycle: None,
             message_queue: None,
             task_output: None,
             session_admission: None,
@@ -97,6 +102,20 @@ impl AgentOperations {
     ) -> Self {
         self.mutations = Some(mutations);
         self.task_output = Some(task_output);
+        self.session_admission = Some(session_admission);
+        self.workspace_operation_gate = Some(workspace_operation_gate);
+        self
+    }
+
+    pub fn with_subagent_lifecycle(
+        mut self,
+        lifecycle: Arc<dyn SubagentLifecycleMutations>,
+        workspaces: Arc<dyn AgentWorkspaceOperations>,
+        session_admission: Arc<SessionMutationAdmission>,
+        workspace_operation_gate: Arc<WorkspaceOperationGate>,
+    ) -> Self {
+        self.subagent_lifecycle = Some(lifecycle);
+        self.workspaces = Some(workspaces);
         self.session_admission = Some(session_admission);
         self.workspace_operation_gate = Some(workspace_operation_gate);
         self
@@ -458,7 +477,7 @@ impl ResolvedAgent {
     fn is_relationship_closed(&self) -> bool {
         self.parent_link
             .as_ref()
-            .is_some_and(|link| link.closed_at.is_some())
+            .is_some_and(|link| link.subagent_closed_at.is_some())
     }
 
     fn is_terminal_session(&self) -> bool {

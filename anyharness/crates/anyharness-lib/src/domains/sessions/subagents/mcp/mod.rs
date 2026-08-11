@@ -12,8 +12,10 @@ use serde_json::Value;
 
 use self::auth::SubagentMcpAuth;
 use self::context::SubagentMcpContext;
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::subagents::service::SubagentService;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition, ProductMcpRequestContext,
@@ -25,6 +27,8 @@ pub struct SubagentProductMcpServer {
     service: Arc<SubagentService>,
     session_runtime: Arc<SessionRuntime>,
     workspace_runtime: Arc<WorkspaceRuntime>,
+    session_admission: Arc<SessionMutationAdmission>,
+    operation_gate: Arc<WorkspaceOperationGate>,
     auth: Arc<SubagentMcpAuth>,
 }
 
@@ -33,12 +37,16 @@ impl SubagentProductMcpServer {
         service: Arc<SubagentService>,
         session_runtime: Arc<SessionRuntime>,
         workspace_runtime: Arc<WorkspaceRuntime>,
+        session_admission: Arc<SessionMutationAdmission>,
+        operation_gate: Arc<WorkspaceOperationGate>,
         auth: Arc<SubagentMcpAuth>,
     ) -> Self {
         Self {
             service,
             session_runtime,
             workspace_runtime,
+            session_admission,
+            operation_gate,
             auth,
         }
     }
@@ -77,6 +85,15 @@ impl ProductMcpServer for SubagentProductMcpServer {
         name: &str,
         arguments: Option<Value>,
     ) -> anyhow::Result<Value> {
-        calls::call_tool(&self.service, &self.session_runtime, ctx, name, arguments).await
+        calls::call_tool(
+            &self.service,
+            &self.session_runtime,
+            &self.session_admission,
+            &self.operation_gate,
+            ctx,
+            name,
+            arguments,
+        )
+        .await
     }
 }

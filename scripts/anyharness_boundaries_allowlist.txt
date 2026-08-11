@@ -140,7 +140,7 @@ DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/goals/sessio
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/goals/store.rs 1 1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/goals/wire.rs 1 1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/model.rs 1 1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
-DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 7 3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 6 3 wire type imports (one inside the inline cfg(test) mod) + 3 inline wire paths below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/schedule.rs 1 1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/service.rs 2 1 wire type import + 1 inline wire path (:245 struct field) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/session_ports.rs 1 1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)

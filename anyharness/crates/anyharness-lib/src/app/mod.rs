@@ -406,11 +406,14 @@ impl AppState {
             workspace_access_gate.clone(),
         ));
         let goal_session_hooks = Arc::new(GoalSessionHooks::new(goal_runtime.clone()));
-        // Loops: the emulated scheduler + its session-facing fire executor, the
-        // write-path runtime, and the attach/turn-finished/closing hooks.
+        let workflow_wiring =
+            workflows::wire_workflows_before_sessions(&db, Arc::new(session_link_service.clone()))?;
+        let session_admission = workflow_wiring.admission.clone();
+        let workflow_run_session_extension = workflow_wiring.session_extension.clone();
         let loop_fire_executor = Arc::new(SessionLoopFireExecutor::new(
             loop_service.clone(),
             acp_manager.clone(),
+            session_admission.clone(),
         ));
         let loop_scheduler = Arc::new(LoopScheduler::new(loop_fire_executor));
         let loop_runtime = Arc::new(LoopRuntime::new(
@@ -428,11 +431,6 @@ impl AppState {
             acp_manager.clone(),
         ));
         let activity_session_hooks = Arc::new(ActivitySessionHooks::new(activity_runtime.clone()));
-        // Workflow runs — phase 1 (before SessionRuntime::new): service,
-        // startup fencing, main-handle capture, completion extension.
-        let workflow_wiring = workflows::wire_workflows_before_sessions(&db)?;
-        let session_admission = workflow_wiring.admission.clone();
-        let workflow_run_session_extension = workflow_wiring.session_extension.clone();
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
@@ -582,6 +580,8 @@ impl AppState {
                 subagent_service: subagent_service.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_runtime: workspace_runtime.clone(),
+                session_admission: session_admission.clone(),
+                workspace_operation_gate: workspace_operation_gate.clone(),
                 subagent_mcp_auth,
                 cowork_artifact_runtime: cowork_artifact_runtime.clone(),
                 cowork_runtime: cowork_runtime.clone(),

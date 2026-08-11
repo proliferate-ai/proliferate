@@ -50,6 +50,56 @@ pub(in crate::live::sessions::actor) fn map_stop_reason(
 }
 
 impl SessionActor {
+    /// Finalize a turn when a non-terminal actor unload has waited its bounded
+    /// cancellation grace period and the ACP peer still has not resolved the
+    /// prompt request. Notifications already received remain durable; this
+    /// closes their open sink items as a cancelled turn without fabricating a
+    /// provider error or terminal session state.
+    pub(in crate::live::sessions::actor) async fn finish_forced_unload_cancel(
+        &mut self,
+        prompt_diagnostics: &mut PromptDiagnostics,
+        notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
+        background_work_rx: &mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
+    ) {
+        while let Ok(notif) = notification_rx.try_recv() {
+            prompt_diagnostics.observe_notification(&notif);
+            self.handle_notification(&notif).await;
+        }
+        while let Ok(update) = background_work_rx.try_recv() {
+            self.handle_background(update).await;
+        }
+
+        let sink_snapshot = {
+            let sink = self.event_sink.lock().await;
+            sink.debug_snapshot()
+        };
+        let last_event_seq = {
+            let mut sink = self.event_sink.lock().await;
+            sink.turn_ended(StopReason::Cancelled);
+            sink.debug_snapshot().next_seq - 1
+        };
+        let now = chrono::Utc::now().to_rfc3339();
+        self.handle
+            .set_execution_phase(SessionExecutionPhase::Idle)
+            .await;
+        let _ = self
+            .caps
+            .state
+            .update_status(&self.session_id, "idle", &now);
+
+        if let Some(callback) = self.hooks.on_turn_finish.as_ref() {
+            callback(SessionTurnFinishResult {
+                session_id: self.session_id.clone(),
+                turn_id: sink_snapshot.current_turn_id.unwrap_or_default(),
+                prompt_id: prompt_diagnostics.prompt_id.clone(),
+                outcome: SessionTurnOutcome::Cancelled,
+                stop_reason: Some(StopReason::Cancelled.to_string()),
+                last_event_seq,
+                error_details: None,
+            });
+        }
+    }
+
     /// Settles a resolved prompt request: drains straggler notifications and
     /// background updates, emits turn end (or the error), writes the durable
     /// status row, and fires the turn-finish hook. Returns `true` when the

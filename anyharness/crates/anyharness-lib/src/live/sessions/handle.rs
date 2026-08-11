@@ -441,6 +441,12 @@ impl LiveSessionHandle {
             .map_err(anyhow_command_error)
     }
 
+    pub(in crate::live::sessions) async fn unload_nonterminal(&self) -> anyhow::Result<()> {
+        self.send_request(|respond_to| SessionCommand::Unload { respond_to })
+            .await
+            .map_err(anyhow_command_error)
+    }
+
     pub async fn close(&self) -> anyhow::Result<()> {
         self.send_request(|respond_to| SessionCommand::Close { respond_to })
             .await

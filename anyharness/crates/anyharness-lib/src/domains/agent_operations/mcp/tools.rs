@@ -29,6 +29,9 @@ pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "configure_agent",
     "resume_agent",
     "interrupt_agent",
+    "close_subagent",
+    "open_subagent",
+    "promote_subagent",
 ];
 
 pub fn build_tool_list() -> Vec<Value> {

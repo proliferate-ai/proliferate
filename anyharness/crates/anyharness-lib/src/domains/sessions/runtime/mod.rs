@@ -24,6 +24,7 @@ use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAcc
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
+mod agent_creation;
 mod config;
 mod creation;
 mod fork;
@@ -45,11 +46,12 @@ mod prompt_message_cold_start_tests;
 mod prompt_message_tests;
 mod replay;
 mod startup;
+mod subagent_lifecycle;
 #[cfg(test)]
 mod tests;
 pub(crate) mod view;
 
-pub use creation::CreateOrdinaryAgentSessionError;
+pub use agent_creation::{CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError};
 pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
 pub(crate) use lifecycle::LiveTurnCancelOutcome;
 pub(crate) use prompt::TextPromptDispatchError;
@@ -256,6 +258,14 @@ pub enum PendingPromptQueueError {
 #[derive(Debug)]
 pub enum SessionLifecycleError {
     SessionNotFound(String),
+    Internal(anyhow::Error),
+}
+
+#[derive(Debug)]
+pub enum SubagentLifecycleError {
+    RelationshipNotFound,
+    OpenRequired,
+    Resume(EnsureLiveSessionError),
     Internal(anyhow::Error),
 }
 

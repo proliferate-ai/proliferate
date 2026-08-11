@@ -10,8 +10,8 @@ use crate::domains::sessions::live_config::{
 use crate::domains::sessions::model::{SessionExecutionState, SessionRecord};
 use crate::domains::sessions::prompt::provenance::AgentSessionPromptSource;
 use crate::domains::sessions::runtime::{
-    CreateOrdinaryAgentSessionError, EnsureLiveSessionError, SessionLifecycleError, SessionRuntime,
-    SetSessionConfigOptionError,
+    CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError, EnsureLiveSessionError,
+    SessionLifecycleError, SessionRuntime, SetSessionConfigOptionError, SubagentLifecycleError,
 };
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::task_output::{TaskOutputError, TaskOutputPage};
@@ -53,14 +53,17 @@ impl SubagentRelationshipReads for SessionLinkService {
         &self,
         child_session_id: &str,
     ) -> anyhow::Result<Option<SessionLinkRecord>> {
-        self.find_subagent_parent_including_closed(child_session_id)
+        // Generic relationship closure is historical/terminal and must not
+        // continue conferring the dynamic subagent role. Reversible
+        // subagent-Closed rows remain in this current relationship query.
+        self.find_subagent_parent(child_session_id)
     }
 
     fn list_children_including_closed(
         &self,
         parent_session_id: &str,
     ) -> anyhow::Result<Vec<SessionLinkRecord>> {
-        self.list_subagent_children_including_closed(parent_session_id)
+        self.list_subagent_children(parent_session_id)
     }
 }
 
@@ -174,6 +177,87 @@ impl AgentSessionMutations for SessionRuntime {
         session_id: &str,
     ) -> Result<SessionRecord, SessionLifecycleError> {
         self.cancel_live_session(session_id).await
+    }
+}
+
+#[async_trait]
+pub trait SubagentLifecycleMutations: Send + Sync {
+    async fn create_subagent_agent(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        task: String,
+        parent_session_id: &str,
+        source_label: &str,
+    ) -> Result<SessionRecord, CreateSubagentAgentSessionError>;
+
+    async fn close_subagent(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> Result<SessionRecord, SubagentLifecycleError>;
+
+    async fn open_subagent(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> Result<SessionRecord, SubagentLifecycleError>;
+
+    async fn promote_subagent(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> Result<SessionRecord, SubagentLifecycleError>;
+}
+
+#[async_trait]
+impl SubagentLifecycleMutations for SessionRuntime {
+    async fn create_subagent_agent(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        task: String,
+        parent_session_id: &str,
+        source_label: &str,
+    ) -> Result<SessionRecord, CreateSubagentAgentSessionError> {
+        self.create_subagent_agent_session(
+            workspace_id,
+            agent_kind,
+            model_id,
+            mode_id,
+            task,
+            parent_session_id,
+            source_label,
+        )
+        .await
+    }
+
+    async fn close_subagent(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> Result<SessionRecord, SubagentLifecycleError> {
+        SessionRuntime::close_subagent(self, parent_session_id, child_session_id).await
+    }
+
+    async fn open_subagent(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> Result<SessionRecord, SubagentLifecycleError> {
+        SessionRuntime::open_subagent(self, parent_session_id, child_session_id).await
+    }
+
+    async fn promote_subagent(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> Result<SessionRecord, SubagentLifecycleError> {
+        SessionRuntime::promote_subagent(self, parent_session_id, child_session_id).await
     }
 }
 

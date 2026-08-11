@@ -175,6 +175,10 @@ pub async fn admit_session_mutation(
                 "session execution is controlled by an active workflow run",
                 "SESSION_CONTROLLED_BY_WORKFLOW",
             ),
+            SessionMutationConflict::SubagentOpenRequired => ApiError::conflict(
+                "open the subagent before performing this operation",
+                "SUBAGENT_OPEN_REQUIRED",
+            ),
             SessionMutationConflict::Internal(error) => {
                 tracing::error!(
                     session_id = %session_id,

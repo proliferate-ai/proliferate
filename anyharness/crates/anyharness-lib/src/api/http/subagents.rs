@@ -197,6 +197,10 @@ fn map_subagent_error(error: SubagentError) -> ApiError {
             "SUBAGENT_TARGET_CONFLICT",
         ),
         SubagentError::Closed => ApiError::conflict("Subagent is closed.", "SUBAGENT_CLOSED"),
+        SubagentError::OpenRequired => ApiError::conflict(
+            "Open the subagent before performing this operation.",
+            "SUBAGENT_OPEN_REQUIRED",
+        ),
         SubagentError::IneligibleWorkspace => ApiError::conflict(
             "Subagents are only available in standard workspaces.",
             "SUBAGENT_INELIGIBLE_WORKSPACE",
