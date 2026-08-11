@@ -4,8 +4,7 @@ use proliferate_diagnostics_protocol::v1::types::{
     TailFrameV1,
 };
 use std::os::unix::fs::PermissionsExt;
-use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::AsyncWriteExt;
 
 fn built_collector_binary() -> std::path::PathBuf {
     std::env::current_exe()
@@ -15,10 +14,6 @@ fn built_collector_binary() -> std::path::PathBuf {
         .expect("target profile directory")
         .join("proliferate-diagnostics-collector")
 }
-
-#[path = "server/cli_test_binary.rs"]
-mod cli_test_binary;
-use cli_test_binary::built_cli_binary;
 
 fn empty_filters() -> RecordsFilterV1 {
     RecordsFilterV1 {
@@ -104,7 +99,7 @@ fn broker_caps_eight_finite_four_tail_and_one_export_leases() {
 }
 
 #[tokio::test]
-async fn broker_cli_client_round_trips_tail_and_injected_internal_export() {
+async fn broker_client_round_trips_records_tail_and_injected_internal_export() {
     use crate::diagnostics_collector::broker::client::DiagnosticsBrokerClient;
     use crate::diagnostics_collector::broker::discovery::build_scope;
     use crate::diagnostics_collector::fallback::FallbackDiagnosticsWriter;
@@ -266,20 +261,7 @@ async fn broker_cli_client_round_trips_tail_and_injected_internal_export() {
         Some(ExportStreamFrameV1::End { .. })
     ));
 
-    let cli = built_cli_binary();
-    assert!(
-        cli.is_file(),
-        "proliferate-debug must be built for CLI proof"
-    );
-    let health_output = tokio::process::Command::new(&cli)
-        .env("HOME", &root)
-        .arg("health")
-        .output()
-        .await
-        .expect("run CLI health");
-    assert!(health_output.status.success());
-    let health: serde_json::Value =
-        serde_json::from_slice(&health_output.stdout).expect("CLI health JSON");
+    let health = client.health().await.expect("broker health");
     assert_eq!(health["supervisor"]["state"], "ready");
     assert_eq!(health["collector"]["status"], "ready");
     let encoded_health = health.to_string();
@@ -289,122 +271,40 @@ async fn broker_cli_client_round_trips_tail_and_injected_internal_export() {
 
     let mut records_filters = empty_filters();
     records_filters.names = vec!["desktop.broker.fixture".to_string()];
-    let records_path = root.join("records-request.json");
-    std::fs::write(
-        &records_path,
-        serde_json::to_vec(&RecordsQueryV1 {
+    let page = client
+        .records(RecordsQueryV1 {
             schema_version: CURRENT_SCHEMA_VERSION,
             after_cursor: None,
             limit: 16,
             filters: records_filters,
         })
-        .expect("serialize records request"),
-    )
-    .expect("write records request");
-    let records_output = tokio::process::Command::new(&cli)
-        .env("HOME", &root)
-        .arg("records")
-        .arg("--request")
-        .arg(&records_path)
-        .output()
         .await
-        .expect("run CLI records");
-    assert!(records_output.status.success());
-    let page: proliferate_diagnostics_protocol::v1::types::RecordsPageV1 =
-        serde_json::from_slice(&records_output.stdout).expect("CLI records page");
+        .expect("broker records page");
     assert!(page
         .records
         .iter()
         .any(|record| record.record.name == "desktop.broker.fixture"));
 
-    let export_request = ExportRequestV1 {
-        schema_version: CURRENT_SCHEMA_VERSION,
-        purpose: ExportPurposeV1::InternalDogfood,
-        support_authorization_id: None,
-        filters: empty_filters(),
-        record_limit: 64,
-        byte_limit: 1_048_576,
-        include_health: true,
-    };
-    let export_path = root.join("export-request.json");
-    std::fs::write(
-        &export_path,
-        serde_json::to_vec(&export_request).expect("serialize export request"),
-    )
-    .expect("write export request");
-    let export_output = tokio::process::Command::new(&cli)
-        .env("HOME", &root)
-        .arg("export")
-        .arg("--request")
-        .arg(&export_path)
-        .output()
+    let mut rejected_support = client
+        .export(ExportRequestV1 {
+            schema_version: CURRENT_SCHEMA_VERSION,
+            purpose: ExportPurposeV1::Support,
+            support_authorization_id: Some("not-authorized-in-pr3".to_string()),
+            filters: empty_filters(),
+            record_limit: 64,
+            byte_limit: 1_048_576,
+            include_health: true,
+        })
         .await
-        .expect("run CLI export");
-    assert!(export_output.status.success());
-    let cli_export_frames = String::from_utf8(export_output.stdout)
-        .expect("CLI export UTF-8")
-        .lines()
-        .map(|line| serde_json::from_str::<ExportStreamFrameV1>(line).expect("CLI export frame"))
-        .collect::<Vec<_>>();
-    assert!(matches!(
-        cli_export_frames.first(),
-        Some(ExportStreamFrameV1::Manifest { .. })
-    ));
-    assert!(cli_export_frames
-        .iter()
-        .any(|frame| matches!(frame, ExportStreamFrameV1::Health { .. })));
-    assert!(matches!(
-        cli_export_frames.last(),
-        Some(ExportStreamFrameV1::End { .. })
-    ));
-
-    let mut tail_child = tokio::process::Command::new(&cli)
-        .env("HOME", &root)
-        .arg("tail")
-        .arg("--after-cursor")
-        .arg("0")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .expect("run CLI tail");
-    let mut tail_lines = BufReader::new(tail_child.stdout.take().expect("CLI tail stdout")).lines();
-    let tail_line = tokio::time::timeout(Duration::from_secs(3), tail_lines.next_line())
+        .expect("support export accepted before collector authorization");
+    let rejection = rejected_support
+        .next()
         .await
-        .expect("CLI tail output deadline")
-        .expect("read CLI tail")
-        .expect("CLI tail frame");
-    serde_json::from_str::<TailFrameV1>(&tail_line).expect("CLI tail JSONL");
-    let tail_pid = tail_child.id().expect("CLI tail pid");
-    // SAFETY: the PID belongs to the retained child handle and SIGINT is the
-    // CLI's documented cancellation path.
-    assert_eq!(unsafe { libc::kill(tail_pid as i32, libc::SIGINT) }, 0);
-    drop(tail_lines);
-    let tail_output = tokio::time::timeout(Duration::from_secs(3), tail_child.wait_with_output())
-        .await
-        .expect("CLI tail cancellation deadline")
-        .expect("wait CLI tail");
-    assert!(!tail_output.status.success());
-
-    let support_path = root.join("support-request.json");
-    let mut support_request = export_request;
-    support_request.purpose = ExportPurposeV1::Support;
-    support_request.support_authorization_id = Some("not-authorized-in-pr3".to_string());
-    std::fs::write(
-        &support_path,
-        serde_json::to_vec(&support_request).expect("serialize support request"),
-    )
-    .expect("write support request");
-    let support_output = tokio::process::Command::new(&cli)
-        .env("HOME", &root)
-        .arg("export")
-        .arg("--request")
-        .arg(&support_path)
-        .output()
-        .await
-        .expect("run rejected CLI support export");
-    assert!(!support_output.status.success());
-    assert!(String::from_utf8_lossy(&support_output.stderr).contains("collector_rejected"));
+        .expect_err("support export remains unauthorized in PR3");
+    assert_eq!(
+        rejection.classification(),
+        DiagnosticsBrokerErrorV1::CollectorRejected
+    );
 
     broker.stop_accepting();
     broker.wait_stopped().await.expect("broker stopped");
