@@ -78,6 +78,12 @@ job publishes signed versioned artifacts plus immutable and rolling
 Release and the live manifests. Product-side update behavior remains owned by
 [Desktop Updates](../../specs/codebase/systems/engineering/delivery/desktop-updates.md).
 
+For each macOS target, the Desktop release lane builds the diagnostics
+collector package first and stages that exact executable into the app. Verify
+the app's `Contents/MacOS` inventory contains executable, signed AnyHarness,
+Worker, `proliferate-debug`, and `proliferate-diagnostics-collector` binaries;
+the collector must not contain the debug placeholder marker.
+
 ## Runtime And SDK
 
 Runtime releases use `runtime-v<version>`. The workflow builds AnyHarness

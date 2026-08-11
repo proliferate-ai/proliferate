@@ -1,7 +1,11 @@
 use rfd::FileDialog;
 use serde::Deserialize;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tauri::State;
+
+use proliferate_diagnostics_protocol::v1::types::{IngestBatchV1, IngestReceiptV1};
+use proliferate_diagnostics_protocol::v1::validation::parse_ingest_batch_value;
 
 use crate::{
     diagnostics::{
@@ -10,9 +14,34 @@ use crate::{
         ExportDebugBundleOptions, ExportDebugBundleResult, SaveDiagnosticJsonOptions,
         SaveDiagnosticJsonResult, SupportDiagnosticsBundle,
     },
+    diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor,
     sidecar::{RuntimeStatus, SharedSidecar},
     telemetry_file_logging::{RendererDiagnosticLog, RENDERER_DIAGNOSTIC_TARGET},
 };
+
+#[tauri::command]
+pub async fn ingest_renderer_diagnostics(
+    window: tauri::WebviewWindow,
+    supervisor: State<'_, Arc<DiagnosticsCollectorSupervisor>>,
+    batch: serde_json::Value,
+) -> Result<IngestReceiptV1, String> {
+    require_main_window(window.label())?;
+    let batch = parse_renderer_ingest_value(batch)?;
+    supervisor
+        .ingest_renderer(batch)
+        .await
+        .map_err(|error| format!("renderer_ingest_{}", error.classification()))
+}
+
+fn parse_renderer_ingest_value(value: serde_json::Value) -> Result<IngestBatchV1, String> {
+    parse_ingest_batch_value(&value).map_err(|_| "renderer_ingest_invalid_batch".to_string())
+}
+
+fn require_main_window(label: &str) -> Result<(), String> {
+    (label == "main")
+        .then_some(())
+        .ok_or_else(|| "renderer_ingest_wrong_window".to_string())
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -226,6 +255,49 @@ mod tests {
             component_stack: Some("at WorkspacePane".to_string()),
             route: Some("/workspaces/example".to_string()),
         }
+    }
+
+    #[test]
+    fn renderer_ingest_is_main_window_only_with_a_stable_error() {
+        assert!(require_main_window("main").is_ok());
+        assert_eq!(
+            require_main_window("secondary"),
+            Err("renderer_ingest_wrong_window".to_string())
+        );
+    }
+
+    #[test]
+    fn renderer_ingest_rejects_unknown_fields_before_typed_deserialization() {
+        let mut value = serde_json::json!({
+            "schema_version": {"major": 1, "minor": 1},
+            "records": [{
+                "schema_version": {"major": 1, "minor": 1},
+                "source_timestamp": "2026-08-11T00:00:00Z",
+                "producer_sequence": 1,
+                "producer_boot_id": "renderer-boot",
+                "component": "desktop_renderer",
+                "source": "renderer",
+                "release": "test",
+                "environment": "test",
+                "operation_id": "renderer-operation",
+                "name": "desktop.renderer.detail",
+                "severity": "info",
+                "arguments": [],
+                "record_class": "detailed",
+                "privacy": "customer_content",
+                "redaction": "structural",
+                "detailed": {"kind": "log", "message": "safe"}
+            }]
+        });
+        assert!(parse_renderer_ingest_value(value.clone()).is_ok());
+        value.as_object_mut().expect("batch object").insert(
+            "endpoint".to_string(),
+            serde_json::json!("http://127.0.0.1:1"),
+        );
+        assert_eq!(
+            parse_renderer_ingest_value(value),
+            Err("renderer_ingest_invalid_batch".to_string())
+        );
     }
 
     #[test]

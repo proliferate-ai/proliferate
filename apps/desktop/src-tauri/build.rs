@@ -3,11 +3,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "src/diagnostics_collector/build_packaging.rs"]
+mod diagnostics_collector_packaging;
+use diagnostics_collector_packaging::{
+    ensure_collector_placeholder, register_diagnostics_collector_rerun_inputs,
+    stage_diagnostics_collector_binary,
+};
+
 fn main() {
     println!("cargo:rerun-if-changed=tauri.conf.json");
     println!("cargo:rerun-if-env-changed=ANYHARNESS_BIN");
     println!("cargo:rerun-if-env-changed=PROLIFERATE_WORKER_BIN");
     println!("cargo:rerun-if-env-changed=PROLIFERATE_DEBUG_BIN");
+    println!("cargo:rerun-if-env-changed=PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN");
     println!("cargo:rerun-if-env-changed=CARGO_PRIMARY_PACKAGE");
     println!("cargo:rerun-if-env-changed=TAURI_ENV_TARGET_TRIPLE");
     println!("cargo:rerun-if-env-changed=TARGET");
@@ -16,6 +24,7 @@ fn main() {
     register_anyharness_rerun_inputs();
     register_proliferate_worker_rerun_inputs();
     register_proliferate_debug_rerun_inputs();
+    register_diagnostics_collector_rerun_inputs();
 
     if let Err(err) = stage_dependency_placeholders() {
         panic!("failed to stage dependency placeholders: {err}");
@@ -30,6 +39,9 @@ fn main() {
         }
         if let Err(err) = stage_proliferate_debug_binary() {
             panic!("failed to stage Proliferate debug helper binary: {err}");
+        }
+        if let Err(err) = stage_diagnostics_collector_binary() {
+            panic!("failed to stage diagnostics collector binary: {err}");
         }
     }
 
@@ -100,7 +112,6 @@ fn stage_dependency_placeholders() -> Result<(), String> {
     } else {
         binaries_dir.join(format!("proliferate-worker-{target}"))
     };
-
     if !helper_dest.exists() {
         write_placeholder_sidecar(&helper_dest, &target)?;
     }
@@ -110,6 +121,7 @@ fn stage_dependency_placeholders() -> Result<(), String> {
     if !worker_dest.exists() {
         write_placeholder_sidecar(&worker_dest, &target)?;
     }
+    ensure_collector_placeholder(&binaries_dir, &target)?;
 
     Ok(())
 }
