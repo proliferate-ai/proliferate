@@ -4236,7 +4236,7 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.4.6"
+version = "0.4.8"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4286,6 +4286,14 @@ dependencies = [
  "clap",
  "proliferate",
  "tokio",
+]
+
+[[package]]
+name = "proliferate-diagnostics-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

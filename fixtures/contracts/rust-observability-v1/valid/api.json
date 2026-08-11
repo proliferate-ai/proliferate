@@ -1,0 +1,347 @@
+{
+  "connection_descriptor": {
+    "endpoint": "http://127.0.0.1:43123",
+    "token_reference": {
+      "kind": "inherited_file_descriptor",
+      "reference": "3"
+    },
+    "schema_major": 1,
+    "collector_boot_id": "collector-boot-01"
+  },
+  "collector_record": {
+    "record": {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T14:00:00.000Z",
+      "producer_sequence": 1,
+      "producer_boot_id": "boot-tauri-api-01",
+      "component": "desktop_tauri",
+      "source": "tauri",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-api-detail-01",
+      "name": "tauri.sidecar.ready",
+      "severity": "info",
+      "arguments": [],
+      "record_class": "detailed",
+      "privacy": "operational",
+      "redaction": "none",
+      "detailed": { "kind": "milestone", "milestone": "ready" }
+    },
+    "accepted_timestamp": "2026-08-10T14:00:00.010Z",
+    "accepted_order": 41,
+    "retention_cursor": 41
+  },
+  "ingest_batch": {
+    "schema_version": { "major": 1, "minor": 1 },
+    "records": [
+      {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T14:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-tauri-api-01",
+        "component": "desktop_tauri",
+        "source": "tauri",
+        "release": "2026.08.10-rc1",
+        "environment": "dogfood",
+        "operation_id": "op-api-detail-01",
+        "name": "tauri.sidecar.ready",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "detailed",
+        "privacy": "operational",
+        "redaction": "none",
+        "detailed": { "kind": "milestone", "milestone": "ready" }
+      }
+    ]
+  },
+  "ingest_receipt": {
+    "schema_version": { "major": 1, "minor": 1 },
+    "collector_boot_id": "collector-boot-01",
+    "accepted_range": { "first": 41, "last": 41 },
+    "accepted_count": 1,
+    "duplicate_count": 0,
+    "rejections": [
+      { "index": 1, "reason": "prohibited_secret" }
+    ],
+    "pressure": "normal"
+  },
+  "records_query": {
+    "schema_version": { "major": 1, "minor": 1 },
+    "after_cursor": 40,
+    "limit": 100,
+    "filters": {
+      "source_time_from": "2026-08-10T13:55:00.000Z",
+      "source_time_to": "2026-08-10T14:05:00.000Z",
+      "components": ["desktop_tauri", "anyharness"],
+      "record_classes": ["detailed", "lifecycle"],
+      "severities": ["info", "error"],
+      "names": ["tauri.sidecar.ready", "anyharness.turn.execute"],
+      "outcomes": ["succeeded", "failed"],
+      "operation_id": "op-api-detail-01",
+      "parent_operation_id": "op-parent-01",
+      "trace_id": "trace-api-01",
+      "workspace_id": "workspace-api-01",
+      "session_id": "session-api-01",
+      "turn_id": "turn-api-01",
+      "item_id": "item-api-01",
+      "request_id": "request-api-01",
+      "target_id": "target-api-01",
+      "prompt_id": "prompt-api-01",
+      "workflow_id": "workflow-api-01",
+      "error_classification": "runtime_unavailable"
+    }
+  },
+  "records_page": {
+    "schema_version": { "major": 1, "minor": 1 },
+    "records": [
+      {
+        "record": {
+          "schema_version": { "major": 1, "minor": 1 },
+          "source_timestamp": "2026-08-10T14:00:00.000Z",
+          "producer_sequence": 1,
+          "producer_boot_id": "boot-tauri-api-01",
+          "component": "desktop_tauri",
+          "source": "tauri",
+          "release": "2026.08.10-rc1",
+          "environment": "dogfood",
+          "operation_id": "op-api-detail-01",
+          "name": "tauri.sidecar.ready",
+          "severity": "info",
+          "arguments": [],
+          "record_class": "detailed",
+          "privacy": "operational",
+          "redaction": "none",
+          "detailed": { "kind": "milestone", "milestone": "ready" }
+        },
+        "accepted_timestamp": "2026-08-10T14:00:00.010Z",
+        "accepted_order": 41,
+        "retention_cursor": 41
+      }
+    ],
+    "next_cursor": 41,
+    "gaps": [
+      {
+        "reason": "producer_sequence",
+        "component": "desktop_tauri",
+        "producer_boot_id": "boot-tauri-api-01",
+        "missing_sequence_from": 2,
+        "missing_sequence_to": 3,
+        "dropped_records": 2
+      }
+    ],
+    "versions_present": [
+      { "version": { "major": 1, "minor": 0 }, "records": 2 },
+      { "version": { "major": 1, "minor": 1 }, "records": 39 }
+    ]
+  },
+  "tail_frames": [
+    {
+      "frame": "records",
+      "records": [
+        {
+          "record": {
+            "schema_version": { "major": 1, "minor": 1 },
+            "source_timestamp": "2026-08-10T14:00:00.000Z",
+            "producer_sequence": 1,
+            "producer_boot_id": "boot-tauri-api-01",
+            "component": "desktop_tauri",
+            "source": "tauri",
+            "release": "2026.08.10-rc1",
+            "environment": "dogfood",
+            "operation_id": "op-api-detail-01",
+            "name": "tauri.sidecar.ready",
+            "severity": "info",
+            "arguments": [],
+            "record_class": "detailed",
+            "privacy": "operational",
+            "redaction": "none",
+            "detailed": { "kind": "milestone", "milestone": "ready" }
+          },
+          "accepted_timestamp": "2026-08-10T14:00:00.010Z",
+          "accepted_order": 41,
+          "retention_cursor": 41
+        }
+      ],
+      "cursor": 41
+    },
+    { "frame": "lag", "dropped_frames": 3, "resume_after_cursor": 41 },
+    {
+      "frame": "gap",
+      "gap": {
+        "reason": "evicted",
+        "from_cursor": 1,
+        "to_cursor": 10,
+        "dropped_records": 10
+      }
+    }
+  ],
+  "export_request": {
+    "schema_version": { "major": 1, "minor": 1 },
+    "purpose": "support",
+    "support_authorization_id": "consent-receipt-01",
+    "filters": {
+      "components": ["desktop_tauri"],
+      "record_classes": ["detailed", "lifecycle"],
+      "severities": [],
+      "names": [],
+      "outcomes": []
+    },
+    "record_limit": 5000,
+    "byte_limit": 16777216,
+    "include_health": true
+  },
+  "export_manifest": {
+    "schema_version": { "major": 1, "minor": 1 },
+    "snapshot_id": "snapshot-01",
+    "generated_at": "2026-08-10T14:05:00.000Z",
+    "record_count": 1,
+    "byte_count": 733,
+    "cursor_start": 41,
+    "cursor_end": 41,
+    "gaps": [],
+    "versions_present": [
+      { "version": { "major": 1, "minor": 1 }, "records": 1 }
+    ],
+    "filters": {
+      "components": ["desktop_tauri"],
+      "record_classes": ["detailed", "lifecycle"],
+      "severities": [],
+      "names": [],
+      "outcomes": []
+    },
+    "redaction": "support_export",
+    "includes_health": true
+  },
+  "health": {
+    "schema_version": { "major": 1, "minor": 1 },
+    "status": "degraded",
+    "collector_boot_id": "collector-boot-01",
+    "restart_count": 1,
+    "pressure": "elevated",
+    "oldest_cursor": 11,
+    "newest_cursor": 41,
+    "retained_bytes": 1048576,
+    "evictions_by_class": { "detailed": 10, "lifecycle": 0 },
+    "evictions_by_component": { "desktop_tauri": 10 },
+    "evictions_by_reason": { "evicted": 10 },
+    "rejections_by_reason": {
+      "prohibited_secret": 1,
+      "record_too_large": 2
+    },
+    "cardinality_counts": { "component.desktop_tauri": 10 },
+    "rejected_records": 3,
+    "oversized_records": 2,
+    "duplicate_terminals": 1,
+    "conflicting_terminals": 1,
+    "producers": [
+      {
+        "component": "desktop_tauri",
+        "producer_boot_id": "boot-tauri-api-01",
+        "schema_version": { "major": 1, "minor": 1 },
+        "last_sequence": 3,
+        "gap_count": 1,
+        "liveness": "alive"
+      }
+    ],
+    "tail_reader_drops": 3,
+    "exporter": {
+      "state": "degraded",
+      "dropped_records": 4,
+      "last_error_classification": "otlp_unavailable"
+    },
+    "fallback": {
+      "state": "active",
+      "bytes": 1024,
+      "dropped_records": 0
+    }
+  },
+  "export_frames": [
+    {
+      "frame": "manifest",
+      "manifest": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "snapshot_id": "snapshot-01",
+        "generated_at": "2026-08-10T14:05:00.000Z",
+        "record_count": 1,
+        "byte_count": 733,
+        "cursor_start": 41,
+        "cursor_end": 41,
+        "gaps": [],
+        "versions_present": [
+          { "version": { "major": 1, "minor": 1 }, "records": 1 }
+        ],
+        "filters": {
+          "components": ["desktop_tauri"],
+          "record_classes": ["detailed", "lifecycle"],
+          "severities": [],
+          "names": [],
+          "outcomes": []
+        },
+        "redaction": "support_export",
+        "includes_health": true
+      }
+    },
+    {
+      "frame": "record",
+      "record": {
+        "record": {
+          "schema_version": { "major": 1, "minor": 1 },
+          "source_timestamp": "2026-08-10T14:00:00.000Z",
+          "producer_sequence": 1,
+          "producer_boot_id": "boot-tauri-api-01",
+          "component": "desktop_tauri",
+          "source": "tauri",
+          "release": "2026.08.10-rc1",
+          "environment": "dogfood",
+          "operation_id": "op-api-detail-01",
+          "name": "tauri.sidecar.ready",
+          "severity": "info",
+          "arguments": [],
+          "record_class": "detailed",
+          "privacy": "operational",
+          "redaction": "none",
+          "detailed": { "kind": "milestone", "milestone": "ready" }
+        },
+        "accepted_timestamp": "2026-08-10T14:00:00.010Z",
+        "accepted_order": 41,
+        "retention_cursor": 41
+      }
+    },
+    {
+      "frame": "gap",
+      "gap": {
+        "reason": "evicted",
+        "from_cursor": 1,
+        "to_cursor": 10,
+        "dropped_records": 10
+      }
+    },
+    {
+      "frame": "health",
+      "health": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "status": "ready",
+        "collector_boot_id": "collector-boot-01",
+        "restart_count": 1,
+        "pressure": "normal",
+        "oldest_cursor": 11,
+        "newest_cursor": 41,
+        "retained_bytes": 1048576,
+        "evictions_by_class": { "detailed": 10 },
+        "evictions_by_component": { "desktop_tauri": 10 },
+        "evictions_by_reason": { "evicted": 10 },
+        "rejections_by_reason": {},
+        "cardinality_counts": {},
+        "rejected_records": 0,
+        "oversized_records": 0,
+        "duplicate_terminals": 0,
+        "conflicting_terminals": 0,
+        "producers": [],
+        "tail_reader_drops": 0,
+        "exporter": { "state": "disabled", "dropped_records": 0 },
+        "fallback": { "state": "inactive", "bytes": 0, "dropped_records": 0 }
+      }
+    },
+    { "frame": "end", "records": 1, "bytes": 733 }
+  ]
+}

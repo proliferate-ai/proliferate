@@ -1,0 +1,54 @@
+{
+  "schema_version": { "major": 1, "minor": 1 },
+  "targets": ["aarch64-apple-darwin", "x86_64-apple-darwin"],
+  "build_profile": "release",
+  "warmup": {
+    "duration_seconds": 30,
+    "records": 10000
+  },
+  "concurrency": {
+    "ingest_writers": 4,
+    "query_readers": 2,
+    "tail_readers": 2,
+    "export_readers": 1
+  },
+  "stress": {
+    "duration_seconds": 300,
+    "records_per_second": 2000,
+    "oversized_record_every": 1000,
+    "slow_tail_delay_ms": 500,
+    "fail_exporter_after_records": 5000
+  },
+  "sampling": {
+    "interval_ms": 250,
+    "command_template": "sample total resident bytes for the release collector pid and append timestamp,rss_bytes",
+    "samples_output": "rss-samples-<target>.csv"
+  },
+  "pass_fail": {
+    "total_rss_limit_bytes": 52428800,
+    "retained_arena_limit_bytes": 33554432,
+    "required_conditions": [
+      "warm_up",
+      "concurrent_ingest",
+      "concurrent_query",
+      "concurrent_tail",
+      "concurrent_export",
+      "oversized_input",
+      "slow_reader",
+      "failed_exporter",
+      "sample_total_rss",
+      "assert_responsive",
+      "assert_counters_and_gaps"
+    ]
+  },
+  "steps": [
+    "Build the diagnostics collector with the release profile for the named target and record the exact binary SHA-256.",
+    "Start with an empty arena, warm for 30 seconds and 10000 records, then reset counters before measurement.",
+    "Run all ingest, query, tail, and export clients concurrently for 300 seconds at the fixed rates.",
+    "Inject each oversized record, hold one slow tail reader, and fail the exporter at the fixed record count without stopping other clients.",
+    "Sample total process RSS every 250 ms from warm-up end through a 30-second post-load drain; do not substitute retained payload bytes.",
+    "Fail if any RSS sample exceeds 52428800 bytes or if health/query responsiveness exceeds the fixture runner's one-second deadline.",
+    "Assert oldest-first eviction plus exact oversize, rejection, tail-drop, exporter-drop, eviction, and cursor-gap evidence.",
+    "Write the target, binary hash, configuration, samples, peak RSS, counters, and pass/fail result to the release evidence directory."
+  ]
+}
