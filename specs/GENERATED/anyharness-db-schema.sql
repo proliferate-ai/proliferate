@@ -486,7 +486,7 @@ CREATE TABLE session_links (
     workspace_relation TEXT NOT NULL,
     created_by_turn_id TEXT,
     created_by_tool_call_id TEXT,
-    created_at TEXT NOT NULL, label TEXT, public_id TEXT, closed_at TEXT,
+    created_at TEXT NOT NULL, label TEXT, public_id TEXT, closed_at TEXT, subagent_closed_at TEXT,
     UNIQUE(relation, parent_session_id, child_session_id),
     CHECK(parent_session_id != child_session_id)
 );
