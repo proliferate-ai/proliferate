@@ -92,7 +92,7 @@ export function WorkspaceCreationReceiptView({
         onClick={hasLog ? onToggleExpanded : undefined}
         aria-expanded={hasLog ? expanded : undefined}
         aria-controls={hasLog ? logId : undefined}
-        className="group/receipt h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left text-chat font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline disabled:cursor-default disabled:opacity-100"
+        className="group/receipt h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left text-chat font-normal text-muted-foreground/60 hover:bg-transparent active:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline disabled:cursor-default disabled:opacity-100"
       >
         {/* The spinner owns the leading icon slot while work is in flight.
             Trailing the label instead means the indicator jumps to a new x

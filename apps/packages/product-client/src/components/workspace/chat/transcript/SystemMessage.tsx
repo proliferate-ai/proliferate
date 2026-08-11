@@ -17,7 +17,7 @@ export function SystemMessage({ content }: SystemMessageProps) {
         variant="ghost"
         data-chat-transcript-ignore
         onClick={() => setSystemExpanded(!systemExpanded)}
-        className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-chat text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
+        className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-chat text-muted-foreground transition-colors hover:bg-transparent active:bg-transparent hover:text-foreground"
       >
         <Settings
           aria-hidden="true"
