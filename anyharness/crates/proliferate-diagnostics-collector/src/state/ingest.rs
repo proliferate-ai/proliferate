@@ -17,7 +17,20 @@ use super::{CollectorCore, CoreError, LifecycleTracker, ProducerState, StoredRec
 
 pub(crate) struct IngestCandidate {
     pub(crate) index: u16,
-    pub(crate) parsed: Result<ProducerRecordV1, RejectionReasonV1>,
+    pub(crate) parsed: Result<PreparedRecord, RejectionReasonV1>,
+}
+
+pub(crate) struct PreparedRecord {
+    pub(crate) component: proliferate_diagnostics_protocol::v1::types::ComponentV1,
+    pub(crate) producer_boot_id: String,
+    pub(crate) schema_version: proliferate_diagnostics_protocol::v1::types::SchemaVersionV1,
+    pub(crate) encoded: Box<[u8]>,
+}
+
+impl PreparedRecord {
+    pub(crate) fn decode(&self) -> Result<ProducerRecordV1, CoreError> {
+        serde_json::from_slice(&self.encoded).map_err(|_| CoreError::Serialization)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -38,13 +51,13 @@ impl CollectorCore {
         let mut inner = self.lock();
         let mut new_producers = Vec::new();
         let mut seen = BTreeSet::new();
-        for record in candidates
+        for prepared in candidates
             .iter()
             .filter_map(|candidate| candidate.parsed.as_ref().ok())
         {
-            let key = (record.component, record.producer_boot_id.clone());
+            let key = (prepared.component, prepared.producer_boot_id.clone());
             if !inner.producers.contains_key(&key) && seen.insert(key.clone()) {
-                new_producers.push((key, record.schema_version));
+                new_producers.push((key, prepared.schema_version));
             }
         }
 
@@ -78,8 +91,8 @@ impl CollectorCore {
         let mut duplicate_count = 0_u16;
         let mut rejections = Vec::new();
         for candidate in candidates {
-            let record = match candidate.parsed {
-                Ok(record) => record,
+            let prepared = match candidate.parsed {
+                Ok(prepared) => prepared,
                 Err(reason) => {
                     self.note_record_rejection_locked(&mut inner, reason);
                     rejections.push(IngestRejectionV1 {
@@ -89,7 +102,7 @@ impl CollectorCore {
                     continue;
                 }
             };
-            let producer_key = (record.component, record.producer_boot_id.clone());
+            let producer_key = (prepared.component, prepared.producer_boot_id.clone());
             if refused_producers.contains(&producer_key) {
                 self.note_record_rejection_locked(&mut inner, RejectionReasonV1::LimitExceeded);
                 rejections.push(IngestRejectionV1 {
@@ -98,6 +111,7 @@ impl CollectorCore {
                 });
                 continue;
             }
+            let record = prepared.decode()?;
             self.track_producer_sequence_locked(&mut inner, &record);
             match self.accept_record_locked(&mut inner, record, false) {
                 Ok(AcceptDisposition::Accepted(order)) => accepted_orders.push(order),

@@ -15,8 +15,8 @@ use tokio::sync::{broadcast, Semaphore};
 
 use crate::config::CollectorConfig;
 
-pub(crate) use ingest::IngestCandidate;
 pub use ingest::IngestResult;
+pub(crate) use ingest::{IngestCandidate, PreparedRecord};
 pub(crate) use query::ExportSnapshot;
 
 #[derive(Debug)]

@@ -11,6 +11,7 @@ pub struct RuntimeLimits {
     pub tail_frame_bytes: usize,
     pub open_connections: usize,
     pub concurrent_handlers: usize,
+    pub concurrent_body_parsers: usize,
     pub tail_readers: usize,
     pub tail_queue_frames: usize,
     pub concurrent_exports: usize,
@@ -29,6 +30,9 @@ impl Default for RuntimeLimits {
             tail_frame_bytes: 1024 * 1024,
             open_connections: 64,
             concurrent_handlers: 8,
+            // Only one request may own a body, prepared-record batch, and
+            // per-record JSON tree at once.
+            concurrent_body_parsers: 1,
             tail_readers: 4,
             tail_queue_frames: 32,
             concurrent_exports: 2,
@@ -50,6 +54,8 @@ impl RuntimeLimits {
             || self.open_connections == 0
             || self.concurrent_handlers == 0
             || self.concurrent_handlers > self.open_connections
+            || self.concurrent_body_parsers == 0
+            || self.concurrent_body_parsers > self.concurrent_handlers
             || self.tail_readers == 0
             || self.tail_readers > self.concurrent_handlers
             || self.tail_queue_frames == 0
