@@ -98,7 +98,7 @@ pub fn build_tool_list() -> Vec<Value> {
                 "additionalProperties": false,
                 "properties": {
                     "repositoryId": { "type": "string" },
-                    "creationMode": { "type": "string" },
+                    "creationMode": { "type": "string", "enum": ["worktree", "local"] },
                     "branch": { "type": "string" },
                     "displayName": { "type": "string" }
                 },
@@ -236,6 +236,21 @@ mod tests {
     }
 
     #[test]
+    fn create_workspace_creation_mode_schema_is_exact() {
+        let tools = build_tool_list();
+        let schema = tools
+            .iter()
+            .find(|tool| tool["name"] == "create_workspace")
+            .map(|tool| &tool["inputSchema"])
+            .expect("create_workspace schema");
+
+        assert_eq!(
+            schema["properties"]["creationMode"],
+            json!({ "type": "string", "enum": ["worktree", "local"] })
+        );
+    }
+
+    #[test]
     fn workspace_mcp_tool_schema_snapshots() {
         let tools = build_tool_list();
         let actual = tools
@@ -287,7 +302,7 @@ mod tests {
             ),
             (
                 "create_workspace",
-                "6c13aff42df908bfc4df40ffeedd2d9f21d2cb70afb2719b9e7be728fc8c9687".to_string(),
+                "b19bb55531b302386a061881ab9c7c2a3c77448e1af4900db63c936eca1eeb1d".to_string(),
             ),
             (
                 "create_agent",

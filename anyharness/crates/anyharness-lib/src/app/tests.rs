@@ -247,6 +247,49 @@ async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_witho
         created["result"]["structuredContent"]["workspace"]["kind"],
         "local"
     );
+    let created_workspace = &created["result"]["structuredContent"]["workspace"];
+    assert_eq!(created_workspace["origin"]["kind"], "system");
+    assert_eq!(created_workspace["origin"]["entrypoint"], "local_runtime");
+    assert_eq!(created_workspace["creatorContext"]["kind"], "agent");
+    assert_eq!(
+        created_workspace["creatorContext"]["sourceSessionId"],
+        "session-1"
+    );
+    assert_eq!(
+        created_workspace["creatorContext"]["sourceSessionWorkspaceId"],
+        "workspace-1"
+    );
+    let created_workspace_id = created_workspace["identity"]["workspaceId"]
+        .as_str()
+        .expect("created workspace id")
+        .to_string();
+    let durable_created = state
+        .workspace_runtime
+        .get_workspace(&created_workspace_id)
+        .expect("read durable created workspace")
+        .expect("durable created workspace");
+    assert_eq!(
+        created_workspace["origin"],
+        serde_json::to_value(
+            durable_created
+                .origin
+                .as_ref()
+                .expect("durable created origin")
+                .to_contract()
+        )
+        .expect("serialize user API origin")
+    );
+    assert_eq!(
+        created_workspace["creatorContext"],
+        serde_json::to_value(
+            durable_created
+                .creator_context
+                .as_ref()
+                .expect("durable created context")
+                .to_contract()
+        )
+        .expect("serialize user API creator context")
+    );
     let listed = endpoint
         .dispatch(
             ProductMcpRequestContext::new("workspace-1", "session-1", endpoint.definition().id),
@@ -267,6 +310,15 @@ async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_witho
     assert!(listed_workspaces
         .iter()
         .any(|workspace| { workspace["identity"]["workspaceId"] == "workspace-1" }));
+    let listed_created = listed_workspaces
+        .iter()
+        .find(|workspace| workspace["identity"]["workspaceId"] == created_workspace_id)
+        .expect("created workspace in MCP list");
+    assert_eq!(listed_created["origin"], created_workspace["origin"]);
+    assert_eq!(
+        listed_created["creatorContext"],
+        created_workspace["creatorContext"]
+    );
 
     let workspace_options = endpoint
         .dispatch(

@@ -15,10 +15,13 @@ use crate::domains::workspaces::model::{
 };
 use crate::domains::workspaces::options::{
     CreateWorkspaceFromOptionsInput, WorkspaceCreationMode, WorkspaceOptionRuntime,
-    WorkspaceRepositoryAvailability, WorkspaceWorktreeCreates,
+    WorkspaceOptionsError, WorkspaceRepositoryAvailability, WorkspaceWorktreeCreates,
 };
 use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
 use crate::domains::workspaces::types::CreateWorktreeResult;
+use crate::domains::workspaces::worktree_names::{
+    WorktreeNameConflictError, WorktreeNameConflictPolicy,
+};
 use crate::domains::workspaces::worktree_runtime::{
     CreateWorktreeWorkflowError, CreateWorktreeWorkflowInput, CreateWorktreeWorkflowResult,
 };
@@ -28,6 +31,11 @@ use crate::persistence::Db;
 
 #[derive(Default)]
 struct RecordingWorktrees {
+    inputs: Mutex<Vec<CreateWorktreeWorkflowInput>>,
+}
+
+#[derive(Default)]
+struct RejectingWorktrees {
     inputs: Mutex<Vec<CreateWorktreeWorkflowInput>>,
 }
 
@@ -66,6 +74,23 @@ impl WorkspaceWorktreeCreates for RecordingWorktrees {
             },
             setup_started: false,
         })
+    }
+}
+
+#[async_trait]
+impl WorkspaceWorktreeCreates for RejectingWorktrees {
+    async fn create_worktree(
+        &self,
+        input: CreateWorktreeWorkflowInput,
+    ) -> Result<CreateWorktreeWorkflowResult, CreateWorktreeWorkflowError> {
+        self.inputs.lock().expect("inputs lock").push(input);
+        Err(CreateWorktreeWorkflowError::NameConflict(
+            WorktreeNameConflictError::Branch {
+                source: anyhow::anyhow!(
+                    "git race stderr: branch collision at /private/runtime/worktrees/feature-exact"
+                ),
+            },
+        ))
     }
 }
 
@@ -165,6 +190,81 @@ async fn listed_local_and_worktree_modes_delegate_to_the_existing_workspace_owne
     assert_eq!(inputs.len(), 1);
     assert_eq!(inputs[0].new_branch_name, "feature/agent-workspace");
     assert_eq!(inputs[0].base_branch.as_deref(), Some("main"));
+    assert_eq!(
+        inputs[0].name_conflict_policy,
+        WorktreeNameConflictPolicy::Fail
+    );
     assert_eq!(inputs[0].creator_context, Some(creator_context));
     assert_eq!(inputs[0].origin, OriginContext::system_local_runtime());
+}
+
+#[tokio::test]
+async fn explicit_worktree_owner_conflict_is_typed_and_never_retries_a_suffixed_branch() {
+    let repo = TempDirGuard::new("workspace-options-conflict-repo");
+    let runtime_home = TempDirGuard::new("workspace-options-conflict-runtime-home");
+    init_repo(repo.path());
+    let db = Db::open_in_memory().expect("open db");
+    let repo_roots = Arc::new(RepoRootService::new(RepoRootStore::new(db.clone())));
+    let workspace_runtime = Arc::new(make_runtime(&db, runtime_home.path()));
+    let caller = workspace_runtime
+        .create_workspace(&repo.path().to_string_lossy())
+        .expect("create caller workspace");
+    let access_gate = Arc::new(WorkspaceAccessGate::new(
+        WorkspaceStore::new(db.clone()),
+        SessionStore::new(db.clone()),
+        WorkspaceAccessStore::new(db.clone()),
+        Arc::new(TerminalService::new(
+            TerminalStore::new(db),
+            runtime_home.path().to_path_buf(),
+        )),
+    ));
+    let worktrees = Arc::new(RejectingWorktrees::default());
+    let owner = WorkspaceOptionRuntime::new(
+        repo_roots,
+        workspace_runtime,
+        worktrees.clone(),
+        access_gate,
+    );
+    let requested_branch = "feature/exact-request";
+    let error = owner
+        .create_workspace(
+            &caller.workspace.id,
+            CreateWorkspaceFromOptionsInput {
+                repository_id: caller.repo_root.id,
+                creation_mode: "worktree".to_string(),
+                branch: Some(requested_branch.to_string()),
+                display_name: None,
+                origin: OriginContext::system_local_runtime(),
+                creator_context: WorkspaceCreatorContext::Agent {
+                    source_session_id: "session-agent".to_string(),
+                    source_session_workspace_id: Some(caller.workspace.id.clone()),
+                    session_link_id: None,
+                    source_workspace_id: Some(caller.workspace.id.clone()),
+                    label: None,
+                },
+            },
+        )
+        .await
+        .expect_err("owner collision must fail");
+
+    assert!(matches!(
+        &error,
+        WorkspaceOptionsError::WorktreeConflict(WorktreeNameConflictError::Branch { .. })
+    ));
+    assert_eq!(error.code(), "WORKSPACE_WORKTREE_CONFLICT");
+    let public = error.public_message();
+    assert_eq!(
+        public,
+        "The requested worktree branch or path is already in use."
+    );
+    assert!(!public.contains("git race stderr"));
+    assert!(!public.contains("/private/runtime"));
+
+    let inputs = worktrees.inputs.lock().expect("inputs lock");
+    assert_eq!(inputs.len(), 1, "the adapter must not retry with a suffix");
+    assert_eq!(inputs[0].new_branch_name, requested_branch);
+    assert_eq!(
+        inputs[0].name_conflict_policy,
+        WorktreeNameConflictPolicy::Fail
+    );
 }

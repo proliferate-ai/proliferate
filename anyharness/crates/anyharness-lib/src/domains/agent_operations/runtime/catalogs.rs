@@ -352,51 +352,33 @@ fn project_config_control(
     switchable_model_ids: &HashSet<String>,
 ) -> AgentConfigOption {
     let is_model = control.key == "model";
-    let mut values = if is_model {
-        control
-            .values
-            .into_iter()
-            .filter_map(|value| {
-                let model =
-                    switchable_launch_model(&value.value, launch_models, switchable_model_ids)?;
-                Some(AgentConfigValueOption {
-                    value: model.id.clone(),
-                    label: value.label,
-                    description: value.description.or_else(|| model.description.clone()),
-                    executable: model.executable,
-                    unavailable_reason: model.unavailable_reason.clone(),
-                })
-            })
-            .collect::<Vec<_>>()
-    } else {
-        control
-            .values
-            .into_iter()
-            .map(|value| AgentConfigValueOption {
-                value: value.value,
-                label: value.label,
-                description: value.description,
-                executable: control.settable,
-                unavailable_reason: (!control.settable).then(|| {
-                    "This live control does not currently offer another value.".to_string()
-                }),
-            })
-            .collect::<Vec<_>>()
-    };
+    // The live actor is authoritative for every token it advertised. Keep
+    // those values byte-for-byte and judge them only by the control's own
+    // settable state; catalog identity/auth must not erase or canonicalize a
+    // token that the same ACP setter accepts.
+    let mut values = control
+        .values
+        .into_iter()
+        .map(|value| AgentConfigValueOption {
+            value: value.value,
+            label: value.label,
+            description: value.description,
+            executable: control.settable,
+            unavailable_reason: (!control.settable)
+                .then(|| "This live control does not currently offer another value.".to_string()),
+        })
+        .collect::<Vec<_>>();
     if is_model {
+        // Catalog authorization is a second, additive path for a model the
+        // live control did not advertise under this exact write token. Do not
+        // merge an ACP alias into the catalog's canonical id: both tokens have
+        // different mutation semantics and the validator must return the one
+        // the caller selected.
         for model in launch_models
             .iter()
             .filter(|model| switchable_model_ids.contains(&model.id))
         {
-            if let Some(existing) = values
-                .iter_mut()
-                .find(|value| value.value == model.id || model.aliases.contains(&value.value))
-            {
-                existing.executable |= model.executable;
-                if existing.executable {
-                    existing.unavailable_reason = None;
-                }
-            } else {
+            if !values.iter().any(|value| value.value == model.id) {
                 values.push(config_value_from_launch_model(model));
             }
         }
@@ -416,17 +398,6 @@ fn project_config_control(
             .then(|| "This live control is not currently settable.".to_string()),
         values,
     }
-}
-
-fn switchable_launch_model<'a>(
-    value: &str,
-    launch_models: &'a [AgentLaunchModelOption],
-    switchable_model_ids: &HashSet<String>,
-) -> Option<&'a AgentLaunchModelOption> {
-    launch_models.iter().find(|model| {
-        switchable_model_ids.contains(&model.id)
-            && (model.id == value || model.aliases.iter().any(|alias| alias == value))
-    })
 }
 
 fn synthetic_model_control(
@@ -609,38 +580,40 @@ mod tests {
     }
 
     #[test]
-    fn config_view_uses_target_workspace_catalog_and_reuses_exact_choice_validator() {
+    fn legacy_session_without_auth_contexts_keeps_every_settable_acp_model_token() {
         let (catalog, resolved, agent_kind, model_id) = effective_fixture();
         let workspace = WorkspaceIdentity {
             runtime_id: RuntimeIdentity::new("runtime-1"),
             workspace_id: "workspace-target".to_string(),
         };
-        let launch = project_launch_options(workspace.clone(), &catalog, resolved);
-        let unauthorized_model_id = launch
+        let mut launch = project_launch_options(workspace.clone(), &catalog, resolved);
+        let raw_alias = "acp/live-alias-token".to_string();
+        let raw_uncataloged = "provider/session-only-token".to_string();
+        launch
             .agents
-            .iter()
-            .find(|agent| !agent.models.is_empty())
-            .and_then(|agent| agent.models.iter().find(|model| model.id != model_id))
-            .expect("catalog-only model")
-            .id
-            .clone();
+            .iter_mut()
+            .find(|agent| agent.agent_kind == agent_kind)
+            .and_then(|agent| agent.models.iter_mut().find(|model| model.id == model_id))
+            .expect("launch model")
+            .aliases
+            .push(raw_alias.clone());
         let snapshot = EffectiveLiveConfigSnapshot {
             controls: vec![
                 EffectiveLiveConfigControl {
                     key: "model".to_string(),
-                    config_id: "model".to_string(),
+                    config_id: "acp_model_selector".to_string(),
                     label: "Model".to_string(),
-                    current_value: Some(model_id.clone()),
-                    settable: false,
+                    current_value: Some(raw_alias.clone()),
+                    settable: true,
                     values: vec![
                         EffectiveLiveConfigValue {
-                            value: model_id.clone(),
-                            label: model_id.clone(),
+                            value: raw_alias.clone(),
+                            label: "Live alias".to_string(),
                             description: None,
                         },
                         EffectiveLiveConfigValue {
-                            value: unauthorized_model_id.clone(),
-                            label: "Unauthorized model".to_string(),
+                            value: raw_uncataloged.clone(),
+                            label: "Session-only model".to_string(),
                             description: None,
                         },
                     ],
@@ -663,27 +636,168 @@ mod tests {
             AgentIdentity::new(RuntimeIdentity::new("runtime-1"), "target-agent"),
             workspace.clone(),
             agent_kind,
-            Some(model_id.clone()),
+            Some(model_id),
+            catalog.catalog_version().to_string(),
+            Some(snapshot),
+            &launch.agents,
+            // A legacy record with no agent_auth_contexts authorizes no
+            // catalog-only additions. Its live ACP vocabulary still governs.
+            &HashSet::new(),
+        );
+
+        assert_eq!(view.workspace, workspace);
+        let model = view
+            .options
+            .iter()
+            .find(|option| option.config_id == "acp_model_selector")
+            .expect("model control");
+        assert_eq!(
+            model
+                .values
+                .iter()
+                .map(|value| value.value.as_str())
+                .collect::<Vec<_>>(),
+            vec![raw_alias.as_str(), raw_uncataloged.as_str()]
+        );
+        assert!(model.values.iter().all(|value| value.executable));
+        assert_eq!(
+            view.validate_choice("acp_model_selector", &raw_alias)
+                .expect("raw alias remains executable")
+                .value,
+            raw_alias
+        );
+        assert_eq!(
+            view.validate_choice("acp_model_selector", &raw_uncataloged)
+                .expect("uncataloged ACP token remains executable")
+                .value,
+            raw_uncataloged
+        );
+        assert!(view.validate_choice("effort", "high").is_ok());
+    }
+
+    #[test]
+    fn acp_alias_write_token_and_catalog_foreign_choice_are_kept_separate() {
+        let (catalog, resolved, agent_kind, model_id) = effective_fixture();
+        let workspace = WorkspaceIdentity {
+            runtime_id: RuntimeIdentity::new("runtime-1"),
+            workspace_id: "workspace-target".to_string(),
+        };
+        let mut launch = project_launch_options(workspace.clone(), &catalog, resolved);
+        let raw_alias = "vendor/model-alias".to_string();
+        launch
+            .agents
+            .iter_mut()
+            .find(|agent| agent.agent_kind == agent_kind)
+            .and_then(|agent| agent.models.iter_mut().find(|model| model.id == model_id))
+            .expect("launch model")
+            .aliases
+            .push(raw_alias.clone());
+        let snapshot = EffectiveLiveConfigSnapshot {
+            controls: vec![EffectiveLiveConfigControl {
+                key: "model".to_string(),
+                config_id: "model_selector".to_string(),
+                label: "Model".to_string(),
+                current_value: Some(raw_alias.clone()),
+                settable: true,
+                values: vec![
+                    EffectiveLiveConfigValue {
+                        value: raw_alias.clone(),
+                        label: "Vendor alias".to_string(),
+                        description: None,
+                    },
+                    EffectiveLiveConfigValue {
+                        value: "vendor/other-live-token".to_string(),
+                        label: "Other live model".to_string(),
+                        description: None,
+                    },
+                ],
+            }],
+        };
+        let view = project_config_options(
+            AgentIdentity::new(RuntimeIdentity::new("runtime-1"), "target-agent"),
+            workspace,
+            agent_kind,
+            Some(raw_alias.clone()),
+            catalog.catalog_version().to_string(),
+            Some(snapshot),
+            &launch.agents,
+            &HashSet::from([model_id.clone()]),
+        );
+        let model = view
+            .options
+            .iter()
+            .find(|option| option.config_id == "model_selector")
+            .expect("model control");
+        assert!(model
+            .values
+            .iter()
+            .any(|value| value.value == raw_alias && value.executable));
+        assert!(model
+            .values
+            .iter()
+            .any(|value| value.value == model_id && value.executable));
+        assert_eq!(
+            view.validate_choice("model_selector", &raw_alias)
+                .expect("raw ACP alias")
+                .value,
+            raw_alias
+        );
+        assert_eq!(
+            view.validate_choice("model_selector", &model_id)
+                .expect("catalog-authorized foreign token")
+                .value,
+            model_id
+        );
+    }
+
+    #[test]
+    fn non_settable_acp_values_stay_visible_but_unavailable() {
+        let (catalog, resolved, agent_kind, model_id) = effective_fixture();
+        let workspace = WorkspaceIdentity {
+            runtime_id: RuntimeIdentity::new("runtime-1"),
+            workspace_id: "workspace-target".to_string(),
+        };
+        let launch = project_launch_options(workspace.clone(), &catalog, resolved);
+        let raw_value = "live/current-only".to_string();
+        let snapshot = EffectiveLiveConfigSnapshot {
+            controls: vec![EffectiveLiveConfigControl {
+                key: "model".to_string(),
+                config_id: "model".to_string(),
+                label: "Model".to_string(),
+                current_value: Some(raw_value.clone()),
+                settable: false,
+                values: vec![EffectiveLiveConfigValue {
+                    value: raw_value.clone(),
+                    label: "Current live model".to_string(),
+                    description: None,
+                }],
+            }],
+        };
+        let view = project_config_options(
+            AgentIdentity::new(RuntimeIdentity::new("runtime-1"), "target-agent"),
+            workspace,
+            agent_kind,
+            Some(raw_value.clone()),
             catalog.catalog_version().to_string(),
             Some(snapshot),
             &launch.agents,
             &HashSet::from([model_id.clone()]),
         );
 
-        assert_eq!(view.workspace, workspace);
-        assert!(view.validate_choice("model", &model_id).is_ok());
-        assert!(view.validate_choice("effort", "high").is_ok());
-        assert!(view
-            .options
+        let model = view.options.first().expect("model control");
+        assert!(model
+            .values
             .iter()
-            .find(|option| option.config_id == "model")
-            .is_some_and(|option| option
-                .values
-                .iter()
-                .all(|value| value.value != unauthorized_model_id)));
+            .any(|value| value.value == raw_value && !value.executable));
         assert_eq!(
-            view.validate_choice("model", &unauthorized_model_id),
-            Err(AgentConfigChoiceError::ValueUnknown)
+            view.validate_choice("model", &raw_value),
+            Err(AgentConfigChoiceError::ValueUnavailable)
+        );
+        assert_eq!(
+            view.validate_choice("model", &model_id)
+                .expect("separate catalog choice")
+                .value,
+            model_id
         );
     }
 }
