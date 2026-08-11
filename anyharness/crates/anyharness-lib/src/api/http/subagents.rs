@@ -3,7 +3,8 @@ use anyharness_contract::v1::{
 };
 use axum::{
     extract::{Path, State},
-    Extension, Json,
+    routing::{get, post},
+    Extension, Json, Router,
 };
 
 use super::access::{assert_session_auth_scope, assert_workspace_auth_scope};
@@ -14,6 +15,30 @@ use super::subagents_contract::{
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::agent_operations::model::AgentIdentity;
+
+pub fn routes() -> Router<AppState> {
+    Router::new()
+        .route(
+            "/workspaces/{workspace_id}/subagents",
+            get(get_workspace_subagents),
+        )
+        .route(
+            "/sessions/{parent_session_id}/subagents",
+            get(get_session_subagents),
+        )
+        .route(
+            "/sessions/{parent_session_id}/subagents/{child_session_id}/close",
+            post(close_subagent),
+        )
+        .route(
+            "/sessions/{parent_session_id}/subagents/{child_session_id}/open",
+            post(open_subagent),
+        )
+        .route(
+            "/sessions/{parent_session_id}/subagents/{child_session_id}/promote",
+            post(promote_subagent),
+        )
+}
 
 #[utoipa::path(
     get,

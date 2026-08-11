@@ -10,6 +10,8 @@ use anyharness_contract::v1::{
 
 use crate::domains::agent_operations::model::{
     AgentCapability, AgentExecutionStatus, AgentPresentationStatus, AgentRole, AgentView,
+};
+use crate::domains::agent_operations::subagents::{
     SubagentLatestCompletionView, SubagentLifecycleView, SubagentParentRoster,
     SubagentRelationshipView, SubagentRosterEntry, WorkspaceSubagentRoster,
 };

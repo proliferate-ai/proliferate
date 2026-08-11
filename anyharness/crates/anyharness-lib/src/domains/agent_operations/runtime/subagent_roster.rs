@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use crate::domains::agent_operations::model::{
-    AuthenticatedAgentCaller, SubagentLatestCompletionView, SubagentParentRoster,
-    SubagentRelationshipView, SubagentRosterEntry, WorkspaceSubagentRoster,
+use crate::domains::agent_operations::model::AuthenticatedAgentCaller;
+use crate::domains::agent_operations::subagents::{
+    SubagentLatestCompletionView, SubagentParentRoster, SubagentRelationshipView,
+    SubagentRosterEntry, WorkspaceSubagentRoster,
 };
 use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::model::SessionRecord;
