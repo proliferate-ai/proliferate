@@ -280,7 +280,7 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
             );
             assert_eq!(completion.child_last_event_seq, last_child_seq);
             assert!(completion.parent_event_seq.is_none());
-            assert!(completion.parent_prompt_seq.is_none());
+            assert!(completion.parent_prompt_seq.is_some());
             let task_output = state
                 .session_service
                 .get_task_output(SESSION_ID, None, 10)
@@ -289,7 +289,24 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
                 .messages
                 .iter()
                 .any(|message| message.text.contains(PARTIAL_TEXT)));
-            assert!(store.list_pending_prompts(PARENT_ID).unwrap().is_empty());
+            let deliveries = CompletionDeliveryStore::new(state.db.clone())
+                .list_all_for_test()
+                .unwrap();
+            assert_eq!(deliveries.len(), 1);
+            assert_eq!(deliveries[0].state, CompletionDeliveryState::Enqueued);
+            assert_eq!(deliveries[0].outcome, SessionTurnOutcome::Cancelled);
+            assert!(deliveries[0]
+                .assistant_text
+                .as_deref()
+                .is_some_and(|text| text.contains(PARTIAL_TEXT)));
+            let pending = store.list_pending_prompts(PARENT_ID).unwrap();
+            assert_eq!(pending.len(), 1);
+            let delivery_prompt_id = deliveries[0].prompt_id();
+            assert_eq!(
+                pending[0].prompt_id.as_deref(),
+                Some(delivery_prompt_id.as_str())
+            );
+            assert!(pending[0].text.contains(PARTIAL_TEXT));
             assert!(!store
                 .list_events(PARENT_ID)
                 .unwrap()

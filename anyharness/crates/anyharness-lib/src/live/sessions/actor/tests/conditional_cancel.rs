@@ -23,10 +23,15 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use crate::app::test_support::{actor_capabilities_for_store, seed_workspace_with_repo_root};
 use crate::app::AppState;
 use crate::domains::agents::installer::seed::AgentSeedStore;
-use crate::domains::sessions::extensions::{SessionExtension, SessionTurnFinishedContext};
+use crate::domains::sessions::extensions::{
+    SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
+};
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::subagents::delivery::{
+    CompletionDeliveryState, CompletionDeliveryStore,
+};
 use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::live::sessions::actor::command::{
     ConditionalCancelOutcome, PromptAcceptance, SessionCommand,

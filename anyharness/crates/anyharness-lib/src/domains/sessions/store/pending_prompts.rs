@@ -5,6 +5,98 @@ use crate::domains::sessions::model::{PendingPromptRecord, PendingPromptReorderO
 use crate::domains::sessions::prompt::PromptPayload;
 
 impl SessionStore {
+    /// Insert one durable prompt keyed by a domain-supplied stable id. The
+    /// lookup and insert share the SQLite transaction so retrying workers in
+    /// this execution store converge without imposing uniqueness on legacy
+    /// prompt rows that never had an idempotency contract.
+    pub(crate) fn insert_pending_prompt_payload_once(
+        &self,
+        session_id: &str,
+        payload: &PromptPayload,
+        prompt_id: &str,
+    ) -> anyhow::Result<(PendingPromptRecord, bool)> {
+        let queued_at = chrono::Utc::now().to_rfc3339();
+        let blocks_json = payload.blocks_json()?;
+        let provenance_json = payload.provenance_json()?;
+        self.db.with_tx(|tx| {
+            if let Some(existing) = tx
+                .query_row(
+                    "SELECT * FROM session_pending_prompts
+                     WHERE session_id = ?1 AND prompt_id = ?2
+                     ORDER BY seq ASC LIMIT 1",
+                    params![session_id, prompt_id],
+                    map_pending_prompt,
+                )
+                .optional()?
+            {
+                return Ok((existing, false));
+            }
+            tx.execute(
+                "UPDATE sessions
+                 SET pending_prompt_seq_cursor = pending_prompt_seq_cursor + 1
+                 WHERE id = ?1",
+                [session_id],
+            )?;
+            let next_seq: i64 = tx.query_row(
+                "SELECT pending_prompt_seq_cursor FROM sessions WHERE id = ?1",
+                [session_id],
+                |row| row.get(0),
+            )?;
+            let next_position: i64 = tx.query_row(
+                "SELECT COALESCE(MAX(queue_position), 0) + 1
+                 FROM session_pending_prompts WHERE session_id = ?1",
+                [session_id],
+                |row| row.get(0),
+            )?;
+            tx.execute(
+                "INSERT INTO session_pending_prompts (
+                    session_id, seq, queue_position, prompt_id, text,
+                    blocks_json, provenance_json, queued_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    session_id,
+                    next_seq,
+                    next_position,
+                    prompt_id,
+                    payload.text_summary,
+                    blocks_json,
+                    provenance_json,
+                    queued_at
+                ],
+            )?;
+            Ok((
+                PendingPromptRecord {
+                    session_id: session_id.to_string(),
+                    seq: next_seq,
+                    queue_position: next_position,
+                    prompt_id: Some(prompt_id.to_string()),
+                    text: payload.text_summary.clone(),
+                    blocks_json,
+                    provenance_json,
+                    queued_at,
+                },
+                true,
+            ))
+        })
+    }
+
+    pub(crate) fn find_pending_prompt_by_id(
+        &self,
+        session_id: &str,
+        prompt_id: &str,
+    ) -> anyhow::Result<Option<PendingPromptRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM session_pending_prompts
+                 WHERE session_id = ?1 AND prompt_id = ?2
+                 ORDER BY seq ASC LIMIT 1",
+                params![session_id, prompt_id],
+                map_pending_prompt,
+            )
+            .optional()
+        })
+    }
+
     pub fn insert_pending_prompt(
         &self,
         session_id: &str,
