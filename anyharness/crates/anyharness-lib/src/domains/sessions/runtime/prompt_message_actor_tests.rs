@@ -14,7 +14,7 @@ use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::task_output::{TaskOutputRole, TaskOutputSender};
 use crate::persistence::Db;
 
-struct EnvVarGuard {
+pub(super) struct EnvVarGuard {
     name: &'static str,
     previous: Option<std::ffi::OsString>,
 }
@@ -36,9 +36,9 @@ impl Drop for EnvVarGuard {
     }
 }
 
-struct ScriptedAgent {
+pub(super) struct ScriptedAgent {
     program: PathBuf,
-    request_log: PathBuf,
+    pub(super) request_log: PathBuf,
     control_dir: PathBuf,
 }
 
@@ -260,7 +260,7 @@ async fn send_message_cold_runtime_reconstruction_replays_two_rows_once_in_order
     std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
 }
 
-async fn send_message(
+pub(super) async fn send_message(
     state: &AppState,
     message: &str,
 ) -> Result<SendMessageReceipt, crate::domains::agent_operations::runtime::AgentOperationsError> {
@@ -291,7 +291,7 @@ async fn send_direct_prompt(state: &AppState, text: &str) {
         .expect("direct prompt");
 }
 
-fn build_state(runtime_home: &Path, db: Db, seed: bool) -> AppState {
+pub(super) fn build_state(runtime_home: &Path, db: Db, seed: bool) -> AppState {
     let workspace_a = runtime_home.join("workspace-a");
     let workspace_b = runtime_home.join("workspace-b");
     std::fs::create_dir_all(&workspace_a).expect("workspace A");
@@ -336,7 +336,7 @@ fn build_state(runtime_home: &Path, db: Db, seed: bool) -> AppState {
     state
 }
 
-fn assert_agent_output(state: &AppState, expected_texts: &[&str]) {
+pub(super) fn assert_agent_output(state: &AppState, expected_texts: &[&str]) {
     let output = state
         .session_service
         .get_task_output("target", None, 50)
@@ -371,14 +371,14 @@ fn assert_agent_output(state: &AppState, expected_texts: &[&str]) {
         .is_empty());
 }
 
-fn temp_runtime_home(label: &str) -> PathBuf {
+pub(super) fn temp_runtime_home(label: &str) -> PathBuf {
     PathBuf::from(format!(
         "/tmp/anyharness-agent-message-{label}-{}",
         uuid::Uuid::new_v4()
     ))
 }
 
-fn install_scripted_agent_env(script: &ScriptedAgent) -> (EnvVarGuard, EnvVarGuard) {
+pub(super) fn install_scripted_agent_env(script: &ScriptedAgent) -> (EnvVarGuard, EnvVarGuard) {
     let program = EnvVarGuard::set("ANYHARNESS_CLAUDE_AGENT_PROGRAM", &script.program);
     let args = serde_json::to_string(&vec![
         script.request_log.to_string_lossy().to_string(),
@@ -389,7 +389,7 @@ fn install_scripted_agent_env(script: &ScriptedAgent) -> (EnvVarGuard, EnvVarGua
     (program, args)
 }
 
-fn write_scripted_agent(runtime_home: &Path) -> ScriptedAgent {
+pub(super) fn write_scripted_agent(runtime_home: &Path) -> ScriptedAgent {
     std::fs::create_dir_all(runtime_home.join("secrets")).expect("secrets directory");
     std::fs::write(
         runtime_home.join("secrets/global.env"),
@@ -496,7 +496,7 @@ for raw_line in sys.stdin:
     }
 }
 
-fn read_requests(path: &Path) -> Vec<Value> {
+pub(super) fn read_requests(path: &Path) -> Vec<Value> {
     let Ok(contents) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
@@ -507,7 +507,7 @@ fn read_requests(path: &Path) -> Vec<Value> {
         .collect()
 }
 
-fn prompt_texts(path: &Path) -> Vec<String> {
+pub(super) fn prompt_texts(path: &Path) -> Vec<String> {
     read_requests(path)
         .into_iter()
         .filter(|request| request["method"] == "session/prompt")
@@ -521,14 +521,14 @@ fn prompt_texts(path: &Path) -> Vec<String> {
         .collect()
 }
 
-async fn wait_for_prompt_count(path: &Path, expected: usize) {
+pub(super) async fn wait_for_prompt_count(path: &Path, expected: usize) {
     wait_for("scripted prompt count", || {
         prompt_texts(path).len() >= expected
     })
     .await;
 }
 
-async fn wait_for_queue_len(state: &AppState, expected: usize) {
+pub(super) async fn wait_for_queue_len(state: &AppState, expected: usize) {
     wait_for("pending queue length", || {
         state
             .session_service
@@ -556,7 +556,7 @@ async fn wait_for(description: &str, mut condition: impl FnMut() -> bool) {
     .unwrap_or_else(|_| panic!("timed out waiting for {description}"));
 }
 
-async fn wait_for_actor_idle(state: &AppState) {
+pub(super) async fn wait_for_actor_idle(state: &AppState) {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             if state
@@ -587,7 +587,7 @@ async fn wait_for_actor_gone(state: &AppState) {
     .expect("target actor exit");
 }
 
-async fn stop_target_actor(state: &AppState) {
+pub(super) async fn stop_target_actor(state: &AppState) {
     if let Some(handle) = state.acp_manager.get_handle("target").await {
         tokio::time::timeout(Duration::from_secs(2), handle.close())
             .await

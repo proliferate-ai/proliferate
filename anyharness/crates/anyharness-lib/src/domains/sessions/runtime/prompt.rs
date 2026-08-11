@@ -77,7 +77,7 @@ impl SessionRuntime {
                 tracing::warn!(
                     session_id = %session_id,
                     queue_seq,
-                    error = ?error,
+                    failure_code = agent_message_start_failure_code(&error),
                     "durable agent message consumer startup failed; pending prompt will replay"
                 );
                 return;
@@ -395,6 +395,21 @@ fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptErro
     }
 }
 
+fn agent_message_start_failure_code(error: &StartSessionError) -> &'static str {
+    match error {
+        StartSessionError::WorkspaceNotFound => "workspace_not_found",
+        StartSessionError::WorkspaceDirectoryMissing { .. } => "workspace_directory_missing",
+        StartSessionError::AgentDescriptorNotFound(_) => "agent_descriptor_not_found",
+        StartSessionError::Closed => "session_closed",
+        StartSessionError::MissingDataKey => "missing_data_key",
+        StartSessionError::RestartRequired(_) => "restart_required",
+        StartSessionError::RouteAuth(_) => "route_auth",
+        StartSessionError::AgentNotReady { .. } => "agent_not_ready",
+        StartSessionError::Internal(_) => "internal",
+        StartSessionError::AcpStart(_) => "acp_start",
+    }
+}
+
 fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
     match error {
         StartSessionError::WorkspaceNotFound => {
@@ -449,6 +464,39 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
 #[cfg(test)]
 mod dispatch_classification_tests {
     use super::*;
+    use crate::domains::agents::model::ResolvedAgentStatus;
+
+    #[test]
+    fn send_message_start_failure_codes_do_not_expose_details() {
+        let cases = [
+            (
+                StartSessionError::WorkspaceDirectoryMissing {
+                    path: "/secret/workspace".into(),
+                },
+                "workspace_directory_missing",
+            ),
+            (
+                StartSessionError::AgentNotReady {
+                    agent_kind: "secret-agent".into(),
+                    status: ResolvedAgentStatus::Error,
+                    detail: Some("secret readiness detail".into()),
+                },
+                "agent_not_ready",
+            ),
+            (
+                StartSessionError::Internal(anyhow::anyhow!("secret")),
+                "internal",
+            ),
+            (
+                StartSessionError::AcpStart(anyhow::anyhow!("secret")),
+                "acp_start",
+            ),
+        ];
+
+        for (error, expected) in cases {
+            assert_eq!(agent_message_start_failure_code(&error), expected);
+        }
+    }
 
     #[test]
     fn response_dropped_is_a_lost_acknowledgement() {
