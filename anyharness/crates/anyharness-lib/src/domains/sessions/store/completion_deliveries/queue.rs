@@ -3,6 +3,74 @@ use rusqlite::{params, OptionalExtension};
 use super::{map_delivery, CompletionDeliveryRecord, CompletionDeliveryStore};
 
 impl CompletionDeliveryStore {
+    pub fn list_for_parent_sessions(
+        &self,
+        parent_session_ids: &[String],
+    ) -> anyhow::Result<Vec<CompletionDeliveryRecord>> {
+        if parent_session_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.db.with_conn(|conn| {
+            let placeholders = vec!["?"; parent_session_ids.len()].join(", ");
+            let mut stmt = conn.prepare(&format!(
+                "SELECT * FROM session_link_completion_deliveries
+                 WHERE parent_session_id IN ({placeholders})
+                   AND state IN ('pending', 'enqueued')
+                 ORDER BY created_at ASC, delivery_id ASC"
+            ))?;
+            let rows = stmt
+                .query_map(
+                    rusqlite::params_from_iter(parent_session_ids.iter()),
+                    map_delivery,
+                )?
+                .collect();
+            rows
+        })
+    }
+
+    pub fn import(&self, record: &CompletionDeliveryRecord) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO session_link_completion_deliveries (
+                    delivery_id, completion_id, session_link_id, parent_session_id,
+                    child_session_id, subagent_public_id, label, child_turn_id,
+                    child_last_event_seq, outcome, assistant_text, notification_text,
+                    state, parent_prompt_seq, parent_turn_id, attempt_count,
+                    next_attempt_at, lease_token, lease_expires_at, last_error_code,
+                    created_at, updated_at, enqueued_at, delivered_at
+                 ) VALUES (
+                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+                    ?13, ?14, ?15, ?16, ?17, NULL, NULL, ?18, ?19, ?20, ?21, ?22
+                 )",
+                params![
+                    record.delivery_id,
+                    record.completion_id,
+                    record.session_link_id,
+                    record.parent_session_id,
+                    record.child_session_id,
+                    record.subagent_public_id,
+                    record.label,
+                    record.child_turn_id,
+                    record.child_last_event_seq,
+                    record.outcome.as_str(),
+                    record.assistant_text,
+                    record.notification_text,
+                    record.state.as_str(),
+                    record.parent_prompt_seq,
+                    record.parent_turn_id,
+                    record.attempt_count,
+                    record.next_attempt_at,
+                    record.last_error_code,
+                    record.created_at,
+                    record.updated_at,
+                    record.enqueued_at,
+                    record.delivered_at,
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
     pub fn claim_next_due(
         &self,
         now: &str,

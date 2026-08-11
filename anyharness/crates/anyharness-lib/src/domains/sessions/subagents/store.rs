@@ -2,6 +2,9 @@ use super::model::{SubagentCompletionRecord, SubagentWakeScheduleRecord};
 use crate::domains::sessions::links::completions::{LinkCompletionInsert, LinkCompletionStore};
 use crate::domains::sessions::model::PendingPromptRecord;
 use crate::domains::sessions::prompt::PromptPayload;
+use crate::domains::sessions::subagents::delivery::{
+    CompletionDeliveryRecord, CompletionDeliveryStore,
+};
 use crate::persistence::Db;
 
 #[derive(Debug, Clone)]
@@ -22,13 +25,30 @@ impl From<LinkCompletionInsert> for SubagentCompletionInsert {
 #[derive(Clone)]
 pub struct SubagentStore {
     inner: LinkCompletionStore,
+    delivery_inner: CompletionDeliveryStore,
 }
 
 impl SubagentStore {
     pub fn new(db: Db) -> Self {
         Self {
-            inner: LinkCompletionStore::new(db),
+            inner: LinkCompletionStore::new(db.clone()),
+            delivery_inner: CompletionDeliveryStore::new(db),
         }
+    }
+
+    pub fn list_for_parent_sessions(
+        &self,
+        parent_session_ids: &[String],
+    ) -> anyhow::Result<Vec<CompletionDeliveryRecord>> {
+        self.delivery_inner
+            .list_for_parent_sessions(parent_session_ids)
+    }
+
+    pub fn import_completion_delivery(
+        &self,
+        delivery: &CompletionDeliveryRecord,
+    ) -> anyhow::Result<()> {
+        self.delivery_inner.import(delivery)
     }
 
     pub fn insert_completion_if_absent(

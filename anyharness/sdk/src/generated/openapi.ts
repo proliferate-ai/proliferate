@@ -3331,6 +3331,7 @@ export interface components {
             blocksJson?: string | null;
             contentParts?: components["schemas"]["ContentPart"][];
             promptId?: string | null;
+            provenanceJson?: string | null;
             queuedAt: string;
             /** Format: int64 */
             seq: number;
@@ -3363,6 +3364,33 @@ export interface components {
             sessionId: string;
             timestamp: string;
             turnId?: string | null;
+        };
+        MobilitySessionLinkCompletionDeliveryRecord: {
+            assistantText?: string | null;
+            /** Format: int64 */
+            attemptCount?: number;
+            /** Format: int64 */
+            childLastEventSeq: number;
+            childSessionId: string;
+            childTurnId: string;
+            completionId: string;
+            createdAt: string;
+            deliveredAt?: string | null;
+            deliveryId: string;
+            enqueuedAt?: string | null;
+            label?: string | null;
+            lastErrorCode?: string | null;
+            nextAttemptAt: string;
+            notificationText: string;
+            outcome: string;
+            /** Format: int64 */
+            parentPromptSeq?: number | null;
+            parentSessionId: string;
+            parentTurnId?: string | null;
+            sessionLinkId: string;
+            state: string;
+            subagentPublicId?: string | null;
+            updatedAt: string;
         };
         MobilitySessionLinkCompletionRecord: {
             /** Format: int64 */
@@ -5287,6 +5315,7 @@ export interface components {
             deletedPaths?: string[];
             files: components["schemas"]["WorkspaceMobilityFileEntry"][];
             repoRootPath: string;
+            sessionLinkCompletionDeliveries?: components["schemas"]["MobilitySessionLinkCompletionDeliveryRecord"][];
             sessionLinkCompletions?: components["schemas"]["MobilitySessionLinkCompletionRecord"][];
             sessionLinkWakeSchedules?: components["schemas"]["MobilitySessionLinkWakeScheduleRecord"][];
             sessionLinks?: components["schemas"]["MobilitySessionLinkRecord"][];

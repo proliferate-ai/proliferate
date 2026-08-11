@@ -12621,6 +12621,12 @@
               "null"
             ]
           },
+          "provenanceJson": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "queuedAt": {
             "type": "string"
           },
@@ -12740,6 +12746,119 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "MobilitySessionLinkCompletionDeliveryRecord": {
+        "type": "object",
+        "required": [
+          "deliveryId",
+          "completionId",
+          "sessionLinkId",
+          "parentSessionId",
+          "childSessionId",
+          "childTurnId",
+          "childLastEventSeq",
+          "outcome",
+          "notificationText",
+          "state",
+          "nextAttemptAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "assistantText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attemptCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "childLastEventSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "childSessionId": {
+            "type": "string"
+          },
+          "childTurnId": {
+            "type": "string"
+          },
+          "completionId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "deliveredAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deliveryId": {
+            "type": "string"
+          },
+          "enqueuedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastErrorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nextAttemptAt": {
+            "type": "string"
+          },
+          "notificationText": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "parentPromptSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "parentTurnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionLinkId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "subagentPublicId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
           }
         }
       },
@@ -20354,6 +20473,12 @@
           },
           "repoRootPath": {
             "type": "string"
+          },
+          "sessionLinkCompletionDeliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilitySessionLinkCompletionDeliveryRecord"
+            }
           },
           "sessionLinkCompletions": {
             "type": "array",

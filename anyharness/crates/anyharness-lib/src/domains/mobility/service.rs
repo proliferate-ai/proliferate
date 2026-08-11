@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::Context;
 
 use crate::adapters::git::executor::run_git_ok;
-use crate::domains::agents::portability::{collect_agent_artifacts, AgentArtifactFileData};
+use crate::domains::agents::portability::collect_agent_artifacts;
 use crate::domains::mobility::model::{
     MobilityFileData, WorkspaceMobilityArchiveData, WorkspaceMobilityExportOptions,
     WorkspaceMobilitySessionBundleData, MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
@@ -23,6 +23,10 @@ use crate::{
 };
 
 const INCLUDE_RAW_NOTIFICATIONS_ENV: &str = "ANYHARNESS_MOBILITY_INCLUDE_RAW_NOTIFICATIONS";
+
+mod archive;
+pub(super) use archive::archive_estimated_size_bytes;
+use archive::validate_completion_deliveries;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MobilityError {
@@ -121,6 +125,12 @@ impl MobilityService {
             self.subagent_service
                 .mobility_graph_for_sessions(&session_ids)
                 .map_err(MobilityError::Internal)?;
+        let mut parent_session_ids = session_ids.iter().cloned().collect::<Vec<_>>();
+        parent_session_ids.sort();
+        let session_link_completion_deliveries = self
+            .subagent_service
+            .completion_deliveries_for_parent_sessions(&parent_session_ids)
+            .map_err(MobilityError::Internal)?;
         if let Some(missing_id) = partial_graph.first() {
             return Err(MobilityError::Invalid(format!(
                 "cannot export partial subagent graph; linked session {missing_id} is outside the archive"
@@ -139,6 +149,7 @@ impl MobilityService {
             sessions,
             session_links,
             session_link_completions,
+            session_link_completion_deliveries,
             session_link_wake_schedules,
         };
         validate_archive_size(&archive)?;
@@ -630,7 +641,7 @@ pub(super) fn validate_delegated_archive_graph(
         }
     }
 
-    Ok(())
+    validate_completion_deliveries(archive, &session_ids)
 }
 
 pub(super) fn validate_archive_size(
@@ -680,172 +691,4 @@ pub(super) fn validate_archive_size(
     }
 
     Ok(())
-}
-
-pub(super) fn archive_estimated_size_bytes(archive: &WorkspaceMobilityArchiveData) -> u64 {
-    let file_bytes = archive
-        .files
-        .iter()
-        .map(encoded_file_size_bytes)
-        .sum::<u64>();
-    let session_bytes = archive
-        .sessions
-        .iter()
-        .map(session_bundle_size_bytes)
-        .sum::<u64>();
-    file_bytes
-        .saturating_add(session_bytes)
-        .saturating_add(string_size(&archive.source_workspace_path))
-        .saturating_add(string_size(&archive.repo_root_path))
-        .saturating_add(option_string_size(&archive.branch_name))
-        .saturating_add(string_size(&archive.base_commit_sha))
-        .saturating_add(archive.deleted_paths.iter().map(string_size).sum::<u64>())
-}
-
-fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64 {
-    encoded_session_size_bytes(&bundle.session)
-        .saturating_add(
-            bundle
-                .live_config_snapshot
-                .as_ref()
-                .map(encoded_live_config_size_bytes)
-                .unwrap_or(0),
-        )
-        .saturating_add(
-            bundle
-                .pending_config_changes
-                .iter()
-                .map(|record| {
-                    string_size(&record.session_id)
-                        + string_size(&record.config_id)
-                        + string_size(&record.value)
-                        + string_size(&record.queued_at)
-                })
-                .sum::<u64>(),
-        )
-        .saturating_add(
-            bundle
-                .pending_prompts
-                .iter()
-                .map(|record| {
-                    string_size(&record.session_id)
-                        + record.seq as u64
-                        + option_string_size(&record.prompt_id)
-                        + string_size(&record.text)
-                        + option_string_size(&record.blocks_json)
-                        + string_size(&record.queued_at)
-                })
-                .sum::<u64>(),
-        )
-        .saturating_add(
-            bundle
-                .prompt_attachments
-                .iter()
-                .map(|attachment| {
-                    let record = &attachment.record;
-                    string_size(&record.attachment_id)
-                        + string_size(&record.session_id)
-                        + str_size(record.state.as_str())
-                        + str_size(record.kind.as_str())
-                        + str_size(record.source.as_str())
-                        + option_string_size(&record.mime_type)
-                        + option_string_size(&record.display_name)
-                        + option_string_size(&record.source_uri)
-                        + base64_size(attachment.content.len())
-                        + string_size(&record.sha256)
-                        + string_size(&record.created_at)
-                        + string_size(&record.updated_at)
-                })
-                .sum::<u64>(),
-        )
-        .saturating_add(
-            bundle
-                .events
-                .iter()
-                .map(|record| {
-                    string_size(&record.session_id)
-                        + record.seq as u64
-                        + string_size(&record.timestamp)
-                        + string_size(&record.event_type)
-                        + option_string_size(&record.turn_id)
-                        + option_string_size(&record.item_id)
-                        + string_size(&record.payload_json)
-                })
-                .sum::<u64>(),
-        )
-        .saturating_add(
-            bundle
-                .raw_notifications
-                .iter()
-                .map(|record| {
-                    string_size(&record.session_id)
-                        + record.seq as u64
-                        + string_size(&record.timestamp)
-                        + string_size(&record.notification_kind)
-                        + string_size(&record.payload_json)
-                })
-                .sum::<u64>(),
-        )
-        .saturating_add(
-            bundle
-                .agent_artifacts
-                .iter()
-                .map(encoded_agent_artifact_size_bytes)
-                .sum::<u64>(),
-        )
-}
-
-fn encoded_session_size_bytes(session: &crate::domains::sessions::model::SessionRecord) -> u64 {
-    string_size(&session.id)
-        + string_size(&session.workspace_id)
-        + string_size(&session.agent_kind)
-        + option_string_size(&session.native_session_id)
-        + option_string_size(&session.requested_model_id)
-        + option_string_size(&session.current_model_id)
-        + option_string_size(&session.requested_mode_id)
-        + option_string_size(&session.current_mode_id)
-        + option_string_size(&session.title)
-        + option_string_size(&session.thinking_level_id)
-        + session.thinking_budget_tokens.unwrap_or_default() as u64
-        + string_size(&session.status)
-        + string_size(&session.created_at)
-        + string_size(&session.updated_at)
-        + option_string_size(&session.last_prompt_at)
-        + option_string_size(&session.closed_at)
-        + option_string_size(&session.dismissed_at)
-        + option_string_size(&session.system_prompt_append)
-}
-
-fn encoded_live_config_size_bytes(
-    record: &crate::domains::sessions::model::SessionLiveConfigSnapshotRecord,
-) -> u64 {
-    string_size(&record.session_id)
-        + record.source_seq as u64
-        + string_size(&record.raw_config_options_json)
-        + string_size(&record.normalized_controls_json)
-        + string_size(&record.updated_at)
-}
-
-fn encoded_file_size_bytes(file: &MobilityFileData) -> u64 {
-    string_size(&file.relative_path) + file.mode as u64 + base64_size(file.content.len())
-}
-
-fn encoded_agent_artifact_size_bytes(file: &AgentArtifactFileData) -> u64 {
-    string_size(&file.relative_path) + file.mode as u64 + base64_size(file.content.len())
-}
-
-fn base64_size(byte_len: usize) -> u64 {
-    byte_len.div_ceil(3) as u64 * 4
-}
-
-fn string_size(value: &String) -> u64 {
-    value.len() as u64
-}
-
-fn str_size(value: &str) -> u64 {
-    value.len() as u64
-}
-
-fn option_string_size(value: &Option<String>) -> u64 {
-    value.as_ref().map(|value| value.len() as u64).unwrap_or(0)
 }
