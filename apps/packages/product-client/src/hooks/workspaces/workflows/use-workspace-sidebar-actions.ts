@@ -66,6 +66,16 @@ export function useWorkspaceSidebarActions() {
     focusNewChatComposer();
   }, [focusNewChatComposer, goToTopLevelRoute, patchTargetSelection]);
 
+  const handleStartWorktreeWorkspaceCreation = useCallback(() => {
+    patchTargetSelection({
+      destination: "repository",
+      repoLaunchKind: "worktree",
+      selectedSshTargetId: null,
+    });
+    goToTopLevelRoute(APP_ROUTES.home);
+    focusNewChatComposer();
+  }, [focusNewChatComposer, goToTopLevelRoute, patchTargetSelection]);
+
   const handleGoWorkflows = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.workflows);
   }, [goToTopLevelRoute]);
@@ -230,6 +240,7 @@ export function useWorkspaceSidebarActions() {
     handleAddRepo,
     handleGoHome,
     handleGoHomeForRepository,
+    handleStartWorktreeWorkspaceCreation,
     handleGoWorkflows,
     handleGoWorkspaces,
     handleSidebarIndicatorAction,
