@@ -3,22 +3,20 @@ use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream as StdUnixStream;
 use std::sync::atomic::Ordering;
 
+use crate::diagnostics_collector::artifact::DiagnosticsArtifactKind;
+use crate::diagnostics_collector::client::{contextualize_export_frame, contextualize_health};
 use proliferate_diagnostics_protocol::v1::limits::CURRENT_SCHEMA_VERSION;
 use proliferate_diagnostics_protocol::v1::types::{
     ConnectionDescriptorV1, ExportRequestV1, ExportStreamFrameV1, HealthStatusV1, IngestBatchV1,
     IngestReceiptV1, ProtectedTokenReferenceV1, RecordsPageV1, RecordsQueryV1,
     TokenReferenceKindV1,
 };
-use proliferate_diagnostics_protocol::v1::validation::validate_ingest_receipt;
-
-use crate::diagnostics_collector::artifact::DiagnosticsArtifactKind;
-use crate::diagnostics_collector::client::{contextualize_export_frame, contextualize_health};
 
 use super::{
     map_client_error, set_cloexec, unavailable_for_state, validate_renderer_ingest_batch,
-    DesktopDiagnosticsHealthV1, DesktopDiagnosticsSupervisorStateV1,
-    DiagnosticsCollectorSupervisor, ProtectedChildHandoff, ReadyCollectorGeneration,
-    SupervisorExportLease, SupervisorTailLease, SupervisorUnavailable,
+    validate_renderer_ingest_receipt, DesktopDiagnosticsHealthV1,
+    DesktopDiagnosticsSupervisorStateV1, DiagnosticsCollectorSupervisor, ProtectedChildHandoff,
+    ReadyCollectorGeneration, SupervisorExportLease, SupervisorTailLease, SupervisorUnavailable,
 };
 
 impl DiagnosticsCollectorSupervisor {
@@ -187,7 +185,7 @@ impl DiagnosticsCollectorSupervisor {
             .ingest(&batch)
             .await
             .map_err(map_client_error)?;
-        validate_ingest_receipt(&receipt).map_err(|_| SupervisorUnavailable::Protocol)?;
+        validate_renderer_ingest_receipt(&receipt, &ready.collector_boot_id)?;
         self.require_generation(ready.generation)?;
         Ok(receipt)
     }

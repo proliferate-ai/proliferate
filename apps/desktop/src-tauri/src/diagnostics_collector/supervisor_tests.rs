@@ -3,8 +3,8 @@ use super::lifecycle::{
 };
 use super::*;
 use proliferate_diagnostics_protocol::v1::types::{
-    ComponentV1, DetailedDiagnosticV1, DetailedKindV1, PrivacyClassificationV1, ProducerRecordV1,
-    RecordClassV1, RecordsFilterV1, RedactionClassificationV1, SeverityV1,
+    ComponentV1, DetailedDiagnosticV1, DetailedKindV1, PressureV1, PrivacyClassificationV1,
+    ProducerRecordV1, RecordClassV1, RecordsFilterV1, RedactionClassificationV1, SeverityV1,
 };
 use std::io::Read;
 
@@ -424,4 +424,28 @@ async fn renderer_ingest_seam_is_bounded_and_non_ready_batches_do_not_enter_taur
     drop(supervisor);
     fallback.close().expect("close fallback");
     std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn renderer_ingest_receipt_is_bound_to_the_ready_collector_boot() {
+    let expected_boot_id = uuid::Uuid::new_v4().to_string();
+    let mut receipt = IngestReceiptV1 {
+        schema_version: CURRENT_SCHEMA_VERSION,
+        collector_boot_id: expected_boot_id.clone(),
+        accepted_range: None,
+        accepted_count: 1,
+        duplicate_count: 0,
+        rejections: Vec::new(),
+        pressure: PressureV1::Normal,
+    };
+    assert_eq!(
+        validate_renderer_ingest_receipt(&receipt, &expected_boot_id),
+        Ok(())
+    );
+
+    receipt.collector_boot_id = uuid::Uuid::new_v4().to_string();
+    assert_eq!(
+        validate_renderer_ingest_receipt(&receipt, &expected_boot_id),
+        Err(SupervisorUnavailable::Protocol)
+    );
 }

@@ -253,6 +253,17 @@ fn validate_renderer_ingest_batch(batch: &IngestBatchV1) -> Result<(), Superviso
     Ok(())
 }
 
+fn validate_renderer_ingest_receipt(
+    receipt: &IngestReceiptV1,
+    expected_collector_boot_id: &str,
+) -> Result<(), SupervisorUnavailable> {
+    validate_ingest_receipt(receipt).map_err(|_| SupervisorUnavailable::Protocol)?;
+    if receipt.collector_boot_id.as_str() != expected_collector_boot_id {
+        return Err(SupervisorUnavailable::Protocol);
+    }
+    Ok(())
+}
+
 fn retryable(kind: CollectorLaunchErrorKind) -> bool {
     matches!(
         kind,
