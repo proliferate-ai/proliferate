@@ -56,7 +56,17 @@ export function ClosedChatTabsMenu({
                 {formatRelativeTime(row.closedAt)}
               </span>
             )}
-            <RotateCcw className="icon-compact shrink-0 text-muted-foreground" aria-hidden="true" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              title={`Restore ${row.title}`}
+              aria-label={`Restore ${row.title}`}
+              className="size-6 shrink-0 rounded-md text-muted-foreground"
+              onClick={() => onRestoreSession(row.id)}
+            >
+              <RotateCcw className="icon-compact" />
+            </Button>
           </div>
         ))}
       </div>
