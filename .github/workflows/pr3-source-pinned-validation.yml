@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PR3_SOURCE_SHA: 936861056aa5293d3260c4c5ac8019d5ba6fb5b2
+  PR3_SOURCE_SHA: 21b660424b68c59f28523e7a7187a684fbfbb566
   CARGO_BUILD_JOBS: "2"
   CARGO_INCREMENTAL: "0"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -192,7 +192,7 @@ jobs:
           bin_dir="$app/Contents/MacOS"
           test -d "$bin_dir"
           actual="$(find "$bin_dir" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | tr '\n' ' ')"
-          expected="Proliferate anyharness proliferate-debug proliferate-diagnostics-collector proliferate-worker "
+          expected="anyharness proliferate proliferate-debug proliferate-diagnostics-collector proliferate-worker "
           test "$actual" = "$expected"
           codesign --verify --deep --strict "$app"
           for binary in anyharness proliferate-worker proliferate-debug proliferate-diagnostics-collector; do
@@ -246,7 +246,7 @@ jobs:
           PROLIFERATE_DEV=1 \
           PROLIFERATE_DEV_PROFILE="$PR3_PROFILE" \
           PROLIFERATE_DEV_HOME="$desktop_home" \
-            "$app/Contents/MacOS/Proliferate" >"$RUNNER_TEMP/pr3-app.log" 2>&1 &
+            "$app/Contents/MacOS/proliferate" >"$RUNNER_TEMP/pr3-app.log" 2>&1 &
           app_pid=$!
           cleanup() {
             if kill -0 "$app_pid" 2>/dev/null; then
