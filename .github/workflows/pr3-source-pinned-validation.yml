@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PR3_SOURCE_SHA: 82a479a115a1e20b83a76d91add1ce3044f016e1
+  PR3_SOURCE_SHA: 936861056aa5293d3260c4c5ac8019d5ba6fb5b2
   CARGO_BUILD_JOBS: "2"
   CARGO_INCREMENTAL: "0"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -264,7 +264,7 @@ jobs:
               exit 1
             fi
             if "$cli" --profile "$PR3_PROFILE" health >"$RUNNER_TEMP/pr3-health.json" 2>"$RUNNER_TEMP/pr3-health.err" \
-              && node -e 'const h=require(process.argv[1]); process.exit(h.supervisor.state === "ready" && h.collector?.status === "ready" && h.collector?.schema_version?.major === 1 ? 0 : 1)' "$RUNNER_TEMP/pr3-health.json"; then
+              && node -e 'const h=require(process.argv[1]); process.exit(h.supervisor.state === "ready" && h.collector?.status === "ready" && h.collector?.schema_version?.major === 1 && h.collector?.schema_version?.minor === 1 ? 0 : 1)' "$RUNNER_TEMP/pr3-health.json"; then
               ready=true
               break
             fi
