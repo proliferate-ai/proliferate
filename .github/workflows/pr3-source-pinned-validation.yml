@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PR3_SOURCE_SHA: 09f4dd650cac7f8af2d963aed4a2e8ffdd316413
+  PR3_SOURCE_SHA: 65b4b62e849294fdf5d643f1db8f872920e7a8a6
   CARGO_BUILD_JOBS: "2"
   CARGO_INCREMENTAL: "0"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
