@@ -445,6 +445,38 @@ impl SessionLinkStore {
         })
     }
 
+    pub fn list_current_subagent_children_with_unclosed_turns(
+        &self,
+        limit: usize,
+    ) -> anyhow::Result<Vec<String>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT l.child_session_id
+                 FROM session_links l
+                 WHERE l.relation = 'subagent'
+                   AND l.closed_at IS NULL
+                   AND EXISTS (
+                     SELECT 1
+                     FROM session_events e
+                     WHERE e.session_id = l.child_session_id
+                       AND e.event_type = 'turn_started'
+                       AND e.turn_id IS NOT NULL
+                       AND NOT EXISTS (
+                         SELECT 1
+                         FROM session_events e2
+                         WHERE e2.session_id = e.session_id
+                           AND e2.turn_id = e.turn_id
+                           AND e2.event_type IN ('turn_ended', 'error', 'session_ended')
+                       )
+                   )
+                 ORDER BY l.subagent_closed_at ASC, l.id ASC
+                 LIMIT ?1",
+            )?;
+            let rows = stmt.query_map([limit as i64], |row| row.get(0))?;
+            rows.collect()
+        })
+    }
+
     pub fn list_subagent_children(
         &self,
         parent_session_id: &str,

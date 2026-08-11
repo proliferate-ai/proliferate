@@ -86,12 +86,18 @@ impl SessionActor {
         {
             let mut sink = self.event_sink.lock().await;
             let content_parts = payload.content_parts();
-            turn_id = sink.begin_turn(
-                payload.text_summary.clone(),
-                prompt_id.clone(),
-                content_parts,
-                payload.public_provenance(),
-            );
+            turn_id = sink
+                .begin_turn(
+                    payload.text_summary.clone(),
+                    prompt_id.clone(),
+                    content_parts,
+                    payload.public_provenance(),
+                )
+                .map_err(|_| {
+                    PromptAcceptError::EnqueueFailed(
+                        "prior turn could not be durably finalized".to_string(),
+                    )
+                })?;
             if let Err(error) = self.caps.attachments.mark_prompt_attachments_state(
                 &self.session_id,
                 &payload.attachment_ids(),

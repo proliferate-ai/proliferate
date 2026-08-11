@@ -1,29 +1,9 @@
 use rusqlite::params;
 
 use super::map_event;
-use crate::domains::sessions::model::SessionEventRecord;
 use crate::domains::sessions::store::SessionStore;
 
 impl SessionStore {
-    pub(crate) fn list_events_for_turn_through_seq(
-        &self,
-        session_id: &str,
-        turn_id: &str,
-        through_seq: i64,
-    ) -> anyhow::Result<Vec<SessionEventRecord>> {
-        self.db.with_conn(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT * FROM session_events
-                 WHERE session_id = ?1 AND turn_id = ?2 AND seq <= ?3
-                 ORDER BY seq ASC",
-            )?;
-            let rows = stmt
-                .query_map(params![session_id, turn_id, through_seq], map_event)?
-                .collect();
-            rows
-        })
-    }
-
     /// Resolve the durable transcript turn that consumed a stable prompt id.
     /// Only completed user-message items qualify; queue visibility events and
     /// assistant/tool items cannot acknowledge delivery.

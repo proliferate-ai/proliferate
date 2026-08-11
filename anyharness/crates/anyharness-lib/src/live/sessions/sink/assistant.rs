@@ -114,6 +114,7 @@ impl SessionEventSink {
                 message_id: message_id.clone(),
                 text: text.clone(),
             };
+            self.turn_assistant_messages.push(text.clone());
             let payload = TranscriptItemPayload {
                 kind: TranscriptItemKind::AssistantMessage,
                 status: TranscriptItemStatus::Completed,

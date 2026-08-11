@@ -1,27 +1,20 @@
 use tokio::sync::mpsc;
 
-use super::delivery::{
-    CaptureCompletionDeliveryInput, CaptureCompletionDeliveryOutcome, CompletionDeliveryStore,
-};
-use super::transcript::summarize_turn_events;
+use super::delivery::CompletionDeliveryStore;
 use crate::domains::sessions::extensions::{SessionExtension, SessionTurnFinishedContext};
-use crate::domains::sessions::store::SessionStore;
 
 #[derive(Clone)]
 pub struct SubagentSessionHooks {
-    session_store: SessionStore,
     delivery_store: CompletionDeliveryStore,
     delivery_nudge: mpsc::UnboundedSender<()>,
 }
 
 impl SubagentSessionHooks {
     pub fn new(
-        session_store: SessionStore,
         delivery_store: CompletionDeliveryStore,
         delivery_nudge: mpsc::UnboundedSender<()>,
     ) -> Self {
         Self {
-            session_store,
             delivery_store,
             delivery_nudge,
         }
@@ -30,7 +23,7 @@ impl SubagentSessionHooks {
 
 impl SessionExtension for SubagentSessionHooks {
     fn on_turn_finished(&self, ctx: SessionTurnFinishedContext) {
-        let captured_at = chrono::Utc::now().to_rfc3339();
+        let finished_at = chrono::Utc::now().to_rfc3339();
         if let Some(prompt_id) = ctx.prompt_id.as_deref() {
             if self
                 .delivery_store
@@ -38,7 +31,7 @@ impl SessionExtension for SubagentSessionHooks {
                     &ctx.session_id,
                     prompt_id,
                     &ctx.turn_id,
-                    &captured_at,
+                    &finished_at,
                 )
                 .is_err()
             {
@@ -52,43 +45,9 @@ impl SessionExtension for SubagentSessionHooks {
         if ctx.turn_id.trim().is_empty() {
             return;
         }
-        let assistant_text = match self.session_store.list_events_for_turn_through_seq(
-            &ctx.session_id,
-            &ctx.turn_id,
-            ctx.last_event_seq,
-        ) {
-            Ok(events) => summarize_turn_events(&events).0,
-            Err(_) => {
-                tracing::warn!(
-                    child_session_id = %ctx.session_id,
-                    child_turn_id = %ctx.turn_id,
-                    failure_code = "turn_summary_unavailable",
-                    "capturing subagent completion without assistant summary"
-                );
-                None
-            }
-        };
-        let input = CaptureCompletionDeliveryInput {
-            turn: ctx,
-            assistant_text,
-            captured_at,
-        };
-        match self.delivery_store.capture(&input) {
-            Ok(CaptureCompletionDeliveryOutcome::Captured { delivery, .. }) => {
-                tracing::info!(
-                    delivery_id = %delivery.delivery_id,
-                    result_class = "captured",
-                    "subagent completion delivery captured"
-                );
-                let _ = self.delivery_nudge.send(());
-            }
-            Ok(CaptureCompletionDeliveryOutcome::NotSubagent) => {}
-            Err(_) => tracing::warn!(
-                child_session_id = %input.turn.session_id,
-                child_turn_id = %input.turn.turn_id,
-                failure_code = "completion_capture_failed",
-                "failed to capture subagent completion delivery"
-            ),
-        }
+        // Terminal persistence already captured any child delivery intent in
+        // the same transaction as the terminal event batch. This is only a
+        // latency hint; the periodic worker remains the crash-safe backstop.
+        let _ = self.delivery_nudge.send(());
     }
 }

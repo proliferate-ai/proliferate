@@ -107,6 +107,21 @@ impl LiveSessionManager {
         sessions.get(session_id).cloned()
     }
 
+    /// Run one synchronous recovery action only while no live actor owns the
+    /// session. Holding the same map lock used by startup makes the absence
+    /// check and action indivisible with respect to actor installation.
+    pub(crate) async fn run_if_session_absent<T>(
+        &self,
+        session_id: &str,
+        action: impl FnOnce() -> T,
+    ) -> Option<T> {
+        let sessions = self.live_sessions.write().await;
+        if sessions.contains_key(session_id) {
+            return None;
+        }
+        Some(action())
+    }
+
     /// Returns only a handle whose actor startup completed. Callers that must
     /// join an in-progress startup should fall through to `start_session`,
     /// which waits on the shared readiness channel.

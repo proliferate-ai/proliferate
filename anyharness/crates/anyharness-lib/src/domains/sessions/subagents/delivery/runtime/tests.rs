@@ -1,0 +1,484 @@
+use std::sync::Arc;
+
+use super::*;
+use crate::app::{test_support, AppState};
+use crate::domains::agents::installer::seed::AgentSeedStore;
+use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::links::model::{
+    SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
+};
+use crate::domains::sessions::links::store::SessionLinkStore;
+use crate::domains::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
+use crate::domains::sessions::store::completion_deliveries::DurableTerminalTurn;
+use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::subagents::delivery::CompletionDeliveryState;
+use crate::persistence::Db;
+
+const WORKSPACE_ID: &str = "workspace-closed-repair";
+const PARENT_ID: &str = "parent-closed-repair";
+const CHILD_ID: &str = "child-closed-repair";
+
+#[test]
+fn enqueued_backoff_increases_and_caps_at_sixty_seconds() {
+    assert_eq!(
+        (1..=8).map(retry_delay_seconds).collect::<Vec<_>>(),
+        vec![2, 4, 8, 16, 32, 60, 60, 60]
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn restarted_worker_repairs_retired_closed_turn_once_after_store_recovers() {
+    let _lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let state = subagent_with_open_turn("worker-restart", true, false, true).await;
+
+    let first_worker = worker(&state);
+    assert!(first_worker.repair_retired_subagent_turns().await.is_err());
+    assert_open_turn_without_delivery(&state);
+    drop(first_worker);
+
+    state
+        .db
+        .with_conn(|conn| conn.execute_batch("DROP TRIGGER reject_closed_repair_delivery;"))
+        .expect("remove repair failure");
+    let restarted_worker = worker(&state);
+    assert_eq!(
+        restarted_worker
+            .repair_retired_subagent_turns()
+            .await
+            .expect("restart repair"),
+        1
+    );
+    assert_eq!(
+        restarted_worker
+            .repair_retired_subagent_turns()
+            .await
+            .expect("idempotent restart repair"),
+        0
+    );
+    assert_one_cancelled_terminal_and_delivery(&state);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn worker_skips_live_closed_child_until_exact_handle_is_retired() {
+    let _lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let state = subagent_with_open_turn("worker-live-gate", false, true, true).await;
+    let worker = worker(&state);
+
+    assert_eq!(
+        worker
+            .repair_retired_subagent_turns()
+            .await
+            .expect("live child skipped"),
+        0
+    );
+    assert_open_turn_without_delivery(&state);
+
+    state.acp_manager.remove_session(CHILD_ID).await;
+    assert_eq!(
+        worker
+            .repair_retired_subagent_turns()
+            .await
+            .expect("retired child repaired"),
+        1
+    );
+    assert_one_cancelled_terminal_and_delivery(&state);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn worker_repairs_open_current_link_but_not_promoted_session() {
+    let _lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let open_state = subagent_with_open_turn("worker-open", false, true, false).await;
+    open_state.acp_manager.remove_session(CHILD_ID).await;
+    assert_eq!(
+        worker(&open_state)
+            .repair_retired_subagent_turns()
+            .await
+            .expect("open current subagent repair"),
+        1
+    );
+    assert_one_cancelled_terminal_and_delivery(&open_state);
+
+    let promoted_state = subagent_with_open_turn("worker-promoted", false, true, false).await;
+    promoted_state
+        .db
+        .with_conn(|conn| {
+            conn.execute(
+                "DELETE FROM session_links WHERE child_session_id = ?1",
+                [CHILD_ID],
+            )?;
+            Ok(())
+        })
+        .expect("promote by deleting relationship");
+    promoted_state.acp_manager.remove_session(CHILD_ID).await;
+    assert_eq!(
+        worker(&promoted_state)
+            .repair_retired_subagent_turns()
+            .await
+            .expect("promoted session skipped"),
+        0
+    );
+    assert_open_turn_without_delivery(&promoted_state);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn file_backed_pending_capture_survives_restart_and_enqueues_once() {
+    let _lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let runtime_home = std::env::temp_dir().join(format!(
+        "completion-delivery-file-restart-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace_path = runtime_home.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("workspace");
+    let db = Db::open(&runtime_home).expect("file-backed db");
+    test_support::seed_workspace_with_repo_root(
+        &db,
+        WORKSPACE_ID,
+        "local",
+        &workspace_path.to_string_lossy(),
+    );
+    let store = SessionStore::new(db.clone());
+    let mut parent = session(PARENT_ID);
+    parent.agent_kind = "missing-agent".to_string();
+    store.insert(&parent).expect("parent");
+    store.insert(&session(CHILD_ID)).expect("child");
+    SessionLinkStore::new(db.clone())
+        .insert(&SessionLinkRecord {
+            id: "link-file-restart".into(),
+            public_id: Some("subagent-file-restart".into()),
+            relation: SessionLinkRelation::Subagent,
+            parent_session_id: PARENT_ID.into(),
+            child_session_id: CHILD_ID.into(),
+            workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+            label: Some("worker".into()),
+            created_by_turn_id: None,
+            created_by_tool_call_id: None,
+            created_at: "2026-08-11T00:00:00Z".into(),
+            subagent_closed_at: None,
+            closed_at: None,
+        })
+        .expect("link");
+    store
+        .append_event(&SessionEventRecord {
+            id: 0,
+            session_id: CHILD_ID.into(),
+            seq: 1,
+            timestamp: "2026-08-11T00:01:00Z".into(),
+            event_type: "turn_started".into(),
+            turn_id: Some("turn-before-crash".into()),
+            item_id: None,
+            payload_json: r#"{"type":"turn_started"}"#.into(),
+        })
+        .expect("turn start");
+    store
+        .persist_terminal_turn_record(&DurableTerminalTurn {
+            terminal_id: "terminal-before-crash".into(),
+            session_id: CHILD_ID.into(),
+            turn_id: "turn-before-crash".into(),
+            outcome: SessionTurnOutcome::Completed,
+            assistant_text: Some("final output".into()),
+            events: vec![SessionEventRecord {
+                id: 0,
+                session_id: CHILD_ID.into(),
+                seq: 2,
+                timestamp: "2026-08-11T00:02:00Z".into(),
+                turn_id: Some("turn-before-crash".into()),
+                item_id: None,
+                event_type: "turn_ended".into(),
+                payload_json: r#"{"type":"turn_ended","stopReason":"end_turn"}"#.into(),
+            }],
+            completed_at: "2026-08-11T00:02:00Z".into(),
+        })
+        .expect("atomic terminal capture");
+    let captured = CompletionDeliveryStore::new(db.clone())
+        .list_all_for_test()
+        .expect("captured delivery");
+    assert_eq!(captured.len(), 1);
+    let delivery_id = captured[0].delivery_id.clone();
+    assert_eq!(captured[0].state, CompletionDeliveryState::Pending);
+    drop(store);
+    drop(db);
+
+    let restarted = AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".into(),
+        Db::open(&runtime_home).expect("reopen db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("restarted app state");
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let pending = restarted
+                .session_service
+                .store()
+                .list_pending_prompts(PARENT_ID)
+                .expect("parent queue");
+            if pending.len() == 1 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("restarted worker enqueued capture");
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    let pending = restarted
+        .session_service
+        .store()
+        .list_pending_prompts(PARENT_ID)
+        .expect("stable parent queue");
+    assert_eq!(pending.len(), 1);
+    let expected_prompt_id = format!("subagent_completion:{delivery_id}");
+    assert_eq!(
+        pending[0].prompt_id.as_deref(),
+        Some(expected_prompt_id.as_str())
+    );
+    let deliveries = CompletionDeliveryStore::new(restarted.db.clone())
+        .list_all_for_test()
+        .expect("restarted deliveries");
+    assert_eq!(deliveries.len(), 1);
+    assert_eq!(deliveries[0].delivery_id, delivery_id);
+    let projection_count: i64 = restarted
+        .db
+        .with_conn(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM session_link_completions", [], |row| {
+                row.get(0)
+            })
+        })
+        .expect("projection count");
+    assert_eq!(projection_count, 1);
+
+    drop(restarted);
+    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn file_backed_closed_open_turn_is_repaired_by_restarted_worker() {
+    let _lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let runtime_home = std::env::temp_dir().join(format!(
+        "completion-delivery-closed-restart-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace_path = runtime_home.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("workspace");
+    let state_before = AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".into(),
+        Db::open(&runtime_home).expect("file-backed db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("state before restart");
+    test_support::seed_workspace_with_repo_root(
+        &state_before.db,
+        WORKSPACE_ID,
+        "local",
+        &workspace_path.to_string_lossy(),
+    );
+    seed_subagent_open_turn(&state_before, true, false, true).await;
+    assert!(worker(&state_before)
+        .repair_retired_subagent_turns()
+        .await
+        .is_err());
+    assert_open_turn_without_delivery(&state_before);
+    drop(state_before);
+
+    let reopened_db = Db::open(&runtime_home).expect("reopen db");
+    reopened_db
+        .with_conn(|conn| conn.execute_batch("DROP TRIGGER reject_closed_repair_delivery;"))
+        .expect("remove failure after crash");
+    let restarted = AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".into(),
+        reopened_db,
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("restarted state");
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            if CompletionDeliveryStore::new(restarted.db.clone())
+                .list_all_for_test()
+                .is_ok_and(|rows| rows.len() == 1)
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("restarted worker repaired Closed child");
+    assert_one_cancelled_terminal_and_delivery(&restarted);
+
+    drop(restarted);
+    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+}
+
+fn worker(state: &AppState) -> CompletionDeliveryWorker {
+    CompletionDeliveryWorker {
+        delivery_store: CompletionDeliveryStore::new(state.db.clone()),
+        session_store: SessionStore::new(state.db.clone()),
+        session_runtime: Arc::downgrade(&state.session_runtime),
+    }
+}
+
+async fn subagent_with_open_turn(
+    label: &str,
+    reject_repair: bool,
+    install_live_handle: bool,
+    close_relationship: bool,
+) -> AppState {
+    let runtime_home = std::env::temp_dir().join(format!(
+        "completion-delivery-{label}-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace_path = runtime_home.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace");
+    let state = AppState::new(
+        runtime_home,
+        "http://127.0.0.1:8457".into(),
+        Db::open_in_memory().expect("db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        WORKSPACE_ID,
+        "local",
+        &workspace_path.to_string_lossy(),
+    );
+    seed_subagent_open_turn(
+        &state,
+        reject_repair,
+        install_live_handle,
+        close_relationship,
+    )
+    .await;
+    state
+}
+
+async fn seed_subagent_open_turn(
+    state: &AppState,
+    reject_repair: bool,
+    install_live_handle: bool,
+    close_relationship: bool,
+) {
+    let store = SessionStore::new(state.db.clone());
+    store.insert(&session(PARENT_ID)).expect("parent");
+    store.insert(&session(CHILD_ID)).expect("child");
+    let link = state
+        .subagent_service
+        .link_child(PARENT_ID, CHILD_ID, Some("worker".into()), None, None)
+        .expect("link");
+    if reject_repair {
+        state
+            .db
+            .with_conn(|conn| {
+                conn.execute_batch(
+                    "CREATE TRIGGER reject_closed_repair_delivery
+                     BEFORE INSERT ON session_link_completion_deliveries
+                     BEGIN SELECT RAISE(ABORT, 'injected repair failure'); END;",
+                )
+            })
+            .expect("install repair failure");
+    }
+    if install_live_handle {
+        state
+            .acp_manager
+            .insert_unavailable_session_for_test(CHILD_ID)
+            .await;
+    }
+    if close_relationship {
+        SessionLinkStore::new(state.db.clone())
+            .close_subagent_operability(&link.id, "2026-08-11T00:01:00Z")
+            .expect("close relationship");
+    }
+    store
+        .append_event(&SessionEventRecord {
+            id: 0,
+            session_id: CHILD_ID.into(),
+            seq: 1,
+            timestamp: "2026-08-11T00:02:00Z".into(),
+            event_type: "turn_started".into(),
+            turn_id: Some("turn-open".into()),
+            item_id: None,
+            payload_json: r#"{"type":"turn_started"}"#.into(),
+        })
+        .expect("open turn");
+}
+
+fn session(id: &str) -> SessionRecord {
+    SessionRecord {
+        id: id.into(),
+        workspace_id: WORKSPACE_ID.into(),
+        agent_kind: "claude".into(),
+        native_session_id: Some(format!("native-{id}")),
+        agent_auth_contexts: None,
+        requested_model_id: None,
+        current_model_id: None,
+        requested_mode_id: None,
+        current_mode_id: None,
+        title: Some(id.into()),
+        thinking_level_id: None,
+        thinking_budget_tokens: None,
+        status: "idle".into(),
+        created_at: "2026-08-11T00:00:00Z".into(),
+        updated_at: "2026-08-11T00:00:00Z".into(),
+        last_prompt_at: None,
+        closed_at: None,
+        dismissed_at: None,
+        mcp_bindings_ciphertext: None,
+        mcp_binding_summaries_json: None,
+        mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
+        system_prompt_append: None,
+        subagents_enabled: true,
+        action_capabilities_json: None,
+        origin: None,
+    }
+}
+
+fn assert_open_turn_without_delivery(state: &AppState) {
+    let events = state
+        .session_service
+        .store()
+        .list_events(CHILD_ID)
+        .expect("events");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].event_type, "turn_started");
+    assert!(CompletionDeliveryStore::new(state.db.clone())
+        .list_all_for_test()
+        .expect("deliveries")
+        .is_empty());
+}
+
+fn assert_one_cancelled_terminal_and_delivery(state: &AppState) {
+    let events = state
+        .session_service
+        .store()
+        .list_events(CHILD_ID)
+        .expect("events");
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event.event_type == "turn_ended")
+            .count(),
+        1
+    );
+    let deliveries = CompletionDeliveryStore::new(state.db.clone())
+        .list_all_for_test()
+        .expect("deliveries");
+    assert_eq!(deliveries.len(), 1);
+    assert_eq!(deliveries[0].outcome.as_str(), "cancelled");
+    assert_eq!(deliveries[0].child_turn_id, "turn-open");
+}

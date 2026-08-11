@@ -18,6 +18,14 @@ impl SessionEventSink {
         output_file: String,
         result_text: String,
     ) {
+        if self.has_staged_terminal() {
+            tracing::error!(
+                session_id = %self.session_id,
+                failure_code = "terminal_sequence_fenced",
+                "background completion rejected while terminal transaction is unresolved"
+            );
+            return;
+        }
         self.tool_items.remove(&tool_call_id);
         let raw_output = Some(background_work_raw_output(
             None,

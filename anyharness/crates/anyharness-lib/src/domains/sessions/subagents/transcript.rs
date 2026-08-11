@@ -3,6 +3,7 @@ use anyharness_contract::v1::{
 };
 
 use super::model::SubagentTranscriptSearchMatch;
+use crate::domains::sessions::model::bounded_assistant_text;
 
 pub(super) const READ_LATEST_TURNS_DEFAULT_LIMIT: usize = 3;
 pub(super) const READ_LATEST_TURNS_MAX_LIMIT: usize = 10;
@@ -10,13 +11,12 @@ pub(super) const SEARCH_TRANSCRIPT_DEFAULT_LIMIT: usize = 10;
 pub(super) const SEARCH_TRANSCRIPT_MAX_LIMIT: usize = 25;
 pub(super) const LATEST_TURN_EVENT_BUDGET: i64 = 200;
 pub(super) const SEARCH_EVENT_BUDGET: i64 = 500;
-const ASSISTANT_TEXT_MAX_CHARS: usize = 4_000;
 const SEARCH_SNIPPET_CONTEXT_CHARS: usize = 120;
 
 pub(super) fn summarize_turn_events(
     events: &[crate::domains::sessions::model::SessionEventRecord],
 ) -> (Option<String>, Vec<String>) {
-    let mut assistant = String::new();
+    let mut assistant_parts = Vec::new();
     let mut tool_errors = Vec::new();
     for record in events {
         let Ok(event) = serde_json::from_str::<SessionEvent>(&record.payload_json) else {
@@ -25,7 +25,11 @@ pub(super) fn summarize_turn_events(
         if let SessionEvent::ItemCompleted(item_event) = event {
             match item_event.item.kind {
                 TranscriptItemKind::AssistantMessage => {
-                    append_content_text(&mut assistant, &item_event.item.content_parts);
+                    for part in &item_event.item.content_parts {
+                        if let ContentPart::Text { text } = part {
+                            assistant_parts.push(text.clone());
+                        }
+                    }
                 }
                 TranscriptItemKind::ToolInvocation => {
                     if matches!(item_event.item.status, TranscriptItemStatus::Failed) {
@@ -41,11 +45,7 @@ pub(super) fn summarize_turn_events(
             }
         }
     }
-    let assistant_text = if assistant.trim().is_empty() {
-        None
-    } else {
-        Some(trim_chars(assistant.trim(), ASSISTANT_TEXT_MAX_CHARS))
-    };
+    let assistant_text = bounded_assistant_text(&assistant_parts);
     (assistant_text, tool_errors)
 }
 
@@ -136,14 +136,4 @@ fn make_snippet(text: &str, index: usize, needle_len: usize) -> String {
         snippet.push_str("...");
     }
     snippet
-}
-
-fn trim_chars(text: &str, max_chars: usize) -> String {
-    let mut iter = text.chars();
-    let trimmed = iter.by_ref().take(max_chars).collect::<String>();
-    if iter.next().is_some() {
-        format!("{trimmed}...")
-    } else {
-        trimmed
-    }
 }

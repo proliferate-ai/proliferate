@@ -12,17 +12,25 @@ impl SessionEventSink {
         prompt_id: Option<String>,
         content_parts: Vec<ContentPart>,
         prompt_provenance: Option<PromptProvenance>,
-    ) -> String {
+    ) -> anyhow::Result<String> {
         // A dangling engine-initiated turn (goal pursuit that never reached a
         // quiescent goal event, e.g. the sidecar died mid-continuation) must
         // not swallow the incoming prompt turn.
-        self.end_engine_initiated_turn_if_open();
+        if let Some(engine_initiated) = self.staged_terminal_is_engine_initiated() {
+            anyhow::ensure!(
+                engine_initiated,
+                "a prompt terminal remains durably unresolved"
+            );
+            self.commit_staged_prompt_terminal()?;
+        }
+        self.end_engine_initiated_turn_if_open()?;
         self.close_open_items();
         self.close_plan_item();
         self.close_tool_items();
 
         let turn_id = uuid::Uuid::new_v4().to_string();
         tracing::debug!(turn_id = %turn_id, "event_sink: beginning turn");
+        self.turn_assistant_messages.clear();
         self.current_turn_id = Some(turn_id.clone());
         self.engine_initiated_turn = false;
         self.emit_with_ids(
@@ -62,7 +70,7 @@ impl SessionEventSink {
             Some(turn_id),
             Some(item_id),
         );
-        self.current_turn_id.clone().unwrap_or_default()
+        Ok(self.current_turn_id.clone().unwrap_or_default())
     }
 
     pub fn turn_ended(&mut self, stop_reason: StopReason) {
@@ -92,6 +100,7 @@ impl SessionEventSink {
         }
         let turn_id = uuid::Uuid::new_v4().to_string();
         tracing::debug!(turn_id = %turn_id, "event_sink: opening engine-initiated turn");
+        self.turn_assistant_messages.clear();
         self.current_turn_id = Some(turn_id.clone());
         self.engine_initiated_turn = true;
         self.engine_turn_has_events = false;
@@ -105,10 +114,19 @@ impl SessionEventSink {
 
     /// Ends the open turn only when it was engine-initiated. Prompt-begun
     /// turns are owned by the prompt lifecycle and never auto-closed.
-    pub(super) fn end_engine_initiated_turn_if_open(&mut self) {
+    pub(super) fn end_engine_initiated_turn_if_open(&mut self) -> anyhow::Result<()> {
         if self.engine_initiated_turn && self.current_turn_id.is_some() {
-            self.turn_ended(StopReason::EndTurn);
+            if self.engine_turn_has_events {
+                self.stage_prompt_terminal(
+                    crate::live::sessions::model::TerminalTurnOutcome::Completed,
+                    super::PromptTerminalEvent::TurnEnded(StopReason::EndTurn),
+                )?;
+                self.commit_staged_prompt_terminal()?;
+            } else {
+                self.turn_ended(StopReason::EndTurn);
+            }
         }
+        Ok(())
     }
 
     /// Closes an engine-initiated turn that never received content. A

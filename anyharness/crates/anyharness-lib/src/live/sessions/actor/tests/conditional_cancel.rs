@@ -122,11 +122,19 @@ async fn spawn_harness() -> Harness {
 }
 
 async fn spawn_harness_with_store(store: SessionStore, hooks: SessionHooks) -> Harness {
+    let caps = actor_capabilities_for_store(&store);
+    spawn_harness_with_capabilities(store, hooks, caps).await
+}
+
+async fn spawn_harness_with_capabilities(
+    store: SessionStore,
+    hooks: SessionHooks,
+    caps: crate::live::sessions::model::ActorCapabilities,
+) -> Harness {
     let session = store
         .find_by_id(SESSION_ID)
         .expect("read session")
         .expect("session exists");
-    let caps = actor_capabilities_for_store(&store);
 
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);
     let (event_tx, _event_rx) = broadcast::channel::<SessionEventEnvelope>(64);

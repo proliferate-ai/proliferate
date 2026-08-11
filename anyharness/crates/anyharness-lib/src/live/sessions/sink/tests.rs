@@ -19,6 +19,10 @@ use support::{
     assistant_completion_marker, drain_events, empty_store, seeded_store, transient_status_chunk,
 };
 
+fn begin(sink: &mut SessionEventSink, prompt: &str) {
+    assert!(sink.begin_turn(prompt.into(), None, vec![], None).is_ok());
+}
+
 #[test]
 fn assistant_chunking_emits_one_item_lifecycle_with_monotonic_seq() {
     let store = seeded_store();
@@ -31,7 +35,7 @@ fn assistant_chunking_emits_one_item_lifecycle_with_monotonic_seq() {
         Arc::new(store.clone()),
     );
 
-    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    begin(&mut sink, "hello");
     sink.agent_message_chunk(AcpChunkPayload {
         content: json!("Hel"),
         ..Default::default()
@@ -145,7 +149,7 @@ fn assistant_completion_marker_closes_matching_open_message() {
         Arc::new(store.clone()),
     );
 
-    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    begin(&mut sink, "hello");
     sink.agent_message_chunk(AcpChunkPayload {
         content: json!("Hel"),
         message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
@@ -215,7 +219,7 @@ fn assistant_completion_marker_ignores_mismatched_message_id() {
         Arc::new(store),
     );
 
-    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    begin(&mut sink, "hello");
     sink.agent_message_chunk(AcpChunkPayload {
         content: json!("Hello"),
         message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
@@ -254,7 +258,7 @@ fn transient_status_marker_sets_transient_reasoning_and_replaces_text() {
         Arc::new(store),
     );
 
-    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    begin(&mut sink, "hello");
     sink.agent_thought_chunk(transient_status_chunk("Authenticating MCP server"));
     sink.agent_thought_chunk(transient_status_chunk("Waiting for browser auth"));
     sink.turn_ended(StopReason::EndTurn);
@@ -310,7 +314,7 @@ fn regular_thought_chunks_remain_non_transient_and_append() {
         Arc::new(store),
     );
 
-    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    begin(&mut sink, "hello");
     sink.agent_thought_chunk(AcpChunkPayload {
         content: json!("Thinking"),
         message_id: Some("reasoning-1".to_string()),
@@ -348,7 +352,7 @@ fn plan_updates_reuse_the_same_plan_item_until_turn_end() {
         Arc::new(store.clone()),
     );
 
-    sink.begin_turn("plan this".to_string(), None, Vec::new(), None);
+    begin(&mut sink, "plan this");
     sink.plan(vec![json!({ "content": "Step 1", "status": "pending" })]);
     sink.plan(vec![json!({ "content": "Step 1", "status": "completed" })]);
     sink.turn_ended(StopReason::EndTurn);
@@ -394,7 +398,7 @@ fn background_resolution_reuses_existing_tool_item_id() {
         Arc::new(store.clone()),
     );
 
-    sink.begin_turn("delegate".to_string(), None, Vec::new(), None);
+    begin(&mut sink, "delegate");
     sink.tool_call(super::AcpToolPayload {
         tool_call_id: "tool-1".to_string(),
         title: Some("Launch investigator".to_string()),
@@ -490,7 +494,7 @@ fn async_launch_completion_preserves_background_metadata_on_completed_item() {
         Arc::new(store),
     );
 
-    sink.begin_turn("delegate".to_string(), None, Vec::new(), None);
+    begin(&mut sink, "delegate");
     sink.tool_call(super::AcpToolPayload {
         tool_call_id: "tool-1".to_string(),
         title: Some("Task".to_string()),
@@ -592,3 +596,4 @@ fn async_launch_completion_preserves_background_metadata_on_completed_item() {
     );
 }
 mod engine_turns;
+mod terminal_turns;
