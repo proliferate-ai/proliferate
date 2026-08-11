@@ -138,6 +138,15 @@ async fn fake_launcher_concurrent_start_accepts_one_start_and_one_terminal_trans
         supervisor.state(),
         DesktopDiagnosticsSupervisorStateV1::Unsupported { .. }
     ));
+    let state = supervisor.subscribe_state();
+    assert!(matches!(
+        &*state.borrow(),
+        DesktopDiagnosticsSupervisorStateV1::Unsupported { .. }
+    ));
+    assert_eq!(
+        supervisor.wait_startup_barrier().await,
+        StartupBarrierResult::Degraded
+    );
 
     let records = std::fs::read_to_string(&path)
         .expect("fallback records")
@@ -204,6 +213,8 @@ async fn concurrent_real_start_owns_one_ready_child_capability_and_lifecycle_pai
         .protected_child_handoff()
         .expect("second protected handoff");
     assert_eq!(first.generation, second.generation);
+    let generation = supervisor.subscribe_generation();
+    assert_eq!(*generation.borrow(), first.generation);
     assert_eq!(
         first.descriptor.collector_boot_id,
         second.descriptor.collector_boot_id
@@ -265,6 +276,8 @@ async fn concurrent_real_start_owns_one_ready_child_capability_and_lifecycle_pai
     );
 
     supervisor.arm_shutdown();
+    let shutdown = supervisor.subscribe_shutdown();
+    assert!(*shutdown.borrow());
     supervisor.stop_collector().await.expect("stop collector");
     producer.close();
     fallback.close().expect("close fallback");

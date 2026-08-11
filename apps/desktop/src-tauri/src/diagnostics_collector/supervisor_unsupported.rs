@@ -154,7 +154,7 @@ impl DiagnosticsCollectorSupervisor {
         }
         self.fallback.set_active(true);
         operation.terminal(TerminalOutcomeV1::Skipped, Some("unsupported_target"));
-        let _ = self.startup_tx.send(StartupBarrierResult::Degraded);
+        self.startup_tx.send_replace(StartupBarrierResult::Degraded);
         StartupBarrierResult::Degraded
     }
 
@@ -205,16 +205,16 @@ impl DiagnosticsCollectorSupervisor {
             return false;
         }
         if *self.startup_tx.borrow() == StartupBarrierResult::Pending {
-            let _ = self.startup_tx.send(StartupBarrierResult::Degraded);
+            self.startup_tx.send_replace(StartupBarrierResult::Degraded);
         }
-        let _ = self.shutdown_tx.send(true);
+        self.shutdown_tx.send_replace(true);
         true
     }
 
     pub(crate) async fn stop_collector(&self) -> Result<(), SupervisorUnavailable> {
         let operation = self.producer.begin_lifecycle("desktop.collector.stop");
         let generation = (*self.generation_tx.borrow()).saturating_add(1);
-        let _ = self.generation_tx.send(generation);
+        self.generation_tx.send_replace(generation);
         self.producer.set_ready_client(generation, None);
         operation.terminal(TerminalOutcomeV1::Skipped, None);
         if let Ok(mut state) = self.state.lock() {

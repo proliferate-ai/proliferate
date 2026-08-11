@@ -108,6 +108,10 @@ impl FallbackDiagnosticsWriter {
         if !inner.active {
             return Ok(());
         }
+        if serialized_record.len().saturating_add(1) as u64 > FALLBACK_SEGMENT_BYTES {
+            inner.dropped_records = inner.dropped_records.saturating_add(1);
+            return Ok(());
+        }
         let sanitized = sanitize_fallback_record(serialized_record);
         let result = inner.write_record(&sanitized);
         if result.is_err() {

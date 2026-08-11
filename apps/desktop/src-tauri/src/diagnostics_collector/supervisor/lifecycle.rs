@@ -19,7 +19,7 @@ impl DiagnosticsCollectorSupervisor {
             return false;
         }
         self.resolve_startup(StartupBarrierResult::Degraded);
-        let _ = self.shutdown_tx.send(true);
+        self.shutdown_tx.send_replace(true);
         // `shutdown_tx` cancels broker leases immediately. The accepted
         // collector generation and producer client deliberately remain live
         // through bounded producer/child flush and stop work; collector
@@ -318,12 +318,12 @@ impl DiagnosticsCollectorSupervisor {
             ));
         if matches!(&state, DesktopDiagnosticsSupervisorStateV1::Degraded { .. }) {
             self.producer.set_ready_client(generation, None);
-            let _ = self.state_tx.send(state);
+            self.state_tx.send_replace(state);
             return;
         }
         self.producer.set_ready_client(generation, Some(client));
-        let _ = self.generation_tx.send(generation);
-        let _ = self.state_tx.send(state);
+        self.generation_tx.send_replace(generation);
+        self.state_tx.send_replace(state);
     }
 
     pub(super) fn accept_restart_budget(&self) -> bool {
@@ -371,20 +371,20 @@ impl DiagnosticsCollectorSupervisor {
                 },
             ));
         self.producer.set_ready_client(generation, None);
-        let _ = self.generation_tx.send(generation);
-        let _ = self.state_tx.send(state);
+        self.generation_tx.send_replace(generation);
+        self.state_tx.send_replace(state);
     }
 
     pub(super) fn publish_state(&self, state: DesktopDiagnosticsSupervisorStateV1) {
         if let Ok(mut inner) = self.inner.lock() {
             inner.state = state.clone();
         }
-        let _ = self.state_tx.send(state);
+        self.state_tx.send_replace(state);
     }
 
     pub(super) fn resolve_startup(&self, result: StartupBarrierResult) {
         if *self.startup_tx.borrow() == StartupBarrierResult::Pending {
-            let _ = self.startup_tx.send(result);
+            self.startup_tx.send_replace(result);
         }
     }
 
@@ -424,7 +424,7 @@ impl DiagnosticsCollectorSupervisor {
             })
             .unwrap_or_default();
         self.producer.set_ready_client(generation, None);
-        let _ = self.generation_tx.send(generation);
+        self.generation_tx.send_replace(generation);
     }
 
     pub(super) fn retain_failed_launch(&self, error: &mut CollectorLaunchError) {
