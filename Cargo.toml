@@ -108,3 +108,4 @@ proliferate-runtime-update-protocol = { path = "anyharness/crates/proliferate-ru
 anyharness-credential-discovery = { path = "anyharness/crates/anyharness-credential-discovery" }
 anyharness-lib = { path = "anyharness/crates/anyharness-lib" }
 proliferate-diagnostics-protocol = { path = "anyharness/crates/proliferate-diagnostics-protocol" }
+proliferate-diagnostics-collector = { path = "anyharness/crates/proliferate-diagnostics-collector" }
