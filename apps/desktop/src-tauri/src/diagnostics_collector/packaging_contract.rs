@@ -3,13 +3,13 @@ const EXTERNAL_BINARY_COUNT: usize = 4;
 pub(crate) fn should_stage_real_binaries(
     cargo_primary_package: bool,
     explicit_inputs: [bool; EXTERNAL_BINARY_COUNT],
-    release_profile: bool,
+    _release_profile: bool,
 ) -> bool {
     let explicit_count = explicit_inputs
         .into_iter()
         .filter(|present| *present)
         .count();
-    release_profile || cargo_primary_package || explicit_count == EXTERNAL_BINARY_COUNT
+    cargo_primary_package || explicit_count == EXTERNAL_BINARY_COUNT
 }
 
 pub(crate) fn is_placeholder_executable(prefix: &[u8]) -> bool {
@@ -33,7 +33,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn explicit_release_inputs_stage_without_cargo_primary_package() {
+    fn only_primary_or_complete_explicit_inputs_stage_real_binaries() {
         assert_eq!(
             should_stage_real_binaries(false, [true, true, true, true], true),
             true
@@ -42,7 +42,7 @@ mod tests {
             should_stage_real_binaries(true, [false, false, false, false], true),
             true
         );
-        assert!(should_stage_real_binaries(
+        assert!(!should_stage_real_binaries(
             false,
             [false, false, false, false],
             true
@@ -51,7 +51,7 @@ mod tests {
             should_stage_real_binaries(false, [false, false, false, false], false),
             false
         );
-        assert!(should_stage_real_binaries(
+        assert!(!should_stage_real_binaries(
             false,
             [true, true, true, false],
             true

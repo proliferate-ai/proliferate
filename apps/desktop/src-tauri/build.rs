@@ -42,6 +42,9 @@ fn main() {
 
     let explicit_inputs = EXTERNAL_BINARY_ENV_KEYS.map(|key| env::var_os(key).is_some());
     let release_profile = env::var("PROFILE").as_deref() == Ok("release");
+    // A release dependency build still runs this script while the outer Cargo process owns the
+    // target directory. Only packaging's complete explicit input set (or a primary-package build)
+    // may resolve real sidecars; release mode alone must not launch nested Cargo builds.
     let stage_real =
         should_stage_real_binaries(building_primary_package(), explicit_inputs, release_profile);
     if stage_real {
