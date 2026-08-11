@@ -1,5 +1,7 @@
 mod authorization_policy;
+mod catalogs;
 mod ports;
+mod workspaces;
 
 #[cfg(test)]
 mod tests;
@@ -7,18 +9,22 @@ mod tests;
 use std::sync::Arc;
 
 use authorization_policy::{CallerFacts, TargetFacts};
-pub use ports::{AgentExecutionReads, AgentSessionReads, SubagentRelationshipReads};
+pub use ports::{
+    AgentCatalogReads, AgentExecutionReads, AgentLaunchOptionReads, AgentSessionReads,
+    AgentWorkspaceOperations, SubagentRelationshipReads,
+};
 
 use crate::domains::agent_operations::model::{
     AgentCapability, AgentConfiguration, AgentCreationKind, AgentExecutionStatus, AgentIdentity,
     AgentPage, AgentPresentationStatus, AgentRole, AgentView, AuthenticatedAgentCaller,
     CapabilityDecision, CapabilityDenial, EffectiveAgentStatus, ListAgentsInput, RuntimeIdentity,
-    WhoAmIView, WorkspaceIdentity, MAX_AGENT_PAGE_SIZE,
+    WhoAmIView, WorkspaceIdentity, MAX_AGENT_PAGE_SIZE, MAX_WORKSPACE_PAGE_SIZE,
 };
 use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::model::{
     SessionExecutionState, SessionExecutionStatePhase, SessionRecord,
 };
+use crate::domains::workspaces::options::WorkspaceOptionsError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AgentOperationsError {
@@ -41,6 +47,14 @@ pub enum AgentOperationsError {
     InvalidCursor,
     #[error("agent-list limit must be between 1 and {MAX_AGENT_PAGE_SIZE}")]
     InvalidPageSize,
+    #[error("invalid workspace-list cursor")]
+    InvalidWorkspaceCursor,
+    #[error("workspace-list limit must be between 1 and {MAX_WORKSPACE_PAGE_SIZE}")]
+    InvalidWorkspacePageSize,
+    #[error(transparent)]
+    Workspace(#[from] WorkspaceOptionsError),
+    #[error("workspace and catalog ports are not configured")]
+    WorkspaceCatalogsUnavailable,
     #[error("agent operations failed")]
     Internal(#[source] anyhow::Error),
 }
@@ -56,21 +70,39 @@ impl AgentOperationsError {
             Self::SubagentOpenRequired => "SUBAGENT_OPEN_REQUIRED",
             Self::InvalidCursor => "AGENT_CURSOR_INVALID",
             Self::InvalidPageSize => "AGENT_PAGE_SIZE_INVALID",
+            Self::InvalidWorkspaceCursor => "WORKSPACE_CURSOR_INVALID",
+            Self::InvalidWorkspacePageSize => "WORKSPACE_PAGE_SIZE_INVALID",
+            Self::Workspace(error) => error.code(),
+            Self::WorkspaceCatalogsUnavailable => "WORKSPACE_CATALOGS_UNAVAILABLE",
             Self::Internal(_) => "AGENT_OPERATIONS_INTERNAL",
         }
     }
 
-    pub fn public_message(&self) -> &'static str {
+    pub fn public_message(&self) -> String {
         match self {
-            Self::RuntimeBoundaryDenied => "The requested agent is not available in this runtime.",
-            Self::CallerNotFound => "The calling agent was not found.",
-            Self::CallerClosed => "The calling agent is closed.",
-            Self::AgentNotFound => "The requested agent was not found.",
-            Self::CapabilityDenied { .. } => "The calling agent does not have this capability.",
-            Self::SubagentOpenRequired => "Open the subagent before performing this operation.",
-            Self::InvalidCursor => "The agent-list cursor is invalid.",
-            Self::InvalidPageSize => "The requested agent-list page size is invalid.",
-            Self::Internal(_) => "Agent operations failed.",
+            Self::RuntimeBoundaryDenied => {
+                "The requested agent is not available in this runtime.".into()
+            }
+            Self::CallerNotFound => "The calling agent was not found.".into(),
+            Self::CallerClosed => "The calling agent is closed.".into(),
+            Self::AgentNotFound => "The requested agent was not found.".into(),
+            Self::CapabilityDenied { .. } => {
+                "The calling agent does not have this capability.".into()
+            }
+            Self::SubagentOpenRequired => {
+                "Open the subagent before performing this operation.".into()
+            }
+            Self::InvalidCursor => "The agent-list cursor is invalid.".into(),
+            Self::InvalidPageSize => "The requested agent-list page size is invalid.".into(),
+            Self::InvalidWorkspaceCursor => "The workspace-list cursor is invalid.".into(),
+            Self::InvalidWorkspacePageSize => {
+                "The requested workspace-list page size is invalid.".into()
+            }
+            Self::Workspace(error) => error.public_message(),
+            Self::WorkspaceCatalogsUnavailable => {
+                "Workspace catalog operations are unavailable.".into()
+            }
+            Self::Internal(_) => "Agent operations failed.".into(),
         }
     }
 }
@@ -80,6 +112,9 @@ pub struct AgentOperations {
     sessions: Arc<dyn AgentSessionReads>,
     relationships: Arc<dyn SubagentRelationshipReads>,
     execution: Arc<dyn AgentExecutionReads>,
+    workspaces: Option<Arc<dyn AgentWorkspaceOperations>>,
+    launch_options: Option<Arc<dyn AgentLaunchOptionReads>>,
+    catalog: Option<Arc<dyn AgentCatalogReads>>,
 }
 
 impl AgentOperations {
@@ -94,7 +129,22 @@ impl AgentOperations {
             sessions,
             relationships,
             execution,
+            workspaces: None,
+            launch_options: None,
+            catalog: None,
         }
+    }
+
+    pub fn with_workspace_catalogs(
+        mut self,
+        workspaces: Arc<dyn AgentWorkspaceOperations>,
+        launch_options: Arc<dyn AgentLaunchOptionReads>,
+        catalog: Arc<dyn AgentCatalogReads>,
+    ) -> Self {
+        self.workspaces = Some(workspaces);
+        self.launch_options = Some(launch_options);
+        self.catalog = Some(catalog);
+        self
     }
 
     pub fn runtime_identity(&self) -> &RuntimeIdentity {
@@ -265,6 +315,25 @@ impl AgentOperations {
             kind,
             target_workspace_id,
         ))
+    }
+
+    fn assert_caller_capability(
+        &self,
+        caller: &ResolvedAgent,
+        capability: AgentCapability,
+    ) -> Result<(), AgentOperationsError> {
+        let decision = authorization_policy::caller_capability(
+            CallerFacts {
+                role: caller.role(),
+                status: status_from_record_only(caller).presentation,
+            },
+            capability,
+        );
+        match decision.denial {
+            None => Ok(()),
+            Some(CapabilityDenial::CallerClosed) => Err(AgentOperationsError::CallerClosed),
+            Some(denial) => Err(AgentOperationsError::CapabilityDenied { capability, denial }),
+        }
     }
 
     fn resolve_caller_record(

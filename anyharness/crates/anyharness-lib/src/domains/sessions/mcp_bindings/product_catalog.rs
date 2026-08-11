@@ -142,6 +142,20 @@ impl ProductMcpLaunchCatalog {
         Self { inner: None }
     }
 
+    #[cfg(test)]
+    pub(crate) fn registered_product_ids(&self) -> Vec<&'static str> {
+        self.inner
+            .as_ref()
+            .map(|inner| {
+                inner
+                    .registrations
+                    .iter()
+                    .map(|registration| registration.definition().id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub fn resolve_launch_extras(
         &self,
         workspace: &WorkspaceRecord,

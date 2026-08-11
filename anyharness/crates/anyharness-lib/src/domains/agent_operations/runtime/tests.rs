@@ -415,3 +415,100 @@ async fn terminal_ordinary_agents_are_hidden_while_relationship_closed_subagents
         vec!["C"]
     );
 }
+
+#[tokio::test]
+async fn pr2_authorization_preserves_closed_relationship_and_terminal_target_distinctions() {
+    let closed_relationship = fixture(true);
+    assert!(matches!(
+        closed_relationship
+            .list_agent_config_options(&caller(&closed_relationship, "P"), &target("C"),)
+            .await,
+        Err(AgentOperationsError::SubagentOpenRequired)
+    ));
+    assert!(matches!(
+        closed_relationship
+            .list_agent_config_options(&caller(&closed_relationship, "Q"), &target("C"),)
+            .await,
+        Err(AgentOperationsError::AgentNotFound)
+    ));
+
+    let open_relationship = fixture(false);
+    assert!(matches!(
+        open_relationship
+            .list_agent_config_options(&caller(&open_relationship, "P"), &target("C"))
+            .await,
+        Err(AgentOperationsError::WorkspaceCatalogsUnavailable)
+    ));
+
+    let mut terminal = session("terminal", "workspace-b", "closed");
+    terminal.closed_at = Some("2026-08-11T00:00:00Z".to_string());
+    let mut dismissed = session("dismissed", "workspace-b", "idle");
+    dismissed.dismissed_at = Some("2026-08-11T00:00:00Z".to_string());
+    let operations = AgentOperations::new(
+        RuntimeIdentity::new("runtime-1"),
+        Arc::new(FakeSessions {
+            records: vec![session("P", "workspace-a", "idle"), terminal, dismissed],
+        }),
+        Arc::new(FakeRelationships::default()),
+        Arc::new(FakeExecution::default()),
+    );
+    assert!(matches!(
+        operations
+            .list_agent_config_options(&caller(&operations, "P"), &target("terminal"))
+            .await,
+        Err(AgentOperationsError::AgentNotFound)
+    ));
+    assert!(matches!(
+        operations
+            .list_agent_config_options(&caller(&operations, "P"), &target("dismissed"))
+            .await,
+        Err(AgentOperationsError::WorkspaceCatalogsUnavailable)
+    ));
+}
+
+#[tokio::test]
+async fn open_subagents_can_create_workspaces_but_closed_callers_cannot_mutate() {
+    let input = crate::domains::agent_operations::model::CreateWorkspaceInput {
+        repository_id: "repo-1".to_string(),
+        creation_mode: "local".to_string(),
+        branch: None,
+        display_name: None,
+    };
+    let open = fixture(false);
+    assert!(matches!(
+        open.create_workspace(&caller(&open, "C"), input.clone())
+            .await,
+        Err(AgentOperationsError::WorkspaceCatalogsUnavailable)
+    ));
+
+    let closed = fixture(true);
+    assert!(matches!(
+        closed.create_workspace(&caller(&closed, "C"), input).await,
+        Err(AgentOperationsError::CallerClosed)
+    ));
+}
+
+#[tokio::test]
+async fn pr2_workspace_targets_enforce_the_runtime_boundary_before_owner_reads() {
+    let operations = fixture(false);
+    let foreign_caller = AuthenticatedAgentCaller::new(RuntimeIdentity::new("runtime-2"), "P");
+    assert!(matches!(
+        operations
+            .list_workspaces(
+                &foreign_caller,
+                crate::domains::agent_operations::model::ListWorkspacesInput::default(),
+            )
+            .await,
+        Err(AgentOperationsError::RuntimeBoundaryDenied)
+    ));
+    let foreign_workspace = WorkspaceIdentity {
+        runtime_id: RuntimeIdentity::new("runtime-2"),
+        workspace_id: "workspace-a".to_string(),
+    };
+    assert!(matches!(
+        operations
+            .list_agent_launch_options(&caller(&operations, "P"), &foreign_workspace)
+            .await,
+        Err(AgentOperationsError::RuntimeBoundaryDenied)
+    ));
+}
