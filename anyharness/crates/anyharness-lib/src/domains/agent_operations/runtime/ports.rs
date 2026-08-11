@@ -8,6 +8,7 @@ use crate::domains::sessions::live_config::{
     effective_live_config_snapshot, EffectiveLiveConfigSnapshot,
 };
 use crate::domains::sessions::model::{SessionExecutionState, SessionRecord};
+use crate::domains::sessions::prompt::provenance::AgentSessionPromptSource;
 use crate::domains::sessions::runtime::{
     CreateOrdinaryAgentSessionError, EnsureLiveSessionError, SessionLifecycleError, SessionRuntime,
     SetSessionConfigOptionError,
@@ -173,6 +174,28 @@ impl AgentSessionMutations for SessionRuntime {
         session_id: &str,
     ) -> Result<SessionRecord, SessionLifecycleError> {
         self.cancel_live_session(session_id).await
+    }
+}
+
+#[async_trait]
+pub(crate) trait AgentMessageQueue: Send + Sync {
+    async fn enqueue_agent_message(
+        &self,
+        target_session_id: &str,
+        message: String,
+        source: AgentSessionPromptSource,
+    ) -> Result<i64, crate::domains::sessions::runtime::SendPromptError>;
+}
+
+#[async_trait]
+impl AgentMessageQueue for SessionRuntime {
+    async fn enqueue_agent_message(
+        &self,
+        target_session_id: &str,
+        message: String,
+        source: AgentSessionPromptSource,
+    ) -> Result<i64, crate::domains::sessions::runtime::SendPromptError> {
+        SessionRuntime::enqueue_agent_message(self, target_session_id, message, source).await
     }
 }
 

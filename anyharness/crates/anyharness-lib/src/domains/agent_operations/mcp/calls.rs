@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use super::context::WorkspaceMcpContext;
 use crate::domains::agent_operations::model::{
     AgentCreationKind, AgentIdentity, AgentPresentationStatus, ConfigureAgentInput,
-    CreateAgentInput, CreateWorkspaceInput, ListAgentsInput, ListWorkspacesInput,
+    CreateAgentInput, CreateWorkspaceInput, ListAgentsInput, ListWorkspacesInput, SendMessageInput,
     WorkspaceIdentity,
 };
 use crate::domains::agent_operations::runtime::{AgentOperations, AgentOperationsError};
@@ -63,6 +63,13 @@ struct ConfigureAgentArgs {
     agent_id: String,
     config_id: String,
     value: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SendMessageArgs {
+    agent_id: String,
+    message: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -220,6 +227,23 @@ pub async fn call_tool(
             let args = parse::<TargetArgs>(arguments)?;
             let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
             serialize(operations.resume_agent(&ctx.caller, &target).await)
+        }
+        "send_message" => {
+            let args = parse::<SendMessageArgs>(arguments)?;
+            serialize(
+                operations
+                    .send_message(
+                        &ctx.caller,
+                        SendMessageInput {
+                            target: AgentIdentity::new(
+                                operations.runtime_identity().clone(),
+                                args.agent_id,
+                            ),
+                            message: args.message,
+                        },
+                    )
+                    .await,
+            )
         }
         "interrupt_agent" => {
             let args = parse::<TargetArgs>(arguments)?;
