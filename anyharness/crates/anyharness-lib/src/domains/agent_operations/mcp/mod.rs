@@ -19,6 +19,7 @@ use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition, ProductMcpRequestContext,
     ProductMcpServer, ProductMcpTokenValidation,
 };
+use crate::integrations::mcp::tools::McpToolOutput;
 
 pub struct WorkspaceProductMcpServer {
     operations: Arc<AgentOperations>,
@@ -65,5 +66,14 @@ impl ProductMcpServer for WorkspaceProductMcpServer {
         arguments: Option<Value>,
     ) -> anyhow::Result<Value> {
         calls::call_tool(&self.operations, ctx, name, arguments).await
+    }
+
+    async fn call_tool_output(
+        &self,
+        ctx: &Self::Context,
+        name: &str,
+        arguments: Option<Value>,
+    ) -> anyhow::Result<McpToolOutput> {
+        calls::call_tool_output(&self.operations, ctx, name, arguments).await
     }
 }

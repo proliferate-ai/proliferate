@@ -6,7 +6,7 @@ use crate::integrations::mcp::json_rpc::{
     jsonrpc_error, jsonrpc_result, CallToolParams, InitializeParams, JsonRpcRequest,
 };
 use crate::integrations::mcp::tools::{
-    jsonrpc_tool_result, jsonrpc_typed_tool_error, McpToolCallError,
+    jsonrpc_mcp_tool_output, jsonrpc_typed_tool_error, McpToolCallError, McpToolOutput,
 };
 
 // ── Error codes ─────────────────────────────────────────────────────────────
@@ -134,6 +134,17 @@ pub trait ProductMcpServer: Send + Sync {
         name: &str,
         arguments: Option<Value>,
     ) -> anyhow::Result<Value>;
+
+    async fn call_tool_output(
+        &self,
+        ctx: &Self::Context,
+        name: &str,
+        arguments: Option<Value>,
+    ) -> anyhow::Result<McpToolOutput> {
+        self.call_tool(ctx, name, arguments)
+            .await
+            .map(McpToolOutput::Structured)
+    }
 }
 
 pub async fn dispatch_product_mcp_request<S>(
@@ -204,16 +215,21 @@ where
                     )));
                 }
             };
-            let result = server.call_tool(&ctx, &params.name, params.arguments).await;
+            let result = server
+                .call_tool_output(&ctx, &params.name, params.arguments)
+                .await;
             if let Err(error) = &result {
                 if let Some(typed) = error.downcast_ref::<McpToolCallError>() {
                     return Ok(Some(jsonrpc_typed_tool_error(request.id, typed)));
                 }
             }
-            Ok(Some(jsonrpc_tool_result(
-                request.id,
-                result.map_err(|error| error.to_string()),
-            )))
+            Ok(Some(match result {
+                Ok(output) => jsonrpc_mcp_tool_output(request.id, output),
+                Err(error) => crate::integrations::mcp::tools::jsonrpc_tool_result(
+                    request.id,
+                    Err::<Value, _>(error.to_string()),
+                ),
+            }))
         }
         _ => Ok(Some(jsonrpc_error(
             request.id,
@@ -287,6 +303,30 @@ mod tests {
                 "known_tool" => Ok(json!({ "ok": true })),
                 _ => Err(anyhow::anyhow!("unknown test tool: {name}")),
             }
+        }
+
+        async fn call_tool_output(
+            &self,
+            ctx: &Self::Context,
+            name: &str,
+            arguments: Option<Value>,
+        ) -> anyhow::Result<McpToolOutput> {
+            if name == "represented_tool" {
+                return Ok(McpToolOutput::Represented {
+                    structured_content: json!({
+                        "messages": [{
+                            "text": format!("{}\n[truncated to fit task output byte limit]", "🦀".repeat(14_000)),
+                            "truncated": true
+                        }],
+                        "truncated": true
+                    }),
+                    text: "visible text representation ".repeat(1_000),
+                    max_response_bytes: 65_536,
+                });
+            }
+            self.call_tool(ctx, name, arguments)
+                .await
+                .map(McpToolOutput::Structured)
         }
     }
 
@@ -417,5 +457,35 @@ mod tests {
 
         assert_eq!(response["id"], Value::Null);
         assert_eq!(response["error"]["code"], json!(JSON_RPC_PARSE_ERROR));
+    }
+
+    #[tokio::test]
+    async fn represented_tool_caps_the_final_dispatched_wire_envelope() {
+        let response = dispatch_product_mcp_request(
+            &TestProductMcpServer,
+            request_context(),
+            json!({
+                "jsonrpc": "2.0",
+                "id": "wire-cap",
+                "method": "tools/call",
+                "params": { "name": "represented_tool", "arguments": {} },
+            }),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert!(serde_json::to_vec(&response).unwrap().len() <= 65_536);
+        assert_eq!(response["result"]["isError"], false);
+        assert!(response["result"]["content"][0]["text"]
+            .as_str()
+            .is_some_and(|text| !text.is_empty()));
+        assert_eq!(response["result"]["structuredContent"]["truncated"], true);
+        assert!(
+            response["result"]["structuredContent"]["messages"][0]["text"]
+                .as_str()
+                .unwrap()
+                .ends_with("[truncated to fit task output byte limit]")
+        );
     }
 }

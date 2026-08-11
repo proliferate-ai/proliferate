@@ -10,6 +10,7 @@ use crate::domains::sessions::live_config::{
 use crate::domains::sessions::model::{SessionExecutionState, SessionRecord};
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
+use crate::domains::sessions::task_output::{TaskOutputError, TaskOutputPage};
 use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::domains::workspaces::options::{
     CreateWorkspaceFromOptionsInput, CreateWorkspaceFromOptionsResult, WorkspaceCreationOptions,
@@ -74,6 +75,143 @@ impl AgentExecutionReads for SessionRuntime {
         session: &SessionRecord,
     ) -> anyhow::Result<SessionExecutionState> {
         Ok(self.session_execution_state(session).await)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentConfigMutationState {
+    Applied,
+    Queued,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum AgentSessionMutationError {
+    #[error("session not found")]
+    SessionNotFound,
+    #[error("session mutation failed")]
+    Failed(#[source] anyhow::Error),
+}
+
+#[async_trait]
+pub trait AgentSessionMutations: Send + Sync {
+    async fn create_ordinary_agent(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        task: Option<String>,
+    ) -> Result<SessionRecord, AgentSessionMutationError>;
+
+    async fn configure_agent(
+        &self,
+        session_id: &str,
+        config_id: &str,
+        value: &str,
+    ) -> Result<(SessionRecord, AgentConfigMutationState), AgentSessionMutationError>;
+
+    async fn resume_agent(
+        &self,
+        session_id: &str,
+    ) -> Result<SessionRecord, AgentSessionMutationError>;
+
+    async fn interrupt_agent(
+        &self,
+        session_id: &str,
+    ) -> Result<SessionRecord, AgentSessionMutationError>;
+}
+
+#[async_trait]
+impl AgentSessionMutations for SessionRuntime {
+    async fn create_ordinary_agent(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        task: Option<String>,
+    ) -> Result<SessionRecord, AgentSessionMutationError> {
+        self.create_ordinary_agent_session(workspace_id, agent_kind, model_id, mode_id, task)
+            .await
+            .map_err(|error| AgentSessionMutationError::Failed(anyhow::anyhow!("{error:?}")))
+    }
+
+    async fn configure_agent(
+        &self,
+        session_id: &str,
+        config_id: &str,
+        value: &str,
+    ) -> Result<(SessionRecord, AgentConfigMutationState), AgentSessionMutationError> {
+        use crate::domains::sessions::runtime::SetSessionConfigOptionError;
+        let (record, _, state) = self
+            .set_live_session_config_option(session_id, config_id, value)
+            .await
+            .map_err(|error| match error {
+                SetSessionConfigOptionError::SessionNotFound(_) => {
+                    AgentSessionMutationError::SessionNotFound
+                }
+                other => AgentSessionMutationError::Failed(anyhow::anyhow!("{other:?}")),
+            })?;
+        let state = match crate::domains::sessions::live_config::effective_config_apply_state(state)
+        {
+            crate::domains::sessions::live_config::EffectiveConfigApplyState::Applied => {
+                AgentConfigMutationState::Applied
+            }
+            crate::domains::sessions::live_config::EffectiveConfigApplyState::Queued => {
+                AgentConfigMutationState::Queued
+            }
+        };
+        Ok((record, state))
+    }
+
+    async fn resume_agent(
+        &self,
+        session_id: &str,
+    ) -> Result<SessionRecord, AgentSessionMutationError> {
+        use crate::domains::sessions::runtime::EnsureLiveSessionError;
+        self.ensure_live_session(session_id, None)
+            .await
+            .map_err(|error| match error {
+                EnsureLiveSessionError::SessionNotFound(_) => {
+                    AgentSessionMutationError::SessionNotFound
+                }
+                other => AgentSessionMutationError::Failed(anyhow::anyhow!("{other:?}")),
+            })
+    }
+
+    async fn interrupt_agent(
+        &self,
+        session_id: &str,
+    ) -> Result<SessionRecord, AgentSessionMutationError> {
+        use crate::domains::sessions::runtime::SessionLifecycleError;
+        self.cancel_live_session(session_id)
+            .await
+            .map_err(|error| match error {
+                SessionLifecycleError::SessionNotFound(_) => {
+                    AgentSessionMutationError::SessionNotFound
+                }
+                SessionLifecycleError::Internal(error) => AgentSessionMutationError::Failed(error),
+            })
+    }
+}
+
+pub trait AgentTaskOutputReads: Send + Sync {
+    fn task_output(
+        &self,
+        session_id: &str,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> Result<TaskOutputPage, TaskOutputError>;
+}
+
+impl AgentTaskOutputReads for SessionService {
+    fn task_output(
+        &self,
+        session_id: &str,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> Result<TaskOutputPage, TaskOutputError> {
+        self.get_task_output(session_id, cursor, limit)
     }
 }
 

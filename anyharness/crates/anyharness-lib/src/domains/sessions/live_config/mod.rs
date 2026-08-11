@@ -1,5 +1,5 @@
 use agent_client_protocol as acp;
-use anyharness_contract::v1::{PromptCapabilities, SessionLiveConfigSnapshot};
+use anyharness_contract::v1::{ConfigApplyState, PromptCapabilities, SessionLiveConfigSnapshot};
 
 use crate::domains::sessions::model::SessionLiveConfigSnapshotRecord;
 
@@ -34,6 +34,19 @@ pub struct EffectiveLiveConfigControl {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EffectiveLiveConfigSnapshot {
     pub controls: Vec<EffectiveLiveConfigControl>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectiveConfigApplyState {
+    Applied,
+    Queued,
+}
+
+pub fn effective_config_apply_state(state: ConfigApplyState) -> EffectiveConfigApplyState {
+    match state {
+        ConfigApplyState::Applied => EffectiveConfigApplyState::Applied,
+        ConfigApplyState::Queued => EffectiveConfigApplyState::Queued,
+    }
 }
 
 pub fn effective_live_config_snapshot(

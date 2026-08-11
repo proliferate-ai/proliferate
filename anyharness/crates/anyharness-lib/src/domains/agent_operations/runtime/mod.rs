@@ -1,16 +1,23 @@
 mod authorization_policy;
 mod catalogs;
+mod error;
+mod ordinary;
 mod ports;
+mod target_access;
 mod workspaces;
 
+#[cfg(test)]
+mod ordinary_tests;
 #[cfg(test)]
 mod tests;
 
 use std::sync::Arc;
 
 use authorization_policy::{CallerFacts, TargetFacts};
+pub use error::AgentOperationsError;
 pub use ports::{
-    AgentCatalogReads, AgentExecutionReads, AgentLaunchOptionReads, AgentSessionReads,
+    AgentCatalogReads, AgentConfigMutationState, AgentExecutionReads, AgentLaunchOptionReads,
+    AgentSessionMutationError, AgentSessionMutations, AgentSessionReads, AgentTaskOutputReads,
     AgentWorkspaceOperations, SubagentRelationshipReads,
 };
 
@@ -18,94 +25,14 @@ use crate::domains::agent_operations::model::{
     AgentCapability, AgentConfiguration, AgentCreationKind, AgentExecutionStatus, AgentIdentity,
     AgentPage, AgentPresentationStatus, AgentRole, AgentView, AuthenticatedAgentCaller,
     CapabilityDecision, CapabilityDenial, EffectiveAgentStatus, ListAgentsInput, RuntimeIdentity,
-    WhoAmIView, WorkspaceIdentity, MAX_AGENT_PAGE_SIZE, MAX_WORKSPACE_PAGE_SIZE,
+    WhoAmIView, WorkspaceIdentity, MAX_AGENT_PAGE_SIZE,
 };
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::model::{
     SessionExecutionState, SessionExecutionStatePhase, SessionRecord,
 };
-use crate::domains::workspaces::options::WorkspaceOptionsError;
-
-#[derive(Debug, thiserror::Error)]
-pub enum AgentOperationsError {
-    #[error("the caller is outside this runtime")]
-    RuntimeBoundaryDenied,
-    #[error("caller agent not found")]
-    CallerNotFound,
-    #[error("caller agent is closed")]
-    CallerClosed,
-    #[error("agent not found")]
-    AgentNotFound,
-    #[error("capability denied: {capability:?}")]
-    CapabilityDenied {
-        capability: AgentCapability,
-        denial: CapabilityDenial,
-    },
-    #[error("subagent must be opened before this operation")]
-    SubagentOpenRequired,
-    #[error("invalid agent-list cursor")]
-    InvalidCursor,
-    #[error("agent-list limit must be between 1 and {MAX_AGENT_PAGE_SIZE}")]
-    InvalidPageSize,
-    #[error("invalid workspace-list cursor")]
-    InvalidWorkspaceCursor,
-    #[error("workspace-list limit must be between 1 and {MAX_WORKSPACE_PAGE_SIZE}")]
-    InvalidWorkspacePageSize,
-    #[error(transparent)]
-    Workspace(#[from] WorkspaceOptionsError),
-    #[error("workspace and catalog ports are not configured")]
-    WorkspaceCatalogsUnavailable,
-    #[error("agent operations failed")]
-    Internal(#[source] anyhow::Error),
-}
-
-impl AgentOperationsError {
-    pub fn code(&self) -> &'static str {
-        match self {
-            Self::RuntimeBoundaryDenied => "AGENT_RUNTIME_FORBIDDEN",
-            Self::CallerNotFound => "AGENT_CALLER_NOT_FOUND",
-            Self::CallerClosed => "AGENT_CALLER_CLOSED",
-            Self::AgentNotFound => "AGENT_NOT_FOUND",
-            Self::CapabilityDenied { .. } => "AGENT_CAPABILITY_DENIED",
-            Self::SubagentOpenRequired => "SUBAGENT_OPEN_REQUIRED",
-            Self::InvalidCursor => "AGENT_CURSOR_INVALID",
-            Self::InvalidPageSize => "AGENT_PAGE_SIZE_INVALID",
-            Self::InvalidWorkspaceCursor => "WORKSPACE_CURSOR_INVALID",
-            Self::InvalidWorkspacePageSize => "WORKSPACE_PAGE_SIZE_INVALID",
-            Self::Workspace(error) => error.code(),
-            Self::WorkspaceCatalogsUnavailable => "WORKSPACE_CATALOGS_UNAVAILABLE",
-            Self::Internal(_) => "AGENT_OPERATIONS_INTERNAL",
-        }
-    }
-
-    pub fn public_message(&self) -> String {
-        match self {
-            Self::RuntimeBoundaryDenied => {
-                "The requested agent is not available in this runtime.".into()
-            }
-            Self::CallerNotFound => "The calling agent was not found.".into(),
-            Self::CallerClosed => "The calling agent is closed.".into(),
-            Self::AgentNotFound => "The requested agent was not found.".into(),
-            Self::CapabilityDenied { .. } => {
-                "The calling agent does not have this capability.".into()
-            }
-            Self::SubagentOpenRequired => {
-                "Open the subagent before performing this operation.".into()
-            }
-            Self::InvalidCursor => "The agent-list cursor is invalid.".into(),
-            Self::InvalidPageSize => "The requested agent-list page size is invalid.".into(),
-            Self::InvalidWorkspaceCursor => "The workspace-list cursor is invalid.".into(),
-            Self::InvalidWorkspacePageSize => {
-                "The requested workspace-list page size is invalid.".into()
-            }
-            Self::Workspace(error) => error.public_message(),
-            Self::WorkspaceCatalogsUnavailable => {
-                "Workspace catalog operations are unavailable.".into()
-            }
-            Self::Internal(_) => "Agent operations failed.".into(),
-        }
-    }
-}
+use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 
 pub struct AgentOperations {
     runtime_id: RuntimeIdentity,
@@ -115,6 +42,10 @@ pub struct AgentOperations {
     workspaces: Option<Arc<dyn AgentWorkspaceOperations>>,
     launch_options: Option<Arc<dyn AgentLaunchOptionReads>>,
     catalog: Option<Arc<dyn AgentCatalogReads>>,
+    mutations: Option<Arc<dyn AgentSessionMutations>>,
+    task_output: Option<Arc<dyn AgentTaskOutputReads>>,
+    session_admission: Option<Arc<SessionMutationAdmission>>,
+    workspace_operation_gate: Option<Arc<WorkspaceOperationGate>>,
 }
 
 impl AgentOperations {
@@ -132,6 +63,10 @@ impl AgentOperations {
             workspaces: None,
             launch_options: None,
             catalog: None,
+            mutations: None,
+            task_output: None,
+            session_admission: None,
+            workspace_operation_gate: None,
         }
     }
 
@@ -144,6 +79,20 @@ impl AgentOperations {
         self.workspaces = Some(workspaces);
         self.launch_options = Some(launch_options);
         self.catalog = Some(catalog);
+        self
+    }
+
+    pub fn with_ordinary_operations(
+        mut self,
+        mutations: Arc<dyn AgentSessionMutations>,
+        task_output: Arc<dyn AgentTaskOutputReads>,
+        session_admission: Arc<SessionMutationAdmission>,
+        workspace_operation_gate: Arc<WorkspaceOperationGate>,
+    ) -> Self {
+        self.mutations = Some(mutations);
+        self.task_output = Some(task_output);
+        self.session_admission = Some(session_admission);
+        self.workspace_operation_gate = Some(workspace_operation_gate);
         self
     }
 
@@ -278,17 +227,8 @@ impl AgentOperations {
         caller: &AuthenticatedAgentCaller,
         target: &AgentIdentity,
     ) -> Result<AgentView, AgentOperationsError> {
-        self.assert_same_runtime(target)?;
-        let caller_agent = self.resolve_caller_agent(caller)?;
-        let target_agent = self.resolve_agent(target)?;
-        if target_agent.role() == AgentRole::Ordinary && target_agent.is_terminal_session() {
-            return Err(AgentOperationsError::AgentNotFound);
-        }
-        if target_agent.role() == AgentRole::Subagent
-            && target_agent.parent_session_id() != Some(caller.identity().session_id.as_str())
-        {
-            return Err(AgentOperationsError::AgentNotFound);
-        }
+        let (caller_agent, target_agent) =
+            self.authorize_target(caller, target, AgentCapability::GetAgent)?;
         self.project_agent(&target_agent, Some(&caller_agent)).await
     }
 
