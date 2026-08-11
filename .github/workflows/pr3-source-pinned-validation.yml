@@ -1,0 +1,317 @@
+name: PR3 source-pinned validation
+
+on:
+  push:
+    branches:
+      - codex/rust-observability-pr3-validation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr3-source-pinned-validation
+  cancel-in-progress: false
+
+env:
+  PR3_SOURCE_SHA: 82a479a115a1e20b83a76d91add1ce3044f016e1
+  CARGO_BUILD_JOBS: "2"
+  CARGO_INCREMENTAL: "0"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  rust-tests:
+    name: Four-package locked tests
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - name: Checkout immutable source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.PR3_SOURCE_SHA }}
+
+      - name: Verify source pin
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$PR3_SOURCE_SHA"
+
+      - name: Install stable Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Enforce machine safety gate
+        shell: bash
+        run: |
+          if pgrep -x cargo || pgrep -x rustc; then
+            echo "::error::Another Cargo/rustc process is active."
+            exit 1
+          fi
+          sysctl vm.swapusage
+          pressure="$(sysctl -n kern.memorystatus_vm_pressure_level)"
+          echo "memory pressure level: $pressure"
+          if (( pressure > 1 )); then
+            echo "::error::Memory pressure exceeds the PR3 build gate."
+            exit 1
+          fi
+
+      - name: Run exact frozen package tests
+        shell: bash
+        env:
+          ANYHARNESS_BIN: /usr/bin/true
+          PROLIFERATE_WORKER_BIN: /usr/bin/true
+          PROLIFERATE_DEBUG_BIN: /usr/bin/true
+          PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN: /usr/bin/true
+        run: |
+          cargo test --locked \
+            -p proliferate-diagnostics-protocol \
+            -p proliferate-diagnostics-collector \
+            -p proliferate \
+            -p proliferate-debug \
+            --all-targets -- --test-threads=1
+
+      - name: Record test receipt
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### PR3 four-package test receipt"
+            echo "- source: \`$PR3_SOURCE_SHA\`"
+            echo "- runner: \`$(uname -m)\` / \`$(sw_vers -productVersion)\`"
+            echo "- cargo jobs: 2"
+            echo "- cache: none"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  package-smoke:
+    name: Package and broker CLI (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+            arch: arm64
+            profile: pr3arm
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            arch: x86_64
+            profile: pr3x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 240
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+      VITE_PROLIFERATE_TELEMETRY_DISABLED: "true"
+      PROLIFERATE_BUILD_TELEMETRY_DISABLED: "true"
+    steps:
+      - name: Checkout immutable source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.PR3_SOURCE_SHA }}
+
+      - name: Verify source pin and native runner
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$PR3_SOURCE_SHA"
+          test "$(uname -m)" = "${{ matrix.arch }}"
+
+      - name: Setup Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Install pnpm and Rust target
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.11.0 --activate
+          rustup toolchain install stable --profile minimal --target "${{ matrix.target }}"
+          rustup default stable
+
+      - name: Install JavaScript dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Enforce machine safety gate
+        shell: bash
+        run: |
+          if pgrep -x cargo || pgrep -x rustc; then
+            echo "::error::Another Cargo/rustc process is active."
+            exit 1
+          fi
+          sysctl vm.swapusage
+          pressure="$(sysctl -n kern.memorystatus_vm_pressure_level)"
+          echo "memory pressure level: $pressure"
+          if (( pressure > 1 )); then
+            echo "::error::Memory pressure exceeds the PR3 build gate."
+            exit 1
+          fi
+
+      - name: Build exact native binaries
+        shell: bash
+        run: |
+          cargo build --locked --release \
+            -p anyharness \
+            -p proliferate-worker \
+            -p proliferate-debug \
+            -p proliferate-diagnostics-collector \
+            --target "${{ matrix.target }}"
+          for binary in anyharness proliferate-worker proliferate-debug proliferate-diagnostics-collector; do
+            path="target/${{ matrix.target }}/release/$binary"
+            test -x "$path"
+            if grep -a -q "diagnostics collector placeholder" "$path"; then
+              echo "::error::$binary is a placeholder"
+              exit 1
+            fi
+          done
+
+      - name: Generate SDK and throwaway updater key
+        shell: bash
+        run: |
+          pnpm --dir anyharness/sdk run generate
+          pnpm --dir anyharness/sdk run build
+          pnpm --dir anyharness/sdk-react run build
+          pnpm --dir apps/desktop tauri signer generate \
+            -w "$RUNNER_TEMP/pr3-updater.key" --password ""
+
+      - name: Build ad-hoc signed app bundle
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ runner.temp }}/pr3-updater.key
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          ANYHARNESS_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/anyharness
+          PROLIFERATE_WORKER_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/proliferate-worker
+          PROLIFERATE_DEBUG_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/proliferate-debug
+          PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/proliferate-diagnostics-collector
+        run: pnpm tauri build --target "${{ matrix.target }}" --bundles app
+
+      - name: Verify exact packaged inventory and signatures
+        shell: bash
+        run: |
+          app="target/${{ matrix.target }}/release/bundle/macos/Proliferate.app"
+          bin_dir="$app/Contents/MacOS"
+          test -d "$bin_dir"
+          actual="$(find "$bin_dir" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | tr '\n' ' ')"
+          expected="Proliferate anyharness proliferate-debug proliferate-diagnostics-collector proliferate-worker "
+          test "$actual" = "$expected"
+          codesign --verify --deep --strict "$app"
+          for binary in anyharness proliferate-worker proliferate-debug proliferate-diagnostics-collector; do
+            test -x "$bin_dir/$binary"
+            codesign --verify --strict "$bin_dir/$binary"
+            if grep -a -q "diagnostics collector placeholder" "$bin_dir/$binary"; then
+              echo "::error::Packaged $binary is a placeholder"
+              exit 1
+            fi
+            archs="$(lipo -archs "$bin_dir/$binary")"
+            if ! tr ' ' '\n' <<<"$archs" | grep -Fxq "${{ matrix.arch }}"; then
+              echo "::error::Unexpected $binary architecture: $archs"
+              exit 1
+            fi
+          done
+
+      - name: Run packaged broker-mediated CLI smoke
+        shell: bash
+        env:
+          PR3_PROFILE: ${{ matrix.profile }}
+          PR3_TARGET: ${{ matrix.target }}
+        run: |
+          app="target/$PR3_TARGET/release/bundle/macos/Proliferate.app"
+          cli="$app/Contents/MacOS/proliferate-debug"
+          desktop_home="$RUNNER_TEMP/pr3-desktop-home"
+          instance_dir="$HOME/.proliferate-local/dev/profiles/$PR3_PROFILE"
+          mkdir -p "$desktop_home" "$instance_dir"
+          chmod 700 "$desktop_home" "$instance_dir"
+          PROFILE_NAME="$PR3_PROFILE" DESKTOP_HOME="$desktop_home" INSTANCE_PATH="$instance_dir/instance.json" node <<'NODE'
+          const fs = require("fs");
+          const path = require("path");
+          const record = {
+            profile: process.env.PROFILE_NAME,
+            worktreePath: process.env.GITHUB_WORKSPACE,
+            branch: "codex/rust-observability-pr3-validation",
+            profileEnv: "validation",
+            launchEnv: "validation",
+            tauriConfig: "validation",
+            tauriRunner: "validation",
+            tauriAppRunner: "validation",
+            anyharnessRuntimeHome: path.join(process.env.DESKTOP_HOME, "anyharness"),
+            desktopHome: process.env.DESKTOP_HOME,
+            databaseName: "validation",
+            ports: { api: 1, desktopWeb: 2, hostedWeb: 3, mobileWeb: 4, hmr: 5, anyharness: 6 },
+            updatedAt: new Date().toISOString(),
+            status: "running",
+          };
+          fs.writeFileSync(process.env.INSTANCE_PATH, JSON.stringify(record));
+          NODE
+          chmod 600 "$instance_dir/instance.json"
+          PROLIFERATE_DEV=1 \
+          PROLIFERATE_DEV_PROFILE="$PR3_PROFILE" \
+          PROLIFERATE_DEV_HOME="$desktop_home" \
+            "$app/Contents/MacOS/Proliferate" >"$RUNNER_TEMP/pr3-app.log" 2>&1 &
+          app_pid=$!
+          cleanup() {
+            if kill -0 "$app_pid" 2>/dev/null; then
+              kill -TERM "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          ready=false
+          for _ in $(seq 1 120); do
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              echo "::error::Packaged app exited before broker readiness"
+              sed -n '1,240p' "$RUNNER_TEMP/pr3-app.log"
+              exit 1
+            fi
+            if "$cli" --profile "$PR3_PROFILE" health >"$RUNNER_TEMP/pr3-health.json" 2>"$RUNNER_TEMP/pr3-health.err" \
+              && node -e 'const h=require(process.argv[1]); process.exit(h.supervisor.state === "ready" && h.collector?.status === "ready" && h.collector?.schema_version?.major === 1 ? 0 : 1)' "$RUNNER_TEMP/pr3-health.json"; then
+              ready=true
+              break
+            fi
+            sleep 0.25
+          done
+          test "$ready" = true
+          node -e 'const fs=require("fs"); const text=fs.readFileSync(process.argv[1],"utf8"); if (/endpoint|token_reference|capability/i.test(text)) process.exit(1)' "$RUNNER_TEMP/pr3-health.json"
+
+          RECORDS_PATH="$RUNNER_TEMP/pr3-records-request.json" node <<'NODE'
+          const fs = require("fs");
+          fs.writeFileSync(process.env.RECORDS_PATH, JSON.stringify({
+            schema_version: { major: 1, minor: 1 },
+            limit: 32,
+            filters: {
+              components: [], record_classes: [], severities: [], names: [], outcomes: [],
+            },
+          }));
+          NODE
+          "$cli" --profile "$PR3_PROFILE" records --request "$RUNNER_TEMP/pr3-records-request.json" >"$RUNNER_TEMP/pr3-records.json"
+          node -e 'const p=require(process.argv[1]); process.exit(p.schema_version?.major === 1 && Array.isArray(p.records) && Array.isArray(p.gaps) ? 0 : 1)' "$RUNNER_TEMP/pr3-records.json"
+
+          EXPORT_PATH="$RUNNER_TEMP/pr3-export-request.json" node <<'NODE'
+          const fs = require("fs");
+          fs.writeFileSync(process.env.EXPORT_PATH, JSON.stringify({
+            schema_version: { major: 1, minor: 1 },
+            purpose: "internal_dogfood",
+            filters: { components: [], record_classes: [], severities: [], names: [], outcomes: [] },
+            record_limit: 32,
+            byte_limit: 65536,
+            include_health: true,
+          }));
+          NODE
+          if "$cli" --profile "$PR3_PROFILE" export --request "$RUNNER_TEMP/pr3-export-request.json" >"$RUNNER_TEMP/pr3-export.jsonl" 2>"$RUNNER_TEMP/pr3-export.err"; then
+            echo "::error::Customer artifact unexpectedly allowed internal export"
+            exit 1
+          fi
+          grep -q "collector_rejected" "$RUNNER_TEMP/pr3-export.err"
+
+      - name: Record package receipt
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### PR3 package receipt"
+            echo "- source: \`$PR3_SOURCE_SHA\`"
+            echo "- target: \`${{ matrix.target }}\`"
+            echo "- runner: \`$(uname -m)\` / \`$(sw_vers -productVersion)\`"
+            echo "- signing: ad-hoc app signature plus ephemeral updater key"
+            echo "- secrets/deploy/cache: none"
+          } >> "$GITHUB_STEP_SUMMARY"
