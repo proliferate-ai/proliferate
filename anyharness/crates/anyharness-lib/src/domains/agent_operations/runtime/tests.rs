@@ -353,3 +353,65 @@ async fn status_projection_separates_presentation_from_execution_detail() {
     assert_eq!(closed.status.presentation, AgentPresentationStatus::Closed);
     assert_eq!(closed.status.execution, AgentExecutionStatus::Closed);
 }
+
+#[tokio::test]
+async fn terminal_ordinary_agents_are_hidden_while_relationship_closed_subagents_remain_readable() {
+    let terminal_by_status = session("terminal-status", "workspace-a", "closed");
+    let mut terminal_by_timestamp = session("terminal-timestamp", "workspace-b", "idle");
+    terminal_by_timestamp.closed_at = Some("2026-08-10T01:00:00Z".to_string());
+    let sessions = FakeSessions {
+        records: vec![
+            session("P", "workspace-a", "idle"),
+            terminal_by_status,
+            terminal_by_timestamp,
+            session("C", "workspace-a", "idle"),
+        ],
+    };
+    let operations = AgentOperations::new(
+        RuntimeIdentity::new("runtime-1"),
+        Arc::new(sessions),
+        Arc::new(FakeRelationships {
+            links: vec![link("P", "C", true)],
+        }),
+        Arc::new(FakeExecution::default()),
+    );
+    let caller = caller(&operations, "P");
+
+    for terminal_id in ["terminal-status", "terminal-timestamp"] {
+        assert!(matches!(
+            operations.get_agent(&caller, &target(terminal_id)).await,
+            Err(AgentOperationsError::AgentNotFound)
+        ));
+    }
+    let ordinary = operations
+        .list_agents(&caller, ListAgentsInput::default())
+        .await
+        .expect("list ordinary agents");
+    assert_eq!(
+        ordinary
+            .agents
+            .iter()
+            .map(|agent| agent.identity.session_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["P"]
+    );
+
+    let closed_child = operations
+        .get_agent(&caller, &target("C"))
+        .await
+        .expect("relationship-Closed subagent remains readable");
+    assert_eq!(
+        closed_child.status.presentation,
+        AgentPresentationStatus::Closed
+    );
+    assert_eq!(
+        operations
+            .list_subagents(&caller)
+            .await
+            .expect("list Closed subagent")
+            .into_iter()
+            .map(|agent| agent.identity.session_id)
+            .collect::<Vec<_>>(),
+        vec!["C"]
+    );
+}

@@ -167,6 +167,9 @@ impl AgentOperations {
             if resolved.role() == AgentRole::Subagent {
                 continue;
             }
+            if resolved.is_terminal_session() {
+                continue;
+            }
             let status = self.status_for(&resolved).await?;
             if input
                 .status
@@ -206,6 +209,9 @@ impl AgentOperations {
         self.assert_same_runtime(target)?;
         let caller_agent = self.resolve_caller_agent(caller)?;
         let target_agent = self.resolve_agent(target)?;
+        if target_agent.role() == AgentRole::Ordinary && target_agent.is_terminal_session() {
+            return Err(AgentOperationsError::AgentNotFound);
+        }
         if target_agent.role() == AgentRole::Subagent
             && target_agent.parent_session_id() != Some(caller.identity().session_id.as_str())
         {
@@ -277,9 +283,7 @@ impl AgentOperations {
         caller: &AuthenticatedAgentCaller,
     ) -> Result<ResolvedAgent, AgentOperationsError> {
         let resolved = self.resolve_record(self.resolve_caller_record(caller)?)?;
-        if (resolved.record.closed_at.is_some() || resolved.record.status == "closed")
-            && !resolved.is_relationship_closed()
-        {
+        if resolved.is_terminal_session() && !resolved.is_relationship_closed() {
             return Err(AgentOperationsError::CallerClosed);
         }
         Ok(resolved)
@@ -426,6 +430,10 @@ impl ResolvedAgent {
         self.parent_link
             .as_ref()
             .is_some_and(|link| link.closed_at.is_some())
+    }
+
+    fn is_terminal_session(&self) -> bool {
+        self.record.closed_at.is_some() || self.record.status == "closed"
     }
 }
 
