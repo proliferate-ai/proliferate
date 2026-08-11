@@ -14,8 +14,8 @@ use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::task_output::{TaskOutputRole, TaskOutputSender};
 use crate::persistence::Db;
 
+mod pending_prompt_protection_tests;
 mod subagent_lifecycle_tests;
-
 pub(super) struct EnvVarGuard {
     name: &'static str,
     previous: Option<std::ffi::OsString>,

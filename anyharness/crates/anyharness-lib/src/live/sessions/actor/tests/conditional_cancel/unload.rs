@@ -55,6 +55,14 @@ impl crate::live::sessions::model::EventPersist for FailingTerminalPersist {
             .append_raw_notification(session_id, notification_kind, timestamp, payload_json)
     }
 
+    fn persist_subagent_wake_turn(
+        &self,
+        input: &crate::live::sessions::subagent_wake::SubagentWakeTurnPersistenceInput,
+    ) -> anyhow::Result<crate::live::sessions::subagent_wake::SubagentWakeTurnPersistenceOutcome>
+    {
+        crate::live::sessions::model::EventPersist::persist_subagent_wake_turn(&self.store, input)
+    }
+
     fn persist_terminal_turn(
         &self,
         input: &crate::live::sessions::model::TerminalTurnPersistenceInput,

@@ -13,20 +13,7 @@ impl SessionEventSink {
         content_parts: Vec<ContentPart>,
         prompt_provenance: Option<PromptProvenance>,
     ) -> anyhow::Result<String> {
-        // A dangling engine-initiated turn (goal pursuit that never reached a
-        // quiescent goal event, e.g. the sidecar died mid-continuation) must
-        // not swallow the incoming prompt turn.
-        if let Some(engine_initiated) = self.staged_terminal_is_engine_initiated() {
-            anyhow::ensure!(
-                engine_initiated,
-                "a prompt terminal remains durably unresolved"
-            );
-            self.commit_staged_prompt_terminal()?;
-        }
-        self.end_engine_initiated_turn_if_open()?;
-        self.close_open_items();
-        self.close_plan_item();
-        self.close_tool_items();
+        self.prepare_for_prompt_turn()?;
 
         let turn_id = uuid::Uuid::new_v4().to_string();
         tracing::debug!(turn_id = %turn_id, "event_sink: beginning turn");
@@ -71,6 +58,24 @@ impl SessionEventSink {
             Some(item_id),
         );
         Ok(self.current_turn_id.clone().unwrap_or_default())
+    }
+
+    pub(super) fn prepare_for_prompt_turn(&mut self) -> anyhow::Result<()> {
+        // A dangling engine-initiated turn (goal pursuit that never reached a
+        // quiescent goal event, e.g. the sidecar died mid-continuation) must
+        // not swallow the incoming prompt turn.
+        if let Some(engine_initiated) = self.staged_terminal_is_engine_initiated() {
+            anyhow::ensure!(
+                engine_initiated,
+                "a prompt terminal remains durably unresolved"
+            );
+            self.commit_staged_prompt_terminal()?;
+        }
+        self.end_engine_initiated_turn_if_open()?;
+        self.close_open_items();
+        self.close_plan_item();
+        self.close_tool_items();
+        Ok(())
     }
 
     pub fn turn_ended(&mut self, stop_reason: StopReason) {

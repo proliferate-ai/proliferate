@@ -50,6 +50,8 @@ use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
 use crate::live::sessions::sink::SessionEventSink;
 use crate::persistence::Db;
 
+mod completion_wake;
+mod completion_wake_outcomes;
 mod terminal_fence;
 mod unload;
 

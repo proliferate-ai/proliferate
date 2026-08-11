@@ -280,23 +280,29 @@ fn terminal_capture_adopts_existing_completion_projection_identity() {
         .claim_next_due("2026-08-11T00:02:00Z", "2026-08-11T00:03:00Z", "worker-1")
         .expect("claim")
         .expect("delivery claimed");
-    assert!(store
-        .mark_enqueued(
+    let expected_parent_prompt_seq = match store
+        .enqueue_claimed_canonical(
             &delivery.delivery_id,
             "worker-1",
-            17,
             "2026-08-11T00:02:01Z",
             "2026-08-11T00:02:02Z",
         )
-        .expect("mark enqueued"));
+        .expect("enqueue canonical")
+    {
+        super::enqueue::ClaimedDeliveryEnqueueOutcome::Enqueued { pending, .. } => pending.seq,
+        _ => panic!("expected enqueue"),
+    };
     db.with_conn(|conn| {
-        let parent_prompt_seq: Option<i64> = conn.query_row(
+        let projected_parent_prompt_seq: Option<i64> = conn.query_row(
             "SELECT parent_prompt_seq FROM session_link_completions
              WHERE completion_id = 'legacy-completion'",
             [],
             |row| row.get(0),
         )?;
-        assert_eq!(parent_prompt_seq, Some(17));
+        assert_eq!(
+            projected_parent_prompt_seq,
+            Some(expected_parent_prompt_seq)
+        );
         Ok(())
     })
     .expect("verify actual projection updated");
@@ -418,7 +424,7 @@ fn expiring_claim_allows_only_one_worker_then_recovers() {
 }
 
 #[test]
-fn mobility_round_trip_preserves_enqueued_delivery_after_promotion() {
+fn mobility_round_trip_recreates_missing_canonical_row_beside_same_seq_id_collision() {
     let source = Db::open_in_memory().expect("open source db");
     seed_link(&source, false);
     let source_store = CompletionDeliveryStore::new(source.clone());
@@ -427,15 +433,17 @@ fn mobility_round_trip_preserves_enqueued_delivery_after_promotion() {
         .claim_next_due("2026-08-11T00:02:00Z", "2026-08-11T00:03:00Z", "worker-1")
         .expect("claim delivery")
         .expect("delivery claimed");
-    assert!(source_store
-        .mark_enqueued(
-            &delivery.delivery_id,
-            "worker-1",
-            11,
-            "2026-08-11T00:02:01Z",
-            "2026-08-11T00:02:02Z",
-        )
-        .expect("mark enqueued"));
+    assert!(matches!(
+        source_store
+            .enqueue_claimed_canonical(
+                &delivery.delivery_id,
+                "worker-1",
+                "2026-08-11T00:02:01Z",
+                "2026-08-11T00:02:02Z",
+            )
+            .expect("enqueue canonical"),
+        super::enqueue::ClaimedDeliveryEnqueueOutcome::Enqueued { .. }
+    ));
     source
         .with_conn(|conn| {
             conn.execute("DELETE FROM session_links WHERE id = 'link-1'", [])?;
@@ -477,6 +485,50 @@ fn mobility_round_trip_preserves_enqueued_delivery_after_promotion() {
         .expect("find imported delivery")
         .expect("delivery imported");
     assert_eq!(imported, exported[0]);
+
+    // Queue rows are not part of the mobility delivery export. Reuse the
+    // imported sequence with an ordinary same-id row to prove the worker does
+    // not treat either raw identity as authority when it recreates the wake.
+    let destination_sessions = SessionStore::new(destination.clone());
+    let ordinary = destination_sessions
+        .insert_pending_prompt(
+            &delivery.parent_session_id,
+            "ordinary destination collision",
+            Some(&delivery.prompt_id()),
+        )
+        .expect("insert ordinary collision");
+    assert_eq!(Some(ordinary.seq), imported.parent_prompt_seq);
+    destination_store
+        .claim_next_due("2026-08-11T00:02:02Z", "2026-08-11T00:03:02Z", "worker-2")
+        .expect("claim imported delivery")
+        .expect("imported delivery due");
+    let (reenqueued, canonical) = match destination_store
+        .enqueue_claimed_canonical(
+            &delivery.delivery_id,
+            "worker-2",
+            "2026-08-11T00:02:02Z",
+            "2026-08-11T00:02:04Z",
+        )
+        .expect("recreate imported wake")
+    {
+        super::enqueue::ClaimedDeliveryEnqueueOutcome::Enqueued {
+            delivery,
+            pending,
+            inserted: true,
+        } => (delivery, pending),
+        outcome => panic!("expected inserted enqueue, got {outcome:?}"),
+    };
+    assert_ne!(canonical.seq, ordinary.seq);
+    assert!(super::canonical::pending_prompt_matches_delivery(
+        &canonical,
+        &reenqueued
+    ));
+    let queue = destination_sessions
+        .list_pending_prompts(&delivery.parent_session_id)
+        .expect("destination queue");
+    assert_eq!(queue.len(), 2);
+    assert!(queue.iter().any(|row| row == &ordinary));
+    assert!(queue.iter().any(|row| row == &canonical));
     destination
         .with_conn(|conn| {
             let links: i64 =

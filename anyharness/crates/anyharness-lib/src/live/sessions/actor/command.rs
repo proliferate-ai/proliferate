@@ -35,6 +35,7 @@ pub enum PromptAcceptance {
 #[derive(Debug)]
 pub enum QueueMutationError {
     NotFound,
+    Protected,
     StaleOrder { current_seqs: Vec<i64> },
     InvalidReorder(String),
     Internal(String),

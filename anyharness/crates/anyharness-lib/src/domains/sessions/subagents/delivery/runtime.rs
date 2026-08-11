@@ -4,9 +4,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use super::{CompletionDeliveryRecord, CompletionDeliveryStore};
-use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
 use crate::domains::sessions::runtime::SessionRuntime;
-use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::store::completion_deliveries::enqueue::ClaimedDeliveryEnqueueOutcome;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const LEASE_DURATION_SECONDS: i64 = 30;
@@ -14,21 +13,18 @@ const MAX_DELIVERIES_PER_PASS: usize = 64;
 
 pub struct CompletionDeliveryWorker {
     delivery_store: CompletionDeliveryStore,
-    session_store: SessionStore,
     session_runtime: Weak<SessionRuntime>,
 }
 
 impl CompletionDeliveryWorker {
     pub fn spawn(
         delivery_store: CompletionDeliveryStore,
-        session_store: SessionStore,
         session_runtime: Weak<SessionRuntime>,
         nudge_rx: mpsc::UnboundedReceiver<()>,
     ) {
         tokio::spawn(
             Self {
                 delivery_store,
-                session_store,
                 session_runtime,
             }
             .run(nudge_rx),
@@ -115,59 +111,26 @@ impl CompletionDeliveryWorker {
         delivery: &CompletionDeliveryRecord,
         lease_token: &str,
     ) -> anyhow::Result<()> {
-        self.delivery_store.ensure_completion_projection(delivery)?;
-        let prompt_id = delivery.prompt_id();
-        if let Some((turn_id, _)) = self
-            .session_store
-            .find_completed_user_prompt_turn(&delivery.parent_session_id, &prompt_id)?
-        {
-            let now = chrono::Utc::now().to_rfc3339();
-            self.delivery_store.mark_delivered(
-                &delivery.delivery_id,
-                lease_token,
-                &turn_id,
-                &now,
-            )?;
-            log_delivered(delivery, &now);
-            return Ok(());
-        }
-
-        let payload = PromptPayload::text(delivery.notification_text.clone()).with_provenance(
-            PromptProvenance::SubagentWake {
-                session_link_id: delivery.session_link_id.clone(),
-                completion_id: delivery.delivery_id.clone(),
-                label: delivery.label.clone(),
-            },
-        );
-        let pending = match self
-            .session_store
-            .find_pending_prompt_by_id(&delivery.parent_session_id, &prompt_id)?
-        {
-            Some(record) => record,
-            None => {
-                self.session_store
-                    .insert_pending_prompt_payload_once(
-                        &delivery.parent_session_id,
-                        &payload,
-                        &prompt_id,
-                    )?
-                    .0
-            }
-        };
         let now = chrono::Utc::now();
         // Persist recovery timing before the best-effort activation. Every
         // unresolved acknowledgement path therefore converges through the
         // same capped backoff instead of the one-second poll cadence.
         let next_attempt = retry_at(&now, delivery.attempt_count);
-        if !self.delivery_store.mark_enqueued(
+        let (delivery, pending) = match self.delivery_store.enqueue_claimed_canonical(
             &delivery.delivery_id,
             lease_token,
-            pending.seq,
             &now.to_rfc3339(),
             &next_attempt,
         )? {
-            return Ok(());
-        }
+            ClaimedDeliveryEnqueueOutcome::Enqueued {
+                delivery, pending, ..
+            } => (delivery, pending),
+            ClaimedDeliveryEnqueueOutcome::AlreadyVisible { delivery, .. } => {
+                log_delivered(&delivery, &now.to_rfc3339());
+                return Ok(());
+            }
+            ClaimedDeliveryEnqueueOutcome::Stale => return Ok(()),
+        };
 
         let Some(session_runtime) = self.session_runtime.upgrade() else {
             anyhow::bail!("session_runtime_unavailable");
@@ -179,20 +142,6 @@ impl CompletionDeliveryWorker {
                 pending.seq,
             )
             .await;
-
-        if let Some((turn_id, _)) = self
-            .session_store
-            .find_completed_user_prompt_turn(&delivery.parent_session_id, &prompt_id)?
-        {
-            let delivered_at = chrono::Utc::now().to_rfc3339();
-            self.delivery_store.mark_delivered_from_parent_turn(
-                &delivery.parent_session_id,
-                &prompt_id,
-                &turn_id,
-                &delivered_at,
-            )?;
-            log_delivered(delivery, &delivered_at);
-        }
         Ok(())
     }
 }

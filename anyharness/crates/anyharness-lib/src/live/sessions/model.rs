@@ -49,7 +49,13 @@ use crate::domains::sessions::model::{
 use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError, ResolvedParts};
 use crate::live::sessions::actor::command::{Resolution, ResolveInteractionCommandError};
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
+use crate::live::sessions::queue_durable::{
+    PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
+};
 use crate::live::sessions::sink::SessionEventSink;
+use crate::live::sessions::subagent_wake::{
+    SubagentWakeTurnPersistenceInput, SubagentWakeTurnPersistenceOutcome,
+};
 // Re-exported: the normalized-payload vocabulary observers consume. The sink
 // module itself stays private to live; these shapes are part of the doorstep.
 pub use crate::live::sessions::sink::{AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage};
@@ -157,6 +163,10 @@ pub trait EventPersist: Send + Sync {
         timestamp: &str,
         payload_json: &str,
     ) -> anyhow::Result<()>;
+    fn persist_subagent_wake_turn(
+        &self,
+        input: &SubagentWakeTurnPersistenceInput,
+    ) -> anyhow::Result<SubagentWakeTurnPersistenceOutcome>;
     fn persist_terminal_turn(&self, input: &TerminalTurnPersistenceInput) -> anyhow::Result<()>;
 }
 
@@ -211,13 +221,13 @@ pub trait QueueDurable: Send + Sync {
         session_id: &str,
         seq: i64,
         payload: &PromptPayload,
-    ) -> anyhow::Result<bool>;
+    ) -> anyhow::Result<PendingPromptUpdateOutcome>;
     fn delete_pending_prompt(&self, session_id: &str, seq: i64) -> anyhow::Result<bool>;
     fn delete_pending_prompt_record(
         &self,
         session_id: &str,
         seq: i64,
-    ) -> anyhow::Result<Option<PendingPromptRecord>>;
+    ) -> anyhow::Result<PendingPromptDeleteOutcome>;
     fn reorder_pending_prompts(
         &self,
         session_id: &str,

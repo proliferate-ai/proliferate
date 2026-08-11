@@ -72,7 +72,7 @@ impl SessionEventSink {
     }
 }
 
-fn build_session_event(
+pub(super) fn build_session_event(
     session_id: &str,
     next_seq: &mut i64,
     event: SessionEvent,

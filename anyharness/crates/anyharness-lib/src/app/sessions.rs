@@ -82,13 +82,8 @@ pub(super) struct CompletionDeliveryWiring {
 }
 
 impl CompletionDeliveryWiring {
-    pub fn spawn(self, db: &Db, session_runtime: &Arc<SessionRuntime>) {
-        CompletionDeliveryWorker::spawn(
-            self.store,
-            SessionStore::new(db.clone()),
-            Arc::downgrade(session_runtime),
-            self.nudge_rx,
-        );
+    pub fn spawn(self, session_runtime: &Arc<SessionRuntime>) {
+        CompletionDeliveryWorker::spawn(self.store, Arc::downgrade(session_runtime), self.nudge_rx);
     }
 }
 
@@ -96,7 +91,7 @@ pub(super) fn wire_completion_delivery_before_sessions(db: &Db) -> CompletionDel
     let (nudge_tx, nudge_rx) = tokio::sync::mpsc::unbounded_channel();
     let store = CompletionDeliveryStore::new(db.clone());
     CompletionDeliveryWiring {
-        session_hooks: Arc::new(SubagentSessionHooks::new(store.clone(), nudge_tx)),
+        session_hooks: Arc::new(SubagentSessionHooks::new(nudge_tx)),
         store,
         nudge_rx,
     }

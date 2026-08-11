@@ -330,7 +330,6 @@ async fn file_backed_closed_open_turn_is_repaired_by_restarted_worker() {
 fn worker(state: &AppState) -> CompletionDeliveryWorker {
     CompletionDeliveryWorker {
         delivery_store: CompletionDeliveryStore::new(state.db.clone()),
-        session_store: SessionStore::new(state.db.clone()),
         session_runtime: Arc::downgrade(&state.session_runtime),
     }
 }

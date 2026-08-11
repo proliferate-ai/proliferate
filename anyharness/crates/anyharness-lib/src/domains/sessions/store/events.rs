@@ -1,14 +1,24 @@
 use rusqlite::params;
 
-use super::completion_deliveries::DurableTerminalTurn;
+use super::completion_deliveries::{
+    DurableSubagentWakeTurn, DurableSubagentWakeTurnOutcome, DurableTerminalTurn,
+};
 use super::persisted_payloads::sanitize_session_event_for_sqlite;
 use super::SessionStore;
 use crate::domains::sessions::model::SessionEventRecord;
 
-mod completion_delivery;
 mod repair;
 
 impl SessionStore {
+    pub(crate) fn persist_subagent_wake_turn_record(
+        &self,
+        input: &DurableSubagentWakeTurn,
+    ) -> anyhow::Result<DurableSubagentWakeTurnOutcome> {
+        self.db.with_tx(|tx| {
+            super::completion_deliveries::admission::persist_subagent_wake_turn_in_tx(tx, input)
+        })
+    }
+
     pub(crate) fn persist_terminal_turn_record(
         &self,
         input: &DurableTerminalTurn,
