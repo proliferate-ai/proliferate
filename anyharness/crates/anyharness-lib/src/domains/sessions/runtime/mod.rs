@@ -39,7 +39,7 @@ mod lifecycle;
 mod pending_prompts;
 mod prompt;
 #[cfg(test)]
-mod prompt_message_actor_tests;
+pub(crate) mod prompt_message_actor_tests;
 #[cfg(test)]
 mod prompt_message_cold_start_tests;
 #[cfg(test)]

@@ -16,7 +16,7 @@ use crate::persistence::Db;
 
 mod pending_prompt_protection_tests;
 mod subagent_lifecycle_tests;
-pub(super) struct EnvVarGuard {
+pub(crate) struct EnvVarGuard {
     name: &'static str,
     previous: Option<std::ffi::OsString>,
 }
@@ -38,10 +38,10 @@ impl Drop for EnvVarGuard {
     }
 }
 
-pub(super) struct ScriptedAgent {
+pub(crate) struct ScriptedAgent {
     program: PathBuf,
-    pub(super) request_log: PathBuf,
-    control_dir: PathBuf,
+    pub(crate) request_log: PathBuf,
+    pub(crate) control_dir: PathBuf,
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -262,7 +262,7 @@ async fn send_message_cold_runtime_reconstruction_replays_two_rows_once_in_order
     std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
 }
 
-pub(super) async fn send_message(
+pub(crate) async fn send_message(
     state: &AppState,
     message: &str,
 ) -> Result<SendMessageReceipt, crate::domains::agent_operations::runtime::AgentOperationsError> {
@@ -293,7 +293,7 @@ async fn send_direct_prompt(state: &AppState, text: &str) {
         .expect("direct prompt");
 }
 
-pub(super) fn build_state(runtime_home: &Path, db: Db, seed: bool) -> AppState {
+pub(crate) fn build_state(runtime_home: &Path, db: Db, seed: bool) -> AppState {
     let workspace_a = runtime_home.join("workspace-a");
     let workspace_b = runtime_home.join("workspace-b");
     std::fs::create_dir_all(&workspace_a).expect("workspace A");
@@ -373,14 +373,14 @@ pub(super) fn assert_agent_output(state: &AppState, expected_texts: &[&str]) {
         .is_empty());
 }
 
-pub(super) fn temp_runtime_home(label: &str) -> PathBuf {
+pub(crate) fn temp_runtime_home(label: &str) -> PathBuf {
     PathBuf::from(format!(
         "/tmp/anyharness-agent-message-{label}-{}",
         uuid::Uuid::new_v4()
     ))
 }
 
-pub(super) fn install_scripted_agent_env(script: &ScriptedAgent) -> (EnvVarGuard, EnvVarGuard) {
+pub(crate) fn install_scripted_agent_env(script: &ScriptedAgent) -> (EnvVarGuard, EnvVarGuard) {
     let program = EnvVarGuard::set("ANYHARNESS_CLAUDE_AGENT_PROGRAM", &script.program);
     let args = serde_json::to_string(&vec![
         script.request_log.to_string_lossy().to_string(),
@@ -391,7 +391,7 @@ pub(super) fn install_scripted_agent_env(script: &ScriptedAgent) -> (EnvVarGuard
     (program, args)
 }
 
-pub(super) fn write_scripted_agent(runtime_home: &Path) -> ScriptedAgent {
+pub(crate) fn write_scripted_agent(runtime_home: &Path) -> ScriptedAgent {
     std::fs::create_dir_all(runtime_home.join("secrets")).expect("secrets directory");
     std::fs::write(
         runtime_home.join("secrets/global.env"),
@@ -498,7 +498,7 @@ for raw_line in sys.stdin:
     }
 }
 
-pub(super) fn read_requests(path: &Path) -> Vec<Value> {
+pub(crate) fn read_requests(path: &Path) -> Vec<Value> {
     let Ok(contents) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
@@ -509,7 +509,7 @@ pub(super) fn read_requests(path: &Path) -> Vec<Value> {
         .collect()
 }
 
-pub(super) fn prompt_texts(path: &Path) -> Vec<String> {
+pub(crate) fn prompt_texts(path: &Path) -> Vec<String> {
     read_requests(path)
         .into_iter()
         .filter(|request| request["method"] == "session/prompt")
@@ -558,7 +558,7 @@ async fn wait_for(description: &str, mut condition: impl FnMut() -> bool) {
     .unwrap_or_else(|_| panic!("timed out waiting for {description}"));
 }
 
-pub(super) async fn wait_for_actor_idle(state: &AppState) {
+pub(crate) async fn wait_for_actor_idle(state: &AppState) {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             if state
@@ -589,7 +589,7 @@ async fn wait_for_actor_gone(state: &AppState) {
     .expect("target actor exit");
 }
 
-pub(super) async fn stop_target_actor(state: &AppState) {
+pub(crate) async fn stop_target_actor(state: &AppState) {
     if let Some(handle) = state.acp_manager.get_handle("target").await {
         tokio::time::timeout(Duration::from_secs(2), handle.close())
             .await

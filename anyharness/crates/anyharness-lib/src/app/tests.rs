@@ -15,6 +15,8 @@ use crate::{
     persistence::Db,
 };
 
+mod completion_delivery_crash_tests;
+
 fn run_git(path: &Path, args: &[&str]) {
     let output = Command::new("git")
         .args(args)
