@@ -1,11 +1,12 @@
 use anyharness_contract::v1::{
     InstallWorkspaceMobilityArchiveResponse, MobilityPendingConfigChangeRecord,
     MobilityPendingPromptRecord, MobilityPromptAttachmentRecord, MobilitySessionEventRecord,
-    MobilitySessionLinkCompletionRecord, MobilitySessionLinkRecord,
-    MobilitySessionLinkWakeScheduleRecord, MobilitySessionLiveConfigSnapshotRecord,
-    MobilitySessionRawNotificationRecord, MobilitySessionRecord, WorkspaceMobilityArchive,
-    WorkspaceMobilityBlocker, WorkspaceMobilityFileEntry, WorkspaceMobilityPreflightResponse,
-    WorkspaceMobilitySessionBundle, WorkspaceMobilitySessionCandidate,
+    MobilitySessionLinkCompletionDeliveryRecord, MobilitySessionLinkCompletionRecord,
+    MobilitySessionLinkRecord, MobilitySessionLinkWakeScheduleRecord,
+    MobilitySessionLiveConfigSnapshotRecord, MobilitySessionRawNotificationRecord,
+    MobilitySessionRecord, WorkspaceMobilityArchive, WorkspaceMobilityBlocker,
+    WorkspaceMobilityFileEntry, WorkspaceMobilityPreflightResponse, WorkspaceMobilitySessionBundle,
+    WorkspaceMobilitySessionCandidate,
 };
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -21,6 +22,7 @@ use crate::domains::sessions::model::{
     parse_action_capabilities, PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
 };
+use crate::domains::sessions::subagents::delivery::CompletionDeliveryRecord;
 use crate::domains::sessions::subagents::model::{
     SubagentCompletionRecord, SubagentWakeScheduleRecord,
 };
@@ -108,6 +110,11 @@ pub(super) fn to_contract_archive(
             .session_link_completions
             .into_iter()
             .map(to_contract_session_link_completion)
+            .collect(),
+        session_link_completion_deliveries: archive
+            .session_link_completion_deliveries
+            .into_iter()
+            .map(to_contract_completion_delivery)
             .collect(),
         session_link_wake_schedules: archive
             .session_link_wake_schedules
@@ -239,6 +246,35 @@ fn to_contract_session_link_wake_schedule(
     }
 }
 
+fn to_contract_completion_delivery(
+    record: CompletionDeliveryRecord,
+) -> MobilitySessionLinkCompletionDeliveryRecord {
+    MobilitySessionLinkCompletionDeliveryRecord {
+        delivery_id: record.delivery_id,
+        completion_id: record.completion_id,
+        session_link_id: record.session_link_id,
+        parent_session_id: record.parent_session_id,
+        child_session_id: record.child_session_id,
+        subagent_public_id: record.subagent_public_id,
+        label: record.label,
+        child_turn_id: record.child_turn_id,
+        child_last_event_seq: record.child_last_event_seq,
+        outcome: record.outcome.as_str().to_string(),
+        assistant_text: record.assistant_text,
+        notification_text: record.notification_text,
+        state: record.state.as_str().to_string(),
+        parent_prompt_seq: record.parent_prompt_seq,
+        parent_turn_id: record.parent_turn_id,
+        attempt_count: record.attempt_count,
+        next_attempt_at: record.next_attempt_at,
+        last_error_code: record.last_error_code,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+        enqueued_at: record.enqueued_at,
+        delivered_at: record.delivered_at,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -326,6 +362,7 @@ fn to_contract_pending_prompt(record: PendingPromptRecord) -> MobilityPendingPro
         text: record.text,
         content_parts,
         blocks_json: record.blocks_json,
+        provenance_json: record.provenance_json,
         queued_at: record.queued_at,
     }
 }

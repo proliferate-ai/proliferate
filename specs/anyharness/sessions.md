@@ -112,6 +112,9 @@ self-links, and enforces uniqueness for `(relation, parent_session_id,
 child_session_id)`. For `subagent` links, a child may have only one parent.
 Deleting a session removes any links where that session is the parent or child,
 including completion and wake-schedule rows attached to those links.
+Accepted completion-delivery snapshots are separate from link history: deleting
+the parent removes them, while promotion or later child deletion preserves them
+until the parent sees the attributed completion prompt.
 
 Session links are durable product state, but their creator turn/tool metadata is
 provenance only. It must not be used as an authorization, billing, or trust
@@ -325,28 +328,24 @@ desktop or public HTTP shapes.
 
 ### Parent Wake
 
-Child turn completion is passive by default. When a child turn finishes, the
-subagent extension inserts a durable completion row keyed by
-`(session_link_id, child_turn_id)` and injects a typed
-`subagent_turn_completed` metadata event into the parent session. SDK reducers
-and UI consumers use this for latest state; it is not transcript content.
+Every terminal child turn atomically records a completion row and an independent
+delivery snapshot while the subagent relationship exists. A retry worker turns
+that snapshot into one durable, attributed parent prompt using the stable
+delivery id for deduplication. This is automatic for completed, failed, and
+cancelled turns, including reversible Close cancellation; it does not depend on
+the legacy one-shot wake schedule. The worker reconciles parent transcript and
+pending-queue state before inserting, and marks delivery complete only after the
+attributed parent transcript item is durable.
 
-Parent wake prompts require an explicit one-shot schedule. Parent agents should
-call `schedule_subagent_wake` after `create_subagent` or
-`send_subagent_message` when they want to listen for the child's next
-completion. Legacy `wakeOnCompletion` fields on create/send are still parsed for
-backward compatibility but are no longer advertised. The schedule is a latch in
-`session_link_wake_schedules`; it applies only to the next newly recorded
-completion for that link and is consumed in the same transaction that queues the
-parent prompt. Duplicate/replayed completion processing must not consume a
-schedule created after the original completion row already existed.
+Legacy one-shot wake schedules remain persisted for the legacy surface, but do
+not gate automatic terminal-completion delivery.
 
 Parent-to-child prompts use internal `agent_session` provenance with the parent
 session id and session link id. Runtime child-to-parent wake prompts use
-internal `subagent_wake` provenance with the `session_link_id` and
-`completion_id`. Legacy `system/subagent_wake` rows are tolerated for
-pending-wake detection, but public read models must not fabricate missing link
-or completion ids.
+internal `subagent_wake` provenance with the `session_link_id` and stable
+delivery id as `completion_id`. Legacy `system/subagent_wake` rows are tolerated
+for pending-wake detection, but public read models must not fabricate missing
+link or completion ids.
 
 ## Session Extensions
 

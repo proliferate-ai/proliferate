@@ -43,7 +43,7 @@ use anyharness_contract::v1::{
     McpElicitationSubmittedValue, McpElicitationTextField, McpElicitationTextFormat,
     McpElicitationUrlPayload, McpElicitationUrlRevealResponse, MobilityPendingConfigChangeRecord,
     MobilityPendingPromptRecord, MobilitySessionEventRecord, MobilitySessionLinkCompletionRecord,
-    MobilitySessionLinkRecord, MobilitySessionLinkWakeScheduleRecord,
+    MobilitySessionLinkCompletionDeliveryRecord, MobilitySessionLinkRecord, MobilitySessionLinkWakeScheduleRecord,
     MobilitySessionLiveConfigSnapshotRecord, MobilitySessionRawNotificationRecord,
     MobilitySessionRecord, ModelCatalogStatus, ModelEffort, NormalizedSessionControl,
     NormalizedSessionControlValue, NormalizedSessionControls, OriginContext, OriginEntrypoint,
@@ -678,7 +678,7 @@ use utoipa::OpenApi;
         MobilityPendingPromptRecord,
         MobilitySessionEventRecord,
         MobilitySessionLinkRecord,
-        MobilitySessionLinkCompletionRecord,
+        MobilitySessionLinkCompletionRecord, MobilitySessionLinkCompletionDeliveryRecord,
         MobilitySessionLinkWakeScheduleRecord,
         MobilitySessionRawNotificationRecord,
     ))

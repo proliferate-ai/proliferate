@@ -512,4 +512,83 @@ mod tests {
         assert_eq!(recovered.delivery_id, first.delivery_id);
         assert_eq!(recovered.attempt_count, 2);
     }
+
+    #[test]
+    fn mobility_round_trip_preserves_enqueued_delivery_after_promotion() {
+        let source = Db::open_in_memory().expect("open source db");
+        seed_link(&source, false);
+        let source_store = CompletionDeliveryStore::new(source.clone());
+        let captured = source_store
+            .capture(&capture_input("turn-1"))
+            .expect("capture delivery");
+        let CaptureCompletionDeliveryOutcome::Captured { delivery, .. } = captured else {
+            panic!("expected captured delivery");
+        };
+        source_store
+            .claim_next_due("2026-08-11T00:02:00Z", "2026-08-11T00:03:00Z", "worker-1")
+            .expect("claim delivery")
+            .expect("delivery claimed");
+        assert!(source_store
+            .mark_enqueued(
+                &delivery.delivery_id,
+                "worker-1",
+                11,
+                "2026-08-11T00:02:01Z",
+                "2026-08-11T00:02:02Z",
+            )
+            .expect("mark enqueued"));
+        source
+            .with_conn(|conn| {
+                conn.execute("DELETE FROM session_links WHERE id = 'link-1'", [])?;
+                Ok(())
+            })
+            .expect("promote child");
+
+        let exported = source_store
+            .list_for_parent_sessions(&["parent-1".to_string()])
+            .expect("export deliveries");
+        assert_eq!(exported.len(), 1);
+        assert_eq!(exported[0].state, CompletionDeliveryState::Enqueued);
+
+        let destination = Db::open_in_memory().expect("open destination db");
+        test_support::seed_workspace_with_repo_root(
+            &destination,
+            "workspace-1",
+            "local",
+            "/tmp/completion-delivery-destination",
+        );
+        destination
+            .with_conn(|conn| {
+                conn.execute(
+                    "INSERT INTO sessions (
+                        id, workspace_id, agent_kind, status, created_at, updated_at,
+                        subagents_enabled
+                     ) VALUES ('parent-1', 'workspace-1', 'claude', 'idle', ?1, ?1, 1)",
+                    ["2026-08-11T00:00:00Z"],
+                )?;
+                Ok(())
+            })
+            .expect("seed destination parent");
+        let destination_store = CompletionDeliveryStore::new(destination.clone());
+        destination_store
+            .import(&exported[0])
+            .expect("import delivery without link or child");
+        let imported = destination_store
+            .find(&delivery.delivery_id)
+            .expect("find imported delivery")
+            .expect("delivery imported");
+        assert_eq!(imported, exported[0]);
+        destination
+            .with_conn(|conn| {
+                let links: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM session_links", [], |row| row.get(0))?;
+                let completions: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM session_link_completions", [], |row| {
+                        row.get(0)
+                    })?;
+                assert_eq!((links, completions), (0, 0));
+                Ok(())
+            })
+            .expect("verify independent delivery import");
+    }
 }
