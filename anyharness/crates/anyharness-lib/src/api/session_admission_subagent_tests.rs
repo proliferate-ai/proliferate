@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::domains::agent_operations::model::AgentIdentity;
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
@@ -103,153 +102,6 @@ async fn restore_cannot_reopen_a_reversibly_closed_dismissed_subagent() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn http_wake_and_close_have_one_child_gate_and_no_late_schedule() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let _guard = test_support::set_bearer_token_env(None);
-
-    let state = Arc::new(test_state());
-    test_support::seed_workspace_with_repo_root(&state.db, WS, "local", "/tmp/http-wake-first");
-    let parent_id = insert_session_row(&state, WS);
-    let child_id = insert_session_row(&state, WS);
-    state
-        .subagent_service
-        .link_child(&parent_id, &child_id, None, None, None)
-        .expect("link child");
-
-    let held_child_gate = state
-        .session_admission
-        .acquire(
-            &child_id,
-            SessionMutationKind::SubagentClose,
-            &SessionMutationSource::external(),
-        )
-        .await
-        .expect("hold child gate");
-    let wake_state = state.clone();
-    let wake_parent = parent_id.clone();
-    let wake_child = child_id.clone();
-    let wake = tokio::spawn(async move {
-        call(
-            &wake_state,
-            "POST",
-            format!("/v1/sessions/{wake_parent}/subagents/{wake_child}/wake"),
-            Some(json!({})),
-        )
-        .await
-    });
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-    assert!(
-        !wake.is_finished(),
-        "HTTP wake must wait on the child gate, never the parent gate"
-    );
-    drop(held_child_gate);
-    let (status, payload) = wake.await.expect("wake task");
-    assert_eq!(status, StatusCode::OK, "{payload}");
-
-    close_through_agent_operations(&state, &parent_id, &child_id).await;
-    assert_no_wake_or_parent_prompt(&state, &parent_id);
-
-    let closed_first = Arc::new(test_state());
-    test_support::seed_workspace_with_repo_root(
-        &closed_first.db,
-        WS,
-        "local",
-        "/tmp/http-close-first",
-    );
-    let parent_id = insert_session_row(&closed_first, WS);
-    let child_id = insert_session_row(&closed_first, WS);
-    closed_first
-        .subagent_service
-        .link_child(&parent_id, &child_id, None, None, None)
-        .expect("link child");
-    close_through_agent_operations(&closed_first, &parent_id, &child_id).await;
-    let (status, payload) = call(
-        &closed_first,
-        "POST",
-        format!("/v1/sessions/{parent_id}/subagents/{child_id}/wake"),
-        Some(json!({})),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CONFLICT, "{payload}");
-    assert_eq!(payload["code"], "SUBAGENT_OPEN_REQUIRED");
-    assert_no_wake_or_parent_prompt(&closed_first, &parent_id);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn http_wake_wrong_parent_cannot_probe_child_operability_or_controller() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let _guard = test_support::set_bearer_token_env(None);
-    let state = test_state();
-    test_support::seed_workspace_with_repo_root(
-        &state.db,
-        WS,
-        "local",
-        "/tmp/http-wake-anti-enumeration",
-    );
-    let owner_id = insert_session_row(&state, WS);
-    let wrong_parent_id = insert_session_row(&state, WS);
-    let open_child_id = insert_session_row(&state, WS);
-    let closed_child_id = insert_session_row(&state, WS);
-    let controlled_child_id = insert_session_row(&state, WS);
-    for child_id in [&open_child_id, &closed_child_id, &controlled_child_id] {
-        state
-            .subagent_service
-            .link_child(&owner_id, child_id, None, None, None)
-            .expect("link child to its real parent");
-    }
-    close_through_agent_operations(&state, &owner_id, &closed_child_id).await;
-
-    let workflow_service = WorkflowRunService::new(WorkflowRunStore::new(state.db.clone()));
-    let run_id = uuid::Uuid::new_v4().to_string();
-    workflow_service
-        .accept(
-            &run_id,
-            super::super::workflow_runs_tests::domain_input_for_workspace(WS),
-        )
-        .expect("accept workflow run");
-    assert!(workflow_service.begin_run(&run_id).expect("begin run"));
-    assert!(workflow_service
-        .bind_session(&run_id, &controlled_child_id)
-        .expect("bind controlled child"));
-
-    let mut public_results = Vec::new();
-    for child_id in [&open_child_id, &closed_child_id, &controlled_child_id] {
-        public_results.push(
-            call(
-                &state,
-                "POST",
-                format!("/v1/sessions/{wrong_parent_id}/subagents/{child_id}/wake"),
-                Some(json!({})),
-            )
-            .await,
-        );
-    }
-
-    let expected = &public_results[0];
-    assert_eq!(expected.0, StatusCode::CONFLICT, "{}", expected.1);
-    assert_eq!(expected.1["code"], "SUBAGENT_NOT_OWNED");
-    for result in &public_results[1..] {
-        assert_eq!(
-            result, expected,
-            "wrong-parent result must not reveal Closed or workflow-controlled state"
-        );
-    }
-    assert_no_wake_or_parent_prompt(&state, &owner_id);
-    assert!(state
-        .session_service
-        .store()
-        .list_pending_prompts(&wrong_parent_id)
-        .expect("wrong-parent pending prompts")
-        .is_empty());
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mobility_imported_closed_link_stays_closed_until_opened() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
@@ -316,30 +168,6 @@ async fn mobility_imported_closed_link_stays_closed_until_opened() {
         )
         .await
         .is_ok());
-}
-
-async fn close_through_agent_operations(state: &AppState, parent_id: &str, child_id: &str) {
-    let caller = state.agent_operations.authenticated_caller(parent_id);
-    let target = AgentIdentity::new(state.agent_operations.runtime_identity().clone(), child_id);
-    state
-        .agent_operations
-        .close_subagent(&caller, &target)
-        .await
-        .expect("close subagent");
-}
-
-fn assert_no_wake_or_parent_prompt(state: &AppState, parent_id: &str) {
-    let context = state
-        .subagent_service
-        .subagent_context(parent_id)
-        .expect("subagent context");
-    assert!(context.children.iter().all(|child| !child.wake_scheduled));
-    assert!(state
-        .session_service
-        .store()
-        .list_pending_prompts(parent_id)
-        .expect("parent pending prompts")
-        .is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

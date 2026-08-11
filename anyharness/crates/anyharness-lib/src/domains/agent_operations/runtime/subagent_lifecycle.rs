@@ -1,5 +1,5 @@
 use crate::domains::agent_operations::model::{
-    AgentCapability, AgentIdentity, AgentView, AuthenticatedAgentCaller,
+    AgentCapability, AgentIdentity, AgentView, AuthenticatedAgentCaller, SubagentLifecycleView,
 };
 use crate::domains::sessions::admission::SessionMutationKind;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
@@ -13,6 +13,14 @@ impl AgentOperations {
         caller: &AuthenticatedAgentCaller,
         target: &AgentIdentity,
     ) -> Result<AgentView, AgentOperationsError> {
+        Ok(self.close_subagent_lifecycle(caller, target).await?.agent)
+    }
+
+    pub async fn close_subagent_lifecycle(
+        &self,
+        caller: &AuthenticatedAgentCaller,
+        target: &AgentIdentity,
+    ) -> Result<SubagentLifecycleView, AgentOperationsError> {
         let (_, initial_target) =
             self.authorize_target(caller, target, AgentCapability::CloseSubagent)?;
         let workspace_id = initial_target.record.workspace_id.clone();
@@ -33,7 +41,15 @@ impl AgentOperations {
             .await
             .map_err(AgentOperationsError::SubagentLifecycle)?;
         let updated = self.resolve_record(record)?;
-        self.project_agent(&updated, Some(&current_caller)).await
+        let relationship = updated
+            .parent_link
+            .clone()
+            .map(super::subagent_roster::relationship_view);
+        let agent = self.project_agent(&updated, Some(&current_caller)).await?;
+        Ok(SubagentLifecycleView {
+            agent,
+            relationship,
+        })
     }
 
     #[tracing::instrument(skip_all, fields(operation = "open_subagent"))]
@@ -42,6 +58,14 @@ impl AgentOperations {
         caller: &AuthenticatedAgentCaller,
         target: &AgentIdentity,
     ) -> Result<AgentView, AgentOperationsError> {
+        Ok(self.open_subagent_lifecycle(caller, target).await?.agent)
+    }
+
+    pub async fn open_subagent_lifecycle(
+        &self,
+        caller: &AuthenticatedAgentCaller,
+        target: &AgentIdentity,
+    ) -> Result<SubagentLifecycleView, AgentOperationsError> {
         let (_, initial_target) =
             self.authorize_target(caller, target, AgentCapability::OpenSubagent)?;
         let workspace_id = initial_target.record.workspace_id.clone();
@@ -62,7 +86,15 @@ impl AgentOperations {
             .await
             .map_err(AgentOperationsError::SubagentLifecycle)?;
         let updated = self.resolve_record(record)?;
-        self.project_agent(&updated, Some(&current_caller)).await
+        let relationship = updated
+            .parent_link
+            .clone()
+            .map(super::subagent_roster::relationship_view);
+        let agent = self.project_agent(&updated, Some(&current_caller)).await?;
+        Ok(SubagentLifecycleView {
+            agent,
+            relationship,
+        })
     }
 
     #[tracing::instrument(skip_all, fields(operation = "promote_subagent"))]
@@ -71,6 +103,14 @@ impl AgentOperations {
         caller: &AuthenticatedAgentCaller,
         target: &AgentIdentity,
     ) -> Result<AgentView, AgentOperationsError> {
+        Ok(self.promote_subagent_lifecycle(caller, target).await?.agent)
+    }
+
+    pub async fn promote_subagent_lifecycle(
+        &self,
+        caller: &AuthenticatedAgentCaller,
+        target: &AgentIdentity,
+    ) -> Result<SubagentLifecycleView, AgentOperationsError> {
         let (_, initial_target) =
             self.authorize_target(caller, target, AgentCapability::PromoteSubagent)?;
         let workspace_id = initial_target.record.workspace_id.clone();
@@ -91,6 +131,10 @@ impl AgentOperations {
             .await
             .map_err(AgentOperationsError::SubagentLifecycle)?;
         let promoted = self.resolve_record(record)?;
-        self.project_agent(&promoted, Some(&current_caller)).await
+        let agent = self.project_agent(&promoted, Some(&current_caller)).await?;
+        Ok(SubagentLifecycleView {
+            agent,
+            relationship: None,
+        })
     }
 }

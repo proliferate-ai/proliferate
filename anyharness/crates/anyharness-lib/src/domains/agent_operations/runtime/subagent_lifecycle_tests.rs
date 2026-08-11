@@ -40,6 +40,10 @@ struct State {
     sessions: Mutex<Vec<SessionRecord>>,
     links: Mutex<Vec<SessionLinkRecord>>,
     calls: Mutex<Vec<String>>,
+    hold_closed_projection: AtomicBool,
+    projection_block_claimed: AtomicBool,
+    projection_started: tokio::sync::Notify,
+    projection_release: AtomicBool,
 }
 
 #[derive(Default)]
@@ -86,13 +90,28 @@ impl SubagentRelationshipReads for State {
         &self,
         child_session_id: &str,
     ) -> anyhow::Result<Option<SessionLinkRecord>> {
-        Ok(self
+        let relationship = self
             .links
             .lock()
             .unwrap()
             .iter()
             .find(|link| link.child_session_id == child_session_id && link.closed_at.is_none())
-            .cloned())
+            .cloned();
+        if relationship
+            .as_ref()
+            .is_some_and(|link| link.subagent_closed_at.is_some())
+            && self.hold_closed_projection.load(Ordering::SeqCst)
+            && self
+                .projection_block_claimed
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+        {
+            self.projection_started.notify_one();
+            while !self.projection_release.load(Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+        Ok(relationship)
     }
 
     fn list_children_including_closed(

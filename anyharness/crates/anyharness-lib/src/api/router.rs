@@ -100,6 +100,10 @@ pub fn build_router(state: AppState) -> Router {
             get(workspaces::get_workspace).delete(workspaces_purge::purge_workspace),
         )
         .route(
+            "/workspaces/{workspace_id}/subagents",
+            get(subagents::get_workspace_subagents),
+        )
+        .route(
             "/workspaces/{workspace_id}/worktree/restore",
             post(workspaces_restore::restore_worktree),
         )
@@ -410,12 +414,20 @@ pub fn build_router(state: AppState) -> Router {
         .route("/sessions", get(sessions::list_sessions))
         .route("/sessions/{session_id}", get(sessions::get_session))
         .route(
-            "/sessions/{session_id}/subagents",
+            "/sessions/{parent_session_id}/subagents",
             get(subagents::get_session_subagents),
         )
         .route(
-            "/sessions/{session_id}/subagents/{child_session_id}/wake",
-            post(subagents::schedule_subagent_wake),
+            "/sessions/{parent_session_id}/subagents/{child_session_id}/close",
+            post(subagents::close_subagent),
+        )
+        .route(
+            "/sessions/{parent_session_id}/subagents/{child_session_id}/open",
+            post(subagents::open_subagent),
+        )
+        .route(
+            "/sessions/{parent_session_id}/subagents/{child_session_id}/promote",
+            post(subagents::promote_subagent),
         )
         .route(
             "/sessions/{session_id}/reviews",
