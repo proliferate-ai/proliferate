@@ -33,9 +33,11 @@ export interface MainScreenRightPanelState {
   setRightPanelWidth: Dispatch<SetStateAction<number>>;
   /** True while a separator drag is actively resizing the panel. */
   rightPanelResizing: boolean;
+  /** True after the live separator gesture has produced a resize value. */
+  rightPanelResizeMoved: boolean;
   rightPanelFocusRequestToken: number;
   requestRightPanelFocus: () => void;
-  onRightSeparatorDown: (event: MouseEvent) => void;
+  onRightSeparatorDown: (event: MouseEvent, renderedStartWidth?: number) => void;
 }
 
 interface MainScreenRightPanelInput {
@@ -220,7 +222,9 @@ export function useMainScreenRightPanel({
   // can drop the geometry easing while the width is pointer-driven.
   const rightPanelDragCollapsedRef = useRef(false);
   const rightPanelDragWidthRef = useRef<number | null>(null);
+  const rightPanelDragInitialStateRef = useRef<RightPanelDurableState | null>(null);
   const [rightPanelResizing, setRightPanelResizing] = useState(false);
+  const [rightPanelResizeMoved, setRightPanelResizeMoved] = useState(false);
   const handleRightPanelDrag = useCallback(
     (rawWidth: number) => {
       if (rightPanelDragCollapsedRef.current || !workspaceUiKey) {
@@ -233,23 +237,40 @@ export function useMainScreenRightPanel({
         // credible width stays persisted, and reopening restores the size the
         // user had chosen rather than the panel's default.
         setRightPanelResizing(false);
-        setRightPanelOpen(false);
+        setRightPanelResizeMoved(false);
+        const initialState = rightPanelDragInitialStateRef.current
+          ?? rightPanelDurableState;
+        const collapsedState = { ...initialState, open: false };
+        setRightPanelSessionDurableState(collapsedState);
+        setRightPanelDurableForWorkspace(workspaceUiKey, collapsedState);
+        setRightPanelUserOpenOverride(null);
         return;
       }
       rightPanelDragWidthRef.current = outcome.width;
+      setRightPanelResizeMoved(true);
       setRightPanelSessionDurableState({
         ...rightPanelDurableState,
         width: outcome.width,
       });
     },
-    [rightPanelDurableState, setRightPanelOpen, workspaceUiKey],
+    [rightPanelDurableState, setRightPanelDurableForWorkspace, workspaceUiKey],
   );
   const handleRightSeparatorDragEnd = useCallback(() => {
     setRightPanelResizing(false);
+    setRightPanelResizeMoved(false);
     const draggedWidth = rightPanelDragWidthRef.current;
     rightPanelDragWidthRef.current = null;
+    const initialState = rightPanelDragInitialStateRef.current;
+    rightPanelDragInitialStateRef.current = null;
+    if (rightPanelDragCollapsedRef.current) {
+      return;
+    }
     if (draggedWidth !== null && workspaceUiKey) {
       setRightPanelWidthForWorkspace(workspaceUiKey, draggedWidth);
+    } else if (initialState) {
+      // A click without movement temporarily adopted the rendered width only
+      // as the pointer origin. Restore the durable request unchanged.
+      setRightPanelSessionDurableState(initialState);
     }
   }, [setRightPanelWidthForWorkspace, workspaceUiKey]);
   const beginRightSeparatorDrag = useResize({
@@ -262,13 +283,22 @@ export function useMainScreenRightPanel({
     max: RIGHT_PANEL_MAX_WIDTH,
   });
   const onRightSeparatorDown = useCallback(
-    (event: MouseEvent) => {
+    (event: MouseEvent, renderedStartWidth = rightPanelWidth) => {
+      const startWidth = Number.isFinite(renderedStartWidth)
+        ? renderedStartWidth
+        : rightPanelWidth;
       rightPanelDragCollapsedRef.current = false;
       rightPanelDragWidthRef.current = null;
+      rightPanelDragInitialStateRef.current = rightPanelDurableState;
+      setRightPanelSessionDurableState({
+        ...rightPanelDurableState,
+        width: startWidth,
+      });
       setRightPanelResizing(true);
-      beginRightSeparatorDrag(event);
+      setRightPanelResizeMoved(false);
+      beginRightSeparatorDrag(event, startWidth);
     },
-    [beginRightSeparatorDrag],
+    [beginRightSeparatorDrag, rightPanelDurableState, rightPanelWidth],
   );
 
   const userOpenOverrideActive = Boolean(
@@ -301,6 +331,7 @@ export function useMainScreenRightPanel({
     rightPanelWidth,
     setRightPanelWidth,
     rightPanelResizing,
+    rightPanelResizeMoved,
     rightPanelFocusRequestToken,
     requestRightPanelFocus,
     onRightSeparatorDown,

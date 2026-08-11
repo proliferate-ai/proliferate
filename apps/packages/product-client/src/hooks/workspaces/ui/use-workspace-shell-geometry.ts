@@ -9,6 +9,10 @@ import {
 } from "react";
 import { motion } from "@proliferate/design/motion";
 import { usePrefersReducedMotion } from "#product/hooks/ui/motion/use-prefers-reduced-motion";
+import {
+  resolveWorkspaceShellSizing,
+  type WorkspaceShellResizeEdge,
+} from "#product/lib/domain/workspaces/shell/workspace-shell-sizing";
 
 interface WorkspaceShellWidths {
   left: number;
@@ -18,6 +22,10 @@ interface WorkspaceShellWidths {
 interface UseWorkspaceShellGeometryOptions {
   leftWidth: number;
   rightWidth: number;
+  /** The rail whose live pointer gesture should receive width precedence. */
+  activeResizeEdge?: WorkspaceShellResizeEdge | null;
+  /** Held true while the left separator drag is live. */
+  snapLeftResize?: boolean;
   /**
    * Held true while the right separator drag is live. A pointer-driven width
    * must land exactly where the cursor is on every frame — easing it would
@@ -31,7 +39,10 @@ interface UseWorkspaceShellGeometryOptions {
 interface WorkspaceShellGeometry {
   rootRef: RefObject<HTMLDivElement | null>;
   style: CSSProperties;
+  leftWidth: number;
+  rightWidth: number;
   snapLeft: boolean;
+  snapViewport: boolean;
   toggleLeft: (options?: { snapGeometry?: boolean }) => void;
   usesManualInterpolation: boolean;
 }
@@ -50,16 +61,31 @@ function easeOutCubic(progress: number): number {
 export function useWorkspaceShellGeometry({
   leftWidth,
   rightWidth,
+  activeResizeEdge = null,
+  snapLeftResize = false,
   snapRight = false,
   onToggleLeft,
 }: UseWorkspaceShellGeometryOptions): WorkspaceShellGeometry {
   const rootRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
   const snapClearFrameRef = useRef<number | null>(null);
-  const [snapLeft, setSnapLeft] = useState(false);
+  const viewportSnapClearFrameRef = useRef<number | null>(null);
+  const containerWidthRef = useRef<number | null>(null);
+  const allocationPriorityRef = useRef<WorkspaceShellResizeEdge>("left");
+  const [containerWidth, setContainerWidth] = useState<number | null>(null);
+  const [toggleSnapLeft, setToggleSnapLeft] = useState(false);
+  const [snapViewport, setSnapViewport] = useState(false);
+  const allocationPriority = activeResizeEdge ?? allocationPriorityRef.current;
+  const target = resolveWorkspaceShellSizing({
+    containerWidth,
+    leftWidth,
+    rightWidth,
+    priority: allocationPriority,
+  });
+  const snapLeft = toggleSnapLeft || snapLeftResize;
   const renderedRef = useRef<WorkspaceShellWidths>({
-    left: leftWidth,
-    right: rightWidth,
+    left: target.left,
+    right: target.right,
   });
   const usesManualInterpolation = useRef(needsManualInterpolation()).current;
   const reducedMotion = usePrefersReducedMotion();
@@ -71,24 +97,79 @@ export function useWorkspaceShellGeometry({
     }
 
     if (!options?.snapGeometry) {
-      setSnapLeft(false);
+      setToggleSnapLeft(false);
       onToggleLeft();
       return;
     }
 
-    setSnapLeft(true);
+    setToggleSnapLeft(true);
     onToggleLeft();
     snapClearFrameRef.current = window.requestAnimationFrame(() => {
       snapClearFrameRef.current = window.requestAnimationFrame(() => {
         snapClearFrameRef.current = null;
-        setSnapLeft(false);
+        setToggleSnapLeft(false);
       });
     });
   }, [onToggleLeft]);
 
   useLayoutEffect(() => {
+    if (activeResizeEdge) {
+      // Retain the last edge the user actually moved. Restoring persisted
+      // widths after the gesture then keeps the opposite rail as the one that
+      // yields until a viewport resize returns layout to passive left-first
+      // allocation.
+      allocationPriorityRef.current = activeResizeEdge;
+    }
+  }, [activeResizeEdge]);
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) {
+      return;
+    }
+
+    const applyContainerWidth = (nextWidth: number) => {
+      if (
+        !Number.isFinite(nextWidth)
+        || nextWidth <= 0
+        || nextWidth === containerWidthRef.current
+      ) {
+        return;
+      }
+      containerWidthRef.current = nextWidth;
+      allocationPriorityRef.current = "left";
+      setSnapViewport(true);
+      setContainerWidth(nextWidth);
+
+      if (viewportSnapClearFrameRef.current !== null) {
+        window.cancelAnimationFrame(viewportSnapClearFrameRef.current);
+      }
+      viewportSnapClearFrameRef.current = window.requestAnimationFrame(() => {
+        viewportSnapClearFrameRef.current = window.requestAnimationFrame(() => {
+          viewportSnapClearFrameRef.current = null;
+          setSnapViewport(false);
+        });
+      });
+    };
+
+    applyContainerWidth(root.getBoundingClientRect().width);
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries.find((candidate) => candidate.target === root);
+      if (entry) {
+        applyContainerWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
     if (!usesManualInterpolation) {
-      renderedRef.current = { left: leftWidth, right: rightWidth };
+      renderedRef.current = target;
       return;
     }
 
@@ -103,24 +184,23 @@ export function useWorkspaceShellGeometry({
     }
 
     const from = renderedRef.current;
-    const target = { left: leftWidth, right: rightWidth };
     const setWidths = (widths: WorkspaceShellWidths) => {
       renderedRef.current = widths;
       root.style.setProperty("--workspace-left-width", `${widths.left}px`);
       root.style.setProperty("--workspace-right-width", `${widths.right}px`);
     };
 
-    const animateLeft = !snapLeft && from.left !== target.left;
-    const animateRight = !snapRight && from.right !== target.right;
+    const animateLeft = !snapViewport && !snapLeft && from.left !== target.left;
+    const animateRight = !snapViewport && !snapRight && from.right !== target.right;
     if (reducedMotion || (!animateLeft && !animateRight)) {
       setWidths(target);
       return;
     }
 
-    if (snapLeft || snapRight) {
+    if (snapViewport || snapLeft || snapRight) {
       setWidths({
-        left: snapLeft ? target.left : from.left,
-        right: snapRight ? target.right : from.right,
+        left: snapViewport || snapLeft ? target.left : from.left,
+        right: snapViewport || snapRight ? target.right : from.right,
       });
     }
 
@@ -143,7 +223,15 @@ export function useWorkspaceShellGeometry({
     };
 
     frameRef.current = window.requestAnimationFrame(tick);
-  }, [leftWidth, reducedMotion, rightWidth, snapLeft, snapRight, usesManualInterpolation]);
+  }, [
+    reducedMotion,
+    snapLeft,
+    snapRight,
+    snapViewport,
+    target.left,
+    target.right,
+    usesManualInterpolation,
+  ]);
 
   useEffect(() => () => {
     if (frameRef.current !== null) {
@@ -152,15 +240,21 @@ export function useWorkspaceShellGeometry({
     if (snapClearFrameRef.current !== null) {
       window.cancelAnimationFrame(snapClearFrameRef.current);
     }
+    if (viewportSnapClearFrameRef.current !== null) {
+      window.cancelAnimationFrame(viewportSnapClearFrameRef.current);
+    }
   }, []);
 
   const rendered = usesManualInterpolation
     ? renderedRef.current
-    : { left: leftWidth, right: rightWidth };
+    : target;
 
   return {
     rootRef,
+    leftWidth: target.left,
+    rightWidth: target.right,
     snapLeft,
+    snapViewport,
     style: {
       "--workspace-left-width": `${rendered.left}px`,
       "--workspace-right-width": `${rendered.right}px`,

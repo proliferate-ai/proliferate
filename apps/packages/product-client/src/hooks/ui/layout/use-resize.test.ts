@@ -51,6 +51,24 @@ describe("useResize", () => {
     expect(onResize).not.toHaveBeenCalled();
   });
 
+  it("can start from the rendered size when layout temporarily constrains the requested size", () => {
+    const onResize = vi.fn();
+    const { result } = renderHook(() =>
+      useResize({
+        direction: "horizontal",
+        size: 480,
+        onResize,
+        reverse: true,
+      }));
+
+    act(() => {
+      result.current(mouseDownEvent(0), 380);
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: -20 }));
+    });
+
+    expect(onResize).toHaveBeenLastCalledWith(400);
+  });
+
   it("appends exactly one cursor-overlay div for the duration of the drag, and removes it on mouseup", () => {
     const { result } = renderHook(() =>
       useResize({ direction: "horizontal", size: 200, onResize: vi.fn() }));

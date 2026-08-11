@@ -1,7 +1,9 @@
 import type { CurrentPullRequestResponse, GitStatusSnapshot, RepoRoot, Workspace } from "@anyharness/sdk";
 import { useCurrentPullRequestQuery, useGitStatusQuery } from "@anyharness/sdk-react";
 import {
+  useCallback,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type MouseEvent,
@@ -40,13 +42,15 @@ export interface MainScreenLayoutState extends MainScreenRightPanelState {
   setSidebarOpen: Dispatch<SetStateAction<boolean>>;
   sidebarWidth: number;
   setSidebarWidth: Dispatch<SetStateAction<number>>;
+  sidebarResizing: boolean;
+  sidebarResizeMoved: boolean;
   terminalActivationRequest: TerminalActivationRequest | null;
   setTerminalActivationRequest: Dispatch<SetStateAction<TerminalActivationRequest | null>>;
   publishDialog: PublishDialogState;
   setPublishDialog: Dispatch<SetStateAction<PublishDialogState>>;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: Dispatch<SetStateAction<boolean>>;
-  onLeftSeparatorDown: (event: MouseEvent) => void;
+  onLeftSeparatorDown: (event: MouseEvent, renderedStartWidth?: number) => void;
 }
 
 export interface TerminalActivationRequest {
@@ -97,15 +101,49 @@ export function useMainScreenState(): MainScreenState {
   const isCloudWorkspaceSelected = selectedCloudWorkspaceId !== null;
   const sidebarOpen = useWorkspaceUiStore((state) => state.sidebarOpen);
   const setSidebarOpen = useWorkspaceUiStore((state) => state.setSidebarOpen);
-  const sidebarWidth = useWorkspaceUiStore((state) => state.sidebarWidth);
+  const persistedSidebarWidth = useWorkspaceUiStore((state) => state.sidebarWidth);
   const setSidebarWidth = useWorkspaceUiStore((state) => state.setSidebarWidth);
-  const onLeftSeparatorDown = useResize({
+  const [sidebarDragWidth, setSidebarDragWidth] = useState<number | null>(null);
+  const [sidebarResizing, setSidebarResizing] = useState(false);
+  const [sidebarResizeMoved, setSidebarResizeMoved] = useState(false);
+  const sidebarDragWidthRef = useRef<number | null>(null);
+  const sidebarWidth = sidebarDragWidth ?? persistedSidebarWidth;
+  const handleSidebarResize = useCallback((width: number) => {
+    sidebarDragWidthRef.current = width;
+    setSidebarResizeMoved(true);
+    setSidebarDragWidth(width);
+  }, []);
+  const handleSidebarResizeEnd = useCallback(() => {
+    const draggedWidth = sidebarDragWidthRef.current;
+    sidebarDragWidthRef.current = null;
+    setSidebarResizing(false);
+    setSidebarResizeMoved(false);
+    setSidebarDragWidth(null);
+    if (draggedWidth !== null) {
+      setSidebarWidth(draggedWidth);
+    }
+  }, [setSidebarWidth]);
+  const beginLeftSeparatorDrag = useResize({
     direction: "horizontal",
     size: sidebarWidth,
-    onResize: setSidebarWidth,
+    onResize: handleSidebarResize,
+    onResizeEnd: handleSidebarResizeEnd,
     min: WORKSPACE_SIDEBAR_MIN_WIDTH,
     max: WORKSPACE_SIDEBAR_MAX_WIDTH,
   });
+  const onLeftSeparatorDown = useCallback(
+    (event: MouseEvent, renderedStartWidth = sidebarWidth) => {
+      const startWidth = Number.isFinite(renderedStartWidth)
+        ? renderedStartWidth
+        : sidebarWidth;
+      sidebarDragWidthRef.current = null;
+      setSidebarDragWidth(startWidth);
+      setSidebarResizing(true);
+      setSidebarResizeMoved(false);
+      beginLeftSeparatorDrag(event, startWidth);
+    },
+    [beginLeftSeparatorDrag, sidebarWidth],
+  );
 
   // The right panel's frame — geometry, open state, focus requests and the
   // separator drag that can collapse it — is its own concern; this facade only
@@ -180,6 +218,8 @@ export function useMainScreenState(): MainScreenState {
       setSidebarOpen,
       sidebarWidth,
       setSidebarWidth,
+      sidebarResizing,
+      sidebarResizeMoved,
       terminalActivationRequest,
       setTerminalActivationRequest,
       publishDialog,

@@ -4,6 +4,7 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { motion } from "@proliferate/design/motion";
 import { useWorkspaceShellGeometry } from "#product/hooks/workspaces/ui/use-workspace-shell-geometry";
+import type { WorkspaceShellResizeEdge } from "#product/lib/domain/workspaces/shell/workspace-shell-sizing";
 
 function stubReducedMotion(matches: boolean): void {
   vi.stubGlobal("matchMedia", vi.fn(() => ({
@@ -18,18 +19,52 @@ function stubReducedMotion(matches: boolean): void {
   })));
 }
 
+function stubResizeObserver(): (width: number) => void {
+  let resize: ((width: number) => void) | null = null;
+  vi.stubGlobal("ResizeObserver", class {
+    private target: Element | null = null;
+
+    constructor(callback: ResizeObserverCallback) {
+      resize = (width) => callback([{
+        target: this.target,
+        contentRect: { width },
+      } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver);
+    }
+
+    observe(target: Element) {
+      this.target = target;
+    }
+
+    disconnect() {}
+  });
+  return (width) => {
+    if (!resize) {
+      throw new Error("ResizeObserver has not observed the geometry root");
+    }
+    resize(width);
+  };
+}
+
 function GeometryHarness({
   leftWidth,
   rightWidth,
+  activeResizeEdge = null,
   snapRight = false,
   onToggleLeft = () => {},
 }: {
   leftWidth: number;
   rightWidth: number;
+  activeResizeEdge?: WorkspaceShellResizeEdge | null;
   snapRight?: boolean;
   onToggleLeft?: () => void;
 }) {
-  const geometry = useWorkspaceShellGeometry({ leftWidth, rightWidth, snapRight, onToggleLeft });
+  const geometry = useWorkspaceShellGeometry({
+    leftWidth,
+    rightWidth,
+    activeResizeEdge,
+    snapRight,
+    onToggleLeft,
+  });
   return (
     <>
       <div
@@ -38,6 +73,7 @@ function GeometryHarness({
         data-testid="geometry"
         data-manual={geometry.usesManualInterpolation ? "true" : "false"}
         data-snap={geometry.snapLeft ? "true" : "false"}
+        data-snap-viewport={geometry.snapViewport ? "true" : "false"}
       />
       <button type="button" onClick={() => geometry.toggleLeft({ snapGeometry: true })}>
         Pin
@@ -56,6 +92,81 @@ afterEach(() => {
 });
 
 describe("useWorkspaceShellGeometry", () => {
+  it("reserves a usable main pane when both requested rails exceed the viewport budget", () => {
+    vi.stubGlobal("CSS", { registerProperty: vi.fn() });
+    stubReducedMotion(false);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 1083,
+    } as DOMRect);
+
+    const { getByTestId } = render(
+      <GeometryHarness leftWidth={420} rightWidth={480} />,
+    );
+
+    const root = getByTestId("geometry");
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("283px");
+    expect(root.style.getPropertyValue("--workspace-right-width")).toBe("380px");
+  });
+
+  it("tracks container pressure, snaps each viewport clamp, and restores requested widths", () => {
+    vi.stubGlobal("CSS", { registerProperty: vi.fn() });
+    stubReducedMotion(false);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 1083,
+    } as DOMRect);
+    const resize = stubResizeObserver();
+
+    const { getByTestId } = render(
+      <GeometryHarness leftWidth={420} rightWidth={480} />,
+    );
+    const root = getByTestId("geometry");
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("283px");
+    expect(root.style.getPropertyValue("--workspace-right-width")).toBe("380px");
+
+    act(() => resize(1024));
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("224px");
+    expect(root.style.getPropertyValue("--workspace-right-width")).toBe("380px");
+    expect(root.dataset.snapViewport).toBe("true");
+
+    act(() => resize(1320));
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("420px");
+    expect(root.style.getPropertyValue("--workspace-right-width")).toBe("480px");
+  });
+
+  it("gives the actively dragged edge precedence without a hidden-width dead zone", () => {
+    vi.stubGlobal("CSS", { registerProperty: vi.fn() });
+    stubReducedMotion(false);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 1083,
+    } as DOMRect);
+    const resize = stubResizeObserver();
+    const { getByTestId, rerender } = render(
+      <GeometryHarness leftWidth={420} rightWidth={480} />,
+    );
+
+    rerender(
+      <GeometryHarness
+        leftWidth={420}
+        rightWidth={400}
+        activeResizeEdge="right"
+        snapRight
+      />,
+    );
+
+    const root = getByTestId("geometry");
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("263px");
+    expect(root.style.getPropertyValue("--workspace-right-width")).toBe("400px");
+
+    rerender(<GeometryHarness leftWidth={420} rightWidth={400} />);
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("263px");
+    expect(root.style.getPropertyValue("--workspace-right-width")).toBe("400px");
+
+    act(() => resize(1320));
+    act(() => resize(1083));
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("283px");
+    expect(root.style.getPropertyValue("--workspace-right-width")).toBe("380px");
+  });
+
   it("leaves interpolation to CSS when registered properties are supported", () => {
     vi.stubGlobal("CSS", { registerProperty: vi.fn() });
     stubReducedMotion(false);

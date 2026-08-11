@@ -32,12 +32,16 @@ afterEach(() => {
  * a live drag into it — the collapse latch and the reset-on-new-drag are
  * behavior of the hook's glue code, not of that pure function.
  */
-function beginDrag(onMouseDown: (event: ReactMouseEvent) => void) {
+function beginDrag(
+  onMouseDown: (event: ReactMouseEvent, renderedStartWidth?: number) => void,
+  renderedStartWidth?: number,
+) {
   const preventDefault = () => {};
   const stopPropagation = () => {};
   act(() => {
     onMouseDown(
       { clientX: 0, preventDefault, stopPropagation } as unknown as ReactMouseEvent,
+      renderedStartWidth,
     );
   });
 }
@@ -57,7 +61,10 @@ function releaseDrag() {
   });
 }
 
-function fireDrag(onMouseDown: (event: ReactMouseEvent) => void, deltas: number[]) {
+function fireDrag(
+  onMouseDown: (event: ReactMouseEvent, renderedStartWidth?: number) => void,
+  deltas: number[],
+) {
   beginDrag(onMouseDown);
   for (const delta of deltas) {
     moveDrag(delta);
@@ -177,6 +184,52 @@ describe("useMainScreenRightPanel drag wiring", () => {
     expect(
       useWorkspaceUiStore.getState().rightPanelDurableByWorkspace[WORKSPACE_ID]?.width,
     ).toBe(startWidth + 40);
+  });
+
+  it("starts a constrained drag from the rendered edge and preserves the durable request", () => {
+    const { result, rerender } = renderRightPanel();
+    act(() => {
+      result.current.setRightPanelOpen(true);
+    });
+    rerender();
+
+    beginDrag(result.current.onRightSeparatorDown, 380);
+    rerender();
+    expect(result.current.rightPanelWidth).toBe(380);
+    expect(result.current.rightPanelResizeMoved).toBe(false);
+
+    moveDrag(20);
+    rerender();
+    expect(result.current.rightPanelWidth).toBe(400);
+    expect(result.current.rightPanelResizeMoved).toBe(true);
+    expect(
+      useWorkspaceUiStore.getState().rightPanelDurableByWorkspace[WORKSPACE_ID]?.width,
+    ).toBe(420);
+
+    releaseDrag();
+    rerender();
+    expect(
+      useWorkspaceUiStore.getState().rightPanelDurableByWorkspace[WORKSPACE_ID]?.width,
+    ).toBe(400);
+  });
+
+  it("restores the requested width after a constrained separator click without movement", () => {
+    const { result, rerender } = renderRightPanel();
+    act(() => {
+      result.current.setRightPanelOpen(true);
+    });
+    rerender();
+
+    beginDrag(result.current.onRightSeparatorDown, 380);
+    rerender();
+    expect(result.current.rightPanelWidth).toBe(380);
+
+    releaseDrag();
+    rerender();
+    expect(result.current.rightPanelWidth).toBe(420);
+    expect(
+      useWorkspaceUiStore.getState().rightPanelDurableByWorkspace[WORKSPACE_ID]?.width,
+    ).toBe(420);
   });
 
   it("ends the resize at the collapse itself and commits no width for a collapse-only gesture", () => {

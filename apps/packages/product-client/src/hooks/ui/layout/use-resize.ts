@@ -41,12 +41,20 @@ export function useResize({
   const activeDragCleanupRef = useRef<(() => void) | null>(null);
 
   const onMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.MouseEvent, renderedStartSize?: number) => {
       e.preventDefault();
       e.stopPropagation();
 
       const startPos = direction === "horizontal" ? e.clientX : e.clientY;
-      startRef.current = { pos: startPos, size };
+      // A shell can temporarily render a persisted panel narrower than its
+      // requested width to preserve the center pane. Starting from that visible
+      // geometry avoids a dead zone where the pointer has to traverse the
+      // hidden difference before the separator moves.
+      const startSize = renderedStartSize !== undefined
+        && Number.isFinite(renderedStartSize)
+        ? renderedStartSize
+        : size;
+      startRef.current = { pos: startPos, size: startSize };
 
       const cursor = direction === "horizontal" ? "col-resize" : "row-resize";
       const overlay = document.createElement("div");

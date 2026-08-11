@@ -84,10 +84,13 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const {
     sidebarOpen,
     sidebarWidth,
+    sidebarResizing,
+    sidebarResizeMoved,
     rightPanelOpen,
     rightPanelState,
     rightPanelWidth,
     rightPanelResizing,
+    rightPanelResizeMoved,
     rightPanelFocusRequestToken,
     terminalActivationRequest,
     publishDialog,
@@ -102,6 +105,12 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     rightWidth: hasWorkspaceShell && !hasLaunchIntentOnlyShell && rightPanelOpen
       ? rightPanelWidth
       : 0,
+    activeResizeEdge: sidebarResizeMoved
+      ? "left"
+      : rightPanelResizeMoved
+        ? "right"
+        : null,
+    snapLeftResize: sidebarResizing,
     snapRight: rightPanelResizing,
     onToggleLeft: actions.onToggleSidebar,
   });
@@ -235,6 +244,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               } as CSSProperties}
               data-snap-left-geometry={workspaceGeometry.snapLeft ? "true" : "false"}
               data-snap-right-geometry={rightPanelResizing ? "true" : "false"}
+              data-snap-viewport-geometry={workspaceGeometry.snapViewport ? "true" : "false"}
               data-manual-workspace-geometry={
                 workspaceGeometry.usesManualInterpolation ? "true" : "false"
               }
@@ -247,7 +257,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
             >
               <WorkspaceShellSidebar
                 open={sidebarOpen}
-                width={sidebarWidth}
+                width={sidebarOpen ? workspaceGeometry.leftWidth : sidebarWidth}
                 showAnimatedDivider={transparentChromeEnabled}
                 snapGeometry={workspaceGeometry.snapLeft}
                 onToggleSidebar={workspaceGeometry.toggleLeft}
@@ -264,7 +274,9 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                 <WorkspaceResizeSeparator
                   edge="left"
                   ariaControls="main-sidebar"
-                  onMouseDown={onLeftSeparatorDown}
+                  onMouseDown={(event) => {
+                    onLeftSeparatorDown(event, workspaceGeometry.leftWidth);
+                  }}
                 />
               )}
 
@@ -353,8 +365,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                 <WorkspaceShellRightRail
                   visible={hasWorkspaceShell && !hasLaunchIntentOnlyShell}
                   open={rightPanelOpen}
-                  width={rightPanelWidth}
-                  onSeparatorMouseDown={onRightSeparatorDown}
+                  width={rightPanelOpen ? workspaceGeometry.rightWidth : rightPanelWidth}
+                  onSeparatorMouseDown={(event) => {
+                    onRightSeparatorDown(event, workspaceGeometry.rightWidth);
+                  }}
                   workspaceId={selectedWorkspaceId}
                   workspaceUiKey={workspaceUiKey}
                   isWorkspaceReady={hasRuntimeReadyWorkspace}

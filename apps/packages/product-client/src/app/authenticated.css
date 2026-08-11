@@ -33,6 +33,15 @@
   --workspace-right-geometry-duration: 0ms;
 }
 
+/* Container pressure is a hard layout constraint, not a user-authored panel
+   transition. Both rails land in the same frame as the ResizeObserver update
+   so the center pane never trails below its reserved width while resizing the
+   desktop window. */
+.standard-workspace-shell[data-snap-viewport-geometry="true"] {
+  --workspace-left-geometry-duration: 0ms;
+  --workspace-right-geometry-duration: 0ms;
+}
+
 .standard-workspace-shell[data-manual-workspace-geometry="true"] {
   transition: none;
 }
