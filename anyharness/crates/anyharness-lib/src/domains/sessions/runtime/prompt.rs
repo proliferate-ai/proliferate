@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyharness_contract::v1::PromptInputBlock;
 
@@ -15,10 +15,9 @@ use super::{
 };
 
 impl SessionRuntime {
-    /// Persist-first cross-agent delivery. The live actor is ready before the
-    /// durable row commits; after commit, the actor command is only a wake
-    /// signal. Losing that signal or its acknowledgement cannot turn an
-    /// accepted durable message into a reported failure because startup queue
+    /// Persist-first cross-agent delivery. The pending-row sequence is the
+    /// acceptance linearization point. Actor startup and the bounded queue wake
+    /// happen only after that commit and are best-effort because startup queue
     /// replay owns eventual processing.
     pub(crate) async fn enqueue_agent_message(
         &self,
@@ -35,10 +34,9 @@ impl SessionRuntime {
         let record = self
             .get_session_or_not_found(session_id)
             .map_err(map_lifecycle_error_to_prompt)?;
-        let handle = self
-            .ensure_live_session_handle(&record, None)
-            .await
-            .map_err(map_start_error_to_prompt)?;
+        if super::launch_policy::session_is_closed(&record) {
+            return Err(SendPromptError::SessionClosed);
+        }
         let payload = crate::domains::sessions::prompt::PromptPayload::text(message)
             .with_provenance(source.into_provenance());
         let pending = self
@@ -47,16 +45,65 @@ impl SessionRuntime {
             .insert_pending_prompt_payload(session_id, &payload, None)
             .map_err(SendPromptError::Internal)?;
 
-        if let Err(error) = handle.send_queued_prompt(payload, pending.seq).await {
-            tracing::warn!(
-                session_id = %session_id,
-                queue_seq = pending.seq,
-                error = ?error,
-                "durable agent message wake signal was lost; pending prompt will replay"
-            );
-        }
+        self.activate_agent_message_consumer(session_id, payload, pending.seq)
+            .await;
 
         Ok(pending.seq)
+    }
+
+    async fn activate_agent_message_consumer(
+        &self,
+        session_id: &str,
+        payload: crate::domains::sessions::prompt::PromptPayload,
+        queue_seq: i64,
+    ) {
+        const WAKE_ACK_TIMEOUT: Duration = Duration::from_secs(1);
+
+        let record = match self.get_session_or_not_found(session_id) {
+            Ok(record) => record,
+            Err(error) => {
+                tracing::warn!(
+                    session_id = %session_id,
+                    queue_seq,
+                    error = ?error,
+                    "durable agent message consumer activation skipped; pending prompt will replay"
+                );
+                return;
+            }
+        };
+        let handle = match self.ensure_live_session_handle(&record, None).await {
+            Ok(handle) => handle,
+            Err(error) => {
+                tracing::warn!(
+                    session_id = %session_id,
+                    queue_seq,
+                    error = ?error,
+                    "durable agent message consumer startup failed; pending prompt will replay"
+                );
+                return;
+            }
+        };
+
+        match tokio::time::timeout(
+            WAKE_ACK_TIMEOUT,
+            handle.send_queued_prompt(payload, queue_seq),
+        )
+        .await
+        {
+            Ok(Ok(_)) => {}
+            Ok(Err(error)) => tracing::warn!(
+                session_id = %session_id,
+                queue_seq,
+                error = ?error,
+                "durable agent message wake acknowledgement was lost; pending prompt will replay"
+            ),
+            Err(_) => tracing::warn!(
+                session_id = %session_id,
+                queue_seq,
+                timeout_ms = WAKE_ACK_TIMEOUT.as_millis(),
+                "durable agent message wake acknowledgement timed out; pending prompt will replay"
+            ),
+        }
     }
 
     #[tracing::instrument(skip_all, fields(session_id = %session_id))]
