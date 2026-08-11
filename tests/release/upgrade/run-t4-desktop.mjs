@@ -298,14 +298,14 @@ async function main() {
     }
 
     // Structural sanity: the swapped bundle has a real Mach-O main binary.
-    const mainBin = join(installApp, "Contents", "MacOS", "Proliferate");
+    const mainBin = join(installApp, "Contents", "MacOS", "proliferate");
     if (!existsSync(mainBin)) {
       throw new Error(`swapped bundle missing main binary at ${mainBin}`);
     }
     const fileKind = capture("file", ["-b", mainBin]);
     console.log(`[t4] swapped bundle main binary: ${fileKind}`);
     const packagedNativeBinaries = readdirSync(join(installApp, "Contents", "MacOS"))
-      .filter((name) => name !== "Proliferate")
+      .filter((name) => name !== "proliferate")
       .sort();
     const expectedNativeBinaries = [...EXTERNAL_BINARIES].sort();
     if (JSON.stringify(packagedNativeBinaries) !== JSON.stringify(expectedNativeBinaries)) {

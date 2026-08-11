@@ -430,7 +430,7 @@ jobs:
           bin_dir="$app/Contents/MacOS"
           test -d "$bin_dir"
           actual_inventory="$(find "$bin_dir" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | tr '\n' ' ')"
-          expected_inventory="Proliferate anyharness proliferate-debug proliferate-diagnostics-collector proliferate-worker "
+          expected_inventory="anyharness proliferate proliferate-debug proliferate-diagnostics-collector proliferate-worker "
           [[ "$actual_inventory" == "$expected_inventory" ]] || {
             echo "::error::Unexpected Contents/MacOS inventory: $actual_inventory"
             exit 1

@@ -229,7 +229,7 @@ mod tests {
     #[test]
     fn cli_surface_has_no_direct_collector_flags() {
         use clap::CommandFactory;
-        let command = Cli::command();
+        let mut command = Cli::command();
         let rendered = command.render_long_help().to_string();
         assert!(!rendered.contains("--endpoint"));
         assert!(!rendered.contains("--token"));
