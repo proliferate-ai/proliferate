@@ -1,6 +1,7 @@
 mod auth;
 pub mod config;
 mod http;
+mod ingest_body;
 pub mod process;
 mod server;
 mod state;

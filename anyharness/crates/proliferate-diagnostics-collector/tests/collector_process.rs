@@ -2,7 +2,9 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::Shutdown;
 use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
@@ -71,6 +73,98 @@ fn client() -> reqwest::Client {
         .timeout(Duration::from_secs(5))
         .build()
         .expect("test client")
+}
+
+struct CollectorChild {
+    child: Child,
+    control: UnixStream,
+}
+
+impl CollectorChild {
+    fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    fn shutdown(&mut self) {
+        writeln!(self.control, "{{\"command\":\"shutdown\"}}").expect("write child shutdown");
+        self.control.flush().expect("flush child shutdown");
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(status) = self.child.try_wait().expect("poll child") {
+                assert!(status.success(), "collector child failed: {status}");
+                return;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "collector child did not stop"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+}
+
+impl Drop for CollectorChild {
+    fn drop(&mut self) {
+        if self.child.try_wait().ok().flatten().is_none() {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+}
+
+fn spawn_collector_child(working_directory: &std::path::Path) -> (CollectorChild, String) {
+    let (mut capability_writer, capability_reader) = UnixStream::pair().expect("capability pair");
+    let (control_writer, control_reader) = UnixStream::pair().expect("control pair");
+    clear_cloexec(capability_reader.as_raw_fd());
+    clear_cloexec(control_reader.as_raw_fd());
+    let mut child = Command::new(env!("CARGO_BIN_EXE_proliferate-diagnostics-collector"))
+        .arg("--capability-fd")
+        .arg(capability_reader.as_raw_fd().to_string())
+        .arg("--control-fd")
+        .arg(control_reader.as_raw_fd().to_string())
+        .current_dir(working_directory)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn collector child");
+    drop(capability_reader);
+    drop(control_reader);
+    writeln!(capability_writer, "{CAPABILITY}").expect("write child capability");
+    capability_writer
+        .shutdown(Shutdown::Write)
+        .expect("close child capability channel");
+    let mut stdout = BufReader::new(child.stdout.take().expect("collector child stdout"));
+    let mut descriptor_line = String::new();
+    stdout
+        .read_line(&mut descriptor_line)
+        .expect("read collector child descriptor");
+    let descriptor: ConnectionDescriptorV1 =
+        serde_json::from_str(&descriptor_line).expect("collector child descriptor JSON");
+    (
+        CollectorChild {
+            child,
+            control: control_writer,
+        },
+        descriptor.endpoint,
+    )
+}
+
+fn process_rss_bytes(pid: u32) -> Option<u64> {
+    let pid = pid.to_string();
+    let output = Command::new("ps")
+        .args(["-o", "rss=", "-p", pid.as_str()])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let kibibytes = std::str::from_utf8(&output.stdout)
+        .ok()?
+        .trim()
+        .parse::<u64>()
+        .ok()?;
+    kibibytes.checked_mul(1024)
 }
 
 async fn start() -> CollectorServer {
@@ -179,6 +273,233 @@ async fn authenticated_loopback_distinguishes_liveness_from_readiness() {
     assert_eq!(ready.fallback.dropped_records, 0);
     assert!(!serde_json::to_string(&ready).unwrap().contains(CAPABILITY));
     server.shutdown().await.expect("graceful shutdown");
+}
+
+#[tokio::test]
+async fn far_oversized_and_chunked_bodies_are_json_accounted_without_unbounded_reads() {
+    let server = start().await;
+    let before = get_health(&server).await;
+    let oversized = vec![b'x'; MAX_BATCH_BYTES * 5];
+
+    for route in ["ingest", "export"] {
+        let response = client()
+            .post(format!("{}/v1/{route}", server.endpoint()))
+            .bearer_auth(CAPABILITY)
+            .header(reqwest::header::EXPECT, "100-continue")
+            .body(oversized.clone())
+            .send()
+            .await
+            .expect("far oversized response");
+        assert_eq!(response.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(
+            response
+                .json::<RejectionReasonV1>()
+                .await
+                .expect("JSON oversized reason"),
+            RejectionReasonV1::BatchTooLarge
+        );
+    }
+
+    let chunks = futures::stream::iter(
+        (0..10).map(|_| Ok::<Vec<u8>, std::io::Error>(vec![b'x'; MAX_BATCH_BYTES / 4])),
+    );
+    let response = client()
+        .post(format!("{}/v1/ingest", server.endpoint()))
+        .bearer_auth(CAPABILITY)
+        .body(reqwest::Body::wrap_stream(chunks))
+        .send()
+        .await
+        .expect("chunked oversized response");
+    assert_eq!(response.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(
+        response
+            .json::<RejectionReasonV1>()
+            .await
+            .expect("chunked JSON oversized reason"),
+        RejectionReasonV1::BatchTooLarge
+    );
+
+    let health = get_health(&server).await;
+    assert_eq!(health.oversized_records, before.oversized_records + 3);
+    assert_eq!(
+        health
+            .rejections_by_reason
+            .get(&RejectionReasonV1::BatchTooLarge)
+            .copied()
+            .unwrap_or(0),
+        before
+            .rejections_by_reason
+            .get(&RejectionReasonV1::BatchTooLarge)
+            .copied()
+            .unwrap_or(0)
+            + 3
+    );
+    server.shutdown().await.expect("shutdown");
+}
+
+#[tokio::test]
+async fn concurrent_maximum_and_degenerate_ingest_stays_under_the_process_rss_ceiling() {
+    fn dense_batch(producer: &str, first_sequence: u64) -> Vec<u8> {
+        let template = fixture_records()[0].clone();
+        let records = (0..16_u64)
+            .map(|offset| {
+                let sequence = first_sequence + offset;
+                let mut record = template.clone();
+                record["producer_boot_id"] = serde_json::json!(producer);
+                record["producer_sequence"] = serde_json::json!(sequence);
+                record["operation_id"] =
+                    serde_json::json!(format!("rss-bound-{producer}-{sequence}"));
+                record["detailed"]["message"] = serde_json::json!("m".repeat(MAX_MESSAGE_BYTES));
+                record["arguments"] = serde_json::json!((0..9)
+                    .map(|argument| serde_json::json!({
+                        "name": format!("arg{argument}"),
+                        "privacy": "operational",
+                        "value": {"type": "string", "value": "v".repeat(MAX_STRING_BYTES)}
+                    }))
+                    .collect::<Vec<_>>());
+                assert!(serde_json::to_vec(&record).unwrap().len() <= MAX_RECORD_BYTES);
+                record
+            })
+            .collect();
+        let mut value = batch(records);
+        pad_compact_json_to(&mut value, "ignored_padding", MAX_BATCH_BYTES);
+        let encoded = serde_json::to_vec(&value).expect("dense batch JSON");
+        assert_eq!(encoded.len(), MAX_BATCH_BYTES);
+        encoded
+    }
+
+    fn degenerate_batch(single_record: bool) -> Vec<u8> {
+        let prefix = if single_record {
+            br#"{"schema_version":{"major":1,"minor":1},"records":[["#.as_slice()
+        } else {
+            br#"{"schema_version":{"major":1,"minor":1},"records":["#.as_slice()
+        };
+        let suffix: &[u8] = if single_record { b"]]}" } else { b"]}" };
+        let mut body = Vec::with_capacity(MAX_BATCH_BYTES);
+        body.extend_from_slice(prefix);
+        while body.len() + suffix.len() + 2 <= MAX_BATCH_BYTES {
+            body.extend_from_slice(b"0,");
+        }
+        body.pop();
+        body.extend_from_slice(suffix);
+        body
+    }
+
+    let temp = tempfile::tempdir().expect("RSS-bound child directory");
+    let (mut child, endpoint) = spawn_collector_child(temp.path());
+    let http = client();
+
+    for batch_index in 0..10_u64 {
+        let response = http
+            .post(format!("{endpoint}/v1/ingest"))
+            .bearer_auth(CAPABILITY)
+            .body(dense_batch("rss-bound-fill", batch_index * 16 + 1))
+            .send()
+            .await
+            .expect("fill ingest response")
+            .error_for_status()
+            .expect("fill ingest status")
+            .json::<IngestReceiptV1>()
+            .await
+            .expect("fill ingest receipt");
+        assert_eq!(response.accepted_count, 16);
+    }
+    let filled_health = http
+        .get(format!("{endpoint}/v1/health"))
+        .bearer_auth(CAPABILITY)
+        .send()
+        .await
+        .expect("filled health response")
+        .error_for_status()
+        .expect("filled health status")
+        .json::<HealthResponseV1>()
+        .await
+        .expect("filled health body");
+    assert!(filled_health.retained_bytes >= 6 * 1024 * 1024);
+    assert!(filled_health.retained_bytes <= 8 * 1024 * 1024);
+
+    let done = Arc::new(AtomicBool::new(false));
+    let sampler_done = Arc::clone(&done);
+    let pid = child.pid();
+    let sampler = std::thread::spawn(move || {
+        let mut peak = 0_u64;
+        while !sampler_done.load(Ordering::SeqCst) {
+            if let Some(rss) = process_rss_bytes(pid) {
+                peak = peak.max(rss);
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        if let Some(rss) = process_rss_bytes(pid) {
+            peak = peak.max(rss);
+        }
+        peak
+    });
+
+    let outer_degenerate = degenerate_batch(false);
+    let record_degenerate = degenerate_batch(true);
+    let requests = (0..8_u64).map(|index| {
+        let http = http.clone();
+        let endpoint = endpoint.clone();
+        let body = match index % 4 {
+            0 => outer_degenerate.clone(),
+            2 => record_degenerate.clone(),
+            _ => dense_batch(&format!("rss-bound-concurrent-{index}"), 1),
+        };
+        async move {
+            http.post(format!("{endpoint}/v1/ingest"))
+                .bearer_auth(CAPABILITY)
+                .body(body)
+                .send()
+                .await
+        }
+    });
+    let responses = futures::future::join_all(requests).await;
+    done.store(true, Ordering::SeqCst);
+    let peak_rss = sampler.join().expect("RSS sampler");
+
+    for (index, response) in responses.into_iter().enumerate() {
+        let response = response.expect("concurrent ingest response");
+        match index % 4 {
+            0 => {
+                assert_eq!(response.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+                assert_eq!(
+                    response.json::<RejectionReasonV1>().await.unwrap(),
+                    RejectionReasonV1::BatchTooLarge
+                );
+            }
+            2 => {
+                let receipt = response
+                    .error_for_status()
+                    .expect("single-record degenerate status")
+                    .json::<IngestReceiptV1>()
+                    .await
+                    .expect("single-record degenerate receipt");
+                assert_eq!(receipt.accepted_count, 0);
+                assert_eq!(
+                    receipt.rejections[0].reason,
+                    RejectionReasonV1::RecordTooLarge
+                );
+            }
+            _ => {
+                let receipt = response
+                    .error_for_status()
+                    .expect("maximum batch status")
+                    .json::<IngestReceiptV1>()
+                    .await
+                    .expect("maximum batch receipt");
+                assert_eq!(receipt.accepted_count, 16);
+            }
+        }
+    }
+    assert!(peak_rss > 0, "RSS sampler produced no samples");
+    eprintln!(
+        "focused concurrent ingest child peak_rss_bytes={peak_rss} limit_bytes={COLLECTOR_TOTAL_RSS_LIMIT_BYTES}"
+    );
+    assert!(
+        peak_rss <= COLLECTOR_TOTAL_RSS_LIMIT_BYTES,
+        "collector peak RSS {peak_rss} exceeded {COLLECTOR_TOTAL_RSS_LIMIT_BYTES}"
+    );
+    child.shutdown();
 }
 
 #[tokio::test]
@@ -647,6 +968,7 @@ async fn runtime_slots_lifecycle_and_gap_maps_stop_at_their_finite_caps() {
         tail_frame_bytes: 64 * 1024,
         open_connections: 8,
         concurrent_handlers: 4,
+        concurrent_body_parsers: 1,
         tail_readers: 1,
         tail_queue_frames: 2,
         concurrent_exports: 1,
@@ -1456,4 +1778,6 @@ fn frozen_constants_used_by_the_collector_have_ordered_at_and_over_boundaries() 
     assert!(runtime.retained_bytes <= RETAINED_RECORD_ARENA_LIMIT_BYTES);
     assert!(runtime.query_page_bytes <= runtime.retained_bytes as usize);
     assert!(runtime.tail_frame_bytes <= runtime.retained_bytes as usize);
+    assert_eq!(runtime.concurrent_body_parsers, 1);
+    assert!(runtime.concurrent_body_parsers <= runtime.concurrent_handlers);
 }

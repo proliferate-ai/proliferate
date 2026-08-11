@@ -81,12 +81,16 @@ remains deferred to PR 12; collector tests use the exported Rust constants.
 
 The serialized limits remain owned by `proliferate-diagnostics-protocol`. This
 process adds finite runtime caps: 64 open connections, 8 active response
-handlers, 4 tails, 32 broadcast frames, 2 exports, 64 tracked lifecycle
-operations, 256 recorded gaps, a five-second shutdown deadline, an 8 MiB
-encoded-record arena, and 1 MiB query-page and tail-frame working buffers. The
-smaller operational arena leaves independent room under the 50 MiB total RSS
-ceiling for indexes, query responses, tail frames, and point-in-time export
-references. Whole records are always evicted oldest first.
+handlers, 1 active request-body parser shared by ingest and export, 4 tails, 32
+broadcast frames, 2 exports, 64 tracked lifecycle operations, 256 recorded
+gaps, a five-second shutdown deadline, an 8 MiB encoded-record arena, and 1
+MiB request-body, query-page, and tail-frame working buffers. Ingest borrows at
+most 128 raw record slices from that body, stops a larger sequence before
+materializing it, bounds each record's preparse tree, and retains at most 1 MiB
+of prepared record encodings. The smaller operational arena leaves independent
+room under the 50 MiB total RSS ceiling for indexes, query responses, tail
+frames, and point-in-time export references. Whole records are always evicted
+oldest first.
 
 No record, token, descriptor, queue, or replay state is written to disk. A new
 process begins with a new boot ID and only its own boot lifecycle evidence.

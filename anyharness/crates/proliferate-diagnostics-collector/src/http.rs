@@ -3,30 +3,31 @@ use std::convert::Infallible;
 use std::sync::Arc;
 
 use axum::body::{Body, Bytes};
-use axum::extract::{DefaultBodyLimit, RawQuery, State};
+use axum::extract::{RawQuery, Request, State};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::middleware;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use futures::stream;
+use futures::{stream, StreamExt};
 use proliferate_diagnostics_protocol::v1::limits::{MAX_BATCH_BYTES, MAX_BATCH_RECORDS};
 use proliferate_diagnostics_protocol::v1::types::{
     ExportRequestV1, ExportStreamFrameV1, RejectionReasonV1, TailFrameV1, TerminalOutcomeV1,
 };
 use proliferate_diagnostics_protocol::v1::validation::{
-    parse_ingest_batch_value, parse_producer_record_value, validate_export_frame,
-    validate_export_request, validate_tail_frame,
+    validate_export_frame, validate_export_request, validate_tail_frame,
 };
-use tokio::sync::{broadcast, OwnedSemaphorePermit};
+use tokio::sync::{broadcast, OwnedSemaphorePermit, Semaphore};
 
 use crate::auth::{authorize, RequestGuard};
-use crate::state::{CollectorCore, ExportSnapshot, IngestCandidate, StoredRecord};
+use crate::ingest_body::{parse_ingest_body, MAX_PREPARED_BATCH_BYTES};
+use crate::state::{CollectorCore, ExportSnapshot, StoredRecord};
 use crate::transport_query::{parse_records_query, parse_tail_cursor};
 
 #[derive(Clone)]
 struct HttpState {
     core: Arc<CollectorCore>,
+    body_parse_slots: Arc<Semaphore>,
 }
 
 pub(crate) fn router(core: Arc<CollectorCore>, capability: &[u8]) -> Result<Router, &'static str> {
@@ -34,14 +35,17 @@ pub(crate) fn router(core: Arc<CollectorCore>, capability: &[u8]) -> Result<Rout
         capability,
         core.limits.concurrent_handlers,
     )?);
-    let state = HttpState { core };
+    let body_parse_slots = Arc::new(Semaphore::new(core.limits.concurrent_body_parsers));
+    let state = HttpState {
+        core,
+        body_parse_slots,
+    };
     Ok(Router::new()
         .route("/v1/ingest", post(ingest))
         .route("/v1/records", get(records))
         .route("/v1/tail", get(tail))
         .route("/v1/export", post(export))
         .route("/v1/health", get(health))
-        .layer(DefaultBodyLimit::max(MAX_BATCH_BYTES + 1))
         .layer(middleware::from_fn_with_state(guard, authorize))
         .with_state(state))
 }
@@ -82,7 +86,7 @@ impl IntoResponse for ApiError {
 
 async fn ingest(
     State(state): State<HttpState>,
-    body: Bytes,
+    request: Request,
 ) -> Result<Json<proliferate_diagnostics_protocol::v1::types::IngestReceiptV1>, ApiError> {
     if !state.core.accepting_ingest() {
         return Err(ApiError {
@@ -90,53 +94,20 @@ async fn ingest(
             reason: RejectionReasonV1::LimitExceeded,
         });
     }
-    if body.len() > MAX_BATCH_BYTES {
-        state
-            .core
-            .note_request_rejection(RejectionReasonV1::BatchTooLarge);
-        return Err(ApiError::from_reason(RejectionReasonV1::BatchTooLarge));
-    }
-    let mut value: serde_json::Value = serde_json::from_slice(&body).map_err(|_| {
-        state
-            .core
-            .note_request_rejection(RejectionReasonV1::InvalidShape);
-        ApiError::from_reason(RejectionReasonV1::InvalidShape)
-    })?;
-    let raw_records = value
-        .get("records")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .ok_or_else(|| {
-            state
-                .core
-                .note_request_rejection(RejectionReasonV1::InvalidShape);
-            ApiError::from_reason(RejectionReasonV1::InvalidShape)
-        })?;
-    if raw_records.len() > MAX_BATCH_RECORDS {
-        state
-            .core
-            .note_request_rejection(RejectionReasonV1::BatchTooLarge);
-        return Err(ApiError::from_reason(RejectionReasonV1::BatchTooLarge));
-    }
-    value
-        .as_object_mut()
-        .ok_or_else(|| ApiError::from_reason(RejectionReasonV1::InvalidShape))?
-        .insert("records".to_owned(), serde_json::Value::Array(Vec::new()));
-    if let Err(reason) = parse_ingest_batch_value(&value) {
+    let _parse_permit = Arc::clone(&state.body_parse_slots)
+        .acquire_owned()
+        .await
+        .map_err(|_| ApiError::internal())?;
+    let body = bounded_request_body(&state, request).await?;
+    let parsed = parse_ingest_body(&body).map_err(|reason| {
         state.core.note_request_rejection(reason);
-        return Err(ApiError::from_reason(reason));
-    }
-    let candidates = raw_records
-        .iter()
-        .enumerate()
-        .map(|(index, value)| IngestCandidate {
-            index: index as u16,
-            parsed: parse_producer_record_value(value),
-        })
-        .collect();
+        ApiError::from_reason(reason)
+    })?;
+    debug_assert!(parsed.raw_record_count <= MAX_BATCH_RECORDS);
+    debug_assert!(parsed.prepared_bytes <= MAX_PREPARED_BATCH_BYTES);
     let result = state
         .core
-        .ingest_candidates(candidates)
+        .ingest_candidates(parsed.candidates)
         .map_err(|_| ApiError::internal())?;
     Ok(Json(result.receipt))
 }
@@ -277,13 +248,12 @@ impl TailStream {
     }
 }
 
-async fn export(State(state): State<HttpState>, body: Bytes) -> Result<Response, ApiError> {
-    if body.len() > MAX_BATCH_BYTES {
-        state
-            .core
-            .note_request_rejection(RejectionReasonV1::BatchTooLarge);
-        return Err(ApiError::from_reason(RejectionReasonV1::BatchTooLarge));
-    }
+async fn export(State(state): State<HttpState>, request: Request) -> Result<Response, ApiError> {
+    let _parse_permit = Arc::clone(&state.body_parse_slots)
+        .acquire_owned()
+        .await
+        .map_err(|_| ApiError::internal())?;
+    let body = bounded_request_body(&state, request).await?;
     let request: ExportRequestV1 = serde_json::from_slice(&body).map_err(|_| {
         state
             .core
@@ -331,6 +301,56 @@ async fn export(State(state): State<HttpState>, body: Bytes) -> Result<Response,
         HeaderValue::from_static("application/x-ndjson"),
     );
     Ok(response)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BodyReadError {
+    TooLarge,
+    Invalid,
+}
+
+async fn bounded_request_body(state: &HttpState, request: Request) -> Result<Bytes, ApiError> {
+    read_bounded_body(request, MAX_BATCH_BYTES)
+        .await
+        .map_err(|error| {
+            let reason = if error == BodyReadError::TooLarge {
+                RejectionReasonV1::BatchTooLarge
+            } else {
+                RejectionReasonV1::InvalidShape
+            };
+            state.core.note_request_rejection(reason);
+            ApiError::from_reason(reason)
+        })
+}
+
+async fn read_bounded_body(request: Request, limit: usize) -> Result<Bytes, BodyReadError> {
+    let declared_length = request
+        .headers()
+        .get(header::CONTENT_LENGTH)
+        .map(|value| {
+            value
+                .to_str()
+                .ok()
+                .and_then(|value| value.parse::<u64>().ok())
+                .ok_or(BodyReadError::Invalid)
+        })
+        .transpose()?;
+    if declared_length.is_some_and(|length| length > limit as u64) {
+        return Err(BodyReadError::TooLarge);
+    }
+
+    // The one body-parse permit makes this exact fixed allocation the total
+    // request-body heap bound across ingest and export.
+    let mut buffered = Vec::with_capacity(limit);
+    let mut stream = request.into_body().into_data_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|_| BodyReadError::Invalid)?;
+        if chunk.len() > limit.saturating_sub(buffered.len()) {
+            return Err(BodyReadError::TooLarge);
+        }
+        buffered.extend_from_slice(&chunk);
+    }
+    Ok(buffered.into())
 }
 
 struct ExportStream {
@@ -440,5 +460,59 @@ impl FrameValidation for TailFrameV1 {
 impl FrameValidation for ExportStreamFrameV1 {
     fn validate(&self) -> Result<(), ()> {
         validate_export_frame(self).map_err(|_| ())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn declared_oversize_is_rejected_without_polling_the_body() {
+        let polled = Arc::new(AtomicUsize::new(0));
+        let stream_polled = Arc::clone(&polled);
+        let body = Body::from_stream(stream::once(async move {
+            stream_polled.fetch_add(1, Ordering::SeqCst);
+            Ok::<Bytes, Infallible>(Bytes::from_static(b"never read"))
+        }));
+        let request = Request::builder()
+            .header(header::CONTENT_LENGTH, MAX_BATCH_BYTES * 5)
+            .body(body)
+            .expect("oversized request");
+
+        assert_eq!(
+            read_bounded_body(request, MAX_BATCH_BYTES).await,
+            Err(BodyReadError::TooLarge)
+        );
+        assert_eq!(polled.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn chunked_oversize_stops_on_the_first_overflowing_chunk() {
+        let produced = Arc::new(AtomicUsize::new(0));
+        let stream_produced = Arc::clone(&produced);
+        let chunk_bytes = MAX_BATCH_BYTES / 4;
+        let body = Body::from_stream(stream::unfold(0_usize, move |index| {
+            let produced = Arc::clone(&stream_produced);
+            async move {
+                if index == 10 {
+                    return None;
+                }
+                produced.fetch_add(1, Ordering::SeqCst);
+                Some((
+                    Ok::<Bytes, Infallible>(Bytes::from(vec![b'x'; chunk_bytes])),
+                    index + 1,
+                ))
+            }
+        }));
+        let request = Request::new(body);
+
+        assert_eq!(
+            read_bounded_body(request, MAX_BATCH_BYTES).await,
+            Err(BodyReadError::TooLarge)
+        );
+        assert_eq!(produced.load(Ordering::SeqCst), 5);
     }
 }
