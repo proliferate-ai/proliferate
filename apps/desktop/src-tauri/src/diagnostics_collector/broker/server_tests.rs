@@ -5,7 +5,7 @@ use proliferate_diagnostics_protocol::v1::types::{
 };
 use std::os::unix::fs::PermissionsExt;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 fn built_collector_binary() -> std::path::PathBuf {
     std::env::current_exe()
@@ -432,7 +432,8 @@ async fn unavailable_queries_preserve_the_actual_supervisor_state() {
     use crate::diagnostics_collector::process::{CollectorLaunchError, CollectorLaunchErrorKind};
     use crate::diagnostics_collector::producer::TauriDiagnosticsProducer;
     use crate::diagnostics_collector::supervisor::{
-        DesktopDiagnosticsSupervisorStateV1, DiagnosticsCollectorSupervisor, StartupBarrierResult,
+        CollectorLaunchKindV1, DesktopDiagnosticsSupervisorStateV1, DiagnosticsCollectorSupervisor,
+        StartupBarrierResult,
     };
 
     let root = std::env::temp_dir().join(format!("broker-state-fixture-{}", uuid::Uuid::new_v4()));

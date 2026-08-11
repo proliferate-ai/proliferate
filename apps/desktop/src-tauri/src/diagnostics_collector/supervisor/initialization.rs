@@ -56,7 +56,7 @@ impl DiagnosticsCollectorSupervisor {
     }
 
     #[cfg(test)]
-    pub(super) fn with_fake_launch_error(
+    pub(crate) fn with_fake_launch_error(
         producer: TauriDiagnosticsProducer,
         fallback: FallbackDiagnosticsWriter,
         error: CollectorLaunchError,
