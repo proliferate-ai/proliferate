@@ -12,7 +12,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   CARGO_TERM_COLOR: always
   EXPECTED_PROOF_REF: refs/heads/codex/rust-observability-pr2-rss-proof
-  EXPECTED_SOURCE_SHA: 40c9f404441427d21bc5966e1f7562c41bc8a1ff
+  EXPECTED_SOURCE_SHA: bb7437cc10db0bcdfc0fed86ada930c9e121af44
   EXPECTED_PROFILE_SHA256: 48bdab50f7d6c577d8bc35ef03f43ed3c720d7ab739220080e163bc0d133b14a
 
 concurrency:
@@ -56,7 +56,7 @@ jobs:
       - name: Checkout exact PR2 source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 40c9f404441427d21bc5966e1f7562c41bc8a1ff
+          ref: bb7437cc10db0bcdfc0fed86ada930c9e121af44
           fetch-depth: 1
           persist-credentials: false
 
