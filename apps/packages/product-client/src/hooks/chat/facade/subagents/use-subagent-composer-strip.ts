@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useSessionSubagentsQuery } from "@anyharness/sdk-react";
-import type { ChildSubagentSummary, ParentSubagentLinkSummary } from "@anyharness/sdk";
+import type { AgentOperationsAgent, SubagentRosterEntry } from "@anyharness/sdk";
 import {
   useActiveSessionId,
   useActiveSessionWorkspaceId,
@@ -19,7 +19,7 @@ import {
 } from "#product/lib/domain/delegated-work/presentation";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 
-const EMPTY_CHILDREN: ChildSubagentSummary[] = [];
+const EMPTY_CHILDREN: SubagentRosterEntry[] = [];
 
 export interface SubagentComposerStripRow {
   sessionLinkId: string;
@@ -66,7 +66,7 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
     enabled: !!materializedSessionId && !isPendingSessionId(materializedSessionId),
     workspaceId: activeWorkspaceId,
   });
-  const parentSessionId = subagentsQuery.data?.parent?.parentSessionId ?? null;
+  const parentSessionId = subagentsQuery.data?.parent.parent?.sessionId ?? null;
   // The session subagents endpoint intentionally returns only the requested
   // session's direct parent and direct children, so child sessions read the
   // parent's context to render the sibling strip.
@@ -80,7 +80,7 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
     ?? EMPTY_CHILDREN;
   const childParentSessionId = parentSessionId ?? activeSessionId;
   const childBySessionId = useMemo(
-    () => new Map(children.map((child) => [child.childSessionId, child])),
+    () => new Map(children.map((child) => [child.agent.identity.sessionId, child])),
     [children],
   );
 
@@ -105,7 +105,7 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
     recordSubagentChildRelationshipHint({
       sessionId: childSessionId,
       parentSessionId: childParentSessionId,
-      sessionLinkId: child?.sessionLinkId ?? null,
+      sessionLinkId: child?.relationship.sessionLinkId ?? null,
       workspaceId: activeWorkspaceId,
     });
     void activateChatTab({
@@ -165,43 +165,41 @@ function buildSummary(
   };
 }
 
-function buildParent(parent: ParentSubagentLinkSummary | null): SubagentComposerParent | null {
-  if (!parent) {
+function buildParent(agent: AgentOperationsAgent | null): SubagentComposerParent | null {
+  if (!agent?.parent) {
     return null;
   }
   return {
-    parentSessionId: parent.parentSessionId,
-    label: parent.parentTitle?.trim()
-      || parent.label?.trim()
-      || "Parent agent",
+    parentSessionId: agent.parent.sessionId,
+    label: "Parent agent",
   };
 }
 
 function buildSubagentRow(
-  child: ChildSubagentSummary,
+  child: SubagentRosterEntry,
   ordinal: number,
 ): SubagentComposerStripRow {
-  const label = formatSubagentLabel(child.label ?? child.title, ordinal);
-  const statusLabel = formatSessionStatus(child.status);
+  const label = formatSubagentLabel(child.relationship.label ?? child.agent.title, ordinal);
+  const statusLabel = formatSessionStatus(child.agent);
   return {
-    sessionLinkId: child.sessionLinkId,
-    childSessionId: child.childSessionId,
+    sessionLinkId: child.relationship.sessionLinkId,
+    childSessionId: child.agent.identity.sessionId,
     label,
     identity: buildDelegatedAgentIdentity({
-      id: child.sessionLinkId,
+      id: child.relationship.sessionLinkId,
       title: label,
-      sessionId: child.childSessionId,
-      sessionLinkId: child.sessionLinkId,
+      sessionId: child.agent.identity.sessionId,
+      sessionLinkId: child.relationship.sessionLinkId,
     }),
     statusLabel,
     statusCategory: delegatedWorkStatusCategoryFromLabel({
       statusLabel,
-      wakeScheduled: child.wakeScheduled,
+      wakeScheduled: false,
     }),
     latestCompletionLabel: child.latestCompletion
       ? formatCompletionLabel(child.latestCompletion.outcome)
       : null,
-    wakeScheduled: child.wakeScheduled,
+    wakeScheduled: false,
   };
 }
 
@@ -224,22 +222,25 @@ function formatCompletionLabel(outcome: string): string {
   return `${title || "Finished"} turn`;
 }
 
-function formatSessionStatus(status: ChildSubagentSummary["status"]): string {
-  switch (status) {
+function formatSessionStatus(agent: AgentOperationsAgent): string {
+  if (agent.status.presentation === "closed") {
+    return "Closed";
+  }
+  switch (agent.status.execution) {
     case "running":
       return "Working";
     case "idle":
       return "Idle";
-    case "completed":
-      return "Done";
     case "errored":
       return "Failed";
     case "starting":
       return "Starting";
     case "closed":
       return "Closed";
+    case "awaiting_interaction":
+      return "Waiting";
     default: {
-      const exhaustive: never = status;
+      const exhaustive: never = agent.status.execution;
       return exhaustive;
     }
   }

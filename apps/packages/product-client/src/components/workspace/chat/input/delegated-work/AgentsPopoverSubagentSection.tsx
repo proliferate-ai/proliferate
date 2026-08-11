@@ -45,12 +45,10 @@ export function AgentsPopoverSubagentSection({
           <SubagentPopoverRow
             key={row.sessionLinkId}
             row={row}
-            isSchedulingWake={subagents.isSchedulingWake}
             onOpen={() => {
               subagents.openSubagent(row.childSessionId);
               onClose();
             }}
-            onScheduleWake={() => subagents.scheduleWake(row.childSessionId)}
           />
         ))}
       </div>
@@ -60,21 +58,15 @@ export function AgentsPopoverSubagentSection({
 
 function SubagentPopoverRow({
   row,
-  isSchedulingWake,
   onOpen,
-  onScheduleWake,
 }: {
   row: SubagentRow;
-  isSchedulingWake: boolean;
   onOpen: () => void;
-  onScheduleWake: () => void;
 }) {
-  const secondaryLabel = row.wakeScheduled
-    ? "Wake scheduled"
-    : row.latestCompletionLabel ?? row.statusLabel;
+  const secondaryLabel = row.latestCompletionLabel ?? row.statusLabel;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1 py-0.5 hover:bg-muted/40">
+    <div className="rounded-md px-1 py-0.5 hover:bg-muted/40">
       <Button
         type="button"
         variant="ghost"
@@ -95,19 +87,6 @@ function SubagentPopoverRow({
           </span>
         </span>
       </Button>
-      {!row.wakeScheduled && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2"
-          loading={isSchedulingWake}
-          aria-label={`Schedule wake for ${row.identity.displayName}`}
-          onClick={onScheduleWake}
-        >
-          Wake
-        </Button>
-      )}
     </div>
   );
 }
