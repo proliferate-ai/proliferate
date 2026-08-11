@@ -1,6 +1,7 @@
 use crate::domains::agent_operations::model::{
-    AgentCapability, AgentIdentity, AgentView, AuthenticatedAgentCaller, SubagentLifecycleView,
+    AgentCapability, AgentIdentity, AgentView, AuthenticatedAgentCaller,
 };
+use crate::domains::agent_operations::subagents::SubagentLifecycleView;
 use crate::domains::sessions::admission::SessionMutationKind;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 

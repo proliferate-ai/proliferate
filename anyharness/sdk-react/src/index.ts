@@ -170,15 +170,17 @@ export {
   useRunWorktreeRetentionMutation,
 } from "./hooks/worktrees.js";
 export {
+  useSessionSubagentsQuery,
+  useCloseSubagentMutation,
+  useOpenSubagentMutation,
+  usePromoteSubagentMutation,
+} from "./hooks/subagents.js";
+export {
   useWorkspaceSessionsQuery,
   useSessionQuery,
   useFetchSessionMutation,
   useSessionLiveConfigQuery,
   useSessionEventsQuery,
-  useSessionSubagentsQuery,
-  useCloseSubagentMutation,
-  useOpenSubagentMutation,
-  usePromoteSubagentMutation,
   useCreateSessionMutation,
   useSetSessionConfigOptionMutation,
   usePromptSessionMutation,

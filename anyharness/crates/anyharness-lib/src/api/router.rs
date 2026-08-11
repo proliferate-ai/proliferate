@@ -13,12 +13,11 @@ use url::form_urlencoded;
 use super::http::{
     agent_auth::{delete_agent_auth_state, put_agent_auth_state},
     agent_gateway_catalog, agent_model_snapshot, agents, auth as http_auth, catalogs, cowork,
-    files, git, goals, health,
-    hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
-    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
-    sessions_prompt, sessions_resume, subagents, terminals, workflow_runs, workflow_workspaces,
-    workspaces, workspaces_lifecycle, workspaces_purge, workspaces_restore, workspaces_setup,
-    workspaces_worktrees, worktrees,
+    files, git, goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay,
+    repo_roots, reviews, sessions, sessions_config, sessions_events, sessions_fork,
+    sessions_interactions, sessions_lifecycle, sessions_prompt, sessions_resume, subagents,
+    terminals, workflow_runs, workflow_workspaces, workspaces, workspaces_lifecycle,
+    workspaces_purge, workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
@@ -98,10 +97,6 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}",
             get(workspaces::get_workspace).delete(workspaces_purge::purge_workspace),
-        )
-        .route(
-            "/workspaces/{workspace_id}/subagents",
-            get(subagents::get_workspace_subagents),
         )
         .route(
             "/workspaces/{workspace_id}/worktree/restore",
@@ -413,22 +408,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/sessions", post(sessions::create_session))
         .route("/sessions", get(sessions::list_sessions))
         .route("/sessions/{session_id}", get(sessions::get_session))
-        .route(
-            "/sessions/{parent_session_id}/subagents",
-            get(subagents::get_session_subagents),
-        )
-        .route(
-            "/sessions/{parent_session_id}/subagents/{child_session_id}/close",
-            post(subagents::close_subagent),
-        )
-        .route(
-            "/sessions/{parent_session_id}/subagents/{child_session_id}/open",
-            post(subagents::open_subagent),
-        )
-        .route(
-            "/sessions/{parent_session_id}/subagents/{child_session_id}/promote",
-            post(subagents::promote_subagent),
-        )
+        .merge(subagents::routes())
         .route(
             "/sessions/{session_id}/reviews",
             get(reviews::get_session_reviews),

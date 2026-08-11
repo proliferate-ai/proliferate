@@ -13,12 +13,14 @@ import {
   anyHarnessWorkspaceSubagentsKey,
 } from "../lib/query-keys.js";
 import {
-  useCloseSubagentMutation,
-  useOpenSubagentMutation,
-  usePromoteSubagentMutation,
   useSessionQuery,
   useSetSessionConfigOptionMutation,
 } from "./sessions.js";
+import {
+  useCloseSubagentMutation,
+  useOpenSubagentMutation,
+  usePromoteSubagentMutation,
+} from "./subagents.js";
 
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
