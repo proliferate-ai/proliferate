@@ -1,3 +1,4 @@
+pub mod delivery;
 pub mod hooks;
 pub mod mcp;
 pub mod model;

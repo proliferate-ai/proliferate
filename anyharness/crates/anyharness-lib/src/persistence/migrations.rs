@@ -228,6 +228,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0067_subagent_operability",
         include_str!("sql/0067_subagent_operability.sql"),
     ),
+    (
+        "0068_subagent_completion_deliveries",
+        include_str!("sql/0068_subagent_completion_deliveries.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
