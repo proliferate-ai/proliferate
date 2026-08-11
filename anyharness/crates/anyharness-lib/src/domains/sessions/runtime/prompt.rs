@@ -6,7 +6,7 @@ use crate::domains::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_D
 use crate::domains::sessions::model::PromptAttachmentState;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_live_config;
 use crate::domains::sessions::prompt::prepare::prepare_prompt;
-use crate::domains::sessions::prompt::provenance::PromptProvenance;
+use crate::domains::sessions::prompt::provenance::{AgentSessionPromptSource, PromptProvenance};
 use crate::domains::sessions::prompt::PromptPrepareContext;
 use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
 
@@ -15,6 +15,50 @@ use super::{
 };
 
 impl SessionRuntime {
+    /// Persist-first cross-agent delivery. The live actor is ready before the
+    /// durable row commits; after commit, the actor command is only a wake
+    /// signal. Losing that signal or its acknowledgement cannot turn an
+    /// accepted durable message into a reported failure because startup queue
+    /// replay owns eventual processing.
+    pub(crate) async fn enqueue_agent_message(
+        &self,
+        session_id: &str,
+        message: String,
+        source: AgentSessionPromptSource,
+    ) -> Result<i64, SendPromptError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| SendPromptError::Internal(anyhow::anyhow!(error.to_string())))?;
+        if message.trim().is_empty() {
+            return Err(SendPromptError::EmptyPrompt);
+        }
+        let record = self
+            .get_session_or_not_found(session_id)
+            .map_err(map_lifecycle_error_to_prompt)?;
+        let handle = self
+            .ensure_live_session_handle(&record, None)
+            .await
+            .map_err(map_start_error_to_prompt)?;
+        let payload = crate::domains::sessions::prompt::PromptPayload::text(message)
+            .with_provenance(source.into_provenance());
+        let pending = self
+            .session_service
+            .store()
+            .insert_pending_prompt_payload(session_id, &payload, None)
+            .map_err(SendPromptError::Internal)?;
+
+        if let Err(error) = handle.send_queued_prompt(payload, pending.seq).await {
+            tracing::warn!(
+                session_id = %session_id,
+                queue_seq = pending.seq,
+                error = ?error,
+                "durable agent message wake signal was lost; pending prompt will replay"
+            );
+        }
+
+        Ok(pending.seq)
+    }
+
     #[tracing::instrument(skip_all, fields(session_id = %session_id))]
     pub async fn send_prompt(
         &self,

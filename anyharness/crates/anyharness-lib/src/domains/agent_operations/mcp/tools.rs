@@ -257,6 +257,11 @@ mod tests {
     }
 
     #[test]
+    fn send_message_owns_its_target_gate_instead_of_the_caller_route_gate() {
+        assert!(!MUTATING_TOOL_NAMES.contains(&"send_message"));
+    }
+
+    #[test]
     fn workspace_mcp_tool_schema_snapshots() {
         let tools = build_tool_list();
         let actual = tools

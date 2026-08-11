@@ -9,6 +9,7 @@
 use agent_client_protocol as acp;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 
+use super::provenance::PromptProvenance;
 use super::{PromptPayload, PromptValidationError, ResolvedParts, StoredPromptBlock};
 use crate::domains::sessions::plan_references::render_plan_reference_markdown;
 
@@ -30,7 +31,12 @@ pub fn render(
     parts: &ResolvedParts,
     extras: &TurnPromptExtras,
 ) -> Result<Vec<acp::schema::ContentBlock>, RenderError> {
-    let mut blocks = Vec::with_capacity(payload.blocks.len());
+    let mut blocks = Vec::with_capacity(payload.blocks.len() + 1);
+    if let Some(context) = agent_message_context(payload) {
+        blocks.push(acp::schema::ContentBlock::Text(
+            acp::schema::TextContent::new(context),
+        ));
+    }
     for block in &payload.blocks {
         match block {
             StoredPromptBlock::Text { text } => {
@@ -142,6 +148,22 @@ pub fn render(
     Ok(blocks)
 }
 
+fn agent_message_context(payload: &PromptPayload) -> Option<String> {
+    let PromptProvenance::AgentSession {
+        source_session_id,
+        label,
+        ..
+    } = payload.provenance.as_ref()?
+    else {
+        return None;
+    };
+    let label = serde_json::Value::String(label.as_deref().unwrap_or("Agent").to_string());
+    let session_id = serde_json::Value::String(source_session_id.clone());
+    Some(format!(
+        "Message context: This message came from another agent. Sender label: {label}. Sender session ID: {session_id}."
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,6 +234,43 @@ mod tests {
             panic!("expected one text block");
         };
         assert_eq!(text.text, "hello");
+    }
+
+    #[test]
+    fn send_message_prompt_provenance_renders_replay_stable_sender_context() {
+        let payload = PromptPayload::text("check the failing test".to_string()).with_provenance(
+            PromptProvenance::AgentSession {
+                source_session_id: "session-1".to_string(),
+                session_link_id: None,
+                label: Some("Build Agent".to_string()),
+            },
+        );
+        let provenance_json = payload
+            .provenance_json()
+            .expect("serialize provenance")
+            .expect("agent provenance");
+        let replayed =
+            PromptPayload::from_persisted(None, "check the failing test", Some(&provenance_json));
+
+        for candidate in [&payload, &replayed] {
+            let blocks = render(
+                candidate,
+                &ResolvedParts::default(),
+                &TurnPromptExtras::default(),
+            )
+            .expect("render agent message");
+            let [acp::schema::ContentBlock::Text(context), acp::schema::ContentBlock::Text(message)] =
+                blocks.as_slice()
+            else {
+                panic!("expected sender context followed by message text");
+            };
+            assert_eq!(
+                context.text,
+                "Message context: This message came from another agent. Sender label: \"Build Agent\". Sender session ID: \"session-1\"."
+            );
+            assert_eq!(message.text, "check the failing test");
+        }
+        assert_eq!(payload.content_parts().len(), 1);
     }
 
     #[test]

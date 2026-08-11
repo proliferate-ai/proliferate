@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use serde_json::json;
@@ -6,13 +6,23 @@ use serde_json::json;
 use super::*;
 use crate::domains::agent_operations::model::RuntimeIdentity;
 use crate::domains::agent_operations::runtime::{
-    AgentExecutionReads, AgentSessionReads, SubagentRelationshipReads,
+    AgentExecutionReads, AgentMessageQueue, AgentSessionReads, AgentWorkspaceOperations,
+    SubagentRelationshipReads,
 };
+use crate::domains::sessions::admission::{NoControllerPolicy, SessionMutationAdmission};
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
 use crate::domains::sessions::model::{
     SessionExecutionState, SessionExecutionStatePhase, SessionMcpBindingPolicy, SessionRecord,
+};
+use crate::domains::sessions::prompt::provenance::AgentSessionPromptSource;
+use crate::domains::sessions::runtime::SendPromptError;
+use crate::domains::workspaces::model::{test_workspace_record, WorkspaceKind, WorkspaceRecord};
+use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
+use crate::domains::workspaces::options::{
+    CreateWorkspaceFromOptionsInput, CreateWorkspaceFromOptionsResult, WorkspaceCreationOptions,
+    WorkspaceOptionsError,
 };
 use crate::integrations::mcp::product_server::{
     dispatch_product_mcp_request, ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpServer,
@@ -77,6 +87,58 @@ impl AgentExecutionReads for Execution {
     }
 }
 
+struct Workspaces(Vec<WorkspaceRecord>);
+
+#[async_trait]
+impl AgentWorkspaceOperations for Workspaces {
+    async fn list_workspaces(&self) -> Result<Vec<WorkspaceRecord>, WorkspaceOptionsError> {
+        Ok(self.0.clone())
+    }
+
+    async fn get_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Option<WorkspaceRecord>, WorkspaceOptionsError> {
+        Ok(self
+            .0
+            .iter()
+            .find(|workspace| workspace.id == workspace_id)
+            .cloned())
+    }
+
+    async fn list_workspace_options(
+        &self,
+    ) -> Result<WorkspaceCreationOptions, WorkspaceOptionsError> {
+        unreachable!()
+    }
+
+    async fn create_workspace(
+        &self,
+        _caller_workspace_id: &str,
+        _input: CreateWorkspaceFromOptionsInput,
+    ) -> Result<CreateWorkspaceFromOptionsResult, WorkspaceOptionsError> {
+        unreachable!()
+    }
+}
+
+struct Messages(Mutex<Vec<(String, String, AgentSessionPromptSource)>>);
+
+#[async_trait]
+impl AgentMessageQueue for Messages {
+    async fn enqueue_agent_message(
+        &self,
+        target_session_id: &str,
+        message: String,
+        source: AgentSessionPromptSource,
+    ) -> Result<i64, SendPromptError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((target_session_id.into(), message, source));
+        Ok(41)
+    }
+}
+
 fn session(id: &str, workspace_id: &str) -> SessionRecord {
     SessionRecord {
         id: id.to_string(),
@@ -107,7 +169,11 @@ fn session(id: &str, workspace_id: &str) -> SessionRecord {
     }
 }
 
-fn server() -> (WorkspaceProductMcpServer, Arc<WorkspaceMcpAuth>) {
+fn server() -> (
+    WorkspaceProductMcpServer,
+    Arc<WorkspaceMcpAuth>,
+    Arc<Messages>,
+) {
     let sessions = Arc::new(Sessions(vec![
         session("P", "workspace-a"),
         session("Q", "workspace-b"),
@@ -126,19 +192,35 @@ fn server() -> (WorkspaceProductMcpServer, Arc<WorkspaceMcpAuth>) {
         created_at: "2026-08-10T00:00:00Z".to_string(),
         closed_at: None,
     }]));
-    let operations = Arc::new(AgentOperations::new(
-        RuntimeIdentity::new("runtime-1"),
-        sessions,
-        relationships,
-        Arc::new(Execution),
-    ));
+    let messages = Arc::new(Messages(Mutex::new(Vec::new())));
+    let workspaces = ["workspace-a", "workspace-b"]
+        .into_iter()
+        .map(|id| {
+            let path = format!("/tmp/{id}");
+            let mut workspace = test_workspace_record(WorkspaceKind::Local, &path);
+            workspace.id = id.into();
+            workspace
+        })
+        .collect();
+    let operations = Arc::new(
+        AgentOperations::new(
+            RuntimeIdentity::new("runtime-1"),
+            sessions,
+            relationships,
+            Arc::new(Execution),
+        )
+        .with_messaging(
+            messages.clone(),
+            Arc::new(Workspaces(workspaces)),
+            Arc::new(SessionMutationAdmission::new(Arc::new(NoControllerPolicy))),
+            Arc::new(WorkspaceOperationGate::new()),
+        ),
+    );
     let auth = Arc::new(WorkspaceMcpAuth::new(
         std::env::temp_dir().join(format!("workspace-mcp-contract-{}", uuid::Uuid::new_v4())),
     ));
-    (
-        WorkspaceProductMcpServer::new(operations, auth.clone()),
-        auth,
-    )
+    let server = WorkspaceProductMcpServer::new(operations, auth.clone());
+    (server, auth, messages)
 }
 
 fn context(workspace_id: &str, session_id: &str) -> ProductMcpRequestContext {
@@ -172,7 +254,7 @@ async fn authenticated_dispatch(
 
 #[tokio::test]
 async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context() {
-    let (server, auth) = server();
+    let (server, auth, _) = server();
     let token = auth
         .mint_capability_token("workspace-a", "P")
         .expect("mint Workspace capability token");
@@ -242,7 +324,7 @@ async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context(
 
 #[tokio::test]
 async fn workspace_mcp_denials_are_typed_and_do_not_leak_foreign_subagent_metadata() {
-    let (server, auth) = server();
+    let (server, auth, _) = server();
     let q_token = auth
         .mint_capability_token("workspace-b", "Q")
         .expect("mint Q Workspace capability token");
@@ -297,7 +379,7 @@ async fn workspace_mcp_denials_are_typed_and_do_not_leak_foreign_subagent_metada
 
 #[tokio::test]
 async fn workspace_capability_scope_rejects_mismatched_workspace_or_session_before_dispatch() {
-    let (server, auth) = server();
+    let (server, auth, _) = server();
     let token = auth
         .mint_capability_token("workspace-a", "P")
         .expect("mint Workspace capability token");
@@ -309,4 +391,93 @@ async fn workspace_capability_scope_rejects_mismatched_workspace_or_session_befo
             Err(AuthenticatedDispatchError::InvalidCapability)
         );
     }
+}
+
+#[tokio::test]
+async fn send_message_dispatch_pins_the_durable_receipt_and_leaves_later_tools_inert() {
+    let (server, auth, messages) = server();
+    let token = auth
+        .mint_capability_token("workspace-a", "P")
+        .expect("mint Workspace capability token");
+    let sent = authenticated_dispatch(
+        &server,
+        &token,
+        context("workspace-a", "P"),
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "send_message",
+                "arguments": { "agentId": "Q", "message": "hello from P" }
+            }
+        }),
+    )
+    .await
+    .expect("send dispatch")
+    .expect("send response");
+    assert_eq!(
+        sent["result"]["structuredContent"],
+        json!({
+            "target": { "runtimeId": "runtime-1", "sessionId": "Q" },
+            "queueSeq": 41,
+            "status": "durably_queued"
+        })
+    );
+    let calls = messages.0.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, "Q");
+    assert_eq!(calls[0].1, "hello from P");
+    assert_eq!(calls[0].2.source_session_id, "P");
+    assert_eq!(calls[0].2.label, "P");
+    drop(calls);
+
+    let forged = authenticated_dispatch(
+        &server,
+        &token,
+        context("workspace-a", "P"),
+        json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "send_message",
+                "arguments": {
+                    "agentId": "Q",
+                    "message": "forged",
+                    "sourceSessionId": "C"
+                }
+            }
+        }),
+    )
+    .await
+    .expect("forged dispatch")
+    .expect("forged response");
+    assert_eq!(
+        forged["result"]["structuredContent"]["error"]["code"],
+        "WORKSPACE_MCP_ARGUMENTS_INVALID"
+    );
+    assert_eq!(messages.0.lock().unwrap().len(), 1);
+
+    let later_slice = authenticated_dispatch(
+        &server,
+        &token,
+        context("workspace-a", "P"),
+        json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "close_subagent",
+                "arguments": { "agentId": "C" }
+            }
+        }),
+    )
+    .await
+    .expect("later-slice dispatch")
+    .expect("later-slice response");
+    assert_eq!(
+        later_slice["result"]["structuredContent"]["error"]["code"],
+        "WORKSPACE_MCP_OPERATION_NOT_IMPLEMENTED"
+    );
 }

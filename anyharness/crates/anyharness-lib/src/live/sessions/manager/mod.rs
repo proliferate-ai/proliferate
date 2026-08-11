@@ -176,6 +176,7 @@ pub(crate) struct ScriptedSessionSpec {
 pub(crate) struct ObservedPrompt {
     pub(crate) prompt_id: Option<String>,
     pub(crate) payload: crate::domains::sessions::prompt::PromptPayload,
+    pub(crate) from_queue_seq: Option<i64>,
 }
 
 #[cfg(test)]
@@ -183,6 +184,18 @@ impl LiveSessionManager {
     pub(crate) async fn insert_prompt_observer_for_test(
         &self,
         session_id: &str,
+    ) -> tokio::sync::mpsc::UnboundedReceiver<ObservedPrompt> {
+        self.insert_prompt_observer_with_phase_for_test(
+            session_id,
+            anyharness_contract::v1::SessionExecutionPhase::Running,
+        )
+        .await
+    }
+
+    pub(crate) async fn insert_prompt_observer_with_phase_for_test(
+        &self,
+        session_id: &str,
+        phase: anyharness_contract::v1::SessionExecutionPhase,
     ) -> tokio::sync::mpsc::UnboundedReceiver<ObservedPrompt> {
         use crate::live::sessions::actor::command::{PromptAcceptance, SessionCommand};
 
@@ -193,7 +206,7 @@ impl LiveSessionManager {
             command_tx,
             event_tx,
             Some(format!("native-{session_id}")),
-            anyharness_contract::v1::SessionExecutionPhase::Running,
+            phase,
         ));
         self.live_sessions
             .write()
@@ -205,14 +218,22 @@ impl LiveSessionManager {
                 if let SessionCommand::Prompt {
                     payload,
                     prompt_id,
+                    from_queue_seq,
                     respond_to,
-                    ..
                 } = command
                 {
-                    let _ = seen_tx.send(ObservedPrompt { prompt_id, payload });
-                    let _ = respond_to.send(Ok(PromptAcceptance::Started {
-                        turn_id: "observed-turn".into(),
-                    }));
+                    let _ = seen_tx.send(ObservedPrompt {
+                        prompt_id,
+                        payload,
+                        from_queue_seq,
+                    });
+                    let acceptance = match from_queue_seq {
+                        Some(seq) => PromptAcceptance::Queued { seq },
+                        None => PromptAcceptance::Started {
+                            turn_id: "observed-turn".into(),
+                        },
+                    };
+                    let _ = respond_to.send(Ok(acceptance));
                 }
             }
         });
