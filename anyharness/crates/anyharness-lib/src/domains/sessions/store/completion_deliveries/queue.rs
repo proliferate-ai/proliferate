@@ -241,3 +241,68 @@ pub(crate) fn delete_parent_deliveries_in_tx(
     )?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{capture_input, seed_link};
+    use super::super::{
+        CaptureCompletionDeliveryOutcome, CompletionDeliveryState, CompletionDeliveryStore,
+    };
+    use crate::persistence::Db;
+
+    #[test]
+    fn enqueued_backoff_is_persisted_and_retries_when_due() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_link(&db, false);
+        let store = CompletionDeliveryStore::new(db);
+        let captured = store.capture(&capture_input("turn-1")).expect("capture");
+        let CaptureCompletionDeliveryOutcome::Captured { delivery, .. } = captured else {
+            panic!("expected captured delivery");
+        };
+        let claimed = store
+            .claim_next_due("2026-08-11T00:02:00Z", "2026-08-11T00:02:30Z", "worker-1")
+            .expect("claim")
+            .expect("delivery claimed");
+        assert_eq!(claimed.attempt_count, 1);
+        assert!(store
+            .mark_enqueued(
+                &delivery.delivery_id,
+                "worker-1",
+                11,
+                "2026-08-11T00:02:00Z",
+                "2026-08-11T00:02:02Z",
+            )
+            .expect("persist retry schedule"));
+        let scheduled = store
+            .find(&delivery.delivery_id)
+            .expect("read delivery")
+            .expect("delivery exists");
+        assert_eq!(scheduled.next_attempt_at, "2026-08-11T00:02:02Z");
+        assert!(store
+            .claim_next_due("2026-08-11T00:02:01Z", "2026-08-11T00:02:31Z", "worker-2",)
+            .expect("early claim")
+            .is_none());
+
+        let recovered = store
+            .claim_next_due("2026-08-11T00:02:02Z", "2026-08-11T00:02:32Z", "worker-2")
+            .expect("due claim")
+            .expect("delivery reclaimed");
+        assert_eq!(recovered.attempt_count, 2);
+        assert!(store
+            .mark_delivered(
+                &delivery.delivery_id,
+                "worker-2",
+                "parent-turn-1",
+                "2026-08-11T00:02:03Z",
+            )
+            .expect("mark recovered delivery"));
+        assert_eq!(
+            store
+                .find(&delivery.delivery_id)
+                .expect("read delivered")
+                .expect("delivery exists")
+                .state,
+            CompletionDeliveryState::Delivered
+        );
+    }
+}

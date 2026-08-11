@@ -72,14 +72,14 @@ impl CompletionDeliveryWorker {
                 }
             };
             if let Err(error) = self.process_claimed(&delivery, &lease_token).await {
-                let next_attempt = retry_at(delivery.attempt_count);
                 let error_code = "delivery_attempt_failed";
-                let now = chrono::Utc::now().to_rfc3339();
+                let now = chrono::Utc::now();
+                let next_attempt = retry_at(&now, delivery.attempt_count);
                 let _ = self.delivery_store.retry_later(
                     &delivery.delivery_id,
                     &lease_token,
                     error_code,
-                    &now,
+                    &now.to_rfc3339(),
                     &next_attempt,
                 );
                 tracing::warn!(
@@ -138,7 +138,10 @@ impl CompletionDeliveryWorker {
             }
         };
         let now = chrono::Utc::now();
-        let next_attempt = (now + chrono::Duration::from_std(POLL_INTERVAL)?).to_rfc3339();
+        // Persist recovery timing before the best-effort activation. Every
+        // unresolved acknowledgement path therefore converges through the
+        // same capped backoff instead of the one-second poll cadence.
+        let next_attempt = retry_at(&now, delivery.attempt_count);
         if !self.delivery_store.mark_enqueued(
             &delivery.delivery_id,
             lease_token,
@@ -177,10 +180,14 @@ impl CompletionDeliveryWorker {
     }
 }
 
-fn retry_at(attempt_count: i64) -> String {
+fn retry_at(now: &chrono::DateTime<chrono::Utc>, attempt_count: i64) -> String {
+    let seconds = retry_delay_seconds(attempt_count);
+    (*now + chrono::Duration::seconds(seconds)).to_rfc3339()
+}
+
+fn retry_delay_seconds(attempt_count: i64) -> i64 {
     let exponent = attempt_count.clamp(0, 6) as u32;
-    let seconds = 1_i64.checked_shl(exponent).unwrap_or(60).min(60);
-    (chrono::Utc::now() + chrono::Duration::seconds(seconds)).to_rfc3339()
+    1_i64.checked_shl(exponent).unwrap_or(60).min(60)
 }
 
 fn error_chain_class(error: &anyhow::Error) -> &'static str {
@@ -212,4 +219,17 @@ fn timestamp_age_ms(start: &str, end: &str) -> i64 {
         return 0;
     };
     (end - start).num_milliseconds().max(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::retry_delay_seconds;
+
+    #[test]
+    fn enqueued_backoff_increases_and_caps_at_sixty_seconds() {
+        assert_eq!(
+            (1..=8).map(retry_delay_seconds).collect::<Vec<_>>(),
+            vec![2, 4, 8, 16, 32, 60, 60, 60]
+        );
+    }
 }

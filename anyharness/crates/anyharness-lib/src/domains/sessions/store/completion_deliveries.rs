@@ -304,7 +304,7 @@ mod tests {
         WorkspaceSurface,
     };
 
-    fn seed_link(db: &Db, relationship_closed: bool) {
+    pub(super) fn seed_link(db: &Db, relationship_closed: bool) {
         test_support::seed_workspace_with_repo_root(
             db,
             "workspace-1",
@@ -362,7 +362,7 @@ mod tests {
         }
     }
 
-    fn capture_input(turn_id: &str) -> CaptureCompletionDeliveryInput {
+    pub(super) fn capture_input(turn_id: &str) -> CaptureCompletionDeliveryInput {
         CaptureCompletionDeliveryInput {
             turn: SessionTurnFinishedContext {
                 workspace: workspace(),
