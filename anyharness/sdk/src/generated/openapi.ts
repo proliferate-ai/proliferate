@@ -628,6 +628,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{parent_session_id}/subagents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_session_subagents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{parent_session_id}/subagents/{child_session_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["close_subagent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{parent_session_id}/subagents/{child_session_id}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["open_subagent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{parent_session_id}/subagents/{child_session_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["promote_subagent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}": {
         parameters: {
             query?: never;
@@ -958,38 +1022,6 @@ export interface paths {
         get: operations["get_session_reviews"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/sessions/{session_id}/subagents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_session_subagents"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/sessions/{session_id}/subagents/{child_session_id}/wake": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["schedule_subagent_wake"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1924,6 +1956,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/subagents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_workspace_subagents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/terminals": {
         parameters: {
             query?: never;
@@ -2172,6 +2220,44 @@ export interface components {
         };
         /** @enum {string} */
         AgentLoginTerminalStatus: "starting" | "running" | "exited" | "failed";
+        AgentOperationsAgent: {
+            capabilities: components["schemas"]["AgentOperationsCapability"][];
+            configuration: components["schemas"]["AgentOperationsConfiguration"];
+            createdAt: string;
+            identity: components["schemas"]["AgentOperationsIdentity"];
+            parent?: null | components["schemas"]["AgentOperationsIdentity"];
+            role: components["schemas"]["AgentOperationsRole"];
+            status: components["schemas"]["AgentOperationsStatus"];
+            title?: string | null;
+            updatedAt: string;
+            workspace: components["schemas"]["AgentOperationsWorkspaceIdentity"];
+        };
+        /** @enum {string} */
+        AgentOperationsCapability: "whoami" | "list_workspaces" | "list_workspace_options" | "create_workspace" | "list_agents" | "get_agent" | "list_subagents" | "list_agent_launch_options" | "list_agent_config_options" | "get_task_output" | "create_agent" | "configure_agent" | "resume_agent" | "send_message" | "interrupt_agent" | "close_subagent" | "open_subagent" | "promote_subagent";
+        AgentOperationsConfiguration: {
+            agentKind: string;
+            modeId?: string | null;
+            modelId?: string | null;
+        };
+        /** @enum {string} */
+        AgentOperationsExecutionStatus: "starting" | "running" | "awaiting_interaction" | "idle" | "errored" | "closed";
+        AgentOperationsIdentity: {
+            runtimeId: string;
+            sessionId: string;
+        };
+        /** @enum {string} */
+        AgentOperationsPresentationStatus: "running" | "available" | "closed";
+        /** @enum {string} */
+        AgentOperationsRole: "ordinary" | "subagent";
+        AgentOperationsStatus: {
+            execution: components["schemas"]["AgentOperationsExecutionStatus"];
+            hasLiveActor: boolean;
+            presentation: components["schemas"]["AgentOperationsPresentationStatus"];
+        };
+        AgentOperationsWorkspaceIdentity: {
+            runtimeId: string;
+            workspaceId: string;
+        };
         /** @enum {string} */
         AgentReadinessState: "ready" | "install_required" | "credentials_required" | "login_required" | "unsupported" | "error";
         /**
@@ -2289,22 +2375,6 @@ export interface components {
             state: components["schemas"]["PullRequestState"];
             title: string;
             url: string;
-        };
-        ChildSubagentSummary: {
-            agentKind: string;
-            childCreatedAt: string;
-            childSessionId: string;
-            label?: string | null;
-            latestCompletion?: null | components["schemas"]["SubagentCompletionSummary"];
-            linkClosedAt?: string | null;
-            linkCreatedAt: string;
-            modeId?: string | null;
-            modelId?: string | null;
-            sessionLinkId: string;
-            status: components["schemas"]["SessionStatus"];
-            subagentId?: string | null;
-            title?: string | null;
-            wakeScheduled: boolean;
         };
         ClearSessionGoalResponse: {
             cleared: boolean;
@@ -3607,17 +3677,6 @@ export interface components {
         OriginEntrypoint: "desktop" | "cloud" | "local_runtime" | "cowork";
         /** @enum {string} */
         OriginKind: "human" | "cowork" | "api" | "system";
-        ParentSubagentLinkSummary: {
-            label?: string | null;
-            linkClosedAt?: string | null;
-            linkCreatedAt: string;
-            parentAgentKind: string;
-            parentModelId?: string | null;
-            parentSessionId: string;
-            parentTitle?: string | null;
-            sessionLinkId: string;
-            subagentId?: string | null;
-        };
         PendingInteractionPayloadSummary: {
             context?: null | components["schemas"]["PermissionInteractionContext"];
             options?: components["schemas"]["PermissionInteractionOption"][];
@@ -4354,15 +4413,6 @@ export interface components {
             /** Format: double */
             pressurePercent?: number | null;
         };
-        ScheduleSubagentWakeRequest: Record<string, never>;
-        ScheduleSubagentWakeResponse: {
-            alreadyScheduled: boolean;
-            childSessionId: string;
-            parentSessionId: string;
-            sessionLinkId: string;
-            subagentId?: string | null;
-            wakeScheduled: boolean;
-        };
         SearchWorkspaceFilesResponse: {
             results: components["schemas"]["WorkspaceFileSearchResult"][];
         };
@@ -4664,8 +4714,8 @@ export interface components {
         /** @enum {string} */
         SessionStatus: "starting" | "idle" | "running" | "completed" | "errored" | "closed";
         SessionSubagentsResponse: {
-            children: components["schemas"]["ChildSubagentSummary"][];
-            parent?: null | components["schemas"]["ParentSubagentLinkSummary"];
+            children: components["schemas"]["SubagentRosterEntry"][];
+            parent: components["schemas"]["AgentOperationsAgent"];
         };
         /** @description Request payload for changing a single live session config option. */
         SetSessionConfigOptionRequest: {
@@ -4791,17 +4841,40 @@ export interface components {
         };
         /** @enum {string} */
         StopReason: "end_turn" | "max_tokens" | "max_turn_requests" | "refusal" | "cancelled";
-        SubagentCompletionSummary: {
+        /**
+         * @description Outcome metadata for the child's latest committed terminal turn.
+         *
+         *     This is not proof that the attributed parent notification was delivered.
+         */
+        SubagentLatestCompletion: {
             /** Format: int64 */
             childLastEventSeq: number;
             childTurnId: string;
             completionId: string;
             createdAt: string;
             outcome: components["schemas"]["SubagentTurnOutcome"];
-            /** Format: int64 */
-            parentEventSeq?: number | null;
-            /** Format: int64 */
-            parentPromptSeq?: number | null;
+        };
+        SubagentLifecycleResponse: {
+            agent: components["schemas"]["AgentOperationsAgent"];
+            relationship: null | components["schemas"]["SubagentRelationship"];
+        };
+        SubagentParentRoster: {
+            children: components["schemas"]["SubagentRosterEntry"][];
+            parent: components["schemas"]["AgentOperationsAgent"];
+        };
+        SubagentRelationship: {
+            childSessionId: string;
+            createdAt: string;
+            label?: string | null;
+            parentSessionId: string;
+            sessionLinkId: string;
+            subagentClosedAt?: string | null;
+            subagentId?: string | null;
+        };
+        SubagentRosterEntry: {
+            agent: components["schemas"]["AgentOperationsAgent"];
+            latestCompletion?: null | components["schemas"]["SubagentLatestCompletion"];
+            relationship: components["schemas"]["SubagentRelationship"];
         };
         SubagentStatus: {
             /** @enum {string} */
@@ -5434,6 +5507,10 @@ export interface components {
             outcome: components["schemas"]["WorkspaceRetireOutcome"];
             preflight: components["schemas"]["WorkspaceRetirePreflightResponse"];
             workspace: components["schemas"]["Workspace"];
+        };
+        WorkspaceSubagentsResponse: {
+            parents: components["schemas"]["SubagentParentRoster"][];
+            workspaceId: string;
         };
         /** @enum {string} */
         WorkspaceSurface: "standard" | "cowork";
@@ -7150,6 +7227,167 @@ export interface operations {
             };
         };
     };
+    get_session_subagents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent session ID */
+                parent_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Parent and current durable subagents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionSubagentsResponse"];
+                };
+            };
+            /** @description Agent not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    close_subagent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent session ID */
+                parent_session_id: string;
+                /** @description Child subagent session ID */
+                child_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subagent relationship is Closed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubagentLifecycleResponse"];
+                };
+            };
+            /** @description Agent not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Subagent lifecycle conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    open_subagent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent session ID */
+                parent_session_id: string;
+                /** @description Child subagent session ID */
+                child_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subagent relationship is Open */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubagentLifecycleResponse"];
+                };
+            };
+            /** @description Agent not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Subagent lifecycle conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    promote_subagent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent session ID */
+                parent_session_id: string;
+                /** @description Child subagent session ID */
+                child_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subagent promoted to an ordinary agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubagentLifecycleResponse"];
+                };
+            };
+            /** @description Agent not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Open the subagent before promotion */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_session: {
         parameters: {
             query?: never;
@@ -8264,94 +8502,6 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    get_session_subagents: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Session ID */
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Subagent parent/child context */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionSubagentsResponse"];
-                };
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    schedule_subagent_wake: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Parent session ID */
-                session_id: string;
-                /** @description Child subagent session ID */
-                child_session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ScheduleSubagentWakeRequest"];
-            };
-        };
-        responses: {
-            /** @description Scheduled a one-shot parent wake for the child subagent */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduleSubagentWakeResponse"];
-                };
-            };
-            /** @description Invalid subagent wake request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Workspace or subagent state blocks wake scheduling */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10899,6 +11049,38 @@ export interface operations {
                 };
             };
             /** @description No setup execution found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_workspace_subagents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current durable subagent roster */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSubagentsResponse"];
+                };
+            };
+            /** @description Workspace not found */
             404: {
                 headers: {
                     [name: string]: unknown;

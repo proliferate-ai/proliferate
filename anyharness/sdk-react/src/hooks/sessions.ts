@@ -29,6 +29,7 @@ import {
   anyHarnessSessionLiveConfigKey,
   anyHarnessSessionSubagentsKey,
   anyHarnessSessionsKey,
+  anyHarnessWorkspaceSubagentsKey,
 } from "../lib/query-keys.js";
 
 interface WorkspaceQueryOptions {
@@ -204,29 +205,62 @@ export function useSessionSubagentsQuery(
   });
 }
 
-export function useScheduleSubagentWakeMutation(options?: { workspaceId?: string | null }) {
+type SubagentLifecycleMutationInput = {
+  parentSessionId: string;
+  childSessionId: string;
+};
+
+function useSubagentLifecycleMutation(
+  action: "closeSubagent" | "openSubagent" | "promoteSubagent",
+  options?: { workspaceId?: string | null },
+) {
   const workspace = useAnyHarnessWorkspaceContext();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (input: { sessionId: string; childSessionId: string }) => {
+    mutationFn: async (input: SubagentLifecycleMutationInput) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.scheduleSubagentWake(input.sessionId, input.childSessionId);
+      return client.sessions[action](input.parentSessionId, input.childSessionId);
     },
     onSuccess: async (_response, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, variables.sessionId),
+          queryKey: anyHarnessWorkspaceSubagentsKey(cacheScopeKey, workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionSubagentsKey(
+            cacheScopeKey,
+            workspaceId,
+            variables.parentSessionId,
+          ),
         }),
         queryClient.invalidateQueries({
           queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, variables.childSessionId),
         }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.childSessionId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId),
+        }),
       ]);
     },
   });
+}
+
+export function useCloseSubagentMutation(options?: { workspaceId?: string | null }) {
+  return useSubagentLifecycleMutation("closeSubagent", options);
+}
+
+export function useOpenSubagentMutation(options?: { workspaceId?: string | null }) {
+  return useSubagentLifecycleMutation("openSubagent", options);
+}
+
+export function usePromoteSubagentMutation(options?: { workspaceId?: string | null }) {
+  return useSubagentLifecycleMutation("promoteSubagent", options);
 }
 
 export function useCreateSessionMutation(options?: { workspaceId?: string | null }) {

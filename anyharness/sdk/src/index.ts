@@ -251,12 +251,6 @@ export type {
   PendingPromptSummary,
   EditPendingPromptRequest,
   ReorderPendingPromptsRequest,
-  SessionSubagentsResponse,
-  ScheduleSubagentWakeRequest,
-  ScheduleSubagentWakeResponse,
-  ParentSubagentLinkSummary,
-  ChildSubagentSummary,
-  SubagentCompletionSummary,
   InteractionDecision,
   ListSessionEventsOptions,
   McpElicitationUrlRevealResponse,
@@ -285,6 +279,24 @@ export type {
   FeedRef,
   FeedKind,
 } from "./types/sessions.js";
+export type {
+  AgentOperationsIdentity,
+  AgentOperationsWorkspaceIdentity,
+  AgentOperationsRole,
+  AgentOperationsPresentationStatus,
+  AgentOperationsExecutionStatus,
+  AgentOperationsStatus,
+  AgentOperationsCapability,
+  AgentOperationsConfiguration,
+  AgentOperationsAgent,
+  SubagentRelationship,
+  SubagentLatestCompletion,
+  SubagentRosterEntry,
+  SubagentParentRoster,
+  SessionSubagentsResponse,
+  WorkspaceSubagentsResponse,
+  SubagentLifecycleResponse,
+} from "./types/subagents.js";
 
 export type {
   ProposedPlanSummary,

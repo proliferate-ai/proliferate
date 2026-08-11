@@ -129,6 +129,48 @@ describe("SessionsClient.listEvents", () => {
   });
 });
 
+describe("SessionsClient subagent operations", () => {
+  it("uses the parent-scoped roster and lifecycle URLs", async () => {
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    const transport = {
+      get: async (path: string) => {
+        calls.push({ method: "GET", path });
+        return {};
+      },
+      post: async (path: string, body: unknown) => {
+        calls.push({ method: "POST", path, body });
+        return { agent: {}, relationship: null };
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new SessionsClient(transport);
+
+    await client.getSubagents("parent/session");
+    await client.closeSubagent("parent/session", "child/session");
+    await client.openSubagent("parent/session", "child/session");
+    const promoted = await client.promoteSubagent("parent/session", "child/session");
+
+    expect(calls).toEqual([
+      { method: "GET", path: "/v1/sessions/parent%2Fsession/subagents" },
+      {
+        method: "POST",
+        path: "/v1/sessions/parent%2Fsession/subagents/child%2Fsession/close",
+        body: undefined,
+      },
+      {
+        method: "POST",
+        path: "/v1/sessions/parent%2Fsession/subagents/child%2Fsession/open",
+        body: undefined,
+      },
+      {
+        method: "POST",
+        path: "/v1/sessions/parent%2Fsession/subagents/child%2Fsession/promote",
+        body: undefined,
+      },
+    ]);
+    expect(promoted.relationship).toBeNull();
+  });
+});
+
 describe("SessionsClient.setConfigOption", () => {
   it("forwards request options to the config mutation transport", async () => {
     const calls: Array<{
