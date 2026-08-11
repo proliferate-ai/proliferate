@@ -17,7 +17,7 @@ use super::model::WorkspaceRecord;
 use super::runtime::{normalize_workspace_display_name, WorkspaceResolution, WorkspaceRuntime};
 use super::types::SetWorkspaceDisplayNameError;
 use super::worktree_checkout::WorktreeCheckoutMode;
-use super::worktree_names::WorktreeNameConflictPolicy;
+use super::worktree_names::{WorktreeNameConflictError, WorktreeNameConflictPolicy};
 use super::worktree_runtime::{
     CreateWorktreeWorkflowError, CreateWorktreeWorkflowInput, CreateWorktreeWorkflowResult,
     WorkspaceWorktreeRuntime,
@@ -33,7 +33,12 @@ use crate::origin::OriginContext;
 pub enum WorkspaceRepositoryAvailability {
     Present,
     Missing,
-    Unreadable { reason: String },
+    Unreadable {
+        /// Retained for local diagnostics and error chains, but never exposed
+        /// through the workspace-options wire projection.
+        #[serde(skip_serializing)]
+        diagnostic: String,
+    },
 }
 
 impl WorkspaceRepositoryAvailability {
@@ -45,9 +50,7 @@ impl WorkspaceRepositoryAvailability {
         match self {
             Self::Present => None,
             Self::Missing => Some("The repository checkout is missing from this runtime.".into()),
-            Self::Unreadable { reason } => Some(format!(
-                "The repository checkout could not be read: {reason}"
-            )),
+            Self::Unreadable { .. } => Some("The repository checkout could not be read.".into()),
         }
     }
 }
@@ -195,6 +198,10 @@ pub enum WorkspaceOptionsError {
     Access(#[from] WorkspaceAccessError),
     #[error("workspace option task failed: {0}")]
     TaskFailed(#[from] tokio::task::JoinError),
+    #[error("requested worktree name conflicts with existing owner state")]
+    WorktreeConflict(#[source] WorktreeNameConflictError),
+    #[error("worktree owner rejected workspace creation")]
+    WorktreeCreate(#[source] CreateWorktreeWorkflowError),
     #[error("workspace operation failed")]
     Create(#[source] anyhow::Error),
 }
@@ -211,6 +218,8 @@ impl WorkspaceOptionsError {
             Self::DisplayNameTooLong(_) => "WORKSPACE_DISPLAY_NAME_INVALID",
             Self::WorkspaceNotFound(_) => "WORKSPACE_NOT_FOUND",
             Self::Access(_) => "WORKSPACE_ACCESS_DENIED",
+            Self::WorktreeConflict(_) => "WORKSPACE_WORKTREE_CONFLICT",
+            Self::WorktreeCreate(_) => "WORKSPACE_WORKTREE_CREATE_FAILED",
             Self::TaskFailed(_) | Self::Create(_) => "WORKSPACE_OPERATION_FAILED",
         }
     }
@@ -235,6 +244,12 @@ impl WorkspaceOptionsError {
             Self::WorkspaceNotFound(_) => "The requested workspace was not found.".into(),
             Self::Access(_) => {
                 "Workspace creation is not allowed while the workspace is read-only.".into()
+            }
+            Self::WorktreeConflict(_) => {
+                "The requested worktree branch or path is already in use.".into()
+            }
+            Self::WorktreeCreate(_) => {
+                "Worktree creation could not use the requested branch and path.".into()
             }
             Self::TaskFailed(_) | Self::Create(_) => "Workspace operation failed.".into(),
         }
@@ -415,12 +430,20 @@ impl WorkspaceOptionRuntime {
                 checkout_mode: WorktreeCheckoutMode::NewBranch,
                 setup_script: None,
                 surface: "standard".to_string(),
-                name_conflict_policy: WorktreeNameConflictPolicy::SuffixPathAndBranch,
+                // `branch` is an explicit caller token. The workspace owner
+                // must either create that exact branch/path pair or return a
+                // conflict; generated-name suffixing is not valid here.
+                name_conflict_policy: WorktreeNameConflictPolicy::Fail,
                 origin: input.origin.clone(),
                 creator_context: Some(input.creator_context.clone()),
             })
             .await
-            .map_err(|error| WorkspaceOptionsError::Create(anyhow::Error::new(error)))?;
+            .map_err(|error| match error {
+                CreateWorktreeWorkflowError::NameConflict(conflict) => {
+                    WorkspaceOptionsError::WorktreeConflict(conflict)
+                }
+                error => WorkspaceOptionsError::WorktreeCreate(error),
+            })?;
         Ok(result.worktree.workspace)
     }
 }
@@ -485,7 +508,7 @@ fn discover_repository(
             ),
             Err(error) => (
                 WorkspaceRepositoryAvailability::Unreadable {
-                    reason: error.to_string(),
+                    diagnostic: error.to_string(),
                 },
                 Vec::new(),
             ),
@@ -496,7 +519,7 @@ fn discover_repository(
         }
         Err(error) => (
             WorkspaceRepositoryAvailability::Unreadable {
-                reason: error.to_string(),
+                diagnostic: error.to_string(),
             },
             Vec::new(),
         ),
@@ -669,7 +692,7 @@ mod tests {
         for availability in [
             WorkspaceRepositoryAvailability::Missing,
             WorkspaceRepositoryAvailability::Unreadable {
-                reason: "permission denied".into(),
+                diagnostic: "permission denied at /private/runtime/repository".into(),
             },
         ] {
             let error =
@@ -683,6 +706,38 @@ mod tests {
                 } if observed == availability
             ));
         }
+    }
+
+    #[test]
+    fn unreadable_repository_serializes_only_a_stable_state_and_safe_message() {
+        let raw_diagnostic =
+            "fatal: could not read /private/customer/repository/.git: permission denied";
+        let availability = WorkspaceRepositoryAvailability::Unreadable {
+            diagnostic: raw_diagnostic.to_string(),
+        };
+        let projected = options(availability.clone());
+        let json = serde_json::to_value(&projected).expect("serialize workspace options");
+        assert_eq!(
+            json["repositories"][0]["availability"]["state"],
+            "unreadable"
+        );
+        assert_eq!(
+            json["repositories"][0]["unavailableReason"],
+            "The repository checkout could not be read."
+        );
+        let serialized = json.to_string();
+        assert!(!serialized.contains(raw_diagnostic));
+        assert!(!serialized.contains("/private/customer"));
+
+        let error = WorkspaceOptionsError::RepositoryUnavailable {
+            repository_id: "repo-1".to_string(),
+            availability,
+        };
+        assert_eq!(error.code(), "WORKSPACE_REPOSITORY_UNAVAILABLE");
+        let public = error.public_message();
+        assert_eq!(public, "The repository checkout could not be read.");
+        assert!(!public.contains("permission denied"));
+        assert!(!public.contains("/private/customer"));
     }
 
     #[test]

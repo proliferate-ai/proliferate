@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::domains::agents::model::ModelCatalogStatus;
+use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::options::{WorkspaceCreationMode, WorkspaceCreationOptions};
+use crate::origin::OriginContext;
 
 pub const DEFAULT_AGENT_PAGE_SIZE: usize = 50;
 pub const MAX_AGENT_PAGE_SIZE: usize = 100;
@@ -262,6 +264,10 @@ pub struct WorkspaceView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_branch: Option<String>,
     pub lifecycle_state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<OriginContext>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creator_context: Option<WorkspaceCreatorContext>,
     pub created_at: String,
     pub updated_at: String,
 }
