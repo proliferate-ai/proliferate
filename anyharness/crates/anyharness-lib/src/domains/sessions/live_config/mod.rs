@@ -11,6 +11,66 @@ mod tests;
 pub const ACP_MODEL_COMPAT_CONFIG_ID: &str = "model";
 pub const LEGACY_MODE_COMPAT_CONFIG_ID: &str = "mode";
 
+/// Sessions-owned effective live-config vocabulary for application domains.
+/// Contract fidelity remains inside sessions; consumers receive only the
+/// normalized ids and values that a later mutation can validate and apply.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectiveLiveConfigValue {
+    pub value: String,
+    pub label: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectiveLiveConfigControl {
+    pub key: String,
+    pub config_id: String,
+    pub label: String,
+    pub current_value: Option<String>,
+    pub settable: bool,
+    pub values: Vec<EffectiveLiveConfigValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectiveLiveConfigSnapshot {
+    pub controls: Vec<EffectiveLiveConfigControl>,
+}
+
+pub fn effective_live_config_snapshot(
+    snapshot: SessionLiveConfigSnapshot,
+) -> EffectiveLiveConfigSnapshot {
+    let controls = snapshot.normalized_controls;
+    let mut normalized = Vec::new();
+    normalized.extend(controls.model);
+    normalized.extend(controls.collaboration_mode);
+    normalized.extend(controls.reasoning);
+    normalized.extend(controls.effort);
+    normalized.extend(controls.fast_mode);
+    normalized.extend(controls.mode);
+    normalized.extend(controls.extras);
+    EffectiveLiveConfigSnapshot {
+        controls: normalized
+            .into_iter()
+            .map(|control| EffectiveLiveConfigControl {
+                key: control.key,
+                config_id: control.raw_config_id,
+                label: control.label,
+                current_value: control.current_value,
+                settable: control.settable,
+                values: control
+                    .values
+                    .into_iter()
+                    .map(|value| EffectiveLiveConfigValue {
+                        value: value.value,
+                        label: value.label,
+                        description: value.description,
+                    })
+                    .collect(),
+            })
+            .collect(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionModelOption {
     pub id: String,

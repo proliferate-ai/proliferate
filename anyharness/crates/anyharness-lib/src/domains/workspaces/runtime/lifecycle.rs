@@ -10,7 +10,26 @@ use crate::domains::workspaces::types::{
     ProjectSetupDetectionResult, SetWorkspaceDisplayNameError,
 };
 
-const MAX_WORKSPACE_DISPLAY_NAME_CHARS: usize = 160;
+pub(crate) const MAX_WORKSPACE_DISPLAY_NAME_CHARS: usize = 160;
+
+pub(crate) fn normalize_workspace_display_name(
+    display_name: Option<&str>,
+) -> Result<Option<String>, SetWorkspaceDisplayNameError> {
+    let normalized = display_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    if let Some(value) = normalized.as_deref() {
+        if value.chars().count() > MAX_WORKSPACE_DISPLAY_NAME_CHARS {
+            return Err(SetWorkspaceDisplayNameError::TooLong(
+                MAX_WORKSPACE_DISPLAY_NAME_CHARS,
+            ));
+        }
+    }
+
+    Ok(normalized)
+}
 
 impl WorkspaceRuntime {
     pub fn get_workspace(&self, workspace_id: &str) -> anyhow::Result<Option<WorkspaceRecord>> {
@@ -31,18 +50,7 @@ impl WorkspaceRuntime {
         workspace_id: &str,
         display_name: Option<&str>,
     ) -> Result<WorkspaceRecord, SetWorkspaceDisplayNameError> {
-        let normalized = display_name
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string);
-
-        if let Some(value) = normalized.as_deref() {
-            if value.chars().count() > MAX_WORKSPACE_DISPLAY_NAME_CHARS {
-                return Err(SetWorkspaceDisplayNameError::TooLong(
-                    MAX_WORKSPACE_DISPLAY_NAME_CHARS,
-                ));
-            }
-        }
+        let normalized = normalize_workspace_display_name(display_name)?;
 
         let existing = self
             .store

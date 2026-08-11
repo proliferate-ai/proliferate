@@ -8,6 +8,8 @@ mod workspaces;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use sha2::{Digest, Sha256};
+
 use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::hosting::PrStatusCache;
 use crate::adapters::processes::ProcessService;
@@ -16,13 +18,16 @@ use crate::domains::activity::feeds::FeedService;
 use crate::domains::activity::runtime::{ActivityRuntime, ActivitySessionHooks};
 use crate::domains::activity::service::ActivityService;
 use crate::domains::activity::store::ActivityStore;
+use crate::domains::agent_operations::mcp::auth::WorkspaceMcpAuth;
+use crate::domains::agent_operations::model::RuntimeIdentity;
+use crate::domains::agent_operations::runtime::AgentOperations;
 use crate::domains::agents::catalog::gateway_plan::GatewayModelPlanner;
 use crate::domains::agents::catalog::service::AgentCatalogService;
-use crate::domains::agents::model_snapshot::targets::RuntimeProbeTargets;
-use crate::domains::agents::model_snapshot::ModelSnapshotService;
 use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
+use crate::domains::agents::model_snapshot::targets::RuntimeProbeTargets;
+use crate::domains::agents::model_snapshot::ModelSnapshotService;
 use crate::domains::agents::runtime::AgentRuntime;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
@@ -77,10 +82,11 @@ use crate::domains::workspaces::files_runtime::{
 };
 use crate::domains::workspaces::inventory::WorktreeInventoryService;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
+use crate::domains::workspaces::options::WorkspaceOptionRuntime;
 use crate::domains::workspaces::purge::WorkspacePurgeService;
-use crate::domains::workspaces::retire::WorkspaceRetireService;
 use crate::domains::workspaces::restore_runtime::RestoreWorktreeRuntime;
 use crate::domains::workspaces::retention::WorkspaceRetentionService;
+use crate::domains::workspaces::retire::WorkspaceRetireService;
 use crate::domains::workspaces::retire_preflight::RetirePreflightChecker;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::domains::workspaces::setup_runtime::WorkspaceSetupRuntime;
@@ -135,6 +141,7 @@ pub struct AppState {
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub workspace_setup_runtime: Arc<WorkspaceSetupRuntime>,
     pub workspace_worktree_runtime: Arc<WorkspaceWorktreeRuntime>,
+    pub workspace_option_runtime: Arc<WorkspaceOptionRuntime>,
     pub restore_worktree_runtime: Arc<RestoreWorktreeRuntime>,
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
     pub process_service: Arc<ProcessService>,
@@ -151,6 +158,7 @@ pub struct AppState {
     pub review_session_hooks: Arc<ReviewSessionHooks>,
     pub integration_gateway_session_launch_extension: Arc<IntegrationGatewaySessionLaunchExtension>,
     pub review_runtime: Arc<ReviewRuntime>,
+    pub agent_operations: Arc<AgentOperations>,
     pub product_mcp_endpoint_registry: Arc<ProductMcpEndpointRegistry>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
@@ -495,6 +503,12 @@ impl AppState {
             workspace_setup_runtime.clone(),
             workspace_retention_service.clone(),
         ));
+        let workspace_option_runtime = Arc::new(WorkspaceOptionRuntime::new(
+            repo_root_service.clone(),
+            workspace_runtime.clone(),
+            workspace_worktree_runtime.clone(),
+            workspace_access_gate.clone(),
+        ));
         let restore_worktree_runtime = Arc::new(RestoreWorktreeRuntime::new(
             workspace_runtime.clone(),
             workspace_operation_gate.clone(),
@@ -543,8 +557,25 @@ impl AppState {
         review_runtime
             .clone()
             .spawn_background_tasks(review_hook_event_rx);
+        let runtime_identity = runtime_identity(&auth_manager, &runtime_home);
+        let agent_operations = Arc::new(
+            AgentOperations::new(
+                runtime_identity,
+                session_service.clone(),
+                Arc::new(session_link_service.clone()),
+                session_runtime.clone(),
+            )
+            .with_workspace_catalogs(
+                workspace_option_runtime.clone(),
+                session_runtime.clone(),
+                session_service.clone(),
+            ),
+        );
+        let workspace_mcp_auth = Arc::new(WorkspaceMcpAuth::new(runtime_home.clone()));
         let product_mcp_endpoint_registry =
             product_mcp::build_product_mcp_endpoint_registry(product_mcp::EndpointRegistryDeps {
+                agent_operations: agent_operations.clone(),
+                workspace_mcp_auth,
                 review_runtime: review_runtime.clone(),
                 review_mcp_auth,
                 subagent_service: subagent_service.clone(),
@@ -582,6 +613,7 @@ impl AppState {
             workspace_runtime,
             workspace_setup_runtime,
             workspace_worktree_runtime,
+            workspace_option_runtime,
             restore_worktree_runtime,
             files_runtime,
             process_service,
@@ -598,6 +630,7 @@ impl AppState {
             review_session_hooks,
             integration_gateway_session_launch_extension,
             review_runtime,
+            agent_operations,
             product_mcp_endpoint_registry,
             session_service,
             session_runtime,
@@ -628,6 +661,23 @@ impl AppState {
             agent_login_terminal_service,
         })
     }
+}
+
+fn runtime_identity(auth_manager: &AuthManager, runtime_home: &std::path::Path) -> RuntimeIdentity {
+    if let Some(target_id) = auth_manager.runtime_target_id() {
+        return RuntimeIdentity::new(target_id);
+    }
+    // Direct local runtimes have no managed target id. Hash the canonical
+    // runtime-home identity so the fallback is stable without exposing a host
+    // filesystem path through Workspace MCP responses.
+    let stable_home = std::fs::canonicalize(runtime_home)
+        .unwrap_or_else(|_| runtime_home.to_path_buf())
+        .to_string_lossy()
+        .into_owned();
+    RuntimeIdentity::new(format!(
+        "local:{:x}",
+        Sha256::digest(stable_home.as_bytes())
+    ))
 }
 
 fn load_runtime_target_id() -> Option<String> {
