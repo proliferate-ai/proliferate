@@ -15,11 +15,13 @@ import {
 import {
   useRuntimeWorkspacesQuery,
   useWorkspaceQuery,
+  useWorkspaceSubagentsQuery,
 } from "./workspaces.js";
 
 const mocks = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
   getWorkspace: vi.fn(),
+  listSubagents: vi.fn(),
   clientConnection: vi.fn(),
 }));
 
@@ -30,6 +32,7 @@ vi.mock("../lib/client-cache.js", () => ({
       workspaces: {
         list: mocks.listWorkspaces,
         get: mocks.getWorkspace,
+        listSubagents: mocks.listSubagents,
       },
     };
   },
@@ -40,6 +43,7 @@ describe("sdk-react workspace query request options", () => {
     cleanup();
     mocks.listWorkspaces.mockReset();
     mocks.getWorkspace.mockReset();
+    mocks.listSubagents.mockReset();
     mocks.clientConnection.mockReset();
   });
 
@@ -59,6 +63,24 @@ describe("sdk-react workspace query request options", () => {
     expect(JSON.stringify(queryClient.getQueryCache().getAll().map((query) => query.queryKey)))
       .not
       .toContain("signal");
+  });
+
+  it("queries the workspace subagent roster with the resolved runtime id", async () => {
+    mocks.listSubagents.mockResolvedValue({
+      workspaceId: "anyharness-workspace-1",
+      parents: [],
+    });
+    const queryClient = createQueryClient();
+
+    const { result } = renderHook(() => useWorkspaceSubagentsQuery(), {
+      wrapper: createWrapper(queryClient, "http://runtime-workspaces.test"),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mocks.listSubagents).toHaveBeenCalledWith(
+      "anyharness-workspace-1",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("composes caller-provided request signals for workspace display queries", async () => {
