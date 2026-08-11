@@ -16,14 +16,9 @@ fn built_collector_binary() -> std::path::PathBuf {
         .join("proliferate-diagnostics-collector")
 }
 
-fn built_cli_binary() -> std::path::PathBuf {
-    std::env::current_exe()
-        .expect("current test executable")
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("target profile directory")
-        .join("proliferate-debug")
-}
+#[path = "server/cli_test_binary.rs"]
+mod cli_test_binary;
+use cli_test_binary::built_cli_binary;
 
 fn empty_filters() -> RecordsFilterV1 {
     RecordsFilterV1 {

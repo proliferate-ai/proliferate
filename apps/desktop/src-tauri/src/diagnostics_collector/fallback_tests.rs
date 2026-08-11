@@ -13,8 +13,11 @@ fn fallback_rotates_whole_records_and_stays_bounded() {
     let path = temp_path();
     let writer = FallbackDiagnosticsWriter::open_for_test(path.clone()).expect("open fallback");
     for index in 0..12 {
-        let record =
-            serde_json::json!({"index": index, "message": "x".repeat(130_000)}).to_string();
+        let record = serde_json::json!({
+            "index": index,
+            "message": "safe ".repeat(26_000),
+        })
+        .to_string();
         writer.record(&record).expect("write fallback record");
     }
     let health = writer.health();

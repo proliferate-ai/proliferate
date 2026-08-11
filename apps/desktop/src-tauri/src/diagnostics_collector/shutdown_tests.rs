@@ -219,10 +219,17 @@ async fn ordered_shutdown_reaps_live_children_cancels_tail_and_is_idempotent() {
         }
     ));
 
-    let tail_error = tokio::time::timeout(std::time::Duration::from_secs(2), tail.next())
-        .await
-        .expect("tail cancellation deadline")
-        .expect_err("tail cancelled by app shutdown");
+    let tail_error = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            match tail.next().await {
+                Ok(Some(_)) => {}
+                Ok(None) => panic!("tail ended without the shutdown cancellation receipt"),
+                Err(error) => break error,
+            }
+        }
+    })
+    .await
+    .expect("tail cancellation deadline");
     assert_eq!(
         tail_error.classification(),
         crate::diagnostics_collector::broker::protocol::DiagnosticsBrokerErrorV1::Cancelled
