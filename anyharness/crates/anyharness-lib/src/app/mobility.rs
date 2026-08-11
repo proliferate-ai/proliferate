@@ -36,7 +36,6 @@ pub(super) fn wire_mobility(deps: MobilityWiringDeps) -> Arc<MobilityRuntime> {
     let service = Arc::new(MobilityService::new(
         deps.workspace_runtime.clone(),
         deps.session_service.clone(),
-        deps.subagent_service.clone(),
         deps.workspace_access_gate.clone(),
         deps.runtime_home,
     ));

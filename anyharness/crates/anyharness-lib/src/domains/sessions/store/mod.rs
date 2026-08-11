@@ -8,7 +8,7 @@ pub(crate) mod idempotent_create;
 pub(crate) mod link_completions;
 mod links;
 mod live_config;
-mod mobility;
+pub(crate) mod mobility;
 mod notifications;
 pub(in crate::domains::sessions) mod pending_prompts;
 pub(crate) mod persisted_payloads;
