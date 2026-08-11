@@ -36,14 +36,6 @@ impl SubagentStore {
         }
     }
 
-    pub fn list_for_parent_sessions(
-        &self,
-        parent_session_ids: &[String],
-    ) -> anyhow::Result<Vec<CompletionDeliveryRecord>> {
-        self.delivery_inner
-            .list_for_parent_sessions(parent_session_ids)
-    }
-
     pub fn import_completion_delivery(
         &self,
         delivery: &CompletionDeliveryRecord,

@@ -526,7 +526,7 @@ pub(crate) fn delete_session_link_rows_for_session_in_tx(
     Ok(())
 }
 
-fn map_session_link(row: &rusqlite::Row) -> rusqlite::Result<SessionLinkRecord> {
+pub(crate) fn map_session_link(row: &rusqlite::Row) -> rusqlite::Result<SessionLinkRecord> {
     let relation: String = row.get("relation")?;
     let workspace_relation: String = row.get("workspace_relation")?;
     Ok(SessionLinkRecord {

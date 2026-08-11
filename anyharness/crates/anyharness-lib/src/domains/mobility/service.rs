@@ -4,15 +4,11 @@ use std::sync::Arc;
 
 use anyhow::Context;
 
-use crate::adapters::git::executor::run_git_ok;
-use crate::domains::agents::portability::collect_agent_artifacts;
 use crate::domains::mobility::model::{
     MobilityFileData, WorkspaceMobilityArchiveData, WorkspaceMobilityExportOptions,
-    WorkspaceMobilitySessionBundleData, MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
+    MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
 };
-use crate::domains::mobility::workspace_delta::{collect_workspace_delta, current_branch_name};
 use crate::domains::sessions::service::SessionService;
-use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
 use crate::domains::workspaces::model::WorkspaceRecord;
@@ -22,11 +18,10 @@ use crate::{
     adapters::git::{types::GitOperation, GitService},
 };
 
-const INCLUDE_RAW_NOTIFICATIONS_ENV: &str = "ANYHARNESS_MOBILITY_INCLUDE_RAW_NOTIFICATIONS";
-
 mod archive;
 pub(super) use archive::archive_estimated_size_bytes;
 use archive::validate_completion_deliveries;
+mod export;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MobilityError {
@@ -55,7 +50,6 @@ pub enum MobilityError {
 pub struct MobilityService {
     workspace_runtime: Arc<WorkspaceRuntime>,
     session_service: Arc<SessionService>,
-    subagent_service: Arc<SubagentService>,
     access_gate: Arc<WorkspaceAccessGate>,
     /// The runtime home directory, for locating per-session agent artifacts.
     /// A path fact, handed in by `app/` — the same value `SessionRuntime` gets.
@@ -66,164 +60,15 @@ impl MobilityService {
     pub fn new(
         workspace_runtime: Arc<WorkspaceRuntime>,
         session_service: Arc<SessionService>,
-        subagent_service: Arc<SubagentService>,
         access_gate: Arc<WorkspaceAccessGate>,
         runtime_home: PathBuf,
     ) -> Self {
         Self {
             workspace_runtime,
             session_service,
-            subagent_service,
             access_gate,
             runtime_home,
         }
-    }
-
-    pub fn export_workspace_archive(
-        &self,
-        workspace_id: &str,
-        options: &WorkspaceMobilityExportOptions,
-    ) -> Result<WorkspaceMobilityArchiveData, MobilityError> {
-        let workspace = self.load_workspace(workspace_id)?;
-        self.validate_expected_export_runtime_state(workspace_id, options)?;
-        let workspace_path = PathBuf::from(&workspace.path);
-        let repo_root = GitService::resolve_repo_root(&workspace_path)
-            .map_err(|_| MobilityError::NotGitWorkspace(workspace.path.clone()))?;
-        let repo_root_string = repo_root.display().to_string();
-        let base_commit_sha = run_git_ok(&repo_root, &["rev-parse", "HEAD"])?
-            .trim()
-            .to_string();
-        let branch_name = current_branch_name(&repo_root)?;
-        if options.require_clean_git_state {
-            validate_expected_export_git_state(
-                workspace_id,
-                &workspace_path,
-                &base_commit_sha,
-                branch_name.as_deref(),
-                options,
-            )?;
-        }
-        let delta = collect_workspace_delta(&repo_root, &options.exclude_paths)?;
-        if options.require_clean_git_state {
-            if !delta.files.is_empty() || !delta.deleted_paths.is_empty() {
-                return Err(MobilityError::Invalid(
-                    "Source workspace changed while preparing the mobility archive".to_string(),
-                ));
-            }
-            validate_clean_repo_for_mobility(
-                workspace_id,
-                &workspace_path,
-                "Source workspace must stay clean while exporting a mobility archive",
-            )?;
-        }
-        let sessions = self.collect_workspace_sessions(&workspace)?;
-        let session_ids = sessions
-            .iter()
-            .map(|bundle| bundle.session.id.clone())
-            .collect::<HashSet<_>>();
-        let (session_links, session_link_completions, session_link_wake_schedules, partial_graph) =
-            self.subagent_service
-                .mobility_graph_for_sessions(&session_ids)
-                .map_err(MobilityError::Internal)?;
-        let mut parent_session_ids = session_ids.iter().cloned().collect::<Vec<_>>();
-        parent_session_ids.sort();
-        let session_link_completion_deliveries = self
-            .subagent_service
-            .completion_deliveries_for_parent_sessions(&parent_session_ids)
-            .map_err(MobilityError::Internal)?;
-        if let Some(missing_id) = partial_graph.first() {
-            return Err(MobilityError::Invalid(format!(
-                "cannot export partial subagent graph; linked session {missing_id} is outside the archive"
-            )));
-        }
-        self.validate_expected_export_runtime_state(workspace_id, options)?;
-
-        let archive = WorkspaceMobilityArchiveData {
-            source_workspace_id: Some(workspace.id),
-            source_workspace_path: workspace.path,
-            repo_root_path: repo_root_string,
-            branch_name,
-            base_commit_sha,
-            files: delta.files,
-            deleted_paths: delta.deleted_paths,
-            sessions,
-            session_links,
-            session_link_completions,
-            session_link_completion_deliveries,
-            session_link_wake_schedules,
-        };
-        validate_archive_size(&archive)?;
-        Ok(archive)
-    }
-
-    fn collect_workspace_sessions(
-        &self,
-        workspace: &WorkspaceRecord,
-    ) -> Result<Vec<WorkspaceMobilitySessionBundleData>, MobilityError> {
-        let workspace_path = PathBuf::from(&workspace.path);
-        let sessions = self
-            .session_service
-            .store()
-            .list_by_workspace(&workspace.id)?;
-        let mut bundles = Vec::new();
-        let runtime_home = Some(self.runtime_home.as_path());
-        for mut session in sessions {
-            if !is_supported_agent_kind(&session.agent_kind) {
-                continue;
-            }
-            // MCP bindings are workspace-local encrypted state; sessions rebind after handoff.
-            session.mcp_bindings_ciphertext = None;
-            let live_config_snapshot = self
-                .session_service
-                .store()
-                .find_live_config_snapshot(&session.id)?;
-            let pending_config_changes = self
-                .session_service
-                .store()
-                .list_pending_config_changes(&session.id)?;
-            let pending_prompts = self
-                .session_service
-                .store()
-                .list_pending_prompts(&session.id)?;
-            let prompt_attachments = self
-                .session_service
-                .store()
-                .list_prompt_attachments(&session.id)?
-                .into_iter()
-                .map(|record| {
-                    let content = self
-                        .session_service
-                        .read_prompt_attachment_content(&record)?;
-                    Ok(
-                        crate::domains::mobility::model::MobilityPromptAttachmentData {
-                            record,
-                            content,
-                        },
-                    )
-                })
-                .collect::<anyhow::Result<Vec<_>>>()?;
-            let events = self.session_service.store().list_events(&session.id)?;
-            let raw_notifications = if include_raw_notifications_in_mobility_archive() {
-                self.session_service
-                    .store()
-                    .list_raw_notifications(&session.id)?
-            } else {
-                Vec::new()
-            };
-            let agent_artifacts = collect_agent_artifacts(&session, &workspace_path, runtime_home)?;
-
-            bundles.push(WorkspaceMobilitySessionBundleData {
-                session,
-                live_config_snapshot,
-                pending_config_changes,
-                pending_prompts,
-                prompt_attachments,
-                events,
-                raw_notifications,
-                agent_artifacts,
-            });
-        }
-        Ok(bundles)
     }
 
     pub(super) fn load_workspace(
@@ -448,20 +293,7 @@ pub(super) fn is_supported_agent_kind(agent_kind: &str) -> bool {
     matches!(agent_kind, "claude" | "codex")
 }
 
-fn include_raw_notifications_in_mobility_archive() -> bool {
-    env_flag_enabled(INCLUDE_RAW_NOTIFICATIONS_ENV)
-}
-
-fn env_flag_enabled(key: &str) -> bool {
-    let Some(value) = std::env::var_os(key) else {
-        return false;
-    };
-    let value = value.to_string_lossy();
-    let normalized = value.trim().to_ascii_lowercase();
-    !normalized.is_empty() && !matches!(normalized.as_str(), "0" | "false" | "no" | "off")
-}
-
-fn validate_expected_export_git_state(
+pub(super) fn validate_expected_export_git_state(
     workspace_id: &str,
     workspace_path: &Path,
     base_commit_sha: &str,

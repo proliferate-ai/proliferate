@@ -477,7 +477,7 @@ impl SessionStore {
     }
 }
 
-fn map_event(row: &rusqlite::Row) -> rusqlite::Result<SessionEventRecord> {
+pub(super) fn map_event(row: &rusqlite::Row) -> rusqlite::Result<SessionEventRecord> {
     Ok(SessionEventRecord {
         id: row.get("id")?,
         session_id: row.get("session_id")?,

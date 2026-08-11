@@ -491,7 +491,7 @@ fn find_by_child_turn(
     .optional()
 }
 
-fn map_delivery(row: &rusqlite::Row<'_>) -> rusqlite::Result<CompletionDeliveryRecord> {
+pub(super) fn map_delivery(row: &rusqlite::Row<'_>) -> rusqlite::Result<CompletionDeliveryRecord> {
     let outcome: String = row.get("outcome")?;
     let state: String = row.get("state")?;
     Ok(CompletionDeliveryRecord {
