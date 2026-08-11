@@ -150,6 +150,25 @@ pub struct SessionRecord {
     pub origin: Option<OriginContext>,
 }
 
+/// Domain-owned execution facts for consumers that must not depend on the
+/// public HTTP contract. Actor presence is execution detail, not a durable
+/// session lifecycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionExecutionStatePhase {
+    Starting,
+    Running,
+    AwaitingInteraction,
+    Idle,
+    Errored,
+    Closed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionExecutionState {
+    pub phase: SessionExecutionStatePhase,
+    pub has_live_handle: bool,
+}
+
 impl SessionRecord {
     pub fn to_contract(&self) -> v1::Session {
         self.to_contract_with_details(None, None)

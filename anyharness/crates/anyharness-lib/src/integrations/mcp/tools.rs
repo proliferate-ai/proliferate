@@ -3,6 +3,22 @@ use serde_json::{json, Value};
 
 use super::json_rpc::jsonrpc_result;
 
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub struct McpToolCallError {
+    pub code: &'static str,
+    pub message: String,
+}
+
+impl McpToolCallError {
+    pub fn new(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+}
+
 pub fn jsonrpc_tool_result<T, E>(id: Option<Value>, result: Result<T, E>) -> Value
 where
     T: Serialize,
@@ -46,6 +62,23 @@ pub fn tool_definition(name: &str, description: &str, input_schema: Value) -> Va
         "description": description,
         "inputSchema": input_schema,
     })
+}
+
+pub fn jsonrpc_typed_tool_error(id: Option<Value>, error: &McpToolCallError) -> Value {
+    let structured = json!({
+        "error": {
+            "code": error.code,
+            "message": error.message,
+        }
+    });
+    jsonrpc_result(
+        id,
+        json!({
+            "content": [{ "type": "text", "text": error.message }],
+            "structuredContent": structured,
+            "isError": true,
+        }),
+    )
 }
 
 #[cfg(test)]
