@@ -572,6 +572,12 @@ impl AppState {
                 workspace_option_runtime.clone(),
                 session_runtime.clone(),
                 session_service.clone(),
+            )
+            .with_ordinary_operations(
+                session_runtime.clone(),
+                session_service.clone(),
+                session_admission.clone(),
+                workspace_operation_gate.clone(),
             ),
         );
         let workspace_mcp_auth = Arc::new(WorkspaceMcpAuth::new(runtime_home.clone()));

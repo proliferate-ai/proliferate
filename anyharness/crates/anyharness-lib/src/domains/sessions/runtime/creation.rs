@@ -15,6 +15,13 @@ use crate::origin::OriginContext;
 
 use super::{CreateAndStartSessionError, SessionRuntime};
 
+#[derive(Debug)]
+pub enum CreateOrdinaryAgentSessionError {
+    Create(CreateAndStartSessionError),
+    InitialTask(super::SendPromptError),
+    Cleanup(anyhow::Error),
+}
+
 /// Typed input for an internal (system-owned) durable session creation. Kept
 /// generic: nothing here is workflow-specific.
 pub(crate) struct InternalSessionCreateInput {
@@ -42,6 +49,99 @@ pub(crate) enum InternalSessionCreateError {
 }
 
 impl SessionRuntime {
+    /// Create one unlinked ordinary agent and optionally submit its initial
+    /// task through the existing prompt owner. A verified start or prompt
+    /// failure compensates only this freshly minted session: its handle is
+    /// retired first, then its durable graph is deleted.
+    pub async fn create_ordinary_agent_session(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        task: Option<String>,
+    ) -> Result<SessionRecord, CreateOrdinaryAgentSessionError> {
+        self.access_gate
+            .assert_can_mutate_for_workspace(workspace_id)
+            .map_err(|error| {
+                CreateOrdinaryAgentSessionError::Create(CreateAndStartSessionError::Invalid(
+                    error.to_string(),
+                ))
+            })?;
+        self.assert_workspace_checkout_present(workspace_id)
+            .map_err(CreateOrdinaryAgentSessionError::Create)?;
+        let record = self
+            .create_durable_session(
+                workspace_id,
+                agent_kind,
+                None,
+                model_id,
+                mode_id,
+                None,
+                vec![],
+                None,
+                SessionMcpBindingPolicy::InheritWorkspace,
+                true,
+                OriginContext::system_local_runtime(),
+            )
+            .map_err(CreateOrdinaryAgentSessionError::Create)?;
+
+        self.start_new_ordinary_agent_session(record, task).await
+    }
+
+    async fn start_new_ordinary_agent_session(
+        &self,
+        record: SessionRecord,
+        task: Option<String>,
+    ) -> Result<SessionRecord, CreateOrdinaryAgentSessionError> {
+        let started = match self.start_persisted_session(&record).await {
+            Ok(started) => started,
+            Err(error) => {
+                self.compensate_new_agent_session(&record.id).await?;
+                return Err(CreateOrdinaryAgentSessionError::Create(error));
+            }
+        };
+        let Some(task) = task else {
+            return Ok(started);
+        };
+        match self
+            .send_text_prompt_with_id(
+                &record.id,
+                task,
+                format!("agent-create-{}", uuid::Uuid::new_v4()),
+            )
+            .await
+        {
+            Ok(super::SendPromptOutcome::Running { session, .. })
+            | Ok(super::SendPromptOutcome::Queued { session, .. }) => Ok(session),
+            // Delivery reached the actor mailbox. Deleting here could destroy
+            // an accepted initial task, so preserve the session and surface
+            // the refreshed snapshot if available.
+            Err(super::TextPromptDispatchError::AcknowledgementLost) => self
+                .session_service
+                .get_session(&record.id)
+                .map_err(CreateOrdinaryAgentSessionError::Cleanup)
+                .map(|current| current.unwrap_or(started)),
+            Err(super::TextPromptDispatchError::Dispatch(error)) => {
+                self.compensate_new_agent_session(&record.id).await?;
+                Err(CreateOrdinaryAgentSessionError::InitialTask(error))
+            }
+        }
+    }
+
+    async fn compensate_new_agent_session(
+        &self,
+        session_id: &str,
+    ) -> Result<(), CreateOrdinaryAgentSessionError> {
+        if let Some(handle) = self.acp_manager.get_handle(session_id).await {
+            let _ = handle.close().await;
+        }
+        self.acp_manager.remove_session(session_id).await;
+        self.session_service
+            .delete_session(session_id)
+            .map_err(CreateOrdinaryAgentSessionError::Cleanup)
+    }
+
     #[tracing::instrument(skip_all, fields(workspace_id = %workspace_id, agent_kind = %agent_kind))]
     pub async fn create_and_start_session(
         &self,
@@ -307,6 +407,10 @@ impl SessionRuntime {
         .map_err(InternalSessionCreateError::Create)
     }
 }
+
+#[cfg(test)]
+#[path = "ordinary_creation_tests.rs"]
+mod ordinary_creation_tests;
 
 fn map_encrypt_bindings_error_to_create(
     error: SessionMcpBindingsError,

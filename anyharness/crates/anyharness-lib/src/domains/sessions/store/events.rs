@@ -243,6 +243,30 @@ impl SessionStore {
         })
     }
 
+    /// Read one bounded reverse-chronological batch from the only durable
+    /// event surface that can contribute user-visible task output. Filtering
+    /// in SQL avoids pulling arbitrary tool and runtime traffic into memory.
+    pub(crate) fn list_completed_items_before_desc(
+        &self,
+        session_id: &str,
+        before_seq: i64,
+        limit: i64,
+    ) -> anyhow::Result<Vec<SessionEventRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT *
+                 FROM session_events
+                 WHERE session_id = ?1
+                   AND seq < ?2
+                   AND event_type = 'item_completed'
+                 ORDER BY seq DESC
+                 LIMIT ?3",
+            )?;
+            let rows = stmt.query_map(params![session_id, before_seq, limit], map_event)?;
+            rows.collect()
+        })
+    }
+
     pub fn list_events_before_for_latest_turns(
         &self,
         session_id: &str,

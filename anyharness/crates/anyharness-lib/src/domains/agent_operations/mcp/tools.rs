@@ -23,7 +23,13 @@ pub const TOOL_NAMES: [&str; 18] = [
     "promote_subagent",
 ];
 
-pub const MUTATING_TOOL_NAMES: &[&str] = &["create_workspace"];
+pub const MUTATING_TOOL_NAMES: &[&str] = &[
+    "create_workspace",
+    "create_agent",
+    "configure_agent",
+    "resume_agent",
+    "interrupt_agent",
+];
 
 pub fn build_tool_list() -> Vec<Value> {
     vec![

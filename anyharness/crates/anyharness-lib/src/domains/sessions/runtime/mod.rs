@@ -43,6 +43,7 @@ mod startup;
 mod tests;
 pub(crate) mod view;
 
+pub use creation::CreateOrdinaryAgentSessionError;
 pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
 pub(crate) use lifecycle::LiveTurnCancelOutcome;
 pub(crate) use prompt::TextPromptDispatchError;
