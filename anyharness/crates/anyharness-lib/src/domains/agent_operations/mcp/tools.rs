@@ -112,12 +112,20 @@ pub fn build_tool_list() -> Vec<Value> {
                 "properties": {
                     "workspaceId": { "type": "string" },
                     "kind": { "type": "string", "enum": ["ordinary", "subagent"] },
-                    "task": { "type": "string" },
+                    "task": {
+                        "type": "string",
+                        "description": "Required for subagents; optional for ordinary agents."
+                    },
                     "agentKind": { "type": "string" },
                     "modelId": { "type": "string" },
                     "modeId": { "type": "string" }
                 },
-                "required": ["workspaceId", "kind", "task"]
+                "required": ["workspaceId", "kind"],
+                "if": {
+                    "properties": { "kind": { "const": "subagent" } },
+                    "required": ["kind"]
+                },
+                "then": { "required": ["task"] }
             }),
         ),
         tool_definition(
@@ -206,6 +214,26 @@ mod tests {
     }
 
     #[test]
+    fn create_agent_requires_task_only_for_subagents() {
+        let tools = build_tool_list();
+        let schema = tools
+            .iter()
+            .find(|tool| tool["name"] == "create_agent")
+            .map(|tool| &tool["inputSchema"])
+            .expect("create_agent schema");
+
+        assert_eq!(schema["required"], json!(["workspaceId", "kind"]));
+        assert_eq!(
+            schema["if"],
+            json!({
+                "properties": { "kind": { "const": "subagent" } },
+                "required": ["kind"]
+            })
+        );
+        assert_eq!(schema["then"], json!({ "required": ["task"] }));
+    }
+
+    #[test]
     fn workspace_mcp_tool_schema_snapshots() {
         let tools = build_tool_list();
         let actual = tools
@@ -261,7 +289,7 @@ mod tests {
             ),
             (
                 "create_agent",
-                "76fd71ec067fcd30cd926cae2d5452c733024105b92c6e96f1f0f5f9b410439a".to_string(),
+                "9e1467ed625a438a3fa71a4bbd3cdf7bfb504cf35fd881eb5bd99c8e91137228".to_string(),
             ),
             (
                 "configure_agent",

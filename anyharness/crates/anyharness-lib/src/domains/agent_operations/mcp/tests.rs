@@ -15,7 +15,8 @@ use crate::domains::sessions::model::{
     SessionExecutionState, SessionExecutionStatePhase, SessionMcpBindingPolicy, SessionRecord,
 };
 use crate::integrations::mcp::product_server::{
-    dispatch_product_mcp_request, ProductMcpRequestContext,
+    dispatch_product_mcp_request, ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpServer,
+    ProductMcpTokenValidation,
 };
 
 struct Sessions(Vec<SessionRecord>);
@@ -106,7 +107,7 @@ fn session(id: &str, workspace_id: &str) -> SessionRecord {
     }
 }
 
-fn server() -> WorkspaceProductMcpServer {
+fn server() -> (WorkspaceProductMcpServer, Arc<WorkspaceMcpAuth>) {
     let sessions = Arc::new(Sessions(vec![
         session("P", "workspace-a"),
         session("Q", "workspace-b"),
@@ -134,18 +135,50 @@ fn server() -> WorkspaceProductMcpServer {
     let auth = Arc::new(WorkspaceMcpAuth::new(
         std::env::temp_dir().join(format!("workspace-mcp-contract-{}", uuid::Uuid::new_v4())),
     ));
-    WorkspaceProductMcpServer::new(operations, auth)
+    (
+        WorkspaceProductMcpServer::new(operations, auth.clone()),
+        auth,
+    )
 }
 
 fn context(workspace_id: &str, session_id: &str) -> ProductMcpRequestContext {
     ProductMcpRequestContext::new(workspace_id, session_id, definition::ID)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum AuthenticatedDispatchError {
+    InvalidCapability,
+}
+
+async fn authenticated_dispatch(
+    server: &WorkspaceProductMcpServer,
+    token: &str,
+    request_context: ProductMcpRequestContext,
+    body: serde_json::Value,
+) -> Result<Option<serde_json::Value>, AuthenticatedDispatchError> {
+    let validation = server
+        .validate_capability_token(
+            ProductMcpAuthHeader::Product { value: token },
+            &request_context,
+        )
+        .expect("validate Workspace capability token");
+    if validation != ProductMcpTokenValidation::Valid {
+        return Err(AuthenticatedDispatchError::InvalidCapability);
+    }
+    Ok(dispatch_product_mcp_request(server, request_context, body)
+        .await
+        .expect("authenticated dispatch"))
+}
+
 #[tokio::test]
 async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context() {
-    let server = server();
-    let initialize = dispatch_product_mcp_request(
+    let (server, auth) = server();
+    let token = auth
+        .mint_capability_token("workspace-a", "P")
+        .expect("mint Workspace capability token");
+    let initialize = authenticated_dispatch(
         &server,
+        &token,
         context("workspace-a", "P"),
         json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }),
     )
@@ -157,8 +190,9 @@ async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context(
         "proliferate-workspace"
     );
 
-    let list = dispatch_product_mcp_request(
+    let list = authenticated_dispatch(
         &server,
+        &token,
         context("workspace-a", "P"),
         json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {} }),
     )
@@ -167,8 +201,9 @@ async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context(
     .expect("tools/list response");
     assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 18);
 
-    let whoami = dispatch_product_mcp_request(
+    let whoami = authenticated_dispatch(
         &server,
+        &token,
         context("workspace-a", "P"),
         json!({
             "jsonrpc": "2.0",
@@ -185,8 +220,9 @@ async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context(
         "P"
     );
 
-    let cross_workspace = dispatch_product_mcp_request(
+    let cross_workspace = authenticated_dispatch(
         &server,
+        &token,
         context("workspace-a", "P"),
         json!({
             "jsonrpc": "2.0",
@@ -206,9 +242,13 @@ async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context(
 
 #[tokio::test]
 async fn workspace_mcp_denials_are_typed_and_do_not_leak_foreign_subagent_metadata() {
-    let server = server();
-    let denied = dispatch_product_mcp_request(
+    let (server, auth) = server();
+    let q_token = auth
+        .mint_capability_token("workspace-b", "Q")
+        .expect("mint Q Workspace capability token");
+    let denied = authenticated_dispatch(
         &server,
+        &q_token,
         context("workspace-b", "Q"),
         json!({
             "jsonrpc": "2.0",
@@ -229,8 +269,12 @@ async fn workspace_mcp_denials_are_typed_and_do_not_leak_foreign_subagent_metada
     assert!(!serialized.contains("workspace-a"));
     assert!(!serialized.contains("subagent-c"));
 
-    let spoofed = dispatch_product_mcp_request(
+    let p_token = auth
+        .mint_capability_token("workspace-a", "P")
+        .expect("mint P Workspace capability token");
+    let spoofed = authenticated_dispatch(
         &server,
+        &p_token,
         context("workspace-a", "P"),
         json!({
             "jsonrpc": "2.0",
@@ -249,4 +293,20 @@ async fn workspace_mcp_denials_are_typed_and_do_not_leak_foreign_subagent_metada
         spoofed["result"]["structuredContent"]["error"]["code"],
         "WORKSPACE_MCP_ARGUMENTS_INVALID"
     );
+}
+
+#[tokio::test]
+async fn workspace_capability_scope_rejects_mismatched_workspace_or_session_before_dispatch() {
+    let (server, auth) = server();
+    let token = auth
+        .mint_capability_token("workspace-a", "P")
+        .expect("mint Workspace capability token");
+    let body = json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} });
+
+    for mismatched_context in [context("workspace-b", "P"), context("workspace-a", "Q")] {
+        assert_eq!(
+            authenticated_dispatch(&server, &token, mismatched_context, body.clone()).await,
+            Err(AuthenticatedDispatchError::InvalidCapability)
+        );
+    }
 }
