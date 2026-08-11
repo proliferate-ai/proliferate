@@ -28,6 +28,9 @@ use crate::{
 
 mod launcher;
 pub(crate) mod lifecycle;
+mod tail;
+#[cfg(test)]
+mod tail_tests;
 
 use launcher::find_proliferate_worker_launcher;
 #[cfg(test)]

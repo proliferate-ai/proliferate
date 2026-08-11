@@ -110,3 +110,4 @@ anyharness-credential-discovery = { path = "anyharness/crates/anyharness-credent
 anyharness-lib = { path = "anyharness/crates/anyharness-lib" }
 proliferate-diagnostics-protocol = { path = "anyharness/crates/proliferate-diagnostics-protocol" }
 proliferate-diagnostics-collector = { path = "anyharness/crates/proliferate-diagnostics-collector" }
+proliferate-diagnostics-client = { path = "anyharness/crates/proliferate-diagnostics-client" }

@@ -9,8 +9,11 @@ use sentry_anyhow::capture_anyhow;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let desktop_diagnostics = proliferate_diagnostics_client::take_desktop_activation(
+        proliferate_diagnostics_client::DiagnosticsComponent::AnyHarness,
+    );
     let args = cli::Cli::parse();
-    let _telemetry = telemetry::init(&args.command);
+    let telemetry = telemetry::init(&args.command, desktop_diagnostics);
 
     let result = match args.command {
         cli::Commands::Serve(serve_args) => commands::serve::run(serve_args).await,
@@ -22,6 +25,10 @@ async fn main() -> Result<()> {
     if let Err(error) = &result {
         capture_anyhow(error);
     }
+
+    telemetry
+        .shutdown(std::time::Duration::from_millis(500))
+        .await;
 
     result
 }
