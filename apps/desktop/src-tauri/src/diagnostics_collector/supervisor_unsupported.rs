@@ -193,11 +193,17 @@ impl DiagnosticsCollectorSupervisor {
         }
         let value = serde_json::to_value(&batch).map_err(|_| SupervisorUnavailable::Protocol)?;
         parse_ingest_batch_value(&value).map_err(|_| SupervisorUnavailable::CollectorRejected)?;
-        if self.shutdown_is_armed() {
-            Err(SupervisorUnavailable::ShuttingDown)
+        let error = if self.shutdown_is_armed() {
+            SupervisorUnavailable::ShuttingDown
         } else {
-            Err(SupervisorUnavailable::Unsupported)
+            SupervisorUnavailable::Unsupported
+        };
+        for record in &batch.records {
+            if let Ok(serialized) = serde_json::to_string(record) {
+                let _ = self.fallback.record_pre_dispatch_renderer(&serialized);
+            }
         }
+        Err(error)
     }
 
     pub(crate) fn arm_shutdown(&self) -> bool {

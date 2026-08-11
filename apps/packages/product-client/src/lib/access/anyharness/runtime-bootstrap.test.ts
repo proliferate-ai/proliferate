@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const mocks = vi.hoisted(() => ({
   getHealth: vi.fn(),
+  rendererDiagnostic: vi.fn(),
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
@@ -28,6 +33,7 @@ function makeRuntime(): DesktopRuntimeBridge {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  setRendererDiagnosticsSink({ emit: mocks.rendererDiagnostic });
   useHarnessConnectionStore.setState({
     runtimeUrl: "",
     connectionState: "connecting",
@@ -37,6 +43,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  resetRendererDiagnosticsSinkForTest();
 });
 
 describe("bootstrapHarnessRuntime", () => {
@@ -135,6 +142,12 @@ describe("bootstrapHarnessRuntime", () => {
       connectionState: "failed",
       error: "Runtime did not become healthy in time.",
     });
+    expect(mocks.rendererDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "renderer.runtime.health_poll_exhausted",
+        errorClassification: "runtime_health_poll_exhausted",
+      }),
+    );
   });
 
   it("stops polling without publishing new state when its lifecycle is cancelled", async () => {

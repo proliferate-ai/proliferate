@@ -3,10 +3,12 @@ use super::lifecycle::{
 };
 use super::*;
 use proliferate_diagnostics_protocol::v1::types::{
-    ComponentV1, DetailedDiagnosticV1, DetailedKindV1, PressureV1, PrivacyClassificationV1,
-    ProducerRecordV1, RecordClassV1, RecordsFilterV1, RedactionClassificationV1, SeverityV1,
+    ComponentV1, DetailedDiagnosticV1, DetailedKindV1, FallbackStateV1, PressureV1,
+    PrivacyClassificationV1, ProducerRecordV1, RecordClassV1, RecordsFilterV1,
+    RedactionClassificationV1, SeverityV1,
 };
 use std::io::Read;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 fn built_collector_binary() -> std::path::PathBuf {
     std::env::current_exe()
@@ -57,6 +59,69 @@ fn renderer_batch() -> IngestBatchV1 {
             lifecycle: None,
         }],
     }
+}
+
+async fn renderer_ingest_http_response(
+    status: &str,
+    body: String,
+    delay: Duration,
+) -> (String, tokio::task::JoinHandle<()>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind fake collector");
+    let address = listener.local_addr().expect("fake collector address");
+    let status = status.to_string();
+    let task = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.expect("accept ingest request");
+        let mut request = vec![0_u8; 16_384];
+        let _ = stream
+            .read(&mut request)
+            .await
+            .expect("read ingest request");
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream
+            .write_all(response.as_bytes())
+            .await
+            .expect("write ingest response");
+    });
+    (format!("http://{address}/"), task)
+}
+
+fn renderer_ingest_ready_generation(
+    endpoint: &str,
+    generation: u64,
+    collector_boot_id: String,
+) -> ReadyCollectorGeneration {
+    let capability =
+        Arc::new(super::super::client::SecretCapability::new("x".repeat(43)).expect("capability"));
+    let client =
+        super::super::client::CollectorHttpClient::new(endpoint, capability).expect("typed client");
+    ReadyCollectorGeneration {
+        generation,
+        client: Arc::new(client),
+        collector_boot_id,
+        restart_count: 0,
+    }
+}
+
+fn set_renderer_ingest_ready_state(
+    supervisor: &DiagnosticsCollectorSupervisor,
+    generation: u64,
+    collector_boot_id: &str,
+) {
+    let mut inner = supervisor.inner.lock().expect("supervisor state");
+    inner.generation = generation;
+    inner.state = DesktopDiagnosticsSupervisorStateV1::Ready {
+        collector_boot_id: collector_boot_id.to_string(),
+        schema_major: CURRENT_SCHEMA_VERSION.major,
+        restart_count: 0,
+    };
 }
 
 #[test]
@@ -226,7 +291,7 @@ async fn fake_launcher_concurrent_start_accepts_one_start_and_one_terminal_trans
 }
 
 #[tokio::test]
-async fn concurrent_real_start_owns_one_ready_child_capability_and_lifecycle_pair() {
+async fn real_ready_and_shutdown_armed_paths_do_not_duplicate() {
     let root = std::env::temp_dir().join(format!("collector-singleton-{}", uuid::Uuid::new_v4()));
     let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
         .expect("fallback");
@@ -331,9 +396,35 @@ async fn concurrent_real_start_owns_one_ready_child_capability_and_lifecycle_pai
         page.records[1].record.operation_id
     );
 
+    let fallback_bytes_before_ready_ingest = fallback.health().bytes;
+    let receipt = supervisor
+        .ingest_renderer(renderer_batch())
+        .await
+        .expect("ready renderer ingest");
+    assert_eq!(
+        usize::from(receipt.accepted_count) + usize::from(receipt.duplicate_count),
+        1
+    );
+    assert_eq!(fallback.health().bytes, fallback_bytes_before_ready_ingest);
+    assert_eq!(fallback.health().state, FallbackStateV1::Inactive);
+
     supervisor.arm_shutdown();
     let shutdown = supervisor.subscribe_shutdown();
     assert!(*shutdown.borrow());
+    assert!(matches!(
+        supervisor.state(),
+        DesktopDiagnosticsSupervisorStateV1::Ready { .. }
+    ));
+    assert_eq!(
+        supervisor.ingest_renderer(renderer_batch()).await,
+        Err(SupervisorUnavailable::ShuttingDown)
+    );
+    assert!(fallback.health().bytes > fallback_bytes_before_ready_ingest);
+    assert_eq!(fallback.health().state, FallbackStateV1::Inactive);
+    assert!(matches!(
+        supervisor.state(),
+        DesktopDiagnosticsSupervisorStateV1::Ready { .. }
+    ));
     supervisor.stop_collector().await.expect("stop collector");
     producer.close();
     fallback.close().expect("close fallback");
@@ -395,11 +486,10 @@ fn rv_2_06_retry_window_remains_inside_sixty_four_trackers() {
 }
 
 #[tokio::test]
-async fn renderer_ingest_seam_is_bounded_and_non_ready_batches_do_not_enter_tauri_fallback() {
+async fn renderer_ingest_pre_dispatch_states_write_once_and_return_the_original_error() {
     let root = std::env::temp_dir().join(format!("renderer-ingest-seam-{}", uuid::Uuid::new_v4()));
-    let fallback =
-        FallbackDiagnosticsWriter::open_for_test(root.join("logs").join("desktop-native.log"))
-            .expect("fallback");
+    let path = root.join("logs").join("desktop-native.log");
+    let fallback = FallbackDiagnosticsWriter::open_for_test(path.clone()).expect("fallback");
     let producer =
         TauriDiagnosticsProducer::new(fallback.clone(), "test".to_string(), "test".to_string());
     let supervisor = DiagnosticsCollectorSupervisor::new(
@@ -408,44 +498,86 @@ async fn renderer_ingest_seam_is_bounded_and_non_ready_batches_do_not_enter_taur
         "test".to_string(),
         "test".to_string(),
     );
-    let first = supervisor.ingest_renderer(renderer_batch());
-    let second = supervisor.ingest_renderer(renderer_batch());
-    let (first, second) = tokio::join!(first, second);
-    assert_eq!(first, Err(SupervisorUnavailable::Stopped));
-    assert_eq!(second, Err(SupervisorUnavailable::Stopped));
-    assert_eq!(fallback.health().bytes, 0);
+    fallback.set_active(false);
+    let cases = [
+        (
+            DesktopDiagnosticsSupervisorStateV1::Starting {
+                launch_kind: CollectorLaunchKindV1::Initial,
+                attempt: 1,
+                restart_count: 0,
+            },
+            SupervisorUnavailable::Starting,
+        ),
+        (
+            DesktopDiagnosticsSupervisorStateV1::Unsupported {
+                classification: "unsupported_target".to_string(),
+            },
+            SupervisorUnavailable::Unsupported,
+        ),
+        (
+            DesktopDiagnosticsSupervisorStateV1::Degraded {
+                classification: "binary_missing".to_string(),
+                restart_count: 0,
+                retry_exhausted: false,
+            },
+            SupervisorUnavailable::Degraded,
+        ),
+        (
+            DesktopDiagnosticsSupervisorStateV1::Stopped { orderly: false },
+            SupervisorUnavailable::Stopped,
+        ),
+    ];
+    for (index, (state, expected)) in cases.into_iter().enumerate() {
+        supervisor.inner.lock().expect("supervisor state").state = state;
+        assert_eq!(
+            supervisor.ingest_renderer(renderer_batch()).await,
+            Err(expected)
+        );
+        assert_eq!(
+            std::fs::read_to_string(&path)
+                .expect("fallback records")
+                .lines()
+                .count(),
+            index + 1
+        );
+        assert_eq!(fallback.health().state, FallbackStateV1::Inactive);
+    }
+
+    supervisor.inner.lock().expect("supervisor state").state =
+        DesktopDiagnosticsSupervisorStateV1::Ready {
+            collector_boot_id: "collector-boot".to_string(),
+            schema_major: 1,
+            restart_count: 0,
+        };
+    supervisor.arm_shutdown();
+    assert_eq!(
+        supervisor.ingest_renderer(renderer_batch()).await,
+        Err(SupervisorUnavailable::ShuttingDown)
+    );
+    assert_eq!(
+        std::fs::read_to_string(&path)
+            .expect("fallback records")
+            .lines()
+            .count(),
+        5
+    );
+    assert!(matches!(
+        supervisor.state(),
+        DesktopDiagnosticsSupervisorStateV1::Ready { .. }
+    ));
+    assert_eq!(fallback.health().state, FallbackStateV1::Inactive);
 
     let mut wrong_owner = renderer_batch();
     wrong_owner.records[0].component = ComponentV1::DesktopTauri;
+    let bytes_before_invalid = fallback.health().bytes;
     assert_eq!(
-        validate_renderer_ingest_batch(&wrong_owner),
+        supervisor.ingest_renderer(wrong_owner).await,
         Err(SupervisorUnavailable::CollectorRejected)
     );
+    assert_eq!(fallback.health().bytes, bytes_before_invalid);
     drop(supervisor);
     fallback.close().expect("close fallback");
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 
-#[test]
-fn renderer_ingest_receipt_is_bound_to_the_ready_collector_boot() {
-    let expected_boot_id = uuid::Uuid::new_v4().to_string();
-    let mut receipt = IngestReceiptV1 {
-        schema_version: CURRENT_SCHEMA_VERSION,
-        collector_boot_id: expected_boot_id.clone(),
-        accepted_range: None,
-        accepted_count: 1,
-        duplicate_count: 0,
-        rejections: Vec::new(),
-        pressure: PressureV1::Normal,
-    };
-    assert_eq!(
-        validate_renderer_ingest_receipt(&receipt, &expected_boot_id),
-        Ok(())
-    );
-
-    receipt.collector_boot_id = uuid::Uuid::new_v4().to_string();
-    assert_eq!(
-        validate_renderer_ingest_receipt(&receipt, &expected_boot_id),
-        Err(SupervisorUnavailable::Protocol)
-    );
-}
+include!("supervisor_renderer_ingest_tests.rs");

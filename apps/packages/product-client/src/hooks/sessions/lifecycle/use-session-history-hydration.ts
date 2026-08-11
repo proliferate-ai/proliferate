@@ -31,6 +31,8 @@ import {
   SESSION_APPLY_MEASUREMENT_SURFACES,
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
 } from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
+import { recordSessionHistoryRehydrateFailure } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 export interface SessionHistoryHydrationOptions {
   afterSeq?: number;
@@ -369,6 +371,13 @@ export function useSessionHistoryHydration() {
       });
       return true;
     } catch (error) {
+      const errorName = safeRendererErrorName(error);
+      recordSessionHistoryRehydrateFailure({
+        sessionId,
+        operationId: options?.measurementOperationId ?? undefined,
+        errorName,
+        timeoutAbort: isSessionHistoryTimeoutAbort(error),
+      });
       if (import.meta.env.DEV && !isSessionHistoryTimeoutAbort(error)) {
         console.debug("[session-runtime] session history rehydrate failed", error);
       }
@@ -380,7 +389,7 @@ export function useSessionHistoryHydration() {
         turnLimit: options?.turnLimit ?? null,
         timeoutMs: options?.timeoutMs ?? null,
         elapsedMs: Math.round(performance.now() - startedAt),
-        errorName: error instanceof Error ? error.name : "unknown",
+        errorName,
       });
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "error_sanitized");
       return false;

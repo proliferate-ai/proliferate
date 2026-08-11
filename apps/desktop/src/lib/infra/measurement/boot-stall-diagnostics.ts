@@ -1,4 +1,12 @@
-import { logRendererEvent } from "@/lib/access/tauri/diagnostics";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostics-port";
+import {
+  rendererDiagnosticCorrelation,
+  rendererDiagnosticFields,
+  rendererDiagnosticName,
+} from "@/lib/infra/diagnostics/renderer-diagnostic-callsite";
 import {
   BOOT_DIAGNOSTICS_EVENTS_STORAGE_KEY,
   BOOT_DIAGNOSTICS_PARAM,
@@ -133,9 +141,14 @@ export function recordBootDiagnostic(
     return;
   }
 
+  const elapsedMs = round(now() - startedAtMs);
+  if (!isNoisyBootLabel(label)) {
+    recordBootRendererDiagnostic(label, elapsedMs, metadata);
+  }
+
   const event: BootDiagnosticEvent = {
     seq: nextSeq,
-    elapsedMs: round(now() - startedAtMs),
+    elapsedMs,
     timestampMs: Date.now(),
     label,
     route: currentRoute(),
@@ -152,15 +165,32 @@ export function recordBootDiagnostic(
   scheduleBootDiagnosticsFlush();
   if (!isNoisyBootLabel(label)) {
     logBootDiagnosticToConsole(event);
-    void logRendererEvent({
-      source: "renderer_boot_diagnostics",
-      message: label,
-      route: event.route,
-      elapsedMs: event.elapsedMs,
-    }).catch(() => {
-      // Boot diagnostics must stay best-effort and cannot affect startup.
-    });
   }
+}
+
+export function recordBootRendererDiagnostic(
+  label: string,
+  elapsedMs: number,
+  metadata?: Record<string, unknown>,
+): void {
+  if (isNoisyBootLabel(label)) {
+    return;
+  }
+  const name = rendererDiagnosticName("renderer.boot", label);
+  if (name === null) {
+    return;
+  }
+  const metadataFields = rendererDiagnosticFields(metadata, "sensitive");
+  const fields = metadataFields ?? {};
+  fields.elapsed_ms = diagnosticField(elapsedMs, "operational");
+  recordRendererDiagnostic({
+    name,
+    severity: "info",
+    kind: "milestone",
+    privacy: metadataFields === undefined ? "operational" : "sensitive",
+    fields,
+    correlation: rendererDiagnosticCorrelation(metadata),
+  });
 }
 
 export function recordBootDiagnosticOnce(

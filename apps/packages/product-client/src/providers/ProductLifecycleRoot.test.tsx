@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { StrictMode } from "react";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { makeTestProductHost } from "#product/test/product-host-fixtures";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 // Every shared lifecycle hook is a no-op stub; this test exercises the root's
 // composition (children pass-through, Desktop lifecycle mount, auth restore,
@@ -18,9 +22,6 @@ vi.mock("#product/hooks/app/lifecycle/use-connectivity-listeners", () => ({
       throw new Error("lifecycle boom");
     }
   },
-}));
-vi.mock("@/lib/integrations/telemetry/native-diagnostics", () => ({
-  reportReactRenderError: vi.fn(),
 }));
 vi.mock("#product/hooks/app/lifecycle/use-debug-session-activity", () => ({ useDebugSessionActivity: vi.fn() }));
 vi.mock("#product/hooks/app/lifecycle/use-dev-desktop-handoff", () => ({ useDevDesktopHandoff: vi.fn() }));
@@ -81,14 +82,39 @@ function CommandContextProbe() {
   return <div data-testid="command-context">{String(Boolean(actions))}</div>;
 }
 
+const rendererDiagnostic = vi.fn();
+
+beforeEach(() => {
+  setRendererDiagnosticsSink({ emit: rendererDiagnostic });
+});
+
 afterEach(() => {
   cleanup();
   desktopLifecycleMountCount.value = 0;
   lifecycleThrow.value = false;
+  resetRendererDiagnosticsSinkForTest();
   vi.clearAllMocks();
 });
 
 describe("ProductLifecycleRoot", () => {
+  it("keeps a desktop-null ProductHost on the no-op renderer sink", async () => {
+    const restoreSession = vi.fn().mockResolvedValue(undefined);
+    resetRendererDiagnosticsSinkForTest();
+    rendererDiagnostic.mockClear();
+
+    render(
+      <ProductHostProvider host={makeTestProductHost({
+        desktop: null,
+        auth: { restoreSession },
+      })}>
+        <ProductLifecycleRoot><div>web product</div></ProductLifecycleRoot>
+      </ProductHostProvider>,
+    );
+
+    await waitFor(() => expect(restoreSession).toHaveBeenCalled());
+    expect(rendererDiagnostic).not.toHaveBeenCalled();
+  });
+
   it("renders the product tree, mounts the Desktop lifecycle root, and provides command actions", async () => {
     const restoreSession = vi.fn().mockResolvedValue(undefined);
     const host = makeTestProductHost({ auth: { restoreSession } });
@@ -110,6 +136,16 @@ describe("ProductLifecycleRoot", () => {
     expect(screen.getByTestId("command-context").textContent).toBe("true");
     // The auth restore effect fires through the host boundary.
     await waitFor(() => expect(restoreSession).toHaveBeenCalled());
+    await waitFor(() => expect(rendererDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "renderer.app_bootstrap.app.auth_bootstrap.completed",
+        kind: "milestone",
+      }),
+    ));
+    expect(rendererDiagnostic).toHaveBeenCalledWith(expect.objectContaining({
+      name: "renderer.app_bootstrap.app.bootstrap.start",
+      kind: "milestone",
+    }));
   });
 
   it("contains a render-phase throw from a shared lifecycle hook in the error boundary", async () => {

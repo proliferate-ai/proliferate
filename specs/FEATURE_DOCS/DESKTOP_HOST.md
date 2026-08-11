@@ -87,7 +87,7 @@ The bridge groups are:
 | `worker` | Read the install id and ensure or stop the Desktop worker process. |
 | `ssh` | Persist SSH profiles and establish a tunnel that yields a normal AnyHarness connection. |
 | `scratch` | Preserve current local file-backed workspace scratch reads and writes. |
-| `diagnostics` | Write narrow renderer events, hand an ownership-checked bounded renderer batch to native collector ingest, collect support bundles, save reports, and stage/read/delete support attachments. |
+| `diagnostics` | Hand an ownership-checked bounded renderer batch to native collector ingest, acknowledge root render-error admission, collect support bundles, save reports, and stage/read/delete support attachments. ProductClient producers use the platform-neutral renderer diagnostics port rather than the bridge directly. |
 
 Repo inspection, git, worktrees, workspaces, sessions, chat, and transcript are
 not bridge operations; they continue through AnyHarness. Product auth,
@@ -102,19 +102,22 @@ actual consumer needs it, and preserve the concrete Desktop behavior and
 return shape at that boundary. The embedded browser is removed, not bridged.
 
 Root render-error reporting is one diagnostics operation with an acknowledged
-result: Desktop resolves success only after its native renderer diagnostic was
-persisted (or an identical event was already persisted inside the host-owned
-dedupe window). ProductClient keeps neutral sending copy until that result,
-reports failure or absence honestly, and contains reporter throws/rejections so
-the recovery surface cannot recursively fail.
+result: Desktop resolves success only after a coherent collector receipt proves
+the indexed record accepted-or-duplicate, or an identical fingerprint has that
+same proof in the preceding three seconds. It is not a persistence, upload,
+fallback, or current-health guarantee. ProductClient keeps neutral sending copy
+until that result, reports failure or absence honestly, and contains reporter
+throws/rejections so the recovery surface cannot recursively fail.
 
-The collector handoff added for the next renderer migration is deliberately
-narrow: only the main window may submit accepted
-`desktop_renderer`/`renderer` records and receive an ingest receipt. It does
-not expose collector health, queries, endpoint, capability, or export to the
-bridge. Existing renderer logging remains authoritative until its owning
-migration replaces it; a non-ready collector rejects the handoff and does not
-reclassify renderer evidence as Tauri fallback.
+The collector handoff is deliberately narrow: only the main window may submit
+accepted `desktop_renderer`/`renderer` schema-v1.1 records and receive an ingest
+receipt. It does not expose collector health, queries, endpoint, capability, or
+export to the bridge. Desktop owns one filtered, bounded renderer sink; the old
+renderer diagnostics file receives no new writes. An eligible error returned
+directly before authenticated dispatch may retain the already-filtered records
+through the native fallback pipeline while preserving the original error. Once
+dispatch begins, every transport, receipt, replacement, deadline, and protocol
+failure remains a renderer delivery loss and never falls back.
 
 ### Desktop-only product behavior
 

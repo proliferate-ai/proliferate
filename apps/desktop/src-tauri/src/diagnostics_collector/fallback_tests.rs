@@ -7,6 +7,99 @@ fn temp_path() -> PathBuf {
 }
 
 #[test]
+fn renderer_ingest_forced_write_bypasses_only_inactive_and_reuses_sanitization() {
+    let path = temp_path();
+    let writer = FallbackDiagnosticsWriter::open_for_test(path.clone()).expect("open fallback");
+    writer.set_active(false);
+    writer
+        .record(r#"{"message":"ordinary inactive record"}"#)
+        .expect("inactive ordinary record is a no-op");
+    assert_eq!(fs::read_to_string(&path).expect("read empty fallback"), "");
+    assert_eq!(writer.health().state, FallbackStateV1::Inactive);
+
+    writer
+        .record_pre_dispatch_renderer(
+            r#"{"message":"collector http://127.0.0.1:43123","authorization":"secret"}"#,
+        )
+        .expect("forced renderer record");
+
+    let retained = fs::read_to_string(&path).expect("read forced record");
+    assert_eq!(retained.lines().count(), 1);
+    assert!(retained.contains("[LOOPBACK_ENDPOINT]"));
+    assert!(retained.contains("[REDACTED]"));
+    assert_eq!(writer.health().state, FallbackStateV1::Inactive);
+    assert!(writer.health().bytes > 0);
+    assert_eq!(writer.health().dropped_records, 0);
+    fs::remove_dir_all(path.parent().expect("fallback parent")).expect("cleanup");
+}
+
+#[test]
+fn renderer_ingest_forced_write_reuses_cap_and_failure_accounting() {
+    let path = temp_path();
+    let writer = FallbackDiagnosticsWriter::open_for_test(path.clone()).expect("open fallback");
+    writer.set_active(false);
+    writer
+        .record_pre_dispatch_renderer(&"x".repeat(FALLBACK_SEGMENT_BYTES as usize))
+        .expect("oversized forced record is a nonfatal drop");
+    assert_eq!(writer.health().state, FallbackStateV1::Inactive);
+    assert_eq!(writer.health().dropped_records, 1);
+    assert_eq!(writer.health().bytes, 0);
+
+    writer.inject_write_failure();
+    let error = writer
+        .record_pre_dispatch_renderer(r#"{"message":"write must fail"}"#)
+        .expect_err("forced write uses existing failure path");
+    assert!(error.starts_with("fallback_write_failed:"));
+    assert_eq!(
+        writer.health(),
+        FallbackHealthV1 {
+            state: FallbackStateV1::Degraded,
+            bytes: 0,
+            dropped_records: 2,
+        }
+    );
+    fs::remove_dir_all(path.parent().expect("fallback parent")).expect("cleanup");
+}
+
+#[test]
+fn renderer_ingest_forced_write_never_temporarily_activates_ordinary_callers() {
+    use std::sync::{Arc, Barrier};
+
+    let path = temp_path();
+    let writer = FallbackDiagnosticsWriter::open_for_test(path.clone()).expect("open fallback");
+    writer.set_active(false);
+    let barrier = Arc::new(Barrier::new(3));
+    let forced_writer = writer.clone();
+    let forced_barrier = barrier.clone();
+    let forced = std::thread::spawn(move || {
+        forced_barrier.wait();
+        forced_writer
+            .record_pre_dispatch_renderer(r#"{"message":"forced renderer"}"#)
+            .expect("forced record");
+    });
+    let ordinary_writer = writer.clone();
+    let ordinary_barrier = barrier.clone();
+    let ordinary = std::thread::spawn(move || {
+        ordinary_barrier.wait();
+        for _ in 0..128 {
+            ordinary_writer
+                .record(r#"{"message":"ordinary native producer"}"#)
+                .expect("inactive ordinary record");
+        }
+    });
+    barrier.wait();
+    forced.join().expect("forced writer joins");
+    ordinary.join().expect("ordinary writer joins");
+
+    let retained = fs::read_to_string(&path).expect("read fallback");
+    assert_eq!(retained.lines().count(), 1);
+    assert!(retained.contains("forced renderer"));
+    assert!(!retained.contains("ordinary native producer"));
+    assert_eq!(writer.health().state, FallbackStateV1::Inactive);
+    fs::remove_dir_all(path.parent().expect("fallback parent")).expect("cleanup");
+}
+
+#[test]
 fn fallback_rotates_whole_records_and_stays_bounded() {
     use std::os::unix::fs::PermissionsExt;
 

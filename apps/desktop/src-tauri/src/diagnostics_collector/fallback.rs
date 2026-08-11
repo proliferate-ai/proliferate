@@ -112,6 +112,23 @@ impl FallbackDiagnosticsWriter {
         if !inner.active {
             return Ok(());
         }
+        Self::record_locked(&mut inner, serialized_record)
+    }
+
+    pub(super) fn record_pre_dispatch_renderer(
+        &self,
+        serialized_record: &str,
+    ) -> Result<(), String> {
+        let Some(inner) = &self.inner else {
+            return Err("fallback_unavailable".to_string());
+        };
+        let mut inner = inner
+            .lock()
+            .map_err(|_| "fallback_lock_poisoned".to_string())?;
+        Self::record_locked(&mut inner, serialized_record)
+    }
+
+    fn record_locked(inner: &mut FallbackInner, serialized_record: &str) -> Result<(), String> {
         if serialized_record.len().saturating_add(1) as u64 > FALLBACK_SEGMENT_BYTES {
             inner.dropped_records = inner.dropped_records.saturating_add(1);
             return Ok(());

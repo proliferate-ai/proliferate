@@ -9,7 +9,6 @@ mod quit_flow;
 mod sidecar;
 mod state;
 mod telemetry;
-mod telemetry_file_logging;
 mod workspace_activity_indicator;
 
 use commands::{
@@ -201,8 +200,7 @@ pub fn run() {
             "production".to_string()
         },
     );
-    let telemetry = telemetry::init(&diagnostics_producer);
-    let renderer_diagnostic_log = telemetry.renderer_diagnostic_log();
+    let _telemetry = telemetry::init(&diagnostics_producer);
     let sc = sidecar::create_sidecar_with_auto_port();
     let cloud_worker_state = cloud_worker::create_cloud_worker_state();
     let diagnostics_supervisor =
@@ -251,7 +249,6 @@ pub fn run() {
         .manage(diagnostics_producer.clone())
         .manage(shutdown_coordinator.clone())
         .manage(QuitFlowState::default())
-        .manage(renderer_diagnostic_log)
         .manage(workspace_activity_indicator::WorkspaceActivityIndicatorStore::default())
         .manage(ssh_tunnel::SshTunnelState::default())
         .invoke_handler(tauri::generate_handler![
@@ -261,8 +258,6 @@ pub fn run() {
             config::set_app_config,
             diagnostics_commands::export_debug_bundle,
             diagnostics_commands::collect_support_diagnostics,
-            diagnostics_commands::log_renderer_diagnostic,
-            diagnostics_commands::log_renderer_event,
             diagnostics_commands::ingest_renderer_diagnostics,
             diagnostics_commands::save_diagnostic_json,
             diagnostics_commands::save_diagnostic_json_to_absolute_path,

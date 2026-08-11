@@ -5,9 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SUPPORT_REPORT_JOB_EVENT } from "#product/lib/access/browser/support-report-job-events";
 import type { SupportReportJob } from "#product/lib/domain/support/report-types";
 import { useSupportModalState } from "#product/hooks/support/facade/use-support-modal-state";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const diagnosticsMocks = vi.hoisted(() => ({
-  logEvent: vi.fn(async () => {}),
+  rendererDiagnostic: vi.fn(),
   deleteAttachment: vi.fn(async () => {}),
   stageAttachment: vi.fn(async () => null),
 }));
@@ -43,10 +47,27 @@ function captureDispatchedJob(): { current: SupportReportJob | null } {
 describe("useSupportModalState", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setRendererDiagnosticsSink({ emit: diagnosticsMocks.rendererDiagnostic });
   });
 
   afterEach(() => {
+    resetRendererDiagnosticsSinkForTest();
     vi.clearAllMocks();
+  });
+
+  it("records the typed local report-opened marker", () => {
+    renderHook(() => useSupportModalState({ kind: "bug", onClose: vi.fn() }));
+
+    expect(diagnosticsMocks.rendererDiagnostic).toHaveBeenCalledWith({
+      name: "renderer.support.report_opened",
+      severity: "info",
+      kind: "milestone",
+      privacy: "operational",
+      fields: {
+        kind: { value: "bug", privacy: "operational" },
+        job_id: { value: expect.any(String), privacy: "operational" },
+      },
+    });
   });
 
   it("carries urgent, notifyMe, includeLogs, and credit fields on the bug job", async () => {

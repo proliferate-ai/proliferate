@@ -56,6 +56,10 @@ import {
   trackSupportReportSubmitted,
   validateAttachmentSizes,
 } from "#product/hooks/support/lifecycle/support-report-upload-payload";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 interface SupportReportUploadResult {
   reportId: string;
@@ -183,9 +187,16 @@ async function drainSupportReportQueue(
     } catch (error) {
       const attemptCount = entry.attemptCount + 1;
       const failure = describeSupportReportUploadFailure(error, attemptCount);
-      void diagnostics?.logEvent({
-        source: "support_report_upload",
-        message: `failed.${failure.kind}`,
+      recordRendererDiagnostic({
+        name: "renderer.support.upload_failed",
+        severity: "warn",
+        kind: "message",
+        privacy: "operational",
+        fields: {
+          job_id: diagnosticField(entry.job.jobId, "operational"),
+          failure_kind: diagnosticField(failure.kind, "operational"),
+        },
+        errorClassification: failure.kind,
       });
 
       // Already completed on a prior attempt — this is success, not failure.
@@ -217,9 +228,16 @@ async function drainSupportReportQueue(
           diagnostics?.deleteAttachment,
         );
         if (exhausted) {
-          void diagnostics?.logEvent({
-            source: "support_report_upload",
-            message: "dropped.exhausted",
+          recordRendererDiagnostic({
+            name: "renderer.support.upload_dropped",
+            severity: "error",
+            kind: "message",
+            privacy: "operational",
+            fields: {
+              job_id: diagnosticField(entry.job.jobId, "operational"),
+              failure_kind: diagnosticField("exhausted", "operational"),
+            },
+            errorClassification: "exhausted",
           });
           showToast(
             "Couldn't send your report after several tries. Please try again from Help.",

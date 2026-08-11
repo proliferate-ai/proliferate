@@ -17,6 +17,10 @@ import { useSupportReportSnapshot } from "#product/hooks/support/derived/use-sup
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import type { SupportModalKind } from "#product/stores/support/support-modal-store";
 import { enqueueSupportReportJob } from "#product/lib/access/browser/support-report-job-events";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 export interface StagedAttachment extends SupportReportAttachmentPayload {
   id: string;
@@ -53,14 +57,20 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
   const jobIdRef = useRef(crypto.randomUUID());
   const openedAtRef = useRef(new Date().toISOString());
 
-  // Write marker line into native log on mount so the log tail can be
-  // bisected around the report. Owns the marker (the store stays pure state).
+  // Record a local marker on mount so diagnostics can be bisected around the
+  // report. The store stays pure state.
   useEffect(() => {
-    void diagnostics?.logEvent({
-      source: "support_report",
-      message: `support-report-opened kind=${kind} jobId=${jobIdRef.current}`,
-    }).catch(() => {});
-  }, [diagnostics, kind]);
+    recordRendererDiagnostic({
+      name: "renderer.support.report_opened",
+      severity: "info",
+      kind: "milestone",
+      privacy: "operational",
+      fields: {
+        kind: diagnosticField(kind, "operational"),
+        job_id: diagnosticField(jobIdRef.current, "operational"),
+      },
+    });
+  }, [kind]);
 
   const stageFiles = useCallback(async (files: FileList | File[]) => {
     const nextFiles = Array.from(files);

@@ -9,6 +9,10 @@ import type {
   MeasurementSummaryRow,
 } from "./debug-measurement-report-types";
 import { now, pushBounded, round } from "./debug-measurement-utils";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const RECENT_SUMMARY_LIMIT = 500;
 
@@ -303,9 +307,47 @@ export function printSummaryRow(input: {
     rows,
   };
   pushBounded(recentSummaries, payload, RECENT_SUMMARY_LIMIT);
+  recordRendererDiagnostic({
+    name: "renderer.measurement.summary",
+    severity: "debug",
+    kind: "progress",
+    privacy: "operational",
+    correlation: { operationId: operation.id },
+    fields: {
+      operation_kind: diagnosticField(operation.kind, "operational"),
+      finish_reason: diagnosticField(reason, "operational"),
+      duration_ms: diagnosticField(durationMs, "operational"),
+      request_count: diagnosticField(a.requestCount, "operational"),
+      react_commit_count: diagnosticField(a.reactCommitCount, "operational"),
+      max_frame_gap_ms: diagnosticField(round(a.maxFrameGapMs), "operational"),
+      max_commit_ms: diagnosticField(round(a.maxCommitMs), "operational"),
+    },
+  });
   console.table(rows);
   console.debug("[measurement_summary_json]", JSON.stringify(payload));
   if (budget && !budget.passed) {
+    recordRendererDiagnostic({
+      name: "renderer.measurement.budget_violation",
+      severity: "error",
+      kind: "message",
+      privacy: "operational",
+      correlation: { operationId: operation.id },
+      fields: {
+        operation_kind: diagnosticField(operation.kind, "operational"),
+        budget: diagnosticField(operation.summaryBudget?.label ?? "unknown", "operational"),
+        failure_labels: diagnosticField(budget.failureLabels, "operational"),
+        request_count: diagnosticField(budget.requestCount ?? -1, "operational"),
+        first_commit_ms: diagnosticField(budget.firstCommitMs ?? -1, "operational"),
+        max_frame_gap_ms: diagnosticField(budget.maxFrameGapMs, "operational"),
+        max_commit_ms: diagnosticField(budget.maxCommitMs, "operational"),
+        total_commit_ms: diagnosticField(budget.totalCommitMs, "operational"),
+        surface_commit_failures: diagnosticField(
+          budget.surfaceCommitFailures || "none",
+          "operational",
+        ),
+      },
+      errorClassification: "measurement_budget_violation",
+    });
     console.error("[debug-measurement] measurement budget violated", {
       operationId: operation.id,
       operationKind: operation.kind,

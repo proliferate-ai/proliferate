@@ -3,6 +3,10 @@ import type {
   DesktopRuntimeBridge,
   LocalRuntimeSnapshot,
 } from "@proliferate/product-client/host/desktop-bridge";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 // Narrow bootstrap wiring: this module is the canonical boot orchestrator for
 // AnyHarness runtime connection state.
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
@@ -122,6 +126,16 @@ async function pollUntilHealthy(
   if (signal?.aborted) {
     return;
   }
+  recordRendererDiagnostic({
+    name: "renderer.runtime.health_poll_exhausted",
+    severity: "error",
+    kind: "message",
+    privacy: "operational",
+    fields: {
+      max_attempts: diagnosticField(maxAttempts, "operational"),
+    },
+    errorClassification: "runtime_health_poll_exhausted",
+  });
   console.error("[harness] pollUntilHealthy: gave up after %d attempts", maxAttempts);
   useHarnessConnectionStore.setState({ connectionState: "failed", error: "Runtime did not become healthy in time." });
 }

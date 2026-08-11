@@ -47,10 +47,17 @@ documented in the [collector README](../anyharness/crates/proliferate-diagnostic
 Desktop Tauri owns the packaged collector process, authenticated readiness and
 restart policy, a same-user native query broker, and a bounded
 `desktop-native.log` bootstrap/outage fallback. Tauri detail uses the collector
-as its primary local path only while ready. Renderer, AnyHarness, Worker, and
-support migrations are not part of that ownership change; their current local
-sinks remain in place. Server log routing, Sentry, PostHog, and anonymous
-telemetry are unchanged. The approved boundary and slice registry live in
+as its primary local path only while ready. Desktop renderer detail now enters
+through one platform-neutral ProductClient port, is filtered and bounded by the
+Desktop sink, and is submitted as exact schema-v1.1 batches through the
+main-window-only Tauri handoff. An eligible direct pre-dispatch collector state
+may retain those already-filtered records in `desktop-native.log` while the
+command still returns the original unavailable result; post-dispatch failures
+never fall back. The obsolete renderer diagnostics file receives no new writes,
+but historical discovery remains available to support collection. AnyHarness,
+Worker, and support-file migrations are not part of this ownership change;
+their current local sinks remain in place. Server log routing, Sentry, PostHog,
+and anonymous telemetry are unchanged. The approved boundary and slice registry live in
 [`../adrs/2026-08-10-rust-observability.md`](../adrs/2026-08-10-rust-observability.md).
 
 ## Instrumenting a new feature

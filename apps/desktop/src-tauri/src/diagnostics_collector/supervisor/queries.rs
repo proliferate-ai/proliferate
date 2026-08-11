@@ -179,15 +179,38 @@ impl DiagnosticsCollectorSupervisor {
         batch: IngestBatchV1,
     ) -> Result<IngestReceiptV1, SupervisorUnavailable> {
         validate_renderer_ingest_batch(&batch)?;
-        let ready = self.ready_generation()?;
-        let receipt = ready
-            .client
-            .ingest(&batch)
-            .await
-            .map_err(map_client_error)?;
+        let ready = match self.ready_generation() {
+            Ok(ready) => ready,
+            Err(error @ SupervisorUnavailable::Starting)
+            | Err(error @ SupervisorUnavailable::Unsupported)
+            | Err(error @ SupervisorUnavailable::Degraded)
+            | Err(error @ SupervisorUnavailable::Stopped)
+            | Err(error @ SupervisorUnavailable::ShuttingDown) => {
+                self.record_pre_dispatch_renderer_batch(&batch);
+                return Err(error);
+            }
+            Err(error) => return Err(error),
+        };
+        self.dispatch_renderer_batch(&batch, ready).await
+    }
+
+    pub(super) async fn dispatch_renderer_batch(
+        &self,
+        batch: &IngestBatchV1,
+        ready: ReadyCollectorGeneration,
+    ) -> Result<IngestReceiptV1, SupervisorUnavailable> {
+        let receipt = ready.client.ingest(batch).await.map_err(map_client_error)?;
         validate_renderer_ingest_receipt(&receipt, &ready.collector_boot_id)?;
         self.require_generation(ready.generation)?;
         Ok(receipt)
+    }
+
+    fn record_pre_dispatch_renderer_batch(&self, batch: &IngestBatchV1) {
+        for record in &batch.records {
+            if let Ok(serialized) = serde_json::to_string(record) {
+                let _ = self.fallback.record_pre_dispatch_renderer(&serialized);
+            }
+        }
     }
 
     pub(crate) fn protected_child_handoff(
