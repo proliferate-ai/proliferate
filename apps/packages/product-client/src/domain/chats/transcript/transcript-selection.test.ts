@@ -43,11 +43,17 @@ describe("transcript selection decisions", () => {
 
   it("sets ownership only from unblocked transcript targets", () => {
     expect(resolvePointerOwnership(target({ insideRoot: true }))).toBe("set-owned");
+    expect(resolvePointerOwnership(target({ contextualActions: true }))).toBe("ignore");
     expect(resolvePointerOwnership(target({ insideRoot: false }))).toBe("clear-owned");
     expect(resolvePointerOwnership(target({ insideRoot: true, textEntry: true }))).toBe("clear-owned");
     expect(resolvePointerOwnership(target({ insideRoot: true, terminalZone: true }))).toBe("clear-owned");
     expect(resolvePointerOwnership(target({ insideRoot: true, nativeInteractive: true }))).toBe("clear-owned");
     expect(resolvePointerOwnership(target({ insideRoot: true, ariaInteractive: true }))).toBe("clear-owned");
+    expect(resolvePointerOwnership(target({
+      insideRoot: true,
+      nativeInteractive: true,
+      selectableInteractiveText: true,
+    }))).toBe("track-selection");
   });
 
   it("treats ignored controls as chrome without blocking body descendants", () => {

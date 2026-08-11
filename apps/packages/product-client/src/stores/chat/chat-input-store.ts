@@ -6,9 +6,13 @@ import {
   isChatDraftEmpty,
   type ChatComposerDraft,
 } from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import type { SelectedResponseContext } from "#product/domain/chats/transcript/selected-response-context";
+
+let selectedResponseContextSequence = 0;
 
 interface ChatInputState {
   draftByWorkspaceId: Record<string, ChatComposerDraft>;
+  selectedResponseContextsByWorkspaceId: Record<string, SelectedResponseContext[]>;
   editDraftBySessionId: Record<string, string>;
   editingQueueSeqBySessionId: Record<string, number>;
   focusRequestNonce: number;
@@ -16,6 +20,9 @@ interface ChatInputState {
   setDraftText: (workspaceId: string, value: string) => void;
   appendDraftText: (workspaceId: string, value: string) => void;
   clearDraft: (workspaceId: string) => void;
+  addSelectedResponseContext: (workspaceId: string, text: string) => void;
+  removeSelectedResponseContext: (workspaceId: string, id: string) => void;
+  clearSelectedResponseContexts: (workspaceId: string, ids?: readonly string[]) => void;
   setEditDraft: (sessionId: string, value: string) => void;
   setEditingQueueSeq: (sessionId: string, seq: number | null) => void;
   requestFocus: () => void;
@@ -23,6 +30,7 @@ interface ChatInputState {
 
 export const useChatInputStore = create<ChatInputState>((set) => ({
   draftByWorkspaceId: {},
+  selectedResponseContextsByWorkspaceId: {},
   editDraftBySessionId: {},
   editingQueueSeqBySessionId: {},
   focusRequestNonce: 0,
@@ -84,6 +92,66 @@ export const useChatInputStore = create<ChatInputState>((set) => ({
     return {
       draftByWorkspaceId: nextDrafts,
     };
+  }),
+
+  addSelectedResponseContext: (workspaceId, text) => set((state) => {
+    if (text.trim().length === 0) {
+      return state;
+    }
+    const current = state.selectedResponseContextsByWorkspaceId[workspaceId] ?? [];
+    selectedResponseContextSequence += 1;
+    return {
+      selectedResponseContextsByWorkspaceId: {
+        ...state.selectedResponseContextsByWorkspaceId,
+        [workspaceId]: [
+          ...current,
+          {
+            id: `selected-response:${Date.now()}:${selectedResponseContextSequence.toString(36)}`,
+            text,
+          },
+        ],
+      },
+    };
+  }),
+
+  removeSelectedResponseContext: (workspaceId, id) => set((state) => {
+    const current = state.selectedResponseContextsByWorkspaceId[workspaceId] ?? [];
+    const next = current.filter((context) => context.id !== id);
+    if (next.length === current.length) {
+      return state;
+    }
+    const selectedResponseContextsByWorkspaceId = {
+      ...state.selectedResponseContextsByWorkspaceId,
+    };
+    if (next.length === 0) {
+      delete selectedResponseContextsByWorkspaceId[workspaceId];
+    } else {
+      selectedResponseContextsByWorkspaceId[workspaceId] = next;
+    }
+    return { selectedResponseContextsByWorkspaceId };
+  }),
+
+  clearSelectedResponseContexts: (workspaceId, ids) => set((state) => {
+    const current = state.selectedResponseContextsByWorkspaceId[workspaceId] ?? [];
+    if (current.length === 0) {
+      return state;
+    }
+    const idSet = ids ? new Set(ids) : null;
+    const next = idSet
+      ? current.filter((context) => !idSet.has(context.id))
+      : [];
+    if (next.length === current.length) {
+      return state;
+    }
+    const selectedResponseContextsByWorkspaceId = {
+      ...state.selectedResponseContextsByWorkspaceId,
+    };
+    if (next.length === 0) {
+      delete selectedResponseContextsByWorkspaceId[workspaceId];
+    } else {
+      selectedResponseContextsByWorkspaceId[workspaceId] = next;
+    }
+    return { selectedResponseContextsByWorkspaceId };
   }),
 
   setEditDraft: (sessionId, value) => set((state) => {
