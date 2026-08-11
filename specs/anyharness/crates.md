@@ -15,6 +15,9 @@ anyharness-credential-discovery/
 proliferate-diagnostics-protocol/
   provider-neutral Desktop diagnostics wire contract and pure validation
 
+proliferate-diagnostics-collector/
+  standalone loopback diagnostics collector process and bounded memory state
+
 anyharness-lib/
   runtime implementation
 ```
@@ -112,9 +115,24 @@ Use [README.md](README.md) for the internal runtime structure.
 
 This crate owns schema-versioned diagnostics envelopes, API shapes, closed
 vocabularies, hard bounds, and pure record/lifecycle validation shared across
-Desktop-owned producers and the future collector. It is separate from
+Desktop-owned producers and the standalone collector. It is separate from
 `anyharness-contract`, whose audience is the AnyHarness public transport API.
 
 It must not own collector runtime state, transport handlers, files, processes,
 exporters, producer queues, or product orchestration. Cross-language meaning is
 pinned by `fixtures/contracts/rust-observability-v1/`.
+
+## `proliferate-diagnostics-collector`
+
+This crate owns the standalone, memory-only Desktop diagnostics collector:
+
+- capability-authenticated loopback HTTP transport
+- bounded ingest, lifecycle validation, query, tail, export, and health state
+- inherited capability and control file-descriptor process seams
+- deterministic resource profiling for the standalone process
+
+It consumes `proliferate-diagnostics-protocol` as its only wire-contract
+authority. It must not own Desktop/Tauri wiring, producer queues, AnyHarness
+runtime behavior, Worker behavior, server/cloud integration, durable storage,
+or upload/export destinations. Its process and transport surfaces are documented
+in `proliferate-diagnostics-collector/README.md`.

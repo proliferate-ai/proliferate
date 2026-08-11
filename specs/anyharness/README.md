@@ -6,6 +6,7 @@ Scope:
 - `anyharness/crates/anyharness-credential-discovery/**`
 - `anyharness/crates/anyharness-contract/**`
 - `anyharness/crates/anyharness-lib/**`
+- `anyharness/crates/proliferate-diagnostics-collector/**`
 - `anyharness/crates/proliferate-diagnostics-protocol/**`
 
 Use this doc first to understand AnyHarness ownership. Then read the focused
@@ -303,6 +304,7 @@ which guide to read and where the code belongs.
 | Binary startup, CLI flags, runtime-home selection, command dispatch | `anyharness/crates/anyharness/src/**` | `anyharness` thin binary | [crates.md](crates.md) |
 | Public HTTP/SSE/WS schemas, OpenAPI-visible request/response types | `anyharness-contract/src/v1/**` | `anyharness-contract` | [crates.md](crates.md), [contract.md](contract.md) |
 | Provider-neutral Desktop diagnostics wire types, bounds, and pure validation | `proliferate-diagnostics-protocol/src/v1/**` | `proliferate-diagnostics-protocol` | [crates.md](crates.md), [../OBSERVABILITY.md](../OBSERVABILITY.md) |
+| Standalone loopback diagnostics collection, bounded in-memory state, query/tail/export/health transport, and process resource profiling | `proliferate-diagnostics-collector/src/**` | `proliferate-diagnostics-collector` | [crates.md](crates.md), [../OBSERVABILITY.md](../OBSERVABILITY.md), [collector README](../../anyharness/crates/proliferate-diagnostics-collector/README.md) |
 | Provider credential file discovery or portable credential export/import | `anyharness-credential-discovery/src/**` | `anyharness-credential-discovery` | [crates.md](crates.md) |
 | HTTP handlers, routers, auth headers, SSE/WS transport, OpenAPI wiring | `anyharness-lib/src/api/**` | `api/**` | [api.md](api.md) |
 | AppState, dependency construction, wiring extension implementations, product MCP endpoint registration | `anyharness-lib/src/app/**` | `app/**` | [app.md](app.md) |
@@ -347,6 +349,8 @@ anyharness/crates/
     src/                         # shared provider credential discovery
   proliferate-diagnostics-protocol/
     src/v1/                      # contract only; no collector or producer runtime
+  proliferate-diagnostics-collector/
+    src/                         # standalone memory-only collector process
   anyharness-lib/
     src/
       api/
@@ -413,6 +417,10 @@ owning layer instead of growing a new global bucket.
 - `proliferate-diagnostics-protocol` owns only the versioned provider-neutral
   diagnostics wire contract, bounds, and pure validation. It must not own
   collection, transport, files, processes, export, or product orchestration.
+- `proliferate-diagnostics-collector` owns only the standalone bounded
+  in-memory collector and its loopback process boundary. It must not own
+  Desktop/Tauri wiring, producer queues, AnyHarness runtime behavior, Worker
+  behavior, server/cloud integration, persistence, or export destinations.
 - `anyharness-lib` owns runtime behavior, durable domain rules, live
   orchestration, workspace adapters, and protocol integrations.
 - `api/` is transport. It parses requests, calls the owning domain/runtime, and
