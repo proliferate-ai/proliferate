@@ -27,7 +27,7 @@ use crate::domains::workspaces::runtime::WorkspaceRuntime;
 
 mod authorization;
 mod mobility;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 pub const MAX_SUBAGENTS_PER_PARENT: usize = 8;
 
@@ -280,6 +280,17 @@ impl SubagentService {
         child_session_id: &str,
     ) -> anyhow::Result<Option<SessionLinkRecord>> {
         self.link_service.find_subagent_parent(child_session_id)
+    }
+
+    pub fn latest_completions_for_links(
+        &self,
+        link_ids: &[String],
+    ) -> anyhow::Result<Vec<SubagentCompletionRecord>> {
+        let mut latest = BTreeMap::new();
+        for completion in self.subagent_store.list_completions_for_links(link_ids)? {
+            latest.insert(completion.session_link_id.clone(), completion);
+        }
+        Ok(latest.into_values().collect())
     }
 
     pub fn session_store(&self) -> &SessionStore {

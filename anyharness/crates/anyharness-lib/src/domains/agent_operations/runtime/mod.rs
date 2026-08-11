@@ -5,6 +5,7 @@ mod messaging;
 mod ordinary;
 mod ports;
 mod subagent_lifecycle;
+mod subagent_roster;
 mod target_access;
 mod workspaces;
 
@@ -25,7 +26,7 @@ pub(crate) use ports::AgentMessageQueue;
 pub use ports::{
     AgentCatalogReads, AgentConfigMutationState, AgentExecutionReads, AgentLaunchOptionReads,
     AgentSessionMutations, AgentSessionReads, AgentTaskOutputReads, AgentWorkspaceOperations,
-    SubagentLifecycleMutations, SubagentRelationshipReads,
+    SubagentCompletionReads, SubagentLifecycleMutations, SubagentRelationshipReads,
 };
 
 use crate::domains::agent_operations::model::{
@@ -55,6 +56,7 @@ pub struct AgentOperations {
     task_output: Option<Arc<dyn AgentTaskOutputReads>>,
     session_admission: Option<Arc<SessionMutationAdmission>>,
     workspace_operation_gate: Option<Arc<WorkspaceOperationGate>>,
+    subagent_completions: Option<Arc<dyn SubagentCompletionReads>>,
 }
 
 impl AgentOperations {
@@ -78,6 +80,7 @@ impl AgentOperations {
             task_output: None,
             session_admission: None,
             workspace_operation_gate: None,
+            subagent_completions: None,
         }
     }
 
@@ -118,6 +121,11 @@ impl AgentOperations {
         self.workspaces = Some(workspaces);
         self.session_admission = Some(session_admission);
         self.workspace_operation_gate = Some(workspace_operation_gate);
+        self
+    }
+
+    pub fn with_subagent_roster(mut self, completions: Arc<dyn SubagentCompletionReads>) -> Self {
+        self.subagent_completions = Some(completions);
         self
     }
 
@@ -254,27 +262,13 @@ impl AgentOperations {
         &self,
         caller: &AuthenticatedAgentCaller,
     ) -> Result<Vec<AgentView>, AgentOperationsError> {
-        let caller_agent = self.resolve_caller_agent(caller)?;
-        let links = self
-            .relationships
-            .list_children_including_closed(&caller.identity().session_id)
-            .map_err(AgentOperationsError::Internal)?;
-        let mut agents = Vec::with_capacity(links.len());
-        for link in links {
-            let Some(record) = self
-                .sessions
-                .get_session(&link.child_session_id)
-                .map_err(AgentOperationsError::Internal)?
-            else {
-                continue;
-            };
-            let target = ResolvedAgent {
-                record,
-                parent_link: Some(link),
-            };
-            agents.push(self.project_agent(&target, Some(&caller_agent)).await?);
-        }
-        Ok(agents)
+        Ok(self
+            .session_subagent_roster(caller)
+            .await?
+            .children
+            .into_iter()
+            .map(|entry| entry.agent)
+            .collect())
     }
 
     pub fn decide_agent_creation(

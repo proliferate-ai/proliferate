@@ -78,3 +78,50 @@ async fn message_after_close_wins_is_rejected_without_queueing() {
     .await
     .is_err());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn lifecycle_response_projection_stays_inside_the_target_permit() {
+    let (operations, state, _, _, _) = fixture(false);
+    state.hold_closed_projection.store(true, Ordering::SeqCst);
+
+    let close_operations = operations.clone();
+    let close = tokio::spawn(async move {
+        close_operations
+            .close_subagent_lifecycle(
+                &close_operations.authenticated_caller("parent"),
+                &target("child"),
+            )
+            .await
+    });
+    state.projection_started.notified().await;
+
+    let open_operations = operations.clone();
+    let open = tokio::spawn(async move {
+        open_operations
+            .open_subagent_lifecycle(
+                &open_operations.authenticated_caller("parent"),
+                &target("child"),
+            )
+            .await
+    });
+    tokio::task::yield_now().await;
+    assert_eq!(
+        state.calls.lock().unwrap().as_slice(),
+        ["close"],
+        "Open cannot mutate the relationship while Close projects its response"
+    );
+
+    state.projection_release.store(true, Ordering::SeqCst);
+    let closed = close.await.unwrap().expect("Close response");
+    let closed_relationship = closed.relationship.expect("Close relationship");
+    assert!(closed_relationship.subagent_closed_at.is_some());
+    assert_eq!(
+        closed.agent.status.presentation,
+        AgentPresentationStatus::Closed
+    );
+
+    let opened = open.await.unwrap().expect("Open response");
+    let opened_relationship = opened.relationship.expect("Open relationship");
+    assert!(opened_relationship.subagent_closed_at.is_none());
+    assert_eq!(state.calls.lock().unwrap().as_slice(), ["close", "open"]);
+}

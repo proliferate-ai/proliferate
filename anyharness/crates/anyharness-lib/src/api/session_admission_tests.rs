@@ -26,6 +26,8 @@ const WS: &str = "20000000-0000-4000-8000-000000000002";
 
 #[path = "session_admission_lock_order_tests.rs"]
 mod lock_order_tests;
+#[path = "subagent_http_tests.rs"]
+mod subagent_http_tests;
 #[path = "session_admission_subagent_tests.rs"]
 mod subagent_operability_tests;
 
@@ -142,25 +144,6 @@ async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_availab
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state();
     let (_run_id, sid) = controlled_fixture(&state);
-    let controlled_child_id = insert_session_row(&state, WS);
-    state
-        .subagent_service
-        .link_child(&sid, &controlled_child_id, None, None, None)
-        .expect("link controlled child");
-    let workflow_service = WorkflowRunService::new(WorkflowRunStore::new(state.db.clone()));
-    let child_run_id = uuid::Uuid::new_v4().to_string();
-    workflow_service
-        .accept(
-            &child_run_id,
-            super::workflow_runs_tests::domain_input_for_workspace(WS),
-        )
-        .expect("accept child workflow run");
-    assert!(workflow_service
-        .begin_run(&child_run_id)
-        .expect("begin child workflow run"));
-    assert!(workflow_service
-        .bind_session(&child_run_id, &controlled_child_id)
-        .expect("bind controlled child"));
 
     let prompt_body = json!({"blocks": [{"type": "text", "text": "foreign"}]});
     let cases: Vec<(&str, String, Option<Value>)> = vec![
@@ -220,11 +203,6 @@ async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_availab
             Some(json!({"prompt": "loop", "schedule": {"kind": "interval", "expr": "1h"}})),
         ),
         ("DELETE", format!("/v1/sessions/{sid}/loops"), None),
-        (
-            "POST",
-            format!("/v1/sessions/{sid}/subagents/{controlled_child_id}/wake"),
-            Some(json!({})),
-        ),
     ];
     for (method, uri, body) in cases {
         let (status, payload) = call(&state, method, uri.clone(), body).await;

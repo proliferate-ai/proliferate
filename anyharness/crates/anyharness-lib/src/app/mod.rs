@@ -564,6 +564,7 @@ impl AppState {
                 runtime_identity,
                 session_service: session_service.clone(),
                 session_link_service: Arc::new(session_link_service.clone()),
+                subagent_service: subagent_service.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_option_runtime: workspace_option_runtime.clone(),
                 session_admission: session_admission.clone(),
