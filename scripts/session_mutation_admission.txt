@@ -29,7 +29,6 @@ loops::set_session_loop fenced loop set
 loops::edit_session_loop fenced loop edit
 loops::clear_session_loops fenced loop clear (all)
 loops::clear_session_loop fenced loop clear (one)
-subagents::schedule_subagent_wake fenced subagent wake targeting the parent session
 replay::advance_replay_session fenced replay advance (replay sessions cannot be controlled; fenced per inventory)
 plans::approve_plan fenced plan decision mutates the owning session projection
 plans::reject_plan fenced plan decision mutates the owning session projection
