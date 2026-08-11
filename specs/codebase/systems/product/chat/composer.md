@@ -522,6 +522,18 @@ echoes it back as a `plan_reference` content part.
 
 `deriveActiveTodoTracker` reads `plan` items straight off the transcript (latest in-progress item with entries, any `sourceAgentKind`) instead of `deriveCanonicalPlan`. The SDK's canonical derivation excludes Claude's `TodoWrite` because the *formal plan UI* treats it as internal bookkeeping — but internal task tracking is exactly what the progress pill surfaces, so the tracker deliberately bypasses that gate. Keep the two derivations separate: the SDK exclusion still governs the formal plan surfaces, and the pill-side derivation must not feed them.
 
+### 3.5 Workspace-creation receipts belong to one session
+
+The local/worktree creation receipt is a synthetic transcript projection, not
+a persisted session event. Its settled row belongs only to the session created
+with the workspace. During the pending-to-materialized handoff, the workspace
+arrival event carries that ProductClient session alias so the row stays mounted
+without waiting for the session-list query. After materialization or reload,
+the earliest server `createdAt` session (ID tie-break) is authoritative. The
+arrival event remains workspace-scoped for setup and arrival lifecycle state;
+switching session tabs must not clear it or project its receipt into another
+session.
+
 ## 4. Visual rules (minimalist pattern)
 
 These are the calls that get broken most easily.

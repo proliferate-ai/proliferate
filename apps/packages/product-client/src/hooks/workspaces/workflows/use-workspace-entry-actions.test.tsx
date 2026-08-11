@@ -251,6 +251,11 @@ describe("useWorkspaceEntryActions", () => {
     });
     unsubscribe();
     expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
+    expect(useSessionSelectionStore.getState().workspaceArrivalEvent).toMatchObject({
+      workspaceId: "workspace-created",
+      source: "worktree-created",
+      receiptClientSessionId: projectedSessionId,
+    });
     expect(useWorkspaceUiStore.getState().workspaceLastInteracted["workspace-created"])
       .toEqual(expect.any(String));
     expect(pendingEntryAtInteraction).toMatchObject({
