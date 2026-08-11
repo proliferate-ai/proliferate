@@ -13,7 +13,7 @@ use proliferate_diagnostics_protocol::v1::validation::{
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 
-use super::discovery::{client_scope, read_locator};
+use super::discovery::{client_scope, peer_matches_locator, read_locator, DiagnosticsBrokerScope};
 use super::protocol::{
     DiagnosticsBrokerErrorV1, DiagnosticsBrokerLocatorAddressV1, DiagnosticsBrokerPayloadV1,
     DiagnosticsBrokerRequestV1, DiagnosticsBrokerResponseV1, BROKER_PROTOCOL_VERSION,
@@ -26,6 +26,7 @@ const FINITE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiagnosticsBrokerClientError {
     classification: DiagnosticsBrokerErrorV1,
+    supervisor: Option<super::protocol::DesktopDiagnosticsSupervisorStateV1>,
 }
 
 impl DiagnosticsBrokerClientError {
@@ -50,8 +51,27 @@ impl DiagnosticsBrokerClientError {
         }
     }
 
+    pub fn supervisor_state(
+        &self,
+    ) -> Option<&super::protocol::DesktopDiagnosticsSupervisorStateV1> {
+        self.supervisor.as_ref()
+    }
+
     fn new(classification: DiagnosticsBrokerErrorV1) -> Self {
-        Self { classification }
+        Self {
+            classification,
+            supervisor: None,
+        }
+    }
+
+    fn from_response(
+        classification: DiagnosticsBrokerErrorV1,
+        supervisor: Option<super::protocol::DesktopDiagnosticsSupervisorStateV1>,
+    ) -> Self {
+        Self {
+            classification,
+            supervisor,
+        }
     }
 }
 
@@ -66,11 +86,25 @@ impl std::error::Error for DiagnosticsBrokerClientError {}
 #[derive(Debug, Clone)]
 pub struct DiagnosticsBrokerClient {
     profile: Option<String>,
+    #[cfg(test)]
+    scope: Option<DiagnosticsBrokerScope>,
 }
 
 impl DiagnosticsBrokerClient {
     pub fn new(profile: Option<String>) -> Self {
-        Self { profile }
+        Self {
+            profile,
+            #[cfg(test)]
+            scope: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_scope(scope: DiagnosticsBrokerScope) -> Self {
+        Self {
+            profile: None,
+            scope: Some(scope),
+        }
     }
 
     pub async fn health(&self) -> Result<serde_json::Value, DiagnosticsBrokerClientError> {
@@ -175,7 +209,7 @@ impl DiagnosticsBrokerClient {
         make_request: impl FnOnce(String, String) -> DiagnosticsBrokerRequestV1,
     ) -> Result<(UnixStream, String, String), DiagnosticsBrokerClientError> {
         tokio::time::timeout(CLI_BROKER_OPEN_TIMEOUT, async {
-            let scope = client_scope(self.profile.as_deref()).map_err(|_| {
+            let scope = self.resolve_scope().map_err(|_| {
                 DiagnosticsBrokerClientError::new(DiagnosticsBrokerErrorV1::ProtocolError)
             })?;
             let locator = read_locator(&scope).map_err(|_| {
@@ -190,9 +224,7 @@ impl DiagnosticsBrokerClient {
             let credentials = stream.peer_cred().map_err(|_| {
                 DiagnosticsBrokerClientError::new(DiagnosticsBrokerErrorV1::PeerUnauthorized)
             })?;
-            if credentials.uid() != effective_uid()
-                || credentials.pid().and_then(|pid| u32::try_from(pid).ok()) != Some(locator.pid)
-            {
+            if !peer_matches_locator(credentials.uid(), credentials.pid(), locator.pid) {
                 return Err(DiagnosticsBrokerClientError::new(
                     DiagnosticsBrokerErrorV1::PeerUnauthorized,
                 ));
@@ -206,9 +238,14 @@ impl DiagnosticsBrokerClient {
                 DiagnosticsBrokerResponseV1::Accepted { .. } => {
                     Ok((stream, request_id, locator.app_boot_id))
                 }
-                DiagnosticsBrokerResponseV1::Error { classification, .. } => {
-                    Err(DiagnosticsBrokerClientError::new(classification))
-                }
+                DiagnosticsBrokerResponseV1::Error {
+                    classification,
+                    supervisor,
+                    ..
+                } => Err(DiagnosticsBrokerClientError::from_response(
+                    classification,
+                    supervisor,
+                )),
                 _ => Err(DiagnosticsBrokerClientError::new(
                     DiagnosticsBrokerErrorV1::ProtocolError,
                 )),
@@ -218,6 +255,14 @@ impl DiagnosticsBrokerClient {
         .map_err(|_| {
             DiagnosticsBrokerClientError::new(DiagnosticsBrokerErrorV1::DeadlineExceeded)
         })?
+    }
+
+    fn resolve_scope(&self) -> Result<DiagnosticsBrokerScope, super::discovery::DiscoveryError> {
+        #[cfg(test)]
+        if let Some(scope) = &self.scope {
+            return Ok(scope.clone());
+        }
+        client_scope(self.profile.as_deref())
     }
 }
 
@@ -281,9 +326,16 @@ impl DiagnosticsBrokerStream {
                 self.ended = true;
                 Ok(None)
             }
-            DiagnosticsBrokerResponseV1::Error { classification, .. } => {
+            DiagnosticsBrokerResponseV1::Error {
+                classification,
+                supervisor,
+                ..
+            } => {
                 self.ended = true;
-                Err(DiagnosticsBrokerClientError::new(classification))
+                Err(DiagnosticsBrokerClientError::from_response(
+                    classification,
+                    supervisor,
+                ))
             }
             DiagnosticsBrokerResponseV1::Accepted { .. } => Err(DiagnosticsBrokerClientError::new(
                 DiagnosticsBrokerErrorV1::ProtocolError,
@@ -309,8 +361,15 @@ async fn read_finite_payload(
             response @ DiagnosticsBrokerResponseV1::Error { .. } => {
                 verify_response(&response, app_boot_id, request_id)?;
                 match response {
-                    DiagnosticsBrokerResponseV1::Error { classification, .. } => {
-                        return Err(DiagnosticsBrokerClientError::new(classification));
+                    DiagnosticsBrokerResponseV1::Error {
+                        classification,
+                        supervisor,
+                        ..
+                    } => {
+                        return Err(DiagnosticsBrokerClientError::from_response(
+                            classification,
+                            supervisor,
+                        ));
                     }
                     _ => unreachable!(),
                 }
@@ -395,11 +454,6 @@ fn verify_response(
 
 fn io_error(_error: io::Error) -> DiagnosticsBrokerClientError {
     DiagnosticsBrokerClientError::new(DiagnosticsBrokerErrorV1::CollectorUnavailable)
-}
-
-fn effective_uid() -> u32 {
-    // SAFETY: geteuid has no preconditions.
-    unsafe { libc::geteuid() }
 }
 
 #[cfg(test)]

@@ -314,5 +314,8 @@ fn set_cloexec(fd: std::os::fd::RawFd) -> std::io::Result<()> {
 }
 
 #[cfg(test)]
+#[path = "supervisor_recovery_tests.rs"]
+mod recovery_tests;
+#[cfg(test)]
 #[path = "supervisor_tests.rs"]
 mod tests;

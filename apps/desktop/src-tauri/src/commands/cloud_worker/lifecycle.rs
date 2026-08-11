@@ -19,6 +19,51 @@ use super::{
     SharedCloudWorkerState, StopDesktopDispatchWorkerResult,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum WorkerStartFailureKind {
+    BinaryMissing,
+    EarlyExit,
+    InspectionFailed,
+    SpawnFailed,
+}
+
+impl WorkerStartFailureKind {
+    pub(super) const fn classification(self) -> &'static str {
+        match self {
+            Self::BinaryMissing => "binary_missing",
+            Self::EarlyExit => "child_exited",
+            Self::InspectionFailed => "child_inspection_failed",
+            Self::SpawnFailed => "spawn_failed",
+        }
+    }
+}
+
+pub(super) struct WorkerStartFailure {
+    pub(super) kind: WorkerStartFailureKind,
+    pub(super) message: String,
+}
+
+impl WorkerStartFailure {
+    pub(super) fn new(kind: WorkerStartFailureKind, message: String) -> Self {
+        Self { kind, message }
+    }
+}
+
+impl From<String> for WorkerStartFailure {
+    fn from(message: String) -> Self {
+        let kind = if message.starts_with("Proliferate Worker binary was not found") {
+            WorkerStartFailureKind::BinaryMissing
+        } else if message.starts_with("Proliferate Worker exited during startup") {
+            WorkerStartFailureKind::EarlyExit
+        } else if message.starts_with("Failed to inspect") {
+            WorkerStartFailureKind::InspectionFailed
+        } else {
+            WorkerStartFailureKind::SpawnFailed
+        };
+        Self { kind, message }
+    }
+}
+
 impl Drop for CloudWorkerProcess {
     fn drop(&mut self) {
         let _ = self.child.start_kill();
@@ -77,7 +122,7 @@ pub(super) async fn prepare_existing_worker_for_ensure_observed(
 
 pub(super) fn finish_worker_start_operation(
     operation: LifecycleOperation,
-    result: &Result<EnsureDesktopDispatchWorkerResult, String>,
+    result: &Result<EnsureDesktopDispatchWorkerResult, WorkerStartFailure>,
 ) {
     match result {
         Ok(result) if result.status == "started" => {
@@ -87,7 +132,9 @@ pub(super) fn finish_worker_start_operation(
             operation.terminal(TerminalOutcomeV1::Rejected, Some("shutdown_armed"))
         }
         Ok(_) => operation.terminal(TerminalOutcomeV1::Skipped, None),
-        Err(_) => operation.terminal(TerminalOutcomeV1::Failed, Some("spawn_failed")),
+        Err(error) => {
+            operation.terminal(TerminalOutcomeV1::Failed, Some(error.kind.classification()))
+        }
     }
 }
 
@@ -147,6 +194,19 @@ pub(crate) async fn stop_tracked_desktop_dispatch_worker(
 ) -> Result<bool, String> {
     let mut lifecycle = state.lifecycle.lock().await;
     stop_process(&mut lifecycle).await
+}
+
+#[cfg(test)]
+pub(crate) async fn install_shutdown_test_child(
+    state: &SharedCloudWorkerState,
+    child: tokio::process::Child,
+) {
+    let mut lifecycle = state.lifecycle.lock().await;
+    lifecycle.process = Some(CloudWorkerProcess {
+        target_id: "shutdown-fixture".to_string(),
+        child,
+        config_path: PathBuf::from("shutdown-fixture.toml"),
+    });
 }
 
 async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, String> {

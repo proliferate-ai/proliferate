@@ -5,13 +5,14 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use proliferate_diagnostics_protocol::v1::limits::CURRENT_SCHEMA_VERSION;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWrite};
 use tokio::net::{unix::OwnedReadHalf, UnixListener, UnixStream};
 use tokio::sync::{watch, Semaphore};
 use tokio::task::{JoinHandle, JoinSet};
 
 use super::discovery::{
-    current_server_scope, BrokerDiscoveryGuard, DiagnosticsBrokerScope, DiscoveryError,
+    current_server_scope, peer_uid_is_owner, BrokerDiscoveryGuard, DiagnosticsBrokerScope,
+    DiscoveryError,
 };
 use super::protocol::{
     parse_exact_request, DiagnosticsBrokerErrorV1, DiagnosticsBrokerPayloadV1,
@@ -27,6 +28,7 @@ use crate::diagnostics_collector::supervisor::{
 const SERVER_INITIAL_REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 const BROKER_FINITE_COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
 const BROKER_STREAM_FRAME_WRITE_TIMEOUT: Duration = Duration::from_secs(2);
+const BROKER_SESSION_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]
 pub(crate) enum BrokerServerError {
@@ -55,6 +57,8 @@ pub(crate) struct DiagnosticsBrokerServer {
     shutdown_tx: watch::Sender<bool>,
     accept_task: Mutex<Option<JoinHandle<()>>>,
     discovery: Mutex<Option<BrokerDiscoveryGuard>>,
+    #[cfg(test)]
+    limits: BrokerLimits,
 }
 
 impl std::fmt::Debug for DiagnosticsBrokerServer {
@@ -72,6 +76,23 @@ impl DiagnosticsBrokerServer {
         supervisor: Arc<DiagnosticsCollectorSupervisor>,
     ) -> Result<Arc<Self>, BrokerServerError> {
         let scope = current_server_scope()?;
+        Self::start_in_scope(supervisor, scope, DiagnosticsArtifactKind::current()).await
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn start_for_test(
+        supervisor: Arc<DiagnosticsCollectorSupervisor>,
+        scope: DiagnosticsBrokerScope,
+        artifact: DiagnosticsArtifactKind,
+    ) -> Result<Arc<Self>, BrokerServerError> {
+        Self::start_in_scope(supervisor, scope, artifact).await
+    }
+
+    async fn start_in_scope(
+        supervisor: Arc<DiagnosticsCollectorSupervisor>,
+        scope: DiagnosticsBrokerScope,
+        artifact: DiagnosticsArtifactKind,
+    ) -> Result<Arc<Self>, BrokerServerError> {
         let app_boot_id = uuid::Uuid::new_v4().to_string();
         let mut discovery =
             BrokerDiscoveryGuard::acquire(scope.clone(), app_boot_id.clone()).await?;
@@ -93,9 +114,19 @@ impl DiagnosticsBrokerServer {
             tails: Arc::new(Semaphore::new(MAX_BROKER_TAILS)),
             exports: Arc::new(Semaphore::new(MAX_BROKER_EXPORTS)),
         };
+        #[cfg(test)]
+        let retained_limits = limits.clone();
         let task_app_boot_id = app_boot_id.clone();
         let accept_task = tokio::spawn(async move {
-            accept_loop(listener, supervisor, task_app_boot_id, shutdown_rx, limits).await;
+            accept_loop(
+                listener,
+                supervisor,
+                task_app_boot_id,
+                artifact,
+                shutdown_rx,
+                limits,
+            )
+            .await;
         });
         Ok(Arc::new(Self {
             app_boot_id,
@@ -103,6 +134,8 @@ impl DiagnosticsBrokerServer {
             shutdown_tx,
             accept_task: Mutex::new(Some(accept_task)),
             discovery: Mutex::new(Some(discovery)),
+            #[cfg(test)]
+            limits: retained_limits,
         }))
     }
 
@@ -148,6 +181,7 @@ async fn accept_loop(
     listener: UnixListener,
     supervisor: Arc<DiagnosticsCollectorSupervisor>,
     app_boot_id: String,
+    artifact: DiagnosticsArtifactKind,
     mut shutdown: watch::Receiver<bool>,
     limits: BrokerLimits,
 ) {
@@ -177,6 +211,7 @@ async fn accept_loop(
                         stream,
                         supervisor,
                         app_boot_id,
+                        artifact,
                         session_shutdown,
                         limits,
                     )
@@ -186,19 +221,27 @@ async fn accept_loop(
             _ = sessions.join_next(), if !sessions.is_empty() => {}
         }
     }
-    sessions.abort_all();
-    while sessions.join_next().await.is_some() {}
+    if tokio::time::timeout(BROKER_SESSION_DRAIN_TIMEOUT, async {
+        while sessions.join_next().await.is_some() {}
+    })
+    .await
+    .is_err()
+    {
+        sessions.abort_all();
+        while sessions.join_next().await.is_some() {}
+    }
 }
 
 async fn handle_connection(
     mut stream: UnixStream,
     supervisor: Arc<DiagnosticsCollectorSupervisor>,
     app_boot_id: String,
+    artifact: DiagnosticsArtifactKind,
     shutdown: watch::Receiver<bool>,
     limits: BrokerLimits,
 ) {
     let credentials = match stream.peer_cred() {
-        Ok(credentials) if credentials.uid() == effective_uid() => credentials,
+        Ok(credentials) if peer_uid_is_owner(credentials.uid()) => credentials,
         _ => return,
     };
     let _ = credentials;
@@ -310,11 +353,12 @@ async fn handle_connection(
                     let _ = write_end(&mut stream, &app_boot_id, &request_id).await;
                 }
                 Ok(Err(error)) => {
-                    let _ = write_error(
+                    let _ = write_supervisor_error(
                         &mut stream,
                         &app_boot_id,
                         &request_id,
-                        map_supervisor_error(error),
+                        &supervisor,
+                        error,
                     )
                     .await;
                 }
@@ -363,17 +407,18 @@ async fn handle_connection(
             let lease = match supervisor.tail(after_cursor).await {
                 Ok(lease) => lease,
                 Err(error) => {
-                    let _ = write_error(
+                    let _ = write_supervisor_error(
                         &mut stream,
                         &app_boot_id,
                         &request_id,
-                        map_supervisor_error(error),
+                        &supervisor,
+                        error,
                     )
                     .await;
                     return;
                 }
             };
-            stream_tail(stream, lease, &app_boot_id, &request_id).await;
+            stream_tail(stream, lease, shutdown, &app_boot_id, &request_id).await;
         }
         DiagnosticsBrokerRequestV1::Export { request, .. } => {
             let Ok(_permit) = Arc::clone(&limits.exports).try_acquire_owned() else {
@@ -392,17 +437,15 @@ async fn handle_connection(
             {
                 return;
             }
-            let lease = match supervisor
-                .export(&request, DiagnosticsArtifactKind::current())
-                .await
-            {
+            let lease = match supervisor.export(&request, artifact).await {
                 Ok(lease) => lease,
                 Err(error) => {
-                    let _ = write_error(
+                    let _ = write_supervisor_error(
                         &mut stream,
                         &app_boot_id,
                         &request_id,
-                        map_supervisor_error(error),
+                        &supervisor,
+                        error,
                     )
                     .await;
                     return;
@@ -412,6 +455,7 @@ async fn handle_connection(
                 stream,
                 Arc::clone(&supervisor),
                 lease,
+                shutdown,
                 &app_boot_id,
                 &request_id,
             )
@@ -423,6 +467,7 @@ async fn handle_connection(
 async fn stream_tail(
     stream: UnixStream,
     mut lease: crate::diagnostics_collector::supervisor::SupervisorTailLease,
+    mut broker_shutdown: watch::Receiver<bool>,
     app_boot_id: &str,
     request_id: &str,
 ) {
@@ -450,6 +495,16 @@ async fn stream_tail(
             .await;
             return;
         }
+        if *broker_shutdown.borrow() {
+            let _ = write_error(
+                &mut write,
+                app_boot_id,
+                request_id,
+                DiagnosticsBrokerErrorV1::Cancelled,
+            )
+            .await;
+            return;
+        }
         tokio::select! {
             _ = &mut disconnected => return,
             changed = lease.generation_changed.changed() => {
@@ -460,6 +515,12 @@ async fn stream_tail(
             }
             changed = lease.shutdown.changed() => {
                 if changed.is_err() || *lease.shutdown.borrow() {
+                    let _ = write_error(&mut write, app_boot_id, request_id, DiagnosticsBrokerErrorV1::Cancelled).await;
+                    return;
+                }
+            }
+            changed = broker_shutdown.changed() => {
+                if changed.is_err() || *broker_shutdown.borrow() {
                     let _ = write_error(&mut write, app_boot_id, request_id, DiagnosticsBrokerErrorV1::Cancelled).await;
                     return;
                 }
@@ -483,86 +544,44 @@ async fn stream_tail(
     }
 }
 
-async fn stream_export(
-    stream: UnixStream,
-    supervisor: Arc<DiagnosticsCollectorSupervisor>,
-    mut lease: crate::diagnostics_collector::supervisor::SupervisorExportLease,
-    app_boot_id: &str,
-    request_id: &str,
-) {
-    let (read, mut write) = stream.into_split();
-    let disconnected = caller_disconnected(read);
-    tokio::pin!(disconnected);
-    loop {
-        if *lease.generation_changed.borrow() != lease.generation {
-            let _ = write_error(
-                &mut write,
-                app_boot_id,
-                request_id,
-                DiagnosticsBrokerErrorV1::CollectorReplaced,
-            )
-            .await;
-            return;
-        }
-        if *lease.shutdown.borrow() {
-            let _ = write_error(
-                &mut write,
-                app_boot_id,
-                request_id,
-                DiagnosticsBrokerErrorV1::Cancelled,
-            )
-            .await;
-            return;
-        }
-        tokio::select! {
-            _ = &mut disconnected => return,
-            changed = lease.generation_changed.changed() => {
-                if changed.is_err() || *lease.generation_changed.borrow() != lease.generation {
-                    let _ = write_error(&mut write, app_boot_id, request_id, DiagnosticsBrokerErrorV1::CollectorReplaced).await;
-                    return;
-                }
-            }
-            changed = lease.shutdown.changed() => {
-                if changed.is_err() || *lease.shutdown.borrow() {
-                    let _ = write_error(&mut write, app_boot_id, request_id, DiagnosticsBrokerErrorV1::Cancelled).await;
-                    return;
-                }
-            }
-            frame = lease.stream.next() => match frame {
-                Ok(Some(frame)) => match supervisor.contextualize_export(lease.generation, lease.restart_count, frame) {
-                    Ok(frame) => {
-                        if write_payload(&mut write, app_boot_id, request_id, DiagnosticsBrokerPayloadV1::Export(frame)).await.is_err() {
-                            return;
-                        }
-                    }
-                    Err(_) => {
-                        let _ = write_error(&mut write, app_boot_id, request_id, DiagnosticsBrokerErrorV1::ProtocolError).await;
-                        return;
-                    }
-                },
-                Ok(None) => {
-                    let _ = write_end(&mut write, app_boot_id, request_id).await;
-                    return;
-                }
-                Err(_) => {
-                    let _ = write_error(&mut write, app_boot_id, request_id, DiagnosticsBrokerErrorV1::CollectorUnavailable).await;
-                    return;
-                }
-            }
-        }
-    }
-}
-
 async fn caller_disconnected(mut read: OwnedReadHalf) {
     let mut byte = [0_u8; 1];
     let _ = read.read(&mut byte).await;
 }
 
+async fn write_supervisor_error(
+    writer: &mut (impl AsyncWrite + Unpin),
+    app_boot_id: &str,
+    request_id: &str,
+    supervisor: &DiagnosticsCollectorSupervisor,
+    error: SupervisorUnavailable,
+) -> Result<(), io::Error> {
+    let state = matches!(
+        error,
+        SupervisorUnavailable::Starting
+            | SupervisorUnavailable::Unsupported
+            | SupervisorUnavailable::Degraded
+            | SupervisorUnavailable::Stopped
+    )
+    .then(|| supervisor.state());
+    write_error_with_supervisor(
+        writer,
+        app_boot_id,
+        request_id,
+        map_supervisor_error(error),
+        state,
+    )
+    .await
+}
+
+#[path = "server/export_stream.rs"]
+mod export_stream;
+use export_stream::stream_export;
 #[path = "server/framing.rs"]
 mod framing;
 use framing::{
-    effective_uid, map_supervisor_error, read_frame, write_accepted, write_end, write_error,
-    write_payload,
+    map_supervisor_error, read_frame, write_accepted, write_end, write_error,
+    write_error_with_supervisor, write_payload,
 };
 #[cfg(test)]
 #[path = "server_tests.rs"]

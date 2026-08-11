@@ -64,6 +64,8 @@ pub(crate) struct DiagnosticsShutdownCoordinator {
     broker: SharedBrokerServerState,
     worker: SharedCloudWorkerState,
     anyharness: SharedSidecar,
+    #[cfg(test)]
+    phase_trace: std::sync::Mutex<Vec<ShutdownPhase>>,
 }
 
 impl std::fmt::Debug for DiagnosticsShutdownCoordinator {
@@ -93,7 +95,25 @@ impl DiagnosticsShutdownCoordinator {
             broker,
             worker,
             anyharness,
+            #[cfg(test)]
+            phase_trace: std::sync::Mutex::new(Vec::new()),
         })
+    }
+
+    fn enter_phase(&self, order: &mut ShutdownOrder, phase: ShutdownPhase) {
+        order.enter(phase);
+        #[cfg(test)]
+        if let Ok(mut trace) = self.phase_trace.lock() {
+            trace.push(phase);
+        }
+    }
+
+    #[cfg(test)]
+    fn phase_trace(&self) -> Vec<ShutdownPhase> {
+        self.phase_trace
+            .lock()
+            .map(|trace| trace.clone())
+            .unwrap_or_default()
     }
 
     pub(crate) async fn shutdown(&self) -> Result<(), String> {
@@ -107,11 +127,11 @@ impl DiagnosticsShutdownCoordinator {
         let mut failed = false;
         let mut order = ShutdownOrder::default();
 
-        order.enter(ShutdownPhase::Arm);
+        self.enter_phase(&mut order, ShutdownPhase::Arm);
         self.supervisor.arm_shutdown();
         cloud_worker::lifecycle::arm_terminal_shutdown(&self.worker);
         sidecar::arm_terminal_shutdown(&self.anyharness).await;
-        order.enter(ShutdownPhase::CancelBrokerSessions);
+        self.enter_phase(&mut order, ShutdownPhase::CancelBrokerSessions);
         let broker = self.broker.lock().await.clone();
         if let Some(broker) = &broker {
             broker.stop_accepting();
@@ -121,10 +141,10 @@ impl DiagnosticsShutdownCoordinator {
             }
         }
 
-        order.enter(ShutdownPhase::DrainProducer);
+        self.enter_phase(&mut order, ShutdownPhase::DrainProducer);
         let _ = self.producer.drain(PRODUCER_DRAIN_TIMEOUT).await;
 
-        order.enter(ShutdownPhase::StopWorker);
+        self.enter_phase(&mut order, ShutdownPhase::StopWorker);
         let worker_stop = self.producer.begin_lifecycle("desktop.worker_process.stop");
         match cloud_worker::lifecycle::arm_terminal_shutdown_and_stop_worker(&self.worker).await {
             Ok(true) => worker_stop.terminal(TerminalOutcomeV1::Succeeded, None),
@@ -143,13 +163,13 @@ impl DiagnosticsShutdownCoordinator {
             }
         }
 
-        order.enter(ShutdownPhase::StopAnyharness);
+        self.enter_phase(&mut order, ShutdownPhase::StopAnyharness);
         if let Err(error) = sidecar::stop(&self.anyharness, &self.producer).await {
             failed = true;
             tracing::warn!(%error, "failed to stop AnyHarness during app exit");
         }
 
-        order.enter(ShutdownPhase::StopCollector);
+        self.enter_phase(&mut order, ShutdownPhase::StopCollector);
         if let Err(error) = self.supervisor.stop_collector().await {
             failed = true;
             tracing::warn!(
@@ -158,7 +178,7 @@ impl DiagnosticsShutdownCoordinator {
             );
         }
 
-        order.enter(ShutdownPhase::CloseArtifacts);
+        self.enter_phase(&mut order, ShutdownPhase::CloseArtifacts);
         self.producer.close();
         if let Some(broker) = broker {
             if let Err(error) = broker.remove_locator_and_unlock() {
@@ -201,3 +221,7 @@ mod tests {
         order.enter(ShutdownPhase::StopCollector);
     }
 }
+
+#[cfg(test)]
+#[path = "shutdown_tests.rs"]
+mod integration_tests;

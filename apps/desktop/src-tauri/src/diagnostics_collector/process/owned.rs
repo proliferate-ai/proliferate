@@ -41,6 +41,10 @@ impl OwnedCollectorProcess {
     }
 
     pub(crate) fn try_wait(&mut self) -> Result<Option<std::process::ExitStatus>, io::Error> {
+        #[cfg(test)]
+        if self.test_faults.try_wait {
+            return Err(io::Error::other("injected collector inspection failure"));
+        }
         match self.child.as_mut() {
             Some(child) => child.try_wait(),
             None => Ok(None),
@@ -52,6 +56,13 @@ impl OwnedCollectorProcess {
     }
 
     pub(crate) async fn write_shutdown(&mut self) -> Result<(), io::Error> {
+        #[cfg(test)]
+        if self.test_faults.control_write {
+            return Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "injected collector control failure",
+            ));
+        }
         let encoded = typed_shutdown_command()?;
         let control = self
             .control
@@ -75,6 +86,10 @@ impl OwnedCollectorProcess {
     }
 
     pub(crate) fn start_kill(&mut self) -> Result<(), io::Error> {
+        #[cfg(test)]
+        if self.test_faults.kill {
+            return Err(io::Error::other("injected collector kill failure"));
+        }
         self.child
             .as_mut()
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "collector handle missing"))?
@@ -100,6 +115,11 @@ impl OwnedCollectorProcess {
     }
 
     pub(crate) async fn orderly_shutdown(&mut self) -> Result<CollectorShutdownOutcome, io::Error> {
+        #[cfg(test)]
+        if self.test_faults.graceful_deadline {
+            self.terminate_and_reap().await?;
+            return Ok(CollectorShutdownOutcome::GracefulDeadlineExceeded);
+        }
         if self.write_shutdown().await.is_err() {
             self.terminate_and_reap().await?;
             return Ok(CollectorShutdownOutcome::ControlWriteFailed);
@@ -119,6 +139,23 @@ impl OwnedCollectorProcess {
         if let Some(task) = self.stderr_task.take() {
             task.abort();
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inject_test_fault(&mut self, fault: super::CollectorProcessTestFault) {
+        match fault {
+            super::CollectorProcessTestFault::TryWait => self.test_faults.try_wait = true,
+            super::CollectorProcessTestFault::ControlWrite => self.test_faults.control_write = true,
+            super::CollectorProcessTestFault::Kill => self.test_faults.kill = true,
+            super::CollectorProcessTestFault::GracefulDeadline => {
+                self.test_faults.graceful_deadline = true;
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn clear_test_faults(&mut self) {
+        self.test_faults = super::CollectorProcessTestFaults::default();
     }
 }
 

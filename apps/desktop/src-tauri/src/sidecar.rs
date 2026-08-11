@@ -53,6 +53,8 @@ pub struct SidecarProcess {
     pub info: RuntimeInfo,
     pub launch_env: HashMap<String, String>,
     terminal_shutdown_armed: bool,
+    #[cfg(test)]
+    suppress_runtime_info_persistence: bool,
 }
 
 impl SidecarProcess {
@@ -66,6 +68,8 @@ impl SidecarProcess {
             },
             launch_env: HashMap::new(),
             terminal_shutdown_armed: false,
+            #[cfg(test)]
+            suppress_runtime_info_persistence: false,
         }
     }
 }
@@ -406,7 +410,7 @@ pub async fn restart(
         guard.child = None;
         guard.info.status = RuntimeStatus::Stopped;
         guard.launch_env = launch_env;
-        persist_runtime_info(&guard.info, None);
+        persist_sidecar_runtime_info(&guard, None);
     }
 
     finish_boot_operation(operation, boot_inner(sidecar).await);
@@ -422,7 +426,7 @@ pub async fn stop(
     guard.terminal_shutdown_armed = true;
     let Some(child) = guard.child.as_mut() else {
         guard.info.status = RuntimeStatus::Stopped;
-        persist_runtime_info(&guard.info, None);
+        persist_sidecar_runtime_info(&guard, None);
         operation.terminal(TerminalOutcomeV1::Skipped, None);
         return Ok(false);
     };
@@ -452,13 +456,26 @@ pub async fn stop(
     }
     guard.child = None;
     guard.info.status = RuntimeStatus::Stopped;
-    persist_runtime_info(&guard.info, None);
+    persist_sidecar_runtime_info(&guard, None);
     operation.terminal(TerminalOutcomeV1::Succeeded, None);
     Ok(true)
 }
 
 pub(crate) async fn arm_terminal_shutdown(sidecar: &SharedSidecar) {
     sidecar.lock().await.terminal_shutdown_armed = true;
+}
+
+#[cfg(test)]
+pub(crate) async fn install_shutdown_test_child(sidecar: &SharedSidecar, child: Child) {
+    let mut guard = sidecar.lock().await;
+    guard.child = Some(child);
+    guard.info.status = RuntimeStatus::Healthy;
+    guard.suppress_runtime_info_persistence = true;
+}
+
+#[cfg(test)]
+pub(crate) async fn suppress_shutdown_test_persistence(sidecar: &SharedSidecar) {
+    sidecar.lock().await.suppress_runtime_info_persistence = true;
 }
 
 fn runtime_health_url(runtime_url: &str) -> String {
@@ -497,4 +514,12 @@ fn persist_runtime_info(info: &RuntimeInfo, health: Option<&RuntimeHealthRecord>
     if let Err(error) = write_runtime_info_record(&record) {
         tracing::warn!(error = %error, "Failed to persist runtime info");
     }
+}
+
+fn persist_sidecar_runtime_info(process: &SidecarProcess, health: Option<&RuntimeHealthRecord>) {
+    #[cfg(test)]
+    if process.suppress_runtime_info_persistence {
+        return;
+    }
+    persist_runtime_info(&process.info, health);
 }

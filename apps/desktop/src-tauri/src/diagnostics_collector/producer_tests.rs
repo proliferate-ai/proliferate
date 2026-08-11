@@ -209,6 +209,17 @@ fn lifecycle_lane_evicts_detail_and_queue_stays_bounded() {
     assert!(bytes <= PRODUCER_QUEUE_MAX_BYTES);
     assert!(dropped_detail > 0);
     assert_eq!(dropped_lifecycle, 0);
+    let state = producer.inner.state.lock().expect("producer state");
+    let sequences = state
+        .queued
+        .iter()
+        .map(|item| item.record.producer_sequence)
+        .collect::<Vec<_>>();
+    assert!(
+        sequences.first().copied().unwrap_or_default() > 1
+            || sequences.windows(2).any(|pair| pair[1] > pair[0] + 1),
+        "queue loss must remain visible as a producer-sequence gap"
+    );
 }
 
 #[test]

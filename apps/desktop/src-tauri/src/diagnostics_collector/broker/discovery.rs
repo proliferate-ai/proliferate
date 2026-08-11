@@ -16,6 +16,10 @@ use crate::app_config;
 #[path = "discovery/profile.rs"]
 mod profile;
 use profile::read_profile_instance;
+#[path = "discovery/security.rs"]
+mod security;
+use security::{effective_uid, owner_file_metadata_is_safe, validate_socket_path};
+pub(super) use security::{peer_matches_locator, peer_uid_is_owner};
 
 use super::protocol::{
     DiagnosticsBrokerLocatorAddressV1, DiagnosticsBrokerLocatorV1, DiagnosticsBrokerRequestV1,
@@ -234,7 +238,7 @@ pub(crate) fn read_locator(
     Ok(locator)
 }
 
-fn build_scope(
+pub(crate) fn build_scope(
     app_dir: PathBuf,
     identifier: String,
     environment: &'static str,
@@ -265,9 +269,7 @@ fn build_scope(
         .collect::<String>();
     let socket_root = darwin_user_temp_dir()?.join("pd");
     let socket_path = socket_root.join(format!("{scope_id}.sock"));
-    if socket_path.as_os_str().as_bytes().len() > MAX_DARWIN_SOCKET_PATH_BYTES {
-        return Err(DiscoveryError::InvalidNamespace);
-    }
+    validate_socket_path(&socket_path)?;
     let run_dir = app_dir.join("run");
     Ok(DiagnosticsBrokerScope {
         app_dir,
@@ -283,6 +285,7 @@ fn build_scope(
 }
 
 fn ensure_namespace(scope: &DiagnosticsBrokerScope) -> Result<(), DiscoveryError> {
+    validate_socket_path(&scope.socket_path)?;
     validate_app_directory(&scope.app_dir)?;
     create_or_validate_directory(&scope.run_dir, 0o700)?;
     let socket_root = scope
@@ -342,11 +345,12 @@ fn open_existing_owner_file(path: &Path, exact_mode: Option<u32>) -> Result<File
 fn validate_open_file(file: &File, exact_mode: Option<u32>) -> Result<(), DiscoveryError> {
     let metadata = file.metadata().map_err(|_| DiscoveryError::Io)?;
     let mode = metadata.mode() & 0o777;
-    if !metadata.file_type().is_file()
-        || metadata.uid() != effective_uid()
-        || exact_mode.is_some_and(|expected| mode != expected)
-        || (exact_mode.is_none() && mode & 0o022 != 0)
-    {
+    if !owner_file_metadata_is_safe(
+        metadata.file_type().is_file(),
+        metadata.uid(),
+        mode,
+        exact_mode,
+    ) {
         return Err(DiscoveryError::UnsafeArtifact);
     }
     Ok(())
@@ -443,9 +447,7 @@ async fn probe_old_broker(
         let Some(locator) = locator else {
             return Liveness::Ambiguous;
         };
-        if credentials.uid() != effective_uid()
-            || credentials.pid().and_then(|pid| u32::try_from(pid).ok()) != Some(locator.pid)
-        {
+        if !peer_matches_locator(credentials.uid(), credentials.pid(), locator.pid) {
             return Liveness::Ambiguous;
         }
         let request_id = uuid::Uuid::new_v4().to_string();
@@ -542,11 +544,6 @@ fn remove_if_exists(path: &Path) -> Result<(), DiscoveryError> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(_) => Err(DiscoveryError::Io),
     }
-}
-
-fn effective_uid() -> u32 {
-    // SAFETY: geteuid has no preconditions.
-    unsafe { libc::geteuid() }
 }
 
 #[cfg(target_os = "macos")]

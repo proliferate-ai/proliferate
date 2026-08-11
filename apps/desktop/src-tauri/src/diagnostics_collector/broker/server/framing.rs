@@ -2,6 +2,8 @@ use std::io;
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+use crate::diagnostics_collector::supervisor::DesktopDiagnosticsSupervisorStateV1;
+
 use super::{
     DiagnosticsBrokerErrorV1, DiagnosticsBrokerPayloadV1, DiagnosticsBrokerResponseV1,
     SupervisorUnavailable, BROKER_PROTOCOL_VERSION, BROKER_STREAM_FRAME_WRITE_TIMEOUT,
@@ -101,6 +103,16 @@ pub(super) async fn write_error(
     request_id: &str,
     classification: DiagnosticsBrokerErrorV1,
 ) -> Result<(), io::Error> {
+    write_error_with_supervisor(writer, app_boot_id, request_id, classification, None).await
+}
+
+pub(super) async fn write_error_with_supervisor(
+    writer: &mut (impl AsyncWrite + Unpin),
+    app_boot_id: &str,
+    request_id: &str,
+    classification: DiagnosticsBrokerErrorV1,
+    supervisor: Option<DesktopDiagnosticsSupervisorStateV1>,
+) -> Result<(), io::Error> {
     write_response(
         writer,
         &DiagnosticsBrokerResponseV1::Error {
@@ -108,6 +120,7 @@ pub(super) async fn write_error(
             app_boot_id: app_boot_id.to_string(),
             request_id: request_id.to_string(),
             classification,
+            supervisor,
         },
     )
     .await
@@ -125,9 +138,4 @@ pub(super) fn map_supervisor_error(error: SupervisorUnavailable) -> DiagnosticsB
         | SupervisorUnavailable::Degraded
         | SupervisorUnavailable::Stopped => DiagnosticsBrokerErrorV1::CollectorUnavailable,
     }
-}
-
-pub(super) fn effective_uid() -> u32 {
-    // SAFETY: geteuid has no preconditions.
-    unsafe { libc::geteuid() }
 }

@@ -402,6 +402,8 @@ impl CollectorProcessLauncher {
             capability,
             stderr_task: Some(stderr_task),
             orderly_shutdown_requested: false,
+            #[cfg(test)]
+            test_faults: CollectorProcessTestFaults::default(),
         })
     }
 }
@@ -469,6 +471,26 @@ pub(crate) struct OwnedCollectorProcess {
     capability: Arc<SecretCapability>,
     stderr_task: Option<JoinHandle<()>>,
     orderly_shutdown_requested: bool,
+    #[cfg(test)]
+    test_faults: CollectorProcessTestFaults,
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CollectorProcessTestFault {
+    TryWait,
+    ControlWrite,
+    Kill,
+    GracefulDeadline,
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct CollectorProcessTestFaults {
+    try_wait: bool,
+    control_write: bool,
+    kill: bool,
+    graceful_deadline: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

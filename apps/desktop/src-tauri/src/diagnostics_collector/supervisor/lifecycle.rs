@@ -7,11 +7,50 @@ use proliferate_diagnostics_protocol::v1::types::{HealthStatusV1, TerminalOutcom
 
 use super::{
     accept_restart_budget_at, classification_for_launch_error, reset_restart_budget_after_health,
-    retryable, CollectorLaunchError, CollectorLaunchErrorKind, CollectorLaunchKindV1,
-    CollectorShutdownOutcome, DesktopDiagnosticsSupervisorStateV1, DiagnosticsCollectorSupervisor,
-    OwnedCollectorProcess, StartupBarrierResult, SupervisorUnavailable, AUTOMATIC_RESTART_DELAYS,
-    HEALTH_FAILURE_THRESHOLD, PRODUCER_DRAIN_TIMEOUT, STEADY_HEALTH_INTERVAL,
+    retryable, CollectorClientError, CollectorLaunchError, CollectorLaunchErrorKind,
+    CollectorLaunchKindV1, CollectorShutdownOutcome, DesktopDiagnosticsSupervisorStateV1,
+    DiagnosticsCollectorSupervisor, OwnedCollectorProcess, StartupBarrierResult,
+    SupervisorUnavailable, AUTOMATIC_RESTART_DELAYS, HEALTH_FAILURE_THRESHOLD,
+    PRODUCER_DRAIN_TIMEOUT, STEADY_HEALTH_INTERVAL,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SteadyHealthAssessment {
+    Healthy,
+    TransientFailure,
+    LatchedFailure(&'static str),
+}
+
+pub(super) fn classify_steady_health_response(
+    status: HealthStatusV1,
+    schema_major: u16,
+    collector_boot_id: &str,
+    expected_boot_id: &str,
+) -> SteadyHealthAssessment {
+    if schema_major != CURRENT_SCHEMA_VERSION.major {
+        SteadyHealthAssessment::LatchedFailure("schema_incompatible")
+    } else if collector_boot_id != expected_boot_id {
+        SteadyHealthAssessment::LatchedFailure("boot_id_mismatch")
+    } else if status == HealthStatusV1::Ready {
+        SteadyHealthAssessment::Healthy
+    } else {
+        SteadyHealthAssessment::TransientFailure
+    }
+}
+
+pub(super) fn classify_steady_health_error(error: CollectorClientError) -> SteadyHealthAssessment {
+    match error {
+        CollectorClientError::Authentication => {
+            SteadyHealthAssessment::LatchedFailure("authentication_failed")
+        }
+        CollectorClientError::Protocol => {
+            SteadyHealthAssessment::LatchedFailure("schema_incompatible")
+        }
+        CollectorClientError::Rejected
+        | CollectorClientError::Unavailable
+        | CollectorClientError::Deadline => SteadyHealthAssessment::TransientFailure,
+    }
+}
 
 impl DiagnosticsCollectorSupervisor {
     pub(crate) fn arm_shutdown(&self) -> bool {
@@ -216,12 +255,17 @@ impl DiagnosticsCollectorSupervisor {
                 }
                 Ok(None) => {}
             }
-            match client.health().await {
-                Ok(health)
-                    if health.status == HealthStatusV1::Ready
-                        && health.schema_version.major == CURRENT_SCHEMA_VERSION.major
-                        && health.collector_boot_id == collector_boot_id =>
-                {
+            let assessment = match client.health().await {
+                Ok(health) => classify_steady_health_response(
+                    health.status,
+                    health.schema_version.major,
+                    &health.collector_boot_id,
+                    &collector_boot_id,
+                ),
+                Err(error) => classify_steady_health_error(error),
+            };
+            match assessment {
+                SteadyHealthAssessment::Healthy => {
                     failed_probes = 0;
                     if let Ok(mut inner) = self.inner.lock() {
                         if inner.generation == generation
@@ -234,13 +278,18 @@ impl DiagnosticsCollectorSupervisor {
                         }
                     }
                 }
-                _ => {
+                SteadyHealthAssessment::TransientFailure => {
                     failed_probes = failed_probes.saturating_add(1);
                     if failed_probes >= HEALTH_FAILURE_THRESHOLD {
                         self.fail_generation(generation, "health_unavailable", true)
                             .await;
                         return;
                     }
+                }
+                SteadyHealthAssessment::LatchedFailure(classification) => {
+                    self.fail_generation(generation, classification, false)
+                        .await;
+                    return;
                 }
             }
         }
@@ -434,5 +483,62 @@ impl DiagnosticsCollectorSupervisor {
         if let Ok(mut inner) = self.inner.lock() {
             inner.retained_launch = Some(retained);
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn kill_current_process_for_test(&self) -> Result<(), std::io::Error> {
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|_| std::io::Error::other("collector supervisor lock poisoned"))?;
+        inner
+            .process
+            .as_mut()
+            .ok_or_else(|| std::io::Error::other("collector process missing"))?
+            .start_kill()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inject_process_fault_for_test(
+        &self,
+        fault: crate::diagnostics_collector::process::CollectorProcessTestFault,
+    ) -> Result<(), std::io::Error> {
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|_| std::io::Error::other("collector supervisor lock poisoned"))?;
+        inner
+            .process
+            .as_mut()
+            .ok_or_else(|| std::io::Error::other("collector process missing"))?
+            .inject_test_fault(fault);
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn clear_process_faults_for_test(&self) -> Result<(), std::io::Error> {
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|_| std::io::Error::other("collector supervisor lock poisoned"))?;
+        inner
+            .process
+            .as_mut()
+            .ok_or_else(|| std::io::Error::other("collector process missing"))?
+            .clear_test_faults();
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_owned_process_for_test(&self) -> bool {
+        self.inner
+            .lock()
+            .map(|inner| inner.process.is_some())
+            .unwrap_or(false)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_state_for_test(&self, state: DesktopDiagnosticsSupervisorStateV1) {
+        self.publish_state(state);
     }
 }

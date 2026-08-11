@@ -1,8 +1,78 @@
 use std::env;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use super::{copy_executable, find_named_binary, mark_executable};
+use super::packaging_contract::is_placeholder_executable;
+use super::{copy_executable, find_named_binary, mark_executable, write_placeholder_sidecar};
+
+pub(super) fn stage_dependency_placeholders() -> Result<(), String> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
+    let target = env::var("TAURI_ENV_TARGET_TRIPLE")
+        .or_else(|_| env::var("TARGET"))
+        .map_err(|e| e.to_string())?;
+    let binaries_dir = manifest_dir.join("binaries");
+    fs::create_dir_all(&binaries_dir).map_err(|e| e.to_string())?;
+
+    for binary in ["proliferate-debug", "anyharness", "proliferate-worker"] {
+        let suffix = if target.contains("windows") {
+            ".exe"
+        } else {
+            ""
+        };
+        let destination = binaries_dir.join(format!("{binary}-{target}{suffix}"));
+        if !destination.exists() {
+            write_placeholder_sidecar(&destination, &target)?;
+        }
+    }
+    ensure_collector_placeholder(&binaries_dir, &target)
+}
+
+pub(super) fn validate_staged_sidecars() -> Result<(), String> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
+    let target = env::var("TAURI_ENV_TARGET_TRIPLE")
+        .or_else(|_| env::var("TARGET"))
+        .map_err(|e| e.to_string())?;
+    let suffix = if target.contains("windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    for binary in [
+        "anyharness",
+        "proliferate-worker",
+        "proliferate-debug",
+        "proliferate-diagnostics-collector",
+    ] {
+        let path = manifest_dir
+            .join("binaries")
+            .join(format!("{binary}-{target}{suffix}"));
+        let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+        if !metadata.file_type().is_file() || metadata.len() == 0 {
+            return Err(format!(
+                "{} is not a non-empty regular file",
+                path.display()
+            ));
+        }
+        let mut prefix = [0_u8; 512];
+        let read = fs::File::open(&path)
+            .and_then(|mut file| file.read(&mut prefix))
+            .map_err(|error| error.to_string())?;
+        let unsupported_collector = binary == "proliferate-diagnostics-collector"
+            && !is_supported_diagnostics_collector_target(&target);
+        if is_placeholder_executable(&prefix[..read]) && !unsupported_collector {
+            return Err(format!("{} is a placeholder", path.display()));
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if metadata.permissions().mode() & 0o111 == 0 {
+                return Err(format!("{} is not executable", path.display()));
+            }
+        }
+    }
+    Ok(())
+}
 
 pub(super) fn ensure_collector_placeholder(
     binaries_dir: &Path,
@@ -82,16 +152,14 @@ pub(super) fn resolve_diagnostics_collector_binary(
     target: &str,
     profile: &str,
 ) -> Result<PathBuf, String> {
-    if profile != "release" {
-        if let Ok(explicit) = env::var("PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN") {
-            let explicit = PathBuf::from(explicit);
-            if explicit.is_file() {
-                return Ok(explicit);
-            }
-            return Err(format!(
-                "PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN does not name a file for {target}"
-            ));
+    if let Ok(explicit) = env::var("PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN") {
+        let explicit = PathBuf::from(explicit);
+        if explicit.is_file() {
+            return Ok(explicit);
         }
+        return Err(format!(
+            "PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN does not name a file for {target}"
+        ));
     }
 
     let repo_root = manifest_dir.join("../../..");

@@ -8,14 +8,38 @@ fn temp_path() -> PathBuf {
 
 #[test]
 fn fallback_rotates_whole_records_and_stays_bounded() {
+    use std::os::unix::fs::PermissionsExt;
+
     let path = temp_path();
     let writer = FallbackDiagnosticsWriter::open_for_test(path.clone()).expect("open fallback");
-    let record = serde_json::json!({"message": "x".repeat(130_000)}).to_string();
-    for _ in 0..12 {
+    for index in 0..12 {
+        let record =
+            serde_json::json!({"index": index, "message": "x".repeat(130_000)}).to_string();
         writer.record(&record).expect("write fallback record");
     }
     let health = writer.health();
     assert!(health.bytes <= FALLBACK_TOTAL_BYTES);
+    let mut retained_indices = Vec::new();
+    for index in (0..=FALLBACK_ROTATED_SEGMENTS).rev() {
+        let segment = if index == 0 {
+            path.clone()
+        } else {
+            rotated_path(&path, index)
+        };
+        if segment.exists() {
+            for line in fs::read_to_string(&segment)
+                .expect("whole UTF-8 records")
+                .lines()
+            {
+                let value =
+                    serde_json::from_str::<serde_json::Value>(line).expect("whole JSON record");
+                retained_indices.push(value["index"].as_u64().expect("record index"));
+            }
+        }
+    }
+    assert!(retained_indices.windows(2).all(|pair| pair[0] < pair[1]));
+    assert_eq!(retained_indices.last(), Some(&11));
+    assert!(retained_indices.first().copied().unwrap_or_default() > 0);
     for index in 0..=FALLBACK_ROTATED_SEGMENTS {
         let segment = if index == 0 {
             path.clone()
@@ -23,6 +47,14 @@ fn fallback_rotates_whole_records_and_stays_bounded() {
             rotated_path(&path, index)
         };
         if segment.exists() {
+            assert_eq!(
+                fs::metadata(&segment)
+                    .expect("segment metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
             assert!(
                 fs::metadata(&segment).expect("segment metadata").len() <= FALLBACK_SEGMENT_BYTES
             );

@@ -123,7 +123,7 @@ pub async fn ensure_desktop_dispatch_worker(
         ensure_desktop_dispatch_worker_inner(input, sidecar, worker_state, &diagnostics_producer)
             .await;
     lifecycle::finish_worker_start_operation(operation, &result);
-    result
+    result.map_err(|error| error.message)
 }
 
 async fn ensure_desktop_dispatch_worker_inner(
@@ -131,7 +131,7 @@ async fn ensure_desktop_dispatch_worker_inner(
     sidecar: State<'_, SharedSidecar>,
     worker_state: State<'_, SharedCloudWorkerState>,
     diagnostics_producer: &TauriDiagnosticsProducer,
-) -> Result<EnsureDesktopDispatchWorkerResult, String> {
+) -> Result<EnsureDesktopDispatchWorkerResult, lifecycle::WorkerStartFailure> {
     let target_id = non_empty("targetId", input.target_id)?;
     let cloud_base_url = configured_cloud_base_url()?;
     let integration_gateway_home = app_config::anyharness_runtime_home_path()?;
@@ -164,8 +164,12 @@ async fn ensure_desktop_dispatch_worker_inner(
         });
     }
 
-    let launcher = find_proliferate_worker_launcher()
-        .ok_or_else(|| "Proliferate Worker binary was not found.".to_string())?;
+    let launcher = find_proliferate_worker_launcher().ok_or_else(|| {
+        lifecycle::WorkerStartFailure::new(
+            lifecycle::WorkerStartFailureKind::BinaryMissing,
+            "Proliferate Worker binary was not found.".to_string(),
+        )
+    })?;
     let paths = worker_paths(&target_id)?;
     let mut mutation_lock = None;
     if enrollment_token.is_some() {
@@ -179,10 +183,9 @@ async fn ensure_desktop_dispatch_worker_inner(
             });
         }
         if !worker_identity_exists(&paths.database)? {
-            return Err(
-                "Desktop dispatch worker is missing local credentials and needs a fresh enrollment token."
-                    .to_string(),
-            );
+            let message =
+                "Desktop dispatch worker is missing local credentials and needs a fresh enrollment token.";
+            return Err(message.to_string().into());
         }
     }
     if enrollment_token.is_some() && paths.database.exists() {
@@ -223,7 +226,10 @@ async fn ensure_desktop_dispatch_worker_inner(
 
     let mut child = command.spawn().map_err(|error| {
         tracing::error!(launcher = %launcher, %error, "Failed to start Proliferate Worker");
-        format!("Failed to start Proliferate Worker with {launcher}: {error}")
+        lifecycle::WorkerStartFailure::new(
+            lifecycle::WorkerStartFailureKind::SpawnFailed,
+            format!("Failed to start Proliferate Worker with {launcher}: {error}"),
+        )
     })?;
     tracing::info!(
         launcher = %launcher,
@@ -232,10 +238,12 @@ async fn ensure_desktop_dispatch_worker_inner(
     );
     let startup_deadline = Instant::now() + startup_watch_window(enrollment_token.is_some());
     let startup_exit = loop {
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|error| format!("Failed to inspect Proliferate Worker startup: {error}"))?
-        {
+        if let Some(status) = child.try_wait().map_err(|error| {
+            lifecycle::WorkerStartFailure::new(
+                lifecycle::WorkerStartFailureKind::InspectionFailed,
+                format!("Failed to inspect Proliferate Worker startup: {error}"),
+            )
+        })? {
             break Some(status);
         }
         if Instant::now() >= startup_deadline {
@@ -253,10 +261,9 @@ async fn ensure_desktop_dispatch_worker_inner(
             log_tail = %log_tail,
             "Proliferate Worker exited during startup"
         );
-        return Err(worker_startup_failure_message(
-            &status.to_string(),
-            &paths.log,
-            &log_tail,
+        return Err(lifecycle::WorkerStartFailure::new(
+            lifecycle::WorkerStartFailureKind::EarlyExit,
+            worker_startup_failure_message(&status.to_string(), &paths.log, &log_tail),
         ));
     }
 

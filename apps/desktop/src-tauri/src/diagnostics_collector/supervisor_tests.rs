@@ -1,3 +1,6 @@
+use super::lifecycle::{
+    classify_steady_health_error, classify_steady_health_response, SteadyHealthAssessment,
+};
 use super::*;
 use proliferate_diagnostics_protocol::v1::types::{
     ComponentV1, DetailedDiagnosticV1, DetailedKindV1, PrivacyClassificationV1, ProducerRecordV1,
@@ -70,6 +73,59 @@ fn frozen_restart_constants_and_retry_taxonomy_are_pinned() {
     assert!(!retryable(CollectorLaunchErrorKind::SchemaIncompatible));
     assert!(!retryable(CollectorLaunchErrorKind::BootIdMismatch));
     assert!(!retryable(CollectorLaunchErrorKind::ChildInspectionFailed));
+}
+
+#[test]
+fn steady_health_preserves_fatal_classification_before_transient_threshold() {
+    let boot_id = uuid::Uuid::new_v4().to_string();
+    assert_eq!(
+        classify_steady_health_response(
+            HealthStatusV1::Ready,
+            CURRENT_SCHEMA_VERSION.major,
+            &boot_id,
+            &boot_id,
+        ),
+        SteadyHealthAssessment::Healthy
+    );
+    assert_eq!(
+        classify_steady_health_response(
+            HealthStatusV1::Degraded,
+            CURRENT_SCHEMA_VERSION.major,
+            &boot_id,
+            &boot_id,
+        ),
+        SteadyHealthAssessment::TransientFailure
+    );
+    assert_eq!(
+        classify_steady_health_response(
+            HealthStatusV1::Ready,
+            CURRENT_SCHEMA_VERSION.major + 1,
+            &boot_id,
+            &boot_id,
+        ),
+        SteadyHealthAssessment::LatchedFailure("schema_incompatible")
+    );
+    assert_eq!(
+        classify_steady_health_response(
+            HealthStatusV1::Ready,
+            CURRENT_SCHEMA_VERSION.major,
+            &uuid::Uuid::new_v4().to_string(),
+            &boot_id,
+        ),
+        SteadyHealthAssessment::LatchedFailure("boot_id_mismatch")
+    );
+    assert_eq!(
+        classify_steady_health_error(CollectorClientError::Authentication),
+        SteadyHealthAssessment::LatchedFailure("authentication_failed")
+    );
+    assert_eq!(
+        classify_steady_health_error(CollectorClientError::Protocol),
+        SteadyHealthAssessment::LatchedFailure("schema_incompatible")
+    );
+    assert_eq!(
+        classify_steady_health_error(CollectorClientError::Unavailable),
+        SteadyHealthAssessment::TransientFailure
+    );
 }
 
 #[test]

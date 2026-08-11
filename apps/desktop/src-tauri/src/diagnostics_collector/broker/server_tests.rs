@@ -1,4 +1,53 @@
 use super::*;
+use proliferate_diagnostics_protocol::v1::types::{
+    ExportPurposeV1, ExportRequestV1, ExportStreamFrameV1, RecordsFilterV1, RecordsQueryV1,
+    TailFrameV1,
+};
+use std::os::unix::fs::PermissionsExt;
+use std::process::Stdio;
+use tokio::io::{AsyncBufReadExt, BufReader};
+
+fn built_collector_binary() -> std::path::PathBuf {
+    std::env::current_exe()
+        .expect("current test executable")
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("target profile directory")
+        .join("proliferate-diagnostics-collector")
+}
+
+fn built_cli_binary() -> std::path::PathBuf {
+    std::env::current_exe()
+        .expect("current test executable")
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("target profile directory")
+        .join("proliferate-debug")
+}
+
+fn empty_filters() -> RecordsFilterV1 {
+    RecordsFilterV1 {
+        source_time_from: None,
+        source_time_to: None,
+        components: Vec::new(),
+        record_classes: Vec::new(),
+        severities: Vec::new(),
+        names: Vec::new(),
+        outcomes: Vec::new(),
+        operation_id: None,
+        parent_operation_id: None,
+        trace_id: None,
+        workspace_id: None,
+        session_id: None,
+        turn_id: None,
+        item_id: None,
+        request_id: None,
+        target_id: None,
+        prompt_id: None,
+        workflow_id: None,
+        error_classification: None,
+    }
+}
 
 #[tokio::test]
 async fn broker_rejects_zero_oversize_truncated_and_second_frames() {
@@ -57,4 +106,484 @@ fn broker_caps_eight_finite_four_tail_and_one_export_leases() {
     exhaust(MAX_BROKER_TAILS);
     exhaust(MAX_BROKER_EXPORTS);
     exhaust(MAX_BROKER_CONNECTIONS);
+}
+
+#[tokio::test]
+async fn broker_cli_client_round_trips_tail_and_injected_internal_export() {
+    use crate::diagnostics_collector::broker::client::DiagnosticsBrokerClient;
+    use crate::diagnostics_collector::broker::discovery::build_scope;
+    use crate::diagnostics_collector::fallback::FallbackDiagnosticsWriter;
+    use crate::diagnostics_collector::process::CollectorProcessLauncher;
+    use crate::diagnostics_collector::producer::{
+        TauriDiagnosticsProducer, PRODUCER_DRAIN_TIMEOUT,
+    };
+    use crate::diagnostics_collector::supervisor::{
+        DiagnosticsCollectorSupervisor, StartupBarrierResult,
+    };
+
+    let root = std::env::temp_dir().join(format!("broker-cli-roundtrip-{}", uuid::Uuid::new_v4()));
+    let app_dir = root.join(".proliferate");
+    std::fs::create_dir_all(&app_dir).expect("app directory");
+    std::fs::set_permissions(&app_dir, std::fs::Permissions::from_mode(0o700))
+        .expect("app directory mode");
+    let fallback =
+        FallbackDiagnosticsWriter::open_for_test(app_dir.join("logs/desktop-native.log"))
+            .expect("fallback");
+    let producer = TauriDiagnosticsProducer::new(fallback.clone(), "test".into(), "test".into());
+    producer.start_pump();
+    let launcher = CollectorProcessLauncher::for_test(
+        built_collector_binary(),
+        "desktop-test".to_string(),
+        "test".to_string(),
+        fallback.clone(),
+    );
+    let supervisor = DiagnosticsCollectorSupervisor::with_launcher(
+        producer.clone(),
+        fallback.clone(),
+        Ok(launcher),
+    );
+    assert_eq!(supervisor.start().await, StartupBarrierResult::Ready);
+    producer.detailed(
+        proliferate_diagnostics_protocol::v1::types::SeverityV1::Info,
+        "desktop.broker.fixture",
+        "broker CLI round trip",
+    );
+    assert!(producer.drain(PRODUCER_DRAIN_TIMEOUT).await);
+
+    let scope = build_scope(
+        app_dir,
+        "com.proliferate.app".to_string(),
+        "production",
+        None,
+    )
+    .expect("broker scope");
+    let broker = DiagnosticsBrokerServer::start_for_test(
+        Arc::clone(&supervisor),
+        scope.clone(),
+        DiagnosticsArtifactKind::InternalDogfood,
+    )
+    .await
+    .expect("broker");
+    let client = DiagnosticsBrokerClient::for_scope(scope.clone());
+
+    let finite_permits = (0..MAX_BROKER_FINITE_REQUESTS)
+        .map(|_| {
+            Arc::clone(&broker.limits.finite)
+                .try_acquire_owned()
+                .expect("hold real finite admission")
+        })
+        .collect::<Vec<_>>();
+    let busy = client
+        .records(RecordsQueryV1 {
+            schema_version: CURRENT_SCHEMA_VERSION,
+            after_cursor: None,
+            limit: 1,
+            filters: empty_filters(),
+        })
+        .await
+        .expect_err("ninth finite request is rejected");
+    assert_eq!(busy.classification(), DiagnosticsBrokerErrorV1::BrokerBusy);
+    drop(finite_permits);
+
+    let tail_permits = (0..MAX_BROKER_TAILS)
+        .map(|_| {
+            Arc::clone(&broker.limits.tails)
+                .try_acquire_owned()
+                .expect("hold real tail admission")
+        })
+        .collect::<Vec<_>>();
+    let busy = match client.tail(None).await {
+        Err(error) => error,
+        Ok(_) => panic!("fifth tail is rejected"),
+    };
+    assert_eq!(busy.classification(), DiagnosticsBrokerErrorV1::BrokerBusy);
+    drop(tail_permits);
+
+    let export_permit = Arc::clone(&broker.limits.exports)
+        .try_acquire_owned()
+        .expect("hold real export admission");
+    let busy = match client
+        .export(ExportRequestV1 {
+            schema_version: CURRENT_SCHEMA_VERSION,
+            purpose: ExportPurposeV1::InternalDogfood,
+            support_authorization_id: None,
+            filters: empty_filters(),
+            record_limit: 1,
+            byte_limit: 1_024,
+            include_health: false,
+        })
+        .await
+    {
+        Err(error) => error,
+        Ok(_) => panic!("second export is rejected"),
+    };
+    assert_eq!(busy.classification(), DiagnosticsBrokerErrorV1::BrokerBusy);
+    drop(export_permit);
+
+    let mut tail = client.tail(Some(0)).await.expect("CLI tail open");
+    let tail_frame = tokio::time::timeout(Duration::from_secs(2), tail.next())
+        .await
+        .expect("CLI tail frame deadline")
+        .expect("CLI tail frame")
+        .expect("CLI tail payload");
+    assert!(matches!(&tail_frame, TailFrameV1::Records { records, .. } if !records.is_empty()));
+    let tail_json = serde_json::to_value(&tail_frame).expect("CLI tail JSONL payload");
+    assert!(tail_json.get("frame").is_some());
+    assert!(tail_json.get("payload").is_none());
+    drop(tail);
+
+    let mut export = client
+        .export(ExportRequestV1 {
+            schema_version: CURRENT_SCHEMA_VERSION,
+            purpose: ExportPurposeV1::InternalDogfood,
+            support_authorization_id: None,
+            filters: empty_filters(),
+            record_limit: 64,
+            byte_limit: 1_048_576,
+            include_health: true,
+        })
+        .await
+        .expect("injected internal CLI export");
+    let mut frames = Vec::new();
+    loop {
+        let frame = tokio::time::timeout(Duration::from_secs(2), export.next())
+            .await
+            .expect("CLI export frame deadline")
+            .expect("CLI export frame");
+        let Some(frame) = frame else { break };
+        let value = serde_json::to_value(&frame).expect("CLI export JSONL payload");
+        assert!(value.get("frame").is_some());
+        assert!(value.get("payload").is_none());
+        frames.push(frame);
+    }
+    assert!(matches!(
+        frames.first(),
+        Some(ExportStreamFrameV1::Manifest { .. })
+    ));
+    assert!(frames
+        .iter()
+        .any(|frame| matches!(frame, ExportStreamFrameV1::Record { .. })));
+    assert!(frames
+        .iter()
+        .any(|frame| matches!(frame, ExportStreamFrameV1::Health { .. })));
+    assert!(matches!(
+        frames.last(),
+        Some(ExportStreamFrameV1::End { .. })
+    ));
+
+    let cli = built_cli_binary();
+    assert!(
+        cli.is_file(),
+        "proliferate-debug must be built for CLI proof"
+    );
+    let health_output = tokio::process::Command::new(&cli)
+        .env("HOME", &root)
+        .arg("health")
+        .output()
+        .await
+        .expect("run CLI health");
+    assert!(health_output.status.success());
+    let health: serde_json::Value =
+        serde_json::from_slice(&health_output.stdout).expect("CLI health JSON");
+    assert_eq!(health["supervisor"]["state"], "ready");
+    assert_eq!(health["collector"]["status"], "ready");
+    let encoded_health = health.to_string();
+    assert!(!encoded_health.contains("endpoint"));
+    assert!(!encoded_health.contains("capability"));
+    assert!(!encoded_health.contains("token"));
+
+    let mut records_filters = empty_filters();
+    records_filters.names = vec!["desktop.broker.fixture".to_string()];
+    let records_path = root.join("records-request.json");
+    std::fs::write(
+        &records_path,
+        serde_json::to_vec(&RecordsQueryV1 {
+            schema_version: CURRENT_SCHEMA_VERSION,
+            after_cursor: None,
+            limit: 16,
+            filters: records_filters,
+        })
+        .expect("serialize records request"),
+    )
+    .expect("write records request");
+    let records_output = tokio::process::Command::new(&cli)
+        .env("HOME", &root)
+        .arg("records")
+        .arg("--request")
+        .arg(&records_path)
+        .output()
+        .await
+        .expect("run CLI records");
+    assert!(records_output.status.success());
+    let page: proliferate_diagnostics_protocol::v1::types::RecordsPageV1 =
+        serde_json::from_slice(&records_output.stdout).expect("CLI records page");
+    assert!(page
+        .records
+        .iter()
+        .any(|record| record.record.name == "desktop.broker.fixture"));
+
+    let export_request = ExportRequestV1 {
+        schema_version: CURRENT_SCHEMA_VERSION,
+        purpose: ExportPurposeV1::InternalDogfood,
+        support_authorization_id: None,
+        filters: empty_filters(),
+        record_limit: 64,
+        byte_limit: 1_048_576,
+        include_health: true,
+    };
+    let export_path = root.join("export-request.json");
+    std::fs::write(
+        &export_path,
+        serde_json::to_vec(&export_request).expect("serialize export request"),
+    )
+    .expect("write export request");
+    let export_output = tokio::process::Command::new(&cli)
+        .env("HOME", &root)
+        .arg("export")
+        .arg("--request")
+        .arg(&export_path)
+        .output()
+        .await
+        .expect("run CLI export");
+    assert!(export_output.status.success());
+    let cli_export_frames = String::from_utf8(export_output.stdout)
+        .expect("CLI export UTF-8")
+        .lines()
+        .map(|line| serde_json::from_str::<ExportStreamFrameV1>(line).expect("CLI export frame"))
+        .collect::<Vec<_>>();
+    assert!(matches!(
+        cli_export_frames.first(),
+        Some(ExportStreamFrameV1::Manifest { .. })
+    ));
+    assert!(cli_export_frames
+        .iter()
+        .any(|frame| matches!(frame, ExportStreamFrameV1::Health { .. })));
+    assert!(matches!(
+        cli_export_frames.last(),
+        Some(ExportStreamFrameV1::End { .. })
+    ));
+
+    let mut tail_child = tokio::process::Command::new(&cli)
+        .env("HOME", &root)
+        .arg("tail")
+        .arg("--after-cursor")
+        .arg("0")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("run CLI tail");
+    let mut tail_lines = BufReader::new(tail_child.stdout.take().expect("CLI tail stdout")).lines();
+    let tail_line = tokio::time::timeout(Duration::from_secs(3), tail_lines.next_line())
+        .await
+        .expect("CLI tail output deadline")
+        .expect("read CLI tail")
+        .expect("CLI tail frame");
+    serde_json::from_str::<TailFrameV1>(&tail_line).expect("CLI tail JSONL");
+    let tail_pid = tail_child.id().expect("CLI tail pid");
+    // SAFETY: the PID belongs to the retained child handle and SIGINT is the
+    // CLI's documented cancellation path.
+    assert_eq!(unsafe { libc::kill(tail_pid as i32, libc::SIGINT) }, 0);
+    drop(tail_lines);
+    let tail_output = tokio::time::timeout(Duration::from_secs(3), tail_child.wait_with_output())
+        .await
+        .expect("CLI tail cancellation deadline")
+        .expect("wait CLI tail");
+    assert!(!tail_output.status.success());
+
+    let support_path = root.join("support-request.json");
+    let mut support_request = export_request;
+    support_request.purpose = ExportPurposeV1::Support;
+    support_request.support_authorization_id = Some("not-authorized-in-pr3".to_string());
+    std::fs::write(
+        &support_path,
+        serde_json::to_vec(&support_request).expect("serialize support request"),
+    )
+    .expect("write support request");
+    let support_output = tokio::process::Command::new(&cli)
+        .env("HOME", &root)
+        .arg("export")
+        .arg("--request")
+        .arg(&support_path)
+        .output()
+        .await
+        .expect("run rejected CLI support export");
+    assert!(!support_output.status.success());
+    assert!(String::from_utf8_lossy(&support_output.stderr).contains("collector_rejected"));
+
+    broker.stop_accepting();
+    broker.wait_stopped().await.expect("broker stopped");
+    broker.remove_locator_and_unlock().expect("broker cleanup");
+    supervisor.arm_shutdown();
+    supervisor
+        .stop_collector()
+        .await
+        .expect("collector stopped");
+    producer.close();
+    fallback.close().expect("fallback close");
+    std::fs::remove_dir_all(root).expect("fixture cleanup");
+}
+
+#[tokio::test]
+async fn unavailable_queries_preserve_the_actual_supervisor_state() {
+    use crate::diagnostics_collector::broker::client::DiagnosticsBrokerClient;
+    use crate::diagnostics_collector::broker::discovery::build_scope;
+    use crate::diagnostics_collector::fallback::FallbackDiagnosticsWriter;
+    use crate::diagnostics_collector::process::{CollectorLaunchError, CollectorLaunchErrorKind};
+    use crate::diagnostics_collector::producer::TauriDiagnosticsProducer;
+    use crate::diagnostics_collector::supervisor::{
+        DesktopDiagnosticsSupervisorStateV1, DiagnosticsCollectorSupervisor, StartupBarrierResult,
+    };
+
+    let root = std::env::temp_dir().join(format!("broker-state-fixture-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&root).expect("app directory");
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))
+        .expect("app directory mode");
+    let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("logs/desktop-native.log"))
+        .expect("fallback");
+    let producer = TauriDiagnosticsProducer::new(fallback.clone(), "test".into(), "test".into());
+    let supervisor = DiagnosticsCollectorSupervisor::with_fake_launch_error(
+        producer.clone(),
+        fallback.clone(),
+        CollectorLaunchError::new(
+            CollectorLaunchErrorKind::UnsupportedTarget,
+            "injected unsupported target",
+        ),
+    );
+    assert_eq!(supervisor.start().await, StartupBarrierResult::Degraded);
+    let unsupported = DesktopDiagnosticsSupervisorStateV1::Unsupported {
+        classification: "unsupported_target".to_string(),
+    };
+    assert_eq!(supervisor.state(), unsupported);
+
+    let scope = build_scope(
+        root.clone(),
+        "com.proliferate.app.local.broker-state-fixture".to_string(),
+        "development",
+        Some("broker_state_fixture".to_string()),
+    )
+    .expect("broker scope");
+    let broker = DiagnosticsBrokerServer::start_for_test(
+        Arc::clone(&supervisor),
+        scope.clone(),
+        DiagnosticsArtifactKind::InternalDogfood,
+    )
+    .await
+    .expect("broker");
+    let client = DiagnosticsBrokerClient::for_scope(scope.clone());
+
+    for expected in [
+        DesktopDiagnosticsSupervisorStateV1::Starting {
+            launch_kind: CollectorLaunchKindV1::Initial,
+            attempt: 1,
+            restart_count: 0,
+        },
+        unsupported,
+        DesktopDiagnosticsSupervisorStateV1::Degraded {
+            classification: "binary_missing".to_string(),
+            restart_count: 0,
+            retry_exhausted: false,
+        },
+        DesktopDiagnosticsSupervisorStateV1::Stopped { orderly: false },
+    ] {
+        supervisor.set_state_for_test(expected.clone());
+        let records_error = client
+            .records(RecordsQueryV1 {
+                schema_version: CURRENT_SCHEMA_VERSION,
+                after_cursor: None,
+                limit: 1,
+                filters: empty_filters(),
+            })
+            .await
+            .expect_err("records must be unavailable");
+        assert_eq!(
+            records_error.classification(),
+            DiagnosticsBrokerErrorV1::CollectorUnavailable
+        );
+        assert_eq!(records_error.supervisor_state(), Some(&expected));
+
+        let mut tail = client.tail(None).await.expect("tail accepted frame");
+        let tail_error = tail
+            .next()
+            .await
+            .expect_err("tail must be unavailable after acceptance");
+        assert_eq!(tail_error.supervisor_state(), Some(&expected));
+
+        let mut export = client
+            .export(ExportRequestV1 {
+                schema_version: CURRENT_SCHEMA_VERSION,
+                purpose: ExportPurposeV1::InternalDogfood,
+                support_authorization_id: None,
+                filters: empty_filters(),
+                record_limit: 1,
+                byte_limit: 1_024,
+                include_health: false,
+            })
+            .await
+            .expect("export accepted frame");
+        let export_error = export
+            .next()
+            .await
+            .expect_err("export must be unavailable after acceptance");
+        assert_eq!(export_error.supervisor_state(), Some(&expected));
+    }
+
+    let mut raw = tokio::net::UnixStream::connect(&scope.socket_path)
+        .await
+        .expect("raw broker connection");
+    for request_id in [uuid::Uuid::new_v4(), uuid::Uuid::new_v4()] {
+        let request = DiagnosticsBrokerRequestV1::Health {
+            protocol_version: BROKER_PROTOCOL_VERSION,
+            app_boot_id: broker.app_boot_id().to_string(),
+            request_id: request_id.to_string(),
+        };
+        let bytes = serde_json::to_vec(&request).expect("serialize raw request");
+        raw.write_u32(bytes.len() as u32)
+            .await
+            .expect("raw request length");
+        raw.write_all(&bytes).await.expect("raw request body");
+    }
+    raw.flush().await.expect("raw request flush");
+    let mut frames = Vec::new();
+    for _ in 0..3 {
+        let bytes = read_frame(&mut raw, MAX_BROKER_RESPONSE_FRAME_BYTES)
+            .await
+            .expect("first command response frame");
+        frames.push(
+            serde_json::from_slice::<DiagnosticsBrokerResponseV1>(&bytes)
+                .expect("typed broker response"),
+        );
+    }
+    assert!(matches!(
+        frames.first(),
+        Some(DiagnosticsBrokerResponseV1::Accepted { .. })
+    ));
+    assert!(matches!(
+        frames.get(1),
+        Some(DiagnosticsBrokerResponseV1::Payload {
+            value: DiagnosticsBrokerPayloadV1::Health(_),
+            ..
+        })
+    ));
+    assert!(matches!(
+        frames.get(2),
+        Some(DiagnosticsBrokerResponseV1::End { .. })
+    ));
+    assert!(
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            read_frame(&mut raw, MAX_BROKER_RESPONSE_FRAME_BYTES),
+        )
+        .await
+        .expect("server closes one-command connection")
+        .is_err(),
+        "a second broker frame must never be dispatched"
+    );
+
+    broker.stop_accepting();
+    broker.wait_stopped().await.expect("broker stopped");
+    broker.remove_locator_and_unlock().expect("broker cleanup");
+    producer.close();
+    fallback.close().expect("fallback close");
+    std::fs::remove_dir_all(root).expect("fixture cleanup");
 }

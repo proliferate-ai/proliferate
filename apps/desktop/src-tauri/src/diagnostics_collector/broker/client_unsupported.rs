@@ -9,6 +9,7 @@ use super::protocol::DiagnosticsBrokerErrorV1;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiagnosticsBrokerClientError {
     classification: DiagnosticsBrokerErrorV1,
+    supervisor: Option<super::protocol::DesktopDiagnosticsSupervisorStateV1>,
 }
 
 impl DiagnosticsBrokerClientError {
@@ -18,6 +19,12 @@ impl DiagnosticsBrokerClientError {
 
     pub fn classification_name(&self) -> &'static str {
         "collector_unavailable"
+    }
+
+    pub fn supervisor_state(
+        &self,
+    ) -> Option<&super::protocol::DesktopDiagnosticsSupervisorStateV1> {
+        self.supervisor.as_ref()
     }
 }
 
@@ -86,5 +93,6 @@ impl DiagnosticsBrokerExportStream {
 fn unavailable() -> DiagnosticsBrokerClientError {
     DiagnosticsBrokerClientError {
         classification: DiagnosticsBrokerErrorV1::CollectorUnavailable,
+        supervisor: None,
     }
 }

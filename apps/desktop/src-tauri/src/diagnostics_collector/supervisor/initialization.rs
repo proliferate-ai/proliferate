@@ -23,7 +23,7 @@ impl DiagnosticsCollectorSupervisor {
         Self::with_launcher(producer, fallback, launcher)
     }
 
-    pub(super) fn with_launcher(
+    pub(crate) fn with_launcher(
         producer: TauriDiagnosticsProducer,
         fallback: FallbackDiagnosticsWriter,
         launcher: Result<CollectorProcessLauncher, CollectorLaunchError>,

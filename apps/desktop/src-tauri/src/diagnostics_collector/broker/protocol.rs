@@ -151,6 +151,8 @@ pub enum DiagnosticsBrokerResponseV1 {
         app_boot_id: String,
         request_id: String,
         classification: DiagnosticsBrokerErrorV1,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        supervisor: Option<DesktopDiagnosticsSupervisorStateV1>,
     },
 }
 

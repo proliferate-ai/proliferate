@@ -2,6 +2,8 @@ pub(crate) mod artifact;
 pub mod broker;
 pub(crate) mod client;
 pub(crate) mod fallback;
+#[cfg(test)]
+mod packaging_contract;
 #[cfg(unix)]
 pub(crate) mod process;
 pub(crate) mod producer;

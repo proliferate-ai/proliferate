@@ -7,6 +7,11 @@ fn owned_app_dir(name: &str) -> PathBuf {
     path
 }
 
+fn write_owner_file(path: &Path, bytes: &[u8], mode: u32) {
+    fs::write(path, bytes).expect("write owner artifact");
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).expect("owner artifact mode");
+}
+
 #[test]
 fn broker_paths_are_distinct_for_production_and_each_dev_profile() {
     let app = owned_app_dir("broker-scope");
@@ -221,5 +226,115 @@ async fn old_boot_cannot_remove_new_boot_locator() {
     drop(listener);
     fs::remove_file(&scope.locator_path).expect("remove locator");
     fs::remove_file(&scope.socket_path).expect("remove socket");
+    fs::remove_dir_all(app).expect("cleanup app");
+}
+
+#[test]
+fn injected_foreign_credentials_and_pid_mismatch_fail_closed() {
+    let uid = effective_uid();
+    let pid = std::process::id();
+    assert!(peer_uid_is_owner(uid));
+    assert!(peer_matches_locator(uid, i32::try_from(pid).ok(), pid));
+    let foreign_uid = uid ^ 1;
+    assert!(!peer_uid_is_owner(foreign_uid));
+    assert!(!peer_matches_locator(
+        foreign_uid,
+        i32::try_from(pid).ok(),
+        pid
+    ));
+    assert!(!peer_matches_locator(
+        uid,
+        i32::try_from(pid.saturating_add(1)).ok(),
+        pid
+    ));
+    assert!(!peer_matches_locator(uid, None, pid));
+
+    assert!(owner_file_metadata_is_safe(true, uid, 0o600, Some(0o600)));
+    assert!(!owner_file_metadata_is_safe(
+        true,
+        foreign_uid,
+        0o600,
+        Some(0o600)
+    ));
+}
+
+#[test]
+fn locator_symlink_wrong_mode_type_and_oversize_fail_closed() {
+    let app = owned_app_dir("broker-unsafe-locator");
+    let scope = build_scope(
+        app.clone(),
+        PRODUCTION_IDENTIFIER.to_string(),
+        "production",
+        None,
+    )
+    .expect("scope");
+    ensure_namespace(&scope).expect("namespace");
+
+    let target = scope.run_dir.join("locator-target.json");
+    write_owner_file(&target, b"{}", 0o600);
+    std::os::unix::fs::symlink(&target, &scope.locator_path).expect("locator symlink");
+    assert!(read_locator_file(&scope.locator_path).is_err());
+    fs::remove_file(&scope.locator_path).expect("remove locator symlink");
+
+    write_owner_file(&scope.locator_path, b"{}", 0o644);
+    assert!(matches!(
+        read_locator_file(&scope.locator_path),
+        Err(DiscoveryError::UnsafeArtifact)
+    ));
+    fs::remove_file(&scope.locator_path).expect("remove wrong-mode locator");
+
+    fs::create_dir(&scope.locator_path).expect("wrong-type locator");
+    assert!(read_locator_file(&scope.locator_path).is_err());
+    fs::remove_dir(&scope.locator_path).expect("remove wrong-type locator");
+
+    write_owner_file(
+        &scope.locator_path,
+        &vec![b'x'; MAX_LOCATOR_BYTES + 1],
+        0o600,
+    );
+    assert!(matches!(
+        read_locator_file(&scope.locator_path),
+        Err(DiscoveryError::Protocol)
+    ));
+
+    fs::remove_dir_all(app).expect("cleanup app");
+}
+
+#[test]
+fn wrong_socket_type_mode_and_overlong_path_fail_closed() {
+    let app = owned_app_dir("broker-unsafe-socket");
+    let scope = build_scope(
+        app.clone(),
+        PRODUCTION_IDENTIFIER.to_string(),
+        "production",
+        None,
+    )
+    .expect("scope");
+    ensure_namespace(&scope).expect("namespace");
+
+    write_owner_file(&scope.socket_path, b"not a socket", 0o600);
+    assert!(matches!(
+        remove_owned_socket(&scope.socket_path),
+        Err(DiscoveryError::UnsafeArtifact)
+    ));
+    fs::remove_file(&scope.socket_path).expect("remove wrong-type socket");
+
+    let listener = std::os::unix::net::UnixListener::bind(&scope.socket_path).expect("bind socket");
+    fs::set_permissions(&scope.socket_path, fs::Permissions::from_mode(0o644))
+        .expect("wrong socket mode");
+    assert!(matches!(
+        remove_owned_socket(&scope.socket_path),
+        Err(DiscoveryError::UnsafeArtifact)
+    ));
+    drop(listener);
+    fs::remove_file(&scope.socket_path).expect("remove wrong-mode socket");
+
+    let mut overlong = scope.clone();
+    overlong.socket_path = PathBuf::from("/").join("x".repeat(MAX_DARWIN_SOCKET_PATH_BYTES + 1));
+    assert!(matches!(
+        ensure_namespace(&overlong),
+        Err(DiscoveryError::InvalidNamespace)
+    ));
+
     fs::remove_dir_all(app).expect("cleanup app");
 }
