@@ -5,9 +5,11 @@ pub mod handle;
 mod manager;
 pub mod model;
 pub mod probe;
+pub mod queue_durable;
 mod rendezvous;
 mod replay;
 mod sink;
+pub mod subagent_wake;
 
 pub use actor::spawn::ActorReadyResult;
 pub use actor::turn::types::SessionTurnFinishResult;

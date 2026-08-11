@@ -13,6 +13,9 @@ use crate::live::sessions::actor::command::{
 };
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::model::AttachmentSource;
+use crate::live::sessions::queue_durable::{
+    PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
+};
 
 impl SessionActor {
     pub(in crate::live::sessions::actor) async fn handle_busy_prompt_queue(
@@ -129,7 +132,7 @@ impl SessionActor {
             .queue
             .update_pending_prompt_payload(&self.session_id, seq, &payload)
         {
-            Ok(true) => {
+            Ok(PendingPromptUpdateOutcome::Updated) => {
                 let updated_record = self
                     .caps
                     .queue
@@ -174,7 +177,8 @@ impl SessionActor {
                 });
                 Ok(())
             }
-            Ok(false) => Err(QueueMutationError::NotFound),
+            Ok(PendingPromptUpdateOutcome::NotFound) => Err(QueueMutationError::NotFound),
+            Ok(PendingPromptUpdateOutcome::Protected) => Err(QueueMutationError::Protected),
             Err(error) => {
                 tracing::warn!(
                     session_id = %self.session_id,
@@ -201,7 +205,7 @@ impl SessionActor {
             .queue
             .delete_pending_prompt_record(&self.session_id, seq)
         {
-            Ok(Some(record)) => {
+            Ok(PendingPromptDeleteOutcome::Deleted(record)) => {
                 let attachment_ids = record.attachment_ids();
                 let attachment_refs = attachment_ids
                     .iter()
@@ -233,7 +237,8 @@ impl SessionActor {
                 });
                 Ok(())
             }
-            Ok(None) => Err(QueueMutationError::NotFound),
+            Ok(PendingPromptDeleteOutcome::NotFound) => Err(QueueMutationError::NotFound),
+            Ok(PendingPromptDeleteOutcome::Protected) => Err(QueueMutationError::Protected),
             Err(error) => {
                 tracing::warn!(
                     session_id = %self.session_id,

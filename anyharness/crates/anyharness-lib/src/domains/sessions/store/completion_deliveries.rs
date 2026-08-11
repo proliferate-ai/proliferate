@@ -2,9 +2,13 @@ use rusqlite::{params, OptionalExtension};
 
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::domains::sessions::model::SessionEventRecord;
+use crate::domains::sessions::prompt::SUBAGENT_COMPLETION_PROMPT_ID_PREFIX;
 use crate::domains::sessions::store::events::insert_event_row;
 use crate::persistence::Db;
 
+pub(crate) mod admission;
+pub(crate) mod canonical;
+pub(crate) mod enqueue;
 pub(crate) mod queue;
 
 #[derive(Debug, Clone)]
@@ -16,6 +20,22 @@ pub(crate) struct DurableTerminalTurn {
     pub assistant_text: Option<String>,
     pub events: Vec<SessionEventRecord>,
     pub completed_at: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct DurableSubagentWakeTurn {
+    pub session_id: String,
+    pub queue_seq: i64,
+    pub events: Vec<SessionEventRecord>,
+    pub admitted_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DurableSubagentWakeTurnOutcome {
+    Admitted,
+    AlreadyVisible { parent_turn_id: String },
+    Discarded,
+    Stale,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -84,7 +104,7 @@ pub struct CompletionDeliveryRecord {
 
 impl CompletionDeliveryRecord {
     pub fn prompt_id(&self) -> String {
-        format!("subagent_completion:{}", self.delivery_id)
+        format!("{SUBAGENT_COMPLETION_PROMPT_ID_PREFIX}{}", self.delivery_id)
     }
 }
 
@@ -117,53 +137,57 @@ impl CompletionDeliveryStore {
         &self,
         delivery: &CompletionDeliveryRecord,
     ) -> anyhow::Result<bool> {
-        self.db.with_tx(|tx| {
-            let link_exists: bool = tx.query_row(
-                "SELECT EXISTS(
-                    SELECT 1 FROM session_links
-                    WHERE id = ?1 AND relation = 'subagent'
-                      AND child_session_id = ?2 AND closed_at IS NULL
-                 )",
-                params![delivery.session_link_id, delivery.child_session_id],
-                |row| row.get(0),
-            )?;
-            if !link_exists {
-                return Ok(false);
-            }
-            if let Some(existing) =
-                find_completion_projection(tx, &delivery.session_link_id, &delivery.child_turn_id)?
-            {
-                adopt_valid_completion_projection(tx, delivery, &existing)?;
-                return Ok(true);
-            }
-            tx.execute(
-                "INSERT OR IGNORE INTO session_link_completions (
-                    completion_id, session_link_id, child_turn_id, child_last_event_seq, outcome,
-                    parent_event_seq, parent_prompt_seq, created_at, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, ?6, ?6)",
-                params![
-                    delivery.completion_id,
-                    delivery.session_link_id,
-                    delivery.child_turn_id,
-                    delivery.child_last_event_seq,
-                    delivery.outcome.as_str(),
-                    delivery.created_at,
-                ],
-            )?;
-            let projected =
-                find_completion_projection(tx, &delivery.session_link_id, &delivery.child_turn_id)?
-                    .ok_or_else(|| {
-                        rusqlite::Error::ToSqlConversionFailure(Box::new(
-                    CompletionDeliveryParseError(
-                        "completion projection insert was suppressed by a conflicting identity"
-                            .to_string(),
-                    ),
-                ))
-                    })?;
-            adopt_valid_completion_projection(tx, delivery, &projected)?;
-            Ok(true)
-        })
+        self.db
+            .with_tx(|tx| ensure_completion_projection_in_tx(tx, delivery))
     }
+}
+
+pub(super) fn ensure_completion_projection_in_tx(
+    tx: &rusqlite::Connection,
+    delivery: &CompletionDeliveryRecord,
+) -> rusqlite::Result<bool> {
+    let link_exists: bool = tx.query_row(
+        "SELECT EXISTS(
+            SELECT 1 FROM session_links
+            WHERE id = ?1 AND relation = 'subagent'
+              AND child_session_id = ?2 AND closed_at IS NULL
+         )",
+        params![delivery.session_link_id, delivery.child_session_id],
+        |row| row.get(0),
+    )?;
+    if !link_exists {
+        return Ok(false);
+    }
+    if let Some(existing) =
+        find_completion_projection(tx, &delivery.session_link_id, &delivery.child_turn_id)?
+    {
+        adopt_valid_completion_projection(tx, delivery, &existing)?;
+        return Ok(true);
+    }
+    tx.execute(
+        "INSERT OR IGNORE INTO session_link_completions (
+            completion_id, session_link_id, child_turn_id, child_last_event_seq, outcome,
+            parent_event_seq, parent_prompt_seq, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, ?6, ?6)",
+        params![
+            delivery.completion_id,
+            delivery.session_link_id,
+            delivery.child_turn_id,
+            delivery.child_last_event_seq,
+            delivery.outcome.as_str(),
+            delivery.created_at,
+        ],
+    )?;
+    let projected =
+        find_completion_projection(tx, &delivery.session_link_id, &delivery.child_turn_id)?
+            .ok_or_else(|| {
+                rusqlite::Error::ToSqlConversionFailure(Box::new(CompletionDeliveryParseError(
+                    "completion projection insert was suppressed by a conflicting identity"
+                        .to_string(),
+                )))
+            })?;
+    adopt_valid_completion_projection(tx, delivery, &projected)?;
+    Ok(true)
 }
 
 type CompletionProjection = (String, i64, String);

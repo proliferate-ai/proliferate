@@ -23,6 +23,7 @@ pub(crate) mod publish;
 mod reasoning;
 mod runtime_events;
 mod state;
+mod subagent_wakes;
 mod terminal;
 mod tools;
 mod turns;
@@ -35,6 +36,7 @@ pub use state::{
 };
 
 pub(in crate::live::sessions) use ingest::{ActorBoundUpdate, SinkObservation};
+pub(in crate::live::sessions) use subagent_wakes::SubagentWakeTurnStartOutcome;
 pub(in crate::live::sessions) use terminal::{
     PromptTerminalEvent, StagedTerminalTurn, TerminalTurnCommit,
 };

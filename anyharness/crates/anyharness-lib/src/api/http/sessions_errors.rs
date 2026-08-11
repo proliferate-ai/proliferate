@@ -313,6 +313,10 @@ pub(super) fn map_pending_prompt_mutation_error(error: PendingPromptMutationErro
         PendingPromptMutationError::NotFound => {
             ApiError::not_found("Pending prompt not found", "PENDING_PROMPT_NOT_FOUND")
         }
+        PendingPromptMutationError::Protected => ApiError::conflict(
+            "Canonical completion wake prompts cannot be edited or deleted",
+            "PENDING_PROMPT_PROTECTED",
+        ),
         PendingPromptMutationError::InvalidPrompt(error) => {
             ApiError::bad_request(error.detail, error.code)
         }
@@ -407,6 +411,15 @@ mod tests {
         })
         .into_response();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn protected_completion_prompt_maps_to_stable_conflict() {
+        use crate::domains::sessions::runtime::PendingPromptMutationError;
+
+        let error = super::map_pending_prompt_mutation_error(PendingPromptMutationError::Protected);
+        assert_eq!(error.status(), StatusCode::CONFLICT);
+        assert_eq!(error.code(), Some("PENDING_PROMPT_PROTECTED"));
     }
 
     /// An unsatisfiable agent-auth selection must reach the client as a typed

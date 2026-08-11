@@ -458,7 +458,7 @@ impl AppState {
             loop_service.clone(),
             activity_service.clone(),
         ));
-        completion_delivery_wiring.spawn(&db, &session_runtime);
+        completion_delivery_wiring.spawn(&session_runtime);
         // Workflow runs — phase 2 (after SessionRuntime): the async facades.
         let workflow_phase_two = workflows::wire_workflow_runtime(
             workflow_wiring,

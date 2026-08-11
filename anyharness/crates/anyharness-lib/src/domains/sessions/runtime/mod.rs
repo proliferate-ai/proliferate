@@ -242,6 +242,7 @@ pub struct ForkSessionOutcome {
 pub enum PendingPromptMutationError {
     SessionNotFound(String),
     NotFound,
+    Protected,
     InvalidPrompt(crate::domains::sessions::prompt::PromptValidationError),
     Internal(anyhow::Error),
 }

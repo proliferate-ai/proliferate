@@ -115,32 +115,6 @@ fn pending_prompt_preserves_internal_provenance_through_load_edit_and_drain() {
 }
 
 #[test]
-fn stable_prompt_insert_converges_without_duplicate_queue_rows() {
-    let db = Db::open_in_memory().expect("open db");
-    seed_workspace(&db);
-    let store = SessionStore::new(db);
-    store.insert(&session_record()).expect("insert session");
-    let payload = PromptPayload::text("completion".to_string()).with_provenance(
-        PromptProvenance::SubagentWake {
-            session_link_id: "link-1".to_string(),
-            completion_id: "delivery-1".to_string(),
-            label: Some("Worker".to_string()),
-        },
-    );
-
-    let (first, inserted) = store
-        .insert_pending_prompt_payload_once("session-1", &payload, "subagent_completion:delivery-1")
-        .expect("first insert");
-    assert!(inserted);
-    let (second, inserted) = store
-        .insert_pending_prompt_payload_once("session-1", &payload, "subagent_completion:delivery-1")
-        .expect("retry insert");
-    assert!(!inserted);
-    assert_eq!(first.seq, second.seq);
-    assert_eq!(store.list_pending_prompts("session-1").unwrap().len(), 1);
-}
-
-#[test]
 fn pending_prompts_reorder_atomically_without_changing_entry_identity() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);

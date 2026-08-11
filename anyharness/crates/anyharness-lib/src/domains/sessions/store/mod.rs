@@ -10,7 +10,7 @@ mod links;
 mod live_config;
 mod mobility;
 mod notifications;
-mod pending_prompts;
+pub(in crate::domains::sessions) mod pending_prompts;
 pub(crate) mod persisted_payloads;
 pub(crate) mod sessions;
 mod titles;

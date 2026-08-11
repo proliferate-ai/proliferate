@@ -17,12 +17,21 @@ use crate::domains::sessions::model::{
 use crate::domains::sessions::prompt::{
     load_prompt_attachments, PromptPayload, PromptValidationError, ResolvedParts,
 };
-use crate::domains::sessions::store::completion_deliveries::DurableTerminalTurn;
+use crate::domains::sessions::store::completion_deliveries::{
+    DurableSubagentWakeTurn, DurableSubagentWakeTurnOutcome, DurableTerminalTurn,
+};
+use crate::domains::sessions::store::pending_prompts::PendingPromptWriteError;
 use crate::domains::sessions::store::persisted_payloads::sanitize_session_event_for_sqlite;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::model::{
     AttachmentSource, BackgroundWorkDurable, EventPersist, QueueDurable, SessionStateDurable,
     TerminalTurnOutcome, TerminalTurnPersistenceInput,
+};
+use crate::live::sessions::queue_durable::{
+    PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
+};
+use crate::live::sessions::subagent_wake::{
+    SubagentWakeTurnPersistenceInput, SubagentWakeTurnPersistenceOutcome,
 };
 
 impl EventPersist for SessionStore {
@@ -71,24 +80,35 @@ impl EventPersist for SessionStore {
         )
     }
 
+    fn persist_subagent_wake_turn(
+        &self,
+        input: &SubagentWakeTurnPersistenceInput,
+    ) -> anyhow::Result<SubagentWakeTurnPersistenceOutcome> {
+        let outcome = SessionStore::persist_subagent_wake_turn_record(
+            self,
+            &DurableSubagentWakeTurn {
+                session_id: input.session_id.clone(),
+                queue_seq: input.queue_seq,
+                events: persisted_event_records(&input.events)?,
+                admitted_at: input.admitted_at.clone(),
+            },
+        )?;
+        Ok(match outcome {
+            DurableSubagentWakeTurnOutcome::Admitted => {
+                SubagentWakeTurnPersistenceOutcome::Admitted
+            }
+            DurableSubagentWakeTurnOutcome::AlreadyVisible { parent_turn_id } => {
+                SubagentWakeTurnPersistenceOutcome::AlreadyVisible { parent_turn_id }
+            }
+            DurableSubagentWakeTurnOutcome::Discarded => {
+                SubagentWakeTurnPersistenceOutcome::Discarded
+            }
+            DurableSubagentWakeTurnOutcome::Stale => SubagentWakeTurnPersistenceOutcome::Stale,
+        })
+    }
+
     fn persist_terminal_turn(&self, input: &TerminalTurnPersistenceInput) -> anyhow::Result<()> {
-        let events = input
-            .events
-            .iter()
-            .map(|envelope| {
-                let event = sanitize_session_event_for_sqlite(&envelope.event);
-                Ok(SessionEventRecord {
-                    id: 0,
-                    session_id: envelope.session_id.clone(),
-                    seq: envelope.seq,
-                    timestamp: envelope.timestamp.clone(),
-                    event_type: event.event_type().to_string(),
-                    turn_id: envelope.turn_id.clone(),
-                    item_id: envelope.item_id.clone(),
-                    payload_json: serde_json::to_string(&event)?,
-                })
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+        let events = persisted_event_records(&input.events)?;
         let outcome = match input.outcome {
             TerminalTurnOutcome::Completed => SessionTurnOutcome::Completed,
             TerminalTurnOutcome::Failed => SessionTurnOutcome::Failed,
@@ -107,6 +127,27 @@ impl EventPersist for SessionStore {
             },
         )
     }
+}
+
+fn persisted_event_records(
+    events: &[SessionEventEnvelope],
+) -> anyhow::Result<Vec<SessionEventRecord>> {
+    events
+        .iter()
+        .map(|envelope| {
+            let event = sanitize_session_event_for_sqlite(&envelope.event);
+            Ok(SessionEventRecord {
+                id: 0,
+                session_id: envelope.session_id.clone(),
+                seq: envelope.seq,
+                timestamp: envelope.timestamp.clone(),
+                event_type: event.event_type().to_string(),
+                turn_id: envelope.turn_id.clone(),
+                item_id: envelope.item_id.clone(),
+                payload_json: serde_json::to_string(&event)?,
+            })
+        })
+        .collect()
 }
 
 impl QueueDurable for SessionStore {
@@ -143,8 +184,15 @@ impl QueueDurable for SessionStore {
         session_id: &str,
         seq: i64,
         payload: &PromptPayload,
-    ) -> anyhow::Result<bool> {
-        SessionStore::update_pending_prompt_payload(self, session_id, seq, payload)
+    ) -> anyhow::Result<PendingPromptUpdateOutcome> {
+        match SessionStore::update_pending_prompt_payload(self, session_id, seq, payload) {
+            Ok(true) => Ok(PendingPromptUpdateOutcome::Updated),
+            Ok(false) => Ok(PendingPromptUpdateOutcome::NotFound),
+            Err(error) if error.downcast_ref::<PendingPromptWriteError>().is_some() => {
+                Ok(PendingPromptUpdateOutcome::Protected)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     fn delete_pending_prompt(&self, session_id: &str, seq: i64) -> anyhow::Result<bool> {
@@ -155,8 +203,15 @@ impl QueueDurable for SessionStore {
         &self,
         session_id: &str,
         seq: i64,
-    ) -> anyhow::Result<Option<PendingPromptRecord>> {
-        SessionStore::delete_pending_prompt_record(self, session_id, seq)
+    ) -> anyhow::Result<PendingPromptDeleteOutcome> {
+        match SessionStore::delete_pending_prompt_record(self, session_id, seq) {
+            Ok(Some(record)) => Ok(PendingPromptDeleteOutcome::Deleted(record)),
+            Ok(None) => Ok(PendingPromptDeleteOutcome::NotFound),
+            Err(error) if error.downcast_ref::<PendingPromptWriteError>().is_some() => {
+                Ok(PendingPromptDeleteOutcome::Protected)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     fn reorder_pending_prompts(

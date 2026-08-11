@@ -4,13 +4,19 @@ use anyharness_contract::v1::{PendingPromptRemovalReason, PendingPromptRemovedPa
 use crate::domains::agents::model::AgentKind;
 use crate::domains::sessions::model::PromptAttachmentState;
 use crate::domains::sessions::prompt::render::{render, TurnPromptExtras};
-use crate::domains::sessions::prompt::PromptPayload;
+use crate::domains::sessions::prompt::{PromptPayload, ResolvedParts};
 use crate::live::sessions::actor::command::PromptAcceptError;
 use crate::live::sessions::actor::state::SessionActor;
+use crate::live::sessions::sink::SubagentWakeTurnStartOutcome;
 
 pub(in crate::live::sessions::actor) struct StartedPromptTurn {
     pub acp_blocks: Vec<acp::schema::ContentBlock>,
     pub turn_id: String,
+}
+
+pub(in crate::live::sessions::actor) enum BeginPromptTurnOutcome {
+    Started(StartedPromptTurn),
+    Skipped(SubagentWakeTurnStartOutcome),
 }
 
 impl SessionActor {
@@ -19,25 +25,10 @@ impl SessionActor {
         payload: &PromptPayload,
         prompt_id: Option<String>,
         queue_seq: Option<i64>,
-    ) -> Result<StartedPromptTurn, PromptAcceptError> {
-        // Resolve: load every referenced attachment (store rows + stored bytes,
-        // legacy-content fallback included) through the attachments capability.
-        let parts = match self.caps.attachments.load(&self.session_id, payload) {
-            Ok(parts) => parts,
-            Err(error) => {
-                tracing::warn!(
-                    session_id = %self.session_id,
-                    code = error.code,
-                    detail = %error.detail,
-                    "failed to build ACP prompt blocks",
-                );
-                return Err(PromptAcceptError::EnqueueFailed(error.detail));
-            }
-        };
-
+    ) -> Result<BeginPromptTurnOutcome, PromptAcceptError> {
         // Decide the codex first-prompt append. The durable turn-history gate
         // stays exactly here: it needs the events capability, so the decision
-        // happens before the pure render and rides in as an extra.
+        // happens before admission/render and rides in as an extra.
         let mut first_prompt_system_prompt_append = None;
         match self.caps.events.has_turn_started_event(&self.session_id) {
             Ok(has_turn_started) => {
@@ -57,6 +48,49 @@ impl SessionActor {
                 );
             }
         }
+
+        // A queued completion wake reaches durable validation before any
+        // attachment lookup. Canonical wakes are exactly one text block, so a
+        // forged internal row with an extra/missing attachment is discarded
+        // rather than becoming an attachment-resolution retry loop.
+        let admitted_subagent_turn =
+            if let Some(seq) = queue_seq.filter(|_| payload.has_subagent_wake_provenance()) {
+                let mut sink = self.event_sink.lock().await;
+                let outcome = sink
+                    .persist_subagent_wake_turn(
+                        payload.text_summary.clone(),
+                        prompt_id.clone(),
+                        payload.content_parts(),
+                        payload.public_provenance(),
+                        seq,
+                    )
+                    .map_err(|error| PromptAcceptError::EnqueueFailed(error.to_string()))?;
+                match outcome {
+                    SubagentWakeTurnStartOutcome::Admitted { turn_id } => Some(turn_id),
+                    other => return Ok(BeginPromptTurnOutcome::Skipped(other)),
+                }
+            } else {
+                None
+            };
+
+        // Admission proves that a completion wake has no attachment-bearing
+        // blocks. Ordinary prompts retain the existing attachment loader.
+        let parts = if admitted_subagent_turn.is_some() {
+            ResolvedParts::default()
+        } else {
+            match self.caps.attachments.load(&self.session_id, payload) {
+                Ok(parts) => parts,
+                Err(error) => {
+                    tracing::warn!(
+                        session_id = %self.session_id,
+                        code = error.code,
+                        detail = %error.detail,
+                        "failed to build ACP prompt blocks",
+                    );
+                    return Err(PromptAcceptError::EnqueueFailed(error.detail));
+                }
+            }
+        };
 
         // Render: pure payload + loaded parts -> ACP blocks; the first-prompt
         // append folds in here instead of mutating the blocks afterwards.
@@ -78,6 +112,13 @@ impl SessionActor {
                 return Err(PromptAcceptError::EnqueueFailed(error.detail));
             }
         };
+
+        if let Some(turn_id) = admitted_subagent_turn {
+            return Ok(BeginPromptTurnOutcome::Started(StartedPromptTurn {
+                acp_blocks,
+                turn_id,
+            }));
+        }
 
         // Effects: begin_turn durably persists the replacement turn events first;
         // attachment hygiene and the queue-row removal follow in the same order
@@ -128,10 +169,10 @@ impl SessionActor {
             }
         }
 
-        Ok(StartedPromptTurn {
+        Ok(BeginPromptTurnOutcome::Started(StartedPromptTurn {
             acp_blocks,
             turn_id,
-        })
+        }))
     }
 }
 

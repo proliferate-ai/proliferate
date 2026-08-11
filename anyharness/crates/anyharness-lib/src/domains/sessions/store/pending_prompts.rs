@@ -4,99 +4,13 @@ use super::SessionStore;
 use crate::domains::sessions::model::{PendingPromptRecord, PendingPromptReorderOutcome};
 use crate::domains::sessions::prompt::PromptPayload;
 
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum PendingPromptWriteError {
+    #[error("canonical completion wake pending prompt is protected")]
+    Protected,
+}
+
 impl SessionStore {
-    /// Insert one durable prompt keyed by a domain-supplied stable id. The
-    /// lookup and insert share the SQLite transaction so retrying workers in
-    /// this execution store converge without imposing uniqueness on legacy
-    /// prompt rows that never had an idempotency contract.
-    pub(crate) fn insert_pending_prompt_payload_once(
-        &self,
-        session_id: &str,
-        payload: &PromptPayload,
-        prompt_id: &str,
-    ) -> anyhow::Result<(PendingPromptRecord, bool)> {
-        let queued_at = chrono::Utc::now().to_rfc3339();
-        let blocks_json = payload.blocks_json()?;
-        let provenance_json = payload.provenance_json()?;
-        self.db.with_tx(|tx| {
-            if let Some(existing) = tx
-                .query_row(
-                    "SELECT * FROM session_pending_prompts
-                     WHERE session_id = ?1 AND prompt_id = ?2
-                     ORDER BY seq ASC LIMIT 1",
-                    params![session_id, prompt_id],
-                    map_pending_prompt,
-                )
-                .optional()?
-            {
-                return Ok((existing, false));
-            }
-            tx.execute(
-                "UPDATE sessions
-                 SET pending_prompt_seq_cursor = pending_prompt_seq_cursor + 1
-                 WHERE id = ?1",
-                [session_id],
-            )?;
-            let next_seq: i64 = tx.query_row(
-                "SELECT pending_prompt_seq_cursor FROM sessions WHERE id = ?1",
-                [session_id],
-                |row| row.get(0),
-            )?;
-            let next_position: i64 = tx.query_row(
-                "SELECT COALESCE(MAX(queue_position), 0) + 1
-                 FROM session_pending_prompts WHERE session_id = ?1",
-                [session_id],
-                |row| row.get(0),
-            )?;
-            tx.execute(
-                "INSERT INTO session_pending_prompts (
-                    session_id, seq, queue_position, prompt_id, text,
-                    blocks_json, provenance_json, queued_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![
-                    session_id,
-                    next_seq,
-                    next_position,
-                    prompt_id,
-                    payload.text_summary,
-                    blocks_json,
-                    provenance_json,
-                    queued_at
-                ],
-            )?;
-            Ok((
-                PendingPromptRecord {
-                    session_id: session_id.to_string(),
-                    seq: next_seq,
-                    queue_position: next_position,
-                    prompt_id: Some(prompt_id.to_string()),
-                    text: payload.text_summary.clone(),
-                    blocks_json,
-                    provenance_json,
-                    queued_at,
-                },
-                true,
-            ))
-        })
-    }
-
-    pub(crate) fn find_pending_prompt_by_id(
-        &self,
-        session_id: &str,
-        prompt_id: &str,
-    ) -> anyhow::Result<Option<PendingPromptRecord>> {
-        self.db.with_conn(|conn| {
-            conn.query_row(
-                "SELECT * FROM session_pending_prompts
-                 WHERE session_id = ?1 AND prompt_id = ?2
-                 ORDER BY seq ASC LIMIT 1",
-                params![session_id, prompt_id],
-                map_pending_prompt,
-            )
-            .optional()
-        })
-    }
-
     pub fn insert_pending_prompt(
         &self,
         session_id: &str,
@@ -263,8 +177,24 @@ impl SessionStore {
         payload: &PromptPayload,
     ) -> anyhow::Result<bool> {
         let blocks_json = payload.blocks_json()?;
-        self.db.with_conn(|conn| {
-            let rows = conn.execute(
+        self.db.with_tx_anyhow(|tx| {
+            let record = tx
+                .query_row(
+                    "SELECT * FROM session_pending_prompts
+                     WHERE session_id = ?1 AND seq = ?2",
+                    params![session_id, seq],
+                    map_pending_prompt,
+                )
+                .optional()?;
+            let Some(record) = record else {
+                return Ok(false);
+            };
+            if super::completion_deliveries::canonical::pending_prompt_is_canonical_delivery(
+                tx, &record,
+            )? {
+                return Err(anyhow::Error::new(PendingPromptWriteError::Protected));
+            }
+            let rows = tx.execute(
                 "UPDATE session_pending_prompts
                  SET text = ?3, blocks_json = ?4
                  WHERE session_id = ?1 AND seq = ?2",
@@ -285,8 +215,8 @@ impl SessionStore {
         session_id: &str,
         seq: i64,
     ) -> anyhow::Result<Option<PendingPromptRecord>> {
-        self.db.with_conn(|conn| {
-            let record = conn
+        self.db.with_tx_anyhow(|tx| {
+            let record = tx
                 .query_row(
                     "SELECT * FROM session_pending_prompts WHERE session_id = ?1 AND seq = ?2",
                     params![session_id, seq],
@@ -296,11 +226,17 @@ impl SessionStore {
             if record.is_none() {
                 return Ok(None);
             }
-            conn.execute(
+            let record = record.expect("guarded pending prompt exists");
+            if super::completion_deliveries::canonical::pending_prompt_is_canonical_delivery(
+                tx, &record,
+            )? {
+                return Err(anyhow::Error::new(PendingPromptWriteError::Protected));
+            }
+            tx.execute(
                 "DELETE FROM session_pending_prompts WHERE session_id = ?1 AND seq = ?2",
                 params![session_id, seq],
             )?;
-            Ok(record)
+            Ok(Some(record))
         })
     }
 
@@ -397,7 +333,7 @@ fn validate_pending_prompt_order(existing: &[i64], requested: &[i64]) -> Result<
     Ok(())
 }
 
-fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptRecord> {
+pub(super) fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptRecord> {
     Ok(PendingPromptRecord {
         session_id: row.get("session_id")?,
         seq: row.get("seq")?,
