@@ -38,6 +38,8 @@ mod lifecycle;
 mod pending_prompts;
 mod prompt;
 #[cfg(test)]
+mod prompt_message_actor_tests;
+#[cfg(test)]
 mod prompt_message_tests;
 mod replay;
 mod startup;

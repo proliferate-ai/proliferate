@@ -1,16 +1,12 @@
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::time::Duration;
 
-use anyharness_contract::v1::{PromptProvenance, SessionExecutionPhase};
-use tokio::sync::broadcast;
+use anyharness_contract::v1::PromptProvenance;
 
 use crate::app::{test_support, AppState};
 use crate::domains::agent_operations::model::{AgentIdentity, SendMessageInput, SendMessageStatus};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
-use crate::domains::sessions::store::SessionStore;
-use crate::domains::sessions::task_output::{TaskOutputRole, TaskOutputSender};
-use crate::live::sessions::SessionEventSink;
 use crate::persistence::Db;
 
 struct AgentProgramGuard(Option<std::ffi::OsString>);
@@ -33,70 +29,11 @@ impl Drop for AgentProgramGuard {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn send_message_idle_and_running_commit_attributed_rows_before_the_wake_receipt() {
+async fn send_message_commits_before_pending_startup_and_bounds_the_readiness_wait() {
     let _env_lock = test_support::lock_env();
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
-    let (state, _agent_program_guard) = state_with_sessions(&[
-        session("caller", "workspace-a", "idle", "Caller Label"),
-        session("idle-target", "workspace-b", "idle", "Idle"),
-        session("running-target", "workspace-b", "running", "Running"),
-    ]);
-
-    for (target, phase) in [
-        ("idle-target", SessionExecutionPhase::Idle),
-        ("running-target", SessionExecutionPhase::Running),
-    ] {
-        let mut observed = state
-            .session_runtime
-            .acp_manager_for_test()
-            .insert_prompt_observer_with_phase_for_test(target, phase)
-            .await;
-        let receipt = state
-            .agent_operations
-            .send_message(
-                &state.agent_operations.authenticated_caller("caller"),
-                SendMessageInput {
-                    target: AgentIdentity::new(
-                        state.agent_operations.runtime_identity().clone(),
-                        target,
-                    ),
-                    message: format!("message for {target}"),
-                },
-            )
-            .await
-            .expect("durable message");
-        assert_eq!(receipt.status, SendMessageStatus::DurablyQueued);
-
-        let wake = observed.recv().await.expect("wake command");
-        assert_eq!(wake.from_queue_seq, Some(receipt.queue_seq));
-        assert_eq!(wake.prompt_id, None);
-        assert_eq!(wake.payload.text_summary, format!("message for {target}"));
-
-        let row = state
-            .session_service
-            .store()
-            .find_pending_prompt(target, receipt.queue_seq)
-            .expect("read pending prompt")
-            .expect("durable pending prompt");
-        assert_eq!(row.text, format!("message for {target}"));
-        assert_eq!(
-            row.prompt_payload().public_provenance(),
-            Some(PromptProvenance::AgentSession {
-                source_session_id: "caller".into(),
-                session_link_id: None,
-                label: Some("Caller Label".into()),
-            })
-        );
-    }
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn send_message_survives_wake_loss_and_cold_replay_is_visible_exactly_once() {
-    let _env_lock = test_support::lock_env();
-    let _bearer = test_support::set_bearer_token_env(None);
-    let _data_key = test_support::set_data_key_env(None);
-    let (state, _agent_program_guard) = state_with_sessions(&[
+    let (state, _program) = state_with_sessions(&[
         session("caller", "workspace-a", "idle", "Exact Sender"),
         session("target", "workspace-b", "idle", "Target"),
     ]);
@@ -108,37 +45,123 @@ async fn send_message_survives_wake_loss_and_cold_replay_is_visible_exactly_once
 
     let operations = state.agent_operations.clone();
     let send = tokio::spawn(async move {
+        let target = AgentIdentity::new(operations.runtime_identity().clone(), "target");
+        operations
+            .send_message(
+                &operations.authenticated_caller("caller"),
+                SendMessageInput {
+                    target,
+                    message: "persist before startup".into(),
+                },
+            )
+            .await
+    });
+    wait_for_pending_row(&state, "target").await;
+    assert!(
+        !send.is_finished(),
+        "the committed row must precede the bounded startup wait"
+    );
+
+    let receipt = tokio::time::timeout(Duration::from_secs(3), send)
+        .await
+        .expect("startup wait must be bounded")
+        .expect("send task")
+        .expect("startup timeout is post-commit success");
+    assert_eq!(receipt.status, SendMessageStatus::DurablyQueued);
+
+    let row = state
+        .session_service
+        .store()
+        .find_pending_prompt("target", receipt.queue_seq)
+        .expect("read pending prompt")
+        .expect("row committed before startup readiness");
+    assert_eq!(row.text, "persist before startup");
+    assert_eq!(
+        row.prompt_payload().public_provenance(),
+        Some(PromptProvenance::AgentSession {
+            source_session_id: "caller".into(),
+            session_link_id: None,
+            label: Some("Exact Sender".into()),
+        })
+    );
+
+    let runtime = state.session_runtime.clone();
+    let rejoin = tokio::spawn(async move { runtime.ensure_live_session("target", None).await });
+    startup
+        .send(Some(Ok("native-target".into())))
+        .expect("release pending startup");
+    let resumed = tokio::time::timeout(Duration::from_secs(1), rejoin)
+        .await
+        .expect("deduplicated startup rejoin timeout")
+        .expect("rejoin task")
+        .expect("deduplicated startup remains usable after activation timeout");
+    assert_eq!(resumed.native_session_id.as_deref(), Some("native-target"));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn send_message_startup_failure_after_commit_still_returns_the_durable_receipt() {
+    let _env_lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let (state, _program) = state_with_sessions(&[
+        session("caller", "workspace-a", "idle", "Exact Sender"),
+        session("target", "workspace-b", "idle", "Target"),
+    ]);
+    let startup = state
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_pending_startup_for_test("target")
+        .await;
+    let operations = state.agent_operations.clone();
+    let send = tokio::spawn(async move {
         operations
             .send_message(
                 &operations.authenticated_caller("caller"),
                 SendMessageInput {
                     target: AgentIdentity::new(operations.runtime_identity().clone(), "target"),
-                    message: "survive restart".into(),
+                    message: "survive startup failure".into(),
                 },
             )
             .await
     });
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-    assert!(
-        !send.is_finished(),
-        "cold send must wait for the target actor before committing"
-    );
+    wait_for_pending_row(&state, "target").await;
+    startup
+        .send(Some(Err("injected ACP startup failure".into())))
+        .expect("fail pending startup");
+
+    let receipt = tokio::time::timeout(Duration::from_secs(1), send)
+        .await
+        .expect("startup failure receipt timeout")
+        .expect("send task")
+        .expect("startup failure is post-commit success");
+    assert_eq!(receipt.status, SendMessageStatus::DurablyQueued);
     assert!(state
         .session_service
         .store()
-        .list_pending_prompts("target")
+        .find_pending_prompt("target", receipt.queue_seq)
         .unwrap()
-        .is_empty());
-    startup
-        .send(Some(Ok("native-target".into())))
-        .expect("finish cold target startup");
+        .is_some());
+}
 
-    let receipt = send
+#[tokio::test(flavor = "current_thread")]
+async fn send_message_keeps_the_same_receipt_when_the_actor_drops_its_wake_response() {
+    let _env_lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let (state, _program) = state_with_sessions(&[
+        session("caller", "workspace-a", "idle", "Exact Sender"),
+        session("target", "workspace-b", "idle", "Target"),
+    ]);
+    let mut observed = state
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_prompt_response_dropper_for_test("target")
+        .await;
+
+    let receipt = send_message(&state, "target", "survive ack loss")
         .await
-        .expect("join cold send")
-        .expect("wake loss is post-commit success");
+        .expect("post-commit response loss is success");
     assert_eq!(receipt.status, SendMessageStatus::DurablyQueued);
-    assert_eq!(receipt.target.session_id, "target");
     assert_eq!(
         serde_json::to_value(&receipt).unwrap(),
         serde_json::json!({
@@ -151,88 +174,136 @@ async fn send_message_survives_wake_loss_and_cold_replay_is_visible_exactly_once
         })
     );
 
-    let restarted_store = SessionStore::new(state.db.clone());
-    let pending = restarted_store
-        .list_pending_prompts("target")
-        .expect("restart queue read");
-    assert_eq!(pending.len(), 1);
-    assert_eq!(pending[0].seq, receipt.queue_seq);
+    let wake = tokio::time::timeout(Duration::from_secs(1), observed.recv())
+        .await
+        .expect("wake timeout")
+        .expect("wake command accepted before response sender dropped");
+    assert_eq!(wake.from_queue_seq, Some(receipt.queue_seq));
+    assert_eq!(wake.payload.text_summary, "survive ack loss");
+    assert!(state
+        .session_service
+        .store()
+        .find_pending_prompt("target", receipt.queue_seq)
+        .unwrap()
+        .is_some());
+}
 
-    assert!(replay_one_pending_prompt(&restarted_store, "target"));
-    assert!(
-        !replay_one_pending_prompt(&restarted_store, "target"),
-        "the committed row is consumed by only one replay"
-    );
-    assert!(restarted_store
+#[tokio::test(flavor = "current_thread")]
+async fn send_message_keeps_the_durable_receipt_when_the_wake_actor_is_unavailable() {
+    let _env_lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let (state, _program) = state_with_sessions(&[
+        session("caller", "workspace-a", "idle", "Exact Sender"),
+        session("target", "workspace-b", "idle", "Target"),
+    ]);
+    state
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_unavailable_session_for_test("target")
+        .await;
+
+    let receipt = send_message(&state, "target", "survive unavailable actor")
+        .await
+        .expect("post-commit ActorUnavailable is success");
+    assert_eq!(receipt.status, SendMessageStatus::DurablyQueued);
+    assert!(state
+        .session_service
+        .store()
+        .find_pending_prompt("target", receipt.queue_seq)
+        .unwrap()
+        .is_some());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn send_message_store_failure_returns_error_without_activating_the_actor() {
+    let _env_lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let (state, _program) = state_with_sessions(&[
+        session("caller", "workspace-a", "idle", "Caller"),
+        session("target", "workspace-b", "idle", "Target"),
+    ]);
+    let mut observed = state
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_prompt_observer_for_test("target")
+        .await;
+    state
+        .db
+        .with_conn(|conn| {
+            conn.execute_batch(
+                "CREATE TRIGGER fail_agent_message_insert \
+                 BEFORE INSERT ON session_pending_prompts \
+                 BEGIN SELECT RAISE(ABORT, 'injected pending-row failure'); END;",
+            )
+        })
+        .expect("install failing insert trigger");
+
+    let error = send_message(&state, "target", "must not wake")
+        .await
+        .expect_err("store failure");
+    assert_eq!(error.code(), "AGENT_OPERATIONS_INTERNAL");
+    assert!(state
+        .session_service
+        .store()
         .list_pending_prompts("target")
         .unwrap()
         .is_empty());
-
-    let output = state
-        .session_service
-        .get_task_output("target", None, 10)
-        .expect("task output");
-    assert_eq!(output.messages.len(), 1);
-    assert_eq!(output.messages[0].role, TaskOutputRole::User);
-    assert_eq!(output.messages[0].text, "survive restart");
-    assert_eq!(
-        output.messages[0].sender,
-        TaskOutputSender::Agent {
-            session_id: Some("caller".into()),
-            label: "Exact Sender".into(),
-        }
-    );
-    assert!(state
-        .session_service
-        .get_task_output("caller", None, 10)
-        .expect("caller output")
-        .messages
-        .is_empty());
-    assert_eq!(
-        state
-            .session_service
-            .get_session("target")
-            .unwrap()
-            .unwrap()
-            .native_session_id
-            .as_deref(),
-        Some("native-target")
-    );
+    assert!(matches!(
+        observed.try_recv(),
+        Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+    ));
 }
 
-fn replay_one_pending_prompt(store: &SessionStore, session_id: &str) -> bool {
-    let Some(row) = store
-        .peek_head_pending_prompt(session_id)
-        .expect("peek restart queue")
-    else {
-        return false;
-    };
-    let payload = row.prompt_payload();
-    let (event_tx, _) = broadcast::channel(16);
-    let last_seq = store.last_event_seq(session_id).expect("last event seq");
-    let mut sink = SessionEventSink::resume_from_seq(
-        session_id.into(),
-        "claude".into(),
-        PathBuf::from("/tmp/workspace-b"),
-        last_seq,
-        event_tx,
-        Arc::new(store.clone()),
-    );
-    sink.begin_turn(
-        payload.text_summary.clone(),
-        row.prompt_id.clone(),
-        payload.content_parts(),
-        payload.public_provenance(),
-    );
-    store
-        .delete_pending_prompt(session_id, row.seq)
-        .expect("consume replayed row");
-    true
+async fn send_message(
+    state: &AppState,
+    target: &str,
+    message: &str,
+) -> Result<
+    crate::domains::agent_operations::model::SendMessageReceipt,
+    crate::domains::agent_operations::runtime::AgentOperationsError,
+> {
+    state
+        .agent_operations
+        .send_message(
+            &state.agent_operations.authenticated_caller("caller"),
+            SendMessageInput {
+                target: AgentIdentity::new(
+                    state.agent_operations.runtime_identity().clone(),
+                    target,
+                ),
+                message: message.into(),
+            },
+        )
+        .await
+}
+
+async fn wait_for_pending_row(state: &AppState, target: &str) {
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if !state
+                .session_service
+                .store()
+                .list_pending_prompts(target)
+                .unwrap()
+                .is_empty()
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("pending row commit");
 }
 
 fn state_with_sessions(sessions: &[SessionRecord]) -> (AppState, AgentProgramGuard) {
     let db = Db::open_in_memory().expect("in-memory db");
-    let runtime_home = std::env::temp_dir().join(format!("agent-message-{}", uuid::Uuid::new_v4()));
+    let runtime_home = PathBuf::from(format!(
+        "/tmp/anyharness-agent-message-unit-{}",
+        uuid::Uuid::new_v4()
+    ));
     let workspace_a = runtime_home.join("workspace-a");
     let workspace_b = runtime_home.join("workspace-b");
     std::fs::create_dir_all(&workspace_a).expect("workspace A");
@@ -278,7 +349,7 @@ fn state_with_sessions(sessions: &[SessionRecord]) -> (AppState, AgentProgramGua
     (state, agent_program_guard)
 }
 
-fn session(id: &str, workspace_id: &str, status: &str, title: &str) -> SessionRecord {
+pub(super) fn session(id: &str, workspace_id: &str, status: &str, title: &str) -> SessionRecord {
     SessionRecord {
         id: id.into(),
         workspace_id: workspace_id.into(),

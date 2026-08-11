@@ -13,6 +13,11 @@ use crate::live::sessions::actor::state::SessionActorConfig;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::{SessionHooks, SessionLaunch};
 
+#[cfg(not(test))]
+const SHARED_STARTUP_READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+#[cfg(test)]
+const SHARED_STARTUP_READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
 impl LiveSessionManager {
     #[tracing::instrument(skip_all, fields(session_id = %launch.session.id))]
     pub async fn start_session(
@@ -172,16 +177,24 @@ async fn wait_for_new_startup_readiness(
 async fn wait_for_startup_readiness(
     receiver: &mut watch::Receiver<StartupReadinessState>,
 ) -> anyhow::Result<ActorReadyResult> {
-    loop {
-        if let Some(result) = receiver.borrow().clone() {
-            return result
-                .map(|native_session_id| ActorReadyResult { native_session_id })
-                .map_err(anyhow::Error::msg);
-        }
+    tokio::time::timeout(SHARED_STARTUP_READINESS_TIMEOUT, async {
+        loop {
+            if let Some(result) = receiver.borrow().clone() {
+                return result
+                    .map(|native_session_id| ActorReadyResult { native_session_id })
+                    .map_err(anyhow::Error::msg);
+            }
 
-        receiver
-            .changed()
-            .await
-            .map_err(|_| anyhow::anyhow!("actor startup readiness channel closed before ready"))?;
-    }
+            receiver.changed().await.map_err(|_| {
+                anyhow::anyhow!("actor startup readiness channel closed before ready")
+            })?;
+        }
+    })
+    .await
+    .map_err(|_| {
+        anyhow::anyhow!(
+            "actor startup readiness wait timed out after {}s",
+            SHARED_STARTUP_READINESS_TIMEOUT.as_secs()
+        )
+    })?
 }

@@ -240,6 +240,50 @@ impl LiveSessionManager {
         seen_rx
     }
 
+    /// Register a ready handle whose command consumer accepts one prompt into
+    /// the real mailbox and then drops its reply sender. This exercises the
+    /// ambiguous post-send `ResponseDropped` path without pretending the actor
+    /// was unavailable before command acceptance.
+    pub(crate) async fn insert_prompt_response_dropper_for_test(
+        &self,
+        session_id: &str,
+    ) -> tokio::sync::mpsc::UnboundedReceiver<ObservedPrompt> {
+        use crate::live::sessions::actor::command::SessionCommand;
+
+        let (command_tx, mut command_rx) = tokio::sync::mpsc::channel(1);
+        let (event_tx, _) = tokio::sync::broadcast::channel(1);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some(format!("native-{session_id}")),
+            anyharness_contract::v1::SessionExecutionPhase::Idle,
+        ));
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle);
+        let (seen_tx, seen_rx) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            if let Some(SessionCommand::Prompt {
+                payload,
+                prompt_id,
+                from_queue_seq,
+                respond_to,
+            }) = command_rx.recv().await
+            {
+                let observed = ObservedPrompt {
+                    prompt_id,
+                    payload,
+                    from_queue_seq,
+                };
+                drop(respond_to);
+                let _ = seen_tx.send(observed);
+            }
+        });
+        seen_rx
+    }
+
     pub(crate) async fn insert_cancel_observer_for_test(
         &self,
         session_id: &str,
