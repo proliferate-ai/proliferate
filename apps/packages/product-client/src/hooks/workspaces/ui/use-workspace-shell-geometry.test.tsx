@@ -21,15 +21,23 @@ function stubReducedMotion(matches: boolean): void {
 function GeometryHarness({
   leftWidth,
   rightWidth,
+  snapLeft = false,
   snapRight = false,
   onToggleLeft = () => {},
 }: {
   leftWidth: number;
   rightWidth: number;
+  snapLeft?: boolean;
   snapRight?: boolean;
   onToggleLeft?: () => void;
 }) {
-  const geometry = useWorkspaceShellGeometry({ leftWidth, rightWidth, snapRight, onToggleLeft });
+  const geometry = useWorkspaceShellGeometry({
+    leftWidth,
+    rightWidth,
+    snapLeft,
+    snapRight,
+    onToggleLeft,
+  });
   return (
     <>
       <div
@@ -137,6 +145,37 @@ describe("useWorkspaceShellGeometry", () => {
     act(() => frames.shift()?.(motion.duration.panelMs));
     expect(root.style.getPropertyValue("--workspace-left-width")).toBe("280px");
     expect(root.style.getPropertyValue("--workspace-right-width")).toBe("500px");
+  });
+
+  it("applies pointer-driven left widths immediately without a release tween on manual renderers", () => {
+    vi.stubGlobal("CSS", {});
+    stubReducedMotion(false);
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const { getByTestId, rerender } = render(
+      <GeometryHarness leftWidth={275} rightWidth={360} />,
+    );
+
+    // A live left drag lands on the cursor-provided width and schedules no
+    // interpolation work for that edge.
+    rerender(
+      <GeometryHarness leftWidth={375} rightWidth={360} snapLeft />,
+    );
+    const root = getByTestId("geometry");
+    expect(root.dataset.snap).toBe("true");
+    expect(frames).toHaveLength(0);
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("375px");
+
+    // Releasing at the same target removes the snap contract without adding
+    // a 240ms tail animation after the pointer has stopped.
+    rerender(<GeometryHarness leftWidth={375} rightWidth={360} />);
+    expect(root.dataset.snap).toBe("false");
+    expect(frames).toHaveLength(0);
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("375px");
   });
 
   it("clears a pending pin snap before a rapid ordinary toggle", () => {

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { IconButton } from "#product/primitives/IconButton";
 import { SplitPanelLeft } from "#product/primitives/icons/app-shell";
-import { useResize } from "#product/hooks/ui/layout/use-resize";
+import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
 import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import {
@@ -9,10 +9,6 @@ import {
   resolveStandardWorkspaceChromeClasses,
 } from "#product/lib/domain/preferences/workspace-chrome";
 import { useProductHost } from "#product/host/ProductHostProvider";
-import {
-  WORKSPACE_SIDEBAR_MAX_WIDTH,
-  WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "#product/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdateFooterButton } from "#product/components/app/sidebar/SidebarUpdateFooterButton";
@@ -23,9 +19,12 @@ interface MainSidebarPageShellProps {
 
 export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   const sidebarOpen = useWorkspaceUiStore((s) => s.sidebarOpen);
-  const sidebarWidth = useWorkspaceUiStore((s) => s.sidebarWidth);
   const setSidebarOpen = useWorkspaceUiStore((s) => s.setSidebarOpen);
-  const setSidebarWidth = useWorkspaceUiStore((s) => s.setSidebarWidth);
+  const {
+    sidebarWidth,
+    sidebarResizing,
+    onSidebarSeparatorDown,
+  } = useWorkspaceSidebarResize();
   const transparentChromeEnabled = useTransparentChromeEnabled();
   const desktopHost = useProductHost().desktop !== null;
   // Only a host that actually paints macOS window buttons reserves room for
@@ -37,14 +36,6 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
     showHeaderDivider: false,
     showContentTopBorder: false,
   });
-  const onLeftSeparatorDown = useResize({
-    direction: "horizontal",
-    size: sidebarWidth,
-    onResize: setSidebarWidth,
-    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
-    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
-  });
-
   return (
     <div
       className={`flex h-screen overflow-hidden ${chromeClasses.root}`}
@@ -54,7 +45,11 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
         id="main-sidebar"
         // isolate: keeps sidebar-internal z-indexes below the resize
         // separator's overlapping hit strip (z-10 in the page context).
-        className={`isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-panel ease-in-out ${resolveMainSidebarEdgeClassName({
+        className={`isolate flex shrink-0 flex-col overflow-hidden bg-sidebar ${
+          sidebarResizing
+            ? "transition-none"
+            : "transition-[width] duration-panel ease-in-out"
+        } ${resolveMainSidebarEdgeClassName({
           desktop: desktopHost,
           transparent: transparentChromeEnabled,
         })}`}
@@ -83,7 +78,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
           role="separator"
           aria-orientation="vertical"
           aria-controls="main-sidebar"
-          onMouseDown={onLeftSeparatorDown}
+          onMouseDown={onSidebarSeparatorDown}
           className="relative z-10 -ml-1 flex w-1 shrink-0 cursor-col-resize items-center justify-center transition-colors hover:bg-primary/30 active:bg-primary/50"
         />
       )}

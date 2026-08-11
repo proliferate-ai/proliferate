@@ -21,6 +21,8 @@
   transition-timing-function: var(--ease-out-cubic), var(--ease-out-cubic);
 }
 
+/* A live left-separator drag and the explicitly snapped toggle path both
+   publish exact geometry; ordinary open/close changes keep panel easing. */
 .standard-workspace-shell[data-snap-left-geometry="true"] {
   --workspace-left-geometry-duration: 0ms;
 }

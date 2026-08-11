@@ -33,12 +33,7 @@ import { ArrowLeft } from "lucide-react";
 import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
-import { useResize } from "#product/hooks/ui/layout/use-resize";
-import {
-  WORKSPACE_SIDEBAR_MAX_WIDTH,
-  WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "#product/lib/domain/preferences/workspace-ui/sidebar";
-import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
@@ -115,15 +110,10 @@ export function SettingsScreen({
 
   // The settings sidebar shares the main sidebar's persisted width, so
   // resizing either surface keeps both in step.
-  const sidebarWidth = useWorkspaceUiStore((s) => s.sidebarWidth);
-  const setSidebarWidth = useWorkspaceUiStore((s) => s.setSidebarWidth);
-  const onSidebarSeparatorDown = useResize({
-    direction: "horizontal",
-    size: sidebarWidth,
-    onResize: setSidebarWidth,
-    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
-    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
-  });
+  const {
+    sidebarWidth,
+    onSidebarSeparatorDown,
+  } = useWorkspaceSidebarResize();
 
   // Only a host that actually paints macOS window buttons reserves room for
   // them; on Web the inset was dead space above the nav.
