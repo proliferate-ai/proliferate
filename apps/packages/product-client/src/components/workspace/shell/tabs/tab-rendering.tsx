@@ -10,7 +10,7 @@ import {
   DotCellLoader,
   type DotCellLoaderVariant,
 } from "#product/primitives/DotCellLoader";
-import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
+import { AgentIdentityGlyph } from "#product/components/workspace/delegated-work/AgentIdentityGlyph";
 import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
 import type {
   HeaderChatMenuEntry,
@@ -69,7 +69,7 @@ function renderDelegatedAgentIcon(agent: DelegatedWorkTabIdentity): ReactNode {
       className={`relative flex size-4 shrink-0 items-center justify-center ${agent.identity.textColorClassName}`}
       title={agent.hoverTitle}
     >
-      <DelegatedAgentIdenticon identity={agent.identity} className="size-3.5" />
+      <AgentIdentityGlyph identity={agent.identity} className="icon-compact text-chat" />
       {dot}
     </span>
   );

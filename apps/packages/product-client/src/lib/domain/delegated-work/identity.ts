@@ -113,7 +113,7 @@ export interface DelegatedWorkVisualIdentity {
   borderColorClassName: string;
   colorToken: string;
   colorVar: string;
-  iconSeedHash: number;
+  glyphSeedHash: number;
 }
 
 export function delegatedWorkVisualIdentity(id: string): DelegatedWorkVisualIdentity {
@@ -132,7 +132,7 @@ export function delegatedWorkVisualIdentity(id: string): DelegatedWorkVisualIden
     borderColorClassName: color.borderColorClassName,
     colorToken: color.token,
     colorVar: color.colorVar,
-    iconSeedHash: seedHash,
+    glyphSeedHash: seedHash,
   };
 }
 
@@ -149,12 +149,18 @@ export function buildDelegatedAgentIdentity({
   sessionId?: string | null;
   sessionLinkId?: string | null;
 }): DelegatedAgentIdentity {
-  const seed = sessionLinkId?.trim() || sessionId?.trim() || id;
+  // A relationship row is mutable metadata around a session, not the agent's
+  // identity. Durable sessions therefore keep one name, color, and glyph when
+  // a link is recreated, closed, or removed. Pre-creation placeholders retain
+  // the caller-provided id only until the runtime returns a durable session ID.
+  const durableSessionId = sessionId?.trim() || null;
+  const seed = durableSessionId || id;
   const visual = delegatedWorkVisualIdentity(seed);
   const resolvedTitle = normalizeTitle(title);
   const shortId = shortDelegatedWorkId(seed);
   return {
     id,
+    sessionId: durableSessionId,
     generatedName: visual.generatedName,
     initial: visual.initial,
     title: resolvedTitle,
@@ -165,11 +171,11 @@ export function buildDelegatedAgentIdentity({
     textColorClassName: visual.textColorClassName,
     borderColorClassName: visual.borderColorClassName,
     colorVar: visual.colorVar,
-    iconSeedHash: visual.iconSeedHash,
-    openTarget: sessionId
+    glyphSeedHash: visual.glyphSeedHash,
+    openTarget: durableSessionId
       ? {
         workspaceId: workspaceId ?? null,
-        sessionId,
+        sessionId: durableSessionId,
         sessionLinkId: sessionLinkId ?? null,
       } satisfies DelegatedAgentOpenTarget
       : null,

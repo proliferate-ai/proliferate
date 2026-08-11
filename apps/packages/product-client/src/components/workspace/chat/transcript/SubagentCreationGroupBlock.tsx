@@ -4,7 +4,7 @@ import { Button } from "#product/primitives/Button";
 import { Robot } from "#product/primitives/icons/product";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
-import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
+import { AgentIdentityGlyph } from "#product/components/workspace/delegated-work/AgentIdentityGlyph";
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
@@ -130,9 +130,9 @@ function SubagentFinishedRow({
         aria-expanded={detailsExpanded}
         onClick={() => setDetailsExpanded((next) => !next)}
       >
-        <DelegatedAgentIdenticon
+        <AgentIdentityGlyph
           identity={identity}
-          className={`size-3 shrink-0 transition-colors ${
+          className={`icon-compact shrink-0 text-ui-sm transition-colors ${
             detailsExpanded
               ? "text-foreground/70"
               : isFailed

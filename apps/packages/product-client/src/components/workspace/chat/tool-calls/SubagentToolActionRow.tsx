@@ -4,7 +4,7 @@ import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollA
 import { Robot } from "#product/primitives/icons/product";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { DelegatedAgentHoverCard } from "#product/components/workspace/shell/tabs/DelegatedAgentHoverCard";
-import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
+import { AgentIdentityGlyph } from "#product/components/workspace/delegated-work/AgentIdentityGlyph";
 import { useTranscriptOpenSession } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import type {
   SubagentMcpReceiptPresentation,
@@ -70,9 +70,9 @@ export function SubagentToolActionRow({
 
   const identityContent = (
     <span className="inline-flex min-w-0 max-w-full items-center gap-1 align-baseline">
-      <DelegatedAgentIdenticon
+      <AgentIdentityGlyph
         identity={identity}
-        className={`size-3 shrink-0 ${identity.textColorClassName}`}
+        className={`icon-compact shrink-0 text-ui-sm ${identity.textColorClassName}`}
       />
       <span className={`truncate font-medium ${identity.textColorClassName}`}>
         {identity.displayName}

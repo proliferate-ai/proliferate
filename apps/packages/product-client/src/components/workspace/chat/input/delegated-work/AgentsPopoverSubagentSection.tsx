@@ -1,6 +1,6 @@
 import { Button } from "#product/primitives/Button";
 import { ExternalLink } from "#product/primitives/icons/core";
-import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
+import { AgentIdentityGlyph } from "#product/components/workspace/delegated-work/AgentIdentityGlyph";
 import type {
   DelegatedWorkComposerViewModel,
 } from "#product/hooks/chat/facade/use-delegated-work-composer";
@@ -74,9 +74,9 @@ function SubagentPopoverRow({
         className="h-auto w-full min-w-0 justify-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-transparent"
         onClick={onOpen}
       >
-        <DelegatedAgentIdenticon
+        <AgentIdentityGlyph
           identity={row.identity}
-          className={`size-3.5 shrink-0 ${row.identity.textColorClassName}`}
+          className={`icon-compact shrink-0 text-chat ${row.identity.textColorClassName}`}
         />
         <span className="min-w-0">
           <span className="block truncate text-ui font-medium text-foreground">

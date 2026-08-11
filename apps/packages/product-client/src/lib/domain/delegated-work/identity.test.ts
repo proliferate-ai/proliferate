@@ -45,21 +45,33 @@ describe("delegatedWorkVisualIdentity", () => {
 });
 
 describe("buildDelegatedAgentIdentity", () => {
-  it("derives the identicon seed from the same seed as name and color", () => {
-    const identity = buildDelegatedAgentIdentity({
-      id: "subagent_abc123456",
+  it("derives every visual field only from the durable session ID", () => {
+    const first = buildDelegatedAgentIdentity({
+      id: "subagent_first",
       title: "API Surface Check",
       sessionId: "session-1",
-      sessionLinkId: "link-abc123",
+      sessionLinkId: "link-first",
+    });
+    const second = buildDelegatedAgentIdentity({
+      id: "subagent_second",
+      title: "API Surface Check",
+      sessionId: "session-1",
+      sessionLinkId: "link-second",
     });
 
-    // The seed is sessionLinkId || sessionId || id; seeding the shape from the
-    // raw id instead would make it diverge from name/color across surfaces.
-    expect(identity.iconSeedHash).toBe(
-      delegatedWorkVisualIdentity("link-abc123").iconSeedHash,
+    const visualFields = (identity: typeof first) => ({
+      generatedName: identity.generatedName,
+      colorToken: identity.colorToken,
+      colorVar: identity.colorVar,
+      glyphSeedHash: identity.glyphSeedHash,
+      shortId: identity.shortId,
+    });
+    expect(visualFields(second)).toEqual(visualFields(first));
+    expect(first.glyphSeedHash).toBe(
+      delegatedWorkVisualIdentity("session-1").glyphSeedHash,
     );
-    expect(identity.iconSeedHash).not.toBe(
-      delegatedWorkVisualIdentity("subagent_abc123456").iconSeedHash,
+    expect(first.glyphSeedHash).not.toBe(
+      delegatedWorkVisualIdentity("link-first").glyphSeedHash,
     );
   });
 
@@ -68,16 +80,16 @@ describe("buildDelegatedAgentIdentity", () => {
       id: "subagent_abc123456",
       title: "API Surface Check",
       workspaceId: "workspace-1",
-      sessionId: "session-1",
+      sessionId: "session-abcdef987654",
       sessionLinkId: "subagent_abc123456",
     });
 
     expect(identity.displayName).toBe(
-      `${identity.generatedName} (API Surface Check abc123)`,
+      `${identity.generatedName} (API Surface Check abcdef)`,
     );
     expect(identity.openTarget).toEqual({
       workspaceId: "workspace-1",
-      sessionId: "session-1",
+      sessionId: "session-abcdef987654",
       sessionLinkId: "subagent_abc123456",
     });
   });
