@@ -3128,7 +3128,7 @@
             }
           },
           "409": {
-            "description": "Session execution is controlled by an active workflow run",
+            "description": "Pending prompt is protected or session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -3197,7 +3197,7 @@
             }
           },
           "409": {
-            "description": "Session execution is controlled by an active workflow run",
+            "description": "Pending prompt is protected or session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -3304,6 +3304,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PromptSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or reserved prompt id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
