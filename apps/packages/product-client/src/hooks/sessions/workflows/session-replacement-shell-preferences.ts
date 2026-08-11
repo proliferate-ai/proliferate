@@ -1,5 +1,6 @@
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import type { ManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import {
   replaceSessionIdInManualChatGroups,
   replaceSessionIdInOrderedList,
@@ -61,6 +62,34 @@ export function replaceSessionIdInShellPreferences(input: {
     input.materializedWorkspaceId,
   ])) {
     replaceSessionIdInShellPreferencesForWorkspace(workspaceId, input);
+  }
+}
+
+/**
+ * Converges a live alias into its client shell everywhere that can keep the
+ * alias open. Durable last-viewed state intentionally remains runtime-keyed.
+ */
+export function replaceSessionIdInOpenShellState(input: {
+  replacedSessionId: string;
+  replacementSessionId: string;
+}): void {
+  const state = useWorkspaceUiStore.getState();
+  const workspaceIds = new Set([
+    ...Object.keys(state.activeShellTabKeyByWorkspace),
+    ...Object.keys(state.shellTabOrderByWorkspace),
+    ...Object.keys(state.visibleChatSessionIdsByWorkspace),
+    ...Object.keys(state.manualChatGroupsByWorkspace),
+  ]);
+  const replacedIntent = chatWorkspaceShellTabKey(input.replacedSessionId);
+  const replacementIntent = chatWorkspaceShellTabKey(input.replacementSessionId);
+
+  for (const workspaceId of workspaceIds) {
+    replaceSessionIdInShellPreferencesForWorkspace(workspaceId, input);
+    state.replaceShellIntent({
+      workspaceId,
+      expectedIntent: replacedIntent,
+      nextIntent: replacementIntent,
+    });
   }
 }
 
