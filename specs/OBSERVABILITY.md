@@ -32,6 +32,18 @@ correlation fields, and clears the Sentry user at request teardown. The
 logical cloud sandbox is `target_id`; the provider sandbox is `sandbox_id`;
 the two must remain distinct.
 
+## Diagnostics contract
+
+`proliferate-diagnostics-protocol` and the matching ProductClient/server pure
+representations define diagnostics schema v1.1. Detailed records explain local
+execution; canonical lifecycle records use the closed P0 catalog and one
+`started` plus exactly one allowed terminal. The shared golden contract is
+`fixtures/contracts/rust-observability-v1/`; it pins privacy rejections, API
+shapes, limits, version compatibility, and the release RSS profile. This is a
+contract only: existing local sinks, server log routing, Sentry, PostHog, and
+anonymous telemetry are unchanged. The approved boundary and slice registry
+live in [`../adrs/2026-08-10-rust-observability.md`](../adrs/2026-08-10-rust-observability.md).
+
 ## Instrumenting a new feature
 
 Choose by what actually happened, not by convenience — do not `raise` to flag

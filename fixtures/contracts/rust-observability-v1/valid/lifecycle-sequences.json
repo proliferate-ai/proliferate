@@ -1,0 +1,34 @@
+{
+  "scenarios": [
+    {
+      "name": "start_first_terminal_identical_retry_conflicting_terminal",
+      "record_indexes": [1, 2, 2, 3],
+      "expected": [
+        { "disposition": "accepted_start", "requires_gap_or_health_violation": false },
+        { "disposition": "accepted_terminal", "requires_gap_or_health_violation": false },
+        { "disposition": "duplicate", "requires_gap_or_health_violation": false },
+        { "error": "conflicting_terminal" }
+      ]
+    },
+    {
+      "name": "producer_death_abandonment",
+      "record_indexes": [4, 5],
+      "expected": [
+        { "disposition": "accepted_start", "requires_gap_or_health_violation": false },
+        { "disposition": "accepted_terminal", "requires_gap_or_health_violation": false }
+      ]
+    },
+    {
+      "name": "structurally_valid_orphan_terminal",
+      "record_indexes": [6],
+      "expected": [
+        {
+          "disposition": "orphan_terminal",
+          "requires_gap_or_health_violation": true,
+          "invented_start": false,
+          "invented_failure": false
+        }
+      ]
+    }
+  ]
+}
