@@ -147,7 +147,7 @@ describe("WorkspaceItem", () => {
     expect(cells?.children).toHaveLength(2);
   });
 
-  it("keeps a dim PR identity for an authoritative no-PR branch", () => {
+  it("falls back to worktree identity for an authoritative no-PR branch", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -164,10 +164,11 @@ describe("WorkspaceItem", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "No pull request" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Worktree" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "No pull request" })).toBeNull();
   });
 
-  it("keeps a dim PR identity when PR data is unknown", () => {
+  it("falls back to worktree identity when PR data is unknown", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -176,7 +177,39 @@ describe("WorkspaceItem", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "Pull request status unavailable" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Worktree" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Pull request status unavailable" })).toBeNull();
+  });
+
+  it("shows worktree identity before git status loads", () => {
+    renderWithProductHost(
+      <WorkspaceItem name="Pending worktree" variant="worktree" />,
+    );
+
+    expect(screen.getByRole("img", { name: "Worktree" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Pull request status unavailable" })).toBeNull();
+  });
+
+  it("keeps git attention beside the worktree fallback when there is no PR", () => {
+    renderWithProductHost(
+      <WorkspaceItem
+        name="Conflicted worktree"
+        variant="worktree"
+        gitStatus={makeGitStatus({
+          pr: {
+            state: "none",
+            number: null,
+            url: null,
+            checks: "none",
+            reviewDecision: "none",
+          },
+          attention: "conflicts",
+        })}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Worktree" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Merge conflicts in worktree" })).toBeTruthy();
   });
 
   it("keeps the PR identity in place for cloud workspaces", () => {

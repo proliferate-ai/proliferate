@@ -7,12 +7,14 @@ import {
 } from "#product/primitives/icons/core";
 import { Folder } from "#product/primitives/icons/workspace";
 import {
+  GitBranch,
   GitBranchIcon,
   GitPullRequest,
 } from "#product/primitives/icons/workspace-git";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { Tooltip } from "#product/primitives/Tooltip";
 import { useWorkspaceSidebarNativeContextMenu } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {
@@ -59,8 +61,9 @@ interface WorkspaceItemProps {
   /** Current git branch, shown read-only in the three-dot menu git section. */
   branchName?: string | null;
   /**
-   * Composed git/PR status. Drives the persistent PR glyph tone, its tooltip,
-   * the separate attention alert, and the "Open pull request" menu item.
+   * Composed git/PR status. A real PR owns the identity glyph; otherwise a
+   * worktree keeps its workspace identity. Git attention remains separate,
+   * and the PR URL drives the "Open pull request" menu item.
    */
   gitStatus?: WorkspaceGitStatus | null;
   /** Renders the trailing unseen-activity dot. */
@@ -125,7 +128,12 @@ export function WorkspaceItem({
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
-  const trailingIdentity = <SidebarWorkspaceGitGlyph status={gitStatus} />;
+  const trailingIdentity = (
+    <SidebarWorkspaceGitGlyph
+      status={gitStatus}
+      fallbackIdentity={worktreeIdentity(variant)}
+    />
+  );
   const pullRequestUrl = gitStatus?.pr?.url ?? null;
   const pullRequestNumber = gitStatus?.pr?.number ?? null;
   const handleOpenPullRequestCommand = pullRequestUrl && onOpenPullRequest
@@ -371,5 +379,22 @@ export function WorkspaceItem({
       }}
       trigger={<div>{contextMenu}</div>}
     />
+  );
+}
+
+function worktreeIdentity(variant: SidebarWorkspaceVariant) {
+  if (variant !== "worktree") {
+    return null;
+  }
+
+  return (
+    <Tooltip content="Worktree" className="inline-flex shrink-0 items-center justify-center">
+      <span role="img" aria-label="Worktree">
+        <GitBranch
+          className="icon-indicator text-sidebar-status-worktree [font-size:var(--text-sidebar-row)]"
+          strokeWidth={1.75}
+        />
+      </span>
+    </Tooltip>
   );
 }
