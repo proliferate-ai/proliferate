@@ -120,7 +120,8 @@ fn link(parent: &str, child: &str, closed: bool) -> SessionLinkRecord {
         created_by_turn_id: None,
         created_by_tool_call_id: None,
         created_at: "2026-08-10T00:00:00Z".to_string(),
-        closed_at: closed.then(|| "2026-08-10T01:00:00Z".to_string()),
+        subagent_closed_at: closed.then(|| "2026-08-10T01:00:00Z".to_string()),
+        closed_at: None,
     }
 }
 

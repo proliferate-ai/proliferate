@@ -216,6 +216,9 @@ fn from_contract_session_link(
         created_by_turn_id: record.created_by_turn_id,
         created_by_tool_call_id: record.created_by_tool_call_id,
         created_at: record.created_at,
+        // Mobility archives predate the reversible local operability gate.
+        // Imported relationships therefore resume open unless closed terminally.
+        subagent_closed_at: None,
         closed_at: record.closed_at,
     })
 }

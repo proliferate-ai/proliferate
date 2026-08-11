@@ -115,6 +115,254 @@ async fn start_failure_retires_only_new_handle_and_deletes_new_row() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn subagent_start_failure_compensates_both_child_and_relationship() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap();
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+    let (state, _program_guard) = test_state("subagent-start-failure", "#!/bin/sh\nexit 1\n");
+    let parent_id = "12234567-89ab-4def-8123-456789abcdef";
+    create_known_record(&state.session_runtime, parent_id);
+
+    let result = state
+        .session_runtime
+        .create_subagent_agent_session(
+            "workspace-1",
+            "claude",
+            None,
+            None,
+            "initial subagent task".into(),
+            parent_id,
+            "Parent",
+        )
+        .await;
+    assert!(matches!(
+        result,
+        Err(CreateSubagentAgentSessionError::Create(_))
+    ));
+    let sessions = state
+        .session_service
+        .list_sessions(Some("workspace-1"), true)
+        .unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].id, parent_id);
+    assert!(state
+        .session_runtime
+        .session_link_service
+        .list_subagent_children(parent_id)
+        .unwrap()
+        .is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn subagent_fanout_failure_rolls_back_the_atomic_child_insert() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap();
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+    let (state, _program_guard) = test_state("subagent-fanout", "#!/bin/sh\nexit 0\n");
+    let parent_id = "41234567-89ab-4def-8123-456789abcdef";
+    create_known_record(&state.session_runtime, parent_id);
+    for index in 0..8 {
+        let child_id = format!("{index}1234567-89ab-4def-8123-456789abcde0");
+        create_known_record(&state.session_runtime, &child_id);
+        state
+            .subagent_service
+            .link_child(parent_id, &child_id, None, None, None)
+            .expect("fill fanout");
+    }
+    let before = state
+        .session_service
+        .list_sessions(Some("workspace-1"), true)
+        .unwrap();
+
+    let result = state
+        .session_runtime
+        .create_subagent_agent_session(
+            "workspace-1",
+            "claude",
+            None,
+            None,
+            "must not survive".into(),
+            parent_id,
+            "Parent",
+        )
+        .await;
+    assert!(matches!(
+        result,
+        Err(CreateSubagentAgentSessionError::Relationship(
+            crate::domains::sessions::links::service::CreateSessionLinkError::FanoutLimit
+        ))
+    ));
+    let after = state
+        .session_service
+        .list_sessions(Some("workspace-1"), true)
+        .unwrap();
+    assert_eq!(after.len(), before.len());
+    assert_eq!(
+        state
+            .session_runtime
+            .session_link_service
+            .list_subagent_children(parent_id)
+            .unwrap()
+            .len(),
+        8
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn concrete_subagent_close_open_and_live_promotion_preserve_session_state() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap();
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+    let (state, _program_guard) = test_state("subagent-lifecycle", "#!/bin/sh\nexit 0\n");
+    let parent_id = "81234567-89ab-4def-8123-456789abcdef";
+    let child_id = "82234567-89ab-4def-8123-456789abcdef";
+    let promoted_id = "83234567-89ab-4def-8123-456789abcdef";
+    for session_id in [parent_id, child_id, promoted_id] {
+        create_known_record(&state.session_runtime, session_id);
+    }
+    let make_link = |child_session_id: &str| {
+        state
+            .session_runtime
+            .session_link_service
+            .create_subagent_link_with_child_limit(
+                crate::domains::sessions::links::service::CreateSessionLinkInput {
+                    relation: crate::domains::sessions::links::model::SessionLinkRelation::Subagent,
+                    parent_session_id: parent_id.into(),
+                    child_session_id: child_session_id.into(),
+                    workspace_relation:
+                        crate::domains::sessions::links::model::SessionLinkWorkspaceRelation::SameWorkspace,
+                    label: None,
+                    created_by_turn_id: None,
+                    created_by_tool_call_id: None,
+                },
+                8,
+            )
+            .expect("create relationship")
+    };
+    make_link(child_id);
+    make_link(promoted_id);
+    let now = chrono::Utc::now().to_rfc3339();
+    for session_id in [child_id, promoted_id] {
+        state
+            .session_service
+            .store()
+            .update_native_session_id(session_id, &format!("native-{session_id}"), &now)
+            .unwrap();
+    }
+    state
+        .session_service
+        .store()
+        .insert_pending_prompt(child_id, "discard me", Some("prompt-1"))
+        .unwrap();
+
+    let manager = state.session_runtime.acp_manager_for_test();
+    let _closing_actor = manager
+        .insert_scripted_session_for_test(
+            child_id,
+            ScriptedSessionSpec {
+                prompt_turn_id: "turn-close".into(),
+                hold_config_replies: false,
+                hold_cancel_replies: false,
+            },
+        )
+        .await;
+    let closed = state
+        .session_runtime
+        .close_subagent(parent_id, child_id)
+        .await
+        .expect("reversible close");
+    assert!(closed.closed_at.is_none());
+    assert!(closed.dismissed_at.is_none());
+    assert_eq!(
+        closed.native_session_id.as_deref(),
+        Some(format!("native-{child_id}").as_str())
+    );
+    assert!(!state.session_runtime.has_live_session(child_id).await);
+    assert!(state
+        .session_service
+        .store()
+        .list_pending_prompts(child_id)
+        .unwrap()
+        .is_empty());
+    assert!(state
+        .session_runtime
+        .session_link_service
+        .find_subagent_link(parent_id, child_id)
+        .unwrap()
+        .unwrap()
+        .subagent_closed_at
+        .is_some());
+
+    let _opened_actor = manager
+        .insert_scripted_session_for_test(
+            child_id,
+            ScriptedSessionSpec {
+                prompt_turn_id: "turn-open".into(),
+                hold_config_replies: false,
+                hold_cancel_replies: false,
+            },
+        )
+        .await;
+    let opened = state
+        .session_runtime
+        .open_subagent(parent_id, child_id)
+        .await
+        .expect("reversible open");
+    assert_eq!(opened.id, child_id);
+    assert_eq!(
+        opened.native_session_id.as_deref(),
+        Some(format!("native-{child_id}").as_str())
+    );
+    assert!(state
+        .session_runtime
+        .session_link_service
+        .find_subagent_link(parent_id, child_id)
+        .unwrap()
+        .unwrap()
+        .subagent_closed_at
+        .is_none());
+
+    let _promoted_actor = manager
+        .insert_scripted_session_for_test(
+            promoted_id,
+            ScriptedSessionSpec {
+                prompt_turn_id: "turn-running".into(),
+                hold_config_replies: false,
+                hold_cancel_replies: false,
+            },
+        )
+        .await;
+    let handle_before = manager.get_handle(promoted_id).await.unwrap();
+    let promoted = state
+        .session_runtime
+        .promote_subagent(parent_id, promoted_id)
+        .await
+        .expect("live promotion");
+    let handle_after = manager.get_handle(promoted_id).await.unwrap();
+    assert!(Arc::ptr_eq(&handle_before, &handle_after));
+    assert_eq!(promoted.id, promoted_id);
+    assert_eq!(
+        promoted.native_session_id.as_deref(),
+        Some(format!("native-{promoted_id}").as_str())
+    );
+    assert!(state
+        .session_runtime
+        .session_link_service
+        .find_subagent_link(parent_id, promoted_id)
+        .unwrap()
+        .is_none());
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn verified_initial_task_failure_removes_row_and_handle() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))

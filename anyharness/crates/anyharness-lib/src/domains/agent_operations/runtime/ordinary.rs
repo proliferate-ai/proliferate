@@ -35,11 +35,9 @@ impl AgentOperations {
             .task
             .as_deref()
             .is_some_and(|task| task.trim().is_empty())
+            || (input.kind == AgentCreationKind::Subagent && input.task.is_none())
         {
             return Err(AgentOperationsError::InvalidTask);
-        }
-        if input.kind == AgentCreationKind::Subagent {
-            return Err(AgentOperationsError::SubagentCreationNotImplemented);
         }
 
         let options = self
@@ -57,6 +55,20 @@ impl AgentOperations {
             )
             .map_err(AgentOperationsError::LaunchSelection)?;
 
+        // A subagent is an atomic child+relationship mutation of its parent.
+        // Hold the parent permit before the workspace lease so terminal parent
+        // close and child creation have one serialized winner.
+        let _parent_permit = if input.kind == AgentCreationKind::Subagent {
+            Some(
+                self.admit_target(
+                    &initial_caller.record.id,
+                    SessionMutationKind::SubagentCreate,
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
         let _lease = self
             .operation_gate()?
             .acquire_shared(
@@ -69,23 +81,42 @@ impl AgentOperations {
         self.assert_workspace_exists_under_lease(&input.workspace.workspace_id)
             .await?;
         let source_label = caller_provenance_label(&current_caller.record);
-        let record = self
-            .session_mutations()?
-            .create_ordinary_agent(
-                &input.workspace.workspace_id,
-                &selection.agent_kind,
-                selection.model_id.as_deref(),
-                selection.mode_id.as_deref(),
-                input.task,
-                &current_caller.record.id,
-                &source_label,
-            )
-            .await
-            .map_err(AgentOperationsError::Create)?;
+        let record = match input.kind {
+            AgentCreationKind::Ordinary => self
+                .session_mutations()?
+                .create_ordinary_agent(
+                    &input.workspace.workspace_id,
+                    &selection.agent_kind,
+                    selection.model_id.as_deref(),
+                    selection.mode_id.as_deref(),
+                    input.task,
+                    &current_caller.record.id,
+                    &source_label,
+                )
+                .await
+                .map_err(AgentOperationsError::Create)?,
+            AgentCreationKind::Subagent => self
+                .subagent_lifecycle()?
+                .create_subagent_agent(
+                    &input.workspace.workspace_id,
+                    &selection.agent_kind,
+                    selection.model_id.as_deref(),
+                    selection.mode_id.as_deref(),
+                    input.task.expect("subagent task validated above"),
+                    &current_caller.record.id,
+                    &source_label,
+                )
+                .await
+                .map_err(AgentOperationsError::CreateSubagent)?,
+        };
         let created = self.resolve_record(record)?;
-        if created.role() != AgentRole::Ordinary {
+        let expected_role = match input.kind {
+            AgentCreationKind::Ordinary => AgentRole::Ordinary,
+            AgentCreationKind::Subagent => AgentRole::Subagent,
+        };
+        if created.role() != expected_role {
             return Err(AgentOperationsError::Internal(anyhow::anyhow!(
-                "ordinary create produced a linked session"
+                "agent create produced an unexpected relationship role"
             )));
         }
         self.project_agent(&created, Some(&current_caller)).await
@@ -235,6 +266,9 @@ impl AgentOperations {
                 SessionMutationConflict::ControlledByWorkflow { .. } => {
                     AgentOperationsError::ControlledByWorkflow
                 }
+                SessionMutationConflict::SubagentOpenRequired => {
+                    AgentOperationsError::SubagentOpenRequired
+                }
                 SessionMutationConflict::Internal(error) => AgentOperationsError::Internal(error),
             })
     }
@@ -278,6 +312,14 @@ impl AgentOperations {
         &self,
     ) -> Result<&Arc<dyn super::AgentSessionMutations>, AgentOperationsError> {
         self.mutations
+            .as_ref()
+            .ok_or(AgentOperationsError::OrdinaryOperationsUnavailable)
+    }
+
+    pub(super) fn subagent_lifecycle(
+        &self,
+    ) -> Result<&Arc<dyn super::SubagentLifecycleMutations>, AgentOperationsError> {
+        self.subagent_lifecycle
             .as_ref()
             .ok_or(AgentOperationsError::OrdinaryOperationsUnavailable)
     }

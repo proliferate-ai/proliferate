@@ -89,6 +89,18 @@ async fn deliver_subagent_completion(
         return Ok(());
     };
 
+    // Re-read after the completion transaction. Close may have committed its
+    // reversible marker after the first lookup but before this insert; using
+    // the stale snapshot would notify the parent after Close won. Promotion
+    // may likewise have removed the relationship (and cascaded this ledger
+    // row). The second read is the notification-eligibility linearization.
+    let Some(current_link) = service.find_subagent_parent(&ctx.session_id)? else {
+        return Ok(());
+    };
+    if current_link.id != link.id || current_link.subagent_closed_at.is_some() {
+        return Ok(());
+    }
+
     let payload = SubagentTurnCompletedPayload {
         completion_id: inserted.completion.completion_id.clone(),
         session_link_id: link.id.clone(),

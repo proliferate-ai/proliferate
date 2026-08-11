@@ -2,9 +2,11 @@ use crate::domains::agent_operations::model::{
     AgentCapability, AgentConfigChoiceError, AgentLaunchSelectionError, CapabilityDenial,
     MAX_AGENT_PAGE_SIZE, MAX_WORKSPACE_PAGE_SIZE,
 };
+use crate::domains::sessions::links::service::CreateSessionLinkError;
 use crate::domains::sessions::runtime::{
-    CreateAndStartSessionError, CreateOrdinaryAgentSessionError, EnsureLiveSessionError,
-    SendPromptError, SessionLifecycleError, SetSessionConfigOptionError,
+    CreateAndStartSessionError, CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError,
+    EnsureLiveSessionError, SendPromptError, SessionLifecycleError, SetSessionConfigOptionError,
+    SubagentLifecycleError,
 };
 use crate::domains::sessions::task_output::TaskOutputError;
 use crate::domains::workspaces::access_gate::WorkspaceAccessError;
@@ -47,6 +49,10 @@ pub enum AgentOperationsError {
     ConfigChoice(#[source] AgentConfigChoiceError),
     #[error("ordinary agent creation failed")]
     Create(CreateOrdinaryAgentSessionError),
+    #[error("subagent creation failed")]
+    CreateSubagent(CreateSubagentAgentSessionError),
+    #[error("subagent lifecycle mutation failed")]
+    SubagentLifecycle(SubagentLifecycleError),
     #[error("agent configuration failed")]
     Configure(SetSessionConfigOptionError),
     #[error("agent resume failed")]
@@ -65,8 +71,6 @@ pub enum AgentOperationsError {
     OrdinaryOperationsUnavailable,
     #[error("agent messaging is not configured")]
     MessagingUnavailable,
-    #[error("subagent creation is declared for a later implementation slice")]
-    SubagentCreationNotImplemented,
     #[error(transparent)]
     TaskOutput(#[from] TaskOutputError),
 }
@@ -115,6 +119,8 @@ impl AgentOperationsError {
                 "AGENT_CONFIG_VALUE_UNAVAILABLE"
             }
             Self::Create(error) => create_code(error),
+            Self::CreateSubagent(error) => create_subagent_code(error),
+            Self::SubagentLifecycle(error) => subagent_lifecycle_code(error),
             Self::Configure(error) => config_code(error),
             Self::Resume(error) => resume_code(error),
             Self::Interrupt(SessionLifecycleError::SessionNotFound(_)) => "AGENT_NOT_FOUND",
@@ -125,7 +131,6 @@ impl AgentOperationsError {
             Self::ControlledByWorkflow => "SESSION_CONTROLLED_BY_WORKFLOW",
             Self::OrdinaryOperationsUnavailable => "AGENT_OPERATIONS_UNAVAILABLE",
             Self::MessagingUnavailable => "AGENT_OPERATIONS_UNAVAILABLE",
-            Self::SubagentCreationNotImplemented => "WORKSPACE_MCP_OPERATION_NOT_IMPLEMENTED",
             Self::TaskOutput(TaskOutputError::InvalidLimit) => "TASK_OUTPUT_LIMIT_INVALID",
             Self::TaskOutput(TaskOutputError::InvalidCursor) => "TASK_OUTPUT_CURSOR_INVALID",
             Self::TaskOutput(TaskOutputError::Internal(_)) => "AGENT_OPERATIONS_INTERNAL",
@@ -164,6 +169,8 @@ impl AgentOperationsError {
                 "The selected configuration option is no longer available.".into()
             }
             Self::Create(error) => create_public_message(error),
+            Self::CreateSubagent(error) => create_subagent_public_message(error),
+            Self::SubagentLifecycle(error) => subagent_lifecycle_public_message(error),
             Self::Configure(error) => config_public_message(error),
             Self::Resume(error) => resume_public_message(error),
             Self::Interrupt(SessionLifecycleError::SessionNotFound(_)) => {
@@ -182,9 +189,6 @@ impl AgentOperationsError {
                 "Ordinary agent operations are unavailable.".into()
             }
             Self::MessagingUnavailable => "Agent messaging is unavailable.".into(),
-            Self::SubagentCreationNotImplemented => {
-                "Subagent creation is not implemented yet.".into()
-            }
             Self::TaskOutput(TaskOutputError::InvalidLimit) => {
                 "The task-output limit must be between 1 and 50.".into()
             }
@@ -192,6 +196,68 @@ impl AgentOperationsError {
                 "The task-output cursor is invalid.".into()
             }
         }
+    }
+}
+
+fn create_subagent_code(error: &CreateSubagentAgentSessionError) -> &'static str {
+    match error {
+        CreateSubagentAgentSessionError::Access(error) => workspace_access_code(error),
+        CreateSubagentAgentSessionError::Create(error) => create_session_code(error),
+        CreateSubagentAgentSessionError::Relationship(CreateSessionLinkError::FanoutLimit) => {
+            "SUBAGENT_FANOUT_LIMIT"
+        }
+        CreateSubagentAgentSessionError::Relationship(
+            CreateSessionLinkError::ParentNotFound(_)
+            | CreateSessionLinkError::ChildNotFound(_)
+            | CreateSessionLinkError::Duplicate
+            | CreateSessionLinkError::ChildAlreadyLinked,
+        ) => "AGENT_NOT_FOUND",
+        CreateSubagentAgentSessionError::Relationship(
+            CreateSessionLinkError::SelfLink | CreateSessionLinkError::Store(_),
+        )
+        | CreateSubagentAgentSessionError::Cleanup(_) => "AGENT_OPERATIONS_INTERNAL",
+        CreateSubagentAgentSessionError::InitialTask(error) => prompt_code(error),
+    }
+}
+
+fn subagent_lifecycle_code(error: &SubagentLifecycleError) -> &'static str {
+    match error {
+        SubagentLifecycleError::RelationshipNotFound => "AGENT_NOT_FOUND",
+        SubagentLifecycleError::OpenRequired => "SUBAGENT_OPEN_REQUIRED",
+        SubagentLifecycleError::Resume(error) => resume_code(error),
+        SubagentLifecycleError::Internal(_) => "AGENT_OPERATIONS_INTERNAL",
+    }
+}
+
+fn create_subagent_public_message(error: &CreateSubagentAgentSessionError) -> String {
+    match error {
+        CreateSubagentAgentSessionError::Access(error) => workspace_access_message(error),
+        CreateSubagentAgentSessionError::Create(error) => create_session_public_message(error),
+        CreateSubagentAgentSessionError::Relationship(CreateSessionLinkError::FanoutLimit) => {
+            "This agent already has the maximum of eight active subagents.".into()
+        }
+        CreateSubagentAgentSessionError::Relationship(
+            CreateSessionLinkError::ParentNotFound(_)
+            | CreateSessionLinkError::ChildNotFound(_)
+            | CreateSessionLinkError::Duplicate
+            | CreateSessionLinkError::ChildAlreadyLinked,
+        ) => "The requested agent was not found.".into(),
+        CreateSubagentAgentSessionError::Relationship(
+            CreateSessionLinkError::SelfLink | CreateSessionLinkError::Store(_),
+        )
+        | CreateSubagentAgentSessionError::Cleanup(_) => "Agent operations failed.".into(),
+        CreateSubagentAgentSessionError::InitialTask(error) => prompt_public_message(error),
+    }
+}
+
+fn subagent_lifecycle_public_message(error: &SubagentLifecycleError) -> String {
+    match error {
+        SubagentLifecycleError::RelationshipNotFound => "The requested agent was not found.".into(),
+        SubagentLifecycleError::OpenRequired => {
+            "Open the subagent before performing this operation.".into()
+        }
+        SubagentLifecycleError::Resume(error) => resume_public_message(error),
+        SubagentLifecycleError::Internal(_) => "Agent operations failed.".into(),
     }
 }
 

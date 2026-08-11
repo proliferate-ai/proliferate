@@ -16,6 +16,11 @@ use crate::live::sessions::actor::turn::diagnostics::{age_ms, PromptDiagnostics}
 use crate::live::sessions::actor::turn::start::StartedPromptTurn;
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
 
+#[cfg(not(test))]
+const UNLOAD_CANCEL_GRACE: Duration = Duration::from_secs(5);
+#[cfg(test)]
+const UNLOAD_CANCEL_GRACE: Duration = Duration::from_millis(100);
+
 pub(in crate::live::sessions::actor) struct ActivePromptRequest {
     pub payload: PromptPayload,
     pub prompt_id: Option<String>,
@@ -99,6 +104,9 @@ impl SessionActor {
             let req = acp::schema::PromptRequest::new(self.native_session_id.clone(), acp_blocks);
 
             let mut prompt_result = None;
+            let unload_deadline = tokio::time::sleep(UNLOAD_CANCEL_GRACE);
+            tokio::pin!(unload_deadline);
+            let mut unload_requested = false;
             let mut prompt_diagnostics = PromptDiagnostics::new(current_prompt_id.clone());
             tracing::info!(
                 session_id = %self.session_id,
@@ -153,6 +161,9 @@ impl SessionActor {
                     result = &mut prompt_fut => {
                         prompt_result = Some(result);
                     }
+                    _ = &mut unload_deadline, if unload_requested => {
+                        break;
+                    }
                     notification = notification_rx.recv() => {
                         if let Some(notif) = notification {
                             prompt_diagnostics.observe_notification(&notif);
@@ -191,6 +202,15 @@ impl SessionActor {
                                     .send_notification(acp::schema::CancelNotification::new(self.native_session_id.clone()));
                                 let _ = respond_to.send(Ok(()));
                                 exit_after_prompt = Some(ActorExitDisposition::Dismiss);
+                            }
+                            Some(SessionCommand::Unload { respond_to }) => {
+                                self.resolve_pending_interactions(Resolution::Cancelled).await;
+                                let _ = self.conn
+                                    .send_notification(acp::schema::CancelNotification::new(self.native_session_id.clone()));
+                                let _ = respond_to.send(Ok(()));
+                                unload_requested = true;
+                                unload_deadline.as_mut().reset(tokio::time::Instant::now() + UNLOAD_CANCEL_GRACE);
+                                exit_after_prompt = Some(ActorExitDisposition::Unload);
                             }
                             Some(SessionCommand::ResolveInteraction { request_id, resolution, respond_to }) => {
                                 let result = self.resolve_interaction(request_id, resolution).await;
@@ -280,15 +300,24 @@ impl SessionActor {
                 }
             }
 
-            let result = prompt_result.expect("prompt_result must be set");
-            let broken_session = self
-                .finish_prompt_result(
-                    result,
+            let broken_session = if unload_requested {
+                self.finish_forced_unload_cancel(
                     &mut prompt_diagnostics,
                     notification_rx,
                     background_work_rx,
                 )
                 .await;
+                false
+            } else {
+                let result = prompt_result.expect("prompt_result must be set");
+                self.finish_prompt_result(
+                    result,
+                    &mut prompt_diagnostics,
+                    notification_rx,
+                    background_work_rx,
+                )
+                .await
+            };
 
             self.resume_replay_filter.disable();
 

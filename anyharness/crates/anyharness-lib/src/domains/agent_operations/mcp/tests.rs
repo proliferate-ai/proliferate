@@ -7,7 +7,7 @@ use super::*;
 use crate::domains::agent_operations::model::RuntimeIdentity;
 use crate::domains::agent_operations::runtime::{
     AgentExecutionReads, AgentMessageQueue, AgentSessionReads, AgentWorkspaceOperations,
-    SubagentRelationshipReads,
+    SubagentLifecycleMutations, SubagentRelationshipReads,
 };
 use crate::domains::sessions::admission::{NoControllerPolicy, SessionMutationAdmission};
 use crate::domains::sessions::links::model::{
@@ -17,7 +17,9 @@ use crate::domains::sessions::model::{
     SessionExecutionState, SessionExecutionStatePhase, SessionMcpBindingPolicy, SessionRecord,
 };
 use crate::domains::sessions::prompt::provenance::AgentSessionPromptSource;
-use crate::domains::sessions::runtime::SendPromptError;
+use crate::domains::sessions::runtime::{
+    CreateSubagentAgentSessionError, SendPromptError, SubagentLifecycleError,
+};
 use crate::domains::workspaces::model::{test_workspace_record, WorkspaceKind, WorkspaceRecord};
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::options::{
@@ -139,6 +141,48 @@ impl AgentMessageQueue for Messages {
     }
 }
 
+struct Lifecycle;
+
+#[async_trait]
+impl SubagentLifecycleMutations for Lifecycle {
+    async fn create_subagent_agent(
+        &self,
+        _workspace_id: &str,
+        _agent_kind: &str,
+        _model_id: Option<&str>,
+        _mode_id: Option<&str>,
+        _task: String,
+        _parent_session_id: &str,
+        _source_label: &str,
+    ) -> Result<SessionRecord, CreateSubagentAgentSessionError> {
+        unreachable!()
+    }
+
+    async fn close_subagent(
+        &self,
+        _parent_session_id: &str,
+        child_session_id: &str,
+    ) -> Result<SessionRecord, SubagentLifecycleError> {
+        Ok(session(child_session_id, "workspace-a"))
+    }
+
+    async fn open_subagent(
+        &self,
+        _parent_session_id: &str,
+        child_session_id: &str,
+    ) -> Result<SessionRecord, SubagentLifecycleError> {
+        Ok(session(child_session_id, "workspace-a"))
+    }
+
+    async fn promote_subagent(
+        &self,
+        _parent_session_id: &str,
+        child_session_id: &str,
+    ) -> Result<SessionRecord, SubagentLifecycleError> {
+        Ok(session(child_session_id, "workspace-a"))
+    }
+}
+
 fn session(id: &str, workspace_id: &str) -> SessionRecord {
     SessionRecord {
         id: id.to_string(),
@@ -190,6 +234,7 @@ fn server() -> (
         created_by_turn_id: None,
         created_by_tool_call_id: None,
         created_at: "2026-08-10T00:00:00Z".to_string(),
+        subagent_closed_at: None,
         closed_at: None,
     }]));
     let messages = Arc::new(Messages(Mutex::new(Vec::new())));
@@ -202,6 +247,12 @@ fn server() -> (
             workspace
         })
         .collect();
+    let workspaces = Arc::new(Workspaces(workspaces));
+    let admission = Arc::new(SessionMutationAdmission::new(
+        Arc::new(NoControllerPolicy),
+        Arc::new(crate::domains::sessions::admission::AllSessionsOperable),
+    ));
+    let gate = Arc::new(WorkspaceOperationGate::new());
     let operations = Arc::new(
         AgentOperations::new(
             RuntimeIdentity::new("runtime-1"),
@@ -209,12 +260,13 @@ fn server() -> (
             relationships,
             Arc::new(Execution),
         )
-        .with_messaging(
-            messages.clone(),
-            Arc::new(Workspaces(workspaces)),
-            Arc::new(SessionMutationAdmission::new(Arc::new(NoControllerPolicy))),
-            Arc::new(WorkspaceOperationGate::new()),
-        ),
+        .with_subagent_lifecycle(
+            Arc::new(Lifecycle),
+            workspaces.clone(),
+            admission.clone(),
+            gate.clone(),
+        )
+        .with_messaging(messages.clone(), workspaces, admission, gate),
     );
     let auth = Arc::new(WorkspaceMcpAuth::new(
         std::env::temp_dir().join(format!("workspace-mcp-contract-{}", uuid::Uuid::new_v4())),
@@ -394,7 +446,7 @@ async fn workspace_capability_scope_rejects_mismatched_workspace_or_session_befo
 }
 
 #[tokio::test]
-async fn send_message_dispatch_pins_the_durable_receipt_and_leaves_later_tools_inert() {
+async fn send_message_and_pr5_lifecycle_tools_dispatch_through_the_real_server() {
     let (server, auth, messages) = server();
     let token = auth
         .mint_capability_token("workspace-a", "P")
@@ -459,25 +511,31 @@ async fn send_message_dispatch_pins_the_durable_receipt_and_leaves_later_tools_i
     );
     assert_eq!(messages.0.lock().unwrap().len(), 1);
 
-    let later_slice = authenticated_dispatch(
-        &server,
-        &token,
-        context("workspace-a", "P"),
-        json!({
-            "jsonrpc": "2.0",
-            "id": 3,
-            "method": "tools/call",
-            "params": {
-                "name": "close_subagent",
-                "arguments": { "agentId": "C" }
-            }
-        }),
-    )
-    .await
-    .expect("later-slice dispatch")
-    .expect("later-slice response");
-    assert_eq!(
-        later_slice["result"]["structuredContent"]["error"]["code"],
-        "WORKSPACE_MCP_OPERATION_NOT_IMPLEMENTED"
-    );
+    for (id, tool_name) in [
+        (3, "close_subagent"),
+        (4, "open_subagent"),
+        (5, "promote_subagent"),
+    ] {
+        let response = authenticated_dispatch(
+            &server,
+            &token,
+            context("workspace-a", "P"),
+            json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": "tools/call",
+                "params": {
+                    "name": tool_name,
+                    "arguments": { "agentId": "C" }
+                }
+            }),
+        )
+        .await
+        .expect("PR5 lifecycle dispatch")
+        .expect("PR5 lifecycle response");
+        assert_eq!(
+            response["result"]["structuredContent"]["identity"]["sessionId"],
+            "C"
+        );
+    }
 }

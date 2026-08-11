@@ -13,6 +13,7 @@ use crate::domains::reviews::mcp::{
     self as review_mcp, auth::ReviewMcpAuth, tools as review_mcp_tools, ReviewProductMcpServer,
 };
 use crate::domains::reviews::runtime::ReviewRuntime;
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use crate::domains::sessions::mcp_bindings::product_launch::{
     ProductMcpLaunchRegistration, ProductMcpSelectionContext,
@@ -26,6 +27,7 @@ use crate::domains::sessions::subagents::mcp::{
 };
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::model::WorkspaceSurface;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 
@@ -46,6 +48,8 @@ pub(super) struct EndpointRegistryDeps {
     pub(super) subagent_service: Arc<SubagentService>,
     pub(super) session_runtime: Arc<SessionRuntime>,
     pub(super) workspace_runtime: Arc<WorkspaceRuntime>,
+    pub(super) session_admission: Arc<SessionMutationAdmission>,
+    pub(super) workspace_operation_gate: Arc<WorkspaceOperationGate>,
     pub(super) subagent_mcp_auth: Arc<SubagentMcpAuth>,
     pub(super) cowork_artifact_runtime: Arc<CoworkArtifactRuntime>,
     pub(super) cowork_runtime: Arc<CoworkRuntime>,
@@ -130,6 +134,8 @@ pub(super) fn build_product_mcp_endpoint_registry(
         subagent_service,
         session_runtime,
         workspace_runtime,
+        session_admission,
+        workspace_operation_gate,
         subagent_mcp_auth,
         cowork_artifact_runtime,
         cowork_runtime,
@@ -158,9 +164,13 @@ pub(super) fn build_product_mcp_endpoint_registry(
                 subagent_service.clone(),
                 session_runtime,
                 workspace_runtime.clone(),
+                session_admission,
+                workspace_operation_gate,
                 subagent_mcp_auth,
             )),
-            Some(WorkspaceOperationKind::SubagentWrite),
+            // Legacy subagent mutations must acquire the session permit before
+            // the workspace lease. The server owns both in that order.
+            None,
             subagent_mcp_tools::MUTATING_TOOL_NAMES,
         ))),
         ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(

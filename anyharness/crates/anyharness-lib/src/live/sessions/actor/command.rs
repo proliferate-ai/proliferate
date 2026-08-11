@@ -216,6 +216,13 @@ pub(in crate::live::sessions) enum SessionCommand {
     Dismiss {
         respond_to: oneshot::Sender<anyhow::Result<()>>,
     },
+    /// Retire the live actor without changing the durable session lifecycle.
+    /// Unlike `Dismiss`, this is an internal execution-lifecycle operation:
+    /// it does not change user-facing visibility. Unlike `Close`, it emits no
+    /// terminal session event and does not make the durable session terminal.
+    Unload {
+        respond_to: oneshot::Sender<anyhow::Result<()>>,
+    },
     Close {
         respond_to: oneshot::Sender<anyhow::Result<()>>,
     },
