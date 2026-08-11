@@ -173,7 +173,52 @@ pub(crate) struct ScriptedSessionSpec {
 }
 
 #[cfg(test)]
+pub(crate) struct ObservedPrompt {
+    pub(crate) prompt_id: Option<String>,
+    pub(crate) payload: crate::domains::sessions::prompt::PromptPayload,
+}
+
+#[cfg(test)]
 impl LiveSessionManager {
+    pub(crate) async fn insert_prompt_observer_for_test(
+        &self,
+        session_id: &str,
+    ) -> tokio::sync::mpsc::UnboundedReceiver<ObservedPrompt> {
+        use crate::live::sessions::actor::command::{PromptAcceptance, SessionCommand};
+
+        let (command_tx, mut command_rx) = tokio::sync::mpsc::channel(1);
+        let (event_tx, _) = tokio::sync::broadcast::channel(1);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some(format!("native-{session_id}")),
+            anyharness_contract::v1::SessionExecutionPhase::Running,
+        ));
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle);
+        let (seen_tx, seen_rx) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                if let SessionCommand::Prompt {
+                    payload,
+                    prompt_id,
+                    respond_to,
+                    ..
+                } = command
+                {
+                    let _ = seen_tx.send(ObservedPrompt { prompt_id, payload });
+                    let _ = respond_to.send(Ok(PromptAcceptance::Started {
+                        turn_id: "observed-turn".into(),
+                    }));
+                }
+            }
+        });
+        seen_rx
+    }
+
     pub(crate) async fn insert_cancel_observer_for_test(
         &self,
         session_id: &str,

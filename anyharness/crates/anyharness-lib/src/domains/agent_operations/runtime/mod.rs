@@ -17,8 +17,8 @@ use authorization_policy::{CallerFacts, TargetFacts};
 pub use error::AgentOperationsError;
 pub use ports::{
     AgentCatalogReads, AgentConfigMutationState, AgentExecutionReads, AgentLaunchOptionReads,
-    AgentSessionMutationError, AgentSessionMutations, AgentSessionReads, AgentTaskOutputReads,
-    AgentWorkspaceOperations, SubagentRelationshipReads,
+    AgentSessionMutations, AgentSessionReads, AgentTaskOutputReads, AgentWorkspaceOperations,
+    SubagentRelationshipReads,
 };
 
 use crate::domains::agent_operations::model::{

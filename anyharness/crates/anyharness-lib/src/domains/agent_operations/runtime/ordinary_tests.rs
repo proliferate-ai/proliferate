@@ -25,6 +25,10 @@ use crate::domains::sessions::live_config::{
 use crate::domains::sessions::model::{
     SessionExecutionState, SessionExecutionStatePhase, SessionMcpBindingPolicy, SessionRecord,
 };
+use crate::domains::sessions::runtime::{
+    CreateOrdinaryAgentSessionError, EnsureLiveSessionError, SessionLifecycleError,
+    SetSessionConfigOptionError,
+};
 use crate::domains::sessions::task_output::{
     TaskOutputError, TaskOutputMessage, TaskOutputPage, TaskOutputRole, TaskOutputSender,
 };
@@ -37,6 +41,8 @@ use crate::domains::workspaces::options::{
 
 #[path = "ordinary_output_tests.rs"]
 mod output_tests;
+#[path = "ordinary_review_tests.rs"]
+mod review_tests;
 
 struct Sessions(Vec<SessionRecord>);
 
@@ -185,6 +191,7 @@ impl AgentCatalogReads for Catalog {
 
 struct Mutations {
     calls: Mutex<Vec<String>>,
+    config_error: Mutex<Option<SetSessionConfigOptionError>>,
     active_resumes: AtomicUsize,
     max_active_resumes: AtomicUsize,
     agent_kind: String,
@@ -206,9 +213,11 @@ impl AgentSessionMutations for Mutations {
         model_id: Option<&str>,
         mode_id: Option<&str>,
         task: Option<String>,
-    ) -> Result<SessionRecord, AgentSessionMutationError> {
+        source_session_id: &str,
+        source_label: &str,
+    ) -> Result<SessionRecord, CreateOrdinaryAgentSessionError> {
         self.record(format!(
-            "create:{workspace_id}:{agent_kind}:{model_id:?}:{mode_id:?}:{task:?}"
+            "create:{workspace_id}:{agent_kind}:{model_id:?}:{mode_id:?}:{task:?}:{source_session_id}:{source_label}"
         ));
         let mut created = session("created", workspace_id, &self.agent_kind, &self.model_id);
         created.native_session_id = Some("native-created".into());
@@ -220,8 +229,11 @@ impl AgentSessionMutations for Mutations {
         session_id: &str,
         config_id: &str,
         value: &str,
-    ) -> Result<(SessionRecord, AgentConfigMutationState), AgentSessionMutationError> {
+    ) -> Result<(SessionRecord, AgentConfigMutationState), SetSessionConfigOptionError> {
         self.record(format!("configure:{session_id}:{config_id}:{value}"));
+        if let Some(error) = self.config_error.lock().unwrap().take() {
+            return Err(error);
+        }
         Ok((
             session(session_id, "workspace-b", &self.agent_kind, &self.model_id),
             AgentConfigMutationState::Queued,
@@ -231,7 +243,7 @@ impl AgentSessionMutations for Mutations {
     async fn resume_agent(
         &self,
         session_id: &str,
-    ) -> Result<SessionRecord, AgentSessionMutationError> {
+    ) -> Result<SessionRecord, EnsureLiveSessionError> {
         self.record(format!("resume:{session_id}"));
         let active = self.active_resumes.fetch_add(1, Ordering::SeqCst) + 1;
         self.max_active_resumes.fetch_max(active, Ordering::SeqCst);
@@ -245,7 +257,7 @@ impl AgentSessionMutations for Mutations {
     async fn interrupt_agent(
         &self,
         session_id: &str,
-    ) -> Result<SessionRecord, AgentSessionMutationError> {
+    ) -> Result<SessionRecord, SessionLifecycleError> {
         self.record(format!("interrupt:{session_id}"));
         Ok(session(
             session_id,
@@ -286,6 +298,8 @@ struct Fixture {
     operations: Arc<AgentOperations>,
     mutations: Arc<Mutations>,
     workspaces: Arc<Workspaces>,
+    session_admission: Arc<SessionMutationAdmission>,
+    workspace_gate: Arc<WorkspaceOperationGate>,
     agent_kind: String,
     model_id: String,
 }
@@ -353,11 +367,14 @@ fn fixture(closed_child: bool) -> Fixture {
     });
     let mutations = Arc::new(Mutations {
         calls: Mutex::new(Vec::new()),
+        config_error: Mutex::new(None),
         active_resumes: AtomicUsize::new(0),
         max_active_resumes: AtomicUsize::new(0),
         agent_kind: agent_kind.clone(),
         model_id: model_id.clone(),
     });
+    let session_admission = Arc::new(SessionMutationAdmission::new(Arc::new(NoControllerPolicy)));
+    let workspace_gate = Arc::new(WorkspaceOperationGate::new());
     let operations = Arc::new(
         AgentOperations::new(
             RuntimeIdentity::new("runtime-1"),
@@ -373,14 +390,16 @@ fn fixture(closed_child: bool) -> Fixture {
         .with_ordinary_operations(
             mutations.clone(),
             Arc::new(TaskOutput),
-            Arc::new(SessionMutationAdmission::new(Arc::new(NoControllerPolicy))),
-            Arc::new(WorkspaceOperationGate::new()),
+            session_admission.clone(),
+            workspace_gate.clone(),
         ),
     );
     Fixture {
         operations,
         mutations,
         workspaces,
+        session_admission,
+        workspace_gate,
         agent_kind,
         model_id,
     }
@@ -449,7 +468,9 @@ async fn cross_workspace_create_uses_current_launch_choice_and_stays_unlinked() 
     assert_eq!(created.workspace.workspace_id, "workspace-b");
     assert_eq!(created.role, AgentRole::Ordinary);
     assert!(created.parent.is_none());
-    assert_eq!(fixture.mutations.calls.lock().unwrap().len(), 1);
+    let calls = fixture.mutations.calls.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert!(calls[0].ends_with(":parent:parent"));
 }
 
 #[tokio::test]
@@ -552,35 +573,5 @@ async fn busy_config_is_successfully_reported_as_queued() {
     assert_eq!(
         fixture.mutations.calls.lock().unwrap().as_slice(),
         ["configure:peer:effort:high"]
-    );
-}
-
-#[tokio::test]
-async fn concurrent_resumes_serialize_and_preserve_session_identity() {
-    let fixture = fixture(false);
-    let operations_a = fixture.operations.clone();
-    let operations_b = fixture.operations.clone();
-    let first = tokio::spawn(async move {
-        operations_a
-            .resume_agent(&caller(&operations_a, "parent"), &target("peer"))
-            .await
-    });
-    let second = tokio::spawn(async move {
-        operations_b
-            .resume_agent(&caller(&operations_b, "parent"), &target("peer"))
-            .await
-    });
-    let (first, second) = tokio::join!(first, second);
-    for result in [first.unwrap(), second.unwrap()] {
-        let agent = result.expect("resume succeeds");
-        assert_eq!(agent.identity.session_id, "peer");
-        assert_eq!(
-            agent.configuration.model_id.as_deref(),
-            Some(fixture.model_id.as_str())
-        );
-    }
-    assert_eq!(
-        fixture.mutations.max_active_resumes.load(Ordering::SeqCst),
-        1
     );
 }

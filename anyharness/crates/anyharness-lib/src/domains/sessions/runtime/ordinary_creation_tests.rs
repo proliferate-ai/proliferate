@@ -4,9 +4,11 @@ use super::*;
 use crate::app::{test_support, AppState};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::sessions::model::SessionMcpBindingPolicy;
-use crate::live::sessions::{ScriptedSessionEvent, ScriptedSessionSpec};
+use crate::domains::sessions::task_output::TaskOutputSender;
+use crate::live::sessions::{ScriptedSessionSpec, SessionEventSink};
 use crate::origin::OriginContext;
 use crate::persistence::Db;
+use anyharness_contract::v1::{PromptProvenance as PublicPromptProvenance, SessionEvent};
 
 struct AgentProgramGuard(Option<std::ffi::OsString>);
 
@@ -91,7 +93,15 @@ async fn start_failure_retires_only_new_handle_and_deletes_new_row() {
 
     let result = state
         .session_runtime
-        .create_ordinary_agent_session("workspace-1", "claude", None, None, None)
+        .create_ordinary_agent_session(
+            "workspace-1",
+            "claude",
+            None,
+            None,
+            None,
+            "caller-session".into(),
+            "Caller".into(),
+        )
         .await;
     assert!(matches!(
         result,
@@ -123,7 +133,12 @@ async fn verified_initial_task_failure_removes_row_and_handle() {
 
     let result = state
         .session_runtime
-        .start_new_ordinary_agent_session(record, Some("initial task".into()))
+        .start_new_ordinary_agent_session(
+            record,
+            Some("initial task".into()),
+            "caller-session".into(),
+            "Caller".into(),
+        )
         .await;
     assert!(matches!(
         result,
@@ -138,7 +153,7 @@ async fn verified_initial_task_failure_removes_row_and_handle() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn initial_task_uses_existing_prompt_owner_and_keeps_session() {
+async fn initial_task_persists_exact_caller_provenance_and_projects_task_output() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
@@ -148,22 +163,20 @@ async fn initial_task_uses_existing_prompt_owner_and_keeps_session() {
     let (state, _program_guard) = test_state("task-success", "#!/bin/sh\nexit 0\n");
     let session_id = "32234567-89ab-4def-8123-456789abcdef";
     let record = create_known_record(&state.session_runtime, session_id);
-    let mut scripted = state
+    let mut observed = state
         .session_runtime
         .acp_manager_for_test()
-        .insert_scripted_session_for_test(
-            session_id,
-            ScriptedSessionSpec {
-                prompt_turn_id: "turn-created".into(),
-                hold_config_replies: false,
-                hold_cancel_replies: false,
-            },
-        )
+        .insert_prompt_observer_for_test(session_id)
         .await;
 
     let created = state
         .session_runtime
-        .start_new_ordinary_agent_session(record, Some("initial task".into()))
+        .start_new_ordinary_agent_session(
+            record,
+            Some("initial task".into()),
+            "caller-session-exact".into(),
+            "Caller Label".into(),
+        )
         .await
         .expect("initial task accepted");
     assert_eq!(created.id, session_id);
@@ -172,12 +185,60 @@ async fn initial_task_uses_existing_prompt_owner_and_keeps_session() {
         .get_session(session_id)
         .unwrap()
         .is_some());
+    let observed = observed.recv().await.expect("prompt observed");
+    assert!(observed
+        .prompt_id
+        .as_deref()
+        .is_some_and(|prompt_id| prompt_id.starts_with("agent-create-")));
+
+    let (event_tx, _) = tokio::sync::broadcast::channel(8);
+    let mut sink = SessionEventSink::new(
+        session_id.into(),
+        "claude".into(),
+        std::path::PathBuf::from("/tmp/workspace"),
+        event_tx,
+        Arc::new(state.session_service.store().clone()),
+    );
+    sink.begin_turn(
+        observed.payload.text_summary.clone(),
+        observed.prompt_id,
+        observed.payload.content_parts(),
+        observed.payload.public_provenance(),
+    );
+
+    let completed = state
+        .session_service
+        .store()
+        .list_events(session_id)
+        .unwrap()
+        .into_iter()
+        .find(|event| event.event_type == "item_completed")
+        .expect("persisted item_completed");
+    let event: SessionEvent = serde_json::from_str(&completed.payload_json).unwrap();
+    let SessionEvent::ItemCompleted(completed) = event else {
+        panic!("expected item_completed");
+    };
     assert!(matches!(
-        scripted.events.recv().await,
-        Some(ScriptedSessionEvent::Prompt {
-            prompt_id: Some(prompt_id)
-        }) if prompt_id.starts_with("agent-create-")
+        completed.item.prompt_provenance,
+        Some(PublicPromptProvenance::AgentSession {
+            source_session_id,
+            label: Some(label),
+            ..
+        }) if source_session_id == "caller-session-exact" && label == "Caller Label"
     ));
+
+    let output = state
+        .session_service
+        .get_task_output(session_id, None, 10)
+        .expect("task output");
+    assert_eq!(output.messages.len(), 1);
+    assert_eq!(
+        output.messages[0].sender,
+        TaskOutputSender::Agent {
+            session_id: Some("caller-session-exact".into()),
+            label: "Caller Label".into(),
+        }
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]
