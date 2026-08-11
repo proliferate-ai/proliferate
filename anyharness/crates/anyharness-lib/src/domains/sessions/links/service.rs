@@ -226,11 +226,34 @@ impl SessionLinkService {
         self.store.list_subagent_children(parent_session_id)
     }
 
+    pub fn list_subagent_children_including_closed(
+        &self,
+        parent_session_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        Ok(self
+            .store
+            .list_by_parent_including_closed(parent_session_id)?
+            .into_iter()
+            .filter(|link| link.relation == SessionLinkRelation::Subagent)
+            .collect())
+    }
+
     pub fn find_subagent_parent(
         &self,
         child_session_id: &str,
     ) -> anyhow::Result<Option<SessionLinkRecord>> {
         self.store.find_subagent_parent(child_session_id)
+    }
+
+    pub fn find_subagent_parent_including_closed(
+        &self,
+        child_session_id: &str,
+    ) -> anyhow::Result<Option<SessionLinkRecord>> {
+        Ok(self
+            .store
+            .list_by_child_including_closed(child_session_id)?
+            .into_iter()
+            .find(|link| link.relation == SessionLinkRelation::Subagent))
     }
 
     pub fn find_subagent_link(

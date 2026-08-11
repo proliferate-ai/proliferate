@@ -1,0 +1,355 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+
+use super::*;
+use crate::domains::sessions::links::model::{SessionLinkRelation, SessionLinkWorkspaceRelation};
+use crate::domains::sessions::model::SessionMcpBindingPolicy;
+
+#[derive(Default)]
+struct FakeSessions {
+    records: Vec<SessionRecord>,
+}
+
+impl AgentSessionReads for FakeSessions {
+    fn get_session(&self, session_id: &str) -> anyhow::Result<Option<SessionRecord>> {
+        Ok(self
+            .records
+            .iter()
+            .find(|record| record.id == session_id)
+            .cloned())
+    }
+
+    fn list_sessions(&self) -> anyhow::Result<Vec<SessionRecord>> {
+        Ok(self.records.clone())
+    }
+}
+
+#[derive(Default)]
+struct FakeRelationships {
+    links: Vec<SessionLinkRecord>,
+}
+
+impl SubagentRelationshipReads for FakeRelationships {
+    fn find_parent_including_closed(
+        &self,
+        child_session_id: &str,
+    ) -> anyhow::Result<Option<SessionLinkRecord>> {
+        Ok(self
+            .links
+            .iter()
+            .find(|link| link.child_session_id == child_session_id)
+            .cloned())
+    }
+
+    fn list_children_including_closed(
+        &self,
+        parent_session_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        Ok(self
+            .links
+            .iter()
+            .filter(|link| link.parent_session_id == parent_session_id)
+            .cloned()
+            .collect())
+    }
+}
+
+#[derive(Default)]
+struct FakeExecution {
+    states: HashMap<String, SessionExecutionState>,
+}
+
+#[async_trait]
+impl AgentExecutionReads for FakeExecution {
+    async fn execution_state(
+        &self,
+        session: &SessionRecord,
+    ) -> anyhow::Result<SessionExecutionState> {
+        Ok(self
+            .states
+            .get(&session.id)
+            .copied()
+            .unwrap_or(SessionExecutionState {
+                phase: SessionExecutionStatePhase::Idle,
+                has_live_handle: false,
+            }))
+    }
+}
+
+fn session(id: &str, workspace_id: &str, status: &str) -> SessionRecord {
+    SessionRecord {
+        id: id.to_string(),
+        workspace_id: workspace_id.to_string(),
+        agent_kind: "codex".to_string(),
+        native_session_id: None,
+        agent_auth_contexts: None,
+        requested_model_id: Some("model-1".to_string()),
+        current_model_id: None,
+        requested_mode_id: Some("mode-1".to_string()),
+        current_mode_id: None,
+        title: Some(format!("Agent {id}")),
+        thinking_level_id: None,
+        thinking_budget_tokens: None,
+        status: status.to_string(),
+        created_at: "2026-08-10T00:00:00Z".to_string(),
+        updated_at: "2026-08-10T00:00:00Z".to_string(),
+        last_prompt_at: None,
+        closed_at: None,
+        dismissed_at: None,
+        mcp_bindings_ciphertext: None,
+        mcp_binding_summaries_json: None,
+        mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
+        system_prompt_append: None,
+        subagents_enabled: true,
+        action_capabilities_json: None,
+        origin: None,
+    }
+}
+
+fn link(parent: &str, child: &str, closed: bool) -> SessionLinkRecord {
+    SessionLinkRecord {
+        id: format!("link-{child}"),
+        public_id: Some(format!("subagent-{child}")),
+        relation: SessionLinkRelation::Subagent,
+        parent_session_id: parent.to_string(),
+        child_session_id: child.to_string(),
+        workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+        label: Some(format!("Child {child}")),
+        created_by_turn_id: None,
+        created_by_tool_call_id: None,
+        created_at: "2026-08-10T00:00:00Z".to_string(),
+        closed_at: closed.then(|| "2026-08-10T01:00:00Z".to_string()),
+    }
+}
+
+fn fixture(closed_c: bool) -> AgentOperations {
+    let sessions = FakeSessions {
+        records: vec![
+            session("P", "workspace-a", "idle"),
+            session("Q", "workspace-b", "idle"),
+            session("R", "workspace-a", "idle"),
+            session("C", "workspace-a", "idle"),
+            session("D", "workspace-a", "idle"),
+        ],
+    };
+    let relationships = FakeRelationships {
+        links: vec![link("P", "C", closed_c), link("R", "D", false)],
+    };
+    AgentOperations::new(
+        RuntimeIdentity::new("runtime-1"),
+        Arc::new(sessions),
+        Arc::new(relationships),
+        Arc::new(FakeExecution::default()),
+    )
+}
+
+fn caller(operations: &AgentOperations, id: &str) -> AuthenticatedAgentCaller {
+    operations.authenticated_caller(id)
+}
+
+fn target(id: &str) -> AgentIdentity {
+    AgentIdentity::new(RuntimeIdentity::new("runtime-1"), id)
+}
+
+#[tokio::test]
+async fn subagent_authorization_matrix_is_runtime_wide_and_parent_scoped() {
+    let operations = fixture(false);
+
+    assert_eq!(
+        operations
+            .get_agent(&caller(&operations, "P"), &target("Q"))
+            .await
+            .expect("P reads cross-workspace ordinary Q")
+            .role,
+        AgentRole::Ordinary
+    );
+    assert_eq!(
+        operations
+            .get_agent(&caller(&operations, "P"), &target("C"))
+            .await
+            .expect("P reads owned C")
+            .role,
+        AgentRole::Subagent
+    );
+    for unrelated in ["Q", "R"] {
+        assert!(matches!(
+            operations
+                .get_agent(&caller(&operations, unrelated), &target("C"))
+                .await,
+            Err(AgentOperationsError::AgentNotFound)
+        ));
+    }
+    assert!(operations
+        .get_agent(&caller(&operations, "C"), &target("Q"))
+        .await
+        .is_ok());
+
+    for kind in [AgentCreationKind::Ordinary, AgentCreationKind::Subagent] {
+        let decision = operations
+            .decide_agent_creation(&caller(&operations, "C"), kind, "workspace-a")
+            .expect("creation decision");
+        assert_eq!(
+            decision.denial,
+            Some(CapabilityDenial::SubagentCannotCreateAgent)
+        );
+    }
+}
+
+#[tokio::test]
+async fn cross_runtime_targets_are_denied_before_lookup() {
+    let operations = fixture(false);
+    let foreign = AgentIdentity::new(RuntimeIdentity::new("runtime-2"), "Q");
+    assert!(matches!(
+        operations
+            .get_agent(&caller(&operations, "P"), &foreign)
+            .await,
+        Err(AgentOperationsError::RuntimeBoundaryDenied)
+    ));
+}
+
+#[tokio::test]
+async fn list_reads_exclude_all_subagents_and_scope_children_to_the_parent() {
+    let operations = fixture(true);
+    let ordinary = operations
+        .list_agents(&caller(&operations, "P"), ListAgentsInput::default())
+        .await
+        .expect("list ordinary agents");
+    assert_eq!(
+        ordinary
+            .agents
+            .iter()
+            .map(|agent| agent.identity.session_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["P", "Q", "R"]
+    );
+
+    let children = operations
+        .list_subagents(&caller(&operations, "P"))
+        .await
+        .expect("list P children");
+    assert_eq!(children.len(), 1);
+    assert_eq!(children[0].identity.session_id, "C");
+    assert_eq!(
+        children[0].status.presentation,
+        AgentPresentationStatus::Closed
+    );
+    assert!(!children
+        .iter()
+        .any(|agent| agent.identity.session_id == "D"));
+}
+
+#[tokio::test]
+async fn whoami_returns_exact_role_parent_scope_and_effective_capabilities() {
+    let operations = fixture(false);
+    let ordinary = operations
+        .whoami(&caller(&operations, "P"))
+        .await
+        .expect("ordinary identity");
+    assert_eq!(ordinary.agent.role, AgentRole::Ordinary);
+    assert!(ordinary.agent.parent.is_none());
+    assert_eq!(ordinary.effective_capabilities, AgentCapability::ALL);
+
+    let child = operations
+        .whoami(&caller(&operations, "C"))
+        .await
+        .expect("subagent identity");
+    assert_eq!(child.agent.role, AgentRole::Subagent);
+    assert_eq!(
+        child.agent.parent.expect("parent").session_id,
+        "P".to_string()
+    );
+    assert!(!child
+        .effective_capabilities
+        .contains(&AgentCapability::CreateAgent));
+    assert!(!child
+        .effective_capabilities
+        .contains(&AgentCapability::PromoteSubagent));
+    assert!(child
+        .effective_capabilities
+        .contains(&AgentCapability::SendMessage));
+}
+
+#[tokio::test]
+async fn status_projection_separates_presentation_from_execution_detail() {
+    let sessions = FakeSessions {
+        records: vec![
+            session("P", "workspace-a", "idle"),
+            session("running", "workspace-a", "running"),
+            session("cold", "workspace-a", "idle"),
+            session("errored", "workspace-a", "errored"),
+            session("closed", "workspace-a", "idle"),
+        ],
+    };
+    let relationships = FakeRelationships {
+        links: vec![link("P", "closed", true)],
+    };
+    let execution = FakeExecution {
+        states: HashMap::from([
+            (
+                "running".to_string(),
+                SessionExecutionState {
+                    phase: SessionExecutionStatePhase::Running,
+                    has_live_handle: true,
+                },
+            ),
+            (
+                "cold".to_string(),
+                SessionExecutionState {
+                    phase: SessionExecutionStatePhase::Idle,
+                    has_live_handle: false,
+                },
+            ),
+            (
+                "errored".to_string(),
+                SessionExecutionState {
+                    phase: SessionExecutionStatePhase::Errored,
+                    has_live_handle: false,
+                },
+            ),
+        ]),
+    };
+    let operations = AgentOperations::new(
+        RuntimeIdentity::new("runtime-1"),
+        Arc::new(sessions),
+        Arc::new(relationships),
+        Arc::new(execution),
+    );
+    let caller = caller(&operations, "P");
+
+    let running = operations
+        .get_agent(&caller, &target("running"))
+        .await
+        .expect("running");
+    assert_eq!(
+        running.status.presentation,
+        AgentPresentationStatus::Running
+    );
+    assert!(running.status.has_live_actor);
+
+    let cold = operations
+        .get_agent(&caller, &target("cold"))
+        .await
+        .expect("cold");
+    assert_eq!(cold.status.presentation, AgentPresentationStatus::Available);
+    assert_eq!(cold.status.execution, AgentExecutionStatus::Idle);
+    assert!(!cold.status.has_live_actor);
+
+    let errored = operations
+        .get_agent(&caller, &target("errored"))
+        .await
+        .expect("errored");
+    assert_eq!(
+        errored.status.presentation,
+        AgentPresentationStatus::Available
+    );
+    assert_eq!(errored.status.execution, AgentExecutionStatus::Errored);
+
+    let closed = operations
+        .get_agent(&caller, &target("closed"))
+        .await
+        .expect("closed owned child");
+    assert_eq!(closed.status.presentation, AgentPresentationStatus::Closed);
+    assert_eq!(closed.status.execution, AgentExecutionStatus::Closed);
+}

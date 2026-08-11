@@ -5,7 +5,9 @@ use super::definition::ProductMcpDefinition;
 use crate::integrations::mcp::json_rpc::{
     jsonrpc_error, jsonrpc_result, CallToolParams, InitializeParams, JsonRpcRequest,
 };
-use crate::integrations::mcp::tools::jsonrpc_tool_result;
+use crate::integrations::mcp::tools::{
+    jsonrpc_tool_result, jsonrpc_typed_tool_error, McpToolCallError,
+};
 
 // ── Error codes ─────────────────────────────────────────────────────────────
 
@@ -202,11 +204,16 @@ where
                     )));
                 }
             };
-            let result = server
-                .call_tool(&ctx, &params.name, params.arguments)
-                .await
-                .map_err(|error| error.to_string());
-            Ok(Some(jsonrpc_tool_result(request.id, result)))
+            let result = server.call_tool(&ctx, &params.name, params.arguments).await;
+            if let Err(error) = &result {
+                if let Some(typed) = error.downcast_ref::<McpToolCallError>() {
+                    return Ok(Some(jsonrpc_typed_tool_error(request.id, typed)));
+                }
+            }
+            Ok(Some(jsonrpc_tool_result(
+                request.id,
+                result.map_err(|error| error.to_string()),
+            )))
         }
         _ => Ok(Some(jsonrpc_error(
             request.id,
