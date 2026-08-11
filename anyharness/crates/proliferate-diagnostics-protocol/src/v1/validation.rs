@@ -1,4 +1,3 @@
-use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use super::catalog::is_p0_operation;
@@ -371,11 +370,4 @@ pub fn validate_rss_profile(profile: &RssMeasurementProfileV1) -> Result<(), Rej
         return Err(RejectionReasonV1::InvalidShape);
     }
     Ok(())
-}
-
-pub fn parse_and_validate<T>(value: &Value) -> Result<T, RejectionReasonV1>
-where
-    T: DeserializeOwned,
-{
-    from_value(value)
 }

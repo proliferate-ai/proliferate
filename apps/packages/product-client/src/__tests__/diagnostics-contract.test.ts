@@ -230,6 +230,20 @@ describe("rust observability v1 golden contract", () => {
     ] = 1;
     expect(rejectionReason(() => parseHealthResponseV1(health))).toBe("limit_exceeded");
   });
+
+  it("rejects lone Unicode surrogates as an invalid shape", () => {
+    // Language-local by design: serde_json rejects a lone-surrogate JSON
+    // escape while parsing, before Rust can consume a shared fixture.
+    for (const value of ["\ud800", "\udc00"]) {
+      const record = cloneRecord(recordsFixture.records[0]);
+      record.release = value;
+      expect(rejectionReason(() => parseProducerRecordV1(record))).toBe("invalid_shape");
+    }
+
+    const paired = cloneRecord(recordsFixture.records[0]);
+    paired.release = "\ud83d\ude00";
+    expect(parseProducerRecordV1(paired).release).toBe("\ud83d\ude00");
+  });
 });
 
 function rejectionReason(callback: () => unknown): RejectionReasonV1 {

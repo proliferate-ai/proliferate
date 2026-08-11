@@ -232,3 +232,18 @@ def test_representative_exact_byte_and_cardinality_boundaries() -> None:
     parse_health_response_v1(health)
     health["cardinality_counts"][f"key.{limits.MAX_CARDINALITY_ENTRIES}"] = 1
     assert _reason(lambda: parse_health_response_v1(health)) == "limit_exceeded"
+
+
+@pytest.mark.parametrize("value", ["\ud800", "\udc00"])
+def test_lone_unicode_surrogates_reject_as_invalid_shape(value: str) -> None:
+    # Language-local by design: serde_json rejects a lone-surrogate JSON escape
+    # while parsing, before Rust can consume a shared fixture.
+    record = _fixture("valid/records.json")["records"][0]
+    record["release"] = value
+    assert _reason(lambda: parse_producer_record_v1(record)) == "invalid_shape"
+
+
+def test_paired_unicode_surrogate_code_point_remains_valid_utf8() -> None:
+    record = _fixture("valid/records.json")["records"][0]
+    record["release"] = "\U0001f600"
+    assert parse_producer_record_v1(record)["release"] == "\U0001f600"

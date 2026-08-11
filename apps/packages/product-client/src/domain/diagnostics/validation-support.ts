@@ -556,12 +556,21 @@ export function jsonByteLength(value: unknown): number {
 
 function utf8ByteLength(value: string): number {
   let bytes = 0;
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    if (codePoint === undefined) {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (index + 1 >= value.length || next < 0xdc00 || next > 0xdfff) {
+        fail("invalid_shape");
+      }
+      bytes += 4;
+      index += 1;
       continue;
     }
-    bytes += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+    if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      fail("invalid_shape");
+    }
+    bytes += codeUnit <= 0x7f ? 1 : codeUnit <= 0x7ff ? 2 : 3;
   }
   return bytes;
 }

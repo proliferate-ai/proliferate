@@ -438,7 +438,7 @@ def _require_bounded_string(value: object, limit: int) -> str:
     result = _require_string(value)
     if not result:
         _fail("invalid_shape")
-    if len(result.encode("utf-8")) > limit:
+    if _utf8_byte_length(result) > limit:
         _fail("limit_exceeded")
     return result
 
@@ -524,11 +524,16 @@ def _set_optional(target: dict[str, object], key: str, value: object | None) -> 
 
 
 def _json_byte_length(value: object) -> int:
-    return len(
-        json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode(
-            "utf-8"
-        )
+    return _utf8_byte_length(
+        json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     )
+
+
+def _utf8_byte_length(value: str) -> int:
+    try:
+        return len(value.encode("utf-8"))
+    except UnicodeEncodeError:
+        _fail("invalid_shape")
 
 
 def _fail(reason: RejectionReasonV1) -> Never:
