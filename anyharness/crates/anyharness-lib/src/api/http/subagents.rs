@@ -69,18 +69,26 @@ pub async fn schedule_subagent_wake(
 ) -> Result<Json<ScheduleSubagentWakeResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
     let _admission_permit =
-        admit_session_mutation(&state, &session_id, SessionMutationKind::SubagentWake).await?;
-    let parent = state
+        admit_session_mutation(&state, &child_session_id, SessionMutationKind::SubagentWake)
+            .await?;
+    let initial_link = state
+        .subagent_service
+        .authorize_child(&session_id, &child_session_id)
+        .map_err(map_subagent_error)?;
+    let child = state
         .session_service
-        .get_session(&session_id)
+        .get_session(&initial_link.child_session_id)
         .map_err(|error| ApiError::internal(error.to_string()))?
         .ok_or_else(|| ApiError::not_found("Session not found", "SESSION_NOT_FOUND"))?;
     let _operation = state
         .workspace_operation_gate
-        .acquire_shared(&parent.workspace_id, WorkspaceOperationKind::SubagentWrite)
+        .acquire_shared(&child.workspace_id, WorkspaceOperationKind::SubagentWrite)
         .await;
-    assert_workspace_mutable(&state, &parent.workspace_id)?;
+    assert_workspace_mutable(&state, &child.workspace_id)?;
 
+    // Re-authorize under the child permit. Close, promotion, and every other
+    // child mutation serialize on this same gate, so the following insert is
+    // either before Close (and Close deletes it) or rejected after Close.
     let (link, inserted) = state
         .subagent_service
         .schedule_wake_for_child(&session_id, &child_session_id)

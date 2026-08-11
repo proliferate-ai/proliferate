@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
 use super::*;
+use crate::domains::agent_operations::model::AgentIdentity;
+use crate::domains::sessions::links::model::{
+    SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
+};
+use crate::domains::sessions::links::service::SessionLinkService;
+use crate::domains::sessions::links::store::SessionLinkStore;
 use crate::domains::sessions::subagents::mcp::auth::SubagentMcpAuth;
 use crate::domains::sessions::subagents::mcp::context::SubagentMcpContext;
 use crate::domains::sessions::subagents::mcp::SubagentProductMcpServer;
@@ -94,6 +100,175 @@ async fn restore_cannot_reopen_a_reversibly_closed_dismissed_subagent() {
         .unwrap()
         .dismissed_at
         .is_some());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn http_wake_and_close_have_one_child_gate_and_no_late_schedule() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = test_support::set_bearer_token_env(None);
+
+    let state = Arc::new(test_state());
+    test_support::seed_workspace_with_repo_root(&state.db, WS, "local", "/tmp/http-wake-first");
+    let parent_id = insert_session_row(&state, WS);
+    let child_id = insert_session_row(&state, WS);
+    state
+        .subagent_service
+        .link_child(&parent_id, &child_id, None, None, None)
+        .expect("link child");
+
+    let held_child_gate = state
+        .session_admission
+        .acquire(
+            &child_id,
+            SessionMutationKind::SubagentClose,
+            &SessionMutationSource::external(),
+        )
+        .await
+        .expect("hold child gate");
+    let wake_state = state.clone();
+    let wake_parent = parent_id.clone();
+    let wake_child = child_id.clone();
+    let wake = tokio::spawn(async move {
+        call(
+            &wake_state,
+            "POST",
+            format!("/v1/sessions/{wake_parent}/subagents/{wake_child}/wake"),
+            Some(json!({})),
+        )
+        .await
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    assert!(
+        !wake.is_finished(),
+        "HTTP wake must wait on the child gate, never the parent gate"
+    );
+    drop(held_child_gate);
+    let (status, payload) = wake.await.expect("wake task");
+    assert_eq!(status, StatusCode::OK, "{payload}");
+
+    close_through_agent_operations(&state, &parent_id, &child_id).await;
+    assert_no_wake_or_parent_prompt(&state, &parent_id);
+
+    let closed_first = Arc::new(test_state());
+    test_support::seed_workspace_with_repo_root(
+        &closed_first.db,
+        WS,
+        "local",
+        "/tmp/http-close-first",
+    );
+    let parent_id = insert_session_row(&closed_first, WS);
+    let child_id = insert_session_row(&closed_first, WS);
+    closed_first
+        .subagent_service
+        .link_child(&parent_id, &child_id, None, None, None)
+        .expect("link child");
+    close_through_agent_operations(&closed_first, &parent_id, &child_id).await;
+    let (status, payload) = call(
+        &closed_first,
+        "POST",
+        format!("/v1/sessions/{parent_id}/subagents/{child_id}/wake"),
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{payload}");
+    assert_eq!(payload["code"], "SUBAGENT_OPEN_REQUIRED");
+    assert_no_wake_or_parent_prompt(&closed_first, &parent_id);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn mobility_imported_closed_link_stays_closed_until_opened() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state();
+    test_support::seed_workspace_with_repo_root(&state.db, WS, "local", "/tmp/mobility-closed");
+    let parent_id = insert_session_row(&state, WS);
+    let child_id = insert_session_row(&state, WS);
+    let link = SessionLinkRecord {
+        id: "mobility-link".into(),
+        public_id: Some("mobility-subagent".into()),
+        relation: SessionLinkRelation::Subagent,
+        parent_session_id: parent_id,
+        child_session_id: child_id.clone(),
+        workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+        label: None,
+        created_by_turn_id: None,
+        created_by_tool_call_id: None,
+        created_at: "2026-08-11T00:00:00Z".into(),
+        subagent_closed_at: Some("2026-08-11T01:00:00Z".into()),
+        closed_at: None,
+    };
+    state
+        .subagent_service
+        .import_link(&link)
+        .expect("install mobility link");
+
+    assert!(matches!(
+        state
+            .session_admission
+            .acquire(
+                &child_id,
+                SessionMutationKind::Prompt,
+                &SessionMutationSource::external(),
+            )
+            .await,
+        Err(SessionMutationConflict::SubagentOpenRequired)
+    ));
+
+    let open_permit = state
+        .session_admission
+        .acquire(
+            &child_id,
+            SessionMutationKind::SubagentOpen,
+            &SessionMutationSource::external(),
+        )
+        .await
+        .expect("Open is allowed while Closed");
+    SessionLinkService::new(
+        SessionLinkStore::new(state.db.clone()),
+        state.session_service.store().clone(),
+    )
+    .open_subagent_operability(&link.id)
+    .expect("open imported relationship");
+    drop(open_permit);
+    assert!(state
+        .session_admission
+        .acquire(
+            &child_id,
+            SessionMutationKind::Prompt,
+            &SessionMutationSource::external(),
+        )
+        .await
+        .is_ok());
+}
+
+async fn close_through_agent_operations(state: &AppState, parent_id: &str, child_id: &str) {
+    let caller = state.agent_operations.authenticated_caller(parent_id);
+    let target = AgentIdentity::new(state.agent_operations.runtime_identity().clone(), child_id);
+    state
+        .agent_operations
+        .close_subagent(&caller, &target)
+        .await
+        .expect("close subagent");
+}
+
+fn assert_no_wake_or_parent_prompt(state: &AppState, parent_id: &str) {
+    let context = state
+        .subagent_service
+        .subagent_context(parent_id)
+        .expect("subagent context");
+    assert!(context.children.iter().all(|child| !child.wake_scheduled));
+    assert!(state
+        .session_service
+        .store()
+        .list_pending_prompts(parent_id)
+        .expect("parent pending prompts")
+        .is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

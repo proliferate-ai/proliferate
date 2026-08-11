@@ -56,6 +56,8 @@ The archive carries supported durable session records, live-config snapshot,
 pending config changes/prompts and attachments, transcript events, native agent
 artifacts, and the complete included session-link graph. Raw provider
 notifications are included only behind their existing environment gate.
+Subagent links carry the optional `subagentClosedAt` operability marker; older
+archives without that field import the relationship as Open.
 
 Export clears workspace-local MCP binding ciphertext but may retain binding
 summaries. Installation clears both ciphertext and summaries, resets imported
