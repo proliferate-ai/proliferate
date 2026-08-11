@@ -85,10 +85,7 @@ export function ClosedSessionsTrigger({
             onRestoreSession(sessionId);
             close();
           }}
-          onDeleteSession={(sessionId) => {
-            onDeleteSession(sessionId);
-            close();
-          }}
+          onDeleteSession={onDeleteSession}
         />
       )}
     </PopoverButton>
