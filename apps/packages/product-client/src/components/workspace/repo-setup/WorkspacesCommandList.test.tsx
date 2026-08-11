@@ -114,27 +114,51 @@ describe("WorkspacesCommandList", () => {
     expect(screen.queryByText("Cloud")).toBeNull();
   });
 
-  it("matches the filter against the PR number", () => {
+  it("matches the filter against the workspace name or branch only", () => {
+    render(
+      <WorkspacesCommandList
+        groups={groups([
+          item({ id: "ws-a", title: "Alpha", branch: "feat/statuses" }),
+          item({ id: "ws-b", title: "Beta", branch: "fix/login" }),
+        ])}
+        onWorkspaceSelect={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText("Filter by name or branch...");
+
+    fireEvent.change(input, { target: { value: "alpha" } });
+    expect(screen.queryByText("Alpha")).toBeTruthy();
+    expect(screen.queryByText("Beta")).toBeNull();
+
+    fireEvent.change(input, { target: { value: "fix/login" } });
+    expect(screen.queryByText("Alpha")).toBeNull();
+    expect(screen.queryByText("Beta")).toBeTruthy();
+  });
+
+  it("does not match the filter against id, meta, PR number, or placement", () => {
     render(
       <WorkspacesCommandList
         groups={groups([
           item({
             id: "ws-pr",
             title: "Alpha",
+            branch: null,
+            meta: "acme/repo",
             prStatus: { kind: "open", number: 805 },
             prNumberLabel: "#805",
+            placementLabel: "Cloud",
           }),
-          item({ id: "ws-plain", title: "Beta" }),
         ])}
         onWorkspaceSelect={vi.fn()}
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Filter workspaces..."), {
-      target: { value: "#805" },
-    });
+    const input = screen.getByPlaceholderText("Filter by name or branch...");
 
-    expect(screen.queryByText("Alpha")).toBeTruthy();
-    expect(screen.queryByText("Beta")).toBeNull();
+    for (const query of ["ws-pr", "acme/repo", "#805", "Cloud"]) {
+      fireEvent.change(input, { target: { value: query } });
+      expect(screen.queryByText("Alpha")).toBeNull();
+    }
   });
 });
