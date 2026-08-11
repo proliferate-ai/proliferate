@@ -217,8 +217,15 @@ impl SessionActor {
                                 let _ = respond_to.send(result);
                             }
                             Some(SessionCommand::RunDomainOp { op, respond_to }) => {
-                                let result = self.run_domain_op_cmd(op).await;
-                                let _ = respond_to.send(result);
+                                if let Some(result) = self.run_domain_op_cmd(op).await {
+                                    let _ = respond_to.send(result);
+                                } else {
+                                    unload_requested = true;
+                                    unload_deadline.as_mut().reset(
+                                        tokio::time::Instant::now() + UNLOAD_CANCEL_GRACE,
+                                    );
+                                    exit_after_prompt = Some(ActorExitDisposition::Unload);
+                                }
                             }
                             Some(SessionCommand::CallAgentExtMethod { method, params, respond_to }) => {
                                 // Dispatched off the actor loop (see

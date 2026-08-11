@@ -50,6 +50,7 @@ use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
 use crate::live::sessions::sink::SessionEventSink;
 use crate::persistence::Db;
 
+mod terminal_fence;
 mod unload;
 
 type DuplexRead = tokio::io::ReadHalf<tokio::io::DuplexStream>;

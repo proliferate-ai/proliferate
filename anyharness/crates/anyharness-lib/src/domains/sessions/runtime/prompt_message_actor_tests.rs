@@ -411,10 +411,7 @@ pub(super) fn write_scripted_agent(runtime_home: &Path) -> ScriptedAgent {
     std::fs::write(
         &program,
         r#"#!/usr/bin/env python3
-import json
-import os
-import sys
-import time
+import json, os, sys, time
 log_path = sys.argv[-2]
 control_dir = sys.argv[-1]
 native_session_id = "native-target"
@@ -449,6 +446,9 @@ for raw_line in sys.stdin:
         })
     elif method == "session/load":
         native_session_id = message["params"]["sessionId"]
+        open(control("load-seen"), "w", encoding="utf-8").close()
+        while os.path.exists(control("hold-load")) and not os.path.exists(control("release-load")):
+            time.sleep(0.01)
         emit({"jsonrpc": "2.0", "id": request_id, "result": {}})
     elif method in ("session/set_model", "session/set_mode", "session/set_config_option"):
         emit({"jsonrpc": "2.0", "id": request_id, "result": {}})

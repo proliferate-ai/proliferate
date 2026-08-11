@@ -65,9 +65,23 @@ impl LiveSessionManager {
             );
         }
 
+        // The absence check, crash repair, last-sequence read, and handle
+        // installation are one manager-owned critical section. A concurrent
+        // start therefore either installs the sole pending actor or observes
+        // that actor above and joins its readiness; it can never repair a
+        // turn after another actor has taken ownership of event sequencing.
+        let repaired_turns = self.caps.state.repair_unclosed_turns(&session_id)?;
+        if repaired_turns > 0 {
+            tracing::info!(
+                session_id = %session_id,
+                repaired_turns,
+                "repaired unclosed turns before actor installation"
+            );
+        }
+
         // The manager owns the last-seq read: it must happen under the
-        // live-sessions write lock (start/inject critical section), so any
-        // caller-provided value is overwritten here.
+        // same start/inject critical section as repair and installation, so
+        // any caller-provided value is overwritten here.
         launch.last_seq = self.caps.events.last_event_seq(&session_id)?;
 
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4096);

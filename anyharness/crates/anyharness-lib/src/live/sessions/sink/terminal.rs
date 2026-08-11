@@ -94,6 +94,15 @@ impl SessionEventSink {
         self.staged_terminal.is_some()
     }
 
+    /// Admission gate for any operation that changes durable or live state
+    /// and then emits a session event. Callers must inspect this while holding
+    /// the sink lock, before performing the associated mutation. Once a
+    /// terminal batch is frozen, that batch owns the next event sequence until
+    /// it commits or startup repair retires it.
+    pub(in crate::live::sessions) fn event_mutations_admitted(&self) -> bool {
+        self.staged_terminal.is_none()
+    }
+
     pub(in crate::live::sessions) fn staged_terminal_is_engine_initiated(&self) -> Option<bool> {
         self.staged_terminal
             .as_ref()

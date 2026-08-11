@@ -240,24 +240,9 @@ impl SessionRuntime {
             }
         }
 
-        let session_store = self.session_service.store().clone();
-
-        // Repair any turns that were left open (turn_started without
-        // turn_ended) before starting the actor. LiveSessionManager reads last_seq
-        // inside its start/inject critical section after this repair.
-        let repaired_turns = session_store
-            .repair_unclosed_turns(&record.id)
-            .map_err(StartSessionError::Internal)?;
-        if repaired_turns > 0 {
-            tracing::info!(
-                session_id = %record.id,
-                repaired_turns,
-                "repaired unclosed turns before resume"
-            );
-        }
-
-        let startup_strategy = choose_session_startup_strategy(&record, &session_store)
-            .map_err(StartSessionError::Internal)?;
+        let startup_strategy =
+            choose_session_startup_strategy(&record, self.session_service.store())
+                .map_err(StartSessionError::Internal)?;
 
         let (handle, native_session_id) = self
             .start_live_session(
