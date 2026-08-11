@@ -158,7 +158,7 @@ describe("buildTurnPresentation", () => {
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
       {
         kind: "subagent_creations",
-        blockId: "create1-create2",
+        blockId: "create1",
         itemIds: ["create1", "create2"],
       },
       { kind: "item", itemId: "final" },
@@ -285,16 +285,83 @@ describe("buildTurnPresentation", () => {
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
       {
         kind: "subagent_creations",
-        blockId: "create1-create1",
+        blockId: "create1",
         itemIds: ["create1"],
       },
       { kind: "item", itemId: "send" },
       {
         kind: "subagent_creations",
-        blockId: "create2-create2",
+        blockId: "create2",
         itemIds: ["create2"],
       },
     ]);
+  });
+
+  it("groups only workspace create_agent calls whose raw kind is subagent", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      subagent1: workspaceCreateAgentItem("subagent1", 1, "subagent"),
+      subagent2: workspaceCreateAgentItem("subagent2", 2, "subagent"),
+      ordinary: workspaceCreateAgentItem("ordinary", 3, "ordinary"),
+    };
+    const turn = turnRecord(["subagent1", "subagent2", "ordinary"]);
+
+    expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
+      {
+        kind: "subagent_creations",
+        blockId: "subagent1",
+        itemIds: ["subagent1", "subagent2"],
+      },
+      { kind: "item", itemId: "ordinary" },
+    ]);
+  });
+
+  it("keeps the first-item creation run key stable while new receipts append", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      subagent1: workspaceCreateAgentItem("subagent1", 1, "subagent"),
+      subagent2: workspaceCreateAgentItem("subagent2", 2, "subagent"),
+    };
+
+    const first = buildTranscriptDisplayBlocks({
+      rootIds: ["subagent1"],
+      transcript,
+      childrenByParentId: new Map(),
+      isComplete: false,
+    });
+    const appended = buildTranscriptDisplayBlocks({
+      rootIds: ["subagent1", "subagent2"],
+      transcript,
+      childrenByParentId: new Map(),
+      isComplete: false,
+    });
+
+    expect(first[0]).toMatchObject({ blockId: "subagent1" });
+    expect(appended[0]).toMatchObject({ blockId: "subagent1" });
+  });
+
+  it("keeps workspace mutations visible while generic reads remain foldable", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      send: {
+        ...toolItem("send", "turn-1", 1, "other"),
+        nativeToolName: "mcp__workspace__send_message",
+      },
+      read: {
+        ...toolItem("read", "turn-1", 2, "other"),
+        nativeToolName: "mcp__workspace__list_agents",
+      },
+      final: assistantItem("final", "turn-1", 3),
+    };
+    const turn = turnRecord(["send", "read", "final"], "2026-04-04T00:00:10Z");
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(presentation.displayBlocks).toEqual([
+      { kind: "item", itemId: "send" },
+      { kind: "collapsed_actions", blockId: "read-read", itemIds: ["read"] },
+      { kind: "item", itemId: "final" },
+    ]);
+    expect(presentation.completedHistoryRootIds).toEqual(["read"]);
   });
 
   it("does not apply completed-history collapse inside scoped subagent work", () => {
@@ -863,6 +930,30 @@ function subagentCreationItem(itemId: string, startedSeq: number): ToolCallItem 
     rawOutput: {
       sessionLinkId: `link-${itemId}`,
       childSessionId: `child-${itemId}`,
+    },
+  };
+}
+
+function workspaceCreateAgentItem(
+  itemId: string,
+  startedSeq: number,
+  kind: "ordinary" | "subagent",
+): ToolCallItem {
+  return {
+    ...toolItem(itemId, "turn-1", startedSeq, "other"),
+    title: "Create agent",
+    nativeToolName: "mcp__workspace__create_agent",
+    rawInput: {
+      workspaceId: "workspace-1",
+      kind,
+      task: kind === "subagent" ? `Agent ${itemId}` : undefined,
+    },
+    rawOutput: {
+      identity: { runtimeId: "runtime-1", sessionId: `session-${itemId}` },
+      workspace: { runtimeId: "runtime-1", workspaceId: "workspace-1" },
+      role: kind,
+      status: { presentation: "available", execution: "idle", hasLiveActor: true },
+      title: `Agent ${itemId}`,
     },
   };
 }

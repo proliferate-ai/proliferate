@@ -1,0 +1,355 @@
+{
+  "sessionId": "agent-operations-parent",
+  "turnId": "agent-operations-turn",
+  "createIds": [
+    "create-review",
+    "create-tests"
+  ],
+  "sendId": "send-review",
+  "readId": "list-agents",
+  "events": [
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 1,
+      "timestamp": "2026-08-10T19:00:01Z",
+      "turnId": "agent-operations-turn",
+      "event": { "type": "turn_started" }
+    },
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 2,
+      "timestamp": "2026-08-10T19:00:02Z",
+      "turnId": "agent-operations-turn",
+      "itemId": "create-review",
+      "event": {
+        "type": "item_started",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "in_progress",
+          "sourceAgentKind": "codex",
+          "title": "Create review agent",
+          "toolCallId": "create-review",
+          "nativeToolName": "mcp__workspace__create_agent",
+          "rawInput": {
+            "workspaceId": "workspace-1",
+            "kind": "subagent",
+            "task": "Review receipt correctness"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "create-review",
+              "title": "Create review agent",
+              "toolKind": "other",
+              "nativeToolName": "mcp__workspace__create_agent"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 3,
+      "timestamp": "2026-08-10T19:00:03Z",
+      "turnId": "agent-operations-turn",
+      "itemId": "create-review",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "completed",
+          "sourceAgentKind": "codex",
+          "title": "Create review agent",
+          "toolCallId": "create-review",
+          "nativeToolName": "mcp__workspace__create_agent",
+          "rawInput": {
+            "workspaceId": "workspace-1",
+            "kind": "subagent",
+            "task": "Review receipt correctness"
+          },
+          "rawOutput": {
+            "identity": {
+              "runtimeId": "runtime-1",
+              "sessionId": "review-session"
+            },
+            "workspace": {
+              "runtimeId": "runtime-1",
+              "workspaceId": "workspace-1"
+            },
+            "role": "subagent",
+            "configuration": {
+              "agentKind": "codex",
+              "modelId": "gpt-5.6-sol",
+              "modeId": "unattended"
+            },
+            "status": {
+              "presentation": "available",
+              "execution": "idle",
+              "hasLiveActor": true
+            },
+            "capabilities": ["get_agent", "send_message"],
+            "createdAt": "2026-08-10T19:00:02Z",
+            "updatedAt": "2026-08-10T19:00:03Z"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "create-review",
+              "title": "Create review agent",
+              "toolKind": "other",
+              "nativeToolName": "mcp__workspace__create_agent"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 4,
+      "timestamp": "2026-08-10T19:00:04Z",
+      "turnId": "agent-operations-turn",
+      "itemId": "create-tests",
+      "event": {
+        "type": "item_started",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "in_progress",
+          "sourceAgentKind": "codex",
+          "title": "Create test agent",
+          "toolCallId": "create-tests",
+          "nativeToolName": "mcp__workspace__create_agent",
+          "rawInput": {
+            "workspaceId": "workspace-1",
+            "kind": "subagent",
+            "task": "Test receipt correctness"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "create-tests",
+              "title": "Create test agent",
+              "toolKind": "other",
+              "nativeToolName": "mcp__workspace__create_agent"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 5,
+      "timestamp": "2026-08-10T19:00:05Z",
+      "turnId": "agent-operations-turn",
+      "itemId": "create-tests",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "completed",
+          "sourceAgentKind": "codex",
+          "title": "Create test agent",
+          "toolCallId": "create-tests",
+          "nativeToolName": "mcp__workspace__create_agent",
+          "rawInput": {
+            "workspaceId": "workspace-1",
+            "kind": "subagent",
+            "task": "Test receipt correctness"
+          },
+          "rawOutput": {
+            "identity": {
+              "runtimeId": "runtime-1",
+              "sessionId": "tests-session"
+            },
+            "workspace": {
+              "runtimeId": "runtime-1",
+              "workspaceId": "workspace-1"
+            },
+            "role": "subagent",
+            "title": "Test receipts",
+            "configuration": {
+              "agentKind": "codex",
+              "modelId": "gpt-5.6-sol",
+              "modeId": "unattended"
+            },
+            "status": {
+              "presentation": "available",
+              "execution": "idle",
+              "hasLiveActor": true
+            },
+            "capabilities": ["get_agent", "send_message"],
+            "createdAt": "2026-08-10T19:00:04Z",
+            "updatedAt": "2026-08-10T19:00:05Z"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "create-tests",
+              "title": "Create test agent",
+              "toolKind": "other",
+              "nativeToolName": "mcp__workspace__create_agent"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 6,
+      "timestamp": "2026-08-10T19:00:06Z",
+      "turnId": "agent-operations-turn",
+      "itemId": "send-review",
+      "event": {
+        "type": "item_started",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "in_progress",
+          "sourceAgentKind": "codex",
+          "title": "Message review agent",
+          "toolCallId": "send-review",
+          "nativeToolName": "mcp__workspace__send_message",
+          "rawInput": {
+            "agentId": "review-session",
+            "message": "Check replay ordering exactly."
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "send-review",
+              "title": "Message review agent",
+              "toolKind": "other",
+              "nativeToolName": "mcp__workspace__send_message"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 7,
+      "timestamp": "2026-08-10T19:00:07Z",
+      "turnId": "agent-operations-turn",
+      "itemId": "send-review",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "completed",
+          "sourceAgentKind": "codex",
+          "title": "Message review agent",
+          "toolCallId": "send-review",
+          "nativeToolName": "mcp__workspace__send_message",
+          "rawInput": {
+            "agentId": "review-session",
+            "message": "Check replay ordering exactly."
+          },
+          "rawOutput": {
+            "target": {
+              "runtimeId": "runtime-1",
+              "sessionId": "review-session"
+            },
+            "queueSeq": 12,
+            "status": "durably_queued"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "send-review",
+              "title": "Message review agent",
+              "toolKind": "other",
+              "nativeToolName": "mcp__workspace__send_message"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 8,
+      "timestamp": "2026-08-10T19:00:08Z",
+      "turnId": "agent-operations-turn",
+      "itemId": "list-agents",
+      "event": {
+        "type": "item_started",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "in_progress",
+          "sourceAgentKind": "codex",
+          "title": "List agents",
+          "toolCallId": "list-agents",
+          "nativeToolName": "mcp__workspace__list_agents",
+          "rawInput": {},
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "list-agents",
+              "title": "List agents",
+              "toolKind": "other",
+              "nativeToolName": "mcp__workspace__list_agents"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 9,
+      "timestamp": "2026-08-10T19:00:09Z",
+      "turnId": "agent-operations-turn",
+      "itemId": "list-agents",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "completed",
+          "sourceAgentKind": "codex",
+          "title": "List agents",
+          "toolCallId": "list-agents",
+          "nativeToolName": "mcp__workspace__list_agents",
+          "rawInput": {},
+          "rawOutput": { "agents": [] },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "list-agents",
+              "title": "List agents",
+              "toolKind": "other",
+              "nativeToolName": "mcp__workspace__list_agents"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 10,
+      "timestamp": "2026-08-10T19:00:10Z",
+      "turnId": "agent-operations-turn",
+      "itemId": "assistant-final",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "assistant_message",
+          "status": "completed",
+          "sourceAgentKind": "codex",
+          "messageId": "assistant-final",
+          "contentParts": [
+            {
+              "type": "text",
+              "text": "The agents are working."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "agent-operations-parent",
+      "seq": 11,
+      "timestamp": "2026-08-10T19:00:11Z",
+      "turnId": "agent-operations-turn",
+      "event": {
+        "type": "turn_ended",
+        "stopReason": "end_turn"
+      }
+    }
+  ]
+}

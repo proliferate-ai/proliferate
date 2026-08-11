@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import type { TranscriptState } from "@anyharness/sdk";
+import { isWorkspaceSubagentCreationAction } from "#product/domain/chats/tools/agent-operations-tool-presentation";
 
 interface TranscriptEntryMotionRegistry {
   seenItemIds: Set<string>;
@@ -27,7 +28,7 @@ export function TranscriptEntryMotionProvider({
   children: ReactNode;
 }) {
   const [registry] = useState<TranscriptEntryMotionRegistry>(() => ({
-    seenItemIds: new Set(Object.keys(transcript.itemsById)),
+    seenItemIds: initialSeenItemIds(transcript),
   }));
 
   useLayoutEffect(() => {
@@ -41,6 +42,30 @@ export function TranscriptEntryMotionProvider({
       {children}
     </TranscriptEntryMotionContext.Provider>
   );
+}
+
+export function subagentCreationReceiptEntryId(itemId: string): string {
+  return `subagent-creation-receipt:${itemId}`;
+}
+
+function initialSeenItemIds(transcript: TranscriptState): Set<string> {
+  const seenItemIds = new Set(Object.keys(transcript.itemsById));
+  for (const [itemId, item] of Object.entries(transcript.itemsById)) {
+    if (
+      item.kind === "tool_call"
+      && (
+        isWorkspaceSubagentCreationAction(item)
+        || item.nativeToolName === "mcp__subagents__create_subagent"
+      )
+    ) {
+      // A fresh provider represents history hydration, session revisit, or
+      // virtualization remount. Seed the receipt-specific key so existing
+      // chips stay static; a live item added after provider mount is absent
+      // here and receives its one entrance when durable identity arrives.
+      seenItemIds.add(subagentCreationReceiptEntryId(itemId));
+    }
+  }
+  return seenItemIds;
 }
 
 export function useTranscriptEntryMotion(

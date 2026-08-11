@@ -257,6 +257,8 @@ export function MessageList({
   const renderPendingPromptRow = useCallback((input: ChatTranscriptPendingPromptRenderInput) => (
     <TranscriptPendingPromptRow
       activeSessionId={input.activeSessionId}
+      transcript={input.transcript}
+      workspaceId={input.selectedWorkspaceId}
       rowIndex={input.rowIndex}
       prompt={input.prompt}
       outboxEntry={input.outboxEntry}

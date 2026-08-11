@@ -529,20 +529,22 @@ millisecond or a bezier.
 | `--duration-exit` | 120ms | Exit of those same surfaces. |
 | `--duration-disclosure` | 200ms | Disclosure, chevrons, height transforms. |
 | `--duration-panel` | 240ms | Panel and rail geometry. |
+| `--duration-pop` | 280ms | A compact item joining an already-mounted group. |
 | `--duration-emphasized` | 300ms | Emphasized, spring-led product moments. |
 
 **Exits are deliberately faster than entrances** — 120ms out against 160ms in.
 An entrance is information arriving and can afford to be seen; an exit is the
 user having already moved on, and matching the entrance duration makes dismissal
 feel sticky. The scale as a whole is ordered by how much geometry moves: color
-(120) < content (160) < height (200) < panel (240) < a moment you are meant to
-notice (300).
+(120) < content (160) < height (200) < panel (240) < a compact item joining a
+group (280) < a moment you are meant to notice (300).
 
 ### Easing
 
 | Token | Curve | Feel |
 | --- | --- | --- |
 | `--ease-out-quint` | `cubic-bezier(0.19, 1, 0.22, 1)` | The default entrance: fast start, long settle. |
+| `--ease-pop` | `cubic-bezier(0.2, 0.9, 0.3, 1.3)` | Compact arrival with a small, deliberate overshoot. |
 | `--ease-spring` | `cubic-bezier(0.16, 1, 0.3, 1)` | Spring-led emphasis, used with `--duration-emphasized`/`panel`. |
 | `--ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | Symmetric transitions and exits. |
 | `--ease-linear` | `linear` | Progress and streaming reveal, where constant rate is the point. |
@@ -561,12 +563,12 @@ entrances decelerate, exits do not need to.
 | `activity.streamRevealHandoffDelayMs` | 160 | Delay before the reveal hands off to static text. |
 
 > **Activity cadence is a separate scale because reduced motion must not stop
-> it.** The generated stylesheet zeroes all six interaction durations under
+> it.** The generated stylesheet zeroes every interaction duration under
 > `prefers-reduced-motion: reduce`. Loops and streaming feedback keep their
 > cadence, because they are the only signal that work is still happening — a
 > zeroed thinking loop is not a calmer UI, it is a UI that looks frozen. The
-> comment on `motion.activity` states this directly, and only the six
-> interaction roles appear in the reduced-motion block.
+> comment on `motion.activity` states this directly, and only interaction
+> roles appear in the reduced-motion block.
 
 ### Choreography delays
 

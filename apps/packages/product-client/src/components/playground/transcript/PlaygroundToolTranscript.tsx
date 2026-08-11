@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Settings } from "#product/primitives/icons/core";
 import { MessageList } from "#product/components/workspace/chat/transcript/MessageList";
 import { BashCommandCall } from "#product/components/workspace/chat/tool-calls/BashCommandCall";
@@ -32,6 +32,12 @@ import {
   PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT,
 } from "#product/lib/domain/chat/__fixtures__/playground/subagent-wake-transcript-fixtures";
 import { TranscriptPreviewShell } from "#product/components/playground/transcript/PlaygroundTranscriptShell";
+import { AgentOperationsGroupingInsertion } from "#product/components/playground/transcript/AgentOperationsGroupingInsertion";
+import {
+  PLAYGROUND_AGENT_OPERATIONS_DIRECTORY_ENTRY,
+  PLAYGROUND_AGENT_OPERATIONS_RECEIPTS_TRANSCRIPT,
+} from "#product/lib/domain/chat/__fixtures__/playground/agent-operations-transcript-fixtures";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 export function renderPlaygroundToolTranscript(
   scenario: ScenarioKey,
@@ -230,9 +236,49 @@ export function renderPlaygroundToolTranscript(
           stickyBottomInsetPx={stickyBottomInsetPx}
         />
       );
+    case "agent-operations-receipts":
+      return (
+        <AgentOperationsReceiptsTranscript
+          selectedWorkspaceId={selectedWorkspaceId}
+          stickyBottomInsetPx={stickyBottomInsetPx}
+        />
+      );
+    case "agent-operations-grouping-insertion":
+      return (
+        <AgentOperationsGroupingInsertion
+          selectedWorkspaceId={selectedWorkspaceId}
+          stickyBottomInsetPx={stickyBottomInsetPx}
+        />
+      );
     default:
       return null;
   }
+}
+
+function AgentOperationsReceiptsTranscript({
+  selectedWorkspaceId,
+  stickyBottomInsetPx,
+}: {
+  selectedWorkspaceId: string | null;
+  stickyBottomInsetPx: number;
+}) {
+  useEffect(() => {
+    useSessionDirectoryStore.getState().upsertEntry(PLAYGROUND_AGENT_OPERATIONS_DIRECTORY_ENTRY);
+    return () => {
+      useSessionDirectoryStore.getState().removeEntry(
+        PLAYGROUND_AGENT_OPERATIONS_DIRECTORY_ENTRY.sessionId,
+      );
+    };
+  }, []);
+
+  return (
+    <MessageListTranscript
+      activeSessionId="playground-agent-operations"
+      selectedWorkspaceId={selectedWorkspaceId}
+      transcript={PLAYGROUND_AGENT_OPERATIONS_RECEIPTS_TRANSCRIPT}
+      stickyBottomInsetPx={stickyBottomInsetPx}
+    />
+  );
 }
 
 function MessageListTranscript({

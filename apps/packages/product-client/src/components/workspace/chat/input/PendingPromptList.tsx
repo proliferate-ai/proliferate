@@ -3,10 +3,17 @@ import { Button } from "#product/primitives/Button";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { ArrowUpRight, GripVertical, Pencil, X } from "#product/primitives/icons/core";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
+import { AgentIdentityGlyph } from "#product/components/workspace/delegated-work/AgentIdentityGlyph";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
 import { usePendingPromptQueue } from "#product/hooks/chat/ui/use-pending-prompt-queue";
 import { useVerticalReorder } from "#product/hooks/chat/ui/use-vertical-reorder";
-import type { PendingPromptQueueRow } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
+import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import type {
+  PendingPromptQueueAgent,
+  PendingPromptQueueRow,
+} from "#product/domain/chats/pending-prompts/pending-prompt-queue";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 
 export interface PendingPromptListProps {
   entries: PendingPromptQueueRow[];
@@ -17,6 +24,9 @@ export interface PendingPromptListProps {
   onDelete: (entry: PendingPromptQueueRow) => void;
   onSteer: (entry: PendingPromptQueueRow) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
+  onOpenAgent?: (sessionId: string) => void;
+  canOpenAgent?: (sessionId: string) => boolean;
+  directoryBackedAgentNavigation?: boolean;
 }
 
 /** Presentational queued-message list with reorder, steer, edit, and remove. */
@@ -29,6 +39,9 @@ export function PendingPromptList({
   onDelete,
   onSteer,
   onReorder,
+  onOpenAgent,
+  canOpenAgent,
+  directoryBackedAgentNavigation = false,
 }: PendingPromptListProps) {
   const { dragIndex, dropIndex, handleDragStart } = useVerticalReorder({
     itemCount: entries.length,
@@ -39,7 +52,9 @@ export function PendingPromptList({
     return null;
   }
 
-  const runtimeEntryIndexes = entries.flatMap((entry, index) => entry.seq > 0 ? [index] : []);
+  const runtimeEntryIndexes = entries.flatMap((entry, index) =>
+    entry.kind === "plain" && entry.seq > 0 ? [index] : []
+  );
 
   return (
     <div
@@ -52,6 +67,17 @@ export function PendingPromptList({
         data-reorder-container
       >
         {entries.map((entry, index) => {
+          if (entry.kind === "agent_updates") {
+            return (
+              <PendingAgentUpdatesRow
+                key={entry.key}
+                entry={entry}
+                onOpenAgent={onOpenAgent}
+                canOpenAgent={canOpenAgent}
+                directoryBackedAgentNavigation={directoryBackedAgentNavigation}
+              />
+            );
+          }
           const runtimeIndex = runtimeEntryIndexes.indexOf(index);
           return (
             <PendingPromptRow
@@ -99,7 +125,127 @@ export function ConnectedPendingPromptList() {
       onDelete={queue.onDelete}
       onSteer={queue.onSteer}
       onReorder={queue.onReorder}
+      directoryBackedAgentNavigation
     />
+  );
+}
+
+function PendingAgentUpdatesRow({
+  entry,
+  onOpenAgent,
+  canOpenAgent,
+  directoryBackedAgentNavigation,
+}: {
+  entry: PendingPromptQueueRow;
+  onOpenAgent?: (sessionId: string) => void;
+  canOpenAgent?: (sessionId: string) => boolean;
+  directoryBackedAgentNavigation: boolean;
+}) {
+  return (
+    <div
+      data-pending-agent-updates
+      className="flex items-center justify-between gap-2 py-0.5 pl-4"
+    >
+      <span className="flex min-w-0 flex-1 items-center gap-2 text-ui text-muted-foreground">
+        <span>{entry.label}</span>
+        <span className="flex items-center -space-x-1.5" data-pending-agent-glyphs>
+          {entry.agents.map((agent) => directoryBackedAgentNavigation ? (
+            <ConnectedPendingAgentIdentityGlyph key={agent.sessionId} agent={agent} />
+          ) : (
+            <PendingAgentIdentityGlyph
+              key={agent.sessionId}
+              agent={agent}
+              canOpen={Boolean(
+                onOpenAgent
+                && (canOpenAgent?.(agent.sessionId) ?? true),
+              )}
+              onOpen={onOpenAgent ? () => onOpenAgent(agent.sessionId) : undefined}
+            />
+          ))}
+        </span>
+        <span className="text-ui-sm text-faint">
+          {entry.agentUpdateCount} {entry.agentUpdateCount === 1 ? "update" : "updates"}
+        </span>
+      </span>
+      <span className="shrink-0 text-ui-sm text-faint">delivered next turn</span>
+    </div>
+  );
+}
+
+function ConnectedPendingAgentIdentityGlyph({
+  agent,
+}: {
+  agent: PendingPromptQueueAgent;
+}) {
+  const navigationSessionId = useSessionDirectoryStore((state) =>
+    state.clientSessionIdByMaterializedSessionId[agent.sessionId] ?? agent.sessionId
+  );
+  const navigationWorkspaceId = useSessionDirectoryStore(
+    (state) => state.entriesById[navigationSessionId]?.workspaceId ?? null,
+  );
+  const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
+  const canOpen = navigationWorkspaceId !== null;
+
+  return (
+    <PendingAgentIdentityGlyph
+      agent={agent}
+      canOpen={canOpen}
+      onOpen={canOpen
+        ? () => {
+          void openWorkspaceSession({
+            workspaceId: navigationWorkspaceId,
+            sessionId: navigationSessionId,
+          });
+        }
+        : undefined}
+    />
+  );
+}
+
+function PendingAgentIdentityGlyph({
+  agent,
+  canOpen,
+  onOpen,
+}: {
+  agent: PendingPromptQueueAgent;
+  canOpen: boolean;
+  onOpen?: () => void;
+}) {
+  const identity = buildDelegatedAgentIdentity({
+    id: agent.sessionId,
+    title: agent.title,
+    sessionId: agent.sessionId,
+  });
+  const queuedLabel = `${agent.title} · ${agent.updateCount} queued ${
+    agent.updateCount === 1 ? "update" : "updates"
+  }${canOpen ? " — click to open" : ""}`;
+  const glyph = <AgentIdentityGlyph identity={identity} dimension={14} />;
+
+  return (
+    <Tooltip content={queuedLabel}>
+      {canOpen && onOpen ? (
+        <Button
+          type="button"
+          variant="unstyled"
+          size="unstyled"
+          data-pending-agent-glyph={agent.sessionId}
+          className="relative flex size-5 items-center justify-center rounded-full bg-surface-elevated ring-1 ring-border transition-transform hover:z-raised hover:scale-110 focus-visible:z-raised focus-visible:scale-110 focus-visible:ring-ring"
+          aria-label={`Open ${identity.displayName}`}
+          onClick={onOpen}
+        >
+          {glyph}
+        </Button>
+      ) : (
+        <span
+          data-pending-agent-glyph={agent.sessionId}
+          data-agent-navigation-unresolved
+          className="relative flex size-5 items-center justify-center rounded-full bg-surface-elevated ring-1 ring-border"
+          aria-label={identity.displayName}
+        >
+          {glyph}
+        </span>
+      )}
+    </Tooltip>
   );
 }
 
@@ -148,6 +294,8 @@ function PendingPromptRow({
     && !entry.isSending
     && !entry.isBeingEdited;
   const canDragReorder =
+    entry.kind === "plain"
+    &&
     isRuntimeConfirmed
     && sessionMaterialized
     && runtimeEntryCount > 1
