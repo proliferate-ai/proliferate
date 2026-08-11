@@ -234,6 +234,8 @@ pub struct MobilitySessionLinkRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by_tool_call_id: Option<String>,
     pub created_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subagent_closed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub closed_at: Option<String>,
 }
