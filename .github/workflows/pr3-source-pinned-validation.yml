@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PR3_SOURCE_SHA: 6075419643156f8a28da18c86086309fa24995b0
+  PR3_SOURCE_SHA: e2ace8127165fe74743bae65bbb7c13834be7237
   CARGO_BUILD_JOBS: "2"
   CARGO_INCREMENTAL: "0"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -248,7 +248,12 @@ jobs:
           PROLIFERATE_DEV_HOME="$desktop_home" \
             "$app/Contents/MacOS/proliferate" >"$RUNNER_TEMP/pr3-app.log" 2>&1 &
           app_pid=$!
+          tail_pid=""
           cleanup() {
+            if [[ -n "$tail_pid" ]] && kill -0 "$tail_pid" 2>/dev/null; then
+              kill -INT "$tail_pid" 2>/dev/null || true
+              wait "$tail_pid" 2>/dev/null || true
+            fi
             if kill -0 "$app_pid" 2>/dev/null; then
               kill -TERM "$app_pid" 2>/dev/null || true
               wait "$app_pid" 2>/dev/null || true
@@ -285,6 +290,30 @@ jobs:
           NODE
           "$cli" --profile "$PR3_PROFILE" records --request "$RUNNER_TEMP/pr3-records-request.json" >"$RUNNER_TEMP/pr3-records.json"
           node -e 'const p=require(process.argv[1]); process.exit(p.schema_version?.major === 1 && Array.isArray(p.records) && Array.isArray(p.gaps) ? 0 : 1)' "$RUNNER_TEMP/pr3-records.json"
+
+          "$cli" --profile "$PR3_PROFILE" tail --after-cursor 0 >"$RUNNER_TEMP/pr3-tail.jsonl" 2>"$RUNNER_TEMP/pr3-tail.err" &
+          tail_pid=$!
+          tail_ready=false
+          for _ in $(seq 1 40); do
+            if test -s "$RUNNER_TEMP/pr3-tail.jsonl" \
+              && node -e 'const fs=require("fs"); const line=fs.readFileSync(process.argv[1],"utf8").split(/\r?\n/).find(Boolean); const f=JSON.parse(line); process.exit(f.frame === "records" && Array.isArray(f.records) ? 0 : 1)' "$RUNNER_TEMP/pr3-tail.jsonl"; then
+              tail_ready=true
+              break
+            fi
+            if ! kill -0 "$tail_pid" 2>/dev/null; then
+              echo "::error::Packaged broker CLI tail exited before its first frame"
+              sed -n '1,120p' "$RUNNER_TEMP/pr3-tail.err"
+              exit 1
+            fi
+            sleep 0.1
+          done
+          test "$tail_ready" = true
+          kill -INT "$tail_pid"
+          if wait "$tail_pid"; then
+            echo "::error::Packaged broker CLI tail unexpectedly succeeded after Ctrl-C"
+            exit 1
+          fi
+          tail_pid=""
 
           EXPORT_PATH="$RUNNER_TEMP/pr3-export-request.json" node <<'NODE'
           const fs = require("fs");
