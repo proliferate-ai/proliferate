@@ -207,7 +207,7 @@ fn finish_stop_attempt(
     Ok(true)
 }
 
-const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
+pub(super) const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
 
 pub(super) fn worker_startup_failure_message(
     status: &str,

@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use super::{
-    build_spawn_command, find_anyharness_binary, persist_runtime_info, runtime_url_port,
-    BootOutcome, RuntimeStatus, SharedSidecar, HEALTH_POLL_INTERVAL, HEALTH_POLL_TIMEOUT,
+    build_spawn_command, find_anyharness_binary, persist_runtime_info, runtime_health_url,
+    runtime_url_port, BootOutcome, RuntimeHealthRecord, RuntimeStatus, SharedSidecar,
+    HEALTH_POLL_INTERVAL, HEALTH_POLL_TIMEOUT,
 };
 
 pub(super) async fn boot_inner(sidecar: &SharedSidecar) -> BootOutcome {

@@ -30,6 +30,8 @@ mod launcher;
 pub(crate) mod lifecycle;
 
 use launcher::find_proliferate_worker_launcher;
+#[cfg(test)]
+use lifecycle::WORKER_LOG_TAIL_MAX_BYTES;
 use lifecycle::{read_worker_log_tail, worker_startup_failure_message};
 
 // Releases through 0.3.38 used `cloud-worker`. Some of those Desktop processes

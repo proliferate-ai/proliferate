@@ -37,7 +37,7 @@ impl FallbackDiagnosticsWriter {
         set_owner_only_dir(parent)?;
         remove_legacy_segments(&path)?;
 
-        let mut dropped_records = 0;
+        let mut dropped_records: u64 = 0;
         if fs::metadata(&path)
             .map(|metadata| metadata.len() > FALLBACK_SEGMENT_BYTES)
             .unwrap_or(false)
@@ -73,7 +73,8 @@ impl FallbackDiagnosticsWriter {
                 }
             }
         }
-        let file = open_append_owner_only(&path)?;
+        let file = open_append_owner_only(&path)
+            .map_err(|error| format!("Failed to open fallback {}: {error}", path.display()))?;
         let bytes = retained_bytes(&path);
         Ok(Self {
             inner: Some(Arc::new(Mutex::new(FallbackInner {
