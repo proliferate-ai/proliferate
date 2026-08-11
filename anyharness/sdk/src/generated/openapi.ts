@@ -7974,7 +7974,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Session execution is controlled by an active workflow run */
+            /** @description Pending prompt is protected or session execution is controlled by an active workflow run */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8021,7 +8021,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Session execution is controlled by an active workflow run */
+            /** @description Pending prompt is protected or session execution is controlled by an active workflow run */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8098,6 +8098,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PromptSessionResponse"];
+                };
+            };
+            /** @description Invalid or reserved prompt id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Session not found */
