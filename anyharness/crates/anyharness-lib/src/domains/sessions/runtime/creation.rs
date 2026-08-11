@@ -9,6 +9,7 @@ use crate::domains::sessions::mcp_bindings::summaries::{
     serialize_binding_summaries, SessionMcpSummaryError,
 };
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::sessions::service::CreateSessionOutcome;
 use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 use crate::origin::OriginContext;
@@ -17,6 +18,7 @@ use super::{CreateAndStartSessionError, SessionRuntime};
 
 #[derive(Debug)]
 pub enum CreateOrdinaryAgentSessionError {
+    Access(WorkspaceAccessError),
     Create(CreateAndStartSessionError),
     InitialTask(super::SendPromptError),
     Cleanup(anyhow::Error),
@@ -60,14 +62,12 @@ impl SessionRuntime {
         model_id: Option<&str>,
         mode_id: Option<&str>,
         task: Option<String>,
+        source_session_id: String,
+        source_label: String,
     ) -> Result<SessionRecord, CreateOrdinaryAgentSessionError> {
         self.access_gate
             .assert_can_mutate_for_workspace(workspace_id)
-            .map_err(|error| {
-                CreateOrdinaryAgentSessionError::Create(CreateAndStartSessionError::Invalid(
-                    error.to_string(),
-                ))
-            })?;
+            .map_err(CreateOrdinaryAgentSessionError::Access)?;
         self.assert_workspace_checkout_present(workspace_id)
             .map_err(CreateOrdinaryAgentSessionError::Create)?;
         let record = self
@@ -86,13 +86,16 @@ impl SessionRuntime {
             )
             .map_err(CreateOrdinaryAgentSessionError::Create)?;
 
-        self.start_new_ordinary_agent_session(record, task).await
+        self.start_new_ordinary_agent_session(record, task, source_session_id, source_label)
+            .await
     }
 
     async fn start_new_ordinary_agent_session(
         &self,
         record: SessionRecord,
         task: Option<String>,
+        source_session_id: String,
+        source_label: String,
     ) -> Result<SessionRecord, CreateOrdinaryAgentSessionError> {
         let started = match self.start_persisted_session(&record).await {
             Ok(started) => started,
@@ -105,10 +108,15 @@ impl SessionRuntime {
             return Ok(started);
         };
         match self
-            .send_text_prompt_with_id(
+            .send_text_prompt_with_id_and_provenance(
                 &record.id,
                 task,
                 format!("agent-create-{}", uuid::Uuid::new_v4()),
+                PromptProvenance::AgentSession {
+                    source_session_id,
+                    session_link_id: None,
+                    label: Some(source_label),
+                },
             )
             .await
         {

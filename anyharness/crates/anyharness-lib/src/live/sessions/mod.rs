@@ -23,3 +23,5 @@ pub(crate) use manager::RevealMcpElicitationUrlError;
 pub(crate) use manager::{ScriptedSessionEvent, ScriptedSessionSpec};
 pub use model::SessionStartupStrategy;
 pub use rendezvous::broker::PermissionDecision;
+#[cfg(test)]
+pub(crate) use sink::SessionEventSink;
