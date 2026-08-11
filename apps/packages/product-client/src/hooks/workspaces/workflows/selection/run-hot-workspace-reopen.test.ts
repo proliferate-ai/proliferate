@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WORKSPACE_UI_DEFAULTS } from "#product/lib/domain/preferences/workspace-ui/model";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import { resolveWorkspaceShellActivation } from "#product/lib/domain/workspaces/tabs/shell-activation";
+import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {
   createEmptySessionRecord,
@@ -20,6 +24,10 @@ vi.mock("./connection", () => ({
   resolveSelectionConnection: vi.fn(),
 }));
 
+vi.mock("./run-workspace-selection", () => ({
+  runWorkspaceSelection: vi.fn(),
+}));
+
 describe("runHotWorkspaceReopen", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -32,9 +40,11 @@ describe("runHotWorkspaceReopen", () => {
       },
     });
     useSessionSelectionStore.setState({
+      selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 0,
       activeSessionId: null,
+      sessionActivationIntentEpochByWorkspace: {},
       hotPaintGate: null,
       pendingWorkspaceEntry: null,
       workspaceArrivalEvent: null,
@@ -48,6 +58,8 @@ describe("runHotWorkspaceReopen", () => {
       transcriptHydrated: true,
     });
     useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
       lastViewedSessionByWorkspace: {
         "workspace-1": "session-1",
       },
@@ -113,9 +125,86 @@ describe("runHotWorkspaceReopen", () => {
     expect(deps.reconcileHotWorkspace).not.toHaveBeenCalled();
     expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-2");
   });
+
+  it("reopens the client slot behind a durable last-viewed id without blanking the shell", () => {
+    const clientSessionA = "client-session:codex:older";
+    const clientSessionB = "client-session:codex:new-empty";
+    const runtimeSessionB = "runtime-session-new-empty";
+    useSessionDirectoryStore.getState().clearEntries();
+    useSessionTranscriptStore.getState().clearEntries();
+    putSessionRecord({
+      ...createEmptySessionRecord(clientSessionA, "codex", {
+        workspaceId: "workspace-1",
+        materializedSessionId: "runtime-session-older",
+      }),
+      transcriptHydrated: true,
+    });
+    putSessionRecord({
+      ...createEmptySessionRecord(clientSessionB, "codex", {
+        workspaceId: "workspace-1",
+        materializedSessionId: runtimeSessionB,
+      }),
+      transcriptHydrated: true,
+    });
+    const logicalWorkspace = localLogicalWorkspace();
+    const intent = chatWorkspaceShellTabKey(clientSessionB);
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      activeShellTabKeyByWorkspace: {
+        [logicalWorkspace.id]: intent,
+      },
+      lastViewedSessionByWorkspace: {
+        [logicalWorkspace.id]: runtimeSessionB,
+      },
+      visibleChatSessionIdsByWorkspace: {
+        [logicalWorkspace.id]: [clientSessionA, clientSessionB],
+      },
+    });
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: logicalWorkspace.id,
+      workspaceId: "workspace-1",
+      initialActiveSessionId: clientSessionB,
+    });
+    useSessionSelectionStore.getState().deselectWorkspacePreservingSessions();
+    const deps = depsForHotReopen([logicalWorkspace]);
+
+    const didHotReopen = runHotWorkspaceReopen(deps, {
+      workspaceId: logicalWorkspace.id,
+    });
+
+    const state = useSessionSelectionStore.getState();
+    expect(didHotReopen).toBe(true);
+    expect(state.selectedLogicalWorkspaceId).toBe(logicalWorkspace.id);
+    expect(state.selectedWorkspaceId).toBe("workspace-1");
+    expect(state.activeSessionId).toBe(clientSessionB);
+    expect(resolveWorkspaceShellActivation({
+      workspaceId: "workspace-1",
+      storedIntent: intent,
+      orderedTabs: [
+        chatWorkspaceShellTabKey(clientSessionA),
+        chatWorkspaceShellTabKey(clientSessionB),
+      ],
+      activeSessionId: state.activeSessionId,
+      activeViewerTargetKey: null,
+      liveChatSessionIds: new Set([clientSessionA, clientSessionB]),
+      openViewerTargetKeys: new Set(),
+      pendingChatActivation: null,
+      currentShellActivationEpoch: 0,
+      currentSessionActivationEpoch:
+        state.sessionActivationIntentEpochByWorkspace["workspace-1"] ?? 0,
+      currentWorkspaceSelectionNonce: state.workspaceSelectionNonce,
+    })).toEqual({
+      renderSurface: { kind: "chat-session", sessionId: clientSessionB },
+      highlightedTabKey: intent,
+    });
+    expect(deps.bootstrapWorkspace).not.toHaveBeenCalled();
+  });
 });
 
-function depsForHotReopen(): WorkspaceSelectionDeps {
+function depsForHotReopen(
+  logicalWorkspaces: LogicalWorkspace[] = [],
+): WorkspaceSelectionDeps {
   return {
     localRuntime: null,
     cloudClient: null,
@@ -124,7 +213,7 @@ function depsForHotReopen(): WorkspaceSelectionDeps {
       invalidateCloudWorkspaceStartState: vi.fn().mockResolvedValue(undefined),
       refreshCloudWorkspaceConnection: vi.fn(),
     },
-    logicalWorkspaces: [],
+    logicalWorkspaces,
     rawWorkspaces: [{ id: "workspace-1" } as never, { id: "workspace-2" } as never],
     setSelectedLogicalWorkspaceId: vi.fn(),
     setSelectedWorkspace,
@@ -133,6 +222,16 @@ function depsForHotReopen(): WorkspaceSelectionDeps {
     bootstrapWorkspace: vi.fn(),
     reconcileHotWorkspace: vi.fn().mockResolvedValue("completed"),
   };
+}
+
+function localLogicalWorkspace(): LogicalWorkspace {
+  return {
+    id: "logical:workspace-1",
+    localWorkspace: { id: "workspace-1" },
+    cloudWorkspace: null,
+    mobilityWorkspace: null,
+    preferredMaterializationId: "workspace-1",
+  } as LogicalWorkspace;
 }
 
 function setSelectedWorkspace(

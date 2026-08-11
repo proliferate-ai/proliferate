@@ -75,6 +75,7 @@ describe("resolveHotReopenCandidate", () => {
       lastViewedSessionByWorkspace: {
         "workspace-1": "session-last",
       },
+      clientSessionIdByMaterializedSessionId: {},
       sessionSlots: {
         "session-initial": slot({
           sessionId: "session-initial",
@@ -105,6 +106,7 @@ describe("resolveHotReopenCandidate", () => {
       lastViewedSessionByWorkspace: {
         "logical:repo": "session-logical",
       },
+      clientSessionIdByMaterializedSessionId: {},
       sessionSlots: {
         "session-fallback": slot({
           sessionId: "session-fallback",
@@ -133,6 +135,7 @@ describe("resolveHotReopenCandidate", () => {
       logicalWorkspace: logicalWorkspace(),
       initialActiveSessionId: null,
       lastViewedSessionByWorkspace: {},
+      clientSessionIdByMaterializedSessionId: {},
       sessionSlots: {
         "session-cached": slot({
           sessionId: "session-cached",
@@ -145,6 +148,40 @@ describe("resolveHotReopenCandidate", () => {
 
     expect(candidate?.source).toBe("cached_slot");
     expect(candidate?.sessionId).toBe("session-cached");
+  });
+
+  it("resolves a durable remembered id to its cached client slot", () => {
+    const candidate = resolveHotReopenCandidate({
+      resolvedWorkspaceId: "workspace-1",
+      logicalWorkspace: logicalWorkspace(),
+      initialActiveSessionId: null,
+      lastViewedSessionByWorkspace: {
+        "logical:repo": "runtime-session-new",
+      },
+      clientSessionIdByMaterializedSessionId: {
+        "runtime-session-old": "client-session:codex:old",
+        "runtime-session-new": "client-session:codex:new",
+      },
+      sessionSlots: {
+        "client-session:codex:old": slot({
+          sessionId: "client-session:codex:old",
+          workspaceId: "workspace-1",
+          hydrated: true,
+        }),
+        "client-session:codex:new": slot({
+          sessionId: "client-session:codex:new",
+          workspaceId: "workspace-1",
+          hydrated: true,
+        }),
+      },
+      isPendingSessionId: () => false,
+    });
+
+    expect(candidate).toEqual({
+      sessionId: "client-session:codex:new",
+      workspaceId: "workspace-1",
+      source: "last_viewed",
+    });
   });
 });
 
