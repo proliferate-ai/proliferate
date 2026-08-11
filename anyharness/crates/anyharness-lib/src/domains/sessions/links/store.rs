@@ -464,6 +464,9 @@ pub(crate) fn delete_session_link_rows_for_session_in_tx(
     conn: &rusqlite::Connection,
     session_id: &str,
 ) -> rusqlite::Result<()> {
+    crate::domains::sessions::store::completion_deliveries::queue::delete_parent_deliveries_in_tx(
+        conn, session_id,
+    )?;
     conn.execute(
         "DELETE FROM session_link_wake_schedules
          WHERE session_link_id IN (

@@ -3,6 +3,8 @@ use rusqlite::{params, OptionalExtension};
 use crate::domains::sessions::extensions::{SessionTurnFinishedContext, SessionTurnOutcome};
 use crate::persistence::Db;
 
+pub(crate) mod queue;
+
 #[derive(Debug, thiserror::Error)]
 #[error("invalid completion delivery value: {0}")]
 struct CompletionDeliveryParseError(String);
@@ -77,7 +79,6 @@ impl CompletionDeliveryRecord {
 pub struct CaptureCompletionDeliveryInput {
     pub turn: SessionTurnFinishedContext,
     pub assistant_text: Option<String>,
-    pub notification_text: String,
     pub captured_at: String,
 }
 
@@ -160,6 +161,12 @@ impl CompletionDeliveryStore {
                 params![link_id, input.turn.turn_id],
                 |row| row.get(0),
             )?;
+            let notification_text = notification_text(
+                label.as_deref(),
+                public_id.as_deref(),
+                input.turn.outcome,
+                input.assistant_text.as_deref(),
+            );
             let delivery_id = uuid::Uuid::new_v4().to_string();
             tx.execute(
                 "INSERT OR IGNORE INTO session_link_completion_deliveries (
@@ -183,7 +190,7 @@ impl CompletionDeliveryStore {
                     input.turn.last_event_seq,
                     input.turn.outcome.as_str(),
                     input.assistant_text,
-                    input.notification_text,
+                    notification_text,
                     input.captured_at,
                 ],
             )?;
@@ -268,6 +275,26 @@ fn parse_outcome(value: &str) -> rusqlite::Result<SessionTurnOutcome> {
     }
 }
 
+fn notification_text(
+    label: Option<&str>,
+    public_id: Option<&str>,
+    outcome: SessionTurnOutcome,
+    assistant_text: Option<&str>,
+) -> String {
+    let output_label = if matches!(outcome, SessionTurnOutcome::Completed) {
+        "Final output"
+    } else {
+        "Partial output"
+    };
+    let output = assistant_text.unwrap_or("No assistant output was recorded.");
+    format!(
+        "Subagent update\nAgent: {} ({})\nOutcome: {}\n\n{output_label}:\n{output}",
+        label.unwrap_or("subagent"),
+        public_id.unwrap_or("unknown"),
+        outcome.as_str()
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,7 +375,6 @@ mod tests {
                 error_details: None,
             },
             assistant_text: Some("Useful answer".to_string()),
-            notification_text: "Subagent update".to_string(),
             captured_at: "2026-08-11T00:02:00Z".to_string(),
         }
     }
@@ -380,6 +406,10 @@ mod tests {
         assert_eq!(first.delivery_id, second.delivery_id);
         assert_eq!(first.completion_id, second.completion_id);
         assert_eq!(first.state, CompletionDeliveryState::Pending);
+        assert_eq!(
+            first.notification_text,
+            "Subagent update\nAgent: Researcher (subagent-1)\nOutcome: completed\n\nFinal output:\nUseful answer"
+        );
         db.with_conn(|conn| {
             let completions: i64 =
                 conn.query_row("SELECT COUNT(*) FROM session_link_completions", [], |row| {
@@ -456,5 +486,30 @@ mod tests {
             Ok(())
         })
         .expect("verify rollback");
+    }
+
+    #[test]
+    fn expiring_claim_allows_only_one_worker_then_recovers() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_link(&db, false);
+        let store = CompletionDeliveryStore::new(db);
+        store.capture(&capture_input("turn-1")).expect("capture");
+
+        let first = store
+            .claim_next_due("2026-08-11T00:02:00Z", "2026-08-11T00:03:00Z", "worker-1")
+            .expect("first claim")
+            .expect("delivery claimed");
+        assert_eq!(first.attempt_count, 1);
+        assert!(store
+            .claim_next_due("2026-08-11T00:02:30Z", "2026-08-11T00:03:30Z", "worker-2",)
+            .expect("parallel claim")
+            .is_none());
+
+        let recovered = store
+            .claim_next_due("2026-08-11T00:03:00Z", "2026-08-11T00:04:00Z", "worker-2")
+            .expect("expired claim recovery")
+            .expect("delivery reclaimed");
+        assert_eq!(recovered.delivery_id, first.delivery_id);
+        assert_eq!(recovered.attempt_count, 2);
     }
 }

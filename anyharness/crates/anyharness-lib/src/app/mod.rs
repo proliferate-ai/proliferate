@@ -378,10 +378,8 @@ impl AppState {
         ));
         let (review_hook_event_tx, review_hook_event_rx) = tokio::sync::mpsc::channel(256);
         let subagent_mcp_auth = Arc::new(SubagentMcpAuth::new(runtime_home.clone()));
-        let subagent_session_hooks = Arc::new(SubagentSessionHooks::new(
-            subagent_service.clone(),
-            acp_manager.clone(),
-        ));
+        let completion_delivery_wiring = sessions::wire_completion_delivery_before_sessions(&db);
+        let subagent_session_hooks = completion_delivery_wiring.session_hooks.clone();
         let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
         let review_session_hooks = Arc::new(ReviewSessionHooks::new(
             review_hook_event_tx,
@@ -460,6 +458,7 @@ impl AppState {
             loop_service.clone(),
             activity_service.clone(),
         ));
+        completion_delivery_wiring.spawn(&db, &session_runtime);
         // Workflow runs — phase 2 (after SessionRuntime): the async facades.
         let workflow_phase_two = workflows::wire_workflow_runtime(
             workflow_wiring,

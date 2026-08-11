@@ -45,13 +45,13 @@ impl SessionRuntime {
             .insert_pending_prompt_payload(session_id, &payload, None)
             .map_err(SendPromptError::Internal)?;
 
-        self.activate_agent_message_consumer(session_id, payload, pending.seq)
+        self.activate_durable_prompt_consumer(session_id, payload, pending.seq)
             .await;
 
         Ok(pending.seq)
     }
 
-    async fn activate_agent_message_consumer(
+    pub(crate) async fn activate_durable_prompt_consumer(
         &self,
         session_id: &str,
         payload: crate::domains::sessions::prompt::PromptPayload,
@@ -66,7 +66,7 @@ impl SessionRuntime {
                     session_id = %session_id,
                     queue_seq,
                     error = ?error,
-                    "durable agent message consumer activation skipped; pending prompt will replay"
+                    "durable prompt consumer activation skipped; pending prompt will replay"
                 );
                 return;
             }
@@ -77,8 +77,8 @@ impl SessionRuntime {
                 tracing::warn!(
                     session_id = %session_id,
                     queue_seq,
-                    failure_code = agent_message_start_failure_code(&error),
-                    "durable agent message consumer startup failed; pending prompt will replay"
+                    failure_code = durable_prompt_start_failure_code(&error),
+                    "durable prompt consumer startup failed; pending prompt will replay"
                 );
                 return;
             }
@@ -95,13 +95,13 @@ impl SessionRuntime {
                 session_id = %session_id,
                 queue_seq,
                 error = ?error,
-                "durable agent message wake acknowledgement was lost; pending prompt will replay"
+                "durable prompt wake acknowledgement was lost; pending prompt will replay"
             ),
             Err(_) => tracing::warn!(
                 session_id = %session_id,
                 queue_seq,
                 timeout_ms = WAKE_ACK_TIMEOUT.as_millis(),
-                "durable agent message wake acknowledgement timed out; pending prompt will replay"
+                "durable prompt wake acknowledgement timed out; pending prompt will replay"
             ),
         }
     }
@@ -395,7 +395,7 @@ fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptErro
     }
 }
 
-fn agent_message_start_failure_code(error: &StartSessionError) -> &'static str {
+fn durable_prompt_start_failure_code(error: &StartSessionError) -> &'static str {
     match error {
         StartSessionError::WorkspaceNotFound => "workspace_not_found",
         StartSessionError::WorkspaceDirectoryMissing { .. } => "workspace_directory_missing",
@@ -494,7 +494,7 @@ mod dispatch_classification_tests {
         ];
 
         for (error, expected) in cases {
-            assert_eq!(agent_message_start_failure_code(&error), expected);
+            assert_eq!(durable_prompt_start_failure_code(&error), expected);
         }
     }
 

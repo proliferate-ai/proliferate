@@ -4,6 +4,8 @@ use super::persisted_payloads::sanitize_session_event_for_sqlite;
 use super::SessionStore;
 use crate::domains::sessions::model::SessionEventRecord;
 
+mod completion_delivery;
+
 impl SessionStore {
     pub fn next_event_seq(&self, session_id: &str) -> anyhow::Result<i64> {
         self.db.with_conn(|conn| {
