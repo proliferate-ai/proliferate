@@ -179,6 +179,77 @@ async fn http_wake_and_close_have_one_child_gate_and_no_late_schedule() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn http_wake_wrong_parent_cannot_probe_child_operability_or_controller() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state();
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        WS,
+        "local",
+        "/tmp/http-wake-anti-enumeration",
+    );
+    let owner_id = insert_session_row(&state, WS);
+    let wrong_parent_id = insert_session_row(&state, WS);
+    let open_child_id = insert_session_row(&state, WS);
+    let closed_child_id = insert_session_row(&state, WS);
+    let controlled_child_id = insert_session_row(&state, WS);
+    for child_id in [&open_child_id, &closed_child_id, &controlled_child_id] {
+        state
+            .subagent_service
+            .link_child(&owner_id, child_id, None, None, None)
+            .expect("link child to its real parent");
+    }
+    close_through_agent_operations(&state, &owner_id, &closed_child_id).await;
+
+    let workflow_service = WorkflowRunService::new(WorkflowRunStore::new(state.db.clone()));
+    let run_id = uuid::Uuid::new_v4().to_string();
+    workflow_service
+        .accept(
+            &run_id,
+            super::super::workflow_runs_tests::domain_input_for_workspace(WS),
+        )
+        .expect("accept workflow run");
+    assert!(workflow_service.begin_run(&run_id).expect("begin run"));
+    assert!(workflow_service
+        .bind_session(&run_id, &controlled_child_id)
+        .expect("bind controlled child"));
+
+    let mut public_results = Vec::new();
+    for child_id in [&open_child_id, &closed_child_id, &controlled_child_id] {
+        public_results.push(
+            call(
+                &state,
+                "POST",
+                format!("/v1/sessions/{wrong_parent_id}/subagents/{child_id}/wake"),
+                Some(json!({})),
+            )
+            .await,
+        );
+    }
+
+    let expected = &public_results[0];
+    assert_eq!(expected.0, StatusCode::CONFLICT, "{}", expected.1);
+    assert_eq!(expected.1["code"], "SUBAGENT_NOT_OWNED");
+    for result in &public_results[1..] {
+        assert_eq!(
+            result, expected,
+            "wrong-parent result must not reveal Closed or workflow-controlled state"
+        );
+    }
+    assert_no_wake_or_parent_prompt(&state, &owner_id);
+    assert!(state
+        .session_service
+        .store()
+        .list_pending_prompts(&wrong_parent_id)
+        .expect("wrong-parent pending prompts")
+        .is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mobility_imported_closed_link_stays_closed_until_opened() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
