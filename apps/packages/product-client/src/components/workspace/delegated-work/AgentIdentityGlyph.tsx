@@ -37,7 +37,12 @@ export function AgentIdentityGlyph({
       aria-label={label}
       aria-hidden={label ? undefined : true}
       className={`shrink-0 ${className}`.trim()}
-      style={{ color: identity.colorVar, opacity: closed ? 0.45 : 1 }}
+      style={{
+        width: dimension,
+        height: dimension,
+        color: identity.colorVar,
+        opacity: closed ? 0.45 : 1,
+      }}
     >
       <g fill="currentColor">
         {geometry.shape === "circle" ? <circle cx={12} cy={12} r={8.6} /> : null}

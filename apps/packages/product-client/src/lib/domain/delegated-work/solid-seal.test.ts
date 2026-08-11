@@ -9,6 +9,15 @@ describe("solidSealGeometry", () => {
     expect(solidSealGeometry(seedHash)).toEqual(solidSealGeometry(seedHash));
   });
 
+  it("matches the unrounded 1e reference coordinates for a diagonal notch", () => {
+    const geometry = solidSealGeometry(stableIndex("session-diagonal-0"));
+
+    // Independently evaluated from glyphs.js style 1e:
+    // h=mix(hash(seed)), angle=((h>>>2)%8)*45°, coordinate=12+4.1*(cos,sin).
+    expect(geometry.notchX).toBe(14.899137802864844);
+    expect(geometry.notchY).toBe(9.100862197135154);
+  });
+
   it("selects only the frozen silhouettes and eight notch positions", () => {
     const shapes = new Set<string>();
     const notchPositions = new Set<string>();

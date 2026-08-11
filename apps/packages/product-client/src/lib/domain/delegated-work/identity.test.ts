@@ -45,6 +45,65 @@ describe("delegatedWorkVisualIdentity", () => {
 });
 
 describe("buildDelegatedAgentIdentity", () => {
+  it("shows only the real title with neutral identity until a durable session exists", () => {
+    const first = buildDelegatedAgentIdentity({
+      id: "tool-call-first",
+      title: "Inspect API",
+      sessionLinkId: "link-first",
+    });
+    const second = buildDelegatedAgentIdentity({
+      id: "tool-call-second",
+      title: "Inspect API",
+      sessionLinkId: "link-second",
+    });
+
+    const visibleFields = (identity: typeof first) => ({
+      generatedName: identity.generatedName,
+      initial: identity.initial,
+      title: identity.title,
+      shortId: identity.shortId,
+      displayName: identity.displayName,
+      colorToken: identity.colorToken,
+      colorClassName: identity.colorClassName,
+      textColorClassName: identity.textColorClassName,
+      borderColorClassName: identity.borderColorClassName,
+      colorVar: identity.colorVar,
+      glyphSeedHash: identity.glyphSeedHash,
+      openTarget: identity.openTarget,
+    });
+
+    expect(visibleFields(first)).toEqual({
+      generatedName: "Inspect API",
+      initial: "I",
+      title: "Inspect API",
+      shortId: "",
+      displayName: "Inspect API",
+      colorToken: "neutral",
+      colorClassName: "bg-muted",
+      textColorClassName: "text-muted-foreground",
+      borderColorClassName: "border-border",
+      colorVar: "var(--color-muted-foreground)",
+      glyphSeedHash: 0,
+      openTarget: null,
+    });
+    expect(visibleFields(second)).toEqual(visibleFields(first));
+
+    const durable = buildDelegatedAgentIdentity({
+      id: first.id,
+      title: first.title,
+      sessionId: "session-durable",
+      sessionLinkId: "link-third",
+    });
+    expect(durable.title).toBe(first.title);
+    expect(durable.sessionId).toBe("session-durable");
+    expect(durable.displayName).toContain("Inspect API");
+    expect(durable.colorToken).toMatch(/^delegated-agent-/u);
+    expect(durable.glyphSeedHash).toBe(
+      delegatedWorkVisualIdentity("session-durable").glyphSeedHash,
+    );
+    expect(durable.openTarget?.sessionId).toBe("session-durable");
+  });
+
   it("derives every visual field only from the durable session ID", () => {
     const first = buildDelegatedAgentIdentity({
       id: "subagent_first",

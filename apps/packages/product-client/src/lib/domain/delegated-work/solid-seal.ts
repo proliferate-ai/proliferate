@@ -29,11 +29,7 @@ export function solidSealGeometry(sessionSeedHash: number): SolidSealGeometry {
   const angle = (((hash >>> 2) % 8) * 45 * Math.PI) / 180;
   return {
     shape: SOLID_SEAL_SHAPES[hash & 3] ?? "circle",
-    notchX: round(12 + 4.1 * Math.cos(angle)),
-    notchY: round(12 + 4.1 * Math.sin(angle)),
+    notchX: 12 + 4.1 * Math.cos(angle),
+    notchY: 12 + 4.1 * Math.sin(angle),
   };
-}
-
-function round(value: number): number {
-  return Math.round(value * 100) / 100;
 }

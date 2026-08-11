@@ -69,7 +69,11 @@ function renderDelegatedAgentIcon(agent: DelegatedWorkTabIdentity): ReactNode {
       className={`relative flex size-4 shrink-0 items-center justify-center ${agent.identity.textColorClassName}`}
       title={agent.hoverTitle}
     >
-      <AgentIdentityGlyph identity={agent.identity} className="icon-compact text-chat" />
+      <AgentIdentityGlyph
+        identity={agent.identity}
+        closed={agent.statusCategory === "closed"}
+        className="icon-compact text-chat"
+      />
       {dot}
     </span>
   );

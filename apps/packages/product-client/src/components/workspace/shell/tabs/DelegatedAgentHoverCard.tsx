@@ -135,6 +135,7 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
         <div className="flex min-w-0 items-center gap-2">
           <AgentIdentityGlyph
             identity={agent.identity}
+            closed={agent.statusCategory === "closed"}
             className={`icon-paired shrink-0 text-ui ${agent.identity.textColorClassName}`}
           />
           <div className="min-w-0">

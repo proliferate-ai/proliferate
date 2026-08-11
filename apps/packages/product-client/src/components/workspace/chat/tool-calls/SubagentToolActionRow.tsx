@@ -72,6 +72,7 @@ export function SubagentToolActionRow({
     <span className="inline-flex min-w-0 max-w-full items-center gap-1 align-baseline">
       <AgentIdentityGlyph
         identity={identity}
+        closed={hoverAgent.statusCategory === "closed"}
         className={`icon-compact shrink-0 text-ui-sm ${identity.textColorClassName}`}
       />
       <span className={`truncate font-medium ${identity.textColorClassName}`}>

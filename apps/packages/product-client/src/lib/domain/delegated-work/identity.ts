@@ -105,6 +105,14 @@ const COLOR_IDENTITIES = [
   },
 ] as const;
 
+const PROVISIONAL_COLOR_IDENTITY = {
+  token: "neutral",
+  colorClassName: "bg-muted",
+  textColorClassName: "text-muted-foreground",
+  borderColorClassName: "border-border",
+  colorVar: "var(--color-muted-foreground)",
+} as const;
+
 export interface DelegatedWorkVisualIdentity {
   generatedName: string;
   initial: string;
@@ -151,13 +159,33 @@ export function buildDelegatedAgentIdentity({
 }): DelegatedAgentIdentity {
   // A relationship row is mutable metadata around a session, not the agent's
   // identity. Durable sessions therefore keep one name, color, and glyph when
-  // a link is recreated, closed, or removed. Pre-creation placeholders retain
-  // the caller-provided id only until the runtime returns a durable session ID.
+  // a link is recreated, closed, or removed.
   const durableSessionId = sessionId?.trim() || null;
-  const seed = durableSessionId || id;
-  const visual = delegatedWorkVisualIdentity(seed);
   const resolvedTitle = normalizeTitle(title);
-  const shortId = shortDelegatedWorkId(seed);
+  if (!durableSessionId) {
+    // Before the runtime returns its durable identity, show only the real task
+    // title with one invariant neutral treatment. Tool-call, link, and client
+    // IDs are routing handles and may never mint a visible agent identity.
+    return {
+      id,
+      sessionId: null,
+      generatedName: resolvedTitle,
+      initial: resolvedTitle.slice(0, 1).toUpperCase(),
+      title: resolvedTitle,
+      shortId: "",
+      displayName: resolvedTitle,
+      colorToken: PROVISIONAL_COLOR_IDENTITY.token,
+      colorClassName: PROVISIONAL_COLOR_IDENTITY.colorClassName,
+      textColorClassName: PROVISIONAL_COLOR_IDENTITY.textColorClassName,
+      borderColorClassName: PROVISIONAL_COLOR_IDENTITY.borderColorClassName,
+      colorVar: PROVISIONAL_COLOR_IDENTITY.colorVar,
+      glyphSeedHash: 0,
+      openTarget: null,
+    };
+  }
+
+  const visual = delegatedWorkVisualIdentity(durableSessionId);
+  const shortId = shortDelegatedWorkId(durableSessionId);
   return {
     id,
     sessionId: durableSessionId,

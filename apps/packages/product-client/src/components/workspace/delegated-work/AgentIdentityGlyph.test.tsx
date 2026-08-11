@@ -69,6 +69,20 @@ describe("AgentIdentityGlyph", () => {
     expect(new Set(rendered.map(withoutDimensions)).size).toBe(1);
   });
 
+  it("keeps an explicit dimension above a semantic size utility", () => {
+    const html = renderToStaticMarkup(
+      <AgentIdentityGlyph
+        identity={identity}
+        dimension={12}
+        className="icon-control"
+      />,
+    );
+
+    expect(html).toContain('class="shrink-0 icon-control"');
+    expect(html).toContain('width="12" height="12"');
+    expect(html).toContain("style=\"width:12px;height:12px;");
+  });
+
   it("dims Closed without changing geometry or color", () => {
     const open = renderToStaticMarkup(
       <AgentIdentityGlyph identity={identity} dimension={18} />,
@@ -77,15 +91,17 @@ describe("AgentIdentityGlyph", () => {
       <AgentIdentityGlyph identity={identity} dimension={18} closed />,
     );
 
-    expect(open).toContain(`style="color:${identity.colorVar};opacity:1"`);
-    expect(closed).toContain(`style="color:${identity.colorVar};opacity:0.45"`);
+    expect(open).toContain(`color:${identity.colorVar};opacity:1`);
+    expect(closed).toContain(`color:${identity.colorVar};opacity:0.45`);
     expect(withoutOpacity(closed)).toBe(withoutOpacity(open));
     expect(closed).toContain(`color:${identity.colorVar}`);
   });
 });
 
 function withoutDimensions(markup: string): string {
-  return markup.replace(/ width="(?:12|16|18|20)" height="(?:12|16|18|20)"/u, "");
+  return markup
+    .replace(/ width="(?:12|16|18|20)" height="(?:12|16|18|20)"/u, "")
+    .replace(/width:(?:12|16|18|20)px;height:(?:12|16|18|20)px;/u, "");
 }
 
 function withoutOpacity(markup: string): string {

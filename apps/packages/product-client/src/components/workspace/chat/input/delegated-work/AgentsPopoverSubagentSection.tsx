@@ -76,6 +76,7 @@ function SubagentPopoverRow({
       >
         <AgentIdentityGlyph
           identity={row.identity}
+          closed={row.statusCategory === "closed"}
           className={`icon-compact shrink-0 text-chat ${row.identity.textColorClassName}`}
         />
         <span className="min-w-0">
