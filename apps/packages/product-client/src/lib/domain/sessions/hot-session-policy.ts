@@ -57,6 +57,7 @@ export function resolveHotSessionTargets(
   input: ResolveHotSessionTargetsInput,
 ): HotSessionTarget[] {
   const candidates = new Map<string, HotSessionTarget>();
+  const liveSessionIds = new Set<string>();
   const maxHotSessionStreams = input.maxHotSessionStreams ?? MAX_HOT_SESSION_STREAMS;
 
   const maybeAdd = (
@@ -109,6 +110,7 @@ export function resolveHotSessionTargets(
     }
 
     if ((input.promptActivityBySessionId[sessionId] ?? 0) > 0) {
+      liveSessionIds.add(sessionId);
       maybeAdd(sessionId, "queued_prompt");
     }
 
@@ -122,15 +124,41 @@ export function resolveHotSessionTargets(
       },
     });
     if (viewState === "needs_input") {
+      liveSessionIds.add(sessionId);
       maybeAdd(sessionId, "needs_input");
     } else if (viewState === "working") {
+      liveSessionIds.add(sessionId);
       maybeAdd(sessionId, "running");
     } else if (visibleSet.has(sessionId)) {
       maybeAdd(sessionId, "open_tab", true);
     }
   }
 
-  return Array.from(candidates.values())
-    .sort((a, b) => a.priority - b.priority || a.clientSessionId.localeCompare(b.clientSessionId))
-    .slice(0, maxHotSessionStreams);
+  const orderedTargets = Array.from(candidates.values())
+    .sort((a, b) => a.priority - b.priority || a.clientSessionId.localeCompare(b.clientSessionId));
+  const mandatorySessionIds = new Set(liveSessionIds);
+  if (input.activeSessionId && candidates.has(input.activeSessionId)) {
+    mandatorySessionIds.add(input.activeSessionId);
+  }
+  const mandatoryTargetCount = orderedTargets.reduce(
+    (count, target) => count + (mandatorySessionIds.has(target.clientSessionId) ? 1 : 0),
+    0,
+  );
+  const passiveTargetBudget = Math.max(0, maxHotSessionStreams - mandatoryTargetCount);
+  let retainedPassiveTargets = 0;
+
+  // The cap limits passive open-tab retention. The selected session and live
+  // work are correctness requirements: evicting a live target closes the only
+  // stream that can deliver completion and leaves the sidebar with stale
+  // activity.
+  return orderedTargets.filter((target) => {
+    if (mandatorySessionIds.has(target.clientSessionId)) {
+      return true;
+    }
+    if (retainedPassiveTargets >= passiveTargetBudget) {
+      return false;
+    }
+    retainedPassiveTargets += 1;
+    return true;
+  });
 }

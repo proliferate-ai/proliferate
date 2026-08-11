@@ -18,6 +18,16 @@ In-app find (Cmd+F) over transcript prose is documented separately in
 - Any deliberate stream close, detach, prune, or reconnect path must flush
   pending batched stream events before discarding the current handle.
 - Never clear `sseHandle` before queued envelopes have a chance to apply.
+- Hot-session retention distinguishes navigation state from live work.
+  Selected sessions and open tabs are scoped to the selected workspace, but a
+  queued prompt, pending interaction, or running turn remains hot across route,
+  session, and workspace navigation until its production stream event makes it
+  terminal.
+- `MAX_HOT_SESSION_STREAMS` limits passive open-tab retention. The selected
+  session and active work are never evicted by that budget, even when more than
+  12 sessions are live, because removing a hot target intentionally closes its
+  stream and can suppress otherwise-stale streaming activity after
+  disconnection.
 - Transcript reducers must preserve structural sharing and must not mutate
   prior transcript state, turns, items, or content-part arrays in place.
 - Long transcripts must stay virtualized on the normal render path.

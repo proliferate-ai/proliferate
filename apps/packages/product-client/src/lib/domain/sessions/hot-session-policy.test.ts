@@ -144,6 +144,41 @@ describe("resolveHotSessionTargets", () => {
       ["running", "running"],
     ]);
   });
+
+  it("retains every active session when live work exceeds the passive stream budget", () => {
+    const runningSessionIds = Array.from(
+      { length: 13 },
+      (_, index) => `running-${String(index).padStart(2, "0")}`,
+    );
+    const state = fixtures(["selected", ...runningSessionIds]);
+    for (const sessionId of runningSessionIds) {
+      state.directory[sessionId] = {
+        ...state.directory[sessionId]!,
+        workspaceId: "workspace-2",
+        streamConnectionState: "open",
+        activity: {
+          ...state.directory[sessionId]!.activity,
+          isStreaming: true,
+        },
+      };
+    }
+
+    const targets = resolveHotSessionTargets({
+      activeSessionId: "selected",
+      candidateSessionIds: ["selected", ...runningSessionIds],
+      directoryEntriesById: state.directory,
+      maxHotSessionStreams: 12,
+      promptActivityBySessionId: state.promptActivity,
+      selectedWorkspaceId: "workspace-1",
+      visibleChatSessionIds: ["selected"],
+    });
+
+    expect(targets).toHaveLength(14);
+    expect(targets.map((target) => target.clientSessionId)).toEqual([
+      "selected",
+      ...runningSessionIds,
+    ]);
+  });
 });
 
 function fixtures(
