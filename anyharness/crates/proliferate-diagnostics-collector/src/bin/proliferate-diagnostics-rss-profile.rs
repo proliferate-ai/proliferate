@@ -22,6 +22,28 @@ use tokio::sync::watch;
 
 const CAPABILITY: &str = "rss-proof-capability-ec94f7f52d";
 const RESPONSE_DEADLINE: Duration = Duration::from_secs(1);
+const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const TAIL_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+struct HttpClients {
+    request: reqwest::Client,
+    tail: reqwest::Client,
+}
+
+fn build_http_clients(request_timeout: Duration) -> anyhow::Result<HttpClients> {
+    let request = reqwest::Client::builder()
+        .pool_max_idle_per_host(16)
+        .timeout(request_timeout)
+        .build()?;
+    // Reqwest's total timeout includes the complete response body. Tail bodies
+    // intentionally span the profile, so bound connect here and headers at the
+    // call site while the existing stop signal owns the streaming lifetime.
+    let tail = reqwest::Client::builder()
+        .pool_max_idle_per_host(16)
+        .connect_timeout(request_timeout)
+        .build()?;
+    Ok(HttpClients { request, tail })
+}
 
 #[derive(Debug, Parser)]
 #[command(name = "proliferate-diagnostics-rss-profile")]
@@ -205,10 +227,10 @@ async fn main() -> anyhow::Result<()> {
     let binary_sha256 = hash_file(&args.collector_binary)?;
     let profile_sha256 = hash_bytes(&profile_bytes);
     let mut collector = ChildCollector::spawn(&args.collector_binary)?;
-    let http = reqwest::Client::builder()
-        .pool_max_idle_per_host(16)
-        .timeout(Duration::from_secs(10))
-        .build()?;
+    let HttpClients {
+        request: http,
+        tail: tail_http,
+    } = build_http_clients(HTTP_REQUEST_TIMEOUT)?;
 
     warm_up(&http, &collector.endpoint, &profile).await?;
     let warmup_health = timed_health(&http, &collector.endpoint, &AtomicU64::new(0)).await?;
@@ -252,8 +274,9 @@ async fn main() -> anyhow::Result<()> {
     }
     for index in 0..profile.concurrency.tail_readers {
         background.push(tokio::spawn(tail_reader(
-            http.clone(),
+            tail_http.clone(),
             collector.endpoint.clone(),
+            TAIL_HANDSHAKE_TIMEOUT,
             index == 1,
             profile.stress.slow_tail_delay_ms,
             if index == 1 {
@@ -654,6 +677,7 @@ async fn query_reader(
 async fn tail_reader(
     http: reqwest::Client,
     endpoint: String,
+    handshake_timeout: Duration,
     slow: bool,
     delay_ms: u32,
     frames: Arc<AtomicU64>,
@@ -665,14 +689,17 @@ async fn tail_reader(
         if *stop.borrow() {
             return Ok(());
         }
-        let response = http
-            .get(format!(
+        let response = tokio::time::timeout(
+            handshake_timeout,
+            http.get(format!(
                 "{endpoint}/v1/tail?schema_version=1.1&after_cursor={cursor}"
             ))
             .bearer_auth(CAPABILITY)
-            .send()
-            .await?
-            .error_for_status()?;
+            .send(),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("tail response headers exceeded handshake timeout"))??
+        .error_for_status()?;
         let mut stream = response.bytes_stream();
         let mut pending = Vec::new();
         loop {
@@ -941,4 +968,132 @@ fn hash_bytes(bytes: &[u8]) -> String {
 
 fn hex_digest(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::convert::Infallible;
+
+    use axum::body::{Body, Bytes};
+    use axum::response::Response;
+    use axum::routing::get;
+    use axum::Router;
+
+    use super::*;
+
+    const TEST_REQUEST_TIMEOUT: Duration = Duration::from_millis(200);
+    const TEST_FRAME_DELAY: Duration = Duration::from_millis(500);
+
+    async fn spawn_tail_server(
+        frame: Bytes,
+        frame_delay: Duration,
+    ) -> (String, tokio::task::JoinHandle<()>) {
+        let app = Router::new().route(
+            "/v1/tail",
+            get(move || {
+                let frame = frame.clone();
+                async move {
+                    let delayed_frame = futures::stream::once(async move {
+                        tokio::time::sleep(frame_delay).await;
+                        Ok::<Bytes, Infallible>(frame)
+                    });
+                    let open_stream = delayed_frame
+                        .chain(futures::stream::pending::<Result<Bytes, Infallible>>());
+                    Response::new(Body::from_stream(open_stream))
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind tail test server");
+        let endpoint = format!(
+            "http://{}",
+            listener.local_addr().expect("tail server addr")
+        );
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("serve tail test response");
+        });
+        (endpoint, server)
+    }
+
+    #[tokio::test]
+    async fn tail_stream_outlives_ordinary_timeout_and_exits_on_stop() {
+        let frame = Bytes::from_static(b"{\"frame\":\"records\",\"records\":[],\"cursor\":7}\n");
+        let (endpoint, server) = spawn_tail_server(frame, TEST_FRAME_DELAY).await;
+        let HttpClients { request, tail } =
+            build_http_clients(TEST_REQUEST_TIMEOUT).expect("build test clients");
+
+        let ordinary = request
+            .get(format!(
+                "{endpoint}/v1/tail?schema_version=1.1&after_cursor=0"
+            ))
+            .send()
+            .await
+            .expect("ordinary response headers");
+        let ordinary_error = ordinary
+            .bytes_stream()
+            .next()
+            .await
+            .expect("ordinary response body result")
+            .expect_err("ordinary client must expire the long-lived response");
+        assert!(ordinary_error.is_timeout(), "{ordinary_error:?}");
+
+        let frames = Arc::new(AtomicU64::new(0));
+        let reported_drops = Arc::new(AtomicU64::new(0));
+        let (stop_tx, stop_rx) = watch::channel(false);
+        let reader = tokio::spawn(tail_reader(
+            tail,
+            endpoint,
+            TEST_REQUEST_TIMEOUT,
+            false,
+            0,
+            Arc::clone(&frames),
+            Arc::clone(&reported_drops),
+            stop_rx,
+        ));
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while frames.load(Ordering::Relaxed) == 0 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("streaming tail frame after ordinary timeout");
+        assert_eq!(reported_drops.load(Ordering::Relaxed), 0);
+
+        stop_tx.send(true).expect("signal tail stop");
+        tokio::time::timeout(Duration::from_secs(1), reader)
+            .await
+            .expect("tail reader stop deadline")
+            .expect("tail reader task")
+            .expect("tail reader result");
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn tail_stream_errors_are_not_hidden_by_streaming_client() {
+        let (endpoint, server) =
+            spawn_tail_server(Bytes::from_static(b"not-json\n"), Duration::ZERO).await;
+        let HttpClients { tail, .. } =
+            build_http_clients(TEST_REQUEST_TIMEOUT).expect("build test clients");
+        let (_stop_tx, stop_rx) = watch::channel(false);
+        let result = tokio::time::timeout(
+            Duration::from_secs(1),
+            tail_reader(
+                tail,
+                endpoint,
+                TEST_REQUEST_TIMEOUT,
+                false,
+                0,
+                Arc::new(AtomicU64::new(0)),
+                Arc::new(AtomicU64::new(0)),
+                stop_rx,
+            ),
+        )
+        .await
+        .expect("tail error deadline");
+        assert!(result.is_err(), "malformed tail frame must be surfaced");
+        server.abort();
+    }
 }
