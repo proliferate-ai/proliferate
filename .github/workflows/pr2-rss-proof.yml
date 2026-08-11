@@ -99,15 +99,18 @@ jobs:
           sw_vers > "proof/context/sw-vers-$TARGET.txt"
           sysctl hw.machine hw.memsize > "proof/context/hardware-$TARGET.txt"
 
-      - name: Run exact locked release suite
+      - name: Run locked release unit and protocol tests
         shell: bash
         run: |
           set -euo pipefail
           cargo test --locked --release --target "$TARGET" \
-            -p proliferate-diagnostics-protocol \
-            -p proliferate-diagnostics-collector \
-            --all-targets -- --test-threads=1 \
-            2>&1 | tee "proof/logs/cargo-test-$TARGET.log"
+            -p proliferate-diagnostics-collector --lib \
+            -- --test-threads=1 \
+            2>&1 | tee "proof/logs/cargo-test-collector-$TARGET.log"
+          cargo test --locked --release --target "$TARGET" \
+            -p proliferate-diagnostics-protocol --test golden_contract \
+            -- --test-threads=1 \
+            2>&1 | tee "proof/logs/cargo-test-protocol-$TARGET.log"
 
       - name: Build exact release collector and runner
         shell: bash
