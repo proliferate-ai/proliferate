@@ -142,6 +142,25 @@ async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_availab
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state();
     let (_run_id, sid) = controlled_fixture(&state);
+    let controlled_child_id = insert_session_row(&state, WS);
+    state
+        .subagent_service
+        .link_child(&sid, &controlled_child_id, None, None, None)
+        .expect("link controlled child");
+    let workflow_service = WorkflowRunService::new(WorkflowRunStore::new(state.db.clone()));
+    let child_run_id = uuid::Uuid::new_v4().to_string();
+    workflow_service
+        .accept(
+            &child_run_id,
+            super::workflow_runs_tests::domain_input_for_workspace(WS),
+        )
+        .expect("accept child workflow run");
+    assert!(workflow_service
+        .begin_run(&child_run_id)
+        .expect("begin child workflow run"));
+    assert!(workflow_service
+        .bind_session(&child_run_id, &controlled_child_id)
+        .expect("bind controlled child"));
 
     let prompt_body = json!({"blocks": [{"type": "text", "text": "foreign"}]});
     let cases: Vec<(&str, String, Option<Value>)> = vec![
@@ -203,7 +222,7 @@ async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_availab
         ("DELETE", format!("/v1/sessions/{sid}/loops"), None),
         (
             "POST",
-            format!("/v1/sessions/{sid}/subagents/child-1/wake"),
+            format!("/v1/sessions/{sid}/subagents/{controlled_child_id}/wake"),
             Some(json!({})),
         ),
     ];
@@ -230,6 +249,13 @@ async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_availab
         .get("dismissedAt")
         .map(|v| v.is_null())
         .unwrap_or(true));
+    assert!(state
+        .subagent_service
+        .subagent_context(&sid)
+        .expect("subagent context")
+        .children
+        .iter()
+        .all(|child| !child.wake_scheduled));
 
     // Reads stay available while controlled.
     let (status, _) = call(&state, "GET", format!("/v1/sessions/{sid}/events"), None).await;

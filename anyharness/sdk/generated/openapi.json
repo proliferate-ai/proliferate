@@ -12849,6 +12849,12 @@
           "relation": {
             "type": "string"
           },
+          "subagentClosedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "workspaceRelation": {
             "type": "string"
           }

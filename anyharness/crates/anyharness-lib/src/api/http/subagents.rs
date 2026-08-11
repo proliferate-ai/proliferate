@@ -15,6 +15,7 @@ use super::error::ApiError;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::subagents::model::{
     ChildSubagentContext, ParentSubagentLinkContext, SessionSubagentsContext,
     SubagentCompletionSummary,
@@ -45,6 +46,19 @@ pub async fn get_session_subagents(
     Ok(Json(session_subagents_to_contract(context)))
 }
 
+/// Read-only ownership resolution used before child admission so foreign
+/// callers cannot probe the child's operability or controller state.
+fn assert_owned_subagent_scope(
+    state: &AppState,
+    parent_session_id: &str,
+    child_session_id: &str,
+) -> Result<SessionLinkRecord, ApiError> {
+    state
+        .subagent_service
+        .resolve_target_including_closed(parent_session_id, None, Some(child_session_id))
+        .map_err(map_subagent_error)
+}
+
 #[utoipa::path(
     post,
     path = "/v1/sessions/{session_id}/subagents/{child_session_id}/wake",
@@ -68,16 +82,13 @@ pub async fn schedule_subagent_wake(
     Json(_body): Json<ScheduleSubagentWakeRequest>,
 ) -> Result<Json<ScheduleSubagentWakeResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let owned_link = assert_owned_subagent_scope(&state, &session_id, &child_session_id)?;
     let _admission_permit =
         admit_session_mutation(&state, &child_session_id, SessionMutationKind::SubagentWake)
             .await?;
-    let initial_link = state
-        .subagent_service
-        .authorize_child(&session_id, &child_session_id)
-        .map_err(map_subagent_error)?;
     let child = state
         .session_service
-        .get_session(&initial_link.child_session_id)
+        .get_session(&owned_link.child_session_id)
         .map_err(|error| ApiError::internal(error.to_string()))?
         .ok_or_else(|| ApiError::not_found("Session not found", "SESSION_NOT_FOUND"))?;
     let _operation = state
@@ -85,6 +96,11 @@ pub async fn schedule_subagent_wake(
         .acquire_shared(&child.workspace_id, WorkspaceOperationKind::SubagentWrite)
         .await;
     assert_workspace_mutable(&state, &child.workspace_id)?;
+
+    state
+        .subagent_service
+        .authorize_child(&session_id, &child_session_id)
+        .map_err(map_subagent_error)?;
 
     // Re-authorize under the child permit. Close, promotion, and every other
     // child mutation serialize on this same gate, so the following insert is
