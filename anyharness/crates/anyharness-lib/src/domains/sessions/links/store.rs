@@ -445,16 +445,18 @@ impl SessionLinkStore {
         })
     }
 
-    pub fn list_current_subagent_children_with_unclosed_turns(
+    pub fn list_current_subagent_children_with_unclosed_turns_page(
         &self,
+        after_link_id: Option<&str>,
         limit: usize,
-    ) -> anyhow::Result<Vec<String>> {
+    ) -> anyhow::Result<Vec<(String, String)>> {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT l.child_session_id
+                "SELECT l.id, l.child_session_id
                  FROM session_links l
                  WHERE l.relation = 'subagent'
                    AND l.closed_at IS NULL
+                   AND (?1 IS NULL OR l.id > ?1)
                    AND EXISTS (
                      SELECT 1
                      FROM session_events e
@@ -469,10 +471,12 @@ impl SessionLinkStore {
                            AND e2.event_type IN ('turn_ended', 'error', 'session_ended')
                        )
                    )
-                 ORDER BY l.subagent_closed_at ASC, l.id ASC
-                 LIMIT ?1",
+                 ORDER BY l.id ASC
+                 LIMIT ?2",
             )?;
-            let rows = stmt.query_map([limit as i64], |row| row.get(0))?;
+            let rows = stmt.query_map(rusqlite::params![after_link_id, limit as i64], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?;
             rows.collect()
         })
     }

@@ -1,10 +1,10 @@
 use super::*;
 
 #[derive(Clone)]
-struct FailingTerminalPersist {
-    store: SessionStore,
-    attempts: Arc<std::sync::atomic::AtomicUsize>,
-    failures_before_success: usize,
+pub(super) struct FailingTerminalPersist {
+    pub(super) store: SessionStore,
+    pub(super) attempts: Arc<std::sync::atomic::AtomicUsize>,
+    pub(super) failures_before_success: usize,
 }
 
 impl crate::live::sessions::model::EventPersist for FailingTerminalPersist {

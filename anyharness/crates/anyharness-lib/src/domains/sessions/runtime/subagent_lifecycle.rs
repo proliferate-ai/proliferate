@@ -68,21 +68,45 @@ impl SessionRuntime {
     /// are eligible; promoted/no-link sessions are not. The live manager
     /// serializes each repair against actor installation.
     pub(crate) async fn repair_retired_subagent_turns(&self, limit: usize) -> anyhow::Result<u32> {
-        let session_ids = self
-            .session_link_service
-            .list_current_subagent_children_with_unclosed_turns(limit)?;
+        if limit == 0 {
+            return Ok(0);
+        }
+        let page_size = limit.max(64);
+        let mut after_link_id = None;
+        let mut repair_attempts = 0usize;
         let mut repaired = 0u32;
-        for session_id in session_ids {
-            if let Some(result) = self
-                .acp_manager
-                .run_if_session_absent(&session_id, || {
-                    self.session_service
-                        .store()
-                        .repair_unclosed_turns(&session_id)
-                })
-                .await
-            {
-                repaired = repaired.saturating_add(result?);
+
+        loop {
+            let candidates = self
+                .session_link_service
+                .list_current_subagent_children_with_unclosed_turns_page(
+                    after_link_id.as_deref(),
+                    page_size,
+                )?;
+            if candidates.is_empty() {
+                break;
+            }
+            let page_len = candidates.len();
+            for (link_id, session_id) in candidates {
+                after_link_id = Some(link_id);
+                if let Some(result) = self
+                    .acp_manager
+                    .run_if_session_absent(&session_id, || {
+                        self.session_service
+                            .store()
+                            .repair_unclosed_turns(&session_id)
+                    })
+                    .await
+                {
+                    repair_attempts += 1;
+                    repaired = repaired.saturating_add(result?);
+                    if repair_attempts == limit {
+                        return Ok(repaired);
+                    }
+                }
+            }
+            if page_len < page_size {
+                break;
             }
         }
         Ok(repaired)

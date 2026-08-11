@@ -18,6 +18,9 @@ const WORKSPACE_ID: &str = "workspace-closed-repair";
 const PARENT_ID: &str = "parent-closed-repair";
 const CHILD_ID: &str = "child-closed-repair";
 
+#[path = "tests/pagination.rs"]
+mod pagination;
+
 #[test]
 fn enqueued_backoff_increases_and_caps_at_sixty_seconds() {
     assert_eq!(

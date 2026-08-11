@@ -91,6 +91,10 @@ pub(crate) fn raw_ext_response<T: Serialize>(value: T) -> acp::Result<acp::schem
     Ok(acp::schema::ExtResponse::new(raw.into()))
 }
 
+pub(super) fn terminal_mutation_rejected() -> acp::Error {
+    acp::Error::internal_error().data("session terminal transaction unresolved")
+}
+
 pub(crate) fn session_update_kind(update: &acp::schema::SessionUpdate) -> &'static str {
     use acp::schema::SessionUpdate::*;
     match update {
