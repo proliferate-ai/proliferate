@@ -68,7 +68,8 @@
     "externalBin": [
       "binaries/anyharness",
       "binaries/proliferate-worker",
-      "binaries/proliferate-debug"
+      "binaries/proliferate-debug",
+      "binaries/proliferate-diagnostics-collector"
     ],
     "resources": [
       "agent-seeds/",

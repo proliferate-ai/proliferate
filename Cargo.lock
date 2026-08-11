@@ -4244,9 +4244,11 @@ dependencies = [
  "fs2",
  "getrandom 0.4.3",
  "keyring",
+ "libc",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
+ "proliferate-diagnostics-protocol",
  "regex",
  "reqwest 0.12.28",
  "rfd 0.15.4",
@@ -4276,6 +4278,7 @@ dependencies = [
  "which",
  "window-vibrancy",
  "zip 8.6.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -4285,6 +4288,9 @@ dependencies = [
  "anyhow",
  "clap",
  "proliferate",
+ "proliferate-diagnostics-protocol",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

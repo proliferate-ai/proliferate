@@ -55,6 +55,12 @@ const TARGET = "aarch64-apple-darwin";
 // the workspace target dir at the repo root, not under src-tauri.
 const BUNDLE_OUT = join(REPO_ROOT, "target", TARGET, "release", "bundle", "macos");
 const PLIST_BUDDY = "/usr/libexec/PlistBuddy";
+const EXTERNAL_BINARIES = [
+  "anyharness",
+  "proliferate-worker",
+  "proliferate-debug",
+  "proliferate-diagnostics-collector",
+];
 
 function parseArgs() {
   const a = process.argv.slice(2);
@@ -114,7 +120,7 @@ function plistVersion(appBundle) {
   return capture(PLIST_BUDDY, ["-c", "Print :CFBundleShortVersionString", plist]);
 }
 
-// The three externalBin sidecars are placeholder stubs in a dev checkout (the
+// The four externalBin sidecars are placeholder stubs in a dev checkout (the
 // updater test only exercises the update mechanism, not the agent runtime — see
 // the gotchas in specs/TESTING/desktop-update-testing.md). Stage tiny
 // executable placeholders so `tauri build` finds them without the ~10-min real
@@ -122,7 +128,7 @@ function plistVersion(appBundle) {
 function stageSidecarStubs() {
   const dir = join(SRC_TAURI, "binaries");
   mkdirSync(dir, { recursive: true });
-  for (const name of ["anyharness", "proliferate-worker", "proliferate-debug"]) {
+  for (const name of EXTERNAL_BINARIES) {
     const p = join(dir, `${name}-${TARGET}`);
     if (!existsSync(p)) {
       const body = `#!/bin/sh\necho "${name}: sidecar placeholder (T4 updater test build)"\n`;
@@ -298,6 +304,15 @@ async function main() {
     }
     const fileKind = capture("file", ["-b", mainBin]);
     console.log(`[t4] swapped bundle main binary: ${fileKind}`);
+    const packagedNativeBinaries = readdirSync(join(installApp, "Contents", "MacOS"))
+      .filter((name) => name !== "Proliferate")
+      .sort();
+    const expectedNativeBinaries = [...EXTERNAL_BINARIES].sort();
+    if (JSON.stringify(packagedNativeBinaries) !== JSON.stringify(expectedNativeBinaries)) {
+      throw new Error(
+        `packaged native binary inventory was ${packagedNativeBinaries.join(",")}; expected ${expectedNativeBinaries.join(",")}`,
+      );
+    }
 
     console.log(`\n[t4] PASS  ${beforeVersion} -> ${afterVersion}  (real signed auto-update converged)`);
   } finally {

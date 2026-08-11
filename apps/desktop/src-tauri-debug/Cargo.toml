@@ -12,3 +12,6 @@ anyhow.workspace = true
 clap.workspace = true
 tokio.workspace = true
 proliferate = { path = "../src-tauri" }
+proliferate-diagnostics-protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true

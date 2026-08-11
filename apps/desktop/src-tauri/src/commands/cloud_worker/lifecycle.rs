@@ -1,8 +1,23 @@
-use std::{path::PathBuf, sync::atomic::Ordering};
+use std::{
+    io::{Read, Seek, SeekFrom},
+    path::{Path, PathBuf},
+    sync::atomic::Ordering,
+};
 
 use tokio::sync::MutexGuard;
+use tokio::time::{timeout, Duration};
 
-use super::{CloudWorkerLifecycle, CloudWorkerProcess, SharedCloudWorkerState};
+use proliferate_diagnostics_protocol::v1::types::TerminalOutcomeV1;
+
+use crate::diagnostics::scrub_diagnostic_text;
+use crate::diagnostics_collector::producer::{
+    lifecycle::LifecycleOperation, TauriDiagnosticsProducer,
+};
+
+use super::{
+    CloudWorkerLifecycle, CloudWorkerProcess, EnsureDesktopDispatchWorkerResult,
+    SharedCloudWorkerState, StopDesktopDispatchWorkerResult,
+};
 
 impl Drop for CloudWorkerProcess {
     fn drop(&mut self) {
@@ -36,6 +51,67 @@ pub(super) async fn prepare_existing_worker_for_ensure(
     Ok(None)
 }
 
+pub(super) async fn prepare_existing_worker_for_ensure_observed(
+    lifecycle: &mut CloudWorkerLifecycle,
+    target_id: &str,
+    fresh_enrollment: bool,
+    producer: &TauriDiagnosticsProducer,
+) -> Result<Option<PathBuf>, String> {
+    let should_record_stop = lifecycle.process.as_mut().is_some_and(|process| {
+        !matches!(
+            process.child.try_wait(),
+            Ok(None) if process.target_id == target_id && !fresh_enrollment
+        )
+    });
+    let operation =
+        should_record_stop.then(|| producer.begin_lifecycle("desktop.worker_process.stop"));
+    let result = prepare_existing_worker_for_ensure(lifecycle, target_id, fresh_enrollment).await;
+    match (&result, operation) {
+        (Ok(Some(_)), Some(operation)) => operation.terminal(TerminalOutcomeV1::Skipped, None),
+        (Ok(None), Some(operation)) => operation.terminal(TerminalOutcomeV1::Succeeded, None),
+        (Err(error), Some(operation)) => finish_failed_stop(operation, error),
+        (_, None) => {}
+    }
+    result
+}
+
+pub(super) fn finish_worker_start_operation(
+    operation: LifecycleOperation,
+    result: &Result<EnsureDesktopDispatchWorkerResult, String>,
+) {
+    match result {
+        Ok(result) if result.status == "started" => {
+            operation.terminal(TerminalOutcomeV1::Succeeded, None)
+        }
+        Ok(result) if result.status == "terminal_shutdown_armed" => {
+            operation.terminal(TerminalOutcomeV1::Rejected, Some("shutdown_armed"))
+        }
+        Ok(_) => operation.terminal(TerminalOutcomeV1::Skipped, None),
+        Err(_) => operation.terminal(TerminalOutcomeV1::Failed, Some("spawn_failed")),
+    }
+}
+
+pub(super) fn finish_worker_stop_operation(
+    operation: LifecycleOperation,
+    result: &Result<StopDesktopDispatchWorkerResult, String>,
+) {
+    match result {
+        Ok(result) if result.stopped => operation.terminal(TerminalOutcomeV1::Succeeded, None),
+        Ok(_) => operation.terminal(TerminalOutcomeV1::Skipped, None),
+        Err(error) => finish_failed_stop(operation, error),
+    }
+}
+
+fn finish_failed_stop(operation: LifecycleOperation, error: &str) {
+    if error.starts_with("Timed out") {
+        operation.terminal(TerminalOutcomeV1::TimedOut, Some("shutdown_timeout"));
+    } else if error.starts_with("Failed to inspect") {
+        operation.terminal(TerminalOutcomeV1::Failed, Some("child_inspection_failed"));
+    } else {
+        operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
+    }
+}
+
 pub(crate) async fn prepare_desktop_dispatch_worker_update(
     state: &SharedCloudWorkerState,
     installer_exits_process: bool,
@@ -48,10 +124,14 @@ pub(crate) async fn prepare_desktop_dispatch_worker_update(
     Ok(())
 }
 
+pub(crate) fn arm_terminal_shutdown(state: &SharedCloudWorkerState) {
+    state.terminal_shutdown_armed.store(true, Ordering::Release);
+}
+
 pub(crate) async fn arm_terminal_shutdown_and_stop_worker(
     state: &SharedCloudWorkerState,
 ) -> Result<bool, String> {
-    state.terminal_shutdown_armed.store(true, Ordering::Release);
+    arm_terminal_shutdown(state);
     let mut lifecycle = state.lifecycle.lock().await;
     stop_process(&mut lifecycle).await
 }
@@ -86,11 +166,17 @@ async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, Stri
 
     let stop_result = match process.child.try_wait() {
         Ok(Some(_)) => Ok(()),
-        Ok(None) => process
-            .child
-            .kill()
-            .await
-            .map_err(|error| format!("Failed to stop Proliferate Worker: {error}")),
+        Ok(None) => {
+            process
+                .child
+                .start_kill()
+                .map_err(|error| format!("Failed to stop Proliferate Worker: {error}"))?;
+            timeout(Duration::from_secs(2), process.child.wait())
+                .await
+                .map_err(|_| "Timed out stopping Proliferate Worker".to_string())?
+                .map(|_| ())
+                .map_err(|error| format!("Failed to reap Proliferate Worker: {error}"))
+        }
         // Do not fall through to `kill` after an ambiguous inspection error.
         // On Unix, `ECHILD` can mean another reaper collected this child while
         // std still has no cached status; its kill fallback uses the bare PID
@@ -119,4 +205,47 @@ fn finish_stop_attempt(
     stop_result?;
     lifecycle.process = None;
     Ok(true)
+}
+
+const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
+
+pub(super) fn worker_startup_failure_message(
+    status: &str,
+    log_path: &Path,
+    log_tail: &str,
+) -> String {
+    let scrubbed_log_path = scrub_diagnostic_text(&log_path.to_string_lossy());
+    let mut message = format!(
+        "Proliferate Worker exited during startup with {status}. See {scrubbed_log_path} for output."
+    );
+    if !log_tail.is_empty() {
+        message.push_str("\n\nLast worker log lines:\n");
+        message.push_str(log_tail);
+    }
+    message
+}
+
+/// Best-effort context for a startup error returned to the renderer. The
+/// worker log is truncated for every launch. Read only a fixed suffix so this
+/// error path cannot allocate or block in proportion to total log volume.
+pub(super) fn read_worker_log_tail(path: &Path, max_lines: usize) -> String {
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return String::new();
+    };
+    let Ok(file_len) = file.metadata().map(|metadata| metadata.len()) else {
+        return String::new();
+    };
+    let read_len = file_len.min(WORKER_LOG_TAIL_MAX_BYTES) as usize;
+    let start = file_len.saturating_sub(read_len as u64);
+    if file.seek(SeekFrom::Start(start)).is_err() {
+        return String::new();
+    }
+    let mut bytes = vec![0; read_len];
+    if file.read_exact(&mut bytes).is_err() {
+        return String::new();
+    }
+    let contents = String::from_utf8_lossy(&bytes);
+    let lines = contents.lines().collect::<Vec<_>>();
+    let start = lines.len().saturating_sub(max_lines);
+    scrub_diagnostic_text(&lines[start..].join("\n"))
 }
