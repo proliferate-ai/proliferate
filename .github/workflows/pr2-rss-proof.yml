@@ -1,0 +1,205 @@
+name: PR2 RSS proof (temporary)
+
+on:
+  push:
+    branches:
+      - codex/rust-observability-pr2-rss-proof
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CARGO_TERM_COLOR: always
+  EXPECTED_PROOF_REF: refs/heads/codex/rust-observability-pr2-rss-proof
+  EXPECTED_SOURCE_SHA: 40c9f404441427d21bc5966e1f7562c41bc8a1ff
+  EXPECTED_PROFILE_SHA256: 48bdab50f7d6c577d8bc35ef03f43ed3c720d7ab739220080e163bc0d133b14a
+
+concurrency:
+  group: pr2-rss-proof-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rss-proof:
+    name: RSS proof (${{ matrix.target }})
+    if: github.repository == 'proliferate-ai/proliferate' && github.event_name == 'push' && github.ref == 'refs/heads/codex/rust-observability-pr2-rss-proof'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            runner_architecture: aarch64
+            uname_architecture: arm64
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            runner_architecture: x86_64
+            uname_architecture: x86_64
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "1"
+      TARGET: ${{ matrix.target }}
+      EXPECTED_RUNNER_ARCHITECTURE: ${{ matrix.runner_architecture }}
+      EXPECTED_UNAME_ARCHITECTURE: ${{ matrix.uname_architecture }}
+
+    steps:
+      - name: Verify validation-only trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "proliferate-ai/proliferate" ]]
+          [[ "$GITHUB_EVENT_NAME" == "push" ]]
+          [[ "$GITHUB_REF" == "$EXPECTED_PROOF_REF" ]]
+
+      - name: Checkout exact PR2 source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 40c9f404441427d21bc5966e1f7562c41bc8a1ff
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify source, profile, and native runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_source_sha=$(git rev-parse HEAD)
+          [[ "$actual_source_sha" == "$EXPECTED_SOURCE_SHA" ]]
+          [[ -z "$(git status --porcelain=v1)" ]]
+          actual_profile_sha=$(shasum -a 256 fixtures/contracts/rust-observability-v1/rss-profile.json | awk '{print $1}')
+          [[ "$actual_profile_sha" == "$EXPECTED_PROFILE_SHA256" ]]
+          [[ "$(uname -m)" == "$EXPECTED_UNAME_ARCHITECTURE" ]]
+
+      - name: Setup Rust stable for target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Record validation context
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p proof/context proof/logs proof/receipts
+          {
+            printf 'source_sha=%s\n' "$(git rev-parse HEAD)"
+            printf 'workflow_event_sha=%s\n' "$GITHUB_SHA"
+            printf 'workflow_ref=%s\n' "$GITHUB_REF"
+            printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'workflow_run_attempt=%s\n' "$GITHUB_RUN_ATTEMPT"
+            printf 'workflow_url=https://github.com/%s/actions/runs/%s/attempts/%s\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            printf 'runner=%s\n' "${{ matrix.runner }}"
+            printf 'target=%s\n' "$TARGET"
+            printf 'uname_architecture=%s\n' "$(uname -m)"
+            printf 'profile_sha256=%s\n' "$EXPECTED_PROFILE_SHA256"
+          } > "proof/context/context-$TARGET.txt"
+          rustc -Vv > "proof/context/rustc-$TARGET.txt"
+          cargo -V > "proof/context/cargo-$TARGET.txt"
+          uname -a > "proof/context/uname-$TARGET.txt"
+          sw_vers > "proof/context/sw-vers-$TARGET.txt"
+          sysctl hw.machine hw.memsize > "proof/context/hardware-$TARGET.txt"
+
+      - name: Run exact locked release suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked --release --target "$TARGET" \
+            -p proliferate-diagnostics-protocol \
+            -p proliferate-diagnostics-collector \
+            --all-targets -- --test-threads=1 \
+            2>&1 | tee "proof/logs/cargo-test-$TARGET.log"
+
+      - name: Build exact release collector and runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked --release --target "$TARGET" \
+            -p proliferate-diagnostics-collector \
+            --bin proliferate-diagnostics-collector \
+            --bin proliferate-diagnostics-rss-profile \
+            2>&1 | tee "proof/logs/cargo-build-$TARGET.log"
+          test -x "target/$TARGET/release/proliferate-diagnostics-collector"
+          test -x "target/$TARGET/release/proliferate-diagnostics-rss-profile"
+
+      - name: Execute exact frozen RSS profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner="$PWD/target/$TARGET/release/proliferate-diagnostics-rss-profile"
+          collector="$PWD/target/$TARGET/release/proliferate-diagnostics-collector"
+          "$runner" \
+            --collector-binary "$collector" \
+            --profile fixtures/contracts/rust-observability-v1/rss-profile.json \
+            --target "$TARGET" \
+            --output-dir proof/receipts \
+            2>&1 | tee "proof/logs/rss-profile-$TARGET.log"
+
+      - name: Verify receipt and sample invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="proof/receipts/rss-profile-$TARGET.json"
+          samples="proof/receipts/rss-samples-$TARGET.csv"
+          collector="target/$TARGET/release/proliferate-diagnostics-collector"
+          test -s "$receipt"
+          test -s "$samples"
+          python3 - "$receipt" "$samples" "$collector" "$TARGET" "$EXPECTED_RUNNER_ARCHITECTURE" "$EXPECTED_PROFILE_SHA256" <<'PY'
+          import csv
+          import hashlib
+          import json
+          import pathlib
+          import sys
+
+          receipt_path, samples_path, collector_path, target, runner_arch, profile_sha = sys.argv[1:]
+          evidence = json.loads(pathlib.Path(receipt_path).read_text())
+          profile = json.loads(pathlib.Path("fixtures/contracts/rust-observability-v1/rss-profile.json").read_text())
+          collector_sha = hashlib.sha256(pathlib.Path(collector_path).read_bytes()).hexdigest()
+
+          assert evidence["target"] == target
+          assert evidence["runner_architecture"] == runner_arch
+          assert evidence["binary_sha256"] == collector_sha
+          assert evidence["profile_sha256"] == profile_sha
+          assert evidence["profile"] == profile
+          assert evidence["attempted_records"] == 600_000
+          assert evidence["expected_oversized_records"] == 600
+          assert evidence["ingest_errors"] == 0
+          assert evidence["query_errors"] == 0
+          assert evidence["export_errors"] == 0
+          assert evidence["export_cancellation_injected"] is True
+          assert evidence["export_cancellation_observed"] is True
+          assert evidence["max_response_micros"] <= 1_000_000
+          assert evidence["peak_rss_bytes"] <= 52_428_800
+          assert evidence["health"]["retained_bytes"] <= 33_554_432
+          assert evidence["health"]["oversized_records"] == 600
+          assert evidence["health"]["rejected_records"] == 600
+          assert evidence["health"]["tail_reader_drops"] > 0
+          assert evidence["child_working_directory_files"] == 0
+          assert evidence["token_absent_from_descriptor_stdout_stderr_and_url"] is True
+          assert evidence["pass"] is True
+          assert evidence["failures"] == []
+
+          evicted = evidence["health"]["evictions_by_reason"]["evicted"]
+          assert evicted > 0
+          assert evidence["health"]["oldest_cursor"] == evicted + 1
+          assert sum(evidence["health"]["evictions_by_class"].values()) == evicted
+          assert sum(evidence["health"]["evictions_by_component"].values()) == evicted
+
+          with pathlib.Path(samples_path).open(newline="") as handle:
+              rows = list(csv.DictReader(handle))
+          rss_values = [int(row["rss_bytes"]) for row in rows]
+          assert len(rows) == evidence["rss_samples"]
+          assert rss_values
+          assert max(rss_values) == evidence["peak_rss_bytes"]
+          assert all(value <= 52_428_800 for value in rss_values)
+          PY
+          printf 'receipt_verified=true\nsource_sha=%s\ntarget=%s\n' "$EXPECTED_SOURCE_SHA" "$TARGET" > "proof/context/verification-$TARGET.txt"
+          shasum -a 256 proof/context/* proof/logs/* proof/receipts/* > "proof/SHA256SUMS-$TARGET"
+
+      - name: Upload RSS proof
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr2-rss-proof-${{ matrix.target }}
+          path: proof/
+          if-no-files-found: error
+          retention-days: 14
