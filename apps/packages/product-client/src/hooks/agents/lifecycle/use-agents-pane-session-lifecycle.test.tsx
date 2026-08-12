@@ -1,0 +1,187 @@
+// @vitest-environment jsdom
+
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getSessionStreamHandle,
+  resetSessionStreamHandlesForTest,
+  setSessionStreamHandle,
+  type ManagedSessionStreamHandle,
+} from "#product/lib/access/anyharness/session-stream-handles";
+import {
+  createEmptySessionRecord,
+  getSessionRecord,
+  patchSessionRecord,
+  putSessionRecord,
+} from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import {
+  useAgentsPaneSessionLifecycle,
+  type AgentsPaneSessionLifecycleInput,
+} from "#product/hooks/agents/lifecycle/use-agents-pane-session-lifecycle";
+
+const mocks = vi.hoisted(() => ({
+  ensureSessionStreamConnected: vi.fn(),
+  hotSessionIds: new Set<string>(),
+  mountSubagentChildSession: vi.fn(),
+  rehydrateSessionSlotFromHistory: vi.fn(),
+}));
+
+vi.mock("#product/hooks/chat/workflows/subagents/use-linked-session-mounting", () => ({
+  useLinkedSessionMounting: () => ({
+    mountSubagentChildSession: mocks.mountSubagentChildSession,
+  }),
+}));
+
+vi.mock("#product/hooks/sessions/workflows/use-session-runtime-actions", () => ({
+  useSessionRuntimeActions: () => ({
+    ensureSessionStreamConnected: mocks.ensureSessionStreamConnected,
+    rehydrateSessionSlotFromHistory: mocks.rehydrateSessionSlotFromHistory,
+  }),
+}));
+
+vi.mock("#product/lib/workflows/sessions/hot-session-ingest-manager", () => ({
+  isHotSessionClientId: (sessionId: string) => mocks.hotSessionIds.has(sessionId),
+}));
+
+const handles = new Map<string, ManagedSessionStreamHandle>();
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.hotSessionIds.clear();
+  handles.clear();
+  resetSessionStreamHandlesForTest();
+  useSessionDirectoryStore.getState().clearEntries();
+  useSessionTranscriptStore.getState().clearEntries();
+  mocks.mountSubagentChildSession.mockResolvedValue(undefined);
+  mocks.rehydrateSessionSlotFromHistory.mockResolvedValue(true);
+  mocks.ensureSessionStreamConnected.mockImplementation(async (sessionId: string) => {
+    const record = getSessionRecord(sessionId);
+    if (!record || record.streamConnectionState === "open") {
+      return;
+    }
+    const handle = handles.get(sessionId);
+    if (!handle || !record.materializedSessionId) {
+      return;
+    }
+    setSessionStreamHandle({
+      sessionId: record.materializedSessionId,
+      workspaceId: record.workspaceId,
+      handle,
+    });
+    patchSessionRecord(sessionId, { streamConnectionState: "open" });
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  resetSessionStreamHandlesForTest();
+  useSessionDirectoryStore.getState().clearEntries();
+  useSessionTranscriptStore.getState().clearEntries();
+});
+
+describe("useAgentsPaneSessionLifecycle stream ownership", () => {
+  it("keeps identical rerenders stable and swaps one pane-owned stream per child", async () => {
+    const handleA = installChild("client-a", "child-a");
+    const handleB = installChild("client-b", "child-b");
+    const inputA = createInput("client-a", "child-a");
+    const inputB = createInput("client-b", "child-b");
+    const rendered = renderHook(
+      ({ input }: { input: AgentsPaneSessionLifecycleInput }) =>
+        useAgentsPaneSessionLifecycle(input),
+      { initialProps: { input: inputA } },
+    );
+
+    await waitFor(() => {
+      expect(mocks.ensureSessionStreamConnected).toHaveBeenCalledTimes(1);
+    });
+    expect(mocks.rehydrateSessionSlotFromHistory).toHaveBeenCalledTimes(1);
+
+    rendered.rerender({ input: inputA });
+    await act(async () => Promise.resolve());
+    expect(mocks.rehydrateSessionSlotFromHistory).toHaveBeenCalledTimes(1);
+    expect(mocks.ensureSessionStreamConnected).toHaveBeenCalledTimes(1);
+
+    rendered.rerender({ input: inputB });
+    await waitFor(() => {
+      expect(mocks.ensureSessionStreamConnected).toHaveBeenCalledTimes(2);
+    });
+    expect(handleA.close).toHaveBeenCalledTimes(1);
+    expect(mocks.rehydrateSessionSlotFromHistory).toHaveBeenCalledTimes(2);
+
+    rendered.unmount();
+    expect(handleB.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands a pane-opened stream to hot-session ingestion without closing it", async () => {
+    const handle = installChild("client-a", "child-a");
+    const rendered = renderHook(() =>
+      useAgentsPaneSessionLifecycle(createInput("client-a", "child-a"))
+    );
+    await waitFor(() => {
+      expect(getSessionStreamHandle("child-a")).toBe(handle);
+    });
+
+    mocks.hotSessionIds.add("client-a");
+    rendered.unmount();
+
+    expect(handle.close).not.toHaveBeenCalled();
+    expect(getSessionStreamHandle("child-a")).toBe(handle);
+  });
+
+  it("closes a pane-owned handle registered by an in-flight connect", async () => {
+    const handle = installChild("client-a", "child-a");
+    let finishConnect!: () => void;
+    const connectGate = new Promise<void>((resolve) => {
+      finishConnect = resolve;
+    });
+    mocks.ensureSessionStreamConnected.mockImplementation(async (sessionId: string) => {
+      setSessionStreamHandle({ sessionId: "child-a", handle });
+      patchSessionRecord(sessionId, { streamConnectionState: "connecting" });
+      await connectGate;
+    });
+    const rendered = renderHook(() =>
+      useAgentsPaneSessionLifecycle(createInput("client-a", "child-a"))
+    );
+    await waitFor(() => {
+      expect(mocks.ensureSessionStreamConnected).toHaveBeenCalledTimes(1);
+    });
+
+    rendered.unmount();
+    expect(handle.close).toHaveBeenCalledTimes(1);
+    expect(getSessionStreamHandle("child-a")).toBeNull();
+
+    await act(async () => {
+      finishConnect();
+      await connectGate;
+    });
+  });
+});
+
+function installChild(clientSessionId: string, childSessionId: string) {
+  const handle = { close: vi.fn() } satisfies ManagedSessionStreamHandle;
+  handles.set(clientSessionId, handle);
+  putSessionRecord(createEmptySessionRecord(clientSessionId, "claude", {
+    materializedSessionId: childSessionId,
+    workspaceId: "workspace-1",
+  }));
+  patchSessionRecord(clientSessionId, { streamConnectionState: "disconnected" });
+  return handle;
+}
+
+function createInput(
+  clientSessionId: string,
+  childSessionId: string,
+): AgentsPaneSessionLifecycleInput {
+  return {
+    workspaceId: "workspace-1",
+    parentSessionId: "parent-1",
+    childSessionId,
+    clientSessionId,
+    sessionLinkId: null,
+    label: "Worker",
+    isClosed: false,
+    isPaneRouteActive: true,
+  };
+}

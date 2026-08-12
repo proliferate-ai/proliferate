@@ -4,9 +4,16 @@ import type { SessionStreamConnectionState } from "#product/lib/domain/sessions/
 import { resolveSessionViewState, type SessionViewState } from "#product/domain/sessions/activity";
 import { useLinkedSessionMounting } from "#product/hooks/chat/workflows/subagents/use-linked-session-mounting";
 import { useSessionRuntimeActions } from "#product/hooks/sessions/workflows/use-session-runtime-actions";
+import {
+  closeSessionStreamHandle,
+  getSessionStreamHandle,
+  type ManagedSessionStreamHandle,
+} from "#product/lib/access/anyharness/session-stream-handles";
+import { isHotSessionClientId } from "#product/lib/workflows/sessions/hot-session-ingest-manager";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
   ensureSessionTranscriptEntry,
+  getMaterializedSessionId,
   getSessionRecord,
   patchSessionRecord,
 } from "#product/stores/sessions/session-records";
@@ -37,6 +44,20 @@ export interface AgentsPaneSessionLifecycleState {
   reconnect: () => void;
 }
 
+interface PaneStreamLease {
+  clientSessionId: string;
+  materializedSessionId: string;
+  handle: ManagedSessionStreamHandle;
+}
+
+interface PaneStreamAttempt {
+  clientSessionId: string;
+  materializedSessionId: string | null;
+  baselineHandle: ManagedSessionStreamHandle | null;
+  mayOwnOpenedHandle: boolean;
+  token: symbol;
+}
+
 /**
  * Mount/hydrate/connect lifecycle for the Agents-pane detail transcript. Uses
  * the existing linked-session mounting, explicit history hydration, and
@@ -65,6 +86,8 @@ export function useAgentsPaneSessionLifecycle(
   const [historyPhase, setHistoryPhase] = useState<AgentsPaneHistoryPhase>("loading");
   const [historyNonce, setHistoryNonce] = useState(0);
   const [streamRequestPending, setStreamRequestPending] = useState(false);
+  const paneStreamLeaseRef = useRef<PaneStreamLease | null>(null);
+  const paneStreamAttemptRef = useRef<PaneStreamAttempt | null>(null);
 
   // The owning hooks currently expose render-unstable callback identities.
   // Keep the latest capabilities behind a ref so a transcript-store rerender
@@ -89,15 +112,108 @@ export function useAgentsPaneSessionLifecycle(
     && guardRef.current.clientSessionId === sessionId
   ), []);
 
+  const releasePaneStream = useCallback((sessionId: string) => {
+    const lease = paneStreamLeaseRef.current?.clientSessionId === sessionId
+      ? paneStreamLeaseRef.current
+      : null;
+    const attempt = paneStreamAttemptRef.current?.clientSessionId === sessionId
+      ? paneStreamAttemptRef.current
+      : null;
+    if (lease) {
+      paneStreamLeaseRef.current = null;
+    }
+    if (attempt) {
+      paneStreamAttemptRef.current = null;
+    }
+
+    // Once hot-session ingestion targets this child, that manager owns the
+    // shared slot. Leaving the pane must not tear down its live attachment.
+    if (isHotSessionClientId(sessionId)) {
+      return;
+    }
+
+    const handlesToClose = new Map<string, ManagedSessionStreamHandle>();
+    if (lease) {
+      handlesToClose.set(lease.materializedSessionId, lease.handle);
+    }
+    if (attempt?.mayOwnOpenedHandle && attempt.materializedSessionId) {
+      const currentHandle = getSessionStreamHandle(attempt.materializedSessionId);
+      if (currentHandle && currentHandle !== attempt.baselineHandle) {
+        handlesToClose.set(attempt.materializedSessionId, currentHandle);
+      }
+    }
+
+    let closed = false;
+    for (const [materializedSessionId, handle] of handlesToClose) {
+      closed = closeSessionStreamHandle(materializedSessionId, handle) || closed;
+    }
+    if (closed && getSessionRecord(sessionId)) {
+      useSessionDirectoryStore.getState().patchEntry(sessionId, {
+        streamConnectionState: "disconnected",
+      });
+    }
+  }, []);
+
   const connectPaneStream = useCallback((sessionId: string) => {
     if (guardRef.current.isClosed || !isCurrent(sessionId)) {
       return;
     }
+    if (paneStreamAttemptRef.current?.clientSessionId === sessionId) {
+      return;
+    }
+
+    const materializedSessionId = getMaterializedSessionId(sessionId);
+    const baselineHandle = materializedSessionId
+      ? getSessionStreamHandle(materializedSessionId)
+      : null;
+    const existingLease = paneStreamLeaseRef.current;
+    const continuingPaneLease = !!existingLease
+      && existingLease.clientSessionId === sessionId
+      && existingLease.materializedSessionId === materializedSessionId
+      && existingLease.handle === baselineHandle;
+    const streamConnectionState = getSessionRecord(sessionId)?.streamConnectionState ?? null;
+    const attempt: PaneStreamAttempt = {
+      clientSessionId: sessionId,
+      materializedSessionId,
+      baselineHandle,
+      mayOwnOpenedHandle: !isHotSessionClientId(sessionId) && (
+        continuingPaneLease
+        || (!baselineHandle
+          && streamConnectionState !== "connecting"
+          && streamConnectionState !== "open")
+      ),
+      token: Symbol("agents-pane-stream-attempt"),
+    };
+    paneStreamAttemptRef.current = attempt;
     setStreamRequestPending(true);
     void lifecycleCapabilitiesRef.current.ensureSessionStreamConnected(sessionId, {
       awaitOpen: true,
+      reconnectOwner: "external",
       isCurrent: () => !guardRef.current.isClosed && isCurrent(sessionId),
+    }).then(() => {
+      if (paneStreamAttemptRef.current?.token !== attempt.token || !isCurrent(sessionId)) {
+        return;
+      }
+      if (!attempt.mayOwnOpenedHandle || isHotSessionClientId(sessionId)) {
+        return;
+      }
+      const currentMaterializedSessionId = getMaterializedSessionId(sessionId);
+      if (!currentMaterializedSessionId) {
+        return;
+      }
+      const currentHandle = getSessionStreamHandle(currentMaterializedSessionId);
+      if (!currentHandle) {
+        return;
+      }
+      paneStreamLeaseRef.current = {
+        clientSessionId: sessionId,
+        materializedSessionId: currentMaterializedSessionId,
+        handle: currentHandle,
+      };
     }).finally(() => {
+      if (paneStreamAttemptRef.current?.token === attempt.token) {
+        paneStreamAttemptRef.current = null;
+      }
       if (isCurrent(sessionId)) {
         setStreamRequestPending(false);
       }
@@ -158,6 +274,7 @@ export function useAgentsPaneSessionLifecycle(
           isPaneRouteActive: false,
         };
       }
+      releasePaneStream(sessionId);
     };
   }, [
     childSessionId,
@@ -169,6 +286,7 @@ export function useAgentsPaneSessionLifecycle(
     isClosed,
     label,
     parentSessionId,
+    releasePaneStream,
     sessionLinkId,
     workspaceId,
   ]);
