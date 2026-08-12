@@ -36,6 +36,10 @@ import { UserAvatar } from "#product/primitives/UserAvatar";
 import { Trash } from "#product/primitives/icons/core";
 import { useState } from "react";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
+// Demos with more than a one-liner's worth of fixture live beside the tier in
+// `entries/` so several authors can add vocabulary without editing this file.
+import { ICON_TILE_LIBRARY_ENTRY } from "./entries/icon-tile";
+import { STATUS_DOT_ENTRY } from "./entries/status-dot";
 import type { LibraryEntry, LibraryTier } from "./types";
 
 function CheckboxDemo() {
@@ -271,6 +275,7 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
   { name: "IconButton", subpath: "#product/primitives/IconButton", render: () => (
     <IconButton title="Delete" onClick={noop}><Trash className="icon-paired" /></IconButton>
   ) },
+  ICON_TILE_LIBRARY_ENTRY,
   { name: "Input", subpath: "#product/primitives/Input", render: () => <Input placeholder="Input" defaultValue="" /> },
   { name: "Label", subpath: "#product/primitives/Label", render: () => <Label>Label</Label> },
   { name: "PaneIconButton", subpath: "#product/primitives/PaneIconButton", render: () => (
@@ -296,6 +301,7 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
     <Button variant="secondary" size="sm" onClick={noop}>Toast trigger (see app toaster)</Button>
   ) },
   { name: "Spinner", subpath: "#product/primitives/Spinner", render: () => <Spinner className="icon-paired" /> },
+  STATUS_DOT_ENTRY,
   { name: "Switch", subpath: "#product/primitives/Switch", render: SwitchDemo },
   { name: "Textarea", subpath: "#product/primitives/Textarea", render: () => <Textarea placeholder="Textarea" defaultValue="" /> },
   { name: "Tooltip", subpath: "#product/primitives/Tooltip", render: () => (

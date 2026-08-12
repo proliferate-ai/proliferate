@@ -22,7 +22,7 @@
         "apps/packages/product-client/src/components/workspace/chat/plans/PlanHandoffDialog.tsx": 2,
         "apps/packages/product-client/src/components/workspace/chat/transcript/UserMessage.tsx": 1,
         "apps/packages/product-client/src/components/workspace/repo-setup/WorkspaceInventory.tsx": 5,
-        "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx": 1
+        "apps/packages/product-client/src/primitives/patterns/tabs/TabGroupPill.tsx": 1
       },
       "justification": "v2 4.2 widened FOREGROUND_ALPHA_RE to every Tailwind alpha spelling in every variant position (bg-foreground/5, /[0.04], /[8%]). The 82 static plain-numeric sites the prior regex could not see are pre-existing and are censused here so Workflow 2 has a ratchet target for them; the ban is at full strength for anything new. The single apps/packages/product-surfaces/ site is newly visible for a different reason \u2014 see the R-V2-1 census-completion trail on fixed-stock-text-utility \u2014 and migrates with the rest."
     }
@@ -40,7 +40,7 @@
     "apps/packages/product-client/src/components/settings/panes/organization/OrganizationLogo.tsx|foreground-alpha-foundation": 2,
     "apps/packages/product-client/src/components/workspace/chat/plans/PlanHandoffDialog.tsx|foreground-alpha-foundation": 2,
     "apps/packages/product-client/src/components/workspace/repo-setup/WorkspaceInventory.tsx|foreground-alpha-foundation": 5,
-    "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx|foreground-alpha-foundation": 1
+    "apps/packages/product-client/src/primitives/patterns/tabs/TabGroupPill.tsx|foreground-alpha-foundation": 1
   },
   "standardNumericZ": {
     "apps/packages/product-client/src/components/auth/AuthGate.tsx|z-50": 1,
@@ -95,8 +95,6 @@
     "apps/packages/product-client/src/components/workspace/shell/sidebar/ProductSidebarRepositories.tsx|z-10": 1,
     "apps/packages/product-client/src/components/workspace/shell/sidebar/ProductSidebarThreads.tsx|z-10": 1,
     "apps/packages/product-client/src/components/workspace/shell/sidebar/WorkspaceShellSidebar.tsx|z-10": 1,
-    "apps/packages/product-client/src/components/workspace/shell/tabs/ChromeWorkspaceTab.tsx|z-10": 1,
-    "apps/packages/product-client/src/components/workspace/shell/tabs/ChromeWorkspaceTab.tsx|z-20": 4,
     "apps/packages/product-client/src/components/workspace/terminals/TerminalCommandFloatingAction.tsx|z-20": 1,
     "apps/packages/product-client/src/pages/AuthenticatedAppHost.tsx|z-50": 1,
     "apps/packages/product-client/src/primitives/AlertDialog.tsx|z-50": 2,
@@ -106,6 +104,8 @@
     "apps/packages/product-client/src/primitives/PopoverButton.tsx|z-50": 1,
     "apps/packages/product-client/src/primitives/patterns/ModalShell.tsx|z-10": 1,
     "apps/packages/product-client/src/primitives/patterns/PageContentFrame.tsx|z-30": 1,
+    "apps/packages/product-client/src/primitives/patterns/tabs/ChromeTab.tsx|z-10": 1,
+    "apps/packages/product-client/src/primitives/patterns/tabs/ChromeTab.tsx|z-20": 4,
     "apps/packages/product-client/src/primitives/tooltip-primitive.tsx|z-50": 1
   },
   "unvirtualizedLongLists": {

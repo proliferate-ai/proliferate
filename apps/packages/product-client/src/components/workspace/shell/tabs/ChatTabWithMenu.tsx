@@ -5,8 +5,8 @@ import type {
   Ref,
 } from "react";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { ChromeTab } from "#product/primitives/patterns/tabs/ChromeTab";
 import { SessionTitleRenamePopover } from "#product/components/workspace/shell/tabs/SessionTitleRenamePopover";
-import { ChromeWorkspaceTab } from "#product/components/workspace/shell/tabs/ChromeWorkspaceTab";
 import { DelegatedAgentHoverCard } from "#product/components/workspace/shell/tabs/DelegatedAgentHoverCard";
 import type { ManualChatGroupEditorAnchorRect } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { TabContextMenu } from "#product/components/workspace/shell/tabs/TabContextMenu";
@@ -124,7 +124,7 @@ export function ChatTabWithMenu({
   }
 
   const tabElement = (
-    <ChromeWorkspaceTab
+    <ChromeTab
       isActive={tab.isActive}
       isMultiSelected={isMultiSelected}
       width={width}
