@@ -9,6 +9,7 @@ use crate::diagnostics::support_snapshot::schema::enums::{
     SupportEvidenceSourceV1, SupportOmissionReasonV1,
 };
 use crate::diagnostics::support_snapshot::scrub::SupportExportScrubber;
+use crate::diagnostics::support_snapshot::scrub::SupportTextKind;
 
 fn accepted_record() -> CollectorAcceptedRecordV1 {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(concat!(
@@ -227,6 +228,42 @@ fn semantic_argument_roles_are_closed_exact_keys_not_suffix_guesses() {
         .omissions
         .iter()
         .any(|entry| entry.reason == SupportOmissionReasonV1::SourceInvalid));
+}
+
+#[test]
+fn embedded_protocol_timestamps_keep_valid_offsets_while_support_timestamps_require_z() {
+    let offset_timestamp = "2026-08-12T12:34:56+05:30";
+    let mut record = accepted_record();
+    record.record.source_timestamp = offset_timestamp.to_owned();
+    record.accepted_timestamp = offset_timestamp.to_owned();
+    let output = SupportExportScrubber::default()
+        .scrub_accepted_record(record, SupportEvidenceSourceV1::Collector)
+        .expect("scrub protocol timestamp")
+        .value
+        .expect("protocol-valid record retained");
+    assert_eq!(output.record.source_timestamp, offset_timestamp);
+    assert_eq!(output.accepted_timestamp, offset_timestamp);
+
+    let support_owned = SupportExportScrubber::default()
+        .scrub_text(
+            offset_timestamp.to_owned(),
+            SupportEvidenceSourceV1::Package,
+            SupportTextKind::Timestamp,
+        )
+        .expect("scrub support-owned timestamp");
+    assert!(support_owned.value.is_none());
+    assert!(support_owned
+        .accounting
+        .omissions
+        .iter()
+        .any(|entry| entry.reason == SupportOmissionReasonV1::SourceInvalid));
+
+    let mut invalid = accepted_record();
+    invalid.record.source_timestamp = "2026-08-12 12:34:56".to_owned();
+    let output = SupportExportScrubber::default()
+        .scrub_accepted_record(invalid, SupportEvidenceSourceV1::Collector)
+        .expect("omit protocol-invalid record");
+    assert!(output.value.is_none());
 }
 
 #[test]

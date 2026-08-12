@@ -219,28 +219,7 @@ fn accepted_protocol_integer_must_also_be_nonnegative_for_support() {
 }
 
 #[test]
-fn support_overlay_rejects_shape_only_protocol_timestamps() {
-    let mut snapshot = completed_snapshot();
-    snapshot.records[0].accepted_timestamp = "2026-02-30T00:00:00Z".to_string();
-    stabilize_serialized_bytes(&mut snapshot).expect("stabilize");
-    assert_eq!(
-        validate_snapshot(&snapshot),
-        Err(SupportSchemaError::InvalidTimestamp)
-    );
-
-    let mut snapshot = completed_snapshot();
-    snapshot
-        .collector
-        .export_manifest
-        .as_mut()
-        .expect("manifest")
-        .generated_at = "2026-13-01T00:00:00Z".to_string();
-    stabilize_serialized_bytes(&mut snapshot).expect("stabilize");
-    assert_eq!(
-        validate_snapshot(&snapshot),
-        Err(SupportSchemaError::InvalidTimestamp)
-    );
-
+fn embedded_export_manifest_still_revalidates_protocol_shape() {
     let mut snapshot = completed_snapshot();
     snapshot
         .collector

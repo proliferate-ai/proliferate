@@ -11,7 +11,7 @@ use proliferate_diagnostics_protocol::v1::validation::{
 };
 use serde::Serialize;
 
-use super::{validate_safe_u64, validate_timestamp, SupportSchemaError};
+use super::{validate_protocol_timestamp, validate_safe_u64, SupportSchemaError};
 
 pub(super) fn accepted_record(
     record: &CollectorAcceptedRecordV1,
@@ -22,8 +22,8 @@ pub(super) fn accepted_record(
         record: record.clone(),
     })
     .map_err(|_| SupportSchemaError::InvalidProtocolValue(context))?;
-    validate_timestamp(&record.record.source_timestamp)?;
-    validate_timestamp(&record.accepted_timestamp)
+    validate_protocol_timestamp(&record.record.source_timestamp)?;
+    validate_protocol_timestamp(&record.accepted_timestamp)
 }
 
 pub(super) fn producer_record(
@@ -33,7 +33,7 @@ pub(super) fn producer_record(
     reject_negative_integers(record, context)?;
     validate_producer_record(record)
         .map_err(|_| SupportSchemaError::InvalidProtocolValue(context))?;
-    validate_timestamp(&record.source_timestamp)
+    validate_protocol_timestamp(&record.source_timestamp)
 }
 
 pub(super) fn gap(gap: &GapV1, context: &'static str) -> Result<(), SupportSchemaError> {
@@ -49,7 +49,7 @@ pub(super) fn export_manifest(
     reject_negative_integers(manifest, context)?;
     validate_export_manifest(manifest)
         .map_err(|_| SupportSchemaError::InvalidProtocolValue(context))?;
-    validate_timestamp(&manifest.generated_at)?;
+    validate_protocol_timestamp(&manifest.generated_at)?;
     for timestamp in [
         manifest.filters.source_time_from.as_deref(),
         manifest.filters.source_time_to.as_deref(),
@@ -57,7 +57,7 @@ pub(super) fn export_manifest(
     .into_iter()
     .flatten()
     {
-        validate_timestamp(timestamp)?;
+        validate_protocol_timestamp(timestamp)?;
     }
     Ok(())
 }

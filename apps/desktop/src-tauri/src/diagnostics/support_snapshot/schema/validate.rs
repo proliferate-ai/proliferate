@@ -172,6 +172,21 @@ pub fn validate_timestamp(value: &str) -> Result<(), SupportSchemaError> {
     parse_timestamp(value).map(|_| ())
 }
 
+/// Embedded diagnostics-protocol timestamps remain RFC 3339 instants but may
+/// carry the offset form accepted by the public protocol validator.
+pub(super) fn validate_protocol_timestamp(value: &str) -> Result<(), SupportSchemaError> {
+    parse_protocol_timestamp(value).map(|_| ())
+}
+
+pub(in crate::diagnostics::support_snapshot) fn parse_protocol_timestamp(
+    value: &str,
+) -> Result<DateTime<Utc>, SupportSchemaError> {
+    validate_id(value)?;
+    DateTime::parse_from_rfc3339(value)
+        .map(|parsed| parsed.with_timezone(&Utc))
+        .map_err(|_| SupportSchemaError::InvalidTimestamp)
+}
+
 pub(super) fn parse_timestamp(value: &str) -> Result<DateTime<Utc>, SupportSchemaError> {
     validate_id(value)?;
     let bytes = value.as_bytes();

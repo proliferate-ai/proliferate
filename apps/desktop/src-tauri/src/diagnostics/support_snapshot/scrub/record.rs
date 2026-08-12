@@ -63,7 +63,7 @@ impl SupportExportScrubber {
             record.accepted_timestamp = required(self.scrub_text_into(
                 &record.accepted_timestamp,
                 record.accepted_timestamp.len(),
-                TextRole::Timestamp,
+                TextRole::ProtocolTimestamp,
                 source,
                 &mut accounting,
             )?)?;
@@ -98,7 +98,7 @@ impl SupportExportScrubber {
 
         record.source_timestamp = required(self.scrub_owned_record_text(
             record.source_timestamp,
-            TextRole::Timestamp,
+            TextRole::ProtocolTimestamp,
             source,
             accounting,
         )?)?;

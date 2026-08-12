@@ -360,6 +360,8 @@ mod manifest_residual_tests;
 mod populated_golden_tests;
 #[path = "tests/protocol.rs"]
 mod protocol_tests;
+#[path = "tests/protocol_timestamps.rs"]
+mod protocol_timestamp_tests;
 #[path = "tests/residuals.rs"]
 mod residual_tests;
 #[path = "tests/unions.rs"]

@@ -164,27 +164,29 @@ pub(super) fn normalize_key(key: &str) -> String {
 }
 
 pub(super) fn secret_key_class(normalized: &str) -> Option<SupportSecretClassV1> {
-    if let Some(class) = direct_secret_key_class(normalized) {
-        return Some(class);
-    }
-    for derived in [
-        "length",
-        "prefix",
-        "suffix",
-        "hash",
-        "sha",
-        "sha256",
-        "checksum",
-        "digest",
-        "fingerprint",
-    ] {
-        if let Some(secret_base) = normalized.strip_suffix(derived) {
-            if let Some(class) = direct_secret_key_class(secret_base) {
-                return Some(class);
+    let mut candidate = normalized;
+    'derived: loop {
+        if let Some(class) = direct_secret_key_class(candidate) {
+            return Some(class);
+        }
+        for suffix in [
+            "length",
+            "prefix",
+            "suffix",
+            "sha256",
+            "checksum",
+            "fingerprint",
+            "digest",
+            "hash",
+            "sha",
+        ] {
+            if let Some(base) = candidate.strip_suffix(suffix) {
+                candidate = base;
+                continue 'derived;
             }
         }
+        return None;
     }
-    None
 }
 
 fn direct_secret_key_class(normalized: &str) -> Option<SupportSecretClassV1> {
@@ -197,10 +199,12 @@ fn direct_secret_key_class(normalized: &str) -> Option<SupportSecretClassV1> {
         | "supportauthorizationid"
         | "supportpermitid" => SupportSecretClassV1::Authorization,
         "cookie" | "cookies" | "cookieheader" | "setcookie" => SupportSecretClassV1::Cookie,
-        "accesstoken" | "bearertoken" | "rawtoken" => SupportSecretClassV1::AccessToken,
+        "accesstoken" | "bearertoken" | "rawtoken" | "sessiontoken" | "securitytoken" => {
+            SupportSecretClassV1::AccessToken
+        }
         "refreshtoken" => SupportSecretClassV1::RefreshToken,
         "identitytoken" | "idtoken" => SupportSecretClassV1::IdentityToken,
-        "apikey" | "xapikey" => SupportSecretClassV1::ApiKey,
+        "apikey" | "xapikey" | "secretkey" => SupportSecretClassV1::ApiKey,
         "clientsecret" => SupportSecretClassV1::ClientSecret,
         "password" | "passphrase" => SupportSecretClassV1::Password,
         "privatekey" | "signingkey" => SupportSecretClassV1::PrivateKey,

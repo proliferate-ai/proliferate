@@ -14,7 +14,7 @@ use super::super::model::evidence::SupportFallbackComponentV1;
 use super::super::model::health::SupportTauriProducerHealthV1;
 use super::super::model::manifest::{SupportSessionCollectionManifestV1, SupportSourceManifestV1};
 use super::super::model::snapshot::SupportSnapshotV3;
-use super::{parse_timestamp, SupportSchemaError};
+use super::{parse_protocol_timestamp, parse_timestamp, SupportSchemaError};
 
 pub(super) fn validate_snapshot_relationships(
     snapshot: &SupportSnapshotV3,
@@ -308,7 +308,7 @@ fn validate_collector_relationships(
     let from = parse_timestamp(&snapshot.selection.source_time_from)?;
     let to = parse_timestamp(&snapshot.selection.source_time_to)?;
     for record in &snapshot.records {
-        let source_time = parse_timestamp(&record.record.source_timestamp)?;
+        let source_time = parse_protocol_timestamp(&record.record.source_timestamp)?;
         if source_time < from || source_time > to {
             return Err(SupportSchemaError::InvariantViolation(
                 "record outside collector source window",

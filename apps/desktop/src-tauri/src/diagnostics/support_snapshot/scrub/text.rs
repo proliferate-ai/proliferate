@@ -20,6 +20,7 @@ pub(super) enum TextRole {
     Identifier,
     Name,
     Timestamp,
+    ProtocolTimestamp,
     Hash,
 }
 
@@ -28,14 +29,18 @@ impl TextRole {
         match self {
             Self::Generic => GENERIC_STRING_BYTES,
             Self::Content => CONTENT_STRING_BYTES,
-            Self::Identifier | Self::Name | Self::Timestamp | Self::Hash => MAX_ID_BYTES,
+            Self::Identifier
+            | Self::Name
+            | Self::Timestamp
+            | Self::ProtocolTimestamp
+            | Self::Hash => MAX_ID_BYTES,
         }
     }
 
     fn omit_when_oversized(self) -> bool {
         matches!(
             self,
-            Self::Identifier | Self::Name | Self::Timestamp | Self::Hash
+            Self::Identifier | Self::Name | Self::Timestamp | Self::ProtocolTimestamp | Self::Hash
         )
     }
 
@@ -110,7 +115,14 @@ impl SupportExportScrubber {
                 });
             }
         };
-        let value = self.scrub_text_into(decoded, value.len(), role, source, &mut accounting)?;
+        let value = self.scrub_text_into_with_tail(
+            decoded,
+            value.len(),
+            decoded.len() < value.len(),
+            role,
+            source,
+            &mut accounting,
+        )?;
         Ok(SupportOptionalScrubbed { value, accounting })
     }
 
@@ -118,6 +130,18 @@ impl SupportExportScrubber {
         &self,
         input: &str,
         original_bytes: usize,
+        role: TextRole,
+        source: SupportEvidenceSourceV1,
+        accounting: &mut SupportScrubAccounting,
+    ) -> Result<Option<String>, SupportScrubError> {
+        self.scrub_text_into_with_tail(input, original_bytes, false, role, source, accounting)
+    }
+
+    fn scrub_text_into_with_tail(
+        &self,
+        input: &str,
+        original_bytes: usize,
+        adapter_has_unscanned_tail: bool,
         role: TextRole,
         source: SupportEvidenceSourceV1,
         accounting: &mut SupportScrubAccounting,
@@ -133,14 +157,22 @@ impl SupportExportScrubber {
             return Ok(None);
         }
 
+        let source_truncated = original_bytes > limit;
+        let retained_limit = if source_truncated {
+            limit.saturating_sub(TRUNCATION_MARKER.len())
+        } else {
+            limit
+        };
+        let retained_source_end = floor_char_boundary(input, input.len().min(retained_limit));
         let scan_limit = limit.saturating_add(REGEX_SCAN_OVERLAP);
         let scan_end = floor_char_boundary(input, input.len().min(scan_limit));
         let bounded = &input[..scan_end];
-        let normalized = self.normalize_home_prefixes(bounded);
+        let (normalized, visible_end) = self.normalize_home_prefixes(bounded, retained_source_end);
         let output = patterns::apply(
             normalized.into_owned(),
+            visible_end,
             role.allows_opaque_redaction(),
-            scan_end < input.len(),
+            adapter_has_unscanned_tail || scan_end < input.len(),
             accounting,
         )?;
 
@@ -148,11 +180,11 @@ impl SupportExportScrubber {
             accounting.record_omission(source, SupportOmissionReasonV1::SourceInvalid, 1, None)?;
             return Ok(None);
         }
+        let visible = &output.value[..output.visible_end];
         let semantic_valid = match role {
-            TextRole::Identifier | TextRole::Name | TextRole::Hash => {
-                validate_id(&output.value).is_ok()
-            }
-            TextRole::Timestamp => validate_timestamp(&output.value).is_ok(),
+            TextRole::Identifier | TextRole::Name | TextRole::Hash => validate_id(visible).is_ok(),
+            TextRole::Timestamp => validate_timestamp(visible).is_ok(),
+            TextRole::ProtocolTimestamp => true,
             TextRole::Generic | TextRole::Content => true,
         };
         if !semantic_valid {
@@ -165,11 +197,16 @@ impl SupportExportScrubber {
             return Ok(None);
         }
 
-        let was_truncated = original_bytes > limit || output.value.len() > limit;
-        let value = truncate_utf8(output.value, limit);
+        let transformed_truncated = visible.len() > limit;
+        let was_truncated = source_truncated || transformed_truncated;
+        let value = if was_truncated {
+            truncate_utf8_with_marker(visible.to_owned(), limit)
+        } else {
+            visible.to_owned()
+        };
         if was_truncated {
-            let omitted_bytes = (original_bytes > limit && !output.redacted)
-                .then(|| to_u64(original_bytes.saturating_sub(limit)))
+            let omitted_bytes = (source_truncated && !output.redacted)
+                .then(|| to_u64(original_bytes.saturating_sub(retained_source_end)))
                 .transpose()?;
             accounting.record_truncation(
                 source,
@@ -181,17 +218,25 @@ impl SupportExportScrubber {
         Ok(Some(value))
     }
 
-    fn normalize_home_prefixes<'a>(&self, value: &'a str) -> Cow<'a, str> {
+    fn normalize_home_prefixes<'a>(
+        &self,
+        value: &'a str,
+        visible_end: usize,
+    ) -> (Cow<'a, str>, usize) {
         let Some(home) = self.home_directory.as_deref() else {
-            return Cow::Borrowed(value);
+            return (Cow::Borrowed(value), visible_end);
         };
         if !value.contains(home) {
-            return Cow::Borrowed(value);
+            return (Cow::Borrowed(value), visible_end);
         }
 
         let mut normalized = String::with_capacity(value.len());
         let mut prior = 0;
+        let mut mapped_visible_end = None;
         for (start, _) in value.match_indices(home) {
+            if start >= visible_end {
+                break;
+            }
             let end = start + home.len();
             let exact_prefix = value[end..]
                 .chars()
@@ -203,12 +248,21 @@ impl SupportExportScrubber {
             normalized.push_str(&value[prior..start]);
             normalized.push('~');
             prior = end;
+            if end >= visible_end {
+                mapped_visible_end = Some(normalized.len());
+                break;
+            }
         }
         if prior == 0 {
-            Cow::Borrowed(value)
+            (Cow::Borrowed(value), visible_end)
         } else {
-            normalized.push_str(&value[prior..]);
-            Cow::Owned(normalized)
+            let mapped_visible_end = mapped_visible_end.unwrap_or_else(|| {
+                normalized.push_str(&value[prior..visible_end]);
+                normalized.len()
+            });
+            let suffix_start = prior.max(visible_end);
+            normalized.push_str(&value[suffix_start..]);
+            (Cow::Owned(normalized), mapped_visible_end)
         }
     }
 }
@@ -229,12 +283,9 @@ fn bounded_utf8_prefix(value: &[u8], limit: usize) -> Option<&str> {
     }
 }
 
-fn truncate_utf8(mut value: String, limit: usize) -> String {
-    if value.len() <= limit {
-        return value;
-    }
+fn truncate_utf8_with_marker(mut value: String, limit: usize) -> String {
     let target = limit.saturating_sub(TRUNCATION_MARKER.len());
-    let boundary = floor_char_boundary(&value, target);
+    let boundary = floor_char_boundary(&value, value.len().min(target));
     value.truncate(boundary);
     value.push_str(TRUNCATION_MARKER);
     value

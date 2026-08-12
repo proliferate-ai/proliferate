@@ -138,7 +138,7 @@ fn unicode_strings_truncate_on_a_boundary_with_manifest_accounting() {
         output.accounting.truncations[0].reason,
         SupportTruncationReasonV1::FieldBytes
     );
-    assert_eq!(output.accounting.truncations[0].omitted_bytes, Some(1_616));
+    assert_eq!(output.accounting.truncations[0].omitted_bytes, Some(1_630));
 }
 
 #[test]
