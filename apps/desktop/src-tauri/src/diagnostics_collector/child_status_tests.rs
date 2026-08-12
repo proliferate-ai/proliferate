@@ -183,33 +183,52 @@ mod supported {
         assert_eq!(capture.desktop_worker.target_id.as_deref(), Some("target"));
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn joined_timeouts_consume_one_shared_hundred_millisecond_window() {
+        let barrier = Arc::new(Barrier::new(2));
         let started = tokio::time::Instant::now();
         let deadline = started + CHILD_STATUS_RESPONSE_DEADLINE;
-        let capture = capture_native_child_statuses_with(
-            deadline,
-            |received| async move {
-                assert_eq!(received, deadline);
-                let _ = tokio::time::timeout_at(received, std::future::pending::<()>()).await;
-                None
-            },
-            |received| async move {
-                assert_eq!(received, deadline);
-                let _ = tokio::time::timeout_at(received, std::future::pending::<()>()).await;
-                DesktopWorkerDiagnosticsState {
-                    target_id: None,
-                    child: state(
-                        ChildProcessPresence::Invalid,
-                        ChildBridgeConnection::Lost,
-                        ChildProducerStatus::Invalid,
-                    ),
-                }
-            },
+        let anyharness_barrier = Arc::clone(&barrier);
+        let worker_barrier = Arc::clone(&barrier);
+        let capture = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            capture_native_child_statuses_with(
+                deadline,
+                move |received| async move {
+                    assert_eq!(received, deadline);
+                    anyharness_barrier.wait().await;
+                    assert!(
+                        tokio::time::timeout_at(received, std::future::pending::<()>())
+                            .await
+                            .is_err()
+                    );
+                    None
+                },
+                move |received| async move {
+                    assert_eq!(received, deadline);
+                    worker_barrier.wait().await;
+                    assert!(
+                        tokio::time::timeout_at(received, std::future::pending::<()>())
+                            .await
+                            .is_err()
+                    );
+                    DesktopWorkerDiagnosticsState {
+                        target_id: None,
+                        child: state(
+                            ChildProcessPresence::Invalid,
+                            ChildBridgeConnection::Lost,
+                            ChildProducerStatus::Invalid,
+                        ),
+                    }
+                },
+            ),
         )
-        .await;
-        assert_eq!(tokio::time::Instant::now(), deadline);
+        .await
+        .expect("joined samplers share one bounded real-time wait");
+        let elapsed = tokio::time::Instant::now() - started;
         assert_eq!(deadline - started, CHILD_STATUS_RESPONSE_DEADLINE);
+        assert!(elapsed >= CHILD_STATUS_RESPONSE_DEADLINE);
+        assert!(elapsed < std::time::Duration::from_secs(1));
         assert!(matches!(
             capture.anyharness.status,
             PortableChildProducerStatus::Omitted(ChildStatusOmission::SourceInvalid)
