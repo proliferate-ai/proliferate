@@ -3,10 +3,13 @@ import type {
   WorkflowArgumentDraft,
   WorkflowArgumentIssue,
 } from "#product/domain/workflows/arguments";
+import type { WorkflowRunEligibilityBlockerView } from "#product/lib/domain/workflows/workflow-run-eligibility";
 import { Button } from "#product/primitives/Button";
 import { Checkbox } from "#product/primitives/Checkbox";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
+import { Card } from "#product/primitives/patterns/Card";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { Select } from "#product/primitives/Select";
 
 export interface WorkflowRunFormProps {
@@ -23,12 +26,6 @@ export interface WorkflowRunFormProps {
   onChange: (draft: WorkflowArgumentDraft) => void;
   onSubmit: () => void;
   onRetryAttempt?: () => void;
-}
-
-export interface WorkflowRunEligibilityBlockerView {
-  code: string;
-  path: string;
-  message: string;
 }
 
 export function WorkflowRunForm({
@@ -50,7 +47,7 @@ export function WorkflowRunForm({
   const disabled = submitting || launchBlocked || ineligible || !capabilityEnabled;
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4" data-telemetry-block>
+    <Card as="section" surface="opaque" className="p-4" data-telemetry-block>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-heading font-medium text-foreground">Run in Cloud</h2>
@@ -64,14 +61,13 @@ export function WorkflowRunForm({
       </div>
 
       {!capabilityEnabled ? (
-        <p className="mt-3 rounded-md border border-border bg-surface-raised px-3 py-2 text-ui-sm text-muted-foreground" role="status">
+        <NoticeBanner tone="neutral" className="mt-3">
           Managed Workflow runs are not enabled on this server. Saved workflows and existing run history remain available.
-        </p>
+        </NoticeBanner>
       ) : null}
       {blockers.length > 0 ? (
-        <div className="mt-3 rounded-md border border-warning-border bg-warning-subtle px-3 py-2" role="status">
-          <p className="text-ui font-medium text-warning-foreground">This workflow cannot run yet.</p>
-          <ul className="mt-1 space-y-1 text-ui text-warning-foreground">
+        <NoticeBanner tone="warning" className="mt-3" title="This workflow cannot run yet.">
+          <ul className="space-y-1">
             {[...blockers]
               .sort((a, b) => a.path.localeCompare(b.path) || a.code.localeCompare(b.code))
               .map((blocker) => (
@@ -80,7 +76,7 @@ export function WorkflowRunForm({
                 </li>
               ))}
           </ul>
-        </div>
+        </NoticeBanner>
       ) : null}
 
       {inputs.length === 0 ? (
@@ -98,7 +94,7 @@ export function WorkflowRunForm({
             const requiredByPrompt = !input.required && requiredForRunInputNames.has(input.name);
             const canOmit = !input.required && !requiredByPrompt;
             return (
-              <div key={input.name} className="rounded-md border border-border p-3">
+              <Card key={input.name} surface="opaque" className="p-3">
                 <div className="flex items-center justify-between gap-2">
                   <Label htmlFor={controlId}>{input.name}</Label>
                   {canOmit ? (
@@ -162,7 +158,7 @@ export function WorkflowRunForm({
                   )}
                 </div>
                 {issue ? <p className="mt-1 text-ui text-destructive" role="alert">{issue.message}</p> : null}
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -179,6 +175,6 @@ export function WorkflowRunForm({
           ) : null}
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }

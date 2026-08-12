@@ -11,6 +11,7 @@ import {
 } from "#product/domain/workflows/definition";
 import { Button } from "#product/primitives/Button";
 import { Label } from "#product/primitives/Label";
+import { Card } from "#product/primitives/patterns/Card";
 import { Select } from "#product/primitives/Select";
 import { Textarea } from "#product/primitives/Textarea";
 
@@ -53,7 +54,7 @@ export function WorkflowStageEditor({
     && !effortOptions.some((option) => option.value === stage.harnessConfig.effort);
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
+    <Card as="section" surface="opaque" className="p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-heading font-medium text-foreground">Stage {stageIndex + 1}</h2>
@@ -100,7 +101,7 @@ export function WorkflowStageEditor({
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </Select>
-          <FieldIssue issue={agentIssue} />
+          <IssueMessages issues={agentIssue ? [agentIssue] : []} />
         </div>
         <div>
           <Label htmlFor={`workflow-stage-${stageIndex}-model`}>Model</Label>
@@ -128,7 +129,7 @@ export function WorkflowStageEditor({
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </Select>
-          <FieldIssue issue={modelIssue} />
+          <IssueMessages issues={modelIssue ? [modelIssue] : []} />
         </div>
         <div>
           <Label htmlFor={`workflow-stage-${stageIndex}-effort`}>Effort</Label>
@@ -159,7 +160,7 @@ export function WorkflowStageEditor({
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </Select>
-          <FieldIssue issue={effortIssue} />
+          <IssueMessages issues={effortIssue ? [effortIssue] : []} />
         </div>
       </div>
 
@@ -202,7 +203,7 @@ export function WorkflowStageEditor({
         <Plus className="icon-paired" aria-hidden />
         Add prompt
       </Button>
-    </section>
+    </Card>
   );
 }
 
@@ -232,7 +233,7 @@ function PromptStepEditor({
   const goalIssues = issues.filter((issue) => issue.path.startsWith(`${stepPath}.goal`));
 
   return (
-    <div className="rounded-lg bg-surface-elevated-secondary p-3">
+    <Card surface="tint" className="p-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-ui font-medium text-muted-foreground">Prompt {stepIndex + 1}</p>
         <Button
@@ -258,7 +259,7 @@ function PromptStepEditor({
         placeholder="Investigate {{inputs.ticket}} and report the root cause."
         onChange={(event) => onChange({ ...step, prompt: event.currentTarget.value })}
       />
-      <IssueList issues={promptIssues} />
+      <IssueMessages issues={promptIssues} />
 
       {step.goal ? (
         <div className="mt-3">
@@ -288,7 +289,7 @@ function PromptStepEditor({
               goal: { objective: event.currentTarget.value },
             })}
           />
-          <IssueList issues={goalIssues} />
+          <IssueMessages issues={goalIssues} />
         </div>
       ) : (
         <Button
@@ -304,7 +305,7 @@ function PromptStepEditor({
           Add goal
         </Button>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -326,13 +327,8 @@ function issuesAt(
   return issues.filter((issue) => issue.path === path);
 }
 
-function FieldIssue({ issue }: { issue: WorkflowValidationIssue | null }) {
-  return issue ? (
-    <p className="mt-1 text-ui text-destructive" role="alert">{issue.message}</p>
-  ) : null;
-}
-
-function IssueList({ issues }: { issues: readonly WorkflowValidationIssue[] }) {
+/** The one inline-error shape in this file: a field issue is a single-item list. */
+function IssueMessages({ issues }: { issues: readonly WorkflowValidationIssue[] }) {
   if (issues.length === 0) {
     return null;
   }

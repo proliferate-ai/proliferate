@@ -8,6 +8,8 @@ import { Checkbox } from "#product/primitives/checkbox-primitive";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
+import { Card } from "#product/primitives/patterns/Card";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { Select } from "#product/primitives/Select";
 
 export function WorkflowInputEditor({
@@ -22,7 +24,7 @@ export function WorkflowInputEditor({
   onChange: (inputs: WorkflowDefinitionInput[]) => void;
 }) {
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
+    <Card as="section" surface="opaque" className="p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-heading font-medium text-foreground">Inputs</h2>
@@ -46,18 +48,22 @@ export function WorkflowInputEditor({
       </div>
 
       {inputs.length === 0 ? (
-        <p className="mt-4 rounded-md bg-surface-elevated-secondary px-3 py-2 text-ui-sm text-muted-foreground">
+        <NoticeBanner tone="neutral" className="mt-4">
           This workflow has no inputs.
-        </p>
+        </NoticeBanner>
       ) : (
         <div className="mt-4 space-y-3">
           {inputs.map((input, index) => {
             const nameIssue = issues.find((issue) => issue.path === `inputs.${index}.name`);
             const requiredId = `workflow-input-${index}-required`;
             return (
-              <div
+              <Card
                 key={index}
-                className="grid items-end gap-3 rounded-lg bg-surface-elevated-secondary p-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto_auto]"
+                surface="tint"
+                // C4: name/type/required/remove need distinct widths that Tailwind's
+                // spacing scale does not name — 1fr for the label, a fixed lane for
+                // the type select, auto for the checkbox and remove button.
+                className="grid items-end gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto_auto]"
               >
                 <div className="min-w-0">
                   <Label htmlFor={`workflow-input-${index}-name`}>Name</Label>
@@ -118,12 +124,12 @@ export function WorkflowInputEditor({
                 >
                   <Trash className="icon-paired" aria-hidden />
                 </Button>
-              </div>
+              </Card>
             );
           })}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
