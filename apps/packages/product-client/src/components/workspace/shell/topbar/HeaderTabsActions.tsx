@@ -44,7 +44,7 @@ export function NewChatButton({
 interface ClosedSessionsTriggerProps {
   closedChatTabs: HeaderChatMenuEntry[];
   onRestoreSession: (sessionId: string) => void;
-  onDeleteSession: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string) => Promise<boolean>;
 }
 
 export function ClosedSessionsTrigger({
@@ -85,10 +85,7 @@ export function ClosedSessionsTrigger({
             onRestoreSession(sessionId);
             close();
           }}
-          onDeleteSession={(sessionId) => {
-            onDeleteSession(sessionId);
-            close();
-          }}
+          onDeleteSession={onDeleteSession}
         />
       )}
     </PopoverButton>
