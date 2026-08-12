@@ -97,16 +97,20 @@ async fn run_suppressed(inner: Arc<ProducerInner>) {
                                     if !generation_current {
                                         break Err(TransportFailure::cancelled(dispatch.observed()));
                                     }
+                                    if TokioInstant::now() >= request_deadline {
+                                        break Err(deadline_failure(&dispatch));
+                                    }
                                     if let Some(parent_deadline) = parent_window {
                                         let revised = parent_deadline.map(|deadline| {
                                             deadline - TERMINAL_FALLBACK_ALLOWANCE
                                         });
                                         if revised.map_or(true, |deadline| deadline < request_deadline) {
-                                            break Err(TransportFailure::dispatched(
-                                                TransportError::Deadline,
-                                            ));
+                                            break Err(deadline_failure(&dispatch));
                                         }
                                     }
+                                }
+                                _ = tokio::time::sleep_until(request_deadline) => {
+                                    break Err(deadline_failure(&dispatch));
                                 }
                                 result = &mut request => break result,
                             }
@@ -129,6 +133,13 @@ async fn run_suppressed(inner: Arc<ProducerInner>) {
         if terminal_and_empty {
             return;
         }
+    }
+}
+
+fn deadline_failure(dispatch: &DispatchObservation) -> TransportFailure {
+    TransportFailure {
+        error: TransportError::Deadline,
+        dispatched: dispatch.observed(),
     }
 }
 
@@ -564,7 +575,13 @@ fn route_fallback(
 
 #[cfg(test)]
 mod generation_change_tests {
-    use super::{generation_change_reason, FallbackReason};
+    use super::{deadline_failure, generation_change_reason, DispatchObservation, FallbackReason};
+
+    #[test]
+    fn deadline_preserves_pre_dispatch_observation() {
+        let dispatch = DispatchObservation::new();
+        assert!(!deadline_failure(&dispatch).dispatched);
+    }
 
     #[test]
     fn dispatch_boundary_controls_generation_change_fallback_reason() {
