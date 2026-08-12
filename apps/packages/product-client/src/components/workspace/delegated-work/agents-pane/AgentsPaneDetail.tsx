@@ -71,26 +71,29 @@ export function AgentsPaneDetail({
 }: AgentsPaneDetailProps) {
   const rosterPresentation = child.agent.status.presentation;
   const identityKey = `${parentSessionId}:${childSessionId}`;
-  const currentIdentityRef = useRef(identityKey);
-  currentIdentityRef.current = identityKey;
+  const currentIdentityRef = useRef({ identityKey, token: Symbol(identityKey) });
+  if (currentIdentityRef.current.identityKey !== identityKey) {
+    currentIdentityRef.current = { identityKey, token: Symbol(identityKey) };
+  }
+  const identityToken = currentIdentityRef.current.token;
   // Accepted lifecycle responses are immediate truth even while a roster
   // invalidation is still in flight. Key the override to the durable target so
   // a late response from child A can never change child B after navigation.
   const [presentationTruth, setPresentationTruth] = useState<{
-    identityKey: string;
+    identityToken: symbol;
     presentation: SubagentRosterEntry["agent"]["status"]["presentation"];
   } | null>(null);
-  const presentation = presentationTruth?.identityKey === identityKey
+  const presentation = presentationTruth?.identityToken === identityToken
     ? presentationTruth.presentation
     : rosterPresentation;
   useEffect(() => {
     if (
-      presentationTruth?.identityKey === identityKey
+      presentationTruth?.identityToken === identityToken
       && presentationTruth.presentation === rosterPresentation
     ) {
       setPresentationTruth(null);
     }
-  }, [identityKey, presentationTruth, rosterPresentation]);
+  }, [identityToken, presentationTruth, rosterPresentation]);
   const isClosed = presentation === "closed";
 
   const identity = useMemo(() => buildDelegatedAgentIdentity({
@@ -128,10 +131,10 @@ export function AgentsPaneDetail({
     promotePending,
   } = useAgentsPaneLifecycleActions({ workspaceId });
 
-  const [closeConfirmFor, setCloseConfirmFor] = useState<string | null>(null);
-  const [promoteConfirmFor, setPromoteConfirmFor] = useState<string | null>(null);
-  const closeConfirmOpen = closeConfirmFor === identityKey;
-  const promoteConfirmOpen = promoteConfirmFor === identityKey;
+  const [closeConfirmFor, setCloseConfirmFor] = useState<symbol | null>(null);
+  const [promoteConfirmFor, setPromoteConfirmFor] = useState<symbol | null>(null);
+  const closeConfirmOpen = closeConfirmFor === identityToken;
+  const promoteConfirmOpen = promoteConfirmFor === identityToken;
   const target = useMemo(() => ({
     parentSessionId,
     childSessionId,
@@ -139,15 +142,15 @@ export function AgentsPaneDetail({
   }), [childSessionId, clientSessionId, parentSessionId]);
 
   const performClose = useCallback(async () => {
-    const operationIdentity = identityKey;
+    const operationIdentity = identityToken;
     const outcome = await closeChild(target);
-    if (currentIdentityRef.current === operationIdentity) {
+    if (currentIdentityRef.current.token === operationIdentity) {
       setCloseConfirmFor(null);
     }
     if (outcome.ok) {
-      if (currentIdentityRef.current === operationIdentity) {
+      if (currentIdentityRef.current.token === operationIdentity) {
         setPresentationTruth({
-          identityKey: operationIdentity,
+          identityToken: operationIdentity,
           presentation: outcome.agent.status.presentation,
         });
       }
@@ -155,24 +158,24 @@ export function AgentsPaneDetail({
     } else {
       onLifecycleError?.(outcome);
     }
-  }, [closeChild, identityKey, onClosed, onLifecycleError, target]);
+  }, [closeChild, identityToken, onClosed, onLifecycleError, target]);
 
   const requestClose = useCallback(() => {
     if (presentation === "running") {
-      setCloseConfirmFor(identityKey);
+      setCloseConfirmFor(identityToken);
       return;
     }
     // Available closes immediately, without confirmation.
     void performClose();
-  }, [identityKey, performClose, presentation]);
+  }, [identityToken, performClose, presentation]);
 
   const performOpen = useCallback(async () => {
-    const operationIdentity = identityKey;
+    const operationIdentity = identityToken;
     const outcome = await openChild(target);
     if (outcome.ok) {
-      if (currentIdentityRef.current === operationIdentity) {
+      if (currentIdentityRef.current.token === operationIdentity) {
         setPresentationTruth({
-          identityKey: operationIdentity,
+          identityToken: operationIdentity,
           presentation: outcome.presentation,
         });
       }
@@ -180,12 +183,12 @@ export function AgentsPaneDetail({
     } else {
       onLifecycleError?.(outcome);
     }
-  }, [identityKey, onLifecycleError, onOpened, openChild, target]);
+  }, [identityToken, onLifecycleError, onOpened, openChild, target]);
 
   const performPromote = useCallback(async () => {
-    const operationIdentity = identityKey;
+    const operationIdentity = identityToken;
     const outcome = await promoteChild(target);
-    if (currentIdentityRef.current === operationIdentity) {
+    if (currentIdentityRef.current.token === operationIdentity) {
       setPromoteConfirmFor(null);
     }
     if (outcome.ok) {
@@ -193,7 +196,7 @@ export function AgentsPaneDetail({
     } else {
       onLifecycleError?.(outcome);
     }
-  }, [identityKey, onLifecycleError, onPromoted, promoteChild, target]);
+  }, [identityToken, onLifecycleError, onPromoted, promoteChild, target]);
 
   const handledActionTokenRef = useRef<number | null>(null);
   useEffect(() => {
@@ -210,11 +213,11 @@ export function AgentsPaneDetail({
     } else if (requestedAction.action === "open") {
       void performOpen();
     } else {
-      setPromoteConfirmFor(identityKey);
+      setPromoteConfirmFor(identityToken);
     }
     onRequestedActionHandled?.(requestedAction.token);
   }, [
-    identityKey,
+    identityToken,
     isPaneRouteActive,
     onRequestedActionHandled,
     performOpen,
@@ -296,7 +299,7 @@ export function AgentsPaneDetail({
               variant="ghost"
               size="sm"
               disabled={promotePending}
-              onClick={() => setPromoteConfirmFor(identityKey)}
+              onClick={() => setPromoteConfirmFor(identityToken)}
             >
               Promote
             </Button>
