@@ -228,6 +228,37 @@ describe("ComposerRichTextEditor", () => {
     );
   });
 
+  it("resets inherited text formats when an external value replaces the draft", async () => {
+    mockRangeRect({ height: 15, left: 24, top: 18 });
+    const onChange = vi.fn();
+    const harness = renderEditor({ value: "seed", onChange });
+    await harness.ready();
+
+    // Rich-paste debris can leave format bits on the live selection; they
+    // survive a root clear, so without the reset every message typed after a
+    // send would inherit the `code` format (PRO-159).
+    act(() => {
+      harness.editor.update(() => {
+        const selection = $getRoot().selectEnd();
+        selection.format = 16;
+        selection.dirty = true;
+      }, { discrete: true });
+    });
+
+    onChange.mockClear();
+    harness.rerender({ value: "", snapshot: undefined });
+    await waitFor(() => expect(harness.root.textContent).toBe(""));
+
+    expect(harness.editor.getEditorState().read(() => {
+      const selection = $getSelection();
+      return $isRangeSelection(selection) ? selection.format : null;
+    })).toBe(0);
+
+    act(() => insertText(harness.editor, "plain again"));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(onChange.mock.calls.at(-1)?.[0]).toBe("plain again");
+  });
+
   it("restores pasted-link identity from the controlled snapshot", async () => {
     const onChange = vi.fn();
     const harness = renderEditor({ onChange });

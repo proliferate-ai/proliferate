@@ -9,6 +9,7 @@ import {
   $getSelection,
   $isRangeSelection,
   KEY_ENTER_COMMAND,
+  PASTE_COMMAND,
   type LexicalEditor,
 } from "lexical";
 import {
@@ -254,6 +255,73 @@ describe("ComposerFencedCodePlugin", () => {
     expect(onChange.mock.calls.at(-1)?.[0]).toBe(`\`\`\`\n${code}\n\`\`\`\n`);
   });
 
+  it("keeps pasted inline-code characters but strips the code text format", async () => {
+    mockRangeRect();
+    const onChange = vi.fn();
+    const harness = renderEditor({ value: "", onChange });
+    await harness.ready();
+    act(() => resetText(harness.editor, ""));
+    onChange.mockClear();
+
+    // A copied rendered code span arrives as text/html <code>; Lexical maps a
+    // single-line <code> to the inline-code text format rather than a block.
+    act(() => {
+      harness.editor.dispatchCommand(
+        PASTE_COMMAND,
+        htmlPasteEvent("<code>const ready = true;</code>", "const ready = true;"),
+      );
+    });
+
+    await waitFor(() => {
+      expect(harness.root.textContent).toBe("const ready = true;");
+    });
+    expect(harness.root.querySelector("code")).toBeNull();
+    act(() => {
+      harness.editor.update(() => {
+        $getRoot().getAllTextNodes().at(-1)?.selectEnd();
+      }, { discrete: true });
+    });
+    await typeCharacters(harness.editor, " and typed", harness.root);
+    expect(harness.root.querySelector("code")).toBeNull();
+    expect(onChange.mock.calls.at(-1)?.[0]).toBe("const ready = true; and typed");
+  });
+
+  it("imports a pasted rendered code block as one escapable block", async () => {
+    const onChange = vi.fn();
+    const harness = renderEditor({ value: "", onChange });
+    await harness.ready();
+    act(() => resetText(harness.editor, ""));
+    onChange.mockClear();
+
+    act(() => {
+      harness.editor.dispatchCommand(
+        PASTE_COMMAND,
+        htmlPasteEvent(
+          "<pre><code>const x = 1;\nconst y = 2;</code></pre>",
+          "const x = 1;\nconst y = 2;",
+        ),
+      );
+    });
+
+    const codeBlock = await waitFor(() => {
+      const code = harness.root.querySelector<HTMLElement>('code[spellcheck="false"]');
+      expect(code).toBeTruthy();
+      return code!;
+    });
+    // One block, not Lexical's nested <pre><code> double conversion.
+    expect(harness.root.querySelectorAll("code")).toHaveLength(1);
+    expect(codeBlock.textContent).toBe("const x = 1;const y = 2;");
+    // The trailing continuation paragraph is the escape hatch below the block.
+    await waitFor(() => {
+      expect(harness.editor.getEditorState().read(() =>
+        $getRoot().getLastChild()?.getType(),
+      )).toBe("paragraph");
+    });
+    expect(onChange.mock.calls.at(-1)?.[0]).toBe(
+      "```\nconst x = 1;\nconst y = 2;\n```\n",
+    );
+  });
+
   it("keeps formatted Markdown paste literal inside a code block", async () => {
     const onChange = vi.fn();
     const harness = renderEditor({
@@ -353,6 +421,38 @@ function pasteEvent(text: string, files: File[] = []): ClipboardEvent {
       files,
       getData: (type: string) => type === "text/plain" ? text : "",
       types: files.length > 0 ? ["Files"] : ["text/plain"],
+    },
+  });
+  return event;
+}
+
+// jsdom has no Range.getBoundingClientRect; Lexical's scroll-into-view path
+// needs one once the editor root has taken focus (a paste commit restores it).
+function mockRangeRect() {
+  Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value: () => ({
+      bottom: 0,
+      height: 0,
+      left: 0,
+      right: 0,
+      toJSON: () => ({}),
+      top: 0,
+      width: 0,
+      x: 0,
+      y: 0,
+    }),
+  });
+}
+
+function htmlPasteEvent(html: string, plain: string): ClipboardEvent {
+  const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", {
+    value: {
+      files: [],
+      getData: (type: string) =>
+        type === "text/html" ? html : type === "text/plain" ? plain : "",
+      types: ["text/html", "text/plain"],
     },
   });
   return event;
