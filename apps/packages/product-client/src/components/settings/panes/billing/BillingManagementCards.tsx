@@ -56,32 +56,34 @@ export function BillingPlanCard({
   const description = errorMessage ?? unavailableMessage ?? context;
 
   return (
-    <SettingsSection title="Plan">
-      <SettingsRow
-        label={label}
-        description={description}
-      >
-        {loading && !plan ? (
-          <SkeletonBlock className="h-8 w-20" />
-        ) : errorMessage ? (
-          <Button type="button" variant="secondary" onClick={onRetry}>
-            Retry
-          </Button>
-        ) : plan ? (
-          <Button
-            type="button"
-            variant="primary"
-            disabled={organizationLoading}
-            onClick={onManage}
-          >
-            Manage
-          </Button>
-        ) : null}
-      </SettingsRow>
+    <div>
+      <SettingsSection title="Plan">
+        <SettingsRow
+          label={label}
+          description={description}
+        >
+          {loading && !plan ? (
+            <SkeletonBlock className="h-8 w-20" />
+          ) : errorMessage ? (
+            <Button type="button" variant="secondary" onClick={onRetry}>
+              Retry
+            </Button>
+          ) : plan ? (
+            <Button
+              type="button"
+              variant="primary"
+              disabled={organizationLoading}
+              onClick={onManage}
+            >
+              Manage
+            </Button>
+          ) : null}
+        </SettingsRow>
+      </SettingsSection>
       {actionError ? (
-        <p className="pt-2 text-ui-sm text-destructive">{actionError}</p>
+        <p className="mt-2 text-ui-sm text-destructive">{actionError}</p>
       ) : null}
-    </SettingsSection>
+    </div>
   );
 }
 

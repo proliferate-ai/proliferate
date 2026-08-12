@@ -7,6 +7,22 @@ import { CloudEnvironmentList } from "#product/components/settings/panes/repo/Cl
 import { CloudRepoPickerDialog } from "#product/components/workspace/repo-setup/CloudRepoPicker";
 import type { CloudRepoPickerRepositoryView } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 
+/**
+ * SettingsGroup dividers are `<div aria-hidden class="mx-3.5 h-px bg-border-light">`
+ * elements it interleaves between children. Counting them is what would have
+ * caught the fragment regression: `Children.toArray` treats a single
+ * fragment as one child, so wrapping a list of rows in `<>...</>` silently
+ * drops every divider between them.
+ */
+function countGroupDividers(container: HTMLElement): number {
+  return container.querySelectorAll(".bg-border-light").length;
+}
+
+/** Badge renders a pill: `rounded-full` + `border`. A plain status span must not. */
+function isBadgeElement(element: Element): boolean {
+  return element.className.includes("rounded-full");
+}
+
 const pickerHandlers = {
   onQueryChange: vi.fn(),
   onManualValueChange: vi.fn(),
@@ -110,7 +126,7 @@ describe("cloud environment product UI", () => {
   it("renders cloud repositories and reports the selected id", () => {
     const onSelectCloud = vi.fn();
 
-    render(
+    const { container } = render(
       <CloudEnvironmentList
         cloudEnvironments={[{
           id: "acme/repo",
@@ -129,12 +145,36 @@ describe("cloud environment product UI", () => {
 
     expect(screen.getByText("Repositories")).toBeTruthy();
     expect(screen.getByText("acme/repo")).toBeTruthy();
-    expect(screen.getAllByText("Cloud")).toHaveLength(2);
+    const cloudChips = screen.getAllByText("Cloud");
+    expect(cloudChips).toHaveLength(2);
+    // Trailing row status is a plain muted span, never a Badge pill.
+    cloudChips.forEach((chip) => expect(isBadgeElement(chip)).toBe(false));
     expect(screen.queryByText("Local")).toBeNull();
     expect(screen.queryByText("Cloud enabled")).toBeNull();
     expect(screen.queryByText("Cloud disabled")).toBeNull();
+    // Two rows means SettingsGroup must render exactly one divider between
+    // them. A fragment wrapping the rows would collapse this to zero.
+    expect(countGroupDividers(container)).toBe(1);
     fireEvent.click(screen.getAllByText("Configure")[1]!);
     expect(onSelectCloud).toHaveBeenCalledWith("acme/rocket");
+  });
+
+  it("renders a divider between every environment row, never a collapsed fragment", () => {
+    const { container } = render(
+      <CloudEnvironmentList
+        cloudEnvironments={[
+          { id: "acme/one", fullName: "acme/one", description: "Cloud-only environment", cloudStatus: "ready" },
+          { id: "acme/two", fullName: "acme/two", description: "Cloud-only environment", cloudStatus: "ready" },
+          { id: "acme/three", fullName: "acme/three", description: "Cloud-only environment", cloudStatus: "ready" },
+        ]}
+        onSelectCloudEnvironment={vi.fn()}
+      />,
+    );
+
+    // N environment rows -> N-1 dividers. This is the regression test for the
+    // `<>...</>` fragment bug: Children.toArray sees the fragment as a single
+    // child and SettingsGroup renders zero dividers regardless of row count.
+    expect(countGroupDividers(container)).toBe(2);
   });
 
   it("surfaces materialization state and the dashed add row", () => {
@@ -158,14 +198,19 @@ describe("cloud environment product UI", () => {
       />,
     );
 
-    expect(screen.getByText("Setup failed")).toBeTruthy();
-    expect(screen.getByText("Setting up")).toBeTruthy();
+    const setupFailed = screen.getByText("Setup failed");
+    const settingUp = screen.getByText("Setting up");
+    expect(setupFailed).toBeTruthy();
+    expect(settingUp).toBeTruthy();
+    // Distinguishing failure state must stay muted text, never a color chip.
+    expect(isBadgeElement(setupFailed)).toBe(false);
+    expect(isBadgeElement(settingUp)).toBe(false);
     fireEvent.click(screen.getByText("Add cloud environment"));
     expect(onAddCloudEnvironment).toHaveBeenCalledTimes(1);
   });
 
   it("renders the cloud config section without dead affordances", () => {
-    render(
+    const { container } = render(
       <CloudEnvironmentConfigSection
         statusLabel="Saved"
         statusTone="success"
@@ -182,12 +227,21 @@ describe("cloud environment product UI", () => {
       />,
     );
 
-    expect(screen.getByText("Saved")).toBeTruthy();
+    const statusLabel = screen.getByText("Saved");
+    expect(statusLabel).toBeTruthy();
     expect(screen.getByLabelText("Cloud run command")).toBeTruthy();
     expect(screen.getByLabelText("Cloud setup script")).toBeTruthy();
     expect(screen.getByText("setup.sh")).toBeTruthy();
     expect(screen.queryByText("Disable cloud environment")).toBeNull();
     expect(screen.queryByText("Add variable")).toBeNull();
+    // Status is a plain muted span, never a Badge pill.
+    expect(isBadgeElement(statusLabel)).toBe(false);
+    // Save/Revert footer lives below the wash card, not inside it.
+    const washCard = container.querySelector(".bg-surface-elevated-secondary");
+    expect(washCard).toBeTruthy();
+    const saveButton = screen.getByText("Save");
+    expect(washCard?.contains(saveButton)).toBe(false);
+    expect(washCard?.contains(statusLabel)).toBe(false);
   });
 
   it("emits config section save, revert, and run command changes", () => {

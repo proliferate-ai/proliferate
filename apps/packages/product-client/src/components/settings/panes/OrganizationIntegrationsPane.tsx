@@ -125,23 +125,25 @@ export function OrganizationIntegrationsPane() {
       ) : (
         <SettingsSection title="Available integrations">
           {showSearch ? (
-            <Input
-              aria-label="Search integrations"
-              className="mb-2 h-8 px-2"
-              placeholder="Search integrations"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
+            <div className="px-3.5 pt-3.5 pb-3.5">
+              <Input
+                aria-label="Search integrations"
+                className="h-8 px-2"
+                placeholder="Search integrations"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </div>
           ) : null}
           {filteredDefinitions.length === 0 ? (
-            <p className="px-1 py-3 text-ui-sm text-muted-foreground">No integrations found</p>
+            <p className="px-3.5 py-3 text-ui-sm text-muted-foreground">No integrations found</p>
           ) : null}
           {filteredDefinitions.map((definition) => {
             const enabledView = adminIntegrationEnabledView(definition);
             return (
               <div
                 key={definition.definitionId}
-                className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,10rem)_auto] items-center gap-3 border-b border-border py-3 last:border-b-0"
+                className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,10rem)_auto] items-center gap-3 px-3.5 py-[13px]"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <IntegrationIcon namespace={definition.namespace} className="icon-display [font-size:var(--text-sidebar-brand)]" />

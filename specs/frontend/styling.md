@@ -126,7 +126,7 @@ container.
 
 ## Card Surfaces
 
-For card-like containers (diff cards, file entries, settings items):
+For card-like containers (diff cards, file entries):
 
 - Background: `bg-foreground/5` for subtle tint against any surface
 - Header: double-layer pattern for opaque sticky headers:

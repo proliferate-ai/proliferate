@@ -29,7 +29,7 @@ describe("AccountSettingsPane", () => {
 
     expect(screen.getByText("Pablo")).toBeTruthy();
     expect(screen.getAllByText("@pablo").length).toBeGreaterThan(0);
-    expect(screen.getByText("Primary")).toBeTruthy();
+    expect(screen.getByText("Primary sign-in method · @pablo")).toBeTruthy();
     expect(screen.getByText("Connected")).toBeTruthy();
   });
 
@@ -84,7 +84,8 @@ describe("AccountSettingsPane", () => {
 
     fireEvent.click(screen.getByText("Connect GitHub"));
     expect(connectGitHub).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText("Primary")).toBeNull();
+    // Unconnected providers don't render the "Primary sign-in method" copy.
+    expect(screen.queryByText(/Primary sign-in method/)).toBeNull();
     expect(screen.getByText("Not connected")).toBeTruthy();
   });
 
@@ -131,9 +132,16 @@ describe("AccountSettingsPane", () => {
     expect(screen.getByText("pablo@gmail.com")).toBeTruthy();
     expect(screen.getByText("Apple")).toBeTruthy();
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
-    const providerIcons = container.querySelectorAll("[data-auth-provider-brand]");
-    expect(providerIcons.length).toBe(4);
-    expect([...providerIcons].every((icon) => icon.classList.contains("icon-control"))).toBe(true);
+    // The four sign-in method rows carry icon-control glyphs; the identity
+    // header above them carries its own smaller icon-compact GitHub glyph —
+    // confirm the sizing actually splits along that line, not just that a
+    // pre-filtered selector matches itself.
+    const allBrandIcons = container.querySelectorAll("[data-auth-provider-brand]");
+    expect(allBrandIcons.length).toBe(5);
+    const controlIcons = [...allBrandIcons].filter((icon) => icon.classList.contains("icon-control"));
+    const compactIcons = [...allBrandIcons].filter((icon) => icon.classList.contains("icon-compact"));
+    expect(controlIcons.length).toBe(4);
+    expect(compactIcons.length).toBe(1);
   });
 
   it("uses SSO brand labels for icons without changing the visible provider label", () => {
@@ -187,9 +195,9 @@ describe("AccountSettingsPane", () => {
     );
 
     expect(screen.getByText("Email & password")).toBeTruthy();
-    expect(screen.getByText("Not set")).toBeTruthy();
-    expect(container.querySelector('[data-auth-provider-brand="password"]')?.getAttribute("class"))
-      .toContain("icon-control");
+    expect(screen.getByText("Add a password to sign in with email")).toBeTruthy();
+    // The password row has no brand glyph — the account rows above it do.
+    expect(container.querySelector('[data-auth-provider-brand="password"]')).toBeNull();
     fireEvent.click(screen.getByText("Set password"));
     fireEvent.change(screen.getByLabelText("New password"), {
       target: { value: "correct horse battery" },

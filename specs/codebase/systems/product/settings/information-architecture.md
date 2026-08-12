@@ -285,12 +285,17 @@ subfolders:
 
 ```text
 SettingsPageHeader.tsx    title + description + action slot
-SettingsSection.tsx       grouped rows with heading
-SettingsRow.tsx           label + control row
-SettingsEyebrow.tsx       group heading style (sidebar + panes)
+SettingsSection.tsx       muted label (or emphasized title) over a wash card of rows
+SettingsRow.tsx           in-card label + control row, no self-divider
 SettingsScopeTabs.tsx     horizontal underline scope switcher
 SettingsEmptyState.tsx
 ```
+
+> Shipped correction: `SettingsEyebrow.tsx` (group heading style) was
+> deleted; `SettingsSection` renders its own label now. The wash card itself
+> is `SettingsGroup.tsx`, a separate component one tier down at
+> `apps/packages/product-client/src/primitives/patterns/SettingsGroup.tsx`
+> (it is domain-unaware, so it lives outside this directory).
 
 ProductClient's `src/components/settings/shared/`
 keeps `AdminOnlyPlaceholder`, `AgentHarnessConfigComposer`, and
@@ -840,9 +845,19 @@ Existing (kept; no changes):
 SettingsPageHeader          apps/packages/product-client/src/components/patterns/SettingsPageHeader.tsx
 SettingsSection             apps/packages/product-client/src/components/patterns/SettingsSection.tsx
 SettingsRow                 apps/packages/product-client/src/components/patterns/SettingsRow.tsx
-SettingsEyebrow / SettingsScopeTabs / SettingsEmptyState
+SettingsScopeTabs / SettingsEmptyState
                             same directory
 ```
+
+> Shipped correction: `SettingsEyebrow.tsx` was deleted by the settings
+> "wash" restyle. `SettingsSection` now renders its own sentence-case muted
+> label directly (or a `titleWeight="emphasized"` variant) over a new
+> `SettingsGroup` wash card
+> (`apps/packages/product-client/src/primitives/patterns/SettingsGroup.tsx`),
+> which owns the inset hairline divider between rows; `SettingsRow` no
+> longer draws its own border. `SettingsSection` and `SettingsRow` above are
+> restyled by the same change; their contracts (props, ownership) are
+> unchanged.
 
 New (spec 03 introduces; feature specs consume):
 

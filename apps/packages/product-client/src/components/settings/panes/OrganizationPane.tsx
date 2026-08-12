@@ -177,7 +177,7 @@ export function OrganizationPane() {
       ) : null}
 
       {shouldShowSignInState ? (
-        <SettingsSection title="Organization" description="Organization access is tied to your signed-in account.">
+        <SettingsSection title="Organization" description="Organization access is tied to your signed-in account." surface="plain">
           <SettingsEmptyState size="compact" title="Sign in to view your organization" />
         </SettingsSection>
       ) : null}
@@ -187,7 +187,7 @@ export function OrganizationPane() {
       ) : null}
 
       {shouldShowErrorState ? (
-        <SettingsSection title="Organization">
+        <SettingsSection title="Organization" surface="plain">
           <SettingsEmptyState
             size="compact"
             title="Could not load organization settings"
@@ -207,7 +207,7 @@ export function OrganizationPane() {
       ) : null}
 
       {shouldShowEmptyState ? (
-        <SettingsSection title="Team">
+        <SettingsSection title="Team" surface="plain">
           {teamCheckoutQuery.data?.intent?.checkoutUrl ? (
             <SettingsEmptyState
               title={teamCheckoutQuery.data.intent.teamName}

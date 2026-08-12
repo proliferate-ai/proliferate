@@ -43,7 +43,7 @@ export function OrganizationInvitationsSection({
           title="Invite link"
           description="Share this link with people who already have an invitation for this organization."
         >
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row">
+          <div className="flex flex-col items-stretch gap-2 px-3.5 py-[13px] sm:flex-row">
             <div className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-3 text-ui text-foreground">
               <span className="min-w-0 truncate font-mono text-ui-sm">
                 {inviteLinkUrl || (copyingInviteLink ? "Loading invite link…" : "Invite link unavailable")}
@@ -74,7 +74,7 @@ export function OrganizationInvitationsSection({
             event.preventDefault();
             void onInviteSubmit();
           }}
-          className="flex flex-col gap-2 sm:flex-row"
+          className="flex flex-col gap-2 px-3.5 py-[13px] sm:flex-row"
         >
           <Input
             type="email"

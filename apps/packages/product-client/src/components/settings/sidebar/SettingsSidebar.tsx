@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { SidebarNavRow } from "#product/primitives/patterns/SidebarNavRow";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
-import { SettingsEyebrow } from "#product/components/patterns/SettingsEyebrow";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
 import { HarnessStatusDot } from "#product/components/settings/sidebar/HarnessStatusDot";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
@@ -302,9 +301,9 @@ export function SettingsSidebar({
               className={`${SETTINGS_GROUP_CLASS} ${index > 0 ? SETTINGS_GROUP_SPACING_CLASS : ""}`}
             >
               {group.heading ? (
-                <SettingsEyebrow className={SETTINGS_GROUP_HEADING_SPACING_CLASS}>
+                <div className={`text-ui-sm text-muted-foreground ${SETTINGS_GROUP_HEADING_SPACING_CLASS}`}>
                   {group.heading}
-                </SettingsEyebrow>
+                </div>
               ) : null}
               {group.items.map((item) => (
                 <Fragment key={item.id}>{renderNavRow(item)}</Fragment>

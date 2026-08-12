@@ -8,7 +8,6 @@ import { ModelTable } from "#product/components/patterns/ModelTable";
 import { PrStatusDot } from "#product/components/patterns/PrStatusBadge";
 import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
 import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
-import { SettingsEyebrow } from "#product/components/patterns/SettingsEyebrow";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";
 import { SettingsSaveFooter } from "#product/components/patterns/SettingsSaveFooter";
@@ -45,8 +44,11 @@ function SettingsRowDemo() {
 function SettingsSectionDemo() {
   return (
     <SettingsSection title="Section title" description="Section description">
-      <SettingsRow label="Row label">
+      <SettingsRow label="Row label" description="Row description">
         <Switch checked onChange={noop} />
+      </SettingsRow>
+      <SettingsRow label="Another row">
+        <Switch checked={false} onChange={noop} />
       </SettingsRow>
     </SettingsSection>
   );
@@ -124,9 +126,6 @@ export const PRODUCT_PATTERNS_ENTRIES: LibraryEntry[] = [
   { name: "ProductPageShell", subpath: "#product/components/patterns/ProductPageShell", render: ProductPageShellDemo },
   { name: "SettingsEmptyState", subpath: "#product/components/patterns/SettingsEmptyState", render: () => (
     <SettingsEmptyState title="No results" description="Nothing to show yet." size="compact" />
-  ) },
-  { name: "SettingsEyebrow", subpath: "#product/components/patterns/SettingsEyebrow", render: () => (
-    <SettingsEyebrow>Section</SettingsEyebrow>
   ) },
   { name: "SettingsPageHeader", subpath: "#product/components/patterns/SettingsPageHeader", render: () => (
     <SettingsPageHeader title="Settings" description="Page description" />

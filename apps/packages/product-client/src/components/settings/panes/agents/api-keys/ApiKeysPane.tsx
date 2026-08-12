@@ -227,7 +227,7 @@ export function ApiKeysPane() {
         description={AGENT_API_KEYS_COPY.addSectionDescription}
       >
         <form
-          className="flex flex-col gap-2 rounded-lg border border-border bg-surface-elevated-secondary p-3.5 sm:flex-row"
+          className="flex flex-col gap-2 p-3.5 sm:flex-row"
           onSubmit={handleSubmit}
         >
           <div className="sm:flex-1">

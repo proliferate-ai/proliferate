@@ -8,7 +8,7 @@ import { Button } from "#product/primitives/Button";
 import { Switch } from "#product/primitives/Switch";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsEyebrow } from "#product/components/patterns/SettingsEyebrow";
+import { SettingsRow } from "#product/components/patterns/SettingsRow";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 
 const ROUTE_OPTIONS: readonly { value: string; label: string; description: string }[] = [
@@ -131,34 +131,30 @@ export function OrganizationModelPolicyPane() {
 
           {/* Harnesses */}
           <SettingsSection title="Harnesses">
-            <div className="overflow-clip rounded-lg bg-foreground/5">
-              {HARNESS_OPTIONS.map((option) => (
-                <PolicySwitchRow
-                  key={option.value}
-                  label={option.label}
-                  description={option.description}
-                  checked={checkedHarnesses.has(option.value)}
-                  disabled={!editable || updatePolicy.isPending}
-                  onChange={() => toggle(checkedHarnesses, setCheckedHarnesses, option.value)}
-                />
-              ))}
-            </div>
+            {HARNESS_OPTIONS.map((option) => (
+              <PolicySwitchRow
+                key={option.value}
+                label={option.label}
+                description={option.description}
+                checked={checkedHarnesses.has(option.value)}
+                disabled={!editable || updatePolicy.isPending}
+                onChange={() => toggle(checkedHarnesses, setCheckedHarnesses, option.value)}
+              />
+            ))}
           </SettingsSection>
 
           {/* Auth routes */}
           <SettingsSection title="Auth routes">
-            <div className="overflow-clip rounded-lg bg-foreground/5">
-              {ROUTE_OPTIONS.map((option) => (
-                <PolicySwitchRow
-                  key={option.value}
-                  label={option.label}
-                  description={option.description}
-                  checked={checkedRoutes.has(option.value)}
-                  disabled={!editable || updatePolicy.isPending}
-                  onChange={() => toggle(checkedRoutes, setCheckedRoutes, option.value)}
-                />
-              ))}
-            </div>
+            {ROUTE_OPTIONS.map((option) => (
+              <PolicySwitchRow
+                key={option.value}
+                label={option.label}
+                description={option.description}
+                checked={checkedRoutes.has(option.value)}
+                disabled={!editable || updatePolicy.isPending}
+                onChange={() => toggle(checkedRoutes, setCheckedRoutes, option.value)}
+              />
+            ))}
           </SettingsSection>
 
           {/* Save */}
@@ -184,51 +180,48 @@ export function OrganizationModelPolicyPane() {
 
           {/* Conflicts */}
           <SettingsSection title="Conflicts" description="Existing member selections outside this policy. New selections are blocked; these stay flagged until each member updates them.">
-            <div className="overflow-clip rounded-lg bg-foreground/5">
-              {violations.isLoading ? (
-                <div className="px-3.5 py-3.5 text-ui-sm text-muted-foreground">Checking…</div>
-              ) : violations.isError ? (
-                <div className="px-3.5 py-3.5 text-ui-sm text-muted-foreground">
-                  Conflicts could not be loaded.
-                </div>
-              ) : violationRows.length === 0 ? (
-                <div className="px-3.5 py-3.5 text-ui-sm text-muted-foreground">
-                  No conflicts with current policy.
-                </div>
-              ) : (
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b border-border-light">
-                      <SettingsEyebrow as="th" className="px-3.5 pb-2 pt-3 text-left">Member</SettingsEyebrow>
-                      <SettingsEyebrow as="th" className="px-3.5 pb-2 pt-3 text-left">Harness</SettingsEyebrow>
-                      <SettingsEyebrow as="th" className="px-3.5 pb-2 pt-3 text-left">Surface</SettingsEyebrow>
-                      <SettingsEyebrow as="th" className="px-3.5 pb-2 pt-3 text-left">Route</SettingsEyebrow>
+            {violations.isLoading ? (
+              <div className="px-3.5 py-3.5 text-ui-sm text-muted-foreground">Checking…</div>
+            ) : violations.isError ? (
+              <div className="px-3.5 py-3.5 text-ui-sm text-muted-foreground">
+                Conflicts could not be loaded.
+              </div>
+            ) : violationRows.length === 0 ? (
+              <div className="px-3.5 py-3.5 text-ui-sm text-muted-foreground">
+                No conflicts with current policy.
+              </div>
+            ) : (
+              <table className="w-full divide-y divide-border-light text-left">
+                <thead>
+                  <tr>
+                    <th className="px-3.5 pb-2 pt-3 text-left text-ui-sm font-normal text-muted-foreground">Member</th>
+                    <th className="px-3.5 pb-2 pt-3 text-left text-ui-sm font-normal text-muted-foreground">Harness</th>
+                    <th className="px-3.5 pb-2 pt-3 text-left text-ui-sm font-normal text-muted-foreground">Surface</th>
+                    <th className="px-3.5 pb-2 pt-3 text-left text-ui-sm font-normal text-muted-foreground">Route</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-light">
+                  {violationRows.map((violation) => (
+                    <tr
+                      key={`${violation.userId}-${violation.harnessKind}-${violation.surface}`}
+                    >
+                      <td className="px-3.5 py-2.5 text-ui text-foreground">
+                        {violation.displayName ?? violation.email ?? violation.userId}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-ui text-muted-foreground">
+                        {HARNESS_OPTIONS.find((o) => o.value === violation.harnessKind)?.label ?? violation.harnessKind}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-ui capitalize text-muted-foreground">
+                        {violation.surface}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-ui text-muted-foreground">
+                        {ROUTE_OPTIONS.find((o) => o.value === violation.sourceKind)?.label ?? violation.sourceKind}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {violationRows.map((violation) => (
-                      <tr
-                        key={`${violation.userId}-${violation.harnessKind}-${violation.surface}`}
-                        className="border-b border-border-light last:border-b-0"
-                      >
-                        <td className="px-3.5 py-2.5 text-ui text-foreground">
-                          {violation.displayName ?? violation.email ?? violation.userId}
-                        </td>
-                        <td className="px-3.5 py-2.5 text-ui text-muted-foreground">
-                          {HARNESS_OPTIONS.find((o) => o.value === violation.harnessKind)?.label ?? violation.harnessKind}
-                        </td>
-                        <td className="px-3.5 py-2.5 text-ui capitalize text-muted-foreground">
-                          {violation.surface}
-                        </td>
-                        <td className="px-3.5 py-2.5 text-ui text-muted-foreground">
-                          {ROUTE_OPTIONS.find((o) => o.value === violation.sourceKind)?.label ?? violation.sourceKind}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </SettingsSection>
         </>
       )}
@@ -250,14 +243,8 @@ function PolicySwitchRow({
   onChange: () => void;
 }) {
   return (
-    <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <div className="font-medium text-foreground">{label}</div>
-        <div className="text-muted-foreground">{description}</div>
-      </div>
-      <div className="shrink-0">
-        <Switch checked={checked} disabled={disabled} onChange={onChange} />
-      </div>
-    </div>
+    <SettingsRow label={label} description={description}>
+      <Switch checked={checked} disabled={disabled} onChange={onChange} />
+    </SettingsRow>
   );
 }

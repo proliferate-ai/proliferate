@@ -96,6 +96,7 @@ export function OrganizationBudgetsPane() {
       <SettingsSection
         title="Balances"
         description="Compute units and LLM credits have separate balances — never combined into one figure."
+        surface="plain"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <BudgetBalanceCard {...computeBalance} loading={billingQuery.isLoading} />
@@ -106,6 +107,7 @@ export function OrganizationBudgetsPane() {
       <SettingsSection
         title="Consumption"
         description="Compute seconds and LLM spend never share an axis, so the chart juxtaposes them instead of summing."
+        surface="plain"
         action={
           <div className="flex flex-wrap items-center gap-2">
             <div className="w-36">
@@ -302,13 +304,13 @@ function OrgUsageTable({
   return (
     <SettingsSection title="Usage by member" description="Select a member to see their usage over time.">
       {loading ? (
-        <div className="space-y-2 py-3">
+        <div className="space-y-2 px-3.5 py-3">
           {[0, 1, 2].map((row) => (
             <SkeletonBlock key={row} className="h-10 w-full" style={shimmerDelay(row)} />
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="py-6 text-ui-sm text-muted-foreground">No usage recorded in this range.</div>
+        <div className="px-6 py-[30px] text-center text-ui text-muted-foreground">No usage recorded in this range.</div>
       ) : (
         rows.map((row) => (
           <Button
@@ -317,7 +319,7 @@ function OrgUsageTable({
             variant="unstyled"
             size="unstyled"
             onClick={() => onSelectUser(row.userId)}
-            className="flex w-full items-center justify-between gap-4 border-t border-border py-3 text-left first:border-t-0 hover:bg-hover active:bg-active"
+            className="flex w-full items-center justify-between gap-4 px-3.5 py-[13px] text-left hover:bg-hover active:bg-active"
           >
             <div className="min-w-0">
               <div className="truncate text-ui font-medium text-foreground">{row.name}</div>
@@ -373,7 +375,7 @@ function UserDrillDown({
   onBack: () => void;
 }) {
   return (
-    <SettingsSection>
+    <SettingsSection surface="plain">
       <Button
         type="button"
         variant="unstyled"

@@ -16,6 +16,7 @@ import { PageContentFrame } from "#product/primitives/patterns/PageContentFrame"
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
 import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMenuItem";
 import { PickerPopoverContent } from "#product/primitives/patterns/PickerPopoverContent";
+import { SettingsGroup } from "#product/primitives/patterns/SettingsGroup";
 import { SettingsMenu } from "#product/primitives/patterns/SettingsMenu";
 import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
 import { SidebarNavRow } from "#product/primitives/patterns/SidebarNavRow";
@@ -183,6 +184,19 @@ function PickerPopoverContentDemo() {
   );
 }
 
+function SettingsGroupDemo() {
+  return (
+    <div className="flex w-64 flex-col gap-4">
+      <SettingsGroup label="Preferences">
+        <div className="flex items-center gap-3.5 px-3.5 py-[13px] text-ui text-foreground">Row one</div>
+        <div className="flex items-center gap-3.5 px-3.5 py-[13px] text-ui text-foreground">Row two</div>
+        <div className="flex items-center gap-3.5 px-3.5 py-[13px] text-ui text-foreground">Row three</div>
+      </SettingsGroup>
+      <SettingsGroup empty="No results" />
+    </div>
+  );
+}
+
 /**
  * The host itself is already mounted once at the app root, so the sheet demos
  * it the only way it is ever used: by raising one of each weight through
@@ -283,6 +297,7 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
     </div>
   ) },
   { name: "PickerPopoverContent", subpath: "#product/primitives/patterns/PickerPopoverContent", render: PickerPopoverContentDemo },
+  { name: "SettingsGroup", subpath: "#product/primitives/patterns/SettingsGroup", render: SettingsGroupDemo },
   { name: "SettingsMenu", subpath: "#product/primitives/patterns/SettingsMenu", render: SettingsMenuDemo },
   { name: "SidebarActionButton", subpath: "#product/primitives/patterns/SidebarActionButton", render: SidebarActionButtonDemo },
   { name: "SidebarNavRow", subpath: "#product/primitives/patterns/SidebarNavRow", render: SidebarNavRowDemo },

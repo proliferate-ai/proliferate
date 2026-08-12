@@ -35,7 +35,7 @@ export function IntegrationRow({
 
   return (
     <div
-      className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,14rem)] items-center gap-3 border-b border-border py-3 last:border-b-0"
+      className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,14rem)] items-center gap-3 px-3.5 py-[13px]"
       data-integration-connected={
         integration.accountId !== null && integration.health === "ready"
           ? integration.namespace

@@ -67,33 +67,32 @@ export function LimitsEditor({
   }
 
   return (
-    <SettingsSection
-      title="Limits"
-      description="Cap compute seconds or LLM spend per calendar day or month, in UTC. Organization-wide rows apply to everyone; per-member rows override them."
-      action={
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={handleSave}
-          loading={updateLimits.isPending}
-          disabled={limitsQuery.isLoading}
-        >
-          Save
-        </Button>
-      }
-    >
-      {limitsQuery.isLoading ? (
-        <div className="space-y-2 py-3">
-          {[0, 1].map((row) => (
-            <SkeletonBlock key={row} className="h-10 w-full" style={shimmerDelay(row)} />
-          ))}
-        </div>
-      ) : (
-        <>
-          {rows.length === 0 ? (
-            <div className="py-4 text-ui-sm text-muted-foreground">No limits configured yet.</div>
-          ) : null}
-          {rows.map((row) => (
+    <div className="space-y-3">
+      <SettingsSection
+        title="Limits"
+        description="Cap compute seconds or LLM spend per calendar day or month, in UTC. Organization-wide rows apply to everyone; per-member rows override them."
+        action={
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleSave}
+            loading={updateLimits.isPending}
+            disabled={limitsQuery.isLoading}
+          >
+            Save
+          </Button>
+        }
+      >
+        {limitsQuery.isLoading ? (
+          <div className="space-y-2 px-3.5 py-3">
+            {[0, 1].map((row) => (
+              <SkeletonBlock key={row} className="h-10 w-full" style={shimmerDelay(row)} />
+            ))}
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="px-3.5 py-4 text-ui-sm text-muted-foreground">No limits configured yet.</div>
+        ) : (
+          rows.map((row) => (
             <LimitRow
               key={row.id}
               row={row}
@@ -102,25 +101,27 @@ export function LimitsEditor({
               onChange={(patch) => updateRow(row.id, patch)}
               onRemove={() => removeRow(row.id)}
             />
-          ))}
-          {saveError ? <div className="pt-2 text-ui-sm text-destructive">{saveError}</div> : null}
-          <div className="flex flex-wrap gap-2 py-4">
-            <Button type="button" variant="secondary" size="sm" onClick={() => addRow(null)}>
-              Add organization-wide limit
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => addRow(members[0]?.userId ?? null)}
-              disabled={members.length === 0}
-            >
-              Add member limit
-            </Button>
-          </div>
-        </>
-      )}
-    </SettingsSection>
+          ))
+        )}
+      </SettingsSection>
+      {!limitsQuery.isLoading ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={() => addRow(null)}>
+            Add organization-wide limit
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => addRow(members[0]?.userId ?? null)}
+            disabled={members.length === 0}
+          >
+            Add member limit
+          </Button>
+          {saveError ? <span className="text-ui-sm text-destructive">{saveError}</span> : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

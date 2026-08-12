@@ -862,6 +862,7 @@ grandfathered.
 | `PageHeader` | [PageHeader.tsx](../apps/packages/product-client/src/primitives/patterns/PageHeader.tsx) | Page-level header (title/description/actions). |
 | `PaneOptionsMenuItem` | [PaneOptionsMenuItem.tsx](../apps/packages/product-client/src/primitives/patterns/PaneOptionsMenuItem.tsx) | Pane options-menu row, composes `Button`. |
 | `PickerPopoverContent` | [PickerPopoverContent.tsx](../apps/packages/product-client/src/primitives/patterns/PickerPopoverContent.tsx) | Popover content shell for pickers: search field + list + empty row. |
+| `SettingsGroup` | [SettingsGroup.tsx](../apps/packages/product-client/src/primitives/patterns/SettingsGroup.tsx) | Settings/list wash surface: borderless tinted card owning inset hairline dividers between children, optional label and empty slot. |
 | `SettingsMenu` | [SettingsMenu.tsx](../apps/packages/product-client/src/primitives/patterns/SettingsMenu.tsx) | Labeled select-style menu, composes `PopoverButton`/`PopoverMenuItem`. |
 | `SidebarActionButton` | [SidebarActionButton.tsx](../apps/packages/product-client/src/primitives/patterns/SidebarActionButton.tsx) | Sidebar action button, composes `RowActionIconButton`. |
 | `SidebarNavRow` | [SidebarNavRow.tsx](../apps/packages/product-client/src/primitives/patterns/SidebarNavRow.tsx) | Sidebar navigation row (icon/label/status/shortcut), composes the `ShortcutBadge` primitive + `SidebarRowSurface`; modifier-held shortcuts overlay an existing rightmost status instead of widening its trailing region. |
@@ -891,12 +892,11 @@ grandfathered.
 | `PrStatusBadge` | [PrStatusBadge.tsx](../apps/packages/product-client/src/components/patterns/PrStatusBadge.tsx) | PR status dot (`PrStatusDot`), icon-overlay wrapper (`PrStatusIconOverlay`), and tooltip-text helper (`prStatusTooltip`); hand-rolls its own tone map, composes nothing. |
 | `ProductPageShell` | [ProductPageShell.tsx](../apps/packages/product-client/src/components/patterns/ProductPageShell.tsx) | General product page shell, composes `PageContentFrame` + `PageHeader`. |
 | `SettingsEmptyState` | [SettingsEmptyState.tsx](../apps/packages/product-client/src/components/patterns/SettingsEmptyState.tsx) | Settings-scoped empty state (compact/full sizes). |
-| `SettingsEyebrow` | [SettingsEyebrow.tsx](../apps/packages/product-client/src/components/patterns/SettingsEyebrow.tsx) | Settings section eyebrow label. |
 | `SettingsPageHeader` | [SettingsPageHeader.tsx](../apps/packages/product-client/src/components/patterns/SettingsPageHeader.tsx) | Flat settings page header (title/description/action). |
-| `SettingsRow` | [SettingsRow.tsx](../apps/packages/product-client/src/components/patterns/SettingsRow.tsx) | Settings row (label/description/control), fixed 240px control-width companion for menus. |
+| `SettingsRow` | [SettingsRow.tsx](../apps/packages/product-client/src/components/patterns/SettingsRow.tsx) | In-card settings row (label/description/control), divider-agnostic (the owning `SettingsGroup` draws hairlines between rows), fixed 240px control-width companion for menus. |
 | `SettingsSaveFooter` | [SettingsSaveFooter.tsx](../apps/packages/product-client/src/components/patterns/SettingsSaveFooter.tsx) | Settings save/revert footer with a status badge, composes `Badge` + `Button`. |
 | `SettingsScopeTabs` | [SettingsScopeTabs.tsx](../apps/packages/product-client/src/components/patterns/SettingsScopeTabs.tsx) | User/org/repo/agents underline scope-switcher tabs, composes `Button`. |
-| `SettingsSection` | [SettingsSection.tsx](../apps/packages/product-client/src/components/patterns/SettingsSection.tsx) | Settings section (title/description), composes `SettingsEyebrow`. |
+| `SettingsSection` | [SettingsSection.tsx](../apps/packages/product-client/src/components/patterns/SettingsSection.tsx) | Sentence-case muted label (or `titleWeight="emphasized"` mini-heading) over a `SettingsGroup` wash card; `surface="plain"` opts out of the card for content that can't sit in one. |
 | `secrets/SecretManagementPanel` | [secrets/SecretManagementPanel.tsx](../apps/packages/product-client/src/components/patterns/secrets/SecretManagementPanel.tsx) | Presentational secrets-management pattern (list, editor/delete dialogs, scope notice are private internals of this one export). |
 
 ### How to add a component
