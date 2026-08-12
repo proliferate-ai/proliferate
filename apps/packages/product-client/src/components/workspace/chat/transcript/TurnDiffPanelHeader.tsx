@@ -2,6 +2,7 @@ import { FileChangeStats } from "#product/components/content/ui/FileChangeStats"
 import { ArrowUpRight, Undo } from "#product/primitives/icons/core";
 import { FileDiff } from "#product/primitives/icons/workspace";
 import { Button } from "#product/primitives/Button";
+import { IconTile } from "#product/primitives/IconTile";
 
 interface TurnDiffPanelHeaderProps {
   title: string;
@@ -41,9 +42,12 @@ export function TurnDiffPanelHeader({
         />
       )}
       <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-2.5 px-[var(--turn-diff-row-padding-x)] py-3 text-left">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-diff-chat-turn-icon-surface)] text-secondary-foreground">
+        <IconTile
+          size="lg"
+          className="bg-diff-chat-turn-icon-surface text-secondary-foreground"
+        >
           <FileDiff className="icon-display" />
-        </span>
+        </IconTile>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-chat font-medium text-foreground">
             {title}

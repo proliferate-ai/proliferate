@@ -30,7 +30,9 @@ describe("TurnDocumentReferenceCard", () => {
 
     const card = document.querySelector("[data-turn-document-reference]");
     expect(card?.className).toContain("rounded-lg");
-    expect(card?.className).toContain("bg-[var(--color-diff-panel-surface)]");
+    expect(card?.className).toContain("bg-diff-panel-surface");
+    expect(document.querySelector("[data-icon-tile]")?.className)
+      .toContain("bg-diff-chat-turn-icon-surface");
     expect(screen.getByText("decision.md")).toBeTruthy();
     expect(screen.getByText("Document · MD")).toBeTruthy();
     expect(screen.getByText("Open preview")).toBeTruthy();

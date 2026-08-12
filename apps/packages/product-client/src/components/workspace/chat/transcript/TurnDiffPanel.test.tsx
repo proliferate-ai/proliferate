@@ -124,7 +124,8 @@ describe("TurnDiffPanel", () => {
     expect(html).toContain("bg-diff-panel-surface");
     expect(html).toContain("data-chat-diff-wrap-context-trigger=\"turn-header\"");
     expect(html).toContain("turn-diff-default-subtitle inline-flex");
-    expect(html).toContain("bg-[var(--color-diff-chat-turn-icon-surface)]");
+    expect(html).toContain("data-icon-tile");
+    expect(html).toContain("bg-diff-chat-turn-icon-surface");
     expect(html).toContain("border border-border bg-diff-panel-surface");
     expect(html).toContain("data-chat-diff-wrap-context-trigger=\"file-header\" class=\"relative flex h-9 w-full min-w-0 items-center bg-background/70");
     expect(html).toContain("hover:bg-hover/60");
