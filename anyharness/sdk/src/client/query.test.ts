@@ -42,6 +42,45 @@ describe("normalizeOwnQueryParameter", () => {
     expect(getter).not.toHaveBeenCalled();
   });
 
+  it("rejects descriptor prototype pollution without invoking it", () => {
+    const inheritedValueGetter = vi.fn(() => "recent");
+    const inputGetter = vi.fn(() => "recent");
+    const originalValueDescriptor = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      "value",
+    );
+    const input = Object.create(null) as Record<string, unknown>;
+    Object.defineProperty(input, "mode", { get: inputGetter });
+    let thrown: unknown;
+
+    Object.defineProperty(Object.prototype, "value", {
+      configurable: true,
+      get: inheritedValueGetter,
+    });
+    try {
+      normalizeOwnQueryParameter(input, "mode", "string");
+    } catch (error) {
+      thrown = error;
+    } finally {
+      if (originalValueDescriptor) {
+        Object.defineProperty(
+          Object.prototype,
+          "value",
+          originalValueDescriptor,
+        );
+      } else {
+        delete (Object.prototype as { value?: unknown }).value;
+      }
+    }
+
+    expect(thrown).toMatchObject({
+      name: "TypeError",
+      message: "Invalid own query property: mode",
+    });
+    expect(inheritedValueGetter).not.toHaveBeenCalled();
+    expect(inputGetter).not.toHaveBeenCalled();
+  });
+
   it("fails closed when a proxy descriptor trap throws", () => {
     const input = new Proxy({}, {
       getOwnPropertyDescriptor() {

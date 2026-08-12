@@ -28,7 +28,7 @@ export function normalizeOwnQueryParameter(
   if (descriptor === undefined) {
     return { present: false };
   }
-  if (!("value" in descriptor)) {
+  if (!Object.hasOwn(descriptor, "value")) {
     throw invalidQueryProperty(property);
   }
 
