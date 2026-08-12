@@ -2,7 +2,7 @@ import { Plus, RotateCcw, Workflow } from "lucide-react";
 import type { WorkflowDefinition } from "#product/domain/workflows/definition";
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { Button } from "#product/primitives/Button";
-import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
+import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
 
 export interface WorkflowDefinitionListProps {
   definitions: readonly WorkflowDefinition[];

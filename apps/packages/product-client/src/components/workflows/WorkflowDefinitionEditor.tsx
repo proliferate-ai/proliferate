@@ -14,7 +14,7 @@ import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { Select } from "#product/primitives/Select";
 import { Textarea } from "#product/primitives/Textarea";
-import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
+import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
 import { WorkflowInputEditor } from "#product/components/workflows/WorkflowInputEditor";
 import {
   createPromptStep,
