@@ -71,9 +71,13 @@ fn protected_anyharness_requires_a_canonical_executable_native_image() {
     use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
 
-    let directory = tempfile::tempdir().expect("tempdir");
-    let native = directory.path().join("native-anyharness");
-    let script = directory.path().join("script-anyharness");
+    let directory = std::env::temp_dir().join(format!(
+        "protected-anyharness-image-{}",
+        uuid::Uuid::new_v4()
+    ));
+    std::fs::create_dir(&directory).expect("create fixture directory");
+    let native = directory.join("native-anyharness");
+    let script = directory.join("script-anyharness");
     let cpu = if cfg!(target_arch = "aarch64") {
         0x0100_000c_u32
     } else {
@@ -103,6 +107,7 @@ fn protected_anyharness_requires_a_canonical_executable_native_image() {
     );
     assert!(diagnostics::protected_anyharness_binary(script.to_str().expect("utf8")).is_none());
     assert!(diagnostics::protected_anyharness_binary("anyharness").is_none());
+    std::fs::remove_dir_all(directory).expect("cleanup fixture directory");
 }
 
 #[cfg(unix)]
