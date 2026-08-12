@@ -25,6 +25,7 @@ describe("requestBoundedJson", () => {
 
     expect(result.response).toBe(response);
     expect(result.body).toEqual({ ok: true });
+    expect(result.bodyBytes).toBe(encoder.encode(text).byteLength);
   });
 
   it("applies the success cap independently from the smaller error cap", async () => {

@@ -9,7 +9,12 @@ import type {
   ForkSessionRequest,
   ForkSessionResponse,
   GetSessionLiveConfigResponse,
+  AnyHarnessEventSupportWindowV1,
+  AnyHarnessRawNotificationSupportWindowV1,
+  AnyHarnessSessionSupportWindowV1,
   ListSessionEventsOptions,
+  ListSupportEvidenceWindowOptions,
+  ListSupportSessionWindowOptions,
   McpElicitationUrlRevealResponse,
   PromptSessionRequest,
   PromptSessionResponse,
@@ -37,6 +42,11 @@ import {
   normalizeSessionLiveConfigSnapshot,
 } from "../types/sessions.js";
 import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
+import {
+  listSupportEventWindow,
+  listSupportRawNotificationWindow,
+  listSupportSessionWindow,
+} from "./support-windows.js";
 
 export class SessionsClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
@@ -65,6 +75,13 @@ export class SessionsClient {
         withTimingCategory(options, "session.list"),
       )
     ).map(normalizeSession);
+  }
+
+  async listSupportWindow(
+    workspaceId: string,
+    options: ListSupportSessionWindowOptions,
+  ): Promise<AnyHarnessSessionSupportWindowV1> {
+    return listSupportSessionWindow(this.transport, workspaceId, options);
   }
 
   async get(sessionId: string, options?: AnyHarnessRequestOptions): Promise<Session> {
@@ -423,6 +440,13 @@ export class SessionsClient {
     return envelopes.map(normalizeSessionEventEnvelope);
   }
 
+  async listEventsSupportWindow(
+    sessionId: string,
+    options: ListSupportEvidenceWindowOptions,
+  ): Promise<AnyHarnessEventSupportWindowV1> {
+    return listSupportEventWindow(this.transport, sessionId, options);
+  }
+
   async listRawNotifications(
     sessionId: string,
     options?: ListSessionEventsOptions,
@@ -435,6 +459,13 @@ export class SessionsClient {
     return this.transport.get<SessionRawNotificationEnvelope[]>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/raw-notifications${query}`,
     );
+  }
+
+  async listRawNotificationsSupportWindow(
+    sessionId: string,
+    options: ListSupportEvidenceWindowOptions,
+  ): Promise<AnyHarnessRawNotificationSupportWindowV1> {
+    return listSupportRawNotificationWindow(this.transport, sessionId, options);
   }
 
   async resolveInteraction(

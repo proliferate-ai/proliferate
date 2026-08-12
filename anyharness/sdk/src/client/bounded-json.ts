@@ -21,6 +21,7 @@ export class AnyHarnessBoundedJsonError extends Error {
 export interface AnyHarnessBoundedJsonResponse {
   response: Response;
   body: unknown;
+  bodyBytes: number;
 }
 
 export interface AnyHarnessBoundedJsonLimits {
@@ -53,6 +54,7 @@ export async function requestBoundedJson(
   return {
     response,
     body: parseResponseJson(bytes, responseOk),
+    bodyBytes: bytes.byteLength,
   };
 }
 
