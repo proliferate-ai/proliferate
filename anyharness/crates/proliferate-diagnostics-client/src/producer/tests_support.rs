@@ -104,7 +104,7 @@ pub(super) fn producer(
             pending_loss_range: PendingLossRange::Empty,
             open_loss_snapshot: None,
         }),
-        fallback: Mutex::new(fallback),
+        fallback: Arc::new(super::fallback_runtime::FallbackController::new(fallback)),
         notify: tokio::sync::Notify::new(),
     })
 }

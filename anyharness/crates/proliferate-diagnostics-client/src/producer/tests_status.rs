@@ -148,10 +148,12 @@ fn resident_totals_cover_queued_and_in_flight_records() {
     with_state(&inner, |state| {
         state.in_flight = vec![
             ResidentAccounting {
-                serialized_bytes: 64,
+                producer_sequence: 4,
+                is_loss_summary: false,
             },
             ResidentAccounting {
-                serialized_bytes: 32,
+                producer_sequence: 5,
+                is_loss_summary: false,
             },
         ];
         state.resident_bytes += 96;

@@ -170,7 +170,8 @@ fn in_flight_ownership_holds_capacity_and_is_never_withdrawn() {
     with_state(&record_bound, |state| {
         state.in_flight = (0..TOTAL_RECORD_LIMIT)
             .map(|_| ResidentAccounting {
-                serialized_bytes: 0,
+                producer_sequence: 1,
+                is_loss_summary: false,
             })
             .collect();
     });
@@ -192,7 +193,8 @@ fn in_flight_ownership_holds_capacity_and_is_never_withdrawn() {
     let byte_bound = unavailable_producer();
     with_state(&byte_bound, |state| {
         state.in_flight = vec![ResidentAccounting {
-            serialized_bytes: TOTAL_BYTE_LIMIT,
+            producer_sequence: 1,
+            is_loss_summary: false,
         }];
         state.resident_bytes = TOTAL_BYTE_LIMIT;
     });

@@ -7,6 +7,7 @@ use tokio::time::Instant as TokioInstant;
 use proliferate_diagnostics_protocol::v1::types::IngestBatchV1;
 
 use super::{
+    fallback_runtime::route_fallback,
     transport::{
         CollectorClient, DispatchObservation, TransportError, TransportFailure, TRANSPORT_DEADLINE,
     },
@@ -38,7 +39,9 @@ async fn run_suppressed(inner: Arc<ProducerInner>) {
                 break;
             };
             match work {
-                Work::Fallback { records, deadline } => route_fallback(&inner, records, deadline),
+                Work::Fallback { records, deadline } => {
+                    route_fallback(&inner, records, deadline).await
+                }
                 Work::Ingest {
                     generation,
                     mut records,
@@ -52,7 +55,7 @@ async fn run_suppressed(inner: Arc<ProducerInner>) {
                                 .fallback_reason
                                 .get_or_insert(FallbackReason::FinalTeardown);
                         }
-                        route_fallback(&inner, records, deadline);
+                        route_fallback(&inner, records, deadline).await;
                         continue;
                     }
                     let generation_identity = GenerationIdentity::capture(&generation);
@@ -63,7 +66,8 @@ async fn run_suppressed(inner: Arc<ProducerInner>) {
                             &generation_identity,
                             records,
                             Err(TransportFailure::cancelled(false)),
-                        );
+                        )
+                        .await;
                         continue;
                     }
                     let payload = records.iter().map(|record| record.record.clone()).collect();
@@ -119,7 +123,7 @@ async fn run_suppressed(inner: Arc<ProducerInner>) {
                     // Drop the cancelled future and generation handle before
                     // fallback I/O or another generation's dispatch begins.
                     drop(generation);
-                    finish_ingest(&inner, &generation_identity, records, result);
+                    finish_ingest(&inner, &generation_identity, records, result).await;
                 }
             }
         }
@@ -322,7 +326,7 @@ fn empty_batch_envelope_bytes() -> usize {
     })
 }
 
-fn finish_ingest(
+async fn finish_ingest(
     inner: &ProducerInner,
     generation_identity: &GenerationIdentity,
     mut records: Vec<ResidentRecord>,
@@ -334,6 +338,9 @@ fn finish_ingest(
             .state
             .lock()
             .unwrap_or_else(|error| error.into_inner());
+        if state.in_flight.is_empty() {
+            return;
+        }
         let generation_current = match &state.collector {
             CollectorAvailability::Ready(current)
             | CollectorAvailability::Cooldown {
@@ -463,7 +470,7 @@ fn finish_ingest(
         }
     }
     if let Some((records, deadline)) = fallback {
-        route_fallback(inner, records, deadline);
+        route_fallback(inner, records, deadline).await;
     }
 }
 
@@ -473,104 +480,6 @@ fn generation_change_reason(dispatched: bool) -> FallbackReason {
     } else {
         FallbackReason::GenerationChanged
     }
-}
-
-enum FallbackWriteOutcome {
-    Written,
-    Failed { overflow: bool },
-    Deadline,
-}
-
-fn route_fallback(
-    inner: &ProducerInner,
-    records: Vec<ResidentRecord>,
-    deadline: Option<TokioInstant>,
-) {
-    // A shutdown byte can cancel an older request before the matching frame
-    // supplies the parent's time window. Retain the detached records and
-    // their honest delivery-unknown reason until that frame arrives; starting
-    // fallback under an invented clock would be another observability wait.
-    let waiting_for_parent_deadline = {
-        let state = inner
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        state.parent_shutdown_observed && state.terminal_deadline.is_none()
-    };
-    if waiting_for_parent_deadline {
-        let mut state = inner
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        for record in records.into_iter().rev() {
-            state.queue.push_front(record);
-        }
-        state.clear_in_flight();
-        drop(state);
-        inner.notify.notify_one();
-        return;
-    }
-    let mut outcomes = Vec::with_capacity(records.len());
-    {
-        let mut writer = inner
-            .fallback
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        for record in &records {
-            if deadline.is_some_and(|deadline| TokioInstant::now() >= deadline) {
-                outcomes.push(FallbackWriteOutcome::Deadline);
-                continue;
-            }
-            let reason = record
-                .fallback_reason
-                .unwrap_or(FallbackReason::CollectorUnavailable);
-            let outcome = match writer.as_mut() {
-                None => FallbackWriteOutcome::Failed { overflow: false },
-                Some(writer) => writer
-                    .write(reason, &record.record)
-                    .map(|_| FallbackWriteOutcome::Written)
-                    .unwrap_or_else(|error| FallbackWriteOutcome::Failed {
-                        overflow: error.is_overflow(),
-                    }),
-            };
-            outcomes.push(outcome);
-        }
-    }
-    let mut state = inner
-        .state
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
-    for (record, outcome) in records.iter().zip(outcomes) {
-        // Fallback storage subtracts nothing from the loss ledger: a summary
-        // routed here returns its snapshot to the pending pool either way.
-        if record.is_loss_summary {
-            state.return_loss_snapshot();
-        }
-        match outcome {
-            FallbackWriteOutcome::Written => {
-                state.fallback_routed = state
-                    .fallback_routed
-                    .saturating_add(1)
-                    .min(proliferate_diagnostics_protocol::v1::limits::MAX_SAFE_INTEGER);
-            }
-            FallbackWriteOutcome::Failed { overflow } => {
-                state.record_loss_with_sequence(
-                    if overflow {
-                        ProducerFailureClassification::FallbackOverflow
-                    } else {
-                        ProducerFailureClassification::FallbackWriteFailed
-                    },
-                    Some(record.record.producer_sequence),
-                );
-            }
-            FallbackWriteOutcome::Deadline => state.record_loss_with_sequence(
-                ProducerFailureClassification::ShutdownTimeout,
-                Some(record.record.producer_sequence),
-            ),
-        }
-        state.release_record(record);
-    }
-    state.clear_in_flight();
 }
 
 #[cfg(test)]

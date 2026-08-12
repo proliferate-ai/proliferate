@@ -22,7 +22,7 @@ pub(crate) struct LossSnapshot {
 /// Assigned-sequence coverage of the pending loss pool. A summary reports
 /// bounds only for one exact contiguous assigned interval; any unsequenced
 /// or non-contiguous loss removes the range without inventing one.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PendingLossRange {
     Empty,
     Exact { first: u64, last: u64 },
@@ -206,7 +206,8 @@ impl AdmissionState {
         self.in_flight = records
             .iter()
             .map(|record| ResidentAccounting {
-                serialized_bytes: record.serialized_bytes,
+                producer_sequence: record.record.producer_sequence,
+                is_loss_summary: record.is_loss_summary,
             })
             .collect();
     }

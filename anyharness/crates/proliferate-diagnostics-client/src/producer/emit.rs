@@ -160,12 +160,32 @@ impl ProducerInner {
         );
     }
 
-    /// Called only after the drain deadline expired and the worker task was
-    /// aborted. Every still-queued record is counted individually; detached
-    /// in-flight records are possibly dispatched, so the fence dies with them.
-    fn discard_resident_on_shutdown_timeout(&self) {
+    /// Called only after the drain deadline expires. Every resident record is
+    /// counted once; detached in-flight work also makes the fence ineligible.
+    fn expire_resident_on_shutdown_timeout(&self) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        // This is a one-way authority transition. A blocking syscall already
+        // in progress may finish later, but its writer/result cannot rejoin
+        // this producer and the caller does not wait a second time. Serializing
+        // the transition under admission ownership gives the worker and expiry
+        // one unambiguous terminal winner.
+        self.fallback.abandon_at_deadline();
+        let in_flight = std::mem::take(&mut state.in_flight);
         let drained: Vec<ResidentRecord> = state.queue.drain(..).collect();
+        if !in_flight.is_empty() {
+            state.delivery_fence_eligible = false;
+        }
+        // In-flight records were admitted before the queued tail. Preserve that
+        // order so a fully owned contiguous loss interval stays exact.
+        for record in in_flight {
+            if record.is_loss_summary {
+                state.return_loss_snapshot();
+            }
+            state.record_loss_with_sequence(
+                ProducerFailureClassification::ShutdownTimeout,
+                Some(record.producer_sequence),
+            );
+        }
         for record in &drained {
             if record.is_loss_summary {
                 state.return_loss_snapshot();
@@ -174,13 +194,6 @@ impl ProducerInner {
                 ProducerFailureClassification::ShutdownTimeout,
                 Some(record.record.producer_sequence),
             );
-        }
-        if !state.in_flight.is_empty() {
-            state.delivery_fence_eligible = false;
-            for _ in 0..state.in_flight.len() {
-                state.record_loss(ProducerFailureClassification::ShutdownTimeout);
-            }
-            state.clear_in_flight();
         }
         state.resident_bytes = 0;
         state.ordinary_records = 0;

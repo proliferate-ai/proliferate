@@ -9,7 +9,7 @@ use proliferate_diagnostics_protocol::v1::{limits::MAX_SAFE_INTEGER, types::Prod
 
 use crate::{
     bridge::activation::{BundledDesktopDiagnosticsBootstrap, InitialCollectorState},
-    fallback::{FallbackReason, FallbackWriter},
+    fallback::FallbackReason,
     tracing_layer::DiagnosticsTracingLayer,
     DiagnosticsComponent, DiagnosticsInstallation, EmitDisposition, InstallError,
 };
@@ -18,11 +18,15 @@ mod admission;
 #[cfg(unix)]
 mod bridge_runtime;
 mod emit;
+mod fallback_runtime;
 pub(crate) mod record;
 pub(crate) mod status;
 pub(crate) mod transport;
 mod worker;
 
+#[cfg(all(test, unix))]
+#[path = "tests_fallback_deadline.rs"]
+mod tests_fallback_deadline;
 #[cfg(test)]
 #[path = "tests_filter.rs"]
 mod tests_filter;
@@ -90,7 +94,7 @@ pub(crate) struct ProducerInner {
     producer_boot_id: String,
     factory: RecordFactory,
     state: Mutex<AdmissionState>,
-    fallback: Mutex<Option<FallbackWriter>>,
+    fallback: Arc<fallback_runtime::FallbackController>,
     notify: tokio::sync::Notify,
 }
 
@@ -104,7 +108,8 @@ pub(crate) struct ResidentRecord {
 }
 
 pub(crate) struct ResidentAccounting {
-    serialized_bytes: usize,
+    producer_sequence: u64,
+    is_loss_summary: bool,
 }
 
 pub(crate) struct AdmissionState {
@@ -242,7 +247,7 @@ pub(crate) fn install(
             pending_loss_range: PendingLossRange::Empty,
             open_loss_snapshot: None,
         }),
-        fallback: Mutex::new(fallback),
+        fallback: Arc::new(fallback_runtime::FallbackController::new(fallback)),
         notify: tokio::sync::Notify::new(),
     });
     let runtime =
@@ -304,13 +309,13 @@ impl DiagnosticsProducerGuard {
                     // Do not invent a new wait while a flush/terminal frame
                     // crossing this return can still win on the bridge.
                     join.abort();
-                    self.inner.discard_resident_on_shutdown_timeout();
+                    self.inner.expire_resident_on_shutdown_timeout();
                     break;
                 };
                 let remaining = deadline.saturating_duration_since(TokioInstant::now());
                 if remaining.is_zero() {
                     join.abort();
-                    self.inner.discard_resident_on_shutdown_timeout();
+                    self.inner.expire_resident_on_shutdown_timeout();
                     break;
                 }
                 tokio::time::sleep(remaining.min(Duration::from_millis(5))).await;
@@ -352,16 +357,9 @@ impl ProducerInner {
     }
 
     pub(crate) fn snapshot(&self) -> ProducerStatusSnapshot {
-        // The writer holds this mutex across bounded disk I/O. Never hold the
-        // admission mutex while waiting for it: tracing callers need the
-        // admission critical section even when fallback storage is slow.
-        let fallback_status = self
-            .fallback
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .as_ref()
-            .map(FallbackWriter::current_status);
         let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        // Cached atomics keep terminal status coherent without blocking on disk I/O.
+        let fallback_status = self.fallback.status();
         ProducerStatusSnapshot {
             component: self.component.protocol_component(),
             producer_boot_id: self.producer_boot_id.clone(),
@@ -379,8 +377,8 @@ impl ProducerInner {
                 .unwrap_or(u16::MAX),
             resident_bytes: u32::try_from(state.resident_bytes).unwrap_or(u32::MAX),
             in_flight: !state.in_flight.is_empty(),
-            fallback_active: fallback_status.is_some_and(|status| status.active),
-            fallback_bytes: fallback_status.map_or(0, |status| status.bytes),
+            fallback_active: fallback_status.active,
+            fallback_bytes: fallback_status.bytes,
             fallback_write_failures: state.dropped.fallback_write_failed,
             dropped_by_reason: state.dropped.clone(),
             fallback_routed: state.fallback_routed,
@@ -455,10 +453,8 @@ impl ProducerInner {
         self.notify.notify_one();
     }
 
-    /// Permanent bridge loss: no strictly newer generation can ever arrive, so
-    /// the sentinel generation latches the producer unavailable. Queued records
-    /// keep their existing routing; the worker assigns `collector_unavailable`
-    /// when it drains them.
+    /// Permanent bridge loss: no newer generation can arrive, so the sentinel
+    /// latches unavailable. Queued records retain routing until worker drain.
     #[cfg(unix)]
     pub(crate) fn mark_bridge_lost(&self) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
@@ -498,7 +494,12 @@ impl ProducerInner {
             }
         };
         let absolute_deadline = self.terminal_deadline().unwrap_or_else(TokioInstant::now);
-        let _ = tokio::time::timeout_at(absolute_deadline, wait).await;
+        if tokio::time::timeout_at(absolute_deadline, wait)
+            .await
+            .is_err()
+        {
+            self.expire_resident_on_shutdown_timeout();
+        }
         let snapshot = self.snapshot();
         self.finish_parent_flush(snapshot.clone());
         snapshot

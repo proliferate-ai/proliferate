@@ -524,13 +524,7 @@ async fn a_restarted_producer_only_admits_newly_emitted_records() {
 
     // Process exit: the worker stops and the lifetime lock is released.
     worker.abort();
-    let released = first
-        .fallback
-        .lock()
-        .expect("fallback slot")
-        .take()
-        .expect("fallback writer");
-    drop(released);
+    first.fallback.close_for_test();
     drop(first);
 
     let fixture = CollectorFixture::accepting(TEST_COLLECTOR_BOOT).await;
