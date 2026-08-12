@@ -16,14 +16,20 @@ import { PageContentFrame } from "#product/primitives/patterns/PageContentFrame"
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
 import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMenuItem";
 import { PickerPopoverContent } from "#product/primitives/patterns/PickerPopoverContent";
-import { SettingsGroup } from "#product/primitives/patterns/SettingsGroup";
-import { SettingsMenu } from "#product/primitives/patterns/SettingsMenu";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
+import { SettingsGroup } from "#product/primitives/patterns/settings/SettingsGroup";
+import { SettingsMenu } from "#product/primitives/patterns/settings/SettingsMenu";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsSaveFooter } from "#product/primitives/patterns/settings/SettingsSaveFooter";
+import { SettingsScopeTabs } from "#product/primitives/patterns/settings/SettingsScopeTabs";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 import { SidebarNavRow } from "#product/primitives/patterns/sidebar/SidebarNavRow";
 import { SidebarRowSurface } from "#product/primitives/patterns/sidebar/SidebarRowSurface";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { showToast } from "#product/primitives/utils/show-toast";
 import { Button } from "#product/primitives/Button";
+import { Switch } from "#product/primitives/Switch";
 import { Home } from "#product/primitives/icons/platform";
 import { Trash } from "#product/primitives/icons/core";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
@@ -197,6 +203,39 @@ function SettingsGroupDemo() {
   );
 }
 
+function SettingsRowDemo() {
+  const [checked, setChecked] = useState(true);
+  return (
+    <SettingsRow label="Setting label" description="Setting description">
+      <Switch checked={checked} onChange={setChecked} />
+    </SettingsRow>
+  );
+}
+
+function SettingsSectionDemo() {
+  return (
+    <SettingsSection title="Section title" description="Section description">
+      <SettingsRow label="Row label" description="Row description">
+        <Switch checked onChange={noop} />
+      </SettingsRow>
+      <SettingsRow label="Another row">
+        <Switch checked={false} onChange={noop} />
+      </SettingsRow>
+    </SettingsSection>
+  );
+}
+
+function SettingsScopeTabsDemo() {
+  const [value, setValue] = useState("user");
+  return (
+    <SettingsScopeTabs
+      items={[{ id: "user", label: "User" }, { id: "org", label: "Org" }]}
+      value={value}
+      onChange={setValue}
+    />
+  );
+}
+
 /**
  * The host itself is already mounted once at the app root, so the sheet demos
  * it the only way it is ever used: by raising one of each weight through
@@ -297,8 +336,17 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
     </div>
   ) },
   { name: "PickerPopoverContent", subpath: "#product/primitives/patterns/PickerPopoverContent", render: PickerPopoverContentDemo },
-  { name: "SettingsGroup", subpath: "#product/primitives/patterns/SettingsGroup", render: SettingsGroupDemo },
-  { name: "SettingsMenu", subpath: "#product/primitives/patterns/SettingsMenu", render: SettingsMenuDemo },
+  { name: "SettingsEmptyState", subpath: "#product/primitives/patterns/settings/SettingsEmptyState", render: () => (
+    <SettingsEmptyState title="No results" description="Nothing to show yet." size="compact" />
+  ) },
+  { name: "SettingsGroup", subpath: "#product/primitives/patterns/settings/SettingsGroup", render: SettingsGroupDemo },
+  { name: "SettingsMenu", subpath: "#product/primitives/patterns/settings/SettingsMenu", render: SettingsMenuDemo },
+  { name: "SettingsRow", subpath: "#product/primitives/patterns/settings/SettingsRow", render: SettingsRowDemo },
+  { name: "SettingsSaveFooter", subpath: "#product/primitives/patterns/settings/SettingsSaveFooter", render: () => (
+    <SettingsSaveFooter onSave={noop} onRevert={noop} />
+  ) },
+  { name: "SettingsScopeTabs", subpath: "#product/primitives/patterns/settings/SettingsScopeTabs", render: SettingsScopeTabsDemo },
+  { name: "SettingsSection", subpath: "#product/primitives/patterns/settings/SettingsSection", render: SettingsSectionDemo },
   { name: "SidebarActionButton", subpath: "#product/primitives/patterns/sidebar/SidebarActionButton", render: SidebarActionButtonDemo },
   { name: "SidebarNavRow", subpath: "#product/primitives/patterns/sidebar/SidebarNavRow", render: SidebarNavRowDemo },
   { name: "SidebarRowSurface", subpath: "#product/primitives/patterns/sidebar/SidebarRowSurface", render: SidebarRowSurfaceDemo },

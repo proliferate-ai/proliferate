@@ -1,5 +1,5 @@
 import { Button } from "#product/primitives/Button";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { AUTH_ACCOUNT_LABELS } from "#product/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";

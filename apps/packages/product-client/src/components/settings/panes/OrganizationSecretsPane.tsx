@@ -1,5 +1,5 @@
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";

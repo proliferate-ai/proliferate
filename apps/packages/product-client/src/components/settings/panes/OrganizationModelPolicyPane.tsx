@@ -6,9 +6,9 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { Button } from "#product/primitives/Button";
 import { Switch } from "#product/primitives/Switch";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 
 const ROUTE_OPTIONS: readonly { value: string; label: string; description: string }[] = [

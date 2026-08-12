@@ -294,7 +294,7 @@ SettingsEmptyState.tsx
 > Shipped correction: `SettingsEyebrow.tsx` (group heading style) was
 > deleted; `SettingsSection` renders its own label now. The wash card itself
 > is `SettingsGroup.tsx`, a separate component one tier down at
-> `apps/packages/product-client/src/primitives/patterns/SettingsGroup.tsx`
+> `apps/packages/product-client/src/primitives/patterns/settings/SettingsGroup.tsx`
 > (it is domain-unaware, so it lives outside this directory).
 
 ProductClient's `src/components/settings/shared/`
@@ -843,8 +843,8 @@ Existing (kept; no changes):
 
 ```text
 SettingsPageHeader          apps/packages/product-client/src/components/patterns/SettingsPageHeader.tsx
-SettingsSection             apps/packages/product-client/src/components/patterns/SettingsSection.tsx
-SettingsRow                 apps/packages/product-client/src/components/patterns/SettingsRow.tsx
+SettingsSection             apps/packages/product-client/src/primitives/patterns/settings/SettingsSection.tsx
+SettingsRow                 apps/packages/product-client/src/primitives/patterns/settings/SettingsRow.tsx
 SettingsScopeTabs / SettingsEmptyState
                             same directory
 ```
@@ -853,7 +853,7 @@ SettingsScopeTabs / SettingsEmptyState
 > "wash" restyle. `SettingsSection` now renders its own sentence-case muted
 > label directly (or a `titleWeight="emphasized"` variant) over a new
 > `SettingsGroup` wash card
-> (`apps/packages/product-client/src/primitives/patterns/SettingsGroup.tsx`),
+> (`apps/packages/product-client/src/primitives/patterns/settings/SettingsGroup.tsx`),
 > which owns the inset hairline divider between rows; `SettingsRow` no
 > longer draws its own border. `SettingsSection` and `SettingsRow` above are
 > restyled by the same change; their contracts (props, ownership) are
@@ -1126,7 +1126,7 @@ apps/packages/product-client/src/lib/domain/settings/navigation-presentation.ts
     scope<->section mapping, PARKED_SECTION_SCOPES
   - adminOnly metadata on Org-scope rows
 
-apps/packages/product-client/src/components/patterns/SettingsScopeTabs.tsx
+apps/packages/product-client/src/primitives/patterns/settings/SettingsScopeTabs.tsx
   - horizontal underline scope switcher consumed by SettingsScreen
 
 apps/packages/product-client/src/components/settings/sidebar/SettingsSidebar.tsx

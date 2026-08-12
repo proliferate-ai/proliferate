@@ -1,6 +1,6 @@
 import { Button } from "#product/primitives/Button";
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 
 export function GitHubAppInstallationSection({
   loading,

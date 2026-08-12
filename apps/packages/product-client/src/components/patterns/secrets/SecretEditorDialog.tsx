@@ -7,7 +7,7 @@ import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { SegmentedControl } from "#product/primitives/SegmentedControl";
-import { SettingsMenu } from "#product/primitives/patterns/SettingsMenu";
+import { SettingsMenu } from "#product/primitives/patterns/settings/SettingsMenu";
 import { Textarea } from "#product/primitives/Textarea";
 
 import {

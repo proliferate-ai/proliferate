@@ -3,8 +3,8 @@ import { Building2, Cloud, CreditCard, Gauge, Server } from "lucide-react";
 
 import { Badge } from "#product/primitives/Badge";
 
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import type { BillingPlanView } from "#product/lib/domain/billing/billing-plan";
 import { CreditGrantBreakdown } from "#product/components/billing/BillingCreditGrantBreakdown";
 import {

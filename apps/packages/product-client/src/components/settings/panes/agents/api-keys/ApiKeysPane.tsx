@@ -12,8 +12,8 @@ import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDia
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { AGENT_API_KEYS_COPY } from "#product/copy/settings/agent-api-keys-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";

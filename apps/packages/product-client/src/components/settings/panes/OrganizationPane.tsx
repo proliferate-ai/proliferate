@@ -18,9 +18,9 @@ import {
   GitHubAppInstallationSection,
   isOrganizationAdminRole,
 } from "#product/components/settings/panes/organization/GitHubAppInstallationSection";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
 import {
   useCurrentTeamCheckout,

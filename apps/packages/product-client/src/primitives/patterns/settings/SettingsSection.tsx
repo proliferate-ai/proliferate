@@ -1,5 +1,5 @@
 import { type HTMLAttributes, type ReactNode } from "react";
-import { SettingsGroup } from "#product/primitives/patterns/SettingsGroup";
+import { SettingsGroup } from "#product/primitives/patterns/settings/SettingsGroup";
 
 export interface SettingsSectionProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   title?: ReactNode;
