@@ -1,8 +1,8 @@
 # Product MCP Servers
 
 Product MCP servers are AnyHarness-owned tools exposed to agents through MCP.
-They let an agent call Proliferate product capabilities such as subagents,
-reviews, cowork artifacts, computer use, browser use, or
+They let an agent call Proliferate product capabilities such as Workspace
+agent operations, reviews, cowork artifacts, computer use, browser use, or
 artifacts.
 
 This document does not cover arbitrary external/user-supplied MCP servers
@@ -44,7 +44,7 @@ decide which product MCPs are enabled.
 Current internal product MCPs:
 
 ```text
-domains/sessions/subagents/mcp
+domains/agent_operations/mcp
 domains/reviews/mcp
 domains/cowork/mcp
 ```
@@ -111,9 +111,9 @@ anyharness-lib/src/domains/<domain>/mcp/
 Examples:
 
 ```text
+domains/agent_operations/mcp/
 domains/reviews/mcp/
-domains/sessions/subagents/mcp/
-domains/artifacts/mcp/
+domains/cowork/mcp/
 domains/computer_use/mcp/
 domains/browser/mcp/
 ```
@@ -138,7 +138,7 @@ Allowed:
 
 Banned:
 
-- product MCP IDs such as `reviews`, `subagents`, or `computer_use`
+- product MCP IDs such as `workspace`, `reviews`, or `computer_use`
 - product authorization rules
 - session selection policy
 - domain service calls
@@ -206,7 +206,7 @@ never
   only attach when explicitly selected by policy
 
 when_session_role_matches
-  attach for a specific product session role, such as reviewer or subagent
+  attach for a specific product session role, such as reviewer or cowork
 
 when_product_feature_created_session
   attach for sessions created by a product workflow
@@ -295,8 +295,8 @@ Examples:
 reviews
   parent session, reviewer session, review run role
 
-subagents
-  parent session allowed to manage child sessions
+workspace
+  current ordinary/delegated role, parent ownership, and target relationship
 
 cowork
   cowork thread/session/artifact context
@@ -316,10 +316,11 @@ state.
 
 Expected but currently unavailable product state should normally resolve to a
 typed context that advertises fewer tools rather than failing protocol setup.
-Examples: a reviews MCP attached to a session with no current review role, or a
-subagents MCP attached to a parent that is now depth/fanout/config blocked.
-Use a hard context error for missing rows, cross-workspace tokens, corrupt
-state, or a product MCP attached to a fundamentally unsupported surface.
+A reviews MCP attached to a session with no current review role is one
+example. Workspace is stricter: it lists its exact 18 tools and applies current
+role and relationship authorization on every call. Use a hard context error
+for missing rows, cross-workspace tokens, corrupt state, or a product MCP
+attached to a fundamentally unsupported surface.
 
 ### `tools.rs`
 
@@ -506,8 +507,8 @@ Internal examples:
 review session
   receives reviews MCP with reviewer/parent scope
 
-parent session with subagent support
-  receives subagents MCP with parent-session scope
+eligible Standard ordinary, delegated, or promoted session
+  receives Workspace MCP with current session scope
 
 cowork session
   receives artifacts MCP with cowork thread/artifact scope
@@ -558,12 +559,8 @@ Preferred generic endpoint:
 /v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/{product_mcp_id}
 ```
 
-Compatibility aliases:
-
-```text
-/v1/workspaces/{workspace_id}/sessions/{session_id}/reviews/mcp
-/v1/workspaces/{workspace_id}/sessions/{session_id}/subagents/mcp
-```
+Product MCPs use only the generic endpoint. There is no compatibility alias for
+the removed Subagents MCP route or tool names.
 
 POST flow:
 
@@ -608,13 +605,14 @@ may also expose normal API/UI refresh state. That does not belong in
 Internal product MCPs:
 
 ```text
-subagents
+workspace
 reviews
+cowork
 ```
 
 Properties:
 
-- injected by product workflow/session role
+- injected by product surface, binding policy, or session role
 - usually not shown as a user toggle
 - may appear in binding summaries for transparency
 - role/context depends on session relationship

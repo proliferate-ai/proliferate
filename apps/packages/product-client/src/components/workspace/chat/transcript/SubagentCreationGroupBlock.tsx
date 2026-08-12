@@ -11,10 +11,6 @@ import {
 } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { deriveAgentOperationsReceiptPresentation } from "#product/domain/chats/tools/agent-operations-tool-presentation";
 import type { TranscriptOpenSessionRole } from "#product/domain/chats/transcript/transcript-open-target";
-import {
-  parseSubagentLaunchResult,
-  resolveSubagentLaunchDisplay,
-} from "#product/domain/chats/subagents/subagent-launch";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
@@ -75,9 +71,11 @@ export function SubagentCreationGroupBlock({
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const receipts = itemIds.flatMap((itemId) => {
     const item = transcript.itemsById[itemId];
-    return item?.kind === "tool_call"
-      ? [spawnReceipt(item, parentDurableSessionId, parentAuthorityWorkspaceId)]
-      : [];
+    if (item?.kind !== "tool_call") {
+      return [];
+    }
+    const receipt = spawnReceipt(item, parentDurableSessionId, parentAuthorityWorkspaceId);
+    return receipt ? [receipt] : [];
   });
   const visibleReceipts = receipts.filter((receipt) => receipt.sessionId || receipt.failed);
   if (visibleReceipts.length === 0) {
@@ -326,32 +324,23 @@ function spawnReceipt(
   item: ToolCallItem,
   parentDurableSessionId: string | null,
   parentWorkspaceId: string | null,
-): SpawnReceipt {
+): SpawnReceipt | null {
   const workspacePresentation = deriveAgentOperationsReceiptPresentation(item);
-  if (workspacePresentation?.action === "create_agent") {
-    const authoritativePresentation = parentDurableSessionId
-      ? deriveAuthoritativeAgentOperation(item, parentDurableSessionId, parentWorkspaceId)
-      : null;
-    return {
-      key: item.itemId,
-      item,
-      sessionId: workspacePresentation.agent?.sessionId ?? null,
-      workspaceId: workspacePresentation.agent?.workspaceId ?? null,
-      title: workspacePresentation.agent?.title ?? readInputTitle(item) ?? "Subagent",
-      failed: item.status === "failed",
-      historicalNavigationAuthorized: authoritativePresentation?.action === "create_agent",
-    };
+  if (workspacePresentation?.action !== "create_agent") {
+    return null;
   }
 
-  const launch = parseSubagentLaunchResult(item);
+  const authoritativePresentation = parentDurableSessionId
+    ? deriveAuthoritativeAgentOperation(item, parentDurableSessionId, parentWorkspaceId)
+    : null;
   return {
     key: item.itemId,
     item,
-    sessionId: launch?.childSessionId ?? null,
-    workspaceId: null,
-    title: resolveSubagentLaunchDisplay(item).title,
+    sessionId: workspacePresentation.agent?.sessionId ?? null,
+    workspaceId: workspacePresentation.agent?.workspaceId ?? null,
+    title: workspacePresentation.agent?.title ?? readInputTitle(item) ?? "Subagent",
     failed: item.status === "failed",
-    historicalNavigationAuthorized: true,
+    historicalNavigationAuthorized: authoritativePresentation?.action === "create_agent",
   };
 }
 

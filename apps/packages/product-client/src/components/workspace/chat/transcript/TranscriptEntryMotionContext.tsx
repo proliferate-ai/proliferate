@@ -53,10 +53,7 @@ function initialSeenItemIds(transcript: TranscriptState): Set<string> {
   for (const [itemId, item] of Object.entries(transcript.itemsById)) {
     if (
       item.kind === "tool_call"
-      && (
-        isWorkspaceSubagentCreationAction(item)
-        || item.nativeToolName === "mcp__subagents__create_subagent"
-      )
+      && isWorkspaceSubagentCreationAction(item)
     ) {
       // A fresh provider represents history hydration, session revisit, or
       // virtualization remount. Seed the receipt-specific key so existing

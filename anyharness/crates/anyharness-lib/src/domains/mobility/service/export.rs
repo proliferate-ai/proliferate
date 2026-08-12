@@ -13,8 +13,9 @@ use crate::domains::sessions::store::mobility::WorkspaceMobilitySnapshot;
 use crate::domains::sessions::store::SessionStore;
 
 use super::{
-    is_supported_agent_kind, validate_archive_size, validate_clean_repo_for_mobility,
-    validate_expected_export_git_state, MobilityError, MobilityService,
+    is_supported_agent_kind, relation_owns_mobility_wake_schedule, validate_archive_size,
+    validate_clean_repo_for_mobility, validate_expected_export_git_state, MobilityError,
+    MobilityService,
 };
 
 const INCLUDE_RAW_NOTIFICATIONS_ENV: &str = "ANYHARNESS_MOBILITY_INCLUDE_RAW_NOTIFICATIONS";
@@ -193,6 +194,11 @@ impl MobilityService {
             .iter()
             .map(|link| link.id.as_str())
             .collect::<HashSet<_>>();
+        let cowork_wake_link_ids = session_links
+            .iter()
+            .filter(|link| relation_owns_mobility_wake_schedule(link.relation))
+            .map(|link| link.id.as_str())
+            .collect::<HashSet<_>>();
         let session_link_completions = snapshot
             .session_link_completions
             .into_iter()
@@ -201,7 +207,7 @@ impl MobilityService {
         let session_link_wake_schedules = snapshot
             .session_link_wake_schedules
             .into_iter()
-            .filter(|schedule| included_link_ids.contains(schedule.session_link_id.as_str()))
+            .filter(|schedule| cowork_wake_link_ids.contains(schedule.session_link_id.as_str()))
             .collect();
         let session_link_completion_deliveries = snapshot
             .session_link_completion_deliveries
@@ -228,7 +234,7 @@ struct AssembledSnapshot {
     session_link_completion_deliveries:
         Vec<crate::domains::sessions::subagents::delivery::CompletionDeliveryRecord>,
     session_link_wake_schedules:
-        Vec<crate::domains::sessions::subagents::model::SubagentWakeScheduleRecord>,
+        Vec<crate::domains::sessions::links::completions::LinkWakeScheduleRecord>,
     partial_graph: Vec<String>,
 }
 

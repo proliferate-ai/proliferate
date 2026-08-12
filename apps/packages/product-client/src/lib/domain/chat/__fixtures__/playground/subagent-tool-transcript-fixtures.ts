@@ -4,34 +4,16 @@ import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/t
 const subagentItem = toolCallItem({
   itemId: "tool-agent",
   toolCallId: "tool-agent",
-  title: "mcp__subagents__create_subagent",
-  nativeToolName: "mcp__subagents__create_subagent",
+  title: "Task: repo-reviewer",
+  nativeToolName: "Agent",
   semanticKind: "subagent",
   rawInput: {
-    agentKind: "codex",
     label: "repo-reviewer",
-    modelId: "gpt-5.4",
     prompt: "Inspect the transcript rendering path and report whether nested tool calls use compact rows.",
   },
   rawOutput: {
-    childSessionId: "child-repo-reviewer",
-    sessionLinkId: "link-repo-reviewer",
-    promptStatus: "running",
-    wakeScheduleCreated: true,
-    wakeScheduled: true,
+    summary: "The nested command and read use the compact native-agent presentation.",
   },
-  contentParts: [
-    {
-      type: "tool_result_text",
-      text: JSON.stringify({
-        childSessionId: "child-repo-reviewer",
-        sessionLinkId: "link-repo-reviewer",
-        promptStatus: "running",
-        wakeScheduleCreated: true,
-        wakeScheduled: true,
-      }),
-    },
-  ],
 });
 
 const subagentCommandItem = toolCallItem({
@@ -88,7 +70,12 @@ export const PLAYGROUND_SUBAGENT_TRANSCRIPT: TranscriptState = {
   turnsById: {
     "turn-subagent": {
       turnId: "turn-subagent",
-      itemOrder: ["assistant-intro", "tool-agent"],
+      itemOrder: [
+        "assistant-intro",
+        "tool-agent",
+        "tool-agent-command",
+        "tool-agent-read",
+      ],
       startedAt: "2026-04-12T00:00:00Z",
       completedAt: "2026-04-12T00:00:03Z",
       stopReason: "end_turn",

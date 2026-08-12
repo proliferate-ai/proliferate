@@ -9,10 +9,6 @@ import type {
   PendingSessionConfigChanges,
 } from "#product/domain/sessions/pending-config";
 import {
-  parseSubagentLaunchResult,
-  resolveSubagentLaunchDisplay,
-} from "#product/domain/chats/subagents/subagent-launch";
-import {
   classifyAgentOperationsTool,
 } from "#product/domain/chats/tools/agent-operations-tool-presentation";
 import {
@@ -263,34 +259,6 @@ export function planBatchedStreamSideEffects(input: {
           workspaceId: agentOperation.agent.workspaceId ?? input.workspaceId,
         });
       }
-      if (item?.kind === "tool_call" && isSubagentMcpMutation(item)) {
-        if (isSubagentMcpCreateMutation(item)) {
-          const launchResult = parseSubagentLaunchResult(item);
-          const display = resolveSubagentLaunchDisplay(item);
-          if (launchResult?.childSessionId) {
-            eventEffects.push({
-              kind: "record_session_relationship_hint",
-              sessionId: launchResult.childSessionId,
-              relationship: {
-                kind: "subagent_child",
-                parentSessionId: input.sessionId,
-                sessionLinkId: launchResult.sessionLinkId,
-                relation: "subagent",
-                workspaceId: input.workspaceId,
-              },
-            });
-            eventEffects.push({
-              kind: "mount_subagent_child_session",
-              childSessionId: launchResult.childSessionId,
-              label: display.title,
-              workspaceId: input.workspaceId,
-              parentSessionId: input.sessionId,
-              sessionLinkId: launchResult.sessionLinkId,
-            });
-          }
-        }
-        invalidateSessionSubagents = true;
-      }
       if (
         item?.kind === "tool_call"
         && item.status === "completed"
@@ -336,18 +304,6 @@ function appendOrderedEffect(
     return;
   }
   effects.push(effect);
-}
-
-function isSubagentMcpMutation(item: ToolCallItem): boolean {
-  const nativeToolName = item.nativeToolName?.trim().toLowerCase();
-  return nativeToolName === "mcp__subagents__create_subagent"
-    || nativeToolName === "mcp__subagents__send_subagent_message"
-    || nativeToolName === "mcp__subagents__schedule_subagent_wake"
-    || nativeToolName === "mcp__subagents__close_subagent";
-}
-
-function isSubagentMcpCreateMutation(item: ToolCallItem): boolean {
-  return item.nativeToolName?.trim().toLowerCase() === "mcp__subagents__create_subagent";
 }
 
 function isCoworkCodingCreateMcpMutation(item: ToolCallItem): boolean {

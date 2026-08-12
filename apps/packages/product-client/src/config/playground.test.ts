@@ -182,6 +182,7 @@ describe("playground scenarios", () => {
     const subagentComposerHtml = renderToStaticMarkup(renderDelegationSlot("subagents-composer-many"));
     expect(subagentComposerHtml).not.toContain("color-mix");
     expect(subagentComposerHtml).not.toContain("style=");
+    expect(subagentComposerHtml.toLowerCase()).not.toContain("wake scheduled");
     expect(subagentComposerHtml).not.toMatch(/Codex|Claude|Grok|gpt-|sonnet|opus|model/i);
   });
 

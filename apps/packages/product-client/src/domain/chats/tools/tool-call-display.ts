@@ -5,9 +5,6 @@ import {
   parseMcpToolName,
 } from "./mcp-tool-presentation";
 import { resolveSubagentLaunchDisplay } from "../subagents/subagent-launch";
-import {
-  formatSubagentMcpActionLabel,
-} from "../subagents/subagent-tool-presentation";
 
 export type ToolDisplayIconKey =
   | "terminal"
@@ -32,21 +29,11 @@ export function describeToolCallDisplay(
   const cleanedToolName = toolName.trim();
   const nativeName = item.nativeToolName?.trim() ?? "";
   const normalizedToolName = cleanedToolName.toLowerCase();
-  const normalizedNativeName = nativeName.toLowerCase();
   const raw = isRecord(item.rawInput);
   const parsedMcp = parseMcpToolName(nativeName || cleanedToolName);
 
   switch (item.semanticKind) {
     case "subagent": {
-      const subagentActionLabel =
-        formatSubagentMcpActionLabel(normalizedNativeName || normalizedToolName);
-      if (subagentActionLabel) {
-        return {
-          label: subagentActionLabel,
-          hint: "Subagent",
-          iconKey: "clipboard-list",
-        };
-      }
       const subagentDisplay = resolveSubagentLaunchDisplay(item);
       const description = readString(raw?.description) ?? undefined;
       return {

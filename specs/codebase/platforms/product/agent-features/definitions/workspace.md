@@ -1,9 +1,7 @@
 # Workspace Product MCP
 
-Status: authoritative target definition for the Workspace product MCP,
+Status: authoritative current definition for the Workspace product MCP,
 session attachment, current-role authorization, and agent product context.
-Until the replacement is implemented, [subagents.md](subagents.md) remains the
-current compatibility contract for the legacy Subagents product MCP.
 
 Workspace is the agent-facing surface for discovering workspaces and agents,
 creating and configuring agents, messaging them, and managing delegated-agent
@@ -171,7 +169,7 @@ not contain prompt content or raw internal error detail.
 
 ## Replacement And Retention Boundary
 
-The Workspace activation replaces and deletes:
+Workspace activation replaced and removed:
 
 - `domains/sessions/subagents/mcp/**`, its auth secret, registration, legacy
   admission proof, and product-catalog selection
@@ -182,7 +180,7 @@ The Workspace activation replaces and deletes:
 
 No alias preserves a removed Subagents tool name.
 
-The replacement retains:
+The current implementation retains:
 
 - Workspace create, configure, messaging, interrupt, Close, Open, and Promote
   behavior and strict live/history receipt correlation
@@ -196,8 +194,9 @@ The replacement retains:
 - child session history and transcript artifacts according to retention policy
 
 No delegated-agent relationship may create or read a one-shot wake schedule.
-The shared wake table remains because Cowork owns active behavior on it; access
-must sit behind a shared or Cowork-correct owner.
+The shared wake table remains because Cowork owns active behavior on it;
+runtime access sits behind Cowork's delegation service, and mobility accepts
+only Cowork-linked schedule rows.
 
 Closing a relationship is not transcript or child-session deletion. Promotion
 removes the parent/child relationship and active delegated-agent roster entry

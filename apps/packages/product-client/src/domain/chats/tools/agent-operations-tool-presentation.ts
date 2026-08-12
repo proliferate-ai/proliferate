@@ -69,7 +69,7 @@ export interface AgentOperationsWorkspaceTarget {
 }
 
 export interface AgentOperationsReceiptPresentation {
-  source: "workspace" | "legacy_subagents";
+  source: "workspace";
   action: AgentOperationsReceiptAction;
   actionLabel: string;
   targetAgentId: string | null;

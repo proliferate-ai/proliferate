@@ -1,4 +1,5 @@
 use crate::domains::agents::portability::AgentArtifactFileData;
+use crate::domains::sessions::links::completions::LinkWakeScheduleRecord;
 use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord,
@@ -6,9 +7,7 @@ use crate::domains::sessions::model::{
     SessionRawNotificationRecord, SessionRecord,
 };
 use crate::domains::sessions::subagents::delivery::CompletionDeliveryRecord;
-use crate::domains::sessions::subagents::model::{
-    SubagentCompletionRecord, SubagentWakeScheduleRecord,
-};
+use crate::domains::sessions::subagents::model::SubagentCompletionRecord;
 use crate::domains::workspaces::access_model::WorkspaceAccessRecord;
 
 pub const MAX_MOBILITY_ARCHIVE_BODY_BYTES: usize = 128 * 1024 * 1024;
@@ -34,7 +33,7 @@ pub struct WorkspaceMobilityArchiveData {
     pub session_links: Vec<SessionLinkRecord>,
     pub session_link_completions: Vec<SubagentCompletionRecord>,
     pub session_link_completion_deliveries: Vec<CompletionDeliveryRecord>,
-    pub session_link_wake_schedules: Vec<SubagentWakeScheduleRecord>,
+    pub session_link_wake_schedules: Vec<LinkWakeScheduleRecord>,
 }
 
 #[derive(Debug, Clone, Default)]

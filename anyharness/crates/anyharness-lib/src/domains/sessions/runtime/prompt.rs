@@ -188,6 +188,16 @@ impl SessionRuntime {
                     );
                     SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
                 }
+                LiveSessionCommandError::Rejected(
+                    PromptAcceptError::ProductContextUnavailable { incident_id, error },
+                ) => {
+                    let _ = prepared.cleanup_attachments(
+                        self.session_service.store(),
+                        self.session_service.attachment_storage(),
+                        session_id,
+                    );
+                    SendPromptError::ProductContextUnavailable { incident_id, error }
+                }
             })?;
         tracing::info!(
             session_id = %session_id,
@@ -335,6 +345,9 @@ impl SessionRuntime {
                 LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
                     SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
                 }
+                LiveSessionCommandError::Rejected(
+                    PromptAcceptError::ProductContextUnavailable { incident_id, error },
+                ) => SendPromptError::ProductContextUnavailable { incident_id, error },
             })?;
         let session = self
             .session_service
@@ -383,6 +396,13 @@ fn classify_text_prompt_command_error(
                 "failed to enqueue prompt: {detail}"
             )))
         }
+        LiveSessionCommandError::Rejected(PromptAcceptError::ProductContextUnavailable {
+            incident_id,
+            error,
+        }) => TextPromptDispatchError::Dispatch(SendPromptError::ProductContextUnavailable {
+            incident_id,
+            error,
+        }),
     }
 }
 
@@ -403,6 +423,7 @@ fn durable_prompt_start_failure_code(error: &StartSessionError) -> &'static str 
         StartSessionError::Closed => "session_closed",
         StartSessionError::MissingDataKey => "missing_data_key",
         StartSessionError::RestartRequired(_) => "restart_required",
+        StartSessionError::WorkspaceMcpAttachmentFailed(_) => "workspace_mcp_attachment_failed",
         StartSessionError::RouteAuth(_) => "route_auth",
         StartSessionError::AgentNotReady { .. } => "agent_not_ready",
         StartSessionError::Internal(_) => "internal",
@@ -424,6 +445,9 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
         StartSessionError::Closed => SendPromptError::SessionClosed,
         StartSessionError::MissingDataKey | StartSessionError::RestartRequired(_) => {
             SendPromptError::Internal(anyhow::anyhow!(SESSION_RESTART_REQUIRED_DETAIL))
+        }
+        StartSessionError::WorkspaceMcpAttachmentFailed(error) => {
+            SendPromptError::WorkspaceMcpAttachmentFailed(error)
         }
         // Lazy-start on prompt: surface the typed agent-auth code so clients
         // can distinguish the fail-closed launch refusal from generic errors.
@@ -517,6 +541,19 @@ mod dispatch_classification_tests {
                 PromptAcceptError::EnqueueFailed("queue closed".to_string())
             )),
             TextPromptDispatchError::Dispatch(SendPromptError::Internal(_))
+        ));
+        assert!(matches!(
+            classify_text_prompt_command_error(LiveSessionCommandError::Rejected(
+                PromptAcceptError::ProductContextUnavailable {
+                    incident_id: "incident-1".to_string(),
+                    error: crate::live::sessions::product_context::AgentProductContextResolutionError::new(
+                        anyhow::anyhow!("private")
+                    ),
+                }
+            )),
+            TextPromptDispatchError::Dispatch(
+                SendPromptError::ProductContextUnavailable { incident_id, .. }
+            ) if incident_id == "incident-1"
         ));
     }
 }

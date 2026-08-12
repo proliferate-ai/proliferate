@@ -286,11 +286,12 @@ behavior, it does not belong here.
 ## Mobility Archive Rule
 
 Workspace mobility archives are public transport. If a workspace contains a
-subagent graph, the archive must preserve `session_links` and
-`session_link_completions` plus pending `session_link_wake_schedules` when both
-linked sessions are included. Export must block with a clear preflight error
-when only one side of a subagent link would be moved, because importing a
-partial graph would break child ownership and parent wake behavior.
+delegated-session graph, the archive must preserve `session_links` and
+`session_link_completions` when both linked sessions are included. Pending
+`session_link_wake_schedules` travel only for Cowork links; delegated-agent
+links neither export nor import them. Export must block with a clear preflight
+error when only one side of a live link would be moved, because importing a
+partial graph would break durable relationship ownership.
 The optional `subagentClosedAt` field preserves reversible Closed state across
 mobility; absence remains backward-compatible and means Open.
 

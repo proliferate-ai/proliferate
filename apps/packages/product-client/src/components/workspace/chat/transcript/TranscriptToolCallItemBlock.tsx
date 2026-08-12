@@ -18,7 +18,6 @@ import { SkillsToolResultRow } from "#product/components/workspace/chat/tool-cal
 import { AgentOperationsToolActionRow } from "#product/components/workspace/chat/tool-calls/AgentOperationsToolActionRow";
 import { useOpenCoworkCodingSession } from "#product/hooks/cowork/workflows/use-open-cowork-coding-session";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { deriveLegacySubagentAgentOperationsReceipt } from "#product/domain/chats/subagents/subagent-tool-presentation";
 import {
   deriveAgentOperationsReceiptPresentation,
   isAgentOperationsReadAction,
@@ -96,9 +95,7 @@ export function TranscriptToolCallItemBlock({
   const rows: React.ReactNode[] = [];
   const status = mapStatus(item.status);
   const skillsToolResult = deriveSkillsToolResultPresentation(item, normalizedResultText);
-  const agentOperationsReceipt =
-    deriveAgentOperationsReceiptPresentation(item)
-    ?? deriveLegacySubagentAgentOperationsReceipt(item);
+  const agentOperationsReceipt = deriveAgentOperationsReceiptPresentation(item);
   const agentOperationsResultText = agentOperationsReceipt
     ? normalizedResultText || formatStructuredToolOutput(readAgentOperationsStructuredOutput(item))
     : null;

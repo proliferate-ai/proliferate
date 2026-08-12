@@ -31,6 +31,9 @@ use crate::integrations::mcp::product_server::{
     ProductMcpTokenValidation,
 };
 
+#[path = "tests/tool_contract.rs"]
+mod tool_contract;
+
 struct Sessions(Vec<SessionRecord>);
 
 impl AgentSessionReads for Sessions {
@@ -111,15 +114,20 @@ impl AgentWorkspaceOperations for Workspaces {
     async fn list_workspace_options(
         &self,
     ) -> Result<WorkspaceCreationOptions, WorkspaceOptionsError> {
-        unreachable!()
+        Ok(WorkspaceCreationOptions {
+            repositories: Vec::new(),
+            creation_modes: Vec::new(),
+        })
     }
 
     async fn create_workspace(
         &self,
         _caller_workspace_id: &str,
-        _input: CreateWorkspaceFromOptionsInput,
+        input: CreateWorkspaceFromOptionsInput,
     ) -> Result<CreateWorkspaceFromOptionsResult, WorkspaceOptionsError> {
-        unreachable!()
+        Err(WorkspaceOptionsError::RepositoryNotFound(
+            input.repository_id,
+        ))
     }
 }
 
@@ -333,7 +341,13 @@ async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context(
     .await
     .expect("tools/list dispatch")
     .expect("tools/list response");
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 18);
+    let listed_names = list["result"]["tools"]
+        .as_array()
+        .expect("listed Workspace tools")
+        .iter()
+        .map(|tool| tool["name"].as_str().expect("listed tool name"))
+        .collect::<Vec<_>>();
+    assert_eq!(listed_names, tools::TOOL_NAMES);
 
     let whoami = authenticated_dispatch(
         &server,

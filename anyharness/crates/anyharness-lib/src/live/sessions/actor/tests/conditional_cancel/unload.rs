@@ -419,7 +419,7 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
             actor_task.await.unwrap().unwrap();
             drop(held_responder);
 
-            let completion_store = SubagentStore::new(state.db.clone());
+            let completion_store = LinkCompletionStore::new(state.db.clone());
             let completions = tokio::time::timeout(Duration::from_secs(2), async {
                 loop {
                     let records = completion_store
@@ -501,7 +501,8 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
             assert!(closed.dismissed_at.is_none());
             assert!(state
                 .subagent_service
-                .resolve_target_including_closed(PARENT_ID, None, Some(SESSION_ID))
+                .find_subagent_parent(SESSION_ID)
+                .unwrap()
                 .unwrap()
                 .subagent_closed_at
                 .is_some());

@@ -68,9 +68,7 @@ use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
-use crate::domains::sessions::subagents::mcp::auth::SubagentMcpAuth;
 use crate::domains::sessions::subagents::service::SubagentService;
-use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
@@ -340,6 +338,12 @@ impl AppState {
             SessionLinkStore::new(db.clone()),
             SessionStore::new(db.clone()),
         );
+        let agent_product_context = Arc::new(
+            crate::domains::agent_operations::product_context::DurableAgentProductContextResolver::new(
+                session_service.clone(),
+                Arc::new(session_link_service.clone()),
+            ),
+        );
         let review_service = Arc::new(ReviewService::new(
             ReviewStore::new(db.clone()),
             SessionStore::new(db.clone()),
@@ -355,6 +359,7 @@ impl AppState {
             goal_service: goal_service.clone(),
             loop_service: loop_service.clone(),
             activity_service: activity_service.clone(),
+            product_context: agent_product_context,
         });
         let cowork_delegation_service = CoworkDelegationService::new(
             (*cowork_service).clone(),
@@ -370,16 +375,13 @@ impl AppState {
         ));
         let subagent_service = Arc::new(SubagentService::new(
             SessionStore::new(db.clone()),
-            session_delete_workflow.clone(),
             session_link_service.clone(),
-            SubagentStore::new(db.clone()),
-            workspace_runtime.clone(),
-            workspace_access_gate.clone(),
+            LinkCompletionStore::new(db.clone()),
         ));
         let (review_hook_event_tx, review_hook_event_rx) = tokio::sync::mpsc::channel(256);
-        let subagent_mcp_auth = Arc::new(SubagentMcpAuth::new(runtime_home.clone()));
         let completion_delivery_wiring = sessions::wire_completion_delivery_before_sessions(&db);
         let subagent_session_hooks = completion_delivery_wiring.session_hooks.clone();
+        let workspace_mcp_auth = Arc::new(WorkspaceMcpAuth::new(runtime_home.clone()));
         let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
         let review_session_hooks = Arc::new(ReviewSessionHooks::new(
             review_hook_event_tx,
@@ -392,10 +394,9 @@ impl AppState {
             product_mcp::build_product_mcp_launch_catalog(product_mcp::LaunchCatalogDeps {
                 runtime_base_url: runtime_base_url.clone(),
                 bearer_token: bearer_token.clone(),
+                workspace_mcp_auth: workspace_mcp_auth.clone(),
                 review_mcp_auth: review_mcp_auth.clone(),
-                subagent_mcp_auth: subagent_mcp_auth.clone(),
                 cowork_mcp_auth: cowork_mcp_auth.clone(),
-                subagent_service: subagent_service.clone(),
             });
         let goal_runtime = Arc::new(GoalRuntime::new(
             goal_service.clone(),
@@ -529,7 +530,7 @@ impl AppState {
             workspace_runtime: workspace_runtime.clone(),
             session_service: session_service.clone(),
             session_runtime: session_runtime.clone(),
-            subagent_service: subagent_service.clone(),
+            session_link_service: Arc::new(session_link_service.clone()),
             workspace_access_gate: workspace_access_gate.clone(),
             terminal_service: terminal_service.clone(),
         });
@@ -569,19 +570,12 @@ impl AppState {
                 session_admission: session_admission.clone(),
                 workspace_operation_gate: workspace_operation_gate.clone(),
             });
-        let workspace_mcp_auth = Arc::new(WorkspaceMcpAuth::new(runtime_home.clone()));
         let product_mcp_endpoint_registry =
             product_mcp::build_product_mcp_endpoint_registry(product_mcp::EndpointRegistryDeps {
                 agent_operations: agent_operations.clone(),
                 workspace_mcp_auth,
                 review_runtime: review_runtime.clone(),
                 review_mcp_auth,
-                subagent_service: subagent_service.clone(),
-                session_runtime: session_runtime.clone(),
-                workspace_runtime: workspace_runtime.clone(),
-                session_admission: session_admission.clone(),
-                workspace_operation_gate: workspace_operation_gate.clone(),
-                subagent_mcp_auth,
                 cowork_artifact_runtime: cowork_artifact_runtime.clone(),
                 cowork_runtime: cowork_runtime.clone(),
                 cowork_mcp_auth,

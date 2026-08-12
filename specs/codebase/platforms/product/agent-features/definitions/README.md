@@ -2,7 +2,7 @@
 
 Read [servers.md](../servers.md) first. That spec
 defines the source layout and implementation rules. Files in this folder define
-the initial product MCPs we are standardizing.
+the current product MCPs.
 
 Each definition carries the durable laws of one product MCP:
 
@@ -24,8 +24,6 @@ Cross-cutting standards:
 
 Definitions:
 
-- [workspace.md](workspace.md) — target Workspace contract
-- [subagents.md](subagents.md) — current compatibility truth until the legacy
-  Subagents MCP is removed during Workspace implementation
+- [workspace.md](workspace.md) — Workspace and delegated-agent operations
 - [cowork.md](cowork.md)
 - [reviews.md](reviews.md)

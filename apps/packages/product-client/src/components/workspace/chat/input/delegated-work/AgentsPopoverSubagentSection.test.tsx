@@ -30,7 +30,6 @@ describe("AgentsPopoverSubagentSection", () => {
         statusLabel: "Available",
         statusCategory: "finished",
         latestCompletionLabel: null,
-        wakeScheduled: false,
       }],
       parent: {
         parentSessionId: "parent-1",

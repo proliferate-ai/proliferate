@@ -68,7 +68,7 @@ describe("classifyAgentOperationsTool", () => {
   });
 
   it("rejects unknown owners, unknown operations, and lookalike suffixes", () => {
-    expect(classifyAgentOperationsTool("mcp__subagents__create_agent")).toBeNull();
+    expect(classifyAgentOperationsTool("mcp__subagents__create_subagent")).toBeNull();
     expect(classifyAgentOperationsTool("mcp__workspace__wake_agent")).toBeNull();
     expect(classifyAgentOperationsTool("mcp__workspace__create_agent_extra")).toBeNull();
   });

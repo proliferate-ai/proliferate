@@ -338,11 +338,10 @@ both optimistic rendering and the compare-and-swap payload. A pending glyph
 is clickable only when directory metadata supplies an authoritative workspace,
 and navigation uses its mapped client-session ID.
 
-Legacy `mcp__subagents__create_subagent`, send, and Close transcript records
-feed these shared renderers as a compatibility input. Only a legacy linked-child
-send may use the current transcript workspace as its trusted navigation
-fallback; that exception must never leak into identity-only Workspace MCP send
-receipts.
+`mcp__workspace__*` is the only Product MCP input to these Agent Operations
+renderers. Removed `mcp__subagents__*` names have no compatibility
+classification or navigation fallback; unrecognized historical tool records
+use generic tool rendering.
 
 Native harness subagents use the same durable item stream as the parent turn:
 

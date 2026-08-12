@@ -6,6 +6,9 @@ use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::model::ActorCapabilities;
+use crate::live::sessions::product_context::{
+    AgentProductContext, AgentProductContextResolutionError, AgentProductContextResolver,
+};
 use crate::persistence::Db;
 
 /// Store-backed [`ActorCapabilities`] for tests: the same wiring as
@@ -24,8 +27,22 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
             store.clone(),
             attachment_storage,
         )),
+        product_context: Arc::new(TestAgentProductContextResolver),
         observers: Vec::new(),
         permission_advisor: None,
+    }
+}
+
+struct TestAgentProductContextResolver;
+
+impl AgentProductContextResolver for TestAgentProductContextResolver {
+    fn resolve(
+        &self,
+        _session_id: &str,
+    ) -> Result<AgentProductContext, AgentProductContextResolutionError> {
+        Ok(AgentProductContext::new(
+            "You are currently an ordinary agent in this test workspace.",
+        ))
     }
 }
 

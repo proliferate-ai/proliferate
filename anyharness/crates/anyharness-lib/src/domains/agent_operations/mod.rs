@@ -6,5 +6,6 @@
 
 pub mod mcp;
 pub mod model;
+pub mod product_context;
 pub mod runtime;
 pub mod subagents;

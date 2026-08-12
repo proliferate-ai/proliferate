@@ -512,69 +512,6 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(screen.queryByText("Created workspace")).toBeNull();
   });
 
-  it("keeps legacy send and Close records on the shared receipt renderer", () => {
-    const legacySend = toolCallItem({
-      semanticKind: "subagent",
-      nativeToolName: "mcp__subagents__send_subagent_message",
-      status: "failed",
-      rawInput: { childSessionId: "legacy-session", label: "Legacy audit", message: "Exact" },
-      rawOutput: { childSessionId: "legacy-session", label: "Legacy audit" },
-    });
-    const { unmount } = render(
-      <TranscriptToolCallItemBlock item={legacySend} workspaceId="workspace-1" onOpenArtifact={() => {}} />,
-    );
-
-    expect(screen.getByText("message failed")).toBeTruthy();
-    expect(screen.queryByText("messaged")).toBeNull();
-    unmount();
-
-    const legacyClose = toolCallItem({
-      semanticKind: "subagent",
-      nativeToolName: "mcp__subagents__close_subagent",
-      status: "failed",
-      rawInput: { childSessionId: "legacy-session", label: "Legacy audit" },
-      rawOutput: { childSessionId: "legacy-session", label: "Legacy audit" },
-    });
-    render(
-      <TranscriptToolCallItemBlock item={legacyClose} workspaceId="workspace-1" onOpenArtifact={() => {}} />,
-    );
-
-    expect(screen.getByText("failed to close")).toBeTruthy();
-    expect(screen.queryByText("closed")).toBeNull();
-  });
-
-  it("keeps ordinary navigation for an explicit non-subagent linked relationship", () => {
-    mocks.directoryRelationshipHints["legacy-session"] = {
-      kind: "linked_child",
-      parentSessionId: "parent-session",
-      relation: "cowork_coding_session",
-      workspaceId: "workspace-current",
-    };
-    const legacySend = toolCallItem({
-      semanticKind: "subagent",
-      nativeToolName: "mcp__subagents__send_subagent_message",
-      status: "completed",
-      rawInput: { childSessionId: "legacy-session", label: "Legacy audit", message: "Exact" },
-      rawOutput: { childSessionId: "legacy-session", label: "Legacy audit" },
-    });
-
-    const onOpenSession = vi.fn();
-    render(
-      <TranscriptContextProviders sessionId="parent-session" onOpenSession={onOpenSession}>
-        <TranscriptToolCallItemBlock
-          item={legacySend}
-          workspaceId="workspace-current"
-          onOpenArtifact={() => {}}
-        />
-      </TranscriptContextProviders>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /open .*legacy audit/i }));
-    expect(onOpenSession).toHaveBeenCalledWith("legacy-session", "linked-child");
-    expect(mocks.openWorkspaceSession).not.toHaveBeenCalled();
-    expect(mocks.selectWorkspace).not.toHaveBeenCalled();
-  });
-
   it.each([
     ["create_agent", "created"],
     ["configure_agent", "configured"],

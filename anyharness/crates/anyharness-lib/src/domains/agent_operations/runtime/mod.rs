@@ -4,6 +4,7 @@ mod error;
 mod messaging;
 mod ordinary;
 mod ports;
+mod product_context;
 mod subagent_lifecycle;
 mod subagent_roster;
 mod target_access;

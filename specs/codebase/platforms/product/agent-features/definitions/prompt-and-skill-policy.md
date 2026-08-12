@@ -242,7 +242,10 @@ Prompt provenance and delegated child-session metadata:
 
 ```text
 anyharness/crates/anyharness-lib/src/domains/sessions/delegation.rs
-anyharness/crates/anyharness-lib/src/domains/sessions/subagents/store.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/links/model.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/links/store.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/store/link_completions.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/prompt/provenance.rs
 anyharness/crates/anyharness-lib/src/persistence/sql/0029_session_links_prompt_provenance.sql
 anyharness/crates/anyharness-lib/src/persistence/sql/0030_subagent_links_and_completions.sql
 ```

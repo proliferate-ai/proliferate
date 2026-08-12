@@ -93,7 +93,7 @@ needs_attention
 failed
 running
 queued
-wake_scheduled
+wake_scheduled (Cowork only)
 finished
 closed
 ```
@@ -119,7 +119,7 @@ needs_attention: attention accent
 failed: destructive accent
 running: active accent, subtle motion only when already established locally
 queued: muted active
-wake_scheduled: muted/neutral with explicit label
+wake_scheduled: Cowork-only, muted/neutral with explicit label
 finished: neutral
 closed: hidden by default
 ```
@@ -133,8 +133,10 @@ Composer visibility:
 - `parent_revising` keeps the delegated-work item visible but must not disable
   normal parent chat input.
 
-Avoid using one word for both action and state. For example, state is
-`Wake scheduled`; action is `Notify me` or `Wake parent`.
+Avoid using one word for both action and state. On Cowork-owned surfaces,
+state is `Wake scheduled`; the corresponding action is `Notify me` or
+`Wake parent`. Delegated-agent surfaces do not expose one-shot wake actions or
+state.
 
 ## Surfaces
 
@@ -180,8 +182,8 @@ The durable runtime roster is the source of truth. The overview reads the
 workspace roster, while cluster/detail routes also read the selected parent's
 session roster. The client preserves server order and uses the server's
 `status.presentation` verdict directly; it does not reconstruct membership or
-presentation from open tabs, transcript receipts, execution status, or wake
-state. A settled focused roster may repair a stale route before a slower
+presentation from open tabs, transcript receipts, or execution status. A
+settled focused roster may repair a stale route before a slower
 workspace-wide refresh finishes, but a loading or failed query must not make a
 parent or child disappear.
 
@@ -266,7 +268,7 @@ Examples:
 
 ```text
 API Surface Check agent created
-Running - Claude - Wake scheduled
+Running - Claude
 Open agent session
 
 Security Review agent created
@@ -372,7 +374,6 @@ Sections:
 Needs attention
 Running
 Queued
-Wake scheduled
 ```
 
 Kinds may be grouped inside sections when needed:
@@ -413,7 +414,6 @@ Primary actions by kind:
 ```text
 subagent
   Open
-  Notify me
   Delete
 
 cowork
@@ -492,12 +492,13 @@ Rules:
   click away.
 - Subagent creation/completion receipts should be concise.
 - Adjacent subagent creation receipts from the same assistant/tool-call cluster
-  group together. Creation receipts do not group with send, wake, status, read,
-  search, close, or generic tool calls.
+  group together. Creation receipts do not group with messaging, lifecycle,
+  configuration, or generic tool calls.
 - Parent messages rendered in a child session show
   `Sent by parent - {parent chat title}`.
-- Wake prompts and queued outbound prompts belong in composer outbound state,
-  not only as silent background state.
+- Queued outbound prompts belong in composer outbound state, not only as silent
+  background state. Automatic completion delivery is represented by the
+  resulting parent notification rather than a delegated-agent wake control.
 - Do not paste long raw child transcripts into parent transcript receipts.
 
 ## Details Surface
@@ -510,11 +511,10 @@ Subagent details:
 API Surface Check
 Status: Completed
 Harness: Claude
-Latest result: Found one SDK mismatch in create_subagent.
+Latest result: Found one SDK mismatch in create_agent.
 
 Actions:
   Open session
-  Notify me
   Send message
   Delete
 ```

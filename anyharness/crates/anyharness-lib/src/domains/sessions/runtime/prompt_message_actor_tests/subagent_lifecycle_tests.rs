@@ -171,7 +171,7 @@ async fn live_promotion_preserves_the_running_turn_and_removes_all_parent_behavi
     wait_for_actor_idle(&state).await;
     assert_eq!(prompt_texts(&script.request_log), ["blocking turn"]);
     assert!(
-        crate::domains::sessions::subagents::store::SubagentStore::new(state.db.clone())
+        crate::domains::sessions::links::completions::LinkCompletionStore::new(state.db.clone())
             .list_completions_for_links(&[link.id])
             .unwrap()
             .is_empty()
