@@ -3,15 +3,14 @@ import type {
   SupportSnapshotPreparation,
 } from "@proliferate/product-client/host/desktop-bridge";
 import type {
-  BundledLocalSupportConnection,
   BundledLocalSupportSelection,
-  ResolvedSupportSnapshotAccess,
 } from "#product/lib/domain/support/support-snapshot-access-contract";
 import {
+  type BoundSupportSessionEvidencePort,
   type SupportListEndpointV1,
   type SupportSessionCaptureV1,
-  type SupportSessionEvidenceClient,
   type SupportSessionEvidenceEnvelopeV1,
+  type SupportSessionListEndpointV1,
   type SupportSummaryEndpointV1,
 } from "#product/lib/domain/support/support-session-contract";
 import {
@@ -27,11 +26,13 @@ import type {
   ExpectedSupportWindow,
 } from "#product/lib/domain/support/support-session-window";
 import {
+  decodeSupportWindow,
+} from "#product/lib/domain/support/support-session-window";
+import {
   EVENTS_WINDOW,
   RAW_WINDOW,
   SESSION_ACTIVE_WINDOW,
   SESSION_RECENT_WINDOW,
-  decodeSupportWindow,
   eventsRequest,
   failureReason,
   forwardAbort,
@@ -43,27 +44,33 @@ import {
   type SettledMeasured,
 } from "#product/lib/workflows/support/support-session-evidence-access";
 import {
+  addSupportSeconds,
+  compareSupportInstants,
   exactIdentity,
   hasSafeOwnDataShape,
   inTimestampWindow,
   isExactIdentityValue,
   ownSafeNonnegativeInteger,
   ownUtcTimestamp,
+  parseCanonicalSupportTimestamp,
+  supportDeadlineDelayMilliseconds,
+  supportInstantFromEpochMilliseconds,
+  timestampInstant,
   timestampNotAfter,
+  type SupportUtcInstant,
   validPreparationWindow,
 } from "#product/lib/workflows/support/support-session-evidence-validation";
 import {
   finishIncluded,
 } from "#product/lib/workflows/support/support-session-evidence-result";
 
-const COLLECTION_TIMEOUT_MS = 5_000;
+const COLLECTION_TIMEOUT_SECONDS = 5;
 const TIMEOUT_REASON = Symbol("support_session_timeout");
 
-export interface CollectSupportSessionEvidenceInput {
+export interface BoundSupportSessionEvidenceInput {
   preparation: SupportSnapshotPreparation;
+  port: BoundSupportSessionEvidencePort;
   selection: BundledLocalSupportSelection;
-  connection: BundledLocalSupportConnection;
-  client: SupportSessionEvidenceClient;
   cancellationSignal?: AbortSignal;
   isSelectionCurrent?: () => boolean;
 }
@@ -82,87 +89,52 @@ export type CollectedSupportSessionEvidence =
     }
   | { state: "cancelled" };
 
-export interface CollectResolvedSupportSessionEvidenceInput {
-  preparation: SupportSnapshotPreparation;
-  access: ResolvedSupportSnapshotAccess;
-  client?: SupportSessionEvidenceClient;
-  cancellationSignal?: AbortSignal;
-  isSelectionCurrent?: () => boolean;
-}
-
-export function collectResolvedSupportSessionEvidence(
-  input: CollectResolvedSupportSessionEvidenceInput,
-): Promise<CollectedSupportSessionEvidence> {
-  if (resolvedInputSuperseded(input)) return Promise.resolve({ state: "cancelled" });
-  if (input.access.state === "none") {
-    return Promise.resolve({
-      state: "omitted",
-      sessionEvidenceJson: null,
-      sessionCollection: {
-        state: "omitted",
-        reason: "no_selected_bundled_local_workspace",
-      },
-    });
-  }
-  if (input.access.state !== "resolved" || !input.client) {
-    return Promise.resolve({ state: "cancelled" });
-  }
-  return collectSupportSessionEvidence({
-    preparation: input.preparation,
-    selection: input.access.selection,
-    connection: input.access.connection,
-    client: input.client,
-    cancellationSignal: input.cancellationSignal,
-    isSelectionCurrent: input.isSelectionCurrent,
-  });
-}
-
-function resolvedInputSuperseded(input: CollectResolvedSupportSessionEvidenceInput): boolean {
-  if (input.cancellationSignal?.aborted === true) return true;
-  try {
-    return input.isSelectionCurrent?.() === false;
-  } catch {
-    return true;
-  }
-}
-
-export async function collectSupportSessionEvidence(
-  input: CollectSupportSessionEvidenceInput,
+export async function collectBoundSupportSessionEvidence(
+  input: BoundSupportSessionEvidenceInput,
 ): Promise<CollectedSupportSessionEvidence> {
   if (
     !validPreparationWindow(input.preparation)
     || !isExactIdentityValue(input.selection.workspace.workspaceId)
     || !isExactIdentityValue(input.selection.workspace.anyharnessWorkspaceId)
-    || input.connection.anyharnessWorkspaceId
-      !== input.selection.workspace.anyharnessWorkspaceId
-    || !exactRuntimeUrl(input.connection.runtimeUrl)
     || (input.selection.kind === "active_session"
       && (!isExactIdentityValue(input.selection.uiSessionId)
         || !isExactIdentityValue(input.selection.materializedSessionId)))
   ) {
     return { state: "cancelled" };
   }
+  const capturedAt = parseCanonicalSupportTimestamp(input.preparation.capturedAt);
+  if (!capturedAt) return { state: "cancelled" };
+  const deadline = addSupportSeconds(capturedAt, COLLECTION_TIMEOUT_SECONDS);
+  const now = supportInstantFromEpochMilliseconds(Date.now());
+  if (compareSupportInstants(now, deadline) >= 0) {
+    return omittedCollection("session_timeout");
+  }
   const controller = new AbortController();
   const removeForwarder = forwardAbort(input.cancellationSignal, controller);
-  const timeout = setTimeout(() => controller.abort(TIMEOUT_REASON), COLLECTION_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(TIMEOUT_REASON),
+    supportDeadlineDelayMilliseconds(now, deadline),
+  );
   try {
     if (isSuperseded(input)) return { state: "cancelled" };
     const result = input.selection.kind === "active_session"
       ? await collectActive(
-          input as CollectSupportSessionEvidenceInput & {
-            selection: Extract<CollectSupportSessionEvidenceInput["selection"], {
+          input as BoundSupportSessionEvidenceInput & {
+            selection: Extract<BoundSupportSessionEvidenceInput["selection"], {
               kind: "active_session";
             }>;
           },
           controller.signal,
+          deadline,
         )
       : await collectRecent(
-          input as CollectSupportSessionEvidenceInput & {
-            selection: Extract<CollectSupportSessionEvidenceInput["selection"], {
+          input as BoundSupportSessionEvidenceInput & {
+            selection: Extract<BoundSupportSessionEvidenceInput["selection"], {
               kind: "recent_activity";
             }>;
           },
           controller.signal,
+          deadline,
         );
     if (isSuperseded(input)) return { state: "cancelled" };
     return result;
@@ -173,40 +145,30 @@ export async function collectSupportSessionEvidence(
   }
 }
 
-function exactRuntimeUrl(value: string): boolean {
-  if (!value || value !== value.trim() || /[\u0000-\u001f\u007f]/.test(value)) return false;
-  try {
-    const parsed = new URL(value);
-    return (parsed.protocol === "http:" || parsed.protocol === "https:")
-      && !parsed.username
-      && !parsed.password
-      && !parsed.search
-      && !parsed.hash;
-  } catch {
-    return false;
-  }
-}
-
 async function collectActive(
-  input: CollectSupportSessionEvidenceInput & {
-    selection: Extract<CollectSupportSessionEvidenceInput["selection"], { kind: "active_session" }>;
+  input: BoundSupportSessionEvidenceInput & {
+    selection: Extract<BoundSupportSessionEvidenceInput["selection"], { kind: "active_session" }>;
   },
   signal: AbortSignal,
+  deadline: SupportUtcInstant,
 ): Promise<CollectedSupportSessionEvidence> {
   const sessionId = input.selection.materializedSessionId;
   const [summaryResult, eventsResult, rawResult] = await Promise.all([
-    settleMeasured(() => input.client.listSupportWindow(input.connection.anyharnessWorkspaceId, {
-      mode: "exact",
-      sessionId,
-      updatedAtTo: input.preparation.capturedAt,
-      limit: 1,
-      maxResponseBytes: 1_048_576,
-      request: { signal },
-    }), signal, input.preparation.capturedAt, TIMEOUT_REASON),
-    settleMeasured(() => eventsRequest(input.client, sessionId, input.preparation, signal), signal,
-      input.preparation.capturedAt, TIMEOUT_REASON),
-    settleMeasured(() => rawRequest(input.client, sessionId, input.preparation, signal), signal,
-      input.preparation.capturedAt, TIMEOUT_REASON),
+    settleMeasured(
+      () => input.port.listSessions({
+        mode: "exact",
+        sessionId,
+        updatedAtTo: input.preparation.capturedAt,
+        signal,
+      }),
+      signal,
+      deadline,
+      TIMEOUT_REASON,
+    ),
+    settleMeasured(() => eventsRequest(input.port, sessionId, input.preparation, signal), signal,
+      deadline, TIMEOUT_REASON),
+    settleMeasured(() => rawRequest(input.port, sessionId, input.preparation, signal), signal,
+      deadline, TIMEOUT_REASON),
   ]);
   const budget = createSupportProjectionBudget();
   const summary = projectActiveSummary(
@@ -230,26 +192,30 @@ async function collectActive(
     events: events.endpoint,
     rawNotifications: raw.endpoint,
   };
-  return finishIncluded(input, [session], [summary.readBytes, events.readBytes, raw.readBytes]);
+  return finishIncluded(
+    input,
+    [session],
+    sessionListFromSummary(summary.endpoint),
+    [summary.readBytes, events.readBytes, raw.readBytes],
+  );
 }
 
 async function collectRecent(
-  input: CollectSupportSessionEvidenceInput & {
-    selection: Extract<CollectSupportSessionEvidenceInput["selection"], { kind: "recent_activity" }>;
+  input: BoundSupportSessionEvidenceInput & {
+    selection: Extract<BoundSupportSessionEvidenceInput["selection"], { kind: "recent_activity" }>;
   },
   signal: AbortSignal,
+  deadline: SupportUtcInstant,
 ): Promise<CollectedSupportSessionEvidence> {
   const summaryResult = await settleMeasured(
-    () => input.client.listSupportWindow(input.connection.anyharnessWorkspaceId, {
+    () => input.port.listSessions({
       mode: "recent",
       updatedAtFrom: input.preparation.window.sourceTimeFrom,
       updatedAtTo: input.preparation.capturedAt,
-      limit: 3,
-      maxResponseBytes: 1_048_576,
-      request: { signal },
+      signal,
     }),
     signal,
-    input.preparation.capturedAt,
+    deadline,
     TIMEOUT_REASON,
   );
   if (summaryResult.state !== "fulfilled") {
@@ -260,13 +226,18 @@ async function collectRecent(
   const projected = projectRecentSummaries(decoded, input.selection, input.preparation);
   if (projected.state !== "projected") return omittedCollection("session_invalid");
   if (isSuperseded(input)) return { state: "cancelled" };
+  const sessionList = sessionListEndpoint(
+    decoded,
+    summaryResult.capturedAt,
+    projected.sessions.length > 0 ? decoded.responseBytes : 0,
+  );
 
   const sessions = await Promise.all(projected.sessions.map(async (summary, index) => {
     const [eventsResult, rawResult] = await Promise.all([
-      settleMeasured(() => eventsRequest(input.client, summary.sessionId, input.preparation, signal),
-        signal, input.preparation.capturedAt, TIMEOUT_REASON),
-      settleMeasured(() => rawRequest(input.client, summary.sessionId, input.preparation, signal),
-        signal, input.preparation.capturedAt, TIMEOUT_REASON),
+      settleMeasured(() => eventsRequest(input.port, summary.sessionId, input.preparation, signal),
+        signal, deadline, TIMEOUT_REASON),
+      settleMeasured(() => rawRequest(input.port, summary.sessionId, input.preparation, signal),
+        signal, deadline, TIMEOUT_REASON),
     ]);
     const events = projectListEndpoint(
       eventsResult,
@@ -286,12 +257,9 @@ async function collectRecent(
       session: {
         index,
         sessionId: summary.sessionId,
-        summary: summaryEndpoint(
-          decoded,
-          summaryResult.capturedAt,
-          summary.value,
-          index === 0 ? decoded.responseBytes : 0,
-        ),
+        summary: summaryEndpoint(sessionList, summary.value, index === 0
+          ? sessionList.includedBytes
+          : 0),
         events: events.endpoint,
         rawNotifications: raw.endpoint,
       },
@@ -301,6 +269,7 @@ async function collectRecent(
   return finishIncluded(
     input,
     sessions.map((session) => session.session),
+    sessionList,
     [decoded.responseBytes, ...sessions.flatMap((session) => session.readBytes)],
   );
 }
@@ -313,26 +282,30 @@ interface ProjectedSummary {
 
 function projectRecentSummaries(
   window: Extract<DecodedSupportWindow, { state: "decoded" }>,
-  selection: Extract<CollectSupportSessionEvidenceInput["selection"], { kind: "recent_activity" }>,
+  selection: Extract<BoundSupportSessionEvidenceInput["selection"], { kind: "recent_activity" }>,
   preparation: SupportSnapshotPreparation,
 ): { state: "projected"; sessions: ProjectedSummary[] } | { state: "invalid" } {
   const output: ProjectedSummary[] = [];
   const seen = new Set<string>();
-  let previousUpdatedAt = Number.POSITIVE_INFINITY;
+  let previousUpdatedAt: SupportUtcInstant | null = null;
   let previousId = "";
   for (const item of window.items) {
     const sessionId = exactIdentity(item, "id");
     const workspaceId = exactIdentity(item, "workspaceId");
     const updatedAt = ownUtcTimestamp(item, "updatedAt");
-    const updatedMs = updatedAt ? Date.parse(updatedAt) : Number.NaN;
+    const updatedInstant = updatedAt ? timestampInstant(updatedAt) : null;
+    const comparedToPrevious = updatedInstant && previousUpdatedAt
+      ? compareSupportInstants(updatedInstant, previousUpdatedAt)
+      : -1;
     if (
       !sessionId
       || workspaceId !== selection.workspace.anyharnessWorkspaceId
       || !updatedAt
+      || !updatedInstant
       || !inTimestampWindow(updatedAt, preparation.window.sourceTimeFrom, preparation.capturedAt)
       || seen.has(sessionId)
-      || updatedMs > previousUpdatedAt
-      || (updatedMs === previousUpdatedAt
+      || comparedToPrevious > 0
+      || (comparedToPrevious === 0
         && compareUnicodeCodePoints(previousId, sessionId) >= 0)
     ) {
       return { state: "invalid" };
@@ -347,7 +320,7 @@ function projectRecentSummaries(
     ) return { state: "invalid" };
     output.push({ sessionId, value, budget });
     seen.add(sessionId);
-    previousUpdatedAt = updatedMs;
+    previousUpdatedAt = updatedInstant;
     previousId = sessionId;
   }
   return { state: "projected", sessions: output };
@@ -355,7 +328,7 @@ function projectRecentSummaries(
 
 function projectActiveSummary(
   result: SettledMeasured,
-  selection: Extract<CollectSupportSessionEvidenceInput["selection"], { kind: "active_session" }>,
+  selection: Extract<BoundSupportSessionEvidenceInput["selection"], { kind: "active_session" }>,
   preparation: SupportSnapshotPreparation,
   budget: SupportProjectionBudget,
 ): { endpoint: SupportSummaryEndpointV1; readBytes: number } {
@@ -418,17 +391,32 @@ function projectActiveSummary(
     };
   }
   return {
-    endpoint: summaryEndpoint(decoded, result.capturedAt, projected, decoded.responseBytes),
+    endpoint: summaryEndpoint(
+      sessionListEndpoint(decoded, result.capturedAt, decoded.responseBytes),
+      projected,
+      decoded.responseBytes,
+    ),
     readBytes: decoded.responseBytes,
   };
 }
 
 function summaryEndpoint(
-  decoded: Extract<DecodedSupportWindow, { state: "decoded" }>,
-  capturedAt: string,
+  sessionList: SupportSessionListEndpointV1,
   projected: ReturnType<typeof projectSupportSessionValue> & { state: "projected" },
   includedBytes: number,
 ): SupportSummaryEndpointV1 {
+  return {
+    ...sessionList,
+    includedBytes,
+    payload: projected.value,
+  };
+}
+
+function sessionListEndpoint(
+  decoded: Extract<DecodedSupportWindow, { state: "decoded" }>,
+  capturedAt: string,
+  includedBytes: number,
+): SupportSessionListEndpointV1 {
   const uncertain = decoded.window.completeness === "limit_uncertain";
   return {
     capturedAt,
@@ -436,7 +424,18 @@ function summaryEndpoint(
     ...(uncertain ? { reason: "session_window_limit_uncertain" as const } : {}),
     includedBytes,
     window: decoded.window,
-    payload: projected.value,
+  };
+}
+
+function sessionListFromSummary(
+  summary: SupportSummaryEndpointV1,
+): SupportSessionListEndpointV1 {
+  return {
+    capturedAt: summary.capturedAt,
+    state: summary.state,
+    ...(summary.reason ? { reason: summary.reason } : {}),
+    includedBytes: summary.includedBytes,
+    window: summary.window,
   };
 }
 

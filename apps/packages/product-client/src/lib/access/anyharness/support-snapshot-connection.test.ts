@@ -34,19 +34,21 @@ function input(
 }
 
 describe("support-only bundled-local resolution", () => {
-  it("returns a branded exact bundled-local binding", async () => {
+  it("returns an opaque frozen bundled-local access binding", async () => {
     const result = await resolveSupportSnapshotAccess(input());
     expect(result).toMatchObject({
       state: "resolved",
-      connection: {
-        runtimeUrl: "http://127.0.0.1:4477",
-        anyharnessWorkspaceId: "runtime-workspace-1",
-      },
       selection: {
         kind: "recent_activity",
         workspace: { workspaceId: "workspace-1" },
       },
     });
+    expect(result).not.toHaveProperty("connection");
+    expect(Object.isFrozen(result)).toBe(true);
+    if (result.state === "resolved") {
+      expect(Object.isFrozen(result.selection)).toBe(true);
+      expect(Object.isFrozen(result.selection.workspace)).toBe(true);
+    }
   });
 
   it.each(["cloud", "ssh", "standalone", "supervisor_owned"] as const)(
@@ -103,5 +105,34 @@ describe("support-only bundled-local resolution", () => {
       ...base,
       activeSession: { ...base.activeSession!, materializedSessionId: " padded " },
     })).toEqual({ state: "ineligible", reason: "session_mapping_stale" });
+  });
+
+  it.each(["with space", "with\ttab", "with\u00a0nbsp", "with\u2003emspace"])(
+    "rejects internal whitespace in an active session id: %s",
+    async (materializedSessionId) => {
+      const result = await resolveSupportSnapshotAccess(input({
+        selection: "active_session",
+        activeSession: {
+          uiSessionId: "ui-session-1",
+          directoryWorkspaceId: "workspace-1",
+          materializedSessionId,
+        },
+      }));
+      expect(result).toEqual({ state: "ineligible", reason: "session_mapping_stale" });
+    },
+  );
+
+  it("fails closed for non-string resolver identities", async () => {
+    const result = await resolveSupportSnapshotAccess(input({
+      selectedWorkspace: {
+        kind: "bundled_local",
+        workspaceId: new String("workspace-1") as unknown as string,
+        anyharnessWorkspaceId: "runtime-workspace-1",
+      },
+    }));
+    expect(result).toEqual({
+      state: "none",
+      binding: { kind: "none", reason: "no_selected_bundled_local_workspace" },
+    });
   });
 });

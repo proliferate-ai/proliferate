@@ -6,6 +6,16 @@ export const SUPPORT_SESSION_LIMIT = 3;
 export const SUPPORT_EVENT_LIMIT = 200;
 export const SUPPORT_RAW_NOTIFICATION_LIMIT = 100;
 
+const MAX_SUPPORT_IDENTITY_BYTES = 128;
+const DISALLOWED_IDENTITY_CODE_POINT = /[\p{Cc}\p{White_Space}\uD800-\uDFFF]/u;
+
+export function isSupportIdentity(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && !DISALLOWED_IDENTITY_CODE_POINT.test(value)
+    && new TextEncoder().encode(value).length <= MAX_SUPPORT_IDENTITY_BYTES;
+}
+
 export type SupportProjectedJson =
   | null
   | boolean
@@ -42,6 +52,14 @@ export interface SupportSummaryEndpointV1 {
   payload?: SupportProjectedJson;
 }
 
+export interface SupportSessionListEndpointV1 {
+  capturedAt: string;
+  state: SupportEndpointState;
+  reason?: SupportEndpointReason;
+  includedBytes: number;
+  window: SupportWindowMetaV1;
+}
+
 export interface SupportListEndpointV1 {
   capturedAt: string;
   state: SupportEndpointState;
@@ -67,6 +85,7 @@ export interface SupportSessionEvidenceEnvelopeV1 {
   sourceTimeFrom: string;
   sourceTimeTo: string;
   totalReadBytes: number;
+  sessionList: SupportSessionListEndpointV1;
   sessions: SupportSessionCaptureV1[];
 }
 
@@ -75,45 +94,34 @@ export interface MeasuredSupportWindow {
   responseBytes: number;
 }
 
-export interface SupportSessionEvidenceClient {
-  listSupportWindow(
-    workspaceId: string,
-    options:
-      | {
-          mode: "exact";
-          sessionId: string;
-          updatedAtTo: string;
-          limit: 1;
-          maxResponseBytes: 1_048_576;
-          request: { signal: AbortSignal };
-        }
-      | {
-          mode: "recent";
-          updatedAtFrom: string;
-          updatedAtTo: string;
-          limit: 3;
-          maxResponseBytes: 1_048_576;
-          request: { signal: AbortSignal };
-        },
+declare const boundSupportSessionEvidencePortBrand: unique symbol;
+
+export interface BoundSupportSessionEvidencePort {
+  readonly [boundSupportSessionEvidencePortBrand]: true;
+  listSessions(request:
+    | {
+        mode: "exact";
+        sessionId: string;
+        updatedAtTo: string;
+        signal: AbortSignal;
+      }
+    | {
+        mode: "recent";
+        updatedAtFrom: string;
+        updatedAtTo: string;
+        signal: AbortSignal;
+      }
   ): Promise<MeasuredSupportWindow>;
-  listEventsSupportWindow(
-    sessionId: string,
-    options: {
-      timestampFrom: string;
-      timestampTo: string;
-      limit: 200;
-      maxResponseBytes: 4_194_304;
-      request: { signal: AbortSignal };
-    },
-  ): Promise<MeasuredSupportWindow>;
-  listRawNotificationsSupportWindow(
-    sessionId: string,
-    options: {
-      timestampFrom: string;
-      timestampTo: string;
-      limit: 100;
-      maxResponseBytes: 2_097_152;
-      request: { signal: AbortSignal };
-    },
-  ): Promise<MeasuredSupportWindow>;
+  listEvents(request: {
+    sessionId: string;
+    timestampFrom: string;
+    timestampTo: string;
+    signal: AbortSignal;
+  }): Promise<MeasuredSupportWindow>;
+  listRawNotifications(request: {
+    sessionId: string;
+    timestampFrom: string;
+    timestampTo: string;
+    signal: AbortSignal;
+  }): Promise<MeasuredSupportWindow>;
 }

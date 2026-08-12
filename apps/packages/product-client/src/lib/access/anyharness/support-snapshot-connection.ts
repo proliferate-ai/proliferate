@@ -1,69 +1,124 @@
+import {
+  AnyHarnessClient,
+  supportWindowResponseBytes,
+} from "@anyharness/sdk";
 import type {
   DesktopRuntimeBridge,
+  LocalRuntimeConnection,
+  SupportSnapshotPreparation,
   SupportSnapshotWorkspaceBindingV1,
 } from "@proliferate/product-client/host/desktop-bridge";
 import type {
-  BundledLocalSupportConnection,
+  BundledLocalSupportSelection,
   ResolvedSupportSnapshotAccess,
   ResolveSupportSnapshotAccessInput,
 } from "#product/lib/domain/support/support-snapshot-access-contract";
+import {
+  SUPPORT_EVENT_LIMIT,
+  SUPPORT_EVENT_LIST_BYTES,
+  SUPPORT_RAW_NOTIFICATION_LIMIT,
+  SUPPORT_RAW_NOTIFICATION_LIST_BYTES,
+  SUPPORT_SESSION_LIMIT,
+  SUPPORT_SESSION_LIST_BYTES,
+  isSupportIdentity,
+  type BoundSupportSessionEvidencePort,
+} from "#product/lib/domain/support/support-session-contract";
+import {
+  collectBoundSupportSessionEvidence,
+  type CollectedSupportSessionEvidence,
+} from "#product/lib/workflows/support/support-session-evidence";
 
 const NO_WORKSPACE_BINDING = {
   kind: "none",
   reason: "no_selected_bundled_local_workspace",
 } as const;
 
+type BoundAccess = Extract<ResolvedSupportSnapshotAccess, { state: "resolved" }>;
+
+const BOUND_SUPPORT_PORTS = new WeakMap<BoundAccess, BoundSupportSessionEvidencePort>();
+
 export async function resolveSupportSnapshotAccess(
   input: ResolveSupportSnapshotAccessInput,
 ): Promise<ResolvedSupportSnapshotAccess> {
-  const failure = await proveBundledLocalConnection(input);
-  if (failure.state !== "resolved") {
+  const proof = await proveBundledLocalConnection(input);
+  if (proof.state !== "resolved") {
     return input.selection === "recent_activity"
       ? { state: "none", binding: NO_WORKSPACE_BINDING }
-      : failure;
+      : proof;
   }
 
-  const workspace: Extract<SupportSnapshotWorkspaceBindingV1, { kind: "bundled_local" }> = {
+  const workspace = Object.freeze({
     kind: "bundled_local",
-    workspaceId: failure.workspaceId,
-    anyharnessWorkspaceId: failure.connection.anyharnessWorkspaceId,
-  };
+    workspaceId: proof.workspaceId,
+    anyharnessWorkspaceId: proof.anyharnessWorkspaceId,
+  }) satisfies Extract<SupportSnapshotWorkspaceBindingV1, { kind: "bundled_local" }>;
   if (input.selection === "recent_activity") {
-    return {
-      state: "resolved",
-      connection: failure.connection,
-      selection: { kind: "recent_activity", workspace },
-    };
+    return bindSupportAccess(
+      Object.freeze({ kind: "recent_activity", workspace }),
+      proof.connection,
+    );
   }
 
   const active = input.activeSession;
   const materializedSessionId = active?.materializedSessionId ?? "";
   if (
     !active
-    || !isBoundedIdentity(active.uiSessionId)
-    || active.directoryWorkspaceId !== failure.workspaceId
-    || !isBoundedIdentity(materializedSessionId)
+    || !isSupportIdentity(active.uiSessionId)
+    || active.directoryWorkspaceId !== proof.workspaceId
+    || !isSupportIdentity(materializedSessionId)
   ) {
     return { state: "ineligible", reason: "session_mapping_stale" };
   }
 
-  return {
-    state: "resolved",
-    connection: failure.connection,
-    selection: {
-      kind: "active_session",
-      workspace,
-      uiSessionId: active.uiSessionId,
-      materializedSessionId,
-    },
-  };
+  return bindSupportAccess(Object.freeze({
+    kind: "active_session",
+    workspace,
+    uiSessionId: active.uiSessionId,
+    materializedSessionId,
+  }), proof.connection);
+}
+
+export interface CollectResolvedSupportSessionEvidenceInput {
+  preparation: SupportSnapshotPreparation;
+  access: ResolvedSupportSnapshotAccess;
+  cancellationSignal?: AbortSignal;
+  isSelectionCurrent?: () => boolean;
+}
+
+export function collectResolvedSupportSessionEvidence(
+  input: CollectResolvedSupportSessionEvidenceInput,
+): Promise<CollectedSupportSessionEvidence> {
+  if (input.cancellationSignal?.aborted || !selectionIsCurrent(input.isSelectionCurrent)) {
+    return Promise.resolve({ state: "cancelled" });
+  }
+  if (input.access.state === "none") {
+    return Promise.resolve({
+      state: "omitted",
+      sessionEvidenceJson: null,
+      sessionCollection: {
+        state: "omitted",
+        reason: "no_selected_bundled_local_workspace",
+      },
+    });
+  }
+  if (input.access.state !== "resolved") return Promise.resolve({ state: "cancelled" });
+  const port = BOUND_SUPPORT_PORTS.get(input.access);
+  if (!port) return Promise.resolve({ state: "cancelled" });
+  return collectBoundSupportSessionEvidence({
+    preparation: input.preparation,
+    port,
+    selection: input.access.selection,
+    cancellationSignal: input.cancellationSignal,
+    isSelectionCurrent: input.isSelectionCurrent,
+  });
 }
 
 type ConnectionProof =
   | {
       state: "resolved";
       workspaceId: string;
-      connection: BundledLocalSupportConnection;
+      anyharnessWorkspaceId: string;
+      connection: LocalRuntimeConnection;
     }
   | Extract<ResolvedSupportSnapshotAccess, { state: "ineligible" }>;
 
@@ -83,8 +138,8 @@ async function proveBundledLocalConnection(
   const workspace = input.selectedWorkspace;
   if (
     workspace?.kind !== "bundled_local"
-    || !isBoundedIdentity(workspace.workspaceId)
-    || !isBoundedIdentity(workspace.anyharnessWorkspaceId)
+    || !isSupportIdentity(workspace.workspaceId)
+    || !isSupportIdentity(workspace.anyharnessWorkspaceId)
   ) {
     return { state: "ineligible", reason: "workspace_ineligible" };
   }
@@ -106,11 +161,88 @@ async function proveBundledLocalConnection(
   return {
     state: "resolved",
     workspaceId: workspace.workspaceId,
+    anyharnessWorkspaceId: workspace.anyharnessWorkspaceId,
     connection: {
       runtimeUrl: trustedUrl,
-      anyharnessWorkspaceId: workspace.anyharnessWorkspaceId,
-    } as BundledLocalSupportConnection,
+      authToken: snapshot.connection.authToken ?? undefined,
+      ...(snapshot.connection.fetch ? { fetch: snapshot.connection.fetch } : {}),
+    },
   };
+}
+
+function bindSupportAccess(
+  selection: BundledLocalSupportSelection,
+  connection: LocalRuntimeConnection,
+): BoundAccess {
+  const client = new AnyHarnessClient({
+    baseUrl: connection.runtimeUrl,
+    authToken: connection.authToken ?? undefined,
+    ...(connection.fetch ? { fetch: connection.fetch } : {}),
+  });
+  const access = Object.freeze({ state: "resolved", selection }) as BoundAccess;
+  const anyharnessWorkspaceId = selection.workspace.anyharnessWorkspaceId;
+  const port = Object.freeze({
+    async listSessions(
+      request: Parameters<BoundSupportSessionEvidencePort["listSessions"]>[0],
+    ) {
+      const response = await (request.mode === "exact"
+        ? client.sessions.listSupportWindow(anyharnessWorkspaceId, {
+            mode: "exact",
+            sessionId: request.sessionId,
+            updatedAtTo: request.updatedAtTo,
+            limit: 1,
+            maxResponseBytes: SUPPORT_SESSION_LIST_BYTES,
+            request: { signal: request.signal },
+          })
+        : client.sessions.listSupportWindow(anyharnessWorkspaceId, {
+            mode: "recent",
+            updatedAtFrom: request.updatedAtFrom,
+            updatedAtTo: request.updatedAtTo,
+            limit: SUPPORT_SESSION_LIMIT,
+            maxResponseBytes: SUPPORT_SESSION_LIST_BYTES,
+            request: { signal: request.signal },
+          }));
+      return measuredResponse(response);
+    },
+    async listEvents(request: Parameters<BoundSupportSessionEvidencePort["listEvents"]>[0]) {
+      const response = await client.sessions.listEventsSupportWindow(request.sessionId, {
+        timestampFrom: request.timestampFrom,
+        timestampTo: request.timestampTo,
+        limit: SUPPORT_EVENT_LIMIT,
+        maxResponseBytes: SUPPORT_EVENT_LIST_BYTES,
+        request: { signal: request.signal },
+      });
+      return measuredResponse(response);
+    },
+    async listRawNotifications(
+      request: Parameters<BoundSupportSessionEvidencePort["listRawNotifications"]>[0],
+    ) {
+      const response = await client.sessions.listRawNotificationsSupportWindow(request.sessionId, {
+        timestampFrom: request.timestampFrom,
+        timestampTo: request.timestampTo,
+        limit: SUPPORT_RAW_NOTIFICATION_LIMIT,
+        maxResponseBytes: SUPPORT_RAW_NOTIFICATION_LIST_BYTES,
+        request: { signal: request.signal },
+      });
+      return measuredResponse(response);
+    },
+  }) as BoundSupportSessionEvidencePort;
+  BOUND_SUPPORT_PORTS.set(access, port);
+  return access;
+}
+
+function measuredResponse(
+  response: Parameters<typeof supportWindowResponseBytes>[0],
+): { value: object; responseBytes: number } {
+  return { value: response, responseBytes: supportWindowResponseBytes(response) };
+}
+
+function selectionIsCurrent(check: (() => boolean) | undefined): boolean {
+  try {
+    return check?.() !== false;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeRuntimeUrl(value: string, requireLoopback: boolean): string | null {
@@ -144,14 +276,6 @@ function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost"
     || hostname === "127.0.0.1"
     || hostname === "[::1]";
-}
-
-function isBoundedIdentity(value: string): boolean {
-  return value.length > 0
-    && value === value.trim()
-    && isWellFormedUnicode(value)
-    && !/[\u0000-\u001f\u007f]/.test(value)
-    && new TextEncoder().encode(value).length <= 128;
 }
 
 function isWellFormedUnicode(value: string): boolean {

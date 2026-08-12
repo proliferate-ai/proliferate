@@ -4,66 +4,92 @@ import {
   SUPPORT_EVENT_LIST_BYTES,
   SUPPORT_RAW_NOTIFICATION_LIMIT,
   SUPPORT_RAW_NOTIFICATION_LIST_BYTES,
+  SUPPORT_SESSION_LIMIT,
+  SUPPORT_SESSION_LIST_BYTES,
+  type BoundSupportSessionEvidencePort,
   type MeasuredSupportWindow,
   type SupportEndpointReason,
   type SupportListEndpointV1,
-  type SupportSessionEvidenceClient,
   type SupportSummaryEndpointV1,
 } from "#product/lib/domain/support/support-session-contract";
+import {
+  compareSupportInstants,
+  supportInstantFromEpochMilliseconds,
+  supportInstantToTimestamp,
+  type SupportUtcInstant,
+} from "#product/lib/workflows/support/support-session-evidence-validation";
 import {
   syntheticSupportWindow,
   type ExpectedSupportWindow,
 } from "#product/lib/domain/support/support-session-window";
-import type {
-  CollectSupportSessionEvidenceInput,
-} from "#product/lib/workflows/support/support-session-evidence";
 
-const COLLECTION_TIMEOUT_MS = 5_000;
-
-export const SESSION_ACTIVE_WINDOW = expectedWindow("updated_desc_id_asc", 1, 1_048_576);
-export const SESSION_RECENT_WINDOW = expectedWindow("updated_desc_id_asc", 3, 1_048_576);
-export const EVENTS_WINDOW = expectedWindow("seq_asc", 200, 4_194_304);
-export const RAW_WINDOW = expectedWindow("seq_asc", 100, 2_097_152);
+export const SESSION_ACTIVE_WINDOW = expectedWindow(
+  "updated_desc_id_asc", 1, SUPPORT_SESSION_LIST_BYTES,
+);
+export const SESSION_RECENT_WINDOW = expectedWindow(
+  "updated_desc_id_asc", SUPPORT_SESSION_LIMIT, SUPPORT_SESSION_LIST_BYTES,
+);
+export const EVENTS_WINDOW = expectedWindow(
+  "seq_asc", SUPPORT_EVENT_LIMIT, SUPPORT_EVENT_LIST_BYTES,
+);
+export const RAW_WINDOW = expectedWindow(
+  "seq_asc", SUPPORT_RAW_NOTIFICATION_LIMIT, SUPPORT_RAW_NOTIFICATION_LIST_BYTES,
+);
 
 export type SettledMeasured =
   | { state: "fulfilled"; value: MeasuredSupportWindow; capturedAt: string }
   | { state: "aborted"; timedOut: boolean; capturedAt: string }
   | { state: "rejected"; capturedAt: string };
 
+interface SupersedableInput {
+  cancellationSignal?: AbortSignal;
+  isSelectionCurrent?: () => boolean;
+}
+
+const DEADLINE_REACHED = Symbol("support_deadline_reached");
+
 export async function settleMeasured(
   operation: () => Promise<MeasuredSupportWindow>,
   signal: AbortSignal,
-  nativeCapturedAt: string,
+  deadline: SupportUtcInstant,
   timeoutReason: symbol,
 ): Promise<SettledMeasured> {
-  if (signal.aborted) {
-    return {
-      state: "aborted",
-      timedOut: signal.reason === timeoutReason,
-      capturedAt: boundedCapturedAt(nativeCapturedAt),
-    };
+  const initial = clockSnapshot();
+  if (signal.aborted || reachedDeadline(initial.instant, deadline)) {
+    return abortedAt(initial, signal, deadline, timeoutReason);
   }
-  let removeAbort = () => undefined;
+
+  let removeAbort: () => void = () => undefined;
   const promise = Promise.resolve().then(() => {
+    const started = clockSnapshot();
+    if (reachedDeadline(started.instant, deadline)) throw DEADLINE_REACHED;
     if (signal.aborted) throw signal.reason;
     return operation();
   });
-  const settled = promise.then<SettledMeasured>(
-    (value) => ({ state: "fulfilled", value, capturedAt: boundedCapturedAt(nativeCapturedAt) }),
-    () => signal.aborted
-      ? {
-          state: "aborted",
-          timedOut: signal.reason === timeoutReason,
-          capturedAt: boundedCapturedAt(nativeCapturedAt),
-        }
-      : { state: "rejected", capturedAt: boundedCapturedAt(nativeCapturedAt) },
+  const settled = promise.then<SettledMeasured, SettledMeasured>(
+    (value) => {
+      const accepted = clockSnapshot();
+      return reachedDeadline(accepted.instant, deadline)
+        ? abortedAt(accepted, signal, deadline, timeoutReason)
+        : { state: "fulfilled", value, capturedAt: accepted.timestamp };
+    },
+    (error: unknown) => {
+      const accepted = clockSnapshot();
+      if (
+        signal.aborted
+        || error === DEADLINE_REACHED
+        || reachedDeadline(accepted.instant, deadline)
+      ) {
+        return abortedAt(accepted, signal, deadline, timeoutReason);
+      }
+      return { state: "rejected", capturedAt: accepted.timestamp };
+    },
   );
   const aborted = new Promise<SettledMeasured>((resolve) => {
-    const finish = () => resolve({
-      state: "aborted",
-      timedOut: signal.reason === timeoutReason,
-      capturedAt: boundedCapturedAt(nativeCapturedAt),
-    });
+    const finish = () => {
+      const accepted = clockSnapshot();
+      resolve(abortedAt(accepted, signal, deadline, timeoutReason));
+    };
     if (signal.aborted) finish();
     else {
       signal.addEventListener("abort", finish, { once: true });
@@ -77,33 +103,31 @@ export async function settleMeasured(
   }
 }
 
-export function eventsRequest(
-  client: SupportSessionEvidenceClient,
+export async function eventsRequest(
+  port: BoundSupportSessionEvidencePort,
   sessionId: string,
   preparation: SupportSnapshotPreparation,
   signal: AbortSignal,
 ): Promise<MeasuredSupportWindow> {
-  return client.listEventsSupportWindow(sessionId, {
+  return port.listEvents({
+    sessionId,
     timestampFrom: preparation.window.sourceTimeFrom,
     timestampTo: preparation.window.sourceTimeTo,
-    limit: SUPPORT_EVENT_LIMIT,
-    maxResponseBytes: SUPPORT_EVENT_LIST_BYTES,
-    request: { signal },
+    signal,
   });
 }
 
-export function rawRequest(
-  client: SupportSessionEvidenceClient,
+export async function rawRequest(
+  port: BoundSupportSessionEvidencePort,
   sessionId: string,
   preparation: SupportSnapshotPreparation,
   signal: AbortSignal,
 ): Promise<MeasuredSupportWindow> {
-  return client.listRawNotificationsSupportWindow(sessionId, {
+  return port.listRawNotifications({
+    sessionId,
     timestampFrom: preparation.window.sourceTimeFrom,
     timestampTo: preparation.window.sourceTimeTo,
-    limit: SUPPORT_RAW_NOTIFICATION_LIMIT,
-    maxResponseBytes: SUPPORT_RAW_NOTIFICATION_LIST_BYTES,
-    request: { signal },
+    signal,
   });
 }
 
@@ -144,7 +168,7 @@ export function failureReason(
     : "session_unavailable";
 }
 
-export function isSuperseded(input: CollectSupportSessionEvidenceInput): boolean {
+export function isSuperseded(input: SupersedableInput): boolean {
   if (input.cancellationSignal?.aborted === true) return true;
   try {
     return input.isSelectionCurrent?.() === false;
@@ -164,17 +188,36 @@ export function forwardAbort(
   return () => source.removeEventListener("abort", abort);
 }
 
+function abortedAt(
+  captured: ReturnType<typeof clockSnapshot>,
+  signal: AbortSignal,
+  deadline: SupportUtcInstant,
+  timeoutReason: symbol,
+): SettledMeasured {
+  return {
+    state: "aborted",
+    timedOut: signal.reason === timeoutReason || reachedDeadline(captured.instant, deadline),
+    capturedAt: captured.timestamp,
+  };
+}
+
+function reachedDeadline(now: SupportUtcInstant, deadline: SupportUtcInstant): boolean {
+  return compareSupportInstants(now, deadline) >= 0;
+}
+
+function clockSnapshot(): { instant: SupportUtcInstant; timestamp: string } {
+  const milliseconds = Date.now();
+  const instant = supportInstantFromEpochMilliseconds(milliseconds);
+  return {
+    instant,
+    timestamp: supportInstantToTimestamp(instant),
+  };
+}
+
 function expectedWindow(
   presentationOrder: ExpectedSupportWindow["presentationOrder"],
   itemLimit: number,
   responseByteLimit: number,
 ): ExpectedSupportWindow {
   return { presentationOrder, itemLimit, responseByteLimit };
-}
-
-function boundedCapturedAt(nativeCapturedAt: string): string {
-  const nativeMs = Date.parse(nativeCapturedAt);
-  if (!Number.isFinite(nativeMs)) return nativeCapturedAt;
-  return new Date(Math.min(Math.max(Date.now(), nativeMs), nativeMs + COLLECTION_TIMEOUT_MS))
-    .toISOString();
 }

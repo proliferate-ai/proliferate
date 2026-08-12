@@ -66,7 +66,9 @@ describe("support session projector", () => {
   it("closes revoked/trapped proxies, cycles, custom prototypes, sparse arrays, and symbols", () => {
     const { proxy, revoke } = Proxy.revocable({}, {});
     revoke();
-    const trapped = new Proxy({}, { getOwnPropertyDescriptor: () => { throw new Error("trap"); } });
+    const trapped = new Proxy({ value: true }, {
+      getOwnPropertyDescriptor: () => { throw new Error("trap"); },
+    });
     const cycle: { self?: unknown } = {};
     cycle.self = cycle;
     const custom = Object.create({ inherited: "value" });
@@ -109,6 +111,10 @@ describe("support session projector", () => {
       .toEqual({ state: "invalid" });
     expect(projectSupportSessionValue({ id: "😀".repeat(33) }, createSupportProjectionBudget()))
       .toEqual({ state: "invalid" });
+    for (const id of ["internal space", "internal\ttab", "internal\u00a0nbsp", "internal\u2003em"]) {
+      expect(projectSupportSessionValue({ id }, createSupportProjectionBudget()))
+        .toEqual({ state: "invalid" });
+    }
     expect(projectSupportSessionValue({ generic: "x".repeat(4097) }, createSupportProjectionBudget()))
       .toEqual({ state: "invalid" });
     expect(projectSupportSessionValue({ content: "x".repeat(16385) }, createSupportProjectionBudget()))
@@ -117,7 +123,8 @@ describe("support session projector", () => {
       createSupportProjectionBudget()).state).toBe("projected");
     expect(projectSupportSessionValue({ ids: ["x".repeat(129)] }, createSupportProjectionBudget()))
       .toEqual({ state: "invalid" });
-    expect(projectSupportSessionValue({ ["\ud800"]: "invalid" }, createSupportProjectionBudget()))
+    expect(projectSupportSessionValue({ [String.fromCharCode(0xd800)]: "invalid" },
+      createSupportProjectionBudget()))
       .toEqual({ state: "invalid" });
     expect(projectSupportSessionValue(exactlyTenThousand, createSupportProjectionBudget()).state)
       .toBe("projected");

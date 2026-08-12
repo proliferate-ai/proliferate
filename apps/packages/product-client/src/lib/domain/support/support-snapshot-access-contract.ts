@@ -3,15 +3,7 @@ import type {
   SupportSnapshotSelectionV1,
   SupportSnapshotWorkspaceBindingV1,
 } from "@proliferate/product-client/host/desktop-bridge";
-
-declare const bundledLocalSupportConnectionBrand: unique symbol;
-
-/** A support-only proof of the healthy Desktop-bundled runtime binding. */
-export type BundledLocalSupportConnection = {
-  readonly runtimeUrl: string;
-  readonly anyharnessWorkspaceId: string;
-  readonly [bundledLocalSupportConnectionBrand]: true;
-};
+declare const resolvedBundledLocalSupportAccessBrand: unique symbol;
 
 export type SupportWorkspaceCandidate =
   | {
@@ -50,8 +42,8 @@ export type ResolveSupportSnapshotAccessInput = {
 export type ResolvedSupportSnapshotAccess =
   | {
       state: "resolved";
-      connection: BundledLocalSupportConnection;
       selection: BundledLocalSupportSelection;
+      readonly [resolvedBundledLocalSupportAccessBrand]: true;
     }
   | {
       state: "none";

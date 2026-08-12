@@ -1,4 +1,7 @@
-import type { SupportProjectedJson } from "#product/lib/domain/support/support-session-contract";
+import {
+  isSupportIdentity,
+  type SupportProjectedJson,
+} from "#product/lib/domain/support/support-session-contract";
 
 const MAX_DEPTH = 16;
 const MAX_CONTAINER_ITEMS = 256;
@@ -202,7 +205,7 @@ function projectString(value: string, owningKey: string | null): string {
   if (!isWellFormedUnicode(value)) throw new ProjectionRejected();
   const kind = classifyStringField(owningKey);
   if (kind === "id") {
-    if (utf8Bytes(value) > MAX_ID_OR_NAME_BYTES) throw new ProjectionRejected();
+    if (!isSupportIdentity(value)) throw new ProjectionRejected();
     return value;
   }
   const limit = kind === "name"
@@ -246,6 +249,7 @@ function safeOwnNames(input: object): string[] {
 }
 
 function isWellFormedUnicode(value: string): boolean {
+  if (new TextDecoder().decode(new TextEncoder().encode(value)) !== value) return false;
   for (let index = 0; index < value.length; index += 1) {
     const unit = value.charCodeAt(index);
     if (unit >= 0xd800 && unit <= 0xdbff) {
