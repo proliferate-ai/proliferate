@@ -319,32 +319,53 @@ fn collect_contextual_opaque_matches(
     end: usize,
     matches: &mut Vec<(usize, usize)>,
 ) {
+    match classify_contextual_run(value, start, end) {
+        ContextualRun::QueryKey => {}
+        ContextualRun::QueryValue { candidate_start } => {
+            collect_opaque_candidate(value, candidate_start, end, matches);
+        }
+        ContextualRun::Path { candidate_start } => {
+            let bytes = value.as_bytes();
+            let mut segment_start = candidate_start;
+            for boundary in candidate_start..=end {
+                if boundary < end && bytes[boundary] != b'/' {
+                    continue;
+                }
+                collect_opaque_candidate(value, segment_start, boundary, matches);
+                segment_start = boundary.saturating_add(1);
+            }
+        }
+    }
+}
+
+enum ContextualRun {
+    QueryKey,
+    QueryValue { candidate_start: usize },
+    Path { candidate_start: usize },
+}
+
+fn classify_contextual_run(value: &str, start: usize, end: usize) -> ContextualRun {
     let token_start = value[..start]
         .rfind(opaque_context_boundary)
         .map_or(0, |boundary| boundary + 1);
-    let query_value = value[token_start..start]
-        .rfind(|character| matches!(character, '?' | '#'))
-        .is_some();
-    let candidate_start = if query_value {
-        value[start..end]
-            .find('=')
-            .map_or(start, |delimiter| start + delimiter + 1)
-    } else {
-        contextual_path_value_start(value, token_start, start, end)
+    let parameter_start = value[token_start..start]
+        .rfind(|character| matches!(character, '?' | '#' | '&'))
+        .map(|boundary| token_start + boundary + 1);
+    let Some(parameter_start) = parameter_start else {
+        return ContextualRun::Path {
+            candidate_start: contextual_path_value_start(value, token_start, start, end),
+        };
     };
-    if query_value {
-        collect_opaque_candidate(value, candidate_start, end, matches);
-        return;
-    }
-
-    let bytes = value.as_bytes();
-    let mut segment_start = candidate_start;
-    for boundary in candidate_start..=end {
-        if boundary < end && bytes[boundary] != b'/' {
-            continue;
-        }
-        collect_opaque_candidate(value, segment_start, boundary, matches);
-        segment_start = boundary.saturating_add(1);
+    let Some(delimiter) = value[parameter_start..end].find('=') else {
+        return ContextualRun::QueryKey;
+    };
+    let delimiter = parameter_start + delimiter;
+    ContextualRun::QueryValue {
+        candidate_start: if delimiter < start {
+            start
+        } else {
+            delimiter + 1
+        },
     }
 }
 

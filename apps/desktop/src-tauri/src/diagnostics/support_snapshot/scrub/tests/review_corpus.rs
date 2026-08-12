@@ -180,7 +180,8 @@ fn long_paths_urls_queries_and_monkey_survive_but_real_opaque_tokens_do_not() {
         format!("path={path}\nurl={url}\nrelative={relative}\nQUERY=ordinary-query\nMONKEY=banana");
     assert_eq!(scrub(&ordinary), ordinary);
 
-    let opaque = "Aa0_Bb1_Cc2_Dd3_Ee4_Ff5_Gg6_Hh7_Ii8_Jj9_Kk0_Ll1";
+    let opaque = "Aa0_Bb1_Cc2_Dd3_Ee4_Ff5_Gg6_Hh7_Ii8_Jj9_Kk0_Ll1_Mm2";
+    assert!(opaque.len() >= 48);
     assert_eq!(scrub(opaque), "[REDACTED:opaque_credential]");
 
     let url = format!("https://example.test/download?blob={opaque}&view=ordinary");
@@ -204,6 +205,12 @@ fn long_paths_urls_queries_and_monkey_survive_but_real_opaque_tokens_do_not() {
     assert_eq!(
         scrub(&url),
         "https://example.test/download?blob=[REDACTED:opaque_credential]&view=ordinary"
+    );
+
+    let url = format!("https://example.test/download?blob=prefix.{padded}&view=ordinary");
+    assert_eq!(
+        scrub(&url),
+        "https://example.test/download?blob=prefix.[REDACTED:opaque_credential]&view=ordinary"
     );
 
     let internal_slash = "Aa0Bb1Cc2Dd3Ee4/Ff5Gg6Hh7Ii8Jj9Kk0Ll1Mm2Nn3Oo4P==";
