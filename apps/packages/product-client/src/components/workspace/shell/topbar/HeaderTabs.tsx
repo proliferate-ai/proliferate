@@ -159,10 +159,11 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
   }, [activeTabIndex, layout.positions, layout.widths]);
 
   const dismissChatSession = useCallback((sessionId: string) => {
-    void chatVisibilityActions.archiveChatSessionTab(sessionId).then((archived) => {
+    return chatVisibilityActions.archiveChatSessionTab(sessionId).then((archived) => {
       if (archived) {
         multiSelect.clearSelection();
       }
+      return archived;
     });
   }, [
     chatVisibilityActions.archiveChatSessionTab,

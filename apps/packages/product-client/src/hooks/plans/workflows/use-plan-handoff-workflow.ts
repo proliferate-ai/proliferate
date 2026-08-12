@@ -236,7 +236,7 @@ interface ExecutePlanHandoffInput {
     optimisticContentParts: ContentPart[];
     workspaceId: string;
   }) => Promise<void>;
-  dismissSession: (sessionId: string) => Promise<void>;
+  dismissSession: (sessionId: string) => Promise<boolean>;
   selectSession: (sessionId: string) => Promise<SessionActivationOutcome | void>;
   hasSession: (sessionId: string) => boolean;
   onCompleted: () => void;

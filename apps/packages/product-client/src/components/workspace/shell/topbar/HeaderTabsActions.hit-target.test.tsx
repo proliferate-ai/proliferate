@@ -63,7 +63,7 @@ describe("ClosedSessionsTrigger row hit target", () => {
   it("keeps Delete isolated from the row restore action", async () => {
     const user = userEvent.setup();
     const onRestoreSession = vi.fn();
-    const onDeleteSession = vi.fn();
+    const onDeleteSession = vi.fn(() => Promise.resolve(true));
 
     render(
       <ClosedSessionsTrigger
@@ -76,10 +76,17 @@ describe("ClosedSessionsTrigger row hit target", () => {
     await openClosedSessions(user);
     await user.click(screen.getByRole("button", { name: "Delete Session one" }));
 
-    expect(onDeleteSession).toHaveBeenCalledOnce();
+    // The row collapses immediately; the archive is deferred past the collapse
+    // transition, and the popover stays open showing the remaining rows.
+    const row = screen.getByText("Session one")
+      .closest("[data-animated-collapsible-content]");
+    expect(row?.getAttribute("data-expanded")).toBe("false");
+    await waitFor(() => {
+      expect(onDeleteSession).toHaveBeenCalledOnce();
+    });
     expect(onDeleteSession).toHaveBeenCalledWith("session-1");
     expect(onRestoreSession).not.toHaveBeenCalled();
-    await expectClosedSessionsToClose();
+    expect(screen.getByRole("dialog")).toBeTruthy();
   });
 
   it("retains native keyboard restore behavior on the title button", async () => {

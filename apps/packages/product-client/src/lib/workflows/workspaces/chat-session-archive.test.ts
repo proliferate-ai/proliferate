@@ -120,6 +120,21 @@ describe("archiveVisibleChatSession", () => {
     expect(harness.activations).toEqual(["C"]);
   });
 
+  it("reports a failed runtime dismissal without touching manual groups", async () => {
+    const harness = createArchiveHarness({
+      activeSessionId: "A",
+      liveSessions: candidates("A", "B"),
+      visibleSessionIds: ["A", "B"],
+    });
+
+    const archiveB = harness.archive("B");
+    harness.resolveDismiss("B", false);
+
+    await expect(archiveB).resolves.toBe(false);
+    expect(harness.removedFromGroups).toEqual([]);
+    expect(harness.liveRecordIds()).toContain("B");
+  });
+
   it("reserves a parent and linked child while preserving target-only runtime dismissal", async () => {
     const harness = createArchiveHarness({
       activeSessionId: "child",
@@ -181,7 +196,9 @@ function createArchiveHarness(input: {
   ) => {
     const pending = deferred();
     deferredDismissals.set(sessionId, pending);
-    await pending.promise;
+    if (!await pending.promise) {
+      return false;
+    }
     records.delete(sessionId);
     if (
       activeSessionId
@@ -193,6 +210,7 @@ function createArchiveHarness(input: {
         activations.push(nextActiveSessionId);
       }
     }
+    return true;
   });
 
   return {
@@ -234,12 +252,12 @@ function createArchiveHarness(input: {
       },
     }),
     liveRecordIds: () => [...records],
-    resolveDismiss: (sessionId: string) => {
+    resolveDismiss: (sessionId: string, dismissed = true) => {
       const pending = deferredDismissals.get(sessionId);
       if (!pending) {
         throw new Error(`No pending dismissal for ${sessionId}.`);
       }
-      pending.resolve();
+      pending.resolve(dismissed);
     },
     visibleSessionIds: () => (
       useWorkspaceUiStore.getState().visibleChatSessionIdsByWorkspace[WORKSPACE_ID] ?? []
@@ -248,9 +266,9 @@ function createArchiveHarness(input: {
 }
 
 function deferred() {
-  let resolve!: () => void;
-  const promise = new Promise<void>((complete) => {
-    resolve = complete;
+  let resolve!: (dismissed?: boolean) => void;
+  const promise = new Promise<boolean>((complete) => {
+    resolve = (dismissed = true) => complete(dismissed);
   });
   return { promise, resolve };
 }
