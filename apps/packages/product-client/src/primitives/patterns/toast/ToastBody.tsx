@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "#product/primitives/icons/core";
 import { Badge, type BadgeTone } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { POPOVER_FRAME_CLASS } from "#product/primitives/popover-surface";
