@@ -41,10 +41,26 @@ Provider id `xai`. Readiness is satisfied by `XAI_API_KEY` / `GROK_API_KEY`, or
 by a cached login token at `~/.grok/auth.json` (produced by `grok login`). The
 registry auth slot uses `syncedFiles` materialization for `.grok/auth.json`
 (discovery `grok`, fact `grok-auth-json-oauth`). ACP `authMethods` are
-`cached_token` (the file) and `grok.com` (browser sign-in). Cloud auth is via
+`cached_token` (the file) and `grok.com` (browser sign-in); a Grok with no
+usable cached token advertises only `grok.com`. Cloud auth is via
 the gateway or an `XAI_API_KEY` selection: the registry declares `syncedFiles`
 for `~/.grok/auth.json`, but nothing exports that file to a cloud sandbox, so
 syncing a local Grok login into a cloud sandbox is not wired today.
+
+ACP `authenticate` is **mandatory before `session/new`**, which otherwise
+fails `-32000 "Authentication required" / "no auth method id provided"` — even
+when `XAI_API_KEY` is set (observed live against `@xai-official/grok` 0.2.102).
+The `grok.com` handler resolves inline against whatever credentials the
+spawned world holds (env key, cached token) with no user interaction; when it
+holds NONE, the same call starts an OIDC device-code flow and **opens the
+browser** at `accounts.x.ai/oauth2/device`, blocking until sign-in completes
+or times out. That side effect is why an unattended spawn of a credential-less
+Grok is forbidden: the catalog probe engine admits an automatic Grok poke only
+when host credential detection or the enrolled agent-auth route provides
+credentials (`model_snapshot/targets.rs`, PRO-210); a manual refresh still
+probes, since a user-initiated sign-in page explains itself. Session launches
+are already covered by the create-time readiness gate, which refuses a
+credential-less agent before spawn.
 
 ## ACP Capabilities and Vendor Extensions
 

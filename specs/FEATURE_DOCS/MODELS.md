@@ -284,6 +284,15 @@ protect live sessions and the machine, not staleness bookkeeping:
   keychain, so an unattended spawn can surface an OS keychain prompt with no
   user-visible cause. Every other harness probes under the events above;
   cursor's observation is written only when a user asks.
+- **Grok probes automatically only when credentialed.** Grok's ACP
+  `authenticate` is mandatory before `session/new`, and its one advertised
+  method (`grok.com`) opens a browser OIDC device-code sign-in whenever the
+  spawned world holds no credentials — so an unattended spawn of a
+  logged-out Grok popped an accounts.x.ai page with no user-visible cause
+  and hung the probe to its timeout (PRO-210). `targets.rs` admits an
+  automatic Grok poke only when host credential detection or the enrolled
+  agent-auth route provides credentials; a manual refresh still probes —
+  the user asked, so the sign-in page explains itself.
 
 The same engine runs everywhere. A cloud sandbox's runtime probes under the
 same events and writes the same document; the Worker syncs it up as the cloud
@@ -530,7 +539,7 @@ anyharness-lib/src/domains/agents/model_snapshot/
 │                         #   that owns both the child and the scratch
 ├── reads.rs              # document/status reads (available in read-only mode)
 ├── status.rs             # the polled status projection (pure)
-└── targets.rs            # which harnesses may be probed (installed; cursor manual-only)
+└── targets.rs            # which harnesses may be probed (installed; cursor manual-only; grok only when credentialed)
 ```
 
 Deleted from the per-context design: `fingerprint.rs`, `staleness.rs` and its
