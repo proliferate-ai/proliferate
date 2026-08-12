@@ -77,8 +77,9 @@ describe("WorkspacesCommandList", () => {
       />,
     );
 
-    expect(container.querySelector("svg.lucide-git-branch")).toBeNull();
-    expect(container.querySelector("svg.lucide-git-pull-request")).toBeNull();
+    const well = container.querySelector(".w-4.shrink-0");
+    expect(well).toBeTruthy();
+    expect(well?.querySelector("svg")).toBeNull();
   });
 
   it("renders the ahead/behind label", () => {
