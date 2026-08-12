@@ -1,15 +1,50 @@
 import { isTauriRuntimeAvailable } from "./connect-server";
 
-type StoreInstance = {
+type StoreMethods = {
   get: <T>(key: string) => Promise<T | undefined>;
   set: (key: string, value: unknown) => Promise<void>;
   delete: (key: string) => Promise<boolean>;
   save: () => Promise<void>;
 };
 
+type BrowserFallbackMethods = {
+  readBrowserFallbackStrict: <T>(key: string) => Promise<T | undefined>;
+  deleteBrowserFallbackStrict: (key: string) => Promise<boolean>;
+};
+
+type StoreBackend = "browser" | "tauri" | "tauri_fallback";
+
+type StoreInstance = StoreMethods & BrowserFallbackMethods & {
+  readonly backend: StoreBackend;
+};
+
 let _store: StoreInstance | null = null;
 
 const BROWSER_STORE_KEY = "proliferate.preferences";
+
+function readBrowserPreferencesStrict(): Record<string, unknown> {
+  const raw = localStorage.getItem(BROWSER_STORE_KEY);
+  if (!raw) {
+    return {};
+  }
+  const parsed = JSON.parse(raw) as unknown;
+  return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+}
+
+async function readBrowserFallbackStrict<T>(key: string): Promise<T | undefined> {
+  const all = readBrowserPreferencesStrict();
+  return Object.prototype.hasOwnProperty.call(all, key) ? (all[key] as T) : undefined;
+}
+
+async function deleteBrowserFallbackStrict(key: string): Promise<boolean> {
+  const all = readBrowserPreferencesStrict();
+  if (!Object.prototype.hasOwnProperty.call(all, key)) {
+    return false;
+  }
+  delete all[key];
+  localStorage.setItem(BROWSER_STORE_KEY, JSON.stringify(all));
+  return true;
+}
 
 /**
  * localStorage-backed fallback for the preferences store when running as the
@@ -19,25 +54,23 @@ const BROWSER_STORE_KEY = "proliferate.preferences";
  * packaged desktop's Tauri store (same get/set/save surface). Values are held
  * as one JSON object under a single localStorage key.
  */
-function createBrowserPreferencesStore(): StoreInstance | null {
+function createBrowserPreferencesStore(
+  backend: "browser" | "tauri_fallback",
+): StoreInstance | null {
   if (typeof localStorage === "undefined") {
     return null;
   }
 
   const readAll = (): Record<string, unknown> => {
     try {
-      const raw = localStorage.getItem(BROWSER_STORE_KEY);
-      if (!raw) {
-        return {};
-      }
-      const parsed = JSON.parse(raw) as unknown;
-      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+      return readBrowserPreferencesStrict();
     } catch {
       return {};
     }
   };
 
   return {
+    backend,
     get: async <T>(key: string): Promise<T | undefined> => {
       const all = readAll();
       return Object.prototype.hasOwnProperty.call(all, key) ? (all[key] as T) : undefined;
@@ -68,6 +101,20 @@ function createBrowserPreferencesStore(): StoreInstance | null {
     save: async (): Promise<void> => {
       // Writes are synchronous in `set`; nothing to flush.
     },
+    readBrowserFallbackStrict,
+    deleteBrowserFallbackStrict,
+  };
+}
+
+function createTauriPreferencesStore(store: StoreMethods): StoreInstance {
+  return {
+    backend: "tauri",
+    get: <T>(key: string) => store.get<T>(key),
+    set: (key: string, value: unknown) => store.set(key, value),
+    delete: (key: string) => store.delete(key),
+    save: () => store.save(),
+    readBrowserFallbackStrict,
+    deleteBrowserFallbackStrict,
   };
 }
 
@@ -78,7 +125,7 @@ export async function getPreferencesStore(): Promise<StoreInstance | null> {
   // localStorage fallback so preferences (incl. the selected workspace) persist
   // across reloads. There is no Tauri store to retry here.
   if (!isTauriRuntimeAvailable()) {
-    _store = createBrowserPreferencesStore();
+    _store = createBrowserPreferencesStore("browser");
     return _store;
   }
 
@@ -88,13 +135,15 @@ export async function getPreferencesStore(): Promise<StoreInstance | null> {
   // best-effort uncached fallback so the next call can retry the real store.
   try {
     const mod = await import("@tauri-apps/plugin-store");
-    _store = await mod.Store.load("preferences.json", {
-      autoSave: true,
-      defaults: {},
-    });
+    _store = createTauriPreferencesStore(
+      await mod.Store.load("preferences.json", {
+        autoSave: true,
+        defaults: {},
+      }),
+    );
     return _store;
   } catch {
-    return createBrowserPreferencesStore();
+    return createBrowserPreferencesStore("tauri_fallback");
   }
 }
 
