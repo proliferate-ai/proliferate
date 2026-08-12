@@ -280,7 +280,9 @@ subfolders:
 > selection/vault contracts owned by
 > [`AGENT_AUTH.md`](../../../../FEATURE_DOCS/AGENT_AUTH.md).
 
-**Existing shared primitives**: page chrome lives in
+**Existing shared primitives**: page chrome lives in the settings kit at
+`apps/packages/product-client/src/primitives/patterns/settings/`, except
+`SettingsPageHeader.tsx`, which is still in
 `apps/packages/product-client/src/components/patterns/`:
 
 ```text
@@ -846,7 +848,7 @@ SettingsPageHeader          apps/packages/product-client/src/components/patterns
 SettingsSection             apps/packages/product-client/src/primitives/patterns/settings/SettingsSection.tsx
 SettingsRow                 apps/packages/product-client/src/primitives/patterns/settings/SettingsRow.tsx
 SettingsScopeTabs / SettingsEmptyState
-                            same directory
+                            same directory as SettingsSection / SettingsRow
 ```
 
 > Shipped correction: `SettingsEyebrow.tsx` was deleted by the settings
