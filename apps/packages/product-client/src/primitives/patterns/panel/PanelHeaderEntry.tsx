@@ -28,6 +28,11 @@ import { twMerge } from "#product/primitives/utils/tw-merge";
  * `data-dragging`) and pointer handlers are caller-owned behavior and pass
  * through the rest props.
  *
+ * Roving tabIndex has a floor: a strip whose entries are all inactive would
+ * otherwise be keyboard-unreachable (every entry at `tabIndex=-1`). The
+ * caller opts one entry — conventionally the first — into `tabIndexFloor` so
+ * the strip always has exactly one focusable stop even with nothing selected.
+ *
  * incubating: shell slice, wave 2
  */
 
@@ -73,6 +78,14 @@ export interface PanelHeaderEntryProps
   closeLabel?: string;
   /** Closing unavailable while the entry itself stays selectable. */
   closeDisabled?: boolean;
+  /**
+   * Roving-tabIndex floor: when no entry in the strip is `active`, exactly
+   * one entry (the caller's first-entry fallback) must still carry
+   * `tabIndex=0` so the strip stays keyboard-reachable. The caller computes
+   * "no entry active" across its whole entry list and sets this on the one
+   * entry that should absorb the floor; every other entry omits it.
+   */
+  tabIndexFloor?: boolean;
   /** Layout only — width, ordering, margins. */
   className?: string;
 }
@@ -90,6 +103,7 @@ export function PanelHeaderEntry({
   onClose,
   closeLabel,
   closeDisabled = false,
+  tabIndexFloor = false,
   className = "",
   ...props
 }: PanelHeaderEntryProps) {
@@ -109,7 +123,7 @@ export function PanelHeaderEntry({
         aria-controls={controls}
         aria-label={title ?? label}
         title={title ?? label}
-        tabIndex={active ? 0 : -1}
+        tabIndex={active || (tabIndexFloor && !disabled) ? 0 : -1}
         disabled={disabled}
         data-active={active || undefined}
         onClick={onSelect}
