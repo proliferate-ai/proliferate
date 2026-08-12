@@ -84,6 +84,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const {
     sidebarOpen,
     sidebarWidth,
+    sidebarResizing,
     rightPanelOpen,
     rightPanelState,
     rightPanelWidth,
@@ -102,6 +103,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     rightWidth: hasWorkspaceShell && !hasLaunchIntentOnlyShell && rightPanelOpen
       ? rightPanelWidth
       : 0,
+    snapLeft: sidebarResizing,
     snapRight: rightPanelResizing,
     onToggleLeft: actions.onToggleSidebar,
   });

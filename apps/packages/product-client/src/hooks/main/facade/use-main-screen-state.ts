@@ -7,20 +7,16 @@ import {
   type MouseEvent,
   type SetStateAction,
 } from "react";
-import { useResize } from "#product/hooks/ui/layout/use-resize";
 import {
   useMainScreenRightPanel,
   type MainScreenRightPanelState,
 } from "#product/hooks/main/facade/use-main-screen-right-panel";
+import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { shouldMountWorkspaceShell } from "#product/lib/domain/chat/surface/chat-surface";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import {
-  WORKSPACE_SIDEBAR_MAX_WIDTH,
-  WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "#product/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
@@ -40,6 +36,8 @@ export interface MainScreenLayoutState extends MainScreenRightPanelState {
   setSidebarOpen: Dispatch<SetStateAction<boolean>>;
   sidebarWidth: number;
   setSidebarWidth: Dispatch<SetStateAction<number>>;
+  /** True while the left separator is driving live, non-durable geometry. */
+  sidebarResizing: boolean;
   terminalActivationRequest: TerminalActivationRequest | null;
   setTerminalActivationRequest: Dispatch<SetStateAction<TerminalActivationRequest | null>>;
   publishDialog: PublishDialogState;
@@ -97,15 +95,12 @@ export function useMainScreenState(): MainScreenState {
   const isCloudWorkspaceSelected = selectedCloudWorkspaceId !== null;
   const sidebarOpen = useWorkspaceUiStore((state) => state.sidebarOpen);
   const setSidebarOpen = useWorkspaceUiStore((state) => state.setSidebarOpen);
-  const sidebarWidth = useWorkspaceUiStore((state) => state.sidebarWidth);
-  const setSidebarWidth = useWorkspaceUiStore((state) => state.setSidebarWidth);
-  const onLeftSeparatorDown = useResize({
-    direction: "horizontal",
-    size: sidebarWidth,
-    onResize: setSidebarWidth,
-    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
-    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
-  });
+  const {
+    sidebarWidth,
+    setSidebarWidth,
+    sidebarResizing,
+    onSidebarSeparatorDown: onLeftSeparatorDown,
+  } = useWorkspaceSidebarResize();
 
   // The right panel's frame — geometry, open state, focus requests and the
   // separator drag that can collapse it — is its own concern; this facade only
@@ -180,6 +175,7 @@ export function useMainScreenState(): MainScreenState {
       setSidebarOpen,
       sidebarWidth,
       setSidebarWidth,
+      sidebarResizing,
       terminalActivationRequest,
       setTerminalActivationRequest,
       publishDialog,
