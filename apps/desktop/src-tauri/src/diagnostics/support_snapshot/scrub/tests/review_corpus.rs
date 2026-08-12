@@ -206,6 +206,11 @@ fn long_paths_urls_queries_and_monkey_survive_but_real_opaque_tokens_do_not() {
         scrub(&url),
         "https://example.test/download?blob=[REDACTED:opaque_credential]&view=ordinary"
     );
+    let path = format!("path=/tmp/prefix&{padded}");
+    assert_eq!(
+        scrub(&path),
+        "path=/tmp/prefix&[REDACTED:opaque_credential]"
+    );
 
     let url = format!("https://example.test/download?blob=prefix.{padded}&view=ordinary");
     assert_eq!(

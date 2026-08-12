@@ -348,14 +348,17 @@ fn classify_contextual_run(value: &str, start: usize, end: usize) -> ContextualR
     let token_start = value[..start]
         .rfind(opaque_context_boundary)
         .map_or(0, |boundary| boundary + 1);
-    let parameter_start = value[token_start..start]
-        .rfind(|character| matches!(character, '?' | '#' | '&'))
-        .map(|boundary| token_start + boundary + 1);
-    let Some(parameter_start) = parameter_start else {
+    let query_opener = value[token_start..start]
+        .rfind(|character| matches!(character, '?' | '#'))
+        .map(|boundary| token_start + boundary);
+    let Some(query_opener) = query_opener else {
         return ContextualRun::Path {
             candidate_start: contextual_path_value_start(value, token_start, start, end),
         };
     };
+    let parameter_start = value[query_opener + 1..start]
+        .rfind('&')
+        .map_or(query_opener + 1, |boundary| query_opener + boundary + 2);
     let Some(delimiter) = value[parameter_start..end].find('=') else {
         return ContextualRun::QueryKey;
     };
