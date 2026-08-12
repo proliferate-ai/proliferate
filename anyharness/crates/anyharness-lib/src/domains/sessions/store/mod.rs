@@ -12,6 +12,7 @@ mod notifications;
 mod pending_prompts;
 pub(crate) mod persisted_payloads;
 pub(crate) mod sessions;
+pub(crate) mod support_windows;
 mod titles;
 
 #[cfg(test)]

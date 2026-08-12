@@ -116,6 +116,7 @@ use anyharness_contract::v1::{
     WriteWorkspaceFileRequest, WriteWorkspaceFileResponse,
 };
 use utoipa::OpenApi;
+mod support_windows;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -684,9 +685,8 @@ use utoipa::OpenApi;
     ))
 )]
 pub struct ApiDoc;
-
 pub fn openapi_json() -> String {
-    ApiDoc::openapi()
+    support_windows::merge(ApiDoc::openapi())
         .to_pretty_json()
         .expect("OpenAPI serialization should not fail")
 }

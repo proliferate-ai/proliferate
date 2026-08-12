@@ -16,6 +16,7 @@ mod create_tests;
 mod history;
 mod launch_options;
 mod mobility;
+pub(crate) mod support_windows;
 mod title;
 
 pub struct SessionService {
