@@ -143,8 +143,8 @@ export function isComposerSelectionPointInsideCode(
   if (isComposerNodeInsideCodeBlock(node)) return true;
 
   let paragraph: LexicalNode | null = node;
-  while (paragraph?.getParent()?.getType() !== "root") {
-    paragraph = paragraph?.getParent() ?? null;
+  while (paragraph && paragraph.getParent()?.getType() !== "root") {
+    paragraph = paragraph.getParent();
   }
   if (!paragraph || paragraph.getType() !== "paragraph") return false;
 
