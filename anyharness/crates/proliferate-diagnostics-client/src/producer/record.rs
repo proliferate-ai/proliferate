@@ -220,7 +220,9 @@ fn filter_value(value: ArgumentValueV1, depth: usize) -> Option<ArgumentValueV1>
 fn sanitize_correlation(correlation: &mut DiagnosticCorrelation) {
     macro_rules! sanitize {
         ($field:ident) => {
-            if !valid_id(correlation.$field.as_deref()) {
+            if !valid_id(correlation.$field.as_deref())
+                || correlation.$field.as_deref().is_some_and(secret_value)
+            {
                 correlation.$field = None;
             }
         };
@@ -259,7 +261,7 @@ pub(crate) fn valid_name(value: &str) -> bool {
         })
 }
 
-fn secret_name(value: &str) -> bool {
+pub(crate) fn secret_name(value: &str) -> bool {
     let normalized: String = value
         .chars()
         .filter(|value| value.is_ascii_alphanumeric())
@@ -281,19 +283,92 @@ fn secret_name(value: &str) -> bool {
         "signingkey",
         "environment",
         "envmap",
+        "envvars",
+        "envvalues",
+        "rawenv",
         "keychain",
         "credential",
+        "awsaccesskeyid",
+        "awssecretaccesskey",
+        "sessiontoken",
+        "securitytoken",
         "secret",
     ]
     .iter()
     .any(|secret| normalized.contains(secret))
 }
 
-fn redact_and_bound(mut value: String, limit: usize) -> String {
+pub(crate) fn redact_and_bound(mut value: String, limit: usize) -> String {
+    // Regex work is bounded independently of caller input. The look-ahead is
+    // deliberately larger than every accepted secret token/key form, and an
+    // unterminated private-key header is itself redacted by the closed corpus.
+    let scan_limit = limit.saturating_add(8_192);
+    redact_secret_crossing_cutoff(&mut value, scan_limit);
+    truncate_utf8_in_place(&mut value, scan_limit);
     for regex in secret_regexes() {
         value = regex.replace_all(&value, "[REDACTED]").into_owned();
     }
     truncate_utf8(value, limit)
+}
+
+pub(crate) fn redact_secret_crossing_cutoff(value: &mut String, cutoff: usize) {
+    if value.len() <= cutoff {
+        return;
+    }
+    let mut boundary = cutoff;
+    while !value.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    let prefix = &value[..boundary];
+    let lower = prefix.to_ascii_lowercase();
+    let mut crossing_start = None;
+    for marker in [
+        "ghp_",
+        "github_pat_",
+        "eyj",
+        "sk-",
+        "akia",
+        "asia",
+        "-----begin ",
+        "bearer ",
+        "basic ",
+        "x-amz-signature=",
+        "x-amz-credential=",
+        "x-amz-security-token=",
+        "access_token=",
+        "api_key=",
+    ] {
+        let Some(start) = lower.rfind(marker) else {
+            continue;
+        };
+        let suffix = &lower[start + marker.len()..];
+        let still_open = match marker {
+            "-----begin " => !suffix.contains("-----end "),
+            "x-amz-signature="
+            | "x-amz-credential="
+            | "x-amz-security-token="
+            | "access_token="
+            | "api_key=" => !suffix
+                .bytes()
+                .any(|byte| byte.is_ascii_whitespace() || matches!(byte, b'&' | b'#')),
+            _ => suffix.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric()
+                    || matches!(byte, b'_' | b'-' | b'.' | b'~' | b'+' | b'/' | b'=')
+            }),
+        };
+        if still_open {
+            crossing_start =
+                Some(crossing_start.map_or(start, |current: usize| current.max(start)));
+        }
+    }
+    if let Some(start) = crossing_start {
+        value.truncate(start);
+        value.push_str("[REDACTED]");
+    }
+}
+
+pub(crate) fn secret_value(value: &str) -> bool {
+    secret_regexes().iter().any(|regex| regex.is_match(value))
 }
 
 fn secret_regexes() -> &'static [Regex] {
@@ -302,8 +377,13 @@ fn secret_regexes() -> &'static [Regex] {
         [
             r"(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{4,}",
             r"(?i)\b[A-Z][A-Z0-9_]*(?:TOKEN|KEY|SECRET|PASSWORD|PASS|CREDENTIAL)[A-Z0-9_]*\s*=\s*[^\s]+",
-            r"(?i)(?:[?&](?:x-amz-signature|x-amz-credential|signature|sig|token|access_token|api_key)=)[^&#\s]+",
-            r"(?s)-----BEGIN [^-\n]*PRIVATE KEY-----.*?-----END [^-\n]*PRIVATE KEY-----",
+            r"(?i)(?:[?&](?:x-amz-signature|x-amz-credential|x-amz-security-token|signature|sig|token|access_token|api_key)=)[^&#\s]+",
+            r"(?s)-----BEGIN [^-\n]*PRIVATE KEY-----.*?(?:-----END [^-\n]*PRIVATE KEY-----|$)",
+            r"\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b",
+            r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b",
+            r"\bsk-[A-Za-z0-9_-]{16,}\b",
+            r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b",
+            r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b",
         ]
         .into_iter()
         .map(|pattern| Regex::new(pattern).expect("fixed secret regex is valid"))
@@ -324,6 +404,20 @@ fn truncate_utf8(mut value: String, limit: usize) -> String {
     value.truncate(boundary);
     value.push_str(MARKER);
     value
+}
+
+fn truncate_utf8_in_place(value: &mut String, limit: usize) {
+    const MARKER: &str = "...[truncated]";
+    if value.len() <= limit {
+        return;
+    }
+    let target = limit.saturating_sub(MARKER.len());
+    let mut boundary = target.min(value.len());
+    while !value.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    value.truncate(boundary);
+    value.push_str(MARKER);
 }
 
 fn map_privacy(value: DiagnosticPrivacy) -> PrivacyClassificationV1 {

@@ -2,9 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::{
-    build_spawn_command, diagnostics, find_anyharness_binary, observer, persist_runtime_info,
-    runtime_health_url, runtime_url_port, BootOutcome, RuntimeHealthRecord, RuntimeStatus,
-    SharedSidecar, HEALTH_POLL_INTERVAL, HEALTH_POLL_TIMEOUT,
+    diagnostics, find_anyharness_binary, observer, persist_runtime_info, runtime_health_url,
+    runtime_url_port, BootOutcome, RuntimeHealthRecord, RuntimeStatus, SharedSidecar,
+    HEALTH_POLL_INTERVAL, HEALTH_POLL_TIMEOUT,
 };
 use crate::diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor;
 
@@ -69,10 +69,7 @@ pub(super) async fn boot_inner(
     // The direct executable and full command are prepared before any
     // observability descriptor exists; the spawn itself may carry the
     // protected bridge/shutdown descriptors on supported targets.
-    let spawn_result = diagnostics::spawn_owned_anyharness(
-        || build_spawn_command(&binary, port, &launch_env),
-        supervisor,
-    );
+    let spawn_result = diagnostics::spawn_owned_anyharness(&binary, port, &launch_env, supervisor);
 
     match spawn_result {
         Ok(spawned) => {
@@ -89,9 +86,10 @@ pub(super) async fn boot_inner(
             persist_runtime_info(&guard.info, None);
             drop(guard);
             let outcome = wait_healthy(sidecar, true).await;
-            if matches!(outcome, BootOutcome::Succeeded) {
-                observer::start(sidecar).await;
-            }
+            // A timeout, cancellation, or ambiguous `try_wait` can retain a
+            // live identity-stable child just as success does. Install the
+            // sole generation-fenced observer whenever ownership remains.
+            observer::start(sidecar).await;
             outcome
         }
         Err(e) => {

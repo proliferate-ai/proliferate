@@ -7,6 +7,7 @@
 pub(crate) mod bootstrap;
 pub(crate) mod fallback_root;
 pub(crate) mod launch;
+pub(crate) mod native_image;
 pub(crate) mod reader;
 pub(crate) mod reap;
 pub(crate) mod runtime;

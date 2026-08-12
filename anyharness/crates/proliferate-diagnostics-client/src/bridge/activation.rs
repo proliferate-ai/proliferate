@@ -243,7 +243,19 @@ mod platform {
             );
         }
 
-        let mut descriptors = received.descriptors.into_iter();
+        // Fallback authority is independent of collector readiness. Detach
+        // and validate its final, role-ordered descriptor before touching a
+        // capability so a malformed collector cannot discard a usable
+        // fallback directory on the degraded path.
+        let mut descriptors = received.descriptors;
+        let fallback = match fallback_state {
+            BootstrapFallbackState::Available { .. } => descriptors.pop().and_then(|fd| {
+                valid_fallback_directory(fd.as_raw_fd())
+                    .then_some(FallbackDirectoryHandle { descriptor: fd })
+            }),
+            BootstrapFallbackState::Unavailable { .. } => None,
+        };
+        let mut descriptors = descriptors.into_iter();
         let collector = match initial_state {
             BootstrapCollectorState::Ready {
                 generation,
@@ -255,7 +267,7 @@ mod platform {
                         DegradedClassification::DescriptorInvalid,
                         Some(bridge),
                         Some(shutdown),
-                        None,
+                        fallback,
                     );
                 };
                 if *generation > MAX_SAFE_INTEGER {
@@ -263,7 +275,7 @@ mod platform {
                         DegradedClassification::DescriptorInvalid,
                         Some(bridge),
                         Some(shutdown),
-                        None,
+                        fallback,
                     );
                 }
                 descriptor.token_reference.reference = capability_fd.as_raw_fd().to_string();
@@ -284,7 +296,7 @@ mod platform {
                             DegradedClassification::DescriptorInvalid,
                             Some(bridge),
                             Some(shutdown),
-                            None,
+                            fallback,
                         )
                     }
                 };
@@ -295,7 +307,7 @@ mod platform {
                             DegradedClassification::DescriptorInvalid,
                             Some(bridge),
                             Some(shutdown),
-                            None,
+                            fallback,
                         )
                     }
                 };
@@ -314,13 +326,6 @@ mod platform {
             },
         };
 
-        let fallback = match fallback_state {
-            BootstrapFallbackState::Available { .. } => descriptors.next().and_then(|fd| {
-                valid_fallback_directory(fd.as_raw_fd())
-                    .then_some(FallbackDirectoryHandle { descriptor: fd })
-            }),
-            BootstrapFallbackState::Unavailable { .. } => None,
-        };
         if descriptors.next().is_some() {
             return degraded(
                 DegradedClassification::FramingInvalid,

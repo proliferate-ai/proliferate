@@ -8,7 +8,7 @@
 //! a product-launch failure. A returned successful protected spawn is the
 //! point of no retry.
 
-use std::{io, sync::Arc};
+use std::{collections::HashMap, io, sync::Arc};
 
 use tokio::process::{Child, Command};
 
@@ -50,9 +50,19 @@ pub(super) struct SpawnedAnyharness {
     any(target_arch = "aarch64", target_arch = "x86_64")
 ))]
 pub(super) fn spawn_owned_anyharness(
-    build_command: impl Fn() -> Command,
+    binary: &str,
+    port: u16,
+    launch_env: &HashMap<String, String>,
     supervisor: &Arc<DiagnosticsCollectorSupervisor>,
 ) -> io::Result<SpawnedAnyharness> {
+    let Some(protected_binary) = protected_anyharness_binary(binary) else {
+        // PATH lookups, scripts, wrappers, symlinks that cannot be
+        // canonicalized, and non-native images retain the legacy product
+        // launch but never inherit protected observability descriptors.
+        return spawn_unprotected(&|| super::build_spawn_command(binary, port, launch_env));
+    };
+    let build_protected = || super::build_spawn_command(&protected_binary, port, launch_env);
+    let build_unprotected = || super::build_spawn_command(binary, port, launch_env);
     let prepared = match PreparedChildDiagnosticsLaunch::create() {
         Ok(prepared) => prepared,
         Err(error) => {
@@ -60,11 +70,11 @@ pub(super) fn spawn_owned_anyharness(
                 error = %error,
                 "diagnostics descriptors unavailable; launching AnyHarness unprotected"
             );
-            return spawn_unprotected(&build_command);
+            return spawn_unprotected(&build_unprotected);
         }
     };
     let fallback = anyharness_fallback_root();
-    match prepared.spawn(build_command()) {
+    match prepared.spawn(build_protected()) {
         Ok(launch) => {
             let bridge = ChildDiagnosticsBridge::start(
                 WireComponent::Anyharness,
@@ -83,7 +93,7 @@ pub(super) fn spawn_owned_anyharness(
                 error = %error,
                 "protected AnyHarness spawn failed before exec; retrying unprotected once"
             );
-            spawn_unprotected(&build_command)
+            spawn_unprotected(&build_unprotected)
         }
     }
 }
@@ -93,12 +103,30 @@ pub(super) fn spawn_owned_anyharness(
     any(target_arch = "aarch64", target_arch = "x86_64")
 )))]
 pub(super) fn spawn_owned_anyharness(
-    build_command: impl Fn() -> Command,
+    binary: &str,
+    port: u16,
+    launch_env: &HashMap<String, String>,
     _supervisor: &Arc<DiagnosticsCollectorSupervisor>,
 ) -> io::Result<SpawnedAnyharness> {
     Ok(SpawnedAnyharness {
-        child: build_command().spawn()?,
+        child: super::build_spawn_command(binary, port, launch_env).spawn()?,
     })
+}
+
+/// Returns one canonical direct native image eligible for protected exec.
+/// Reading only the fixed Mach-O header keeps validation bounded; product
+/// launch falls back unprotected when ownership cannot be proven.
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+pub(super) fn protected_anyharness_binary(binary: &str) -> Option<String> {
+    crate::diagnostics_collector::child_bridge::native_image::canonical_current_target_executable(
+        std::path::Path::new(binary),
+    )
+    .ok()?
+    .to_str()
+    .map(str::to_owned)
 }
 
 #[cfg(all(

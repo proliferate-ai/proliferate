@@ -62,6 +62,71 @@ fn sidecar_observer_generation_replacement_makes_old_task_inert() {
     assert!(!observer::generation_matches(first, replacement));
 }
 
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+#[test]
+fn protected_anyharness_requires_a_canonical_executable_native_image() {
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().expect("tempdir");
+    let native = directory.path().join("native-anyharness");
+    let script = directory.path().join("script-anyharness");
+    let cpu = if cfg!(target_arch = "aarch64") {
+        0x0100_000c_u32
+    } else {
+        0x0100_0007_u32
+    };
+    let mut native_header = vec![0xcf, 0xfa, 0xed, 0xfe];
+    native_header.extend_from_slice(&cpu.to_le_bytes());
+    std::fs::File::create(&native)
+        .expect("native fixture")
+        .write_all(&native_header)
+        .expect("native header");
+    std::fs::write(&script, b"#!/bin/sh\nexit 0\n").expect("script fixture");
+    std::fs::set_permissions(&native, std::fs::Permissions::from_mode(0o755))
+        .expect("native permissions");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+        .expect("script permissions");
+
+    assert_eq!(
+        diagnostics::protected_anyharness_binary(native.to_str().expect("utf8")),
+        Some(
+            std::fs::canonicalize(&native)
+                .expect("canonical native")
+                .to_str()
+                .expect("utf8 canonical native")
+                .to_owned()
+        )
+    );
+    assert!(diagnostics::protected_anyharness_binary(script.to_str().expect("utf8")).is_none());
+    assert!(diagnostics::protected_anyharness_binary("anyharness").is_none());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn observer_is_installed_for_a_retained_nonhealthy_child() {
+    let sidecar = create_sidecar(8_457);
+    let child = Command::new("/bin/sh")
+        .args(["-c", "sleep 0.2"])
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawn retained AnyHarness fixture");
+    {
+        let mut guard = sidecar.lock().await;
+        guard.child = Some(child);
+        guard.info.status = RuntimeStatus::Failed;
+        guard.suppress_runtime_info_persistence = true;
+    }
+
+    observer::start(&sidecar).await;
+    let guard = sidecar.lock().await;
+    assert!(guard.child.is_some());
+    assert!(guard.exit_observer.is_some());
+}
+
 #[tokio::test]
 async fn terminal_shutdown_arm_rejects_setup_boot_before_spawn() {
     let sidecar = create_sidecar(8_457);

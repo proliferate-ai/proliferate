@@ -18,6 +18,10 @@ pub(super) const TERMINAL_FALLBACK_ALLOWANCE: std::time::Duration =
     std::time::Duration::from_millis(25);
 
 pub(crate) async fn run(inner: Arc<ProducerInner>) {
+    crate::tracing_layer::with_task_suppression(run_suppressed(inner)).await;
+}
+
+async fn run_suppressed(inner: Arc<ProducerInner>) {
     loop {
         tokio::select! {
             _ = inner.notify.notified() => {}

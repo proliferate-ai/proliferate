@@ -261,6 +261,31 @@ fn ready_empty_or_oversized_capability_is_descriptor_invalid() {
     }
 }
 
+#[test]
+fn invalid_collector_capability_retains_independent_valid_fallback() {
+    for capability in [Vec::new(), vec![b'a'; 300]] {
+        let (bridge, shutdown) = context();
+        let frame = bootstrap(
+            WireComponent::Anyharness,
+            BootstrapCollectorState::Ready {
+                generation: 1,
+                descriptor: descriptor(),
+                capability_fd_role: CapabilityFdRole::CollectorCapability,
+            },
+            fallback_available(),
+        );
+        let capability = capability_fd(&capability);
+        let (_directory, fallback) = fallback_dir_fd(0o700);
+        let outcome = parse_bootstrap(
+            DiagnosticsComponent::AnyHarness,
+            bridge,
+            shutdown,
+            received(frame, vec![capability, fallback]),
+        );
+        assert_degraded(outcome, DegradedClassification::DescriptorInvalid, true);
+    }
+}
+
 // ---------------------------------------------------------------------
 // The four collector/fallback ready/unavailable combinations
 // ---------------------------------------------------------------------

@@ -12,12 +12,19 @@ use crate::{
     DiagnosticsProducerHandle,
 };
 
+mod promotions;
 mod visitor;
 
 use visitor::{CollectedFields, FieldVisitor};
 
+const MAX_INHERITED_SPANS: usize = 32;
+
 thread_local! {
     static SUPPRESSED: Cell<bool> = const { Cell::new(false) };
+}
+
+tokio::task_local! {
+    static TASK_SUPPRESSED: Cell<bool>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -133,10 +140,29 @@ where
         }
         let mut merged = CollectedFields::default();
         if let Some(scope) = context.event_scope(event) {
-            for span in scope.from_root() {
+            // `Scope` is nearest-to-farthest and does not allocate. Nearest
+            // explicit span context wins; once the bounded map is full,
+            // deeper ancestors cannot contribute an accepted argument.
+            let mut scope = scope;
+            let mut inheritance_closed = false;
+            for _ in 0..MAX_INHERITED_SPANS {
+                let Some(span) = scope.next() else {
+                    inheritance_closed = true;
+                    break;
+                };
                 if let Some(fields) = span.extensions().get::<SpanFields>() {
-                    merged.extend(fields.0.clone());
+                    merged.extend_missing(&fields.0);
+                    if merged.is_full() {
+                        if scope.next().is_some() {
+                            merged.note_dropped();
+                        }
+                        inheritance_closed = true;
+                        break;
+                    }
                 }
+            }
+            if !inheritance_closed && scope.next().is_some() {
+                merged.note_dropped();
             }
         }
         let mut visitor = FieldVisitor::default();
@@ -155,7 +181,7 @@ where
         let kind = mapping.map_or(DetailedKindV1::Log, |mapping| mapping.kind);
         let stream = mapping.and_then(|mapping| mapping.stream);
         let message = merged.take_message();
-        let correlation = merged.correlation();
+        let correlation = merged.take_correlation();
         let error_classification = merged.take_error_classification();
         let mut arguments = merged.into_arguments();
         push_metadata(&mut arguments, "metadata.target", metadata.target());
@@ -208,8 +234,16 @@ fn bound_tracing_arguments(mut arguments: Vec<DiagnosticArgument>) -> Vec<Diagno
     if arguments.len() <= MAX_ARGUMENTS {
         return arguments;
     }
-    let dropped = arguments.len().saturating_sub(MAX_ARGUMENTS - 1);
-    arguments.truncate(MAX_ARGUMENTS - 1);
+    let field_marker = arguments
+        .iter()
+        .position(|argument| argument.name == "diagnostics.fields_truncated")
+        .map(|index| arguments.remove(index));
+    let reserved = 1 + usize::from(field_marker.is_some());
+    let dropped = arguments.len().saturating_sub(MAX_ARGUMENTS - reserved);
+    arguments.truncate(MAX_ARGUMENTS - reserved);
+    if let Some(marker) = field_marker {
+        arguments.push(marker);
+    }
     arguments.push(DiagnosticArgument {
         name: "diagnostics.arguments_truncated".into(),
         privacy: DiagnosticPrivacy::Operational,
@@ -237,8 +271,14 @@ pub(crate) fn with_suppression<T>(operation: impl FnOnce() -> T) -> T {
     })
 }
 
+pub(crate) async fn with_task_suppression<T>(future: impl std::future::Future<Output = T>) -> T {
+    TASK_SUPPRESSED.scope(Cell::new(true), future).await
+}
+
 fn suppressed() -> bool {
-    SUPPRESSED.with(Cell::get)
+    TASK_SUPPRESSED
+        .try_with(Cell::get)
+        .unwrap_or_else(|_| SUPPRESSED.with(Cell::get))
 }
 
 #[cfg(test)]
@@ -261,5 +301,19 @@ mod tests {
         let marker = bounded.last().expect("truncation marker");
         assert_eq!(marker.name, "diagnostics.arguments_truncated");
         assert_eq!(marker.value, ArgumentValueV1::Integer(8));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn task_suppression_survives_async_yields_and_nested_thread_guard() {
+        with_task_suppression(async {
+            for _ in 0..32 {
+                tokio::task::yield_now().await;
+                assert!(suppressed());
+            }
+            with_suppression(|| assert!(suppressed()));
+            assert!(suppressed());
+        })
+        .await;
+        assert!(!suppressed());
     }
 }

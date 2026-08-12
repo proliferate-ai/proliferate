@@ -21,6 +21,13 @@ use crate::{
     sidecar::SharedSidecar,
 };
 
+#[cfg_attr(
+    not(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    )),
+    path = "cloud_worker/launcher_legacy.rs"
+)]
 mod launcher;
 pub(crate) mod lifecycle;
 mod observer;
@@ -37,12 +44,8 @@ mod tail;
 ))]
 mod tail_tests;
 
-// Releases through 0.3.38 used `cloud-worker`. Some of those Desktop processes
-// exited without stopping their child, so the legacy Worker can retain that
-// namespace's credential lock across an app update. The complete v2 namespace
-// lets a freshly enrolled Worker converge without inspecting or killing an
-// unowned process; server enrollment revokes every predecessor for the same
-// desktop install.
+// Releases through 0.3.38 used `cloud-worker`; v2 avoids an orphaned legacy
+// credential lock without inspecting or killing an unowned process.
 const WORKER_STATE_NAMESPACE: &str = "cloud-worker-v2";
 #[cfg(test)]
 const LEGACY_WORKER_STATE_NAMESPACE: &str = "cloud-worker";
@@ -66,11 +69,8 @@ struct CloudWorkerLifecycle {
     injected_stop_error: Option<String>,
 }
 
-/// The single identity-stable owner for a Tauri-launched Worker: the owned
-/// `Child` plus, on supported bundled targets, the parent bridge (its reader,
-/// shutdown writer, acknowledged producer boot, and cached terminal
-/// status/fence), the two pipe drainers, and the bounded in-memory tail. The
-/// tail is cleared only when this owner is released after a verified reap.
+/// Identity-stable Worker owner, with bundled bridge, drainers, and tail kept
+/// through verified reap on supported targets.
 struct CloudWorkerProcess {
     target_id: String,
     child: Child,
@@ -356,9 +356,7 @@ fn configured_cloud_base_url() -> Result<String, String> {
         .map(|value| value.trim_end_matches('/').to_string())
 }
 
-/// The bundled supported-macOS launch has no `worker.log`: the `log` member
-/// exists only for unsupported builds, whose legacy writer is preserved.
-/// Historical `worker.log` files at that path are untouched customer data.
+/// Bundled macOS creates no `worker.log`; unsupported targets preserve it.
 struct WorkerPaths {
     config: PathBuf,
     database: PathBuf,

@@ -36,7 +36,11 @@ impl BridgeRuntime {
         let (commands, receiver) = mpsc::sync_channel(1);
         let join = thread::Builder::new()
             .name("desktop-diagnostics-bridge".to_owned())
-            .spawn(move || run(inner, bridge, shutdown, runtime, receiver))
+            .spawn(move || {
+                crate::tracing_layer::with_suppression(|| {
+                    run(inner, bridge, shutdown, runtime, receiver)
+                })
+            })
             .map_err(|_| ())?;
         Ok(Self {
             commands,
@@ -168,6 +172,12 @@ fn handle_parent_frame(
             descriptor,
             ..
         } if valid_protocol_version(protocol_version) => {
+            // A stale/equal generation cannot affect state and must not even
+            // detach or parse attacker-controlled capability bytes. The
+            // frame shape is still closed: exactly one unread owned right.
+            if !generation_is_newer(inner, generation) {
+                return (descriptors.len() == 1).then_some(()).ok_or(());
+            }
             let capability = descriptors.next().ok_or(())?;
             if descriptors.next().is_some() {
                 return Err(());
@@ -251,4 +261,20 @@ fn handle_parent_frame(
         | ParentFrame::FlushRequest { .. } => return Err(()),
     }
     Ok(())
+}
+
+fn generation_is_newer(inner: &ProducerInner, generation: u64) -> bool {
+    let state = inner
+        .state
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let current = match &state.collector {
+        super::CollectorAvailability::Ready(current)
+        | super::CollectorAvailability::Cooldown {
+            generation: current,
+            ..
+        } => current.generation,
+        super::CollectorAvailability::Unavailable { generation } => *generation,
+    };
+    generation > current
 }
