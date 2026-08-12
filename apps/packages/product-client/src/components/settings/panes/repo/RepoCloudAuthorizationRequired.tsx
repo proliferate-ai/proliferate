@@ -1,5 +1,4 @@
-import { CloudIcon } from "#product/primitives/icons/platform";
-import { GitHub } from "#product/primitives/icons/platform";
+import { CloudIcon, GitHub } from "#product/primitives/icons/platform";
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { Button } from "#product/primitives/Button";
