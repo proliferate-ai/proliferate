@@ -177,12 +177,12 @@ describe("support snapshot preparation wrappers", () => {
 });
 
 describe("support snapshot artifact wrappers", () => {
-  it("saves an archive and unwraps the chosen archive path", async () => {
-    mocks.invoke.mockResolvedValue({ archivePath: "/chosen/archive.zip" });
+  it("saves an archive and returns the display-safe basename receipt", async () => {
+    mocks.invoke.mockResolvedValue({ archiveName: "support-snapshot-ssv1_abc.zip" });
 
     await expect(
       saveSupportSnapshotArchive({ artifactId: "ssv1_abc", consentEpoch: "epoch-1" }),
-    ).resolves.toBe("/chosen/archive.zip");
+    ).resolves.toBe("support-snapshot-ssv1_abc.zip");
     expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
       "save_support_snapshot_archive",
       { input: { artifactId: "ssv1_abc", consentEpoch: "epoch-1" } },
@@ -195,6 +195,52 @@ describe("support snapshot artifact wrappers", () => {
     await expect(
       saveSupportSnapshotArchive({ artifactId: "ssv1_abc", consentEpoch: "epoch-1" }),
     ).resolves.toBeNull();
+  });
+
+  it.each([
+    ["a legacy absolute-path payload", { archivePath: "/chosen/archive.zip" }],
+    ["a slashed receipt", { archiveName: "/chosen/archive.zip" }],
+    ["a relative slashed receipt", { archiveName: "chosen/archive.zip" }],
+    ["a backslashed receipt", { archiveName: "chosen\\archive.zip" }],
+    ["a NUL-bearing receipt", { archiveName: "archive\0.zip" }],
+    ["an empty receipt", { archiveName: "" }],
+    ["a non-string receipt", { archiveName: 7 }],
+    ["a dot receipt", { archiveName: "." }],
+    ["a dot-dot receipt", { archiveName: ".." }],
+    ["an oversized receipt", { archiveName: `${"a".repeat(125)}.zip` }],
+    ["an oversized multibyte receipt", { archiveName: "é".repeat(65) }],
+  ])("rejects %s closed", async (_label, payload) => {
+    mocks.invoke.mockResolvedValue(payload);
+
+    await expect(
+      saveSupportSnapshotArchive({ artifactId: "ssv1_abc", consentEpoch: "epoch-1" }),
+    ).rejects.toThrow(
+      "Native host returned an invalid support snapshot archive receipt.",
+    );
+  });
+
+  it("accepts a receipt at exactly the 128 UTF-8 byte bound", async () => {
+    const name = `${"a".repeat(124)}.zip`;
+    mocks.invoke.mockResolvedValue({ archiveName: name });
+
+    await expect(
+      saveSupportSnapshotArchive({ artifactId: "ssv1_abc", consentEpoch: "epoch-1" }),
+    ).resolves.toBe(name);
+  });
+
+  it("never surfaces the absolute chosen path across the bridge", async () => {
+    mocks.invoke.mockResolvedValue({ archivePath: "/chosen/archive.zip" });
+
+    const rejection = await saveSupportSnapshotArchive({
+      artifactId: "ssv1_abc",
+      consentEpoch: "epoch-1",
+    }).then(
+      (value) => {
+        throw new Error(`resolved with ${String(value)}`);
+      },
+      (error: unknown) => error,
+    );
+    expect(String(rejection)).not.toContain("/chosen/archive.zip");
   });
 
   it("reads a staged artifact by opaque ID and returns base64 bytes", async () => {

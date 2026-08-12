@@ -97,6 +97,32 @@ export async function cancelSupportSnapshotPreparation(input: {
   await invoke("cancel_support_snapshot_preparation", { input });
 }
 
+// The native save command answers with a display-safe receipt — the archive
+// basename only — never the absolute or relative path the user picked in the
+// dialog. Anything path-shaped or unbounded rejects closed.
+const MAX_ARCHIVE_NAME_UTF8_BYTES = 128;
+
+function validateArchiveName(value: unknown): string {
+  const invalid = () =>
+    new Error("Native host returned an invalid support snapshot archive receipt.");
+  if (typeof value !== "string" || value.length === 0) {
+    throw invalid();
+  }
+  if (
+    value === "." ||
+    value === ".." ||
+    value.includes("/") ||
+    value.includes("\\") ||
+    value.includes("\u0000")
+  ) {
+    throw invalid();
+  }
+  if (new TextEncoder().encode(value).length > MAX_ARCHIVE_NAME_UTF8_BYTES) {
+    throw invalid();
+  }
+  return value;
+}
+
 export async function saveSupportSnapshotArchive(input: {
   artifactId: string;
   consentEpoch: string;
@@ -105,11 +131,14 @@ export async function saveSupportSnapshotArchive(input: {
     return null;
   }
 
-  const result = await invoke<{ archivePath: string } | null>(
+  const result = await invoke<{ archiveName: string } | null>(
     "save_support_snapshot_archive",
     { input },
   );
-  return result?.archivePath ?? null;
+  if (result == null) {
+    return null;
+  }
+  return validateArchiveName(result.archiveName);
 }
 
 export async function readStagedSupportSnapshot(input: {
