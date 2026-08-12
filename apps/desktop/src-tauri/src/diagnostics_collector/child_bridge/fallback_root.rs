@@ -34,6 +34,19 @@ pub(crate) enum FallbackRootOutcome {
     Unavailable(FallbackUnavailableClassification),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ReadOnlyRootPolicy {
+    ActiveFallback,
+    HistoricalCompatibility,
+}
+
+pub(crate) enum ReadOnlyRootOutcome {
+    Available(OwnedFd),
+    Missing,
+    Unreadable,
+    UnsafeMetadata,
+}
+
 enum RootError {
     Io(io::Error),
     Security,
@@ -68,6 +81,81 @@ pub(crate) fn resolve_fallback_root(base: &Path, components: &[&str]) -> Fallbac
     match resolve_inner(base, components) {
         Ok(descriptor) => FallbackRootOutcome::Available(descriptor),
         Err(error) => FallbackRootOutcome::Unavailable(error.classification()),
+    }
+}
+
+/// Opens a pre-existing evidence directory without creating or repairing any
+/// component. The deterministic base and finite components come from native
+/// owners, never from a renderer path or record value.
+pub(crate) fn open_read_only_root(
+    base: &Path,
+    components: &[&str],
+    policy: ReadOnlyRootPolicy,
+) -> ReadOnlyRootOutcome {
+    match open_read_only_root_inner(base, components, policy) {
+        Ok(descriptor) => ReadOnlyRootOutcome::Available(descriptor),
+        Err(error) if error.is_not_found() => ReadOnlyRootOutcome::Missing,
+        Err(RootError::Security) => ReadOnlyRootOutcome::UnsafeMetadata,
+        Err(RootError::Io(error))
+            if matches!(
+                error.raw_os_error(),
+                Some(libc::ELOOP) | Some(libc::ENOTDIR)
+            ) =>
+        {
+            ReadOnlyRootOutcome::UnsafeMetadata
+        }
+        Err(RootError::Io(_)) => ReadOnlyRootOutcome::Unreadable,
+    }
+}
+
+fn open_read_only_root_inner(
+    base: &Path,
+    components: &[&str],
+    policy: ReadOnlyRootPolicy,
+) -> Result<OwnedFd, RootError> {
+    let mut current = open_anchor(base)?;
+    validate_read_only_directory(
+        &current,
+        if components.is_empty() {
+            policy
+        } else {
+            ReadOnlyRootPolicy::HistoricalCompatibility
+        },
+    )?;
+    for (index, component) in components.iter().enumerate() {
+        current = open_directory_at(&current, component)?;
+        let component_policy = if index + 1 == components.len() {
+            policy
+        } else {
+            ReadOnlyRootPolicy::HistoricalCompatibility
+        };
+        validate_read_only_directory(&current, component_policy)?;
+    }
+    Ok(current)
+}
+
+fn validate_read_only_directory(
+    descriptor: &OwnedFd,
+    policy: ReadOnlyRootPolicy,
+) -> Result<(), RootError> {
+    // SAFETY: zeroed stat is a valid output buffer for fstat.
+    let mut stat: libc::stat = unsafe { zeroed() };
+    // SAFETY: `descriptor` is an owned open descriptor.
+    if unsafe { libc::fstat(descriptor.as_raw_fd(), &mut stat) } != 0 {
+        return Err(RootError::last_os_error());
+    }
+    // SAFETY: geteuid has no preconditions.
+    let euid = unsafe { libc::geteuid() };
+    let mode = u32::from(stat.st_mode) & 0o777;
+    if stat.st_mode & libc::S_IFMT != libc::S_IFDIR || stat.st_uid != euid {
+        return Err(RootError::Security);
+    }
+    match policy {
+        ReadOnlyRootPolicy::ActiveFallback if mode != 0o700 => Err(RootError::Security),
+        ReadOnlyRootPolicy::HistoricalCompatibility if mode & 0o022 != 0 => {
+            Err(RootError::Security)
+        }
+        _ => Ok(()),
     }
 }
 

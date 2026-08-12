@@ -1,6 +1,7 @@
 pub(crate) mod artifact;
 pub mod broker;
 pub(crate) mod child_bridge;
+pub(crate) mod child_status;
 pub(crate) mod client;
 pub(crate) mod export_admission;
 pub(crate) mod fallback;

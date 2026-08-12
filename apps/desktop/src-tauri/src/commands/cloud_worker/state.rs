@@ -43,6 +43,19 @@ impl CloudWorkerState {
     ))]
     pub(crate) async fn child_diagnostics_state(&self) -> DesktopWorkerDiagnosticsState {
         let deadline = tokio::time::Instant::now() + CHILD_STATUS_RESPONSE_DEADLINE;
+        self.child_diagnostics_state_until(deadline).await
+    }
+
+    /// Uses the support coordinator's absolute joined deadline rather than
+    /// granting the Worker a fresh status window after AnyHarness completes.
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    pub(crate) async fn child_diagnostics_state_until(
+        &self,
+        deadline: tokio::time::Instant,
+    ) -> DesktopWorkerDiagnosticsState {
         let Ok(mut lifecycle) = tokio::time::timeout_at(deadline, self.lifecycle.lock()).await
         else {
             return DesktopWorkerDiagnosticsState {

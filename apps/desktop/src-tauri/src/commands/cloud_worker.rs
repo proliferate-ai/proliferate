@@ -31,7 +31,7 @@ use crate::{
 mod launcher;
 pub(crate) mod lifecycle;
 mod observer;
-mod spawn;
+pub(crate) mod spawn;
 pub(crate) mod state;
 #[cfg(all(
     target_os = "macos",
@@ -47,9 +47,8 @@ mod tail_tests;
 
 // Releases through 0.3.38 used `cloud-worker`; v2 avoids an orphaned legacy
 // credential lock without inspecting or killing an unowned process.
-const WORKER_STATE_NAMESPACE: &str = "cloud-worker-v2";
-#[cfg(test)]
-const LEGACY_WORKER_STATE_NAMESPACE: &str = "cloud-worker";
+pub(super) const WORKER_STATE_NAMESPACE: &str = "cloud-worker-v2";
+pub(super) const LEGACY_WORKER_STATE_NAMESPACE: &str = "cloud-worker";
 const WORKER_CREDENTIALS_LOCKED_ERROR: &str =
     "Cannot replace worker credentials while a Proliferate Worker is still running.";
 
@@ -546,7 +545,7 @@ fn toml_string(value: &str) -> String {
     )
 }
 
-fn sanitize_path_segment(value: &str) -> String {
+pub(super) fn sanitize_path_segment(value: &str) -> String {
     value
         .chars()
         .map(|ch| {

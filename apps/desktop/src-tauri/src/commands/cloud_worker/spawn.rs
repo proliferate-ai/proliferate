@@ -54,6 +54,32 @@ use proliferate_diagnostics_client::bridge::wire::{
     FallbackUnavailableClassification, WireComponent,
 };
 
+/// The only two historical Worker primary-log candidates authorized for a
+/// bounded, evidence-derived target ID. This helper derives paths only; it
+/// opens, creates, repairs, or enumerates nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct WorkerLegacyLogPaths {
+    pub(crate) v2: std::path::PathBuf,
+    pub(crate) v1: std::path::PathBuf,
+}
+
+pub(crate) fn worker_legacy_log_paths(
+    app_dir: &std::path::Path,
+    target_id: &str,
+) -> WorkerLegacyLogPaths {
+    let target = super::sanitize_path_segment(target_id);
+    WorkerLegacyLogPaths {
+        v2: app_dir
+            .join(super::WORKER_STATE_NAMESPACE)
+            .join(&target)
+            .join("worker.log"),
+        v1: app_dir
+            .join(super::LEGACY_WORKER_STATE_NAMESPACE)
+            .join(target)
+            .join("worker.log"),
+    }
+}
+
 pub(super) enum WorkerLaunchOutcome {
     Started(CloudWorkerProcess),
     RetainedAfterInspection {
