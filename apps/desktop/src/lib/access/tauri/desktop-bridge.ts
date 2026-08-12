@@ -65,8 +65,17 @@ import {
   saveDiagnosticJson,
 } from "./diagnostics";
 import {
+  beginSupportSnapshotPreparation,
+  beginSupportSnapshotSubmission,
+  cancelSupportSnapshotPreparation,
   deleteStagedSupportReportAttachment,
+  deleteStagedSupportSnapshot,
+  finishSupportSnapshotPreparation,
+  finishSupportSnapshotSubmission,
   readStagedSupportReportAttachment,
+  readStagedSupportSnapshot,
+  reconcileStagedSupportSnapshots,
+  saveSupportSnapshotArchive,
   stageSupportReportAttachment,
 } from "./support";
 
@@ -243,6 +252,17 @@ export const desktopBridge: DesktopBridge = {
     stageAttachment: stageSupportReportAttachment,
     readAttachment: readStagedSupportReportAttachment,
     deleteAttachment: deleteStagedSupportReportAttachment,
+    supportSnapshot: {
+      beginPreparation: beginSupportSnapshotPreparation,
+      finishPreparation: finishSupportSnapshotPreparation,
+      cancelPreparation: cancelSupportSnapshotPreparation,
+      saveArchive: saveSupportSnapshotArchive,
+      readArtifact: readStagedSupportSnapshot,
+      deleteArtifact: deleteStagedSupportSnapshot,
+      reconcileArtifacts: reconcileStagedSupportSnapshots,
+      beginSubmission: beginSupportSnapshotSubmission,
+      finishSubmission: finishSupportSnapshotSubmission,
+    },
   },
 
   connect: {

@@ -36,6 +36,15 @@ const mocks = vi.hoisted(() => ({
   stageSupportReportAttachment: vi.fn(),
   readStagedSupportReportAttachment: vi.fn(),
   deleteStagedSupportReportAttachment: vi.fn(),
+  beginSupportSnapshotPreparation: vi.fn(),
+  finishSupportSnapshotPreparation: vi.fn(),
+  cancelSupportSnapshotPreparation: vi.fn(),
+  saveSupportSnapshotArchive: vi.fn(),
+  readStagedSupportSnapshot: vi.fn(),
+  deleteStagedSupportSnapshot: vi.fn(),
+  reconcileStagedSupportSnapshots: vi.fn(),
+  beginSupportSnapshotSubmission: vi.fn(),
+  finishSupportSnapshotSubmission: vi.fn(),
   fetchServerMeta: vi.fn(),
   isTauriRuntimeAvailable: vi.fn(() => true),
 }));
@@ -107,6 +116,15 @@ vi.mock("@/lib/access/tauri/support", () => ({
   stageSupportReportAttachment: mocks.stageSupportReportAttachment,
   readStagedSupportReportAttachment: mocks.readStagedSupportReportAttachment,
   deleteStagedSupportReportAttachment: mocks.deleteStagedSupportReportAttachment,
+  beginSupportSnapshotPreparation: mocks.beginSupportSnapshotPreparation,
+  finishSupportSnapshotPreparation: mocks.finishSupportSnapshotPreparation,
+  cancelSupportSnapshotPreparation: mocks.cancelSupportSnapshotPreparation,
+  saveSupportSnapshotArchive: mocks.saveSupportSnapshotArchive,
+  readStagedSupportSnapshot: mocks.readStagedSupportSnapshot,
+  deleteStagedSupportSnapshot: mocks.deleteStagedSupportSnapshot,
+  reconcileStagedSupportSnapshots: mocks.reconcileStagedSupportSnapshots,
+  beginSupportSnapshotSubmission: mocks.beginSupportSnapshotSubmission,
+  finishSupportSnapshotSubmission: mocks.finishSupportSnapshotSubmission,
 }));
 vi.mock("@/lib/access/tauri/connect-server", () => ({
   fetchServerMeta: mocks.fetchServerMeta,
@@ -560,5 +578,19 @@ describe("diagnostics", () => {
 
     await desktopBridge.diagnostics.deleteAttachment("/staged");
     expect(mocks.deleteStagedSupportReportAttachment).toHaveBeenCalledWith("/staged");
+  });
+
+  it("wires the supportSnapshot subgroup directly to the support wrappers", () => {
+    // Full invoke/output/unavailable behavior is pinned in support.test.ts.
+    const group = desktopBridge.diagnostics.supportSnapshot;
+    expect(group.beginPreparation).toBe(mocks.beginSupportSnapshotPreparation);
+    expect(group.finishPreparation).toBe(mocks.finishSupportSnapshotPreparation);
+    expect(group.cancelPreparation).toBe(mocks.cancelSupportSnapshotPreparation);
+    expect(group.saveArchive).toBe(mocks.saveSupportSnapshotArchive);
+    expect(group.readArtifact).toBe(mocks.readStagedSupportSnapshot);
+    expect(group.deleteArtifact).toBe(mocks.deleteStagedSupportSnapshot);
+    expect(group.reconcileArtifacts).toBe(mocks.reconcileStagedSupportSnapshots);
+    expect(group.beginSubmission).toBe(mocks.beginSupportSnapshotSubmission);
+    expect(group.finishSubmission).toBe(mocks.finishSupportSnapshotSubmission);
   });
 });
