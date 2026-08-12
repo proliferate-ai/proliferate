@@ -1,17 +1,38 @@
 use std::{
     fs::{self, File, OpenOptions},
+    io,
     io::{Read, Write},
     os::unix::{fs::OpenOptionsExt, fs::PermissionsExt},
     path::Path,
     time::Instant,
 };
 
+use sha2::{Digest, Sha256};
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
 use super::{
     digest, ArtifactStoreError, ReconciledSupportArtifact, StoredSupportArtifact,
     SupportArtifactReference, ARTIFACT_MAX_BYTES,
 };
+
+const VERIFY_CHUNK_BYTES: usize = 65_536;
+
+pub(super) trait ReconcileHooks {
+    fn now(&mut self) -> Instant;
+    fn read(&mut self, file: &mut File, destination: &mut [u8]) -> io::Result<usize>;
+}
+
+struct SystemReconcileHooks;
+
+impl ReconcileHooks for SystemReconcileHooks {
+    fn now(&mut self) -> Instant {
+        Instant::now()
+    }
+
+    fn read(&mut self, file: &mut File, destination: &mut [u8]) -> io::Result<usize> {
+        file.read(destination)
+    }
+}
 
 #[path = "unix_fs.rs"]
 mod fs_support;
@@ -26,7 +47,9 @@ use fs_support::{
 
 pub(super) fn stage(
     root: &Path,
+    client_job_id: &str,
     artifact_id: &str,
+    snapshot_id: &str,
     preparation_id: &str,
     bytes: &[u8],
 ) -> Result<StoredSupportArtifact, ArtifactStoreError> {
@@ -42,17 +65,16 @@ pub(super) fn stage(
     rename_noreplace_at(&directory, &partial_name, &final_name)?;
     cleanup.track(final_name);
     sync_directory(&directory)?;
-    let expected = SupportArtifactReference {
-        artifact_id: artifact_id.to_owned(),
-        size_bytes: bytes.len() as u64,
-        sha256: digest(bytes),
-    };
-    verify_open(&directory, &expected)?;
+    let size_bytes = bytes.len() as u64;
+    let sha256 = digest(bytes);
+    verify_open(&directory, artifact_id, size_bytes, &sha256)?;
     cleanup.disarm();
     Ok(StoredSupportArtifact {
-        artifact_id: expected.artifact_id,
-        size_bytes: expected.size_bytes,
-        sha256: expected.sha256,
+        client_job_id: client_job_id.to_owned(),
+        artifact_id: artifact_id.to_owned(),
+        snapshot_id: snapshot_id.to_owned(),
+        size_bytes,
+        sha256,
     })
 }
 
@@ -61,9 +83,16 @@ pub(super) fn verify(
     reference: &SupportArtifactReference,
 ) -> Result<StoredSupportArtifact, ArtifactStoreError> {
     let directory = open_existing_root(root)?.ok_or(ArtifactStoreError::Missing)?;
-    verify_open(&directory, reference)?;
+    verify_open(
+        &directory,
+        &reference.artifact_id,
+        reference.size_bytes,
+        &reference.sha256,
+    )?;
     Ok(StoredSupportArtifact {
+        client_job_id: reference.client_job_id.clone(),
         artifact_id: reference.artifact_id.clone(),
+        snapshot_id: reference.snapshot_id.clone(),
         size_bytes: reference.size_bytes,
         sha256: reference.sha256.clone(),
     })
@@ -74,7 +103,12 @@ pub(super) fn read_verified(
     reference: &SupportArtifactReference,
 ) -> Result<Vec<u8>, ArtifactStoreError> {
     let directory = open_existing_root(root)?.ok_or(ArtifactStoreError::Missing)?;
-    verify_open(&directory, reference)
+    verify_open(
+        &directory,
+        &reference.artifact_id,
+        reference.size_bytes,
+        &reference.sha256,
+    )
 }
 
 pub(super) fn delete(root: &Path, artifact_id: &str) -> Result<(), ArtifactStoreError> {
@@ -147,16 +181,44 @@ pub(super) fn reconcile(
     attachment_paths: &[String],
     deadline: Instant,
 ) -> Result<Vec<ReconciledSupportArtifact>, ArtifactStoreError> {
-    reconciliation::reconcile(root, attachment_root, artifacts, attachment_paths, deadline)
+    reconciliation::reconcile_with_hooks(
+        root,
+        attachment_root,
+        artifacts,
+        attachment_paths,
+        deadline,
+        &mut SystemReconcileHooks,
+    )
+}
+
+#[cfg(test)]
+pub(super) fn reconcile_with_hooks(
+    root: &Path,
+    attachment_root: &Path,
+    artifacts: &[SupportArtifactReference],
+    attachment_paths: &[String],
+    deadline: Instant,
+    hooks: &mut impl ReconcileHooks,
+) -> Result<Vec<ReconciledSupportArtifact>, ArtifactStoreError> {
+    reconciliation::reconcile_with_hooks(
+        root,
+        attachment_root,
+        artifacts,
+        attachment_paths,
+        deadline,
+        hooks,
+    )
 }
 
 pub(super) fn verify_open(
     directory: &std::os::fd::OwnedFd,
-    reference: &SupportArtifactReference,
+    artifact_id: &str,
+    expected_size: u64,
+    expected_sha256: &str,
 ) -> Result<Vec<u8>, ArtifactStoreError> {
-    let name = format!("{}.json", reference.artifact_id);
+    let name = format!("{artifact_id}.json");
     let (descriptor, size) = open_safe_file_at(directory, &name)?;
-    if size != reference.size_bytes || size > ARTIFACT_MAX_BYTES {
+    if size != expected_size || size > ARTIFACT_MAX_BYTES {
         return Err(ArtifactStoreError::Mismatch);
     }
     let mut file = File::from(descriptor);
@@ -165,8 +227,60 @@ pub(super) fn verify_open(
         .take(size.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|_| ArtifactStoreError::Io)?;
-    if bytes.len() as u64 != size || digest(&bytes) != reference.sha256 {
+    if bytes.len() as u64 != size || digest(&bytes) != expected_sha256 {
         return Err(ArtifactStoreError::Mismatch);
     }
     Ok(bytes)
+}
+
+pub(super) fn verify_open_until(
+    directory: &std::os::fd::OwnedFd,
+    reference: &SupportArtifactReference,
+    deadline: Instant,
+    hooks: &mut impl ReconcileHooks,
+) -> Result<(), ArtifactStoreError> {
+    require_deadline(deadline, hooks)?;
+    let name = format!("{}.json", reference.artifact_id);
+    let (descriptor, size) = open_safe_file_at(directory, &name)?;
+    if size != reference.size_bytes || size > ARTIFACT_MAX_BYTES {
+        return Err(ArtifactStoreError::Mismatch);
+    }
+    let mut file = File::from(descriptor);
+    let mut hasher = Sha256::new();
+    let mut remaining = size;
+    let mut buffer = [0_u8; VERIFY_CHUNK_BYTES];
+    while remaining > 0 {
+        require_deadline(deadline, hooks)?;
+        let requested = usize::try_from(remaining.min(VERIFY_CHUNK_BYTES as u64))
+            .map_err(|_| ArtifactStoreError::Mismatch)?;
+        let read = hooks
+            .read(&mut file, &mut buffer[..requested])
+            .map_err(|_| ArtifactStoreError::Io)?;
+        if read == 0 || read > requested {
+            return Err(ArtifactStoreError::Mismatch);
+        }
+        hasher.update(&buffer[..read]);
+        remaining -= read as u64;
+        require_deadline(deadline, hooks)?;
+    }
+    require_deadline(deadline, hooks)?;
+    let mut extra = [0_u8; 1];
+    let extra_read = hooks
+        .read(&mut file, &mut extra)
+        .map_err(|_| ArtifactStoreError::Io)?;
+    require_deadline(deadline, hooks)?;
+    let actual_sha256 = format!("{:x}", hasher.finalize());
+    if extra_read != 0 || actual_sha256 != reference.sha256 {
+        return Err(ArtifactStoreError::Mismatch);
+    }
+    Ok(())
+}
+
+fn require_deadline(
+    deadline: Instant,
+    hooks: &mut impl ReconcileHooks,
+) -> Result<(), ArtifactStoreError> {
+    (hooks.now() < deadline)
+        .then_some(())
+        .ok_or(ArtifactStoreError::Deadline)
 }

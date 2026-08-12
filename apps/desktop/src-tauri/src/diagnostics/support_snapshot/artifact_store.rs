@@ -7,7 +7,7 @@
 
 use std::{
     collections::BTreeMap,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     time::Instant,
 };
@@ -20,17 +20,22 @@ pub(crate) const ARTIFACT_PREFIX: &str = "ssv1_";
 pub(crate) const ARTIFACT_MAX_BYTES: u64 = 26_214_400;
 pub(crate) const MAX_ARTIFACT_REFERENCES: usize = 10;
 pub(crate) const MAX_ATTACHMENT_REFERENCES: usize = 200;
+const MAX_OPAQUE_ID_BYTES: usize = 128;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct StoredSupportArtifact {
+    pub(crate) client_job_id: String,
     pub(crate) artifact_id: String,
+    pub(crate) snapshot_id: String,
     pub(crate) size_bytes: u64,
     pub(crate) sha256: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SupportArtifactReference {
+    pub(crate) client_job_id: String,
     pub(crate) artifact_id: String,
+    pub(crate) snapshot_id: String,
     pub(crate) size_bytes: u64,
     pub(crate) sha256: String,
 }
@@ -87,11 +92,7 @@ impl SupportArtifactStore {
     }
 
     pub(crate) fn artifact_id(client_job_id: &str) -> Result<String, ArtifactStoreError> {
-        let job =
-            uuid::Uuid::parse_str(client_job_id).map_err(|_| ArtifactStoreError::InvalidInput)?;
-        if job.to_string() != client_job_id {
-            return Err(ArtifactStoreError::InvalidInput);
-        }
+        require_canonical_uuid(client_job_id)?;
         let mut hasher = Sha256::new();
         hasher.update(ARTIFACT_DOMAIN);
         hasher.update(client_job_id.as_bytes());
@@ -101,16 +102,25 @@ impl SupportArtifactStore {
     pub(crate) fn stage(
         &self,
         client_job_id: &str,
+        snapshot_id: &str,
         preparation_id: &str,
         bytes: &[u8],
     ) -> Result<StoredSupportArtifact, ArtifactStoreError> {
         self.require_ready()?;
         let artifact_id = Self::artifact_id(client_job_id)?;
+        require_bounded_identity(snapshot_id)?;
         require_canonical_uuid(preparation_id)?;
         if bytes.len() as u64 > ARTIFACT_MAX_BYTES {
             return Err(ArtifactStoreError::InvalidInput);
         }
-        platform::stage(&self.root, &artifact_id, preparation_id, bytes)
+        platform::stage(
+            &self.root,
+            client_job_id,
+            &artifact_id,
+            snapshot_id,
+            preparation_id,
+            bytes,
+        )
     }
 
     pub(crate) fn verify(
@@ -153,26 +163,43 @@ impl SupportArtifactStore {
         deadline: Instant,
     ) -> Result<Vec<ReconciledSupportArtifact>, ArtifactStoreError> {
         self.reconciled.store(false, Ordering::Release);
-        if artifacts.len() > MAX_ARTIFACT_REFERENCES
-            || referenced_attachment_paths.len() > MAX_ATTACHMENT_REFERENCES
-        {
-            return Err(ArtifactStoreError::InvalidInput);
-        }
-        let mut references = BTreeMap::new();
-        for reference in artifacts {
-            validate_reference(reference)?;
-            if let Some(existing) = references.insert(reference.artifact_id.clone(), reference) {
-                if existing != reference {
-                    return Err(ArtifactStoreError::InvalidInput);
-                }
-            }
-        }
+        let artifacts = validate_reconciliation_inputs(
+            artifacts,
+            &self.attachment_root,
+            referenced_attachment_paths,
+        )?;
         let states = platform::reconcile(
             &self.root,
             &self.attachment_root,
-            artifacts,
+            &artifacts,
             referenced_attachment_paths,
             deadline,
+        )?;
+        self.reconciled.store(true, Ordering::Release);
+        Ok(states)
+    }
+
+    #[cfg(all(test, unix))]
+    pub(super) fn reconcile_with_hooks(
+        &self,
+        artifacts: &[SupportArtifactReference],
+        referenced_attachment_paths: &[String],
+        deadline: Instant,
+        hooks: &mut impl platform::ReconcileHooks,
+    ) -> Result<Vec<ReconciledSupportArtifact>, ArtifactStoreError> {
+        self.reconciled.store(false, Ordering::Release);
+        let artifacts = validate_reconciliation_inputs(
+            artifacts,
+            &self.attachment_root,
+            referenced_attachment_paths,
+        )?;
+        let states = platform::reconcile_with_hooks(
+            &self.root,
+            &self.attachment_root,
+            &artifacts,
+            referenced_attachment_paths,
+            deadline,
+            hooks,
         )?;
         self.reconciled.store(true, Ordering::Release);
         Ok(states)
@@ -197,18 +224,74 @@ impl SupportArtifactStore {
 }
 
 fn require_canonical_uuid(value: &str) -> Result<(), ArtifactStoreError> {
+    if value.is_empty() || value.len() > MAX_OPAQUE_ID_BYTES {
+        return Err(ArtifactStoreError::InvalidInput);
+    }
     let parsed = uuid::Uuid::parse_str(value).map_err(|_| ArtifactStoreError::InvalidInput)?;
     (parsed.to_string() == value)
         .then_some(())
         .ok_or(ArtifactStoreError::InvalidInput)
 }
 
+fn require_bounded_identity(value: &str) -> Result<(), ArtifactStoreError> {
+    (!value.is_empty() && value.len() <= MAX_OPAQUE_ID_BYTES)
+        .then_some(())
+        .ok_or(ArtifactStoreError::InvalidInput)
+}
+
 fn validate_reference(reference: &SupportArtifactReference) -> Result<(), ArtifactStoreError> {
-    validate_artifact_id(&reference.artifact_id)?;
+    require_canonical_uuid(&reference.client_job_id)?;
+    require_bounded_identity(&reference.snapshot_id)?;
+    let expected = SupportArtifactStore::artifact_id(&reference.client_job_id)?;
+    if reference.artifact_id != expected {
+        return Err(ArtifactStoreError::InvalidInput);
+    }
     if reference.size_bytes > ARTIFACT_MAX_BYTES || !valid_sha256(&reference.sha256) {
         return Err(ArtifactStoreError::InvalidInput);
     }
     Ok(())
+}
+
+fn validate_reconciliation_inputs(
+    artifacts: &[SupportArtifactReference],
+    attachment_root: &Path,
+    referenced_attachment_paths: &[String],
+) -> Result<Vec<SupportArtifactReference>, ArtifactStoreError> {
+    if artifacts.len() > MAX_ARTIFACT_REFERENCES
+        || referenced_attachment_paths.len() > MAX_ATTACHMENT_REFERENCES
+    {
+        return Err(ArtifactStoreError::InvalidInput);
+    }
+    let mut references = BTreeMap::new();
+    let mut unique_artifacts = Vec::with_capacity(artifacts.len());
+    for reference in artifacts {
+        validate_reference(reference)?;
+        if let Some(existing) = references.get(&reference.artifact_id) {
+            if *existing != reference {
+                return Err(ArtifactStoreError::InvalidInput);
+            }
+        } else {
+            references.insert(reference.artifact_id.clone(), reference);
+            unique_artifacts.push(reference.clone());
+        }
+    }
+    for value in referenced_attachment_paths {
+        let path = Path::new(value);
+        if !path.is_absolute() {
+            return Err(ArtifactStoreError::InvalidInput);
+        }
+        let relative = path
+            .strip_prefix(attachment_root)
+            .map_err(|_| ArtifactStoreError::InvalidInput)?;
+        let mut components = relative.components();
+        if !matches!(components.next(), Some(Component::Normal(_)))
+            || !matches!(components.next(), Some(Component::Normal(_)))
+            || components.next().is_some()
+        {
+            return Err(ArtifactStoreError::InvalidInput);
+        }
+    }
+    Ok(unique_artifacts)
 }
 
 fn validate_artifact_id(value: &str) -> Result<(), ArtifactStoreError> {

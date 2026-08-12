@@ -15,17 +15,18 @@ use super::{
         open_existing_compat_directory, remove_directory_if_empty, safe_compat_file_metadata_cstr,
         safe_file_metadata_at, sync_directory, unlink_cstr, unlink_file_at,
     },
-    verify_open,
+    verify_open_until, ReconcileHooks,
 };
 
-pub(super) fn reconcile(
+pub(super) fn reconcile_with_hooks(
     root: &Path,
     attachment_root: &Path,
     artifacts: &[SupportArtifactReference],
     attachment_paths: &[String],
     deadline: Instant,
+    hooks: &mut impl ReconcileHooks,
 ) -> Result<Vec<ReconciledSupportArtifact>, ArtifactStoreError> {
-    require_time(deadline)?;
+    require_time(deadline, hooks)?;
     let directory = ensure_root(root)?;
     let referenced = artifacts
         .iter()
@@ -33,8 +34,8 @@ pub(super) fn reconcile(
         .collect::<BTreeSet<_>>();
     let mut states = Vec::with_capacity(artifacts.len());
     for reference in artifacts {
-        require_time(deadline)?;
-        let state = match verify_open(&directory, reference) {
+        require_time(deadline, hooks)?;
+        let state = match verify_open_until(&directory, reference, deadline, hooks) {
             Ok(_) => ReconciledArtifactState::Verified,
             Err(ArtifactStoreError::Missing) => ReconciledArtifactState::Missing,
             Err(
@@ -42,6 +43,7 @@ pub(super) fn reconcile(
                 | ArtifactStoreError::UnsafeMetadata
                 | ArtifactStoreError::Io,
             ) => ReconciledArtifactState::Mismatch,
+            Err(ArtifactStoreError::Deadline) => return Err(ArtifactStoreError::Deadline),
             Err(error) => return Err(error),
         };
         states.push(ReconciledSupportArtifact {
@@ -49,11 +51,11 @@ pub(super) fn reconcile(
             state,
         });
     }
-    require_time(deadline)?;
-    sweep_artifacts(&directory, &referenced, deadline)?;
-    require_time(deadline)?;
-    sweep_attachments(attachment_root, attachment_paths, deadline)?;
-    require_time(deadline)?;
+    require_time(deadline, hooks)?;
+    sweep_artifacts(&directory, &referenced, deadline, hooks)?;
+    require_time(deadline, hooks)?;
+    sweep_attachments(attachment_root, attachment_paths, deadline, hooks)?;
+    require_time(deadline, hooks)?;
     Ok(states)
 }
 
@@ -61,10 +63,11 @@ fn sweep_artifacts(
     directory: &OwnedFd,
     referenced: &BTreeSet<&str>,
     deadline: Instant,
+    hooks: &mut impl ReconcileHooks,
 ) -> Result<(), ArtifactStoreError> {
-    require_time(deadline)?;
+    require_time(deadline, hooks)?;
     for_each_entry(directory, |name| {
-        require_time(deadline)?;
+        require_time(deadline, hooks)?;
         let Some(name_text) = std::str::from_utf8(name).ok() else {
             return Ok(());
         };
@@ -82,7 +85,7 @@ fn sweep_artifacts(
         }
         Ok(())
     })?;
-    require_time(deadline)?;
+    require_time(deadline, hooks)?;
     sync_directory(directory)
 }
 
@@ -90,19 +93,20 @@ fn sweep_attachments(
     root: &Path,
     referenced_paths: &[String],
     deadline: Instant,
+    hooks: &mut impl ReconcileHooks,
 ) -> Result<(), ArtifactStoreError> {
-    require_time(deadline)?;
+    require_time(deadline, hooks)?;
     let referenced = attachment_reference_keys(root, referenced_paths)?;
     let Some(root_fd) = open_existing_compat_directory(root)? else {
         return Ok(());
     };
     for_each_entry(&root_fd, |directory_name| {
-        require_time(deadline)?;
+        require_time(deadline, hooks)?;
         let Ok(child) = open_compat_directory_at(&root_fd, directory_name) else {
             return Ok(());
         };
         for_each_entry(&child, |file_name| {
-            require_time(deadline)?;
+            require_time(deadline, hooks)?;
             let key = attachment_key(directory_name, file_name);
             if !referenced.contains(&key) {
                 let file_name = cstring_component(file_name)?;
@@ -118,7 +122,7 @@ fn sweep_attachments(
         let _ = remove_directory_if_empty(&root_fd, directory_name);
         Ok(())
     })?;
-    require_time(deadline)?;
+    require_time(deadline, hooks)?;
     sync_directory(&root_fd)
 }
 
@@ -170,8 +174,11 @@ fn valid_partial_name(name: &str) -> bool {
         && uuid::Uuid::parse_str(preparation).is_ok_and(|value| value.to_string() == preparation)
 }
 
-fn require_time(deadline: Instant) -> Result<(), ArtifactStoreError> {
-    (Instant::now() < deadline)
+fn require_time(
+    deadline: Instant,
+    hooks: &mut impl ReconcileHooks,
+) -> Result<(), ArtifactStoreError> {
+    (hooks.now() < deadline)
         .then_some(())
         .ok_or(ArtifactStoreError::Deadline)
 }

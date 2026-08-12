@@ -55,6 +55,14 @@ mod supported {
     };
 
     use super::*;
+    use proliferate_diagnostics_client::{FallbackReason, FallbackRecordV1};
+    use proliferate_diagnostics_protocol::v1::{
+        limits::CURRENT_SCHEMA_VERSION,
+        types::{
+            ComponentV1, DetailedDiagnosticV1, DetailedKindV1, PrivacyClassificationV1,
+            ProducerRecordV1, RecordClassV1, RedactionClassificationV1, SeverityV1, SourceV1,
+        },
+    };
 
     fn fixture_root() -> std::path::PathBuf {
         let root = std::env::temp_dir().join(format!(
@@ -75,6 +83,50 @@ mod supported {
             .iter()
             .find(|source| source.source == kind)
             .expect("source exists")
+    }
+
+    fn record(component: ComponentV1, source: SourceV1) -> ProducerRecordV1 {
+        let name = match component {
+            ComponentV1::Anyharness => "anyharness.transport.status",
+            ComponentV1::DesktopWorker => "desktop_worker.transport.status",
+            _ => "desktop_tauri.transport.status",
+        };
+        ProducerRecordV1 {
+            schema_version: CURRENT_SCHEMA_VERSION,
+            source_timestamp: "2026-08-11T12:00:00.000Z".into(),
+            producer_sequence: 1,
+            producer_boot_id: "producer-boot".into(),
+            component,
+            source,
+            release: "test-release".into(),
+            environment: "test".into(),
+            operation_id: "operation".into(),
+            parent_operation_id: None,
+            trace_id: None,
+            workspace_id: None,
+            session_id: None,
+            turn_id: None,
+            item_id: None,
+            request_id: None,
+            target_id: None,
+            prompt_id: None,
+            workflow_id: None,
+            name: name.into(),
+            severity: SeverityV1::Warn,
+            arguments: Vec::new(),
+            error_classification: None,
+            record_class: RecordClassV1::Detailed,
+            privacy: PrivacyClassificationV1::Operational,
+            redaction: RedactionClassificationV1::Structural,
+            detailed: Some(DetailedDiagnosticV1 {
+                kind: DetailedKindV1::Log,
+                message: Some("status".into()),
+                stream: None,
+                dropped_count: None,
+                milestone: None,
+            }),
+            lifecycle: None,
+        }
     }
 
     #[test]
@@ -137,6 +189,72 @@ mod supported {
         assert_eq!(worker.state, EvidenceSourceState::Invalid);
         assert_eq!(worker.invalid_lines, 1);
         assert!(worker.lines.is_empty());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn strict_wrapper_rejects_wrong_shape_component_and_version() {
+        let root = fixture_root();
+        let fallback = root.join("diagnostics-fallback");
+        fs::create_dir(&fallback).expect("fallback directory");
+        fs::set_permissions(&fallback, fs::Permissions::from_mode(0o700)).expect("fallback mode");
+        let wrong_component = FallbackRecordV1 {
+            fallback_schema: 1,
+            reason: FallbackReason::CollectorUnavailable,
+            record: record(ComponentV1::Anyharness, SourceV1::Anyharness),
+        };
+        let mut wrong_version = serde_json::to_value(FallbackRecordV1 {
+            fallback_schema: 1,
+            reason: FallbackReason::CollectorUnavailable,
+            record: record(ComponentV1::DesktopWorker, SourceV1::Worker),
+        })
+        .expect("wrapper value");
+        wrong_version["fallback_schema"] = serde_json::Value::from(2);
+        let lines = [
+            serde_json::json!({"not": "a-wrapper"}),
+            serde_json::to_value(wrong_component).expect("component wrapper"),
+            wrong_version,
+        ]
+        .into_iter()
+        .map(|value| serde_json::to_string(&value).expect("line"))
+        .collect::<Vec<_>>()
+        .join("\n")
+            + "\n";
+        let log = fallback.join("desktop-worker.jsonl");
+        fs::write(&log, lines).expect("invalid wrapper fixture");
+        fs::set_permissions(&log, fs::Permissions::from_mode(0o600)).expect("file mode");
+        let capture = collect_finite_evidence(&FiniteEvidenceRoots::new(&root, None, &root, &[]));
+        let worker = source(&capture, EvidenceSource::DesktopWorkerFallback);
+        assert_eq!(worker.state, EvidenceSourceState::Invalid);
+        assert_eq!(worker.invalid_lines, 3);
+        assert!(worker.lines.is_empty());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn active_fallback_rejects_wrong_parent_and_file_modes() {
+        let root = fixture_root();
+        let fallback = root.join("diagnostics-fallback");
+        fs::create_dir(&fallback).expect("fallback directory");
+        fs::set_permissions(&fallback, fs::Permissions::from_mode(0o750))
+            .expect("wrong parent mode");
+        let log = fallback.join("desktop-worker.jsonl");
+        fs::write(&log, b"line\n").expect("fallback fixture");
+        fs::set_permissions(&log, fs::Permissions::from_mode(0o600)).expect("file mode");
+        let roots = FiniteEvidenceRoots::new(&root, None, &root, &[]);
+        let capture = collect_finite_evidence(&roots);
+        assert_eq!(
+            source(&capture, EvidenceSource::DesktopWorkerFallback).state,
+            EvidenceSourceState::UnsafeMetadata
+        );
+        fs::set_permissions(&fallback, fs::Permissions::from_mode(0o700))
+            .expect("safe parent mode");
+        fs::set_permissions(&log, fs::Permissions::from_mode(0o640)).expect("wrong file mode");
+        let capture = collect_finite_evidence(&roots);
+        assert_eq!(
+            source(&capture, EvidenceSource::DesktopWorkerFallback).state,
+            EvidenceSourceState::UnsafeMetadata
+        );
         fs::remove_dir_all(root).ok();
     }
 

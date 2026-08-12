@@ -6,7 +6,9 @@ use super::{
 
 pub(super) fn stage(
     _root: &Path,
+    _client_job_id: &str,
     _artifact_id: &str,
+    _snapshot_id: &str,
     _preparation_id: &str,
     _bytes: &[u8],
 ) -> Result<StoredSupportArtifact, ArtifactStoreError> {

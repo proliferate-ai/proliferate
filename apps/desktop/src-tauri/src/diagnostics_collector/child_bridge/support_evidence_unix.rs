@@ -20,7 +20,10 @@ use crate::{
         open_read_only_root, ReadOnlyRootOutcome, ReadOnlyRootPolicy,
     },
 };
-use evidence_io::{open_evidence_file, parse_line, read_snapshotted_tail, OpenFileError};
+use evidence_io::{
+    open_evidence_file, parse_line, read_snapshotted_tail_with, EvidenceReadHook, OpenFileError,
+    SystemEvidenceReadHook,
+};
 
 struct Budget {
     remaining: u64,
@@ -40,6 +43,13 @@ struct SourceSpec<'a> {
 }
 
 pub(super) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvidenceCapture {
+    collect_finite_evidence_with(roots, &mut SystemEvidenceReadHook)
+}
+
+fn collect_finite_evidence_with<Reader: EvidenceReadHook + ?Sized>(
+    roots: &FiniteEvidenceRoots,
+    reader: &mut Reader,
+) -> FiniteEvidenceCapture {
     let mut global = Budget {
         remaining: ALL_FILES_READ_BYTES,
     };
@@ -62,6 +72,7 @@ pub(super) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvid
             family_remaining: &mut desktop_family,
         },
         &mut global,
+        reader,
     ));
     if let Some(runtime_home) = roots.anyharness_runtime_home.as_deref() {
         sources.push(read_source(
@@ -78,6 +89,7 @@ pub(super) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvid
                 family_remaining: &mut anyharness_family,
             },
             &mut global,
+            reader,
         ));
     } else {
         sources.push(EvidenceSourceRead::omitted(
@@ -98,6 +110,7 @@ pub(super) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvid
             family_remaining: &mut worker_family,
         },
         &mut global,
+        reader,
     ));
 
     // Structured active evidence is always attempted before compatibility
@@ -116,6 +129,7 @@ pub(super) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvid
             family_remaining: &mut desktop_family,
         },
         &mut global,
+        reader,
     ));
     if let Some(runtime_home) = roots.anyharness_runtime_home.as_deref() {
         sources.push(read_source(
@@ -132,6 +146,7 @@ pub(super) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvid
                 family_remaining: &mut anyharness_family,
             },
             &mut global,
+            reader,
         ));
     } else {
         sources.push(EvidenceSourceRead::omitted(
@@ -159,6 +174,7 @@ pub(super) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvid
                 EvidenceSource::WorkerLegacyV2,
                 &mut worker_family,
                 &mut global,
+                reader,
             );
             merge_worker_source(&mut worker_v2, candidate);
         }
@@ -169,6 +185,7 @@ pub(super) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvid
                 EvidenceSource::WorkerLegacyV1,
                 &mut worker_family,
                 &mut global,
+                reader,
             );
             merge_worker_source(&mut worker_v1, candidate);
         }
@@ -190,6 +207,7 @@ fn read_worker_legacy(
     source: EvidenceSource,
     family_remaining: &mut u64,
     global: &mut Budget,
+    reader: &mut (impl EvidenceReadHook + ?Sized),
 ) -> EvidenceSourceRead {
     let Some(parent) = path.parent() else {
         return EvidenceSourceRead::omitted(source);
@@ -221,6 +239,7 @@ fn read_worker_legacy(
             family_remaining,
         },
         global,
+        reader,
     )
 }
 
@@ -257,7 +276,11 @@ fn merge_source_state(
     }
 }
 
-fn read_source(mut spec: SourceSpec<'_>, global: &mut Budget) -> EvidenceSourceRead {
+fn read_source(
+    mut spec: SourceSpec<'_>,
+    global: &mut Budget,
+    reader: &mut (impl EvidenceReadHook + ?Sized),
+) -> EvidenceSourceRead {
     let mut result = EvidenceSourceRead::omitted(spec.source);
     if global.remaining == 0 || *spec.family_remaining == 0 {
         result.omitted_by_cap = 1;
@@ -284,7 +307,7 @@ fn read_source(mut spec: SourceSpec<'_>, global: &mut Budget) -> EvidenceSourceR
         .min(*spec.family_remaining)
         .min(global.remaining);
     let snapshots = snapshot_segments(&root, spec.leaf, spec.segments, spec.exact_file_mode);
-    select_and_parse(&mut result, snapshots, spec.parser, source_budget);
+    select_and_parse(&mut result, snapshots, spec.parser, source_budget, reader);
     *spec.family_remaining = spec.family_remaining.saturating_sub(result.read_bytes);
     global.remaining = global.remaining.saturating_sub(result.read_bytes);
     result.state = source_state(&result);
@@ -343,6 +366,7 @@ fn select_and_parse(
     mut snapshots: Vec<SegmentSnapshot>,
     parser: EvidenceParser,
     budget: u64,
+    reader: &mut (impl EvidenceReadHook + ?Sized),
 ) {
     let mut remaining = budget;
     let mut retained = Vec::new();
@@ -358,54 +382,54 @@ fn select_and_parse(
             continue;
         };
         let to_read = snapshot.length.min(remaining);
-        match read_snapshotted_tail(descriptor, snapshot.length, to_read) {
-            Ok(tail) => {
-                remaining -= tail.read_bytes;
-                result.read_bytes += tail.read_bytes;
-                result.incomplete_leading_bytes += tail.incomplete_leading_bytes;
-                result.incomplete_final_bytes += tail.incomplete_final_bytes;
-                for (line, bytes) in tail.lines.into_iter().rev() {
-                    if retained.len() >= MAX_RETAINED_LINES_PER_SOURCE {
-                        result.omitted_by_cap += 1;
-                        continue;
-                    }
-                    if bytes.len() > SOURCE_LINE_BYTES {
-                        result.oversized_line_bytes += bytes.len() as u64;
-                        result.invalid_lines += 1;
-                        continue;
-                    }
-                    match parse_line(parser, &bytes) {
-                        Some((value, invalid_utf8_bytes)) => {
-                            result.included_bytes += bytes.len() as u64;
-                            result.invalid_utf8_bytes += invalid_utf8_bytes;
-                            retained.push(EvidenceLine {
-                                segment: snapshot.segment,
-                                line,
-                                value,
-                            });
-                        }
-                        None => result.invalid_lines += 1,
-                    }
-                }
-                result.segments.push(EvidenceSegmentRead {
-                    segment: snapshot.segment,
-                    state: if to_read < snapshot.length {
-                        result.omitted_by_cap += 1;
-                        EvidenceSegmentState::SourceCap
-                    } else {
-                        EvidenceSegmentState::Available
-                    },
-                    snapshotted_bytes: snapshot.length,
-                    read_bytes: tail.read_bytes,
-                });
-            }
-            Err(_) => result.segments.push(EvidenceSegmentRead {
+        let tail = read_snapshotted_tail_with(reader, descriptor, snapshot.length, to_read);
+        remaining = remaining.saturating_sub(tail.read_bytes);
+        result.read_bytes += tail.read_bytes;
+        if tail.error_kind.is_some() {
+            result.segments.push(EvidenceSegmentRead {
                 segment: snapshot.segment,
                 state: EvidenceSegmentState::Unreadable,
                 snapshotted_bytes: snapshot.length,
-                read_bytes: 0,
-            }),
+                read_bytes: tail.read_bytes,
+            });
+            continue;
         }
+        result.incomplete_leading_bytes += tail.incomplete_leading_bytes;
+        result.incomplete_final_bytes += tail.incomplete_final_bytes;
+        for (line, bytes) in tail.lines.into_iter().rev() {
+            if retained.len() >= MAX_RETAINED_LINES_PER_SOURCE {
+                result.omitted_by_cap += 1;
+                continue;
+            }
+            if bytes.len() > SOURCE_LINE_BYTES {
+                result.oversized_line_bytes += bytes.len() as u64;
+                result.invalid_lines += 1;
+                continue;
+            }
+            match parse_line(parser, &bytes) {
+                Some((value, invalid_utf8_bytes)) => {
+                    result.included_bytes += bytes.len() as u64;
+                    result.invalid_utf8_bytes += invalid_utf8_bytes;
+                    retained.push(EvidenceLine {
+                        segment: snapshot.segment,
+                        line,
+                        value,
+                    });
+                }
+                None => result.invalid_lines += 1,
+            }
+        }
+        result.segments.push(EvidenceSegmentRead {
+            segment: snapshot.segment,
+            state: if to_read < snapshot.length {
+                result.omitted_by_cap += 1;
+                EvidenceSegmentState::SourceCap
+            } else {
+                EvidenceSegmentState::Available
+            },
+            snapshotted_bytes: snapshot.length,
+            read_bytes: tail.read_bytes,
+        });
     }
     for snapshot in snapshots {
         if !result
@@ -427,6 +451,10 @@ fn select_and_parse(
     retained.sort_by_key(|line| (std::cmp::Reverse(line.segment), line.line));
     result.lines = retained;
 }
+
+#[cfg(test)]
+#[path = "support_evidence_accounting_tests.rs"]
+mod accounting_tests;
 
 fn source_state(result: &EvidenceSourceRead) -> EvidenceSourceState {
     if !result.lines.is_empty() {

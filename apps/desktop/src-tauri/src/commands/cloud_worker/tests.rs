@@ -321,6 +321,20 @@ async fn v2_worker_namespace_converges_while_a_legacy_worker_holds_its_lock() {
 }
 
 #[test]
+fn legacy_log_helper_exposes_only_fixed_v2_and_v1_paths() {
+    let root = PathBuf::from("/app");
+    let paths = spawn::worker_legacy_log_paths(&root, "target/with spaces");
+    assert_eq!(
+        paths.v2,
+        root.join("cloud-worker-v2/target_with_spaces/worker.log")
+    );
+    assert_eq!(
+        paths.v1,
+        root.join("cloud-worker/target_with_spaces/worker.log")
+    );
+}
+
+#[test]
 #[ignore = "subprocess fixture for update_preparation_only_stops_worker_for_direct_exit_installers"]
 fn worker_database_lock_holder_fixture() {
     let Some(database_path) = env::var_os(TEST_WORKER_LOCK_PATH_ENV) else {
