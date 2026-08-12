@@ -101,6 +101,7 @@ impl CandidateRejection {
 /// Selection outcome. `invalid_override` reports, as a closed classification,
 /// a `PROLIFERATE_WORKER_BIN` override that was present but rejected before
 /// the debug/scan fallbacks ran.
+#[derive(Debug)]
 pub(super) struct WorkerLauncherSelection {
     pub(super) launcher: Option<WorkerLauncher>,
     pub(super) invalid_override: Option<CandidateRejection>,

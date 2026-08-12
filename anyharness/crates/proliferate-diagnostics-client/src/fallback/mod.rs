@@ -81,7 +81,7 @@ impl FallbackWriter {
         self.platform.current_status()
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     fn write_encoded_for_test(&mut self, line: &[u8]) -> Result<u32, FallbackError> {
         self.platform.write_encoded_for_test(line)
     }

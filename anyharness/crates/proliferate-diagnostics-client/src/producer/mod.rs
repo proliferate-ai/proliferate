@@ -9,7 +9,7 @@ use proliferate_diagnostics_protocol::v1::{limits::MAX_SAFE_INTEGER, types::Prod
 
 use crate::{
     bridge::activation::{BundledDesktopDiagnosticsBootstrap, InitialCollectorState},
-    fallback::FallbackReason,
+    fallback::{FallbackReason, FallbackWriter},
     tracing_layer::DiagnosticsTracingLayer,
     DiagnosticsComponent, DiagnosticsInstallation, EmitDisposition, InstallError,
 };

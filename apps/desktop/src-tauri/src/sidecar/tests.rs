@@ -127,6 +127,7 @@ async fn observer_is_installed_for_a_retained_nonhealthy_child() {
     assert!(guard.exit_observer.is_some());
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn terminal_shutdown_arm_rejects_setup_boot_before_spawn() {
     let sidecar = create_sidecar(8_457);

@@ -190,7 +190,7 @@ mod platform {
             Ok(received) => {
                 parse_bootstrap_until(component, bridge, shutdown, received, bootstrap_deadline)
             }
-            Err(FrameError::Closed | FrameError::Io) => degraded(
+            Err(FrameError::Closed | FrameError::Io | FrameError::Deadline) => degraded(
                 DegradedClassification::BootstrapTimeout,
                 Some(bridge),
                 Some(shutdown),
