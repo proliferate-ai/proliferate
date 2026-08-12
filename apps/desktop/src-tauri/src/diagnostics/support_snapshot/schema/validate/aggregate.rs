@@ -463,7 +463,7 @@ fn validate_session_relationships(snapshot: &SupportSnapshotV3) -> Result<(), Su
                 || workspace_id != &ledger.workspace_id
                 || anyharness_workspace_id != &ledger.anyharness_workspace_id
                 || *selected_sessions != ledger.sessions.len() as u64
-                || *limit_uncertain_endpoints != count_limit_uncertain_endpoints(ledger)
+                || !valid_limit_uncertain_endpoints(ledger, *limit_uncertain_endpoints)
             {
                 return Err(SupportSchemaError::InvariantViolation(
                     "session ledger manifest preservation",
@@ -498,21 +498,35 @@ fn validate_session_relationships(snapshot: &SupportSnapshotV3) -> Result<(), Su
     Ok(())
 }
 
-fn count_limit_uncertain_endpoints(
+fn valid_limit_uncertain_endpoints(
     ledger: &super::super::model::evidence::SupportSessionLedgerV1,
-) -> u64 {
-    ledger
+    declared: u64,
+) -> bool {
+    let per_session = ledger
         .sessions
         .iter()
         .flat_map(|session| {
             [
-                session.endpoint_states.summary,
                 session.endpoint_states.events,
                 session.endpoint_states.raw_notifications,
             ]
         })
         .filter(|state| *state == SupportEndpointStateV1::LimitUncertain)
-        .count() as u64
+        .count() as u64;
+    let list_uncertain_is_visible = ledger
+        .sessions
+        .iter()
+        .any(|session| session.endpoint_states.summary == SupportEndpointStateV1::LimitUncertain);
+    // The final schema carries a zero-item shared list response only in this
+    // aggregate. With one or more shells, a limit-uncertain response remains
+    // visible in the endpoint state even if its optional summary is removed.
+    if list_uncertain_is_visible {
+        per_session.checked_add(1) == Some(declared)
+    } else if ledger.sessions.is_empty() {
+        declared == per_session || per_session.checked_add(1) == Some(declared)
+    } else {
+        declared == per_session
+    }
 }
 
 fn validate_collector_omission(snapshot: &SupportSnapshotV3) -> Result<(), SupportSchemaError> {

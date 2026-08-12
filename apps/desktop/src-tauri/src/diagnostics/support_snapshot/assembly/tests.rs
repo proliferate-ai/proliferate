@@ -8,7 +8,8 @@ use proliferate_diagnostics_protocol::v1::types::{
 use serde::Deserialize;
 
 use super::super::schema::enums::{
-    SupportEvidenceSourceV1, SupportOmissionReasonV1, SupportSourceManifestSourceV1,
+    SupportEndpointStateV1, SupportEvidenceSourceV1, SupportOmissionReasonV1,
+    SupportSourceManifestSourceV1,
 };
 use super::super::schema::model::common::SupportJsonValueV1;
 use super::super::schema::model::evidence::{SupportFallbackComponentV1, SupportSessionLedgerV1};
@@ -226,6 +227,12 @@ fn session_input(snapshot: &SupportSnapshotV3) -> SupportSessionAssemblyV1 {
     SupportSessionAssemblyV1::Included {
         captured_at: source.captured_at.clone(),
         read_bytes: source.read_bytes,
+        session_list_state: ledger
+            .sessions
+            .first()
+            .map_or(SupportEndpointStateV1::Included, |session| {
+                session.endpoint_states.summary
+            }),
         workspace_id: ledger.workspace_id.clone(),
         anyharness_workspace_id: ledger.anyharness_workspace_id.clone(),
         sessions: session_candidates(ledger, summary_bytes, event_bytes, raw_bytes),

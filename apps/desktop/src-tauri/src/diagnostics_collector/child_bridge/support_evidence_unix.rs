@@ -5,10 +5,11 @@ use std::{
 };
 
 use super::{
-    EvidenceLine, EvidenceParser, EvidenceSegmentRead, EvidenceSegmentState, EvidenceSource,
-    EvidenceSourceRead, EvidenceSourceState, FiniteEvidenceCapture, FiniteEvidenceRoots,
-    ALL_FILES_READ_BYTES, COMPONENT_FILES_READ_BYTES, DESKTOP_ACTIVE_READ_BYTES, FALLBACK_SEGMENTS,
-    LEGACY_SEGMENTS, MAX_RETAINED_LINES_PER_SOURCE, MAX_WORKER_LEGACY_TARGETS, SOURCE_LINE_BYTES,
+    EvidenceCaptureGuard, EvidenceCaptureInterrupted, EvidenceLine, EvidenceParser,
+    EvidenceSegmentRead, EvidenceSegmentState, EvidenceSource, EvidenceSourceRead,
+    EvidenceSourceState, FiniteEvidenceCapture, FiniteEvidenceRoots, ALL_FILES_READ_BYTES,
+    COMPONENT_FILES_READ_BYTES, DESKTOP_ACTIVE_READ_BYTES, FALLBACK_SEGMENTS, LEGACY_SEGMENTS,
+    MAX_RETAINED_LINES_PER_SOURCE, MAX_WORKER_LEGACY_TARGETS, SOURCE_LINE_BYTES,
 };
 
 #[path = "support_evidence_io.rs"]
@@ -44,6 +45,43 @@ struct SourceSpec<'a> {
 
 pub(super) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvidenceCapture {
     collect_finite_evidence_with(roots, &mut SystemEvidenceReadHook)
+}
+
+pub(super) fn collect_finite_evidence_guarded(
+    roots: &FiniteEvidenceRoots,
+    guard: &EvidenceCaptureGuard,
+) -> Result<FiniteEvidenceCapture, EvidenceCaptureInterrupted> {
+    guard.check()?;
+    let mut reader = GuardedEvidenceReader {
+        guard,
+        system: SystemEvidenceReadHook,
+    };
+    let capture = collect_finite_evidence_with(roots, &mut reader);
+    guard.check()?;
+    Ok(capture)
+}
+
+struct GuardedEvidenceReader<'a> {
+    guard: &'a EvidenceCaptureGuard,
+    system: SystemEvidenceReadHook,
+}
+
+impl EvidenceReadHook for GuardedEvidenceReader<'_> {
+    fn interrupted(&self) -> bool {
+        self.guard.check().is_err()
+    }
+
+    fn read_at(
+        &mut self,
+        descriptor: &OwnedFd,
+        offset: u64,
+        destination: &mut [u8],
+    ) -> std::io::Result<usize> {
+        self.guard
+            .check()
+            .map_err(|_| std::io::Error::from(std::io::ErrorKind::Interrupted))?;
+        self.system.read_at(descriptor, offset, destination)
+    }
 }
 
 fn collect_finite_evidence_with<Reader: EvidenceReadHook + ?Sized>(
@@ -250,6 +288,7 @@ fn merge_worker_source(target: &mut EvidenceSourceRead, mut candidate: EvidenceS
     target.invalid_utf8_bytes += candidate.invalid_utf8_bytes;
     target.incomplete_leading_bytes += candidate.incomplete_leading_bytes;
     target.incomplete_final_bytes += candidate.incomplete_final_bytes;
+    target.oversized_lines += candidate.oversized_lines;
     target.oversized_line_bytes += candidate.oversized_line_bytes;
     target.omitted_by_cap += candidate.omitted_by_cap;
     let line_base = target.lines.len() as u64;
@@ -282,6 +321,9 @@ fn read_source(
     reader: &mut (impl EvidenceReadHook + ?Sized),
 ) -> EvidenceSourceRead {
     let mut result = EvidenceSourceRead::omitted(spec.source);
+    if reader.interrupted() {
+        return result;
+    }
     if global.remaining == 0 || *spec.family_remaining == 0 {
         result.omitted_by_cap = 1;
         return result;
@@ -373,6 +415,9 @@ fn select_and_parse(
     // Select newest complete lines first: active to oldest rotation, and each
     // segment from its end. Presentation is restored afterward.
     for snapshot in snapshots.iter_mut().rev() {
+        if reader.interrupted() {
+            return;
+        }
         if remaining == 0 {
             snapshot.state = EvidenceSegmentState::SourceCap;
             result.omitted_by_cap += 1;
@@ -397,22 +442,28 @@ fn select_and_parse(
         result.incomplete_leading_bytes += tail.incomplete_leading_bytes;
         result.incomplete_final_bytes += tail.incomplete_final_bytes;
         for (line, bytes) in tail.lines.into_iter().rev() {
+            if reader.interrupted() {
+                return;
+            }
             if retained.len() >= MAX_RETAINED_LINES_PER_SOURCE {
                 result.omitted_by_cap += 1;
                 continue;
             }
             if bytes.len() > SOURCE_LINE_BYTES {
+                result.oversized_lines += 1;
                 result.oversized_line_bytes += bytes.len() as u64;
                 result.invalid_lines += 1;
                 continue;
             }
             match parse_line(parser, &bytes) {
                 Some((value, invalid_utf8_bytes)) => {
-                    result.included_bytes += bytes.len() as u64;
+                    let included_bytes = bytes.len() as u64 + 1;
+                    result.included_bytes += included_bytes;
                     result.invalid_utf8_bytes += invalid_utf8_bytes;
                     retained.push(EvidenceLine {
                         segment: snapshot.segment,
                         line,
+                        included_bytes,
                         value,
                     });
                 }
@@ -486,6 +537,8 @@ fn source_state(result: &EvidenceSourceRead) -> EvidenceSourceState {
     {
         EvidenceSourceState::Missing
     } else {
-        EvidenceSourceState::Included
+        // An available but empty file contributes exact read accounting but
+        // no evidence section; do not claim an included source with no item.
+        EvidenceSourceState::Omitted
     }
 }

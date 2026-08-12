@@ -5,8 +5,8 @@ use std::fmt;
 use proliferate_diagnostics_protocol::v1::types::CollectorAcceptedRecordV1;
 
 use super::super::schema::enums::{
-    SupportLegacySourceKindV1, SupportSessionOmissionReasonV1, SupportSourceManifestSourceV1,
-    SupportSourceStateV1,
+    SupportEndpointStateV1, SupportLegacySourceKindV1, SupportSessionOmissionReasonV1,
+    SupportSourceManifestSourceV1, SupportSourceStateV1,
 };
 use super::super::schema::model::common::SupportJsonValueV1;
 use super::super::schema::model::evidence::{
@@ -87,6 +87,10 @@ pub enum SupportSessionAssemblyV1 {
     Included {
         captured_at: String,
         read_bytes: u64,
+        /// Canonical state of the one active-get or recent-list response.
+        /// Recent shells repeat this state, but it is counted once even when
+        /// the response returned zero shells.
+        session_list_state: SupportEndpointStateV1,
         workspace_id: String,
         anyharness_workspace_id: String,
         sessions: Vec<SupportSessionCandidateV1>,

@@ -192,6 +192,13 @@ async fn ordered_shutdown_reaps_live_children_cancels_tail_and_is_idempotent() {
 
     let broker = create_broker_server_state();
     *broker.lock().await = Some(Arc::clone(&broker_server));
+    let support =
+        crate::diagnostics::support_snapshot::coordinator::SupportSnapshotCoordinator::new(
+            Arc::clone(&supervisor),
+            producer.clone(),
+            worker.clone(),
+            anyharness.clone(),
+        );
     let coordinator = DiagnosticsShutdownCoordinator::new(
         Arc::clone(&supervisor),
         producer.clone(),
@@ -199,6 +206,7 @@ async fn ordered_shutdown_reaps_live_children_cancels_tail_and_is_idempotent() {
         broker,
         worker,
         anyharness,
+        support,
     );
     let (first, repeated) = tokio::join!(coordinator.shutdown(), coordinator.shutdown());
     assert_eq!(first, Ok(()));
@@ -253,6 +261,13 @@ async fn ordered_shutdown_surfaces_injected_teardown_fallback_failure() {
     let anyharness = sidecar::create_sidecar(49_902);
     sidecar::suppress_shutdown_test_persistence(&anyharness).await;
     fallback.inject_write_failure();
+    let support =
+        crate::diagnostics::support_snapshot::coordinator::SupportSnapshotCoordinator::new(
+            Arc::clone(&supervisor),
+            producer.clone(),
+            worker.clone(),
+            anyharness.clone(),
+        );
     let coordinator = DiagnosticsShutdownCoordinator::new(
         Arc::clone(&supervisor),
         producer,
@@ -260,6 +275,7 @@ async fn ordered_shutdown_surfaces_injected_teardown_fallback_failure() {
         create_broker_server_state(),
         worker,
         anyharness,
+        support,
     );
 
     assert_eq!(coordinator.shutdown().await, Ok(()));

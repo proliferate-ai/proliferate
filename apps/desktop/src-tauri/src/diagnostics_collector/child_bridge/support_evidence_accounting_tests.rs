@@ -242,5 +242,8 @@ fn pathname_replacement_after_snapshot_cannot_replace_opened_evidence() {
         &desktop.lines[0].value,
         super::super::EvidenceValue::DesktopOpaque { value, .. } if value == "old"
     ));
+    assert_eq!(desktop.read_bytes, 4);
+    assert_eq!(desktop.included_bytes, 4);
+    assert_eq!(desktop.lines[0].included_bytes, 4);
     fs::remove_dir_all(root).ok();
 }

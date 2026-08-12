@@ -37,6 +37,7 @@ pub(super) enum SessionPlan {
     Included {
         workspace_id: String,
         anyharness_workspace_id: String,
+        session_list_state: SupportEndpointStateV1,
         shells: Vec<SessionShell>,
     },
     Omitted {
@@ -209,6 +210,7 @@ fn session_sections(
     let SessionPlan::Included {
         workspace_id,
         anyharness_workspace_id,
+        session_list_state,
         shells,
     } = plan
     else {
@@ -224,7 +226,8 @@ fn session_sections(
     let mut session_bytes = 0_u64;
     let mut event_bytes = 0_u64;
     let mut raw_bytes = 0_u64;
-    let mut limit_uncertain = 0_u64;
+    let mut limit_uncertain =
+        u64::from(*session_list_state == SupportEndpointStateV1::LimitUncertain);
     let mut sessions = Vec::with_capacity(shells.len());
     for shell in shells {
         let mut selected = values.remove(&shell.selection_index).unwrap_or_default();
@@ -242,7 +245,6 @@ fn session_sections(
         limit_uncertain = checked_add(
             limit_uncertain,
             [
-                shell.endpoint_states.summary,
                 shell.endpoint_states.events,
                 shell.endpoint_states.raw_notifications,
             ]

@@ -4,7 +4,14 @@
 //! target IDs. The implementation enumerates fixed leaves; there is no glob,
 //! walk, arbitrary path, writer, repair, replay, or cleanup surface here.
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Instant,
+};
 
 use proliferate_diagnostics_client::FallbackRecordV1;
 use proliferate_diagnostics_protocol::v1::types::ProducerRecordV1;
@@ -87,6 +94,9 @@ pub(crate) enum EvidenceValue {
 pub(crate) struct EvidenceLine {
     pub(crate) segment: u8,
     pub(crate) line: u64,
+    /// Exact complete-line source bytes retained by the bounded reader,
+    /// including the consumed newline delimiter.
+    pub(crate) included_bytes: u64,
     pub(crate) value: EvidenceValue,
 }
 
@@ -108,6 +118,7 @@ pub(crate) struct EvidenceSourceRead {
     pub(crate) invalid_utf8_bytes: u64,
     pub(crate) incomplete_leading_bytes: u64,
     pub(crate) incomplete_final_bytes: u64,
+    pub(crate) oversized_lines: u64,
     pub(crate) oversized_line_bytes: u64,
     pub(crate) omitted_by_cap: u64,
     pub(crate) segments: Vec<EvidenceSegmentRead>,
@@ -125,6 +136,7 @@ impl EvidenceSourceRead {
             invalid_utf8_bytes: 0,
             incomplete_leading_bytes: 0,
             incomplete_final_bytes: 0,
+            oversized_lines: 0,
             oversized_line_bytes: 0,
             omitted_by_cap: 0,
             segments: Vec::new(),
@@ -145,6 +157,36 @@ pub(crate) struct FiniteEvidenceRoots {
     pub(crate) anyharness_runtime_home: Option<PathBuf>,
     pub(crate) app_dir: PathBuf,
     pub(crate) worker_target_ids: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum EvidenceCaptureInterrupted {
+    Cancelled,
+    Deadline,
+}
+
+pub(crate) struct EvidenceCaptureGuard {
+    cancelled: Arc<AtomicBool>,
+    deadline: Instant,
+}
+
+impl EvidenceCaptureGuard {
+    pub(crate) fn new(cancelled: Arc<AtomicBool>, deadline: Instant) -> Self {
+        Self {
+            cancelled,
+            deadline,
+        }
+    }
+
+    pub(crate) fn check(&self) -> Result<(), EvidenceCaptureInterrupted> {
+        if self.cancelled.load(Ordering::Acquire) {
+            Err(EvidenceCaptureInterrupted::Cancelled)
+        } else if Instant::now() >= self.deadline {
+            Err(EvidenceCaptureInterrupted::Deadline)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl FiniteEvidenceRoots {
@@ -174,7 +216,7 @@ mod platform;
     target_os = "macos",
     any(target_arch = "aarch64", target_arch = "x86_64")
 ))]
-pub(crate) use platform::collect_finite_evidence;
+pub(crate) use platform::{collect_finite_evidence, collect_finite_evidence_guarded};
 
 #[cfg(not(all(
     target_os = "macos",
@@ -195,6 +237,36 @@ pub(crate) fn collect_finite_evidence(_roots: &FiniteEvidenceRoots) -> FiniteEvi
         .into_iter()
         .map(EvidenceSourceRead::omitted)
         .collect(),
+    }
+}
+
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
+pub(crate) fn collect_finite_evidence_guarded(
+    roots: &FiniteEvidenceRoots,
+    guard: &EvidenceCaptureGuard,
+) -> Result<FiniteEvidenceCapture, EvidenceCaptureInterrupted> {
+    guard.check()?;
+    Ok(collect_finite_evidence(roots))
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::*;
+
+    #[test]
+    fn capture_guard_fails_closed_for_cancel_and_deadline() {
+        let cancelled = Arc::new(AtomicBool::new(true));
+        let guard = EvidenceCaptureGuard::new(
+            cancelled,
+            Instant::now() + std::time::Duration::from_secs(1),
+        );
+        assert_eq!(guard.check(), Err(EvidenceCaptureInterrupted::Cancelled));
+
+        let guard = EvidenceCaptureGuard::new(Arc::new(AtomicBool::new(false)), Instant::now());
+        assert_eq!(guard.check(), Err(EvidenceCaptureInterrupted::Deadline));
     }
 }
 

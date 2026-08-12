@@ -87,6 +87,10 @@ pub(super) struct TailRead {
 }
 
 pub(super) trait EvidenceReadHook {
+    fn interrupted(&self) -> bool {
+        false
+    }
+
     fn read_at(
         &mut self,
         descriptor: &OwnedFd,

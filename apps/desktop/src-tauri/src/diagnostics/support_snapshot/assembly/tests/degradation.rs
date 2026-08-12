@@ -2,7 +2,7 @@ use proliferate_diagnostics_protocol::v1::types::SeverityV1;
 
 use super::super::super::schema::enums::{
     SupportEndpointStateV1, SupportOmissionReasonV1, SupportSessionOmissionReasonV1,
-    SupportSessionSelectionV1, SupportTruncationReasonV1,
+    SupportSessionSelectionV1, SupportSourceManifestSourceV1, SupportTruncationReasonV1,
 };
 use super::super::super::schema::limits::{
     COLLECTOR_BYTES, MANIFEST_BYTES, PACKAGE_BYTES, SESSION_EVIDENCE_BYTES,
@@ -116,6 +116,122 @@ fn lifecycle_pair_is_removed_atomically_and_lone_side_stays_honest() {
             && entry.reason == SupportOmissionReasonV1::RecordLimit
             && entry.count == 1
     }));
+}
+
+#[test]
+fn degraded_collector_sibling_keeps_positive_measured_byte_accounting() {
+    let mut input = non_session_input();
+    let prototype = input_from_fixture(SCHEMA_POPULATED).collector_records[0]
+        .scrubbed
+        .value
+        .clone()
+        .expect("collector prototype");
+    let mut low = prototype.clone();
+    low.accepted_order = 1;
+    low.retention_cursor = 1;
+    low.record.producer_sequence = 1;
+    low.record.operation_id = "low-priority-operation".to_string();
+    low.record.severity = SeverityV1::Info;
+    clear_incidental_correlations(&mut low.record);
+    low.record.detailed.as_mut().expect("detail").message = Some("l".repeat(10_000));
+    let mut high = prototype;
+    high.accepted_order = 2;
+    high.retention_cursor = 2;
+    high.record.producer_sequence = 2;
+    high.record.operation_id = "high-priority-operation".to_string();
+    high.record.severity = SeverityV1::Warn;
+    high.record.detailed.as_mut().expect("detail").message = Some("high".to_string());
+    input.mandatory.collector.coverage.returned_record_bytes = 10;
+    input
+        .mandatory
+        .collector
+        .export_manifest
+        .as_mut()
+        .expect("manifest")
+        .byte_count = 10;
+    input = with_collector_records(input, vec![low, high]);
+    input.collector_records[0].included_bytes = 5;
+    input.collector_records[1].included_bytes = 5;
+
+    let mut high_only = input.clone();
+    high_only.collector_records.remove(0);
+    let high_output = assemble_support_snapshot(high_only).expect("high record alone");
+    let degraded = assemble_for_test(input, high_output.serialized_bytes + 1_000, MANIFEST_BYTES)
+        .expect("collector degradation");
+    assert_eq!(degraded.snapshot.records.len(), 1);
+    assert_eq!(
+        degraded.snapshot.records[0].record.severity,
+        SeverityV1::Warn
+    );
+    let source = degraded
+        .snapshot
+        .manifest
+        .sources
+        .iter()
+        .find(|source| source.source == SupportSourceManifestSourceV1::Collector)
+        .expect("collector source");
+    assert!((1..=10).contains(&source.included_bytes));
+}
+
+#[test]
+fn degraded_session_event_and_raw_siblings_keep_positive_response_bytes() {
+    for raw in [false, true] {
+        let mut input = input_from_fixture(SCHEMA_POPULATED);
+        input.collector_records.clear();
+        input.fallback.clear();
+        input.legacy.clear();
+        let SupportSessionAssemblyV1::Included {
+            read_bytes,
+            sessions,
+            ..
+        } = &mut input.sessions
+        else {
+            panic!("session fixture")
+        };
+        let session = &mut sessions[0];
+        session.summary = candidate(None, 0, 0);
+        session.normalized_events.clear();
+        session.raw_notifications.clear();
+        session.endpoint_states.summary = SupportEndpointStateV1::Omitted;
+        session.endpoint_states.events = SupportEndpointStateV1::Omitted;
+        session.endpoint_states.raw_notifications = SupportEndpointStateV1::Omitted;
+        let candidates = vec![
+            candidate(Some(seq_value(1, &"l".repeat(10_000))), 5, 0),
+            candidate(Some(seq_value(2, "high")), 5, 1),
+        ];
+        if raw {
+            session.raw_notifications = candidates;
+            session.endpoint_states.raw_notifications = SupportEndpointStateV1::Included;
+        } else {
+            session.normalized_events = candidates;
+            session.endpoint_states.events = SupportEndpointStateV1::Included;
+        }
+        *read_bytes = 10;
+
+        let mut high_only = input.clone();
+        let SupportSessionAssemblyV1::Included { sessions, .. } = &mut high_only.sessions else {
+            panic!("session fixture")
+        };
+        if raw {
+            sessions[0].raw_notifications.remove(0);
+        } else {
+            sessions[0].normalized_events.remove(0);
+        }
+        let high_output = assemble_support_snapshot(high_only).expect("high session atom alone");
+        let degraded =
+            assemble_for_test(input, high_output.serialized_bytes + 1_000, MANIFEST_BYTES)
+                .expect("session degradation");
+        let collection = &degraded.snapshot.manifest.session_collection;
+        let bytes = match collection {
+            super::super::super::schema::model::manifest::SupportSessionCollectionManifestV1::Included {
+                event_included_bytes,
+                raw_notification_included_bytes,
+                ..
+            } => if raw { *raw_notification_included_bytes } else { *event_included_bytes },
+            _ => panic!("included session collection"),
+        };
+        assert!((1..=10).contains(&bytes));
+    }
 }
 
 fn input_for_tier(tier: usize) -> super::super::SupportAssemblyInputV1 {

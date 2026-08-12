@@ -47,6 +47,7 @@ pub(super) fn prepare_sessions(
         SupportSessionAssemblyV1::Included {
             captured_at,
             read_bytes,
+            session_list_state,
             workspace_id,
             anyharness_workspace_id,
             mut sessions,
@@ -76,6 +77,7 @@ pub(super) fn prepare_sessions(
             included_session(
                 captured_at,
                 read_bytes,
+                session_list_state,
                 workspace_id,
                 anyharness_workspace_id,
                 sessions,
@@ -89,6 +91,7 @@ pub(super) fn prepare_sessions(
 fn included_session(
     captured_at: String,
     read_bytes: u64,
+    session_list_state: SupportEndpointStateV1,
     workspace_id: String,
     anyharness_workspace_id: String,
     sessions: Vec<SupportSessionCandidateV1>,
@@ -149,6 +152,7 @@ fn included_session(
         SessionPlan::Included {
             workspace_id,
             anyharness_workspace_id,
+            session_list_state,
             shells,
         },
         SupportSourceCaptureV1 {

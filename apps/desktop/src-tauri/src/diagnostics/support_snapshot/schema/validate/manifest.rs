@@ -164,8 +164,7 @@ fn validate_session_collection(
             if *selected_sessions == 0
                 && (*session_included_bytes != 0
                     || *event_included_bytes != 0
-                    || *raw_notification_included_bytes != 0
-                    || *limit_uncertain_endpoints != 0)
+                    || *raw_notification_included_bytes != 0)
             {
                 return Err(SupportSchemaError::InvariantViolation(
                     "empty sessionCollection accounting",
@@ -193,7 +192,10 @@ fn validate_session_collection(
                     "sessionCollection evidence bytes",
                 ));
             }
-            if *limit_uncertain_endpoints > (*selected_sessions).saturating_mul(3) {
+            // One active-get/recent-list response plus two per-session list
+            // endpoints. A zero-item recent list can itself be uncertain.
+            if *limit_uncertain_endpoints > (*selected_sessions).saturating_mul(2).saturating_add(1)
+            {
                 return Err(SupportSchemaError::InvariantViolation(
                     "sessionCollection limit-uncertain endpoints",
                 ));
