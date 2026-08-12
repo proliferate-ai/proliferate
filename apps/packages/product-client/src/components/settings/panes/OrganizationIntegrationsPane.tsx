@@ -4,7 +4,8 @@ import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Switch } from "#product/primitives/Switch";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import type { AdminIntegrationDefinition } from "@proliferate/cloud-sdk/client/integrations";
@@ -80,8 +81,9 @@ export function OrganizationIntegrationsPane() {
   );
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Integrations"
         description="Control which integrations members of your organization can connect and use."
         action={
@@ -189,6 +191,6 @@ export function OrganizationIntegrationsPane() {
         onClose={() => setAddDialogOpen(false)}
         onSubmit={handleCreate}
       />
-    </section>
+    </SettingsPageBody>
   );
 }

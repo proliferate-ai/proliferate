@@ -28,6 +28,7 @@ import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-har
 import { getAgentStatusDisplay } from "#product/lib/domain/agents/status-presentation";
 import { HarnessInstallGate } from "#product/components/settings/panes/agents/harness/HarnessInstallGate";
 import { CloudAnyHarnessRuntimeProvider } from "#product/providers/CloudAnyHarnessRuntimeProvider";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 
 interface HarnessPaneProps {
   harnessKind: string;
@@ -75,10 +76,12 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   const { agentsByKind } = useAgentCatalog();
 
   return (
-    <section className="space-y-6">
+    <SettingsPageBody>
       {/* §1 identity header (design-handoff v2): 42px provider glyph tile +
-          name/vendor line + Docs exit. Inline rather than SettingsPageHeader —
-          the shared pattern has no leading-tile slot. */}
+          name/vendor line + Docs exit. Inline rather than PageHeader's
+          settings (flat) variant — that variant has no leading-tile slot, and
+          this is a first-instance carve-out (no second call site exists to
+          justify promoting a tile slot onto the shared pattern). */}
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3.5">
           <span
@@ -113,7 +116,7 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
       ) : (
         <HarnessRuntimeSurface harnessKind={harnessKind} surface="local" />
       )}
-    </section>
+    </SettingsPageBody>
   );
 }
 

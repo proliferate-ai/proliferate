@@ -13,7 +13,8 @@ import { Select } from "#product/primitives/Select";
 import {
   SegmentedControl,
 } from "#product/primitives/SegmentedControl";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import { useOrganizationMembers } from "#product/hooks/access/cloud/organizations/use-organization-members";
@@ -83,8 +84,9 @@ export function OrganizationBudgetsPane() {
   const selectedRow = usageRows.find((row) => row.userId === selectedUserId) ?? null;
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Usage & limits"
         description="Track compute seconds and LLM spend, and set caps for the organization or individual members."
       />
@@ -165,7 +167,7 @@ export function OrganizationBudgetsPane() {
         members={members}
         byUserRows={byUserQuery.data?.users}
       />
-    </section>
+    </SettingsPageBody>
   );
 }
 

@@ -1,6 +1,7 @@
 import { Button } from "#product/primitives/Button";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 import { CLOUD_SETUP_DOCS_URL } from "#product/config/capabilities";
@@ -9,8 +10,9 @@ export function CloudUnavailablePane() {
   const { openExternal } = useProductHost().links;
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Cloud"
         description={CAPABILITY_COPY.cloudDisabledDescription}
       />
@@ -29,6 +31,6 @@ export function CloudUnavailablePane() {
           </Button>
         }
       />
-    </section>
+    </SettingsPageBody>
   );
 }

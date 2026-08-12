@@ -19,7 +19,8 @@ import {
   isOrganizationAdminRole,
 } from "#product/components/settings/panes/organization/GitHubAppInstallationSection";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
 import {
@@ -166,8 +167,9 @@ export function OrganizationPane() {
     && organizations.length === 0;
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Organization"
         description="Profile, Team plan setup, and billing."
       />
@@ -320,7 +322,7 @@ export function OrganizationPane() {
           <OrganizationBillingLinkSection />
         </>
       ) : null}
-    </section>
+    </SettingsPageBody>
   );
 }
 

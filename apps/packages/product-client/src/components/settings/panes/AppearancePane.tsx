@@ -1,7 +1,8 @@
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { SettingsMenu } from "#product/primitives/patterns/settings/SettingsMenu";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { Button } from "#product/primitives/Button";
 import { AppearanceCodePreview } from "#product/components/settings/panes/AppearanceCodePreview";
 import { ThemePreviewCards } from "#product/components/settings/panes/ThemePreviewCards";
@@ -60,8 +61,8 @@ export function AppearancePane() {
   const canIncreaseZoom = windowZoomId !== WINDOW_ZOOM_IDS[WINDOW_ZOOM_IDS.length - 1];
 
   return (
-    <section className="flex flex-col gap-8">
-      <SettingsPageHeader title="Appearance" />
+    <SettingsPageBody>
+      <PageHeader variant="flat" title="Appearance" />
 
       <SettingsSection title="Theme" surface="plain">
         <ThemePreviewCards value={mode} onChange={setMode} />
@@ -167,6 +168,6 @@ export function AppearancePane() {
           />
         </SettingsRow>
       </SettingsSection>
-    </section>
+    </SettingsPageBody>
   );
 }

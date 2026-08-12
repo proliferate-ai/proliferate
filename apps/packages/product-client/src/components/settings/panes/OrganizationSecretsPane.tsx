@@ -1,6 +1,7 @@
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
@@ -15,8 +16,9 @@ export function OrganizationSecretsPane() {
   const canManage = admin.isAdmin === true;
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Organization secrets"
         description="Secrets available in every member's cloud sandbox"
       />
@@ -39,7 +41,7 @@ export function OrganizationSecretsPane() {
           canManage={canManage}
         />
       ) : null}
-    </section>
+    </SettingsPageBody>
   );
 }
 

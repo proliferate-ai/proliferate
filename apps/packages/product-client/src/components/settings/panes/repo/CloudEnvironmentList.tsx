@@ -4,7 +4,8 @@ import { Plus } from "#product/primitives/icons/core";
 
 import { Button } from "#product/primitives/Button";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 
@@ -64,8 +65,8 @@ export function CloudEnvironmentList({
   const usingEmptyState = !hasItems && !unavailableRow && !errorRow;
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader title={title} description={description} />
+    <SettingsPageBody>
+      <PageHeader variant="flat" title={title} description={description} />
 
       <SettingsSection
         title="Repositories"
@@ -124,7 +125,7 @@ export function CloudEnvironmentList({
           Add cloud environment
         </Button>
       ) : null}
-    </section>
+    </SettingsPageBody>
   );
 }
 

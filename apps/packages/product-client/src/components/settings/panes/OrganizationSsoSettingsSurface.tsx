@@ -6,7 +6,8 @@ import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDia
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { Select } from "#product/primitives/Select";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 
 export interface OrganizationSsoConnectionView {
@@ -75,8 +76,9 @@ export function OrganizationSsoSettingsSurface({
   const statusActionDisabled = busy || hasUnsavedChanges;
 
   return (
-    <div className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Single sign-on"
         description="Configure organization OIDC sign-in for managed cloud users."
         action={(
@@ -294,7 +296,7 @@ export function OrganizationSsoSettingsSurface({
           onDelete();
         }}
       />
-    </div>
+    </SettingsPageBody>
   );
 }
 

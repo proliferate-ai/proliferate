@@ -2,7 +2,8 @@ import { useNavigate } from "react-router-dom";
 import { BillingSettingsSurface } from "#product/components/settings/panes/billing/BillingSettingsSurface";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 
 import { PROLIFERATE_PRICING_URL } from "#product/config/capabilities";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
@@ -66,15 +67,15 @@ export function BillingPane({ focus = {} }: { focus?: SettingsFocus }) {
 
 function BillingOwnerState({ loading }: { loading: boolean }) {
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader title="Billing" />
+    <SettingsPageBody>
+      <PageHeader variant="flat" title="Billing" />
       <SettingsEmptyState
         title={loading ? "Loading billing owner…" : "Billing owner unavailable"}
         description={loading
           ? "Confirming the organization for this billing destination."
           : "This organization is no longer available to your account. Return to the sidebar and select an available owner."}
       />
-    </section>
+    </SettingsPageBody>
   );
 }
 
