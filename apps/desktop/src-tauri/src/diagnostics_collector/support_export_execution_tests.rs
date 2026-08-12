@@ -228,6 +228,7 @@ mod unix {
 
     #[derive(Clone, Copy)]
     enum Interruption {
+        Cancellation,
         CancellationSenderClosed,
         Shutdown,
         Generation,
@@ -253,6 +254,13 @@ mod unix {
         ));
         opening_rx.recv().await.expect("opening entered");
         match interruption {
+            Interruption::Cancellation => {
+                signals
+                    .cancellation
+                    .as_ref()
+                    .expect("cancellation sender")
+                    .send_replace(true);
+            }
             Interruption::CancellationSenderClosed => drop(signals.cancellation.take()),
             Interruption::Shutdown => {
                 signals
@@ -274,7 +282,9 @@ mod unix {
     }
 
     #[tokio::test]
-    async fn closed_cancellation_shutdown_and_replacement_fail_during_opening() {
+    async fn cancellation_closure_shutdown_and_replacement_fail_during_opening() {
+        assert_opening_interruption(Interruption::Cancellation, SupportExportError::Cancelled)
+            .await;
         assert_opening_interruption(
             Interruption::CancellationSenderClosed,
             SupportExportError::Cancelled,
@@ -300,6 +310,13 @@ mod unix {
         ));
         wait_for_entry(&mut entered).await;
         match interruption {
+            Interruption::Cancellation => {
+                signals
+                    .cancellation
+                    .as_ref()
+                    .expect("cancellation sender")
+                    .send_replace(true);
+            }
             Interruption::CancellationSenderClosed => drop(signals.cancellation.take()),
             Interruption::Shutdown => {
                 signals
@@ -321,7 +338,8 @@ mod unix {
     }
 
     #[tokio::test]
-    async fn closed_cancellation_shutdown_and_replacement_fail_after_lease() {
+    async fn cancellation_closure_shutdown_and_replacement_fail_after_lease() {
+        assert_stream_interruption(Interruption::Cancellation, SupportExportError::Cancelled).await;
         assert_stream_interruption(
             Interruption::CancellationSenderClosed,
             SupportExportError::Cancelled,
