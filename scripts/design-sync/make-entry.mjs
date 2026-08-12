@@ -1,0 +1,161 @@
+#!/usr/bin/env node
+/**
+ * Generates `.out/.ds-entry.tsx`, the single Vite lib-mode entry that
+ * build-bundle.mjs compiles into `_ds_bundle.js`.
+ *
+ * Rather than parsing the registry's TSX into an AST, this script imports
+ * `LIBRARY_TIERS` directly in the generated entry and builds `__demos` /
+ * `__tiers` at bundle-eval time by walking the live tier objects (see
+ * CONTRACT.md "`_ds_bundle.js`"). The one thing that genuinely needs
+ * static analysis ahead of time is the `export *` barrel: ES module
+ * `export * from` statements must be literal, so this script regex-scans
+ * the four tier source files for every `subpath: "#product/..."` entry to
+ * produce the deduped list of modules to re-export.
+ */
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repo = join(here, "..", "..");
+const libDir = join(
+  repo,
+  "apps/packages/product-client/src/components/playground/library",
+);
+const outDir = join(here, ".out");
+mkdirSync(outDir, { recursive: true });
+
+// file -> {id, title}, mirroring each tier file's own LibraryTier export
+// (PRIMITIVES_TIER / PATTERNS_TIER / ICONS_TIER / PRODUCT_PATTERNS_TIER).
+const TIER_FILES = [
+  { file: "primitives.tsx", id: "primitives", title: "Primitives" },
+  { file: "patterns.tsx", id: "patterns", title: "Patterns" },
+  { file: "icons.tsx", id: "icons", title: "Icons" },
+  { file: "product-patterns.tsx", id: "product-patterns", title: "Product patterns" },
+];
+
+// Collect every unique `subpath: "#product/..."` value across the tier
+// files, in first-seen order (stable, deterministic output) — plus the
+// full {name, subpath, tierId} triples for every entry, written out as a
+// JSON sidecar so build-bundle.mjs can build the `_ds_bundle.js` manifest
+// comment (component list + group) without re-deriving the registry.
+const subpaths = [];
+const seenSubpaths = new Set();
+const registryEntries = [];
+const entryPairRe = /\{\s*name:\s*"([^"]+)",\s*subpath:\s*"([^"]+)"/g;
+for (const { file, id: tierId, title: tierTitle } of TIER_FILES) {
+  const src = readFileSync(join(libDir, file), "utf8");
+
+  const subpathRe = /subpath:\s*"([^"]+)"/g;
+  let subpathMatch;
+  while ((subpathMatch = subpathRe.exec(src))) {
+    const subpath = subpathMatch[1];
+    if (!seenSubpaths.has(subpath)) {
+      seenSubpaths.add(subpath);
+      subpaths.push(subpath);
+    }
+  }
+
+  entryPairRe.lastIndex = 0;
+  let pairMatch;
+  while ((pairMatch = entryPairRe.exec(src))) {
+    registryEntries.push({ name: pairMatch[1], subpath: pairMatch[2], tierId, tierTitle });
+  }
+}
+
+// Known ambiguous `export *` collisions across the registry's subpaths.
+// Two `export *` sources defining the same binding produce a Rollup
+// "Conflicting namespaces" warning and the name is dropped from the bundle
+// namespace entirely — UNLESS something explicitly redeclares that name,
+// which wins over the ambiguous star exports (verified against this
+// registry: build-bundle.mjs's Rollup run warns only about `Tooltip`, not
+// `Checkbox` — Checkbox.tsx does `export { Checkbox } from
+// "./checkbox-primitive"`, a simple re-export Rollup traces to the same
+// underlying binding, so it isn't actually ambiguous; Tooltip.tsx and
+// tooltip-primitive.tsx are genuinely distinct implementations that both
+// independently declare `Tooltip`). Each entry below pins BOTH sides: an
+// explicit `keep` re-export so the plain name unambiguously resolves to the
+// intended (higher-level) module, and a `rename` re-export so the other
+// side's binding is still reachable under a distinct name.
+//   - #product/primitives/Checkbox vs. #product/primitives/checkbox-primitive
+//     (not ambiguous per above, pinned anyway for symmetry/documentation).
+//   - #product/primitives/Tooltip vs. #product/primitives/tooltip-primitive
+//     (genuinely ambiguous — this is the one that actually needs the pin).
+// If build-bundle.mjs's Rollup run logs further "Conflicting namespaces"
+// warnings (e.g. from a future registry addition), add another entry here.
+const PIN_EXPORTS = [
+  {
+    name: "Checkbox",
+    primary: "#product/primitives/Checkbox",
+    alias: { from: "#product/primitives/checkbox-primitive", as: "CheckboxPrimitive" },
+  },
+  {
+    name: "Tooltip",
+    primary: "#product/primitives/Tooltip",
+    alias: { from: "#product/primitives/tooltip-primitive", as: "TooltipPrimitive" },
+  },
+];
+
+const libIndexSpecifier = join(libDir, "index.tsx").replace(/\.tsx$/, "");
+
+const starExportLines = subpaths
+  .map((subpath) => `export * from "${subpath}";`)
+  .join("\n");
+
+const pinExportLines = PIN_EXPORTS.flatMap(({ name, primary, alias }) => [
+  `export { ${name} } from "${primary}";`,
+  `export { ${name} as ${alias.as} } from "${alias.from}";`,
+]).join("\n");
+
+const entrySource = `// AUTO-GENERATED by scripts/design-sync/make-entry.mjs — do not hand-edit.
+// Regenerate with: node scripts/design-sync/make-entry.mjs
+import { LIBRARY_TIERS } from "${libIndexSpecifier}";
+
+// Full library vocabulary, barrel-style. One \`export *\` per unique subpath
+// referenced by the registry (${subpaths.length} modules).
+${starExportLines}
+
+// Explicit pins for names ambiguous across the \`export *\` sources above —
+// see PIN_EXPORTS in make-entry.mjs for why each of these exists.
+${pinExportLines}
+
+// Card "group" for a registry entry (CONTRACT.md "Groups (kit-aware,
+// ruled)"): derived from the entry name first, else the owning tier id.
+function groupFor(name, tierId) {
+  if (name.startsWith("Composer") || name === "LevelBarsButton") return "composer";
+  if (name === "ToastHost" || name === "Sonner" || name.startsWith("Toast")) return "toast";
+  if (name.startsWith("Sidebar")) return "sidebar";
+  if (name.startsWith("Settings")) return "settings";
+  return tierId;
+}
+
+const __demos = {};
+const __tiers = [];
+for (const tier of LIBRARY_TIERS) {
+  const tierEntries = [];
+  for (const libraryEntry of tier.entries) {
+    __demos[libraryEntry.name] = () => libraryEntry.render();
+    tierEntries.push({
+      name: libraryEntry.name,
+      subpath: libraryEntry.subpath,
+      group: groupFor(libraryEntry.name, tier.id),
+    });
+  }
+  __tiers.push({ id: tier.id, title: tier.title, entries: tierEntries });
+}
+
+export { __demos, __tiers };
+`;
+
+const outPath = join(outDir, ".ds-entry.tsx");
+writeFileSync(outPath, entrySource);
+
+// Sidecar consumed by build-bundle.mjs to build the `_ds_bundle.js` manifest
+// comment (component list, sourcePath/group per entry) without re-deriving
+// the registry from source a second time.
+const manifestPath = join(outDir, ".ds-registry-manifest.json");
+writeFileSync(manifestPath, `${JSON.stringify(registryEntries, null, 2)}\n`);
+
+console.log(
+  `make-entry: wrote ${outPath} (${subpaths.length} unique subpath exports, ${PIN_EXPORTS.length} collision pin group(s)) and ${manifestPath} (${registryEntries.length} entries)`,
+);

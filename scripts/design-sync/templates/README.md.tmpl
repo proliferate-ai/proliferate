@@ -1,0 +1,161 @@
+## Building with this design system
+
+Proliferate's UI is a **Tailwind-v4 preset** system: components carry their
+own styling, and you compose layout with utility classes. Two rules matter
+more than everything else below.
+
+### 1. The stock Tailwind palette and type ramp DO NOT EXIST here
+
+The token authority opens with `--color-*: initial; --text-*: initial`,
+which **erases** Tailwind's built-in colours and text sizes. So `text-sm`,
+`text-2xl`, `text-base`, `bg-slate-500`, `text-gray-400` and every other
+stock colour/size class resolve to **nothing** — no error, just unstyled
+output.
+
+Use the semantic roles instead. Colours (the ones the system actually
+leans on, most-used first):
+
+| Role | Use for |
+| --- | --- |
+| `text-foreground` / `text-muted-foreground` / `text-faint` | primary / secondary / tertiary text |
+| `text-destructive`, `text-success`, `text-warning` | status text |
+| `bg-background` | the page surface |
+| `bg-surface`, `bg-surface-elevated`, `bg-surface-elevated-secondary`, `bg-surface-control` | raised surfaces, in ascending elevation |
+| `bg-card`, `bg-popover` | card and popover surfaces |
+| `bg-hover`, `bg-active`, `bg-selected` | interaction states |
+| `border-border`, `border-border-light`, `border-border-heavy`, `border-input` | dividers and control outlines |
+| `bg-primary` / `text-primary-foreground` | the primary action pair |
+| `text-sidebar-foreground`, `text-sidebar-muted-foreground`, `bg-sidebar-background` | sidebar-scoped roles |
+
+Type — these __DS_TEXT_ROLE_COUNT__ named scales are the entire ramp (each
+carries its own size, line-height and letter-spacing):
+
+__DS_TEXT_ROLES_LIST__
+
+`text-ui-sm` and `text-ui` are the workhorses for interface text;
+`text-body` for prose; `text-heading` / `text-title` for section and page
+headings.
+
+Everything non-colour, non-type is ordinary Tailwind and works normally:
+`flex`, `grid`, `gap-4`, `p-6`, `w-full`, `rounded-lg`, `items-center`.
+Icon sizing has named helpers: `icon-tight`, `icon-paired`, `icon-status`.
+
+### 2. It is dark-first, and needs no provider
+
+There is **no ThemeProvider and no ColorModeProvider** — tokens live on
+`:root` in CSS, so components are correctly styled as soon as the
+stylesheet is loaded. Just render them:
+
+```jsx
+<Button size="sm">Create workspace</Button>
+```
+
+Dark is the default. For light, set `data-mode="light"` on the root
+element (`<html data-mode="light">`); every token flips.
+
+Two components need a wrapper: `tooltip-primitive`'s raw parts (`Tooltip`,
+`TooltipTrigger`, `TooltipContent`) must sit inside a `TooltipProvider`
+exported from that same module — the styled `Tooltip` primitive wraps this
+internally and needs neither. `ToastHost` is the single toast mount: render
+it once near the app root, then raise toasts through `showToast`.
+
+### 3. Where the truth lives
+
+Read `styles.css` and its `@import` closure (the compiled tokens and
+utilities) first. For any one component, its own
+`components/<group>/<Name>/<Name>.prompt.md` has the purpose, the import
+line, and the `Demo` story; `<Name>.jsx` is that component's real, current
+source — types stripped, JSX left intact — copied straight from the
+registry this payload was built from.
+
+This is a **library-only sync**: every card here is one `#product/...`
+component with a self-contained registry demo. There are no page or
+surface cards (workspace shells, settings panes assembled from these
+parts, chat surfaces) — composition, anatomy, and "which pattern owns this
+skeleton" rules live in the source repo's `specs/DESIGN_SYSTEM.md` (the
+"Component Library" section), not in this payload.
+
+### 4. An idiomatic composition
+
+Library components for the controls, DS utilities for your own glue:
+
+```jsx
+<div className="flex flex-col gap-4 rounded-lg border border-border bg-surface-elevated p-6">
+  <div className="flex items-center justify-between">
+    <h2 className="text-heading text-foreground">Cloud workspace</h2>
+    <Badge tone="success">Ready</Badge>
+  </div>
+  <p className="text-ui-sm text-muted-foreground">
+    Runs on a managed sandbox. Commits push to your branch.
+  </p>
+  <div className="flex items-center gap-2">
+    <Button size="sm">Open</Button>
+    <Button size="sm" variant="secondary">Settings</Button>
+  </div>
+</div>
+```
+
+# ProliferateUI (library-registry@__DS_GIT_SHA__)
+
+This design system is built directly from the live `product-client`
+component registry — every one of the __DS_COMPONENT_COUNT__ components
+below is real, current, in-repo source, not a published package snapshot.
+
+## Where things are
+
+- `_ds_bundle.js` — the whole-library bundle at the project root; loads
+  every component onto `window.ProliferateUI`, plus `__demos` (entry name
+  → demo component) and `__tiers` (the registry's own tier/group listing).
+  First line is a `/* @ds-bundle: … */` metadata header.
+- `styles.css` — the single stylesheet entry: it `@import`s the fonts and
+  the compiled component styles (`_ds_bundle.css`). Link this one file.
+- `components/<group>/<Name>/<Name>.prompt.md` (purpose, import line,
+  story list), `<Name>.jsx` (real source), `<Name>.html` (the rendered
+  variant card).
+- `fonts/` — `@font-face` files + `fonts.css`.
+
+For a specific component, `read_file("components/<group>/<Name>/<Name>.prompt.md")`.
+
+## Loading
+
+Add these two lines to your page once (React must be on the page first):
+
+```html
+<link rel="stylesheet" href="styles.css">
+<script src="_ds_bundle.js"></script>
+```
+
+Components are then available at `window.ProliferateUI.*`. Mount into a
+dedicated child node (e.g. `<div id="ds-root">`), not the host page's own
+React root, so the two trees don't collide:
+
+```jsx
+const { Button } = window.ProliferateUI;
+ReactDOM.createRoot(document.getElementById('ds-root')).render(<Button size="sm">Open</Button>);
+```
+
+## Tokens
+
+__DS_TOTAL_TOKEN_COUNT__ CSS custom properties, declared inside
+`_ds_bundle.css` (this sync ships one compiled stylesheet rather than
+separate token files). Names are preserved verbatim from
+`apps/packages/design/src/tokens.ts`, the token authority — where this
+README and `apps/packages/design/dist/theme.css` disagree about a count,
+`theme.css` is right; these numbers are computed from that file at sync
+time, not hand-copied.
+
+- **color** (__DS_COLOR_COUNT__)
+- **typography** (__DS_TEXT_ROLE_COUNT__ named type-ramp scales, plus their
+  paired line-height/letter-spacing variables and `font-*` weight/family
+  tokens)
+- **radius** (__DS_RADIUS_COUNT__)
+- **shadow** (__DS_SHADOW_COUNT__)
+
+## Components (__DS_COMPONENT_COUNT__)
+
+Every card's only story is `Demo` — the registry's self-contained fixture
+render for that component (no providers, no stores; see
+`specs/DESIGN_SYSTEM.md` → "How to add a component" in the source repo for
+why that's a CI-enforced rule, not a convention).
+
+__DS_COMPONENTS_SECTION__
