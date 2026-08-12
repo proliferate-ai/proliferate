@@ -27,6 +27,21 @@ describe("PanelHeaderEntry", () => {
     expect(entry.getAttribute("tabindex")).toBe("0");
   });
 
+  it("shows the dirty marker only when dirty, as StatusDot's decorative form", () => {
+    const { container, rerender } = render(<PanelHeaderEntry label="Scratch" onSelect={vi.fn()} />);
+    expect(container.querySelector(".rounded-full")).toBeNull();
+
+    rerender(<PanelHeaderEntry label="Scratch" dirty onSelect={vi.fn()} />);
+    const dot = container.querySelector(".rounded-full");
+    // The `StatusDot` primitive on `current`, not a second hand-rolled dot:
+    // `inline-block icon-status … bg-current` is its class signature, and with
+    // no label it stays decorative so the entry keeps its own accessible name.
+    expect(dot?.className).toContain("inline-block icon-status");
+    expect(dot?.className).toContain("bg-current");
+    expect(dot?.getAttribute("aria-hidden")).toBe("true");
+    expect(dot?.getAttribute("role")).toBeNull();
+  });
+
   it("renders the close control only when a close handler is supplied", () => {
     const onClose = vi.fn();
     const { rerender } = render(<PanelHeaderEntry label="Scratch" onSelect={vi.fn()} />);

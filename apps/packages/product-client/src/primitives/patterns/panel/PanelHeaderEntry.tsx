@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
+import { StatusDot } from "#product/primitives/StatusDot";
 import { AppShellTabCloseIcon } from "#product/primitives/icons/app-shell";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 
@@ -122,9 +123,10 @@ export function PanelHeaderEntry({
         {icon}
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {trailing}
-        {dirty && (
-          <span aria-hidden="true" className="icon-status shrink-0 rounded-full bg-current" />
-        )}
+        {/* The dirty marker is the `StatusDot` primitive on `current`, not a
+            second hand-rolled `icon-status rounded-full` span: the entry
+            already inherits the tone it should paint in. */}
+        {dirty && <StatusDot tone="current" />}
       </button>
       {onClose && (
         <RowActionIconButton

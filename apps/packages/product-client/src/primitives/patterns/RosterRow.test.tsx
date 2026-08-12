@@ -53,6 +53,26 @@ describe("RosterRow", () => {
     expect(rowOf("Run 12").getAttribute("aria-disabled")).toBe("true");
   });
 
+  it("runs a caller's own onClick/onKeyDown instead of swallowing them", () => {
+    const onSelect = vi.fn();
+    const onClick = vi.fn();
+    const onKeyDown = vi.fn();
+    render(
+      <RosterRow title="Run 12" onSelect={onSelect} onClick={onClick} onKeyDown={onKeyDown} />,
+    );
+
+    fireEvent.click(rowOf("Run 12"));
+    fireEvent.keyDown(rowOf("Run 12"), { key: "Enter" });
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a read-only row out of the button role even when disabled", () => {
+    render(<RosterRow title="Run 12" disabled />);
+    expect(rowOf("Run 12").getAttribute("role")).toBeNull();
+  });
+
   it("is a hover group so RowActionIconButton's reveal contract resolves", () => {
     render(<RosterRow title="Run 12" actions={<span>action</span>} onSelect={() => {}} />);
     expect(rowOf("Run 12").className.split(" ")).toContain("group");

@@ -144,11 +144,15 @@ licence to re-assemble it.
   header over a tinted card cannot just repeat the tint, or the body
   shows through it — so the outer layer paints the opaque plane behind
   the card and the inner layer repaints the tint on top, resolving to
-  exactly the body's colour. On the main content pane the outer ground
-  is `bg-background`; on a side panel or rail it is `bg-sidebar`. Not
-  `bg-sidebar-background`: nothing paints a rail with it, and its dark
-  value (`#181818`) differs from `bg-sidebar` (`#222222`), so a header
-  grounded on it seams against the rail behind it.
+  exactly the body's colour. The ground is whatever the card's own
+  parent paints, and `Card`'s `plane` axis names the two grounds it
+  supports: `content` is `bg-background`, `rail` is `bg-sidebar` — the
+  ground the git/review rail that hosts these cards paints
+  (`GitPanel.tsx`). `bg-sidebar-background` is a *third*, darker plane
+  (`#181818` against `bg-sidebar`'s `#222222`) painted by the right-panel
+  frame, the attached pane shell and the file-tree pane; a card whose
+  parent is one of those cannot ground on `plane="rail"` without seaming,
+  and needs a review decision rather than a guessed token.
 - Border radius: `rounded-lg` with `overflow-clip`. Never
   `overflow-hidden`, which establishes a scroll container and freezes a
   sticky header inside a box that never scrolls.

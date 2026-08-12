@@ -1,4 +1,4 @@
-import type { HTMLAttributes, KeyboardEvent, ReactNode } from "react";
+import type { HTMLAttributes, KeyboardEvent, MouseEvent, ReactNode } from "react";
 
 import { twMerge } from "#product/primitives/utils/tw-merge";
 
@@ -49,7 +49,12 @@ const DENSITY_TITLE_CLASS: Record<RosterRowDensity, string> = {
 };
 
 export interface RosterRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect" | "title"> {
-  /** Leading glyph, status dot, or avatar. */
+  /**
+   * Leading glyph, status dot, or avatar. The slot is `aria-hidden`: it is a
+   * decorative mark, and the row's accessible name is `title`. A `StatusDot`
+   * placed here is silenced, so any status the row must announce belongs in
+   * `secondary` or `trailing` text.
+   */
   leading?: ReactNode;
   /** Primary line. Truncates — rosters are narrow and their titles are long. */
   title: ReactNode;
@@ -78,6 +83,8 @@ export function RosterRow({
   disabled = false,
   onSelect,
   className = "",
+  onClick: onClickProp,
+  onKeyDown: onKeyDownProp,
   ...props
 }: RosterRowProps) {
   const interactive = typeof onSelect === "function" && !disabled;
@@ -106,24 +113,32 @@ export function RosterRow({
     className,
   );
 
+  // The row's own activation runs first, then the caller's handler — a
+  // consumer that also wants the raw DOM event (context menus, drag starts)
+  // must not have it silently swallowed by this pattern's props spread.
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!interactive) {
-      return;
-    }
-    if (event.key === "Enter" || event.key === " ") {
+    if (interactive && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       onSelect();
     }
+    onKeyDownProp?.(event);
+  };
+
+  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (interactive) {
+      onSelect();
+    }
+    onClickProp?.(event);
   };
 
   return (
     <div
       {...props}
-      role={interactive || disabled ? "button" : undefined}
+      role={onSelect ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
       aria-disabled={disabled || undefined}
       data-selected={selected}
-      onClick={interactive ? onSelect : undefined}
+      onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={rowClassName}
     >
