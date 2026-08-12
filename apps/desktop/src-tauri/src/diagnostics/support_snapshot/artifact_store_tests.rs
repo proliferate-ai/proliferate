@@ -256,7 +256,7 @@ fn stage_waits_for_reconciliation_then_reopens_exact_bytes() {
     ));
     assert!(matches!(
         store.stage(&job, &canonical_job(), &canonical_job(), b"replacement"),
-        Err(ArtifactStoreError::AlreadyExists)
+        Err(ArtifactStoreError::StageFailed)
     ));
     fs::remove_dir_all(app).ok();
 }

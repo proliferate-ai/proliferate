@@ -53,21 +53,49 @@ pub(super) fn stage(
     preparation_id: &str,
     bytes: &[u8],
 ) -> Result<StoredSupportArtifact, ArtifactStoreError> {
-    let directory = ensure_root(root)?;
+    stage_with_verifier(
+        root,
+        client_job_id,
+        artifact_id,
+        snapshot_id,
+        preparation_id,
+        bytes,
+        verify_open,
+    )
+}
+
+fn stage_with_verifier(
+    root: &Path,
+    client_job_id: &str,
+    artifact_id: &str,
+    snapshot_id: &str,
+    preparation_id: &str,
+    bytes: &[u8],
+    verify: impl FnOnce(&std::os::fd::OwnedFd, &str, u64, &str) -> Result<Vec<u8>, ArtifactStoreError>,
+) -> Result<StoredSupportArtifact, ArtifactStoreError> {
+    // Creation through directory durability is the staging phase. The final
+    // safe reopen is the only verification phase; cleanup stays armed across
+    // both so neither failure can leave this attempt's bytes behind.
+    let directory = ensure_root(root).map_err(|_| ArtifactStoreError::StageFailed)?;
     let partial_name = format!("{artifact_id}.{preparation_id}.json.partial");
     let final_name = format!("{artifact_id}.json");
-    let partial = create_private_file_at(&directory, &partial_name)?;
+    let partial = create_private_file_at(&directory, &partial_name)
+        .map_err(|_| ArtifactStoreError::StageFailed)?;
     let mut cleanup = PartialCleanup::new(&directory, partial_name.clone());
     let mut file = File::from(partial);
-    file.write_all(bytes).map_err(|_| ArtifactStoreError::Io)?;
-    file.sync_all().map_err(|_| ArtifactStoreError::Io)?;
+    file.write_all(bytes)
+        .map_err(|_| ArtifactStoreError::StageFailed)?;
+    file.sync_all()
+        .map_err(|_| ArtifactStoreError::StageFailed)?;
     drop(file);
-    rename_noreplace_at(&directory, &partial_name, &final_name)?;
+    rename_noreplace_at(&directory, &partial_name, &final_name)
+        .map_err(|_| ArtifactStoreError::StageFailed)?;
     cleanup.track(final_name);
-    sync_directory(&directory)?;
+    sync_directory(&directory).map_err(|_| ArtifactStoreError::StageFailed)?;
     let size_bytes = bytes.len() as u64;
     let sha256 = digest(bytes);
-    verify_open(&directory, artifact_id, size_bytes, &sha256)?;
+    verify(&directory, artifact_id, size_bytes, &sha256)
+        .map_err(|_| ArtifactStoreError::ArtifactVerificationFailed)?;
     cleanup.disarm();
     Ok(StoredSupportArtifact {
         client_job_id: client_job_id.to_owned(),
@@ -283,4 +311,93 @@ fn require_deadline(
     (hooks.now() < deadline)
         .then_some(())
         .ok_or(ArtifactStoreError::Deadline)
+}
+
+#[cfg(test)]
+mod stage_tests {
+    use super::super::SupportArtifactStore;
+    use super::*;
+
+    fn fixture_root() -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "proliferate-support-stage-phase-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir(&root).expect("create stage fixture root");
+        root
+    }
+
+    #[test]
+    fn rename_conflict_is_stage_failed_and_cleans_only_its_partial() {
+        let app = fixture_root();
+        let root = app.join("artifacts");
+        let client_job_id = uuid::Uuid::new_v4().to_string();
+        let artifact_id = SupportArtifactStore::artifact_id(&client_job_id).expect("artifact id");
+        stage(
+            &root,
+            &client_job_id,
+            &artifact_id,
+            "snapshot-one",
+            &uuid::Uuid::new_v4().to_string(),
+            b"original",
+        )
+        .expect("first stage");
+        let second_preparation = uuid::Uuid::new_v4().to_string();
+        assert!(matches!(
+            stage(
+                &root,
+                &client_job_id,
+                &artifact_id,
+                "snapshot-two",
+                &second_preparation,
+                b"replacement",
+            ),
+            Err(ArtifactStoreError::StageFailed)
+        ));
+        assert_eq!(
+            fs::read(root.join(format!("{artifact_id}.json"))).expect("existing final"),
+            b"original"
+        );
+        assert!(!root
+            .join(format!("{artifact_id}.{second_preparation}.json.partial"))
+            .exists());
+        fs::remove_dir_all(app).ok();
+    }
+
+    #[test]
+    fn verification_failure_is_distinct_and_cleans_renamed_final() {
+        let app = fixture_root();
+        let root = app.join("artifacts");
+        let client_job_id = uuid::Uuid::new_v4().to_string();
+        let artifact_id = SupportArtifactStore::artifact_id(&client_job_id).expect("artifact id");
+        let preparation_id = uuid::Uuid::new_v4().to_string();
+        let final_path = root.join(format!("{artifact_id}.json"));
+        let expected_sha256 = digest(b"diagnostics");
+        assert!(matches!(
+            stage_with_verifier(
+                &root,
+                &client_job_id,
+                &artifact_id,
+                "snapshot",
+                &preparation_id,
+                b"diagnostics",
+                |_, received_artifact_id, size, sha256| {
+                    assert_eq!(received_artifact_id, artifact_id.as_str());
+                    assert_eq!(size, b"diagnostics".len() as u64);
+                    assert_eq!(sha256, expected_sha256.as_str());
+                    assert_eq!(
+                        fs::read(&final_path).expect("renamed final"),
+                        b"diagnostics"
+                    );
+                    Err(ArtifactStoreError::Mismatch)
+                },
+            ),
+            Err(ArtifactStoreError::ArtifactVerificationFailed)
+        ));
+        assert!(!final_path.exists());
+        assert!(!root
+            .join(format!("{artifact_id}.{preparation_id}.json.partial"))
+            .exists());
+        fs::remove_dir_all(app).ok();
+    }
 }

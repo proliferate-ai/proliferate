@@ -57,6 +57,10 @@ pub(crate) struct ReconciledSupportArtifact {
 pub(crate) enum ArtifactStoreError {
     InvalidInput,
     NotReady,
+    // Stage callers need this closed phase boundary for lifecycle mapping;
+    // underlying filesystem errors never cross the artifact-store owner.
+    StageFailed,
+    ArtifactVerificationFailed,
     AlreadyExists,
     Missing,
     Mismatch,
