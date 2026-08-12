@@ -92,7 +92,10 @@ export function useCloseActiveWorkspaceTab(headerTabs: WorkspaceTabActionsContex
       }
       const hidden = chatVisibilityActions.hideChatSessionTabs(
         [activeShellTab.sessionId],
-        { selectFallback: true },
+        {
+          selectFallback: true,
+          fallbackAnchorSessionId: activeShellTab.sessionId,
+        },
       );
       return hidden ? "closed" : "noop";
     }

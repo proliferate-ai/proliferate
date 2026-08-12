@@ -35,6 +35,7 @@ interface ShowOptions {
 
 interface HideOptions {
   selectFallback?: boolean;
+  fallbackAnchorSessionId?: string;
 }
 
 export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
@@ -158,14 +159,18 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     idsToHide.forEach((id) => rememberHiddenChatSessionForWorkspace(workspaceUiKey, id));
 
     if (options?.selectFallback) {
+      const fallbackAnchorSessionId = options.fallbackAnchorSessionId ?? activeSessionId;
       const fallbackId = resolveFallbackAfterHidingChatTabs({
         visibleIdsBeforeHide: visibleIds,
         idsToHide,
-        activeSessionId,
+        activeSessionId: fallbackAnchorSessionId,
       });
       if (fallbackId) {
         selectSessionId(fallbackId, "header_tab");
-      } else if (activeSessionId && expandedHideSet.has(activeSessionId)) {
+      } else if (
+        fallbackAnchorSessionId
+        && expandedHideSet.has(fallbackAnchorSessionId)
+      ) {
         activateChatShell({
           workspaceId: materializedWorkspaceId,
           shellWorkspaceId: workspaceUiKey,
