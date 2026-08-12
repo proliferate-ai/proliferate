@@ -1,4 +1,4 @@
-use super::{empty_coverage, no_evidence_skeleton, TS, WINDOW_START};
+use super::{empty_coverage, no_evidence_skeleton, set_manifest_source, TS, WINDOW_START};
 
 use proliferate_diagnostics_protocol::v1::types::{
     ArgumentValueV1, CollectorAcceptedRecordV1, ComponentV1, ExportManifestV1, HealthResponseV1,
@@ -20,7 +20,6 @@ use crate::diagnostics::support_snapshot::schema::model::health::{
     SupportChildProducerSnapshotV1, SupportChildProducerStatusV1, SupportLossCountsV1,
     SupportOmittedProducerStatusV1, SupportTauriProducerHealthV1,
 };
-use crate::diagnostics::support_snapshot::schema::model::manifest::SupportSourceManifestV1;
 use crate::diagnostics::support_snapshot::schema::model::snapshot::SupportSnapshotV3;
 use crate::diagnostics::support_snapshot::schema::validate::{
     stabilize_serialized_bytes, validate_collector_evidence, validate_snapshot, SupportSchemaError,
@@ -115,14 +114,14 @@ pub(super) fn completed_snapshot() -> SupportSnapshotV3 {
     snapshot.records = vec![record];
     snapshot.manifest.collector = coverage;
     snapshot.manifest.omissions.clear();
-    snapshot.manifest.sources = vec![SupportSourceManifestV1 {
-        source: SupportSourceManifestSourceV1::Collector,
-        state: SupportSourceStateV1::Included,
-        captured_at: TS.to_string(),
-        read_bytes: 733,
-        included_bytes: 733,
-        included_items: 1,
-    }];
+    set_manifest_source(
+        &mut snapshot,
+        SupportSourceManifestSourceV1::Collector,
+        SupportSourceStateV1::Included,
+        733,
+        733,
+        1,
+    );
     stabilize_serialized_bytes(&mut snapshot).expect("completed byte fixed point");
     snapshot
 }
@@ -304,6 +303,14 @@ fn structured_fallback_records_validate_protocol_and_family_identity() {
         }],
         opaque_lines: Vec::new(),
     }];
+    set_manifest_source(
+        &mut snapshot,
+        SupportSourceManifestSourceV1::DesktopNativeFallback,
+        SupportSourceStateV1::Included,
+        1,
+        1,
+        1,
+    );
     stabilize_serialized_bytes(&mut snapshot).expect("stabilize");
     validate_snapshot(&snapshot).expect("valid PR3 structured fallback");
 
@@ -388,7 +395,7 @@ fn structured_fallback_records_require_canonical_group_and_sequence_order() {
     );
 }
 
-fn child_snapshot(component: SupportChildComponentV1) -> SupportChildProducerSnapshotV1 {
+pub(super) fn child_snapshot(component: SupportChildComponentV1) -> SupportChildProducerSnapshotV1 {
     SupportChildProducerSnapshotV1 {
         component,
         producer_boot_id: "producer-boot-1".to_string(),
@@ -557,6 +564,14 @@ fn pr5_fallback_requires_reason_and_exact_child_family() {
         }],
         opaque_lines: Vec::new(),
     }];
+    set_manifest_source(
+        &mut snapshot,
+        SupportSourceManifestSourceV1::AnyharnessFallback,
+        SupportSourceStateV1::Included,
+        1,
+        1,
+        1,
+    );
     stabilize_serialized_bytes(&mut snapshot).expect("stabilize");
     validate_snapshot(&snapshot).expect("valid PR5 fallback wrapper");
 

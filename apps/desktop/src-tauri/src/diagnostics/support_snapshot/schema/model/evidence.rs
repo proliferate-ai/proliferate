@@ -101,7 +101,8 @@ pub enum SupportFallbackComponentV1 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SupportLegacyLineV1 {
-    /// Rotation segment index, 0 (active) through 5 (oldest).
+    /// Renderer/AnyHarness use 0 (active) through 5 (oldest); Worker v2/v1
+    /// are unrotated and accept only 0.
     pub segment: u8,
     pub line: u64,
     pub value: String,

@@ -104,11 +104,11 @@ pub fn validate_finite_f64(value: f64) -> Result<(), SupportSchemaError> {
     Ok(())
 }
 
-/// A projected JSON number is finite; integral values additionally obey the
-/// artifact's nonnegative JavaScript-safe integer boundary.
+/// A projected JSON number is finite; integral values, including signed
+/// negative zero, additionally obey the nonnegative JavaScript-safe boundary.
 pub fn validate_support_number(value: f64) -> Result<(), SupportSchemaError> {
     validate_finite_f64(value)?;
-    if value.fract() == 0.0 && (value < 0.0 || value > MAX_SAFE_INTEGER as f64) {
+    if value.fract() == 0.0 && (value.is_sign_negative() || value > MAX_SAFE_INTEGER as f64) {
         return Err(SupportSchemaError::UnsafeInteger);
     }
     Ok(())

@@ -142,7 +142,21 @@ fn validate_child_snapshot(
     ] {
         validate_safe_u64(count)?;
     }
-    validate_loss_counts(&snapshot.dropped_by_reason)
+    validate_loss_counts(&snapshot.dropped_by_reason)?;
+    if snapshot.fallback_write_failures != snapshot.dropped_by_reason.fallback_write_failed {
+        return Err(SupportSchemaError::InvariantViolation(
+            "child fallback-write failure accounting",
+        ));
+    }
+    if snapshot
+        .last_failure
+        .is_some_and(|reason| snapshot.dropped_by_reason.get(reason) == 0)
+    {
+        return Err(SupportSchemaError::InvariantViolation(
+            "child last-failure accounting",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_child_status(

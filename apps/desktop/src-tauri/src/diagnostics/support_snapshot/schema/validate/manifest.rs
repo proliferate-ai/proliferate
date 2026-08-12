@@ -38,6 +38,11 @@ fn validate_source(source: &SupportSourceManifestV1) -> Result<(), SupportSchema
             "non-included source carries included evidence",
         ));
     }
+    if source.included_bytes > source.read_bytes {
+        return Err(SupportSchemaError::InvariantViolation(
+            "source included bytes exceed read bytes",
+        ));
+    }
     let (read_cap, included_cap) = match source.source {
         SupportSourceManifestSourceV1::Collector => (COLLECTOR_BYTES, COLLECTOR_BYTES),
         SupportSourceManifestSourceV1::DesktopNativeFallback => {
@@ -71,6 +76,9 @@ fn validate_sources(sources: &[SupportSourceManifestV1]) -> Result<(), SupportSc
     }
     let mut prior = None;
     let mut file_bytes = 0_u64;
+    let mut desktop_family_bytes = 0_u64;
+    let mut anyharness_family_bytes = 0_u64;
+    let mut worker_family_bytes = 0_u64;
     for source in sources {
         validate_source(source)?;
         if prior.is_some_and(|prior| source.source <= prior) {
@@ -87,10 +95,38 @@ fn validate_sources(sources: &[SupportSourceManifestV1]) -> Result<(), SupportSc
                 .checked_add(source.read_bytes)
                 .ok_or(SupportSchemaError::UnsafeInteger)?;
         }
+        let family_bytes = match source.source {
+            SupportSourceManifestSourceV1::DesktopNativeFallback
+            | SupportSourceManifestSourceV1::RendererLegacy => Some(&mut desktop_family_bytes),
+            SupportSourceManifestSourceV1::AnyharnessFallback
+            | SupportSourceManifestSourceV1::AnyharnessLegacy => Some(&mut anyharness_family_bytes),
+            SupportSourceManifestSourceV1::DesktopWorkerFallback
+            | SupportSourceManifestSourceV1::WorkerLegacyV2
+            | SupportSourceManifestSourceV1::WorkerLegacyV1 => Some(&mut worker_family_bytes),
+            SupportSourceManifestSourceV1::Collector
+            | SupportSourceManifestSourceV1::SessionLedger => None,
+        };
+        if let Some(family_bytes) = family_bytes {
+            *family_bytes = (*family_bytes)
+                .checked_add(source.read_bytes)
+                .ok_or(SupportSchemaError::UnsafeInteger)?;
+        }
     }
     if file_bytes > ALL_FILES_READ_BYTES {
         return Err(SupportSchemaError::CapExceeded(
             "manifest all file read bytes",
+        ));
+    }
+    if [
+        desktop_family_bytes,
+        anyharness_family_bytes,
+        worker_family_bytes,
+    ]
+    .into_iter()
+    .any(|bytes| bytes > COMPONENT_FILES_READ_BYTES)
+    {
+        return Err(SupportSchemaError::CapExceeded(
+            "manifest logical-family read bytes",
         ));
     }
     Ok(())

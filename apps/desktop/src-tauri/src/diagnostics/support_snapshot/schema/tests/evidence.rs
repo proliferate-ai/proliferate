@@ -1,9 +1,9 @@
-use super::{empty_coverage, no_evidence_skeleton, TS};
+use super::{empty_coverage, no_evidence_skeleton, set_manifest_source, TS};
 
 use crate::diagnostics::support_snapshot::schema::enums::{
     SupportCollectorCompletenessV1, SupportCollectorStatusV1, SupportEndpointStateV1,
     SupportLegacySourceKindV1, SupportLiveConfigStateV1, SupportSessionSelectionV1,
-    SupportUnknownDesktopNativeV1,
+    SupportSourceManifestSourceV1, SupportSourceStateV1, SupportUnknownDesktopNativeV1,
 };
 use crate::diagnostics::support_snapshot::schema::limits::{COLLECTOR_BYTES, MAX_SAFE_INTEGER};
 use crate::diagnostics::support_snapshot::schema::model::common::SupportJsonValueV1;
@@ -34,6 +34,10 @@ fn projected_values_reject_all_directly_constructed_invalid_forms() {
     );
     assert_eq!(
         validate_support_json_value(&SupportJsonValueV1::Number(-1.0)),
+        Err(SupportSchemaError::UnsafeInteger)
+    );
+    assert_eq!(
+        validate_support_json_value(&SupportJsonValueV1::Number(-0.0)),
         Err(SupportSchemaError::UnsafeInteger)
     );
     assert_eq!(
@@ -131,7 +135,7 @@ fn projected_json_conversion_rejects_unsigned_overflow_and_sorts_keys() {
     );
 }
 
-fn populated_coverage(
+pub(super) fn populated_coverage(
     bytes: u64,
     uncertain: bool,
 ) -> super::super::model::evidence::SupportCollectorCoverageV1 {
@@ -157,17 +161,21 @@ fn populated_coverage(
 #[test]
 fn collector_byte_uncertainty_boundary_is_conservative() {
     let threshold = COLLECTOR_BYTES - 65_536;
-    validate_collector_coverage(&populated_coverage(threshold, true))
-        .expect("exactly one maximum record of headroom is uncertain");
-    validate_collector_coverage(&populated_coverage(threshold - 1, false))
-        .expect("one additional byte of headroom can be complete");
+    validate_collector_coverage(&populated_coverage(threshold, false))
+        .expect("exactly one maximum record of headroom is complete");
+    validate_collector_coverage(&populated_coverage(threshold + 1, true))
+        .expect("less than one maximum record of headroom is uncertain");
 
     assert_eq!(
-        validate_collector_coverage(&populated_coverage(threshold, false)),
+        validate_collector_coverage(&populated_coverage(threshold, true)),
         Err(SupportSchemaError::InvariantViolation(
             "collector coverage status/completeness"
         ))
     );
+
+    let mut record_limit = populated_coverage(1, true);
+    record_limit.returned_records = 10_000;
+    validate_collector_coverage(&record_limit).expect("record-limit equality is uncertain");
 }
 
 #[test]
@@ -207,7 +215,7 @@ fn endpoint_states() -> SupportSessionEndpointStatesV1 {
     }
 }
 
-fn session(id: &str) -> SupportSessionV1 {
+pub(super) fn session(id: &str) -> SupportSessionV1 {
     SupportSessionV1 {
         session_id: id.to_string(),
         summary_captured_at: TS.to_string(),
@@ -218,7 +226,7 @@ fn session(id: &str) -> SupportSessionV1 {
     }
 }
 
-fn bind_recent_ledger(
+pub(super) fn bind_recent_ledger(
     snapshot: &mut super::super::model::snapshot::SupportSnapshotV3,
     sessions: Vec<SupportSessionV1>,
 ) {
@@ -245,6 +253,14 @@ fn bind_recent_ledger(
         raw_notification_included_bytes: 0,
         limit_uncertain_endpoints: 0,
     };
+    set_manifest_source(
+        snapshot,
+        SupportSourceManifestSourceV1::SessionLedger,
+        SupportSourceStateV1::Included,
+        0,
+        0,
+        selected_sessions,
+    );
 }
 
 #[test]
@@ -253,44 +269,6 @@ fn recent_ledger_may_be_present_and_empty() {
     bind_recent_ledger(&mut snapshot, Vec::new());
     stabilize_serialized_bytes(&mut snapshot).expect("stabilize");
     validate_snapshot(&snapshot).expect("zero matching recent sessions is honest");
-}
-
-#[test]
-fn session_endpoint_states_must_match_present_values() {
-    let mut missing_summary = session("session-1");
-    missing_summary.endpoint_states.summary = SupportEndpointStateV1::LimitUncertain;
-    let mut snapshot = no_evidence_skeleton();
-    bind_recent_ledger(&mut snapshot, vec![missing_summary]);
-    let SupportSessionCollectionManifestV1::Included {
-        limit_uncertain_endpoints,
-        ..
-    } = &mut snapshot.manifest.session_collection
-    else {
-        unreachable!()
-    };
-    *limit_uncertain_endpoints = 1;
-    stabilize_serialized_bytes(&mut snapshot).expect("stabilize");
-    assert_eq!(
-        validate_snapshot(&snapshot),
-        Err(SupportSchemaError::InvariantViolation(
-            "session summary endpoint state"
-        ))
-    );
-
-    let mut omitted_with_event = session("session-1");
-    omitted_with_event.normalized_events = vec![SupportJsonValueV1::Object(vec![(
-        "seq".to_string(),
-        SupportJsonValueV1::Integer(1),
-    )])];
-    let mut snapshot = no_evidence_skeleton();
-    bind_recent_ledger(&mut snapshot, vec![omitted_with_event]);
-    stabilize_serialized_bytes(&mut snapshot).expect("stabilize");
-    assert_eq!(
-        validate_snapshot(&snapshot),
-        Err(SupportSchemaError::InvariantViolation(
-            "session events endpoint state"
-        ))
-    );
 }
 
 #[test]

@@ -10,7 +10,7 @@ use proliferate_diagnostics_protocol::v1::types::{
 use super::super::enums::{
     SupportChildComponentV1, SupportCollectorCompletenessV1, SupportCollectorStatusV1,
     SupportEndpointStateV1, SupportFallbackDispositionV1, SupportFallbackRecordComponentV1,
-    SupportPr5FallbackReasonV1, SupportSessionSelectionV1,
+    SupportLegacySourceKindV1, SupportPr5FallbackReasonV1, SupportSessionSelectionV1,
 };
 use super::super::limits::{
     COLLECTOR_BYTES, COLLECTOR_RECORDS, EVENTS_PER_SESSION, RAW_NOTIFICATIONS_PER_SESSION,
@@ -80,10 +80,22 @@ pub(super) fn validate_collector_coverage(
         coverage.health_newest_cursor,
         "coverage health cursor pair",
     )?;
+    if let (Some(cursor_start), Some(cursor_end), Some(health_oldest), Some(health_newest)) = (
+        coverage.cursor_start,
+        coverage.cursor_end,
+        coverage.health_oldest_cursor,
+        coverage.health_newest_cursor,
+    ) {
+        if health_oldest > cursor_start || cursor_end > health_newest {
+            return Err(SupportSchemaError::InvariantViolation(
+                "coverage cursors outside health fence",
+            ));
+        }
+    }
 
     let byte_threshold = COLLECTOR_BYTES - MAX_RECORD_BYTES as u64;
     let uncertain = coverage.returned_records >= COLLECTOR_RECORDS
-        || coverage.returned_record_bytes >= byte_threshold;
+        || coverage.returned_record_bytes > byte_threshold;
     match coverage.status {
         SupportCollectorStatusV1::Complete
             if coverage.completeness == SupportCollectorCompletenessV1::Complete
@@ -403,7 +415,13 @@ pub(super) fn validate_legacy_evidence(
         }
         let mut prior_line = None;
         for line in &source.lines {
-            if line.segment > 5 {
+            let maximum_segment = match source.source {
+                SupportLegacySourceKindV1::RendererDiagnostics
+                | SupportLegacySourceKindV1::AnyharnessPrimary => 5,
+                SupportLegacySourceKindV1::WorkerPrimaryV2
+                | SupportLegacySourceKindV1::WorkerPrimaryV1 => 0,
+            };
+            if line.segment > maximum_segment {
                 return Err(SupportSchemaError::CapExceeded("legacy segment"));
             }
             validate_safe_u64(line.line)?;
@@ -529,7 +547,7 @@ fn validate_summary_endpoint_value(
 ) -> Result<(), SupportSchemaError> {
     match (state, has_value) {
         (SupportEndpointStateV1::Included, true)
-        | (SupportEndpointStateV1::LimitUncertain, true)
+        | (SupportEndpointStateV1::LimitUncertain, _)
         | (SupportEndpointStateV1::Omitted, false) => Ok(()),
         _ => Err(SupportSchemaError::InvariantViolation(name)),
     }

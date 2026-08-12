@@ -61,7 +61,24 @@ pub(super) fn skeleton_manifest() -> SupportSnapshotManifestV1 {
         serialized_bytes: 0,
         limits: SupportSnapshotLimitsV1::fixed(),
         collector: empty_coverage(),
-        sources: Vec::new(),
+        sources: vec![
+            SupportSourceManifestV1 {
+                source: SupportSourceManifestSourceV1::Collector,
+                state: SupportSourceStateV1::Omitted,
+                captured_at: TS.to_string(),
+                read_bytes: 0,
+                included_bytes: 0,
+                included_items: 0,
+            },
+            SupportSourceManifestV1 {
+                source: SupportSourceManifestSourceV1::SessionLedger,
+                state: SupportSourceStateV1::Omitted,
+                captured_at: TS.to_string(),
+                read_bytes: 0,
+                included_bytes: 0,
+                included_items: 0,
+            },
+        ],
         session_collection: SupportSessionCollectionManifestV1::Omitted {
             reason: SupportSessionOmissionReasonV1::NoSelectedBundledLocalWorkspace,
         },
@@ -78,6 +95,32 @@ pub(super) fn skeleton_manifest() -> SupportSnapshotManifestV1 {
             omissions: 0,
             truncations: 0,
         },
+    }
+}
+
+pub(super) fn set_manifest_source(
+    snapshot: &mut SupportSnapshotV3,
+    source: SupportSourceManifestSourceV1,
+    state: SupportSourceStateV1,
+    read_bytes: u64,
+    included_bytes: u64,
+    included_items: u64,
+) {
+    let entry = SupportSourceManifestV1 {
+        source,
+        state,
+        captured_at: TS.to_string(),
+        read_bytes,
+        included_bytes,
+        included_items,
+    };
+    match snapshot
+        .manifest
+        .sources
+        .binary_search_by_key(&source, |candidate| candidate.source)
+    {
+        Ok(index) => snapshot.manifest.sources[index] = entry,
+        Err(index) => snapshot.manifest.sources.insert(index, entry),
     }
 }
 
@@ -309,8 +352,16 @@ fn projected_json_values_enforce_scrub_bounds() {
 mod aggregate_tests;
 #[path = "tests/evidence.rs"]
 mod evidence_tests;
+#[path = "tests/literals.rs"]
+mod literal_tests;
+#[path = "tests/manifest_residuals.rs"]
+mod manifest_residual_tests;
+#[path = "tests/populated_golden.rs"]
+mod populated_golden_tests;
 #[path = "tests/protocol.rs"]
 mod protocol_tests;
+#[path = "tests/residuals.rs"]
+mod residual_tests;
 #[path = "tests/unions.rs"]
 mod union_tests;
 
@@ -438,6 +489,14 @@ fn session_ledger_enforces_session_cap() {
         raw_notification_included_bytes: 0,
         limit_uncertain_endpoints: 0,
     };
+    set_manifest_source(
+        &mut snapshot,
+        SupportSourceManifestSourceV1::SessionLedger,
+        SupportSourceStateV1::Included,
+        0,
+        0,
+        SESSIONS,
+    );
     stabilize_serialized_bytes(&mut snapshot).expect("stabilize session snapshot");
     validate_snapshot(&snapshot).expect("three sessions are allowed");
 

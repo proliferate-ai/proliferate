@@ -1,4 +1,4 @@
-use super::{no_evidence_skeleton, skeleton_manifest, TS};
+use super::{no_evidence_skeleton, set_manifest_source, skeleton_manifest, TS};
 
 use crate::diagnostics::support_snapshot::schema::enums::{
     SupportEndpointStateV1, SupportLiveConfigStateV1, SupportSessionSelectionV1,
@@ -207,6 +207,14 @@ fn active_snapshot() -> super::super::model::snapshot::SupportSnapshotV3 {
         raw_notification_included_bytes: 0,
         limit_uncertain_endpoints: 0,
     };
+    set_manifest_source(
+        &mut snapshot,
+        SupportSourceManifestSourceV1::SessionLedger,
+        SupportSourceStateV1::Included,
+        0,
+        0,
+        1,
+    );
     stabilize_serialized_bytes(&mut snapshot).expect("active fixed point");
     snapshot
 }

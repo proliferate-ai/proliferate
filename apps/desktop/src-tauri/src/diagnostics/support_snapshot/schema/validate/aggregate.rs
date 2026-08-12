@@ -4,12 +4,15 @@ use chrono::TimeDelta;
 use proliferate_diagnostics_protocol::v1::types::{ComponentV1, RecordClassV1};
 
 use super::super::enums::{
-    SupportCollectorStatusV1, SupportEndpointStateV1, SupportEvidenceSourceV1,
-    SupportOmissionReasonV1, SupportSessionOmissionReasonV1, SupportSessionSelectionV1,
+    SupportChildComponentV1, SupportCollectorStatusV1, SupportEndpointStateV1,
+    SupportEvidenceSourceV1, SupportLegacySourceKindV1, SupportOmissionReasonV1,
+    SupportSessionOmissionReasonV1, SupportSessionSelectionV1, SupportSourceManifestSourceV1,
+    SupportSourceStateV1,
 };
 use super::super::limits::PACKAGE_BYTES;
+use super::super::model::evidence::SupportFallbackComponentV1;
 use super::super::model::health::SupportTauriProducerHealthV1;
-use super::super::model::manifest::SupportSessionCollectionManifestV1;
+use super::super::model::manifest::{SupportSessionCollectionManifestV1, SupportSourceManifestV1};
 use super::super::model::snapshot::SupportSnapshotV3;
 use super::{parse_timestamp, SupportSchemaError};
 
@@ -20,8 +23,231 @@ pub(super) fn validate_snapshot_relationships(
     validate_collector_relationships(snapshot)?;
     validate_producer_relationships(snapshot)?;
     validate_session_relationships(snapshot)?;
+    validate_source_evidence_accounting(snapshot)?;
     validate_collector_omission(snapshot)?;
     validate_serialized_bytes(snapshot)
+}
+
+fn source_entry(
+    snapshot: &SupportSnapshotV3,
+    source: SupportSourceManifestSourceV1,
+) -> Result<&SupportSourceManifestV1, SupportSchemaError> {
+    snapshot
+        .manifest
+        .sources
+        .iter()
+        .find(|entry| entry.source == source)
+        .ok_or(SupportSchemaError::InvariantViolation(
+            "evidence section missing source accounting",
+        ))
+}
+
+fn validate_included_source(
+    source: &SupportSourceManifestV1,
+    included_items: u64,
+    exact_included_bytes: Option<u64>,
+) -> Result<(), SupportSchemaError> {
+    if source.state != SupportSourceStateV1::Included || source.included_items != included_items {
+        return Err(SupportSchemaError::InvariantViolation(
+            "evidence/source state or item accounting",
+        ));
+    }
+    if let Some(expected) = exact_included_bytes {
+        if source.included_bytes != expected {
+            return Err(SupportSchemaError::InvariantViolation(
+                "evidence/source included-byte accounting",
+            ));
+        }
+    } else if (included_items == 0) != (source.included_bytes == 0) {
+        return Err(SupportSchemaError::InvariantViolation(
+            "evidence/source included-byte presence",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_source_evidence_accounting(
+    snapshot: &SupportSnapshotV3,
+) -> Result<(), SupportSchemaError> {
+    validate_collector_source(snapshot)?;
+
+    let mut present_file_sources = Vec::with_capacity(7);
+    for component in &snapshot.fallback_evidence {
+        let (source, items) = match component {
+            SupportFallbackComponentV1::Pr3DesktopNativeMixed {
+                records,
+                opaque_lines,
+            } => (
+                SupportSourceManifestSourceV1::DesktopNativeFallback,
+                records.len() + opaque_lines.len(),
+            ),
+            SupportFallbackComponentV1::Pr5Wrapped {
+                component, records, ..
+            } => (
+                match component {
+                    SupportChildComponentV1::Anyharness => {
+                        SupportSourceManifestSourceV1::AnyharnessFallback
+                    }
+                    SupportChildComponentV1::DesktopWorker => {
+                        SupportSourceManifestSourceV1::DesktopWorkerFallback
+                    }
+                },
+                records.len(),
+            ),
+        };
+        let items = u64::try_from(items).map_err(|_| SupportSchemaError::UnsafeInteger)?;
+        validate_included_source(source_entry(snapshot, source)?, items, None)?;
+        present_file_sources.push(source);
+    }
+    for legacy in &snapshot.legacy_evidence {
+        let source = match legacy.source {
+            SupportLegacySourceKindV1::RendererDiagnostics => {
+                SupportSourceManifestSourceV1::RendererLegacy
+            }
+            SupportLegacySourceKindV1::AnyharnessPrimary => {
+                SupportSourceManifestSourceV1::AnyharnessLegacy
+            }
+            SupportLegacySourceKindV1::WorkerPrimaryV2 => {
+                SupportSourceManifestSourceV1::WorkerLegacyV2
+            }
+            SupportLegacySourceKindV1::WorkerPrimaryV1 => {
+                SupportSourceManifestSourceV1::WorkerLegacyV1
+            }
+        };
+        let items =
+            u64::try_from(legacy.lines.len()).map_err(|_| SupportSchemaError::UnsafeInteger)?;
+        validate_included_source(source_entry(snapshot, source)?, items, None)?;
+        present_file_sources.push(source);
+    }
+    for source in &snapshot.manifest.sources {
+        let is_file_source = !matches!(
+            source.source,
+            SupportSourceManifestSourceV1::Collector | SupportSourceManifestSourceV1::SessionLedger
+        );
+        if is_file_source
+            && source.state == SupportSourceStateV1::Included
+            && !present_file_sources.contains(&source.source)
+        {
+            return Err(SupportSchemaError::InvariantViolation(
+                "included source missing final evidence section",
+            ));
+        }
+    }
+
+    validate_session_source(snapshot)
+}
+
+fn validate_collector_source(snapshot: &SupportSnapshotV3) -> Result<(), SupportSchemaError> {
+    let source = source_entry(snapshot, SupportSourceManifestSourceV1::Collector)?;
+    let expected_state = match snapshot.collector.coverage.status {
+        SupportCollectorStatusV1::Complete | SupportCollectorStatusV1::LimitUncertain => {
+            SupportSourceStateV1::Included
+        }
+        SupportCollectorStatusV1::Unavailable => SupportSourceStateV1::Omitted,
+        SupportCollectorStatusV1::Interrupted | SupportCollectorStatusV1::Invalid => {
+            SupportSourceStateV1::Invalid
+        }
+    };
+    let included_items =
+        u64::try_from(snapshot.records.len()).map_err(|_| SupportSchemaError::UnsafeInteger)?;
+    if source.state != expected_state
+        || source.captured_at != snapshot.collector.captured_at
+        || source.read_bytes != snapshot.collector.coverage.returned_record_bytes
+        || source.included_items != included_items
+    {
+        return Err(SupportSchemaError::InvariantViolation(
+            "collector source accounting",
+        ));
+    }
+    if expected_state != SupportSourceStateV1::Included {
+        if source.included_bytes != 0 {
+            return Err(SupportSchemaError::InvariantViolation(
+                "collector omitted source accounting",
+            ));
+        }
+    } else if included_items == snapshot.collector.coverage.returned_records {
+        if source.included_bytes != snapshot.collector.coverage.returned_record_bytes {
+            return Err(SupportSchemaError::InvariantViolation(
+                "collector full-prefix byte accounting",
+            ));
+        }
+    } else if (included_items == 0) != (source.included_bytes == 0) {
+        return Err(SupportSchemaError::InvariantViolation(
+            "collector selected-byte presence",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_session_source(snapshot: &SupportSnapshotV3) -> Result<(), SupportSchemaError> {
+    let source = source_entry(snapshot, SupportSourceManifestSourceV1::SessionLedger)?;
+    match (
+        &snapshot.session_ledger,
+        &snapshot.manifest.session_collection,
+    ) {
+        (
+            Some(ledger),
+            SupportSessionCollectionManifestV1::Included {
+                selected_sessions,
+                session_included_bytes,
+                event_included_bytes,
+                raw_notification_included_bytes,
+                ..
+            },
+        ) => {
+            let included_bytes = session_included_bytes
+                .checked_add(*event_included_bytes)
+                .and_then(|bytes| bytes.checked_add(*raw_notification_included_bytes))
+                .ok_or(SupportSchemaError::UnsafeInteger)?;
+            validate_included_source(source, *selected_sessions, Some(included_bytes))?;
+            if ledger
+                .sessions
+                .iter()
+                .any(|session| session.summary.is_some())
+                && *session_included_bytes == 0
+            {
+                return Err(SupportSchemaError::InvariantViolation(
+                    "session summary included-byte accounting",
+                ));
+            }
+            if ledger
+                .sessions
+                .iter()
+                .any(|session| !session.normalized_events.is_empty())
+                && *event_included_bytes == 0
+            {
+                return Err(SupportSchemaError::InvariantViolation(
+                    "session event included-byte accounting",
+                ));
+            }
+            if ledger
+                .sessions
+                .iter()
+                .any(|session| !session.raw_notifications.is_empty())
+                && *raw_notification_included_bytes == 0
+            {
+                return Err(SupportSchemaError::InvariantViolation(
+                    "session raw-notification included-byte accounting",
+                ));
+            }
+        }
+        (None, SupportSessionCollectionManifestV1::Omitted { .. }) => {
+            if source.state != SupportSourceStateV1::Omitted
+                || source.included_bytes != 0
+                || source.included_items != 0
+            {
+                return Err(SupportSchemaError::InvariantViolation(
+                    "omitted session source accounting",
+                ));
+            }
+        }
+        _ => {
+            return Err(SupportSchemaError::InvariantViolation(
+                "session source/sessionCollection state",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_window(snapshot: &SupportSnapshotV3) -> Result<(), SupportSchemaError> {
