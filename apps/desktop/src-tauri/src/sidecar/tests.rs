@@ -130,7 +130,7 @@ async fn observer_is_installed_for_a_retained_nonhealthy_child() {
 #[tokio::test]
 async fn terminal_shutdown_arm_rejects_setup_boot_before_spawn() {
     let sidecar = create_sidecar(8_457);
-    arm_terminal_shutdown(&sidecar).await;
+    arm_terminal_shutdown(&sidecar);
 
     // The rejected boot must never consult the collector supervisor, so a
     // fake launcher-error supervisor is sufficient here.
@@ -156,6 +156,41 @@ async fn terminal_shutdown_arm_rejects_setup_boot_before_spawn() {
     ));
     assert!(sidecar.lock().await.child.is_none());
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+#[tokio::test]
+async fn arm_signals_anyharness_while_process_owner_is_held() {
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+
+    let sidecar = create_sidecar(8_457);
+    let mut descriptors = [0_i32; 2];
+    assert_eq!(unsafe { libc::pipe(descriptors.as_mut_ptr()) }, 0);
+    let (reader, writer) = unsafe {
+        (
+            OwnedFd::from_raw_fd(descriptors[0]),
+            OwnedFd::from_raw_fd(descriptors[1]),
+        )
+    };
+    sidecar.set_child_shutdown_signal(Some(
+        crate::diagnostics_collector::child_bridge::shutdown_signal::ChildShutdownSignal::for_test(
+            writer,
+        ),
+    ));
+    let _owner = sidecar.lock().await;
+
+    let started = std::time::Instant::now();
+    arm_terminal_shutdown(&sidecar);
+    let mut byte = [0_u8; 1];
+    assert_eq!(
+        unsafe { libc::read(reader.as_raw_fd(), byte.as_mut_ptr().cast(), 1) },
+        1
+    );
+    assert_eq!(byte, [1]);
+    assert!(started.elapsed() < Duration::from_millis(500));
 }
 
 #[cfg(unix)]

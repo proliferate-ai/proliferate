@@ -175,6 +175,7 @@ pub(crate) async fn prepare_desktop_dispatch_worker_update(
 
 pub(crate) fn arm_terminal_shutdown(state: &SharedCloudWorkerState) {
     state.terminal_shutdown_armed.store(true, Ordering::Release);
+    state.signal_child_shutdown();
 }
 
 pub(crate) async fn arm_terminal_shutdown_and_stop_worker(
@@ -208,7 +209,9 @@ pub(crate) async fn stop_tracked_desktop_dispatch_worker(
     any(target_arch = "aarch64", target_arch = "x86_64")
 ))]
 pub(crate) async fn flush_child_diagnostics(state: &SharedCloudWorkerState, deadline: Instant) {
-    let lifecycle = state.lifecycle.lock().await;
+    let Ok(lifecycle) = timeout_at(deadline, state.lifecycle.lock()).await else {
+        return;
+    };
     let Some(bridge) = lifecycle
         .process
         .as_ref()
@@ -216,10 +219,10 @@ pub(crate) async fn flush_child_diagnostics(state: &SharedCloudWorkerState, dead
     else {
         return;
     };
+    // Retry the idempotent signal from stable process ownership. This also
+    // closes the narrow outer-slot handoff race without a fresh deadline.
     bridge.signal_shutdown();
-    let _ = bridge
-        .request_flush(deadline.saturating_duration_since(Instant::now()))
-        .await;
+    let _ = bridge.request_flush_until(deadline).await;
 }
 
 #[cfg(not(all(
@@ -268,7 +271,10 @@ async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, Stri
 
     let deadline = Instant::now() + Duration::from_secs(2);
     let stop_result = match observation {
-        Ok(Some(status)) => Ok(status),
+        Ok(Some(status)) => Ok((
+            status,
+            crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Natural,
+        )),
         Ok(None) => {
             let process = lifecycle
                 .process
@@ -281,6 +287,12 @@ async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, Stri
             timeout_at(deadline, process.child.wait())
                 .await
                 .map_err(|_| "Timed out stopping Proliferate Worker".to_string())?
+                .map(|status| {
+                    (
+                        status,
+                        crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Forced,
+                    )
+                })
                 .map_err(|error| format!("Failed to reap Proliferate Worker: {error}"))
         }
         // Do not fall through to `kill` after an ambiguous inspection error.
@@ -296,7 +308,7 @@ async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, Stri
         )),
     };
     match stop_result {
-        Ok(status) => {
+        Ok((status, kind)) => {
             // The child result is established; complete the EOF/cancellation
             // and bridge fences before the verified owner is released. An
             // error above retains every owned resource unfenced.
@@ -304,7 +316,7 @@ async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, Stri
                 .process
                 .as_mut()
                 .expect("successful observation retains process");
-            process.finish_verified_reap(status, deadline).await;
+            process.finish_verified_reap(status, kind, deadline).await;
             finish_stop_attempt(lifecycle, Ok(()))
         }
         Err(error) => finish_stop_attempt(lifecycle, Err(error)),

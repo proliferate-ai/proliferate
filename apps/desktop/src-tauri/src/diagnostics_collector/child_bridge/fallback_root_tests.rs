@@ -24,7 +24,7 @@ fn temp_base() -> PathBuf {
         uuid::Uuid::new_v4()
     ));
     fs::create_dir_all(&base).expect("create temp base");
-    base
+    fs::canonicalize(base).expect("canonical test base")
 }
 
 fn expect_available(outcome: FallbackRootOutcome) -> OwnedFd {
@@ -159,6 +159,21 @@ fn symlinked_parent_component_is_security_rejected() {
         FallbackUnavailableClassification::SecurityRejected,
     );
     fs::remove_dir_all(&base).ok();
+}
+
+#[test]
+fn symlinked_ancestor_of_the_base_is_security_rejected() {
+    let root = temp_base();
+    let real = root.join("real");
+    let via_link = root.join("via-link");
+    fs::create_dir(&real).expect("create real ancestor");
+    fs::create_dir(real.join("base")).expect("create base");
+    std::os::unix::fs::symlink(&real, &via_link).expect("symlink ancestor");
+    expect_unavailable(
+        resolve_fallback_root(&via_link.join("base"), &[]),
+        FallbackUnavailableClassification::SecurityRejected,
+    );
+    fs::remove_dir_all(&root).ok();
 }
 
 #[test]

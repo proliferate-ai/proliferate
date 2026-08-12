@@ -12,7 +12,7 @@ pub(super) async fn boot_inner(
     sidecar: &SharedSidecar,
     supervisor: &Arc<DiagnosticsCollectorSupervisor>,
 ) -> BootOutcome {
-    if sidecar.lock().await.terminal_shutdown_armed {
+    if sidecar.shutdown_is_armed() {
         return BootOutcome::Rejected;
     }
     // Dev-URL mode: point at an externally running AnyHarness, skip spawn.
@@ -23,7 +23,7 @@ pub(super) async fn boot_inner(
         );
         {
             let mut guard = sidecar.lock().await;
-            if guard.terminal_shutdown_armed {
+            if sidecar.shutdown_is_armed() {
                 return BootOutcome::Rejected;
             }
             guard.info.port = runtime_url_port(&dev_url).unwrap_or(guard.info.port);
@@ -48,7 +48,7 @@ pub(super) async fn boot_inner(
 
     let (port, launch_env) = {
         let guard = sidecar.lock().await;
-        if guard.terminal_shutdown_armed {
+        if sidecar.shutdown_is_armed() {
             return BootOutcome::Rejected;
         }
         (guard.info.port, guard.launch_env.clone())
@@ -61,7 +61,7 @@ pub(super) async fn boot_inner(
     );
 
     let mut guard = sidecar.lock().await;
-    if guard.terminal_shutdown_armed {
+    if sidecar.shutdown_is_armed() {
         return BootOutcome::Rejected;
     }
     guard.info.status = RuntimeStatus::Starting;
@@ -80,6 +80,12 @@ pub(super) async fn boot_inner(
                 any(target_arch = "aarch64", target_arch = "x86_64")
             ))]
             {
+                sidecar.set_child_shutdown_signal(
+                    spawned
+                        .bridge
+                        .as_ref()
+                        .and_then(|bridge| bridge.shutdown_signal()),
+                );
                 guard.diagnostics_bridge = spawned.bridge;
             }
             guard.info.status = RuntimeStatus::Starting;
@@ -115,7 +121,7 @@ pub(super) async fn wait_healthy(sidecar: &SharedSidecar, require_child: bool) -
     loop {
         let url = {
             let mut guard = sidecar.lock().await;
-            if guard.terminal_shutdown_armed {
+            if sidecar.shutdown_is_armed() {
                 return BootOutcome::Cancelled;
             }
             if require_child {
@@ -127,9 +133,20 @@ pub(super) async fn wait_healthy(sidecar: &SharedSidecar, require_child: bool) -
                 };
                 match child.try_wait() {
                     Ok(Some(status)) => {
-                        guard.finish_diagnostics_reap(status).await;
+                        guard
+                            .finish_diagnostics_reap(
+                                status,
+                                crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Natural,
+                                tokio::time::Instant::now() + Duration::from_millis(500),
+                            )
+                            .await;
                         guard.child = None;
                         guard.clear_diagnostics_bridge();
+                        #[cfg(all(
+                            target_os = "macos",
+                            any(target_arch = "aarch64", target_arch = "x86_64")
+                        ))]
+                        sidecar.set_child_shutdown_signal(None);
                         guard.info.status = RuntimeStatus::Failed;
                         persist_runtime_info(&guard.info, None);
                         tracing::error!(

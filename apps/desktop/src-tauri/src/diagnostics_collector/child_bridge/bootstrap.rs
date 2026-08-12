@@ -10,15 +10,23 @@
 //! latest supervisor watch pair before its capability descriptor crosses the
 //! bridge.
 
-use std::{os::fd::AsRawFd, os::unix::net::UnixStream, sync::Arc};
+use std::{
+    os::fd::AsRawFd,
+    os::unix::net::UnixStream,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use proliferate_diagnostics_client::bridge::wire::{
     BootstrapCollectorState, BootstrapFallbackState, CapabilityFdRole,
-    CollectorUnavailableClassification, FallbackFdRole, ParentFrame, CHILD_BRIDGE_PROTOCOL_VERSION,
+    CollectorUnavailableClassification, FallbackFdRole, ParentFrame, CHILD_BOOTSTRAP_READ_DEADLINE,
+    CHILD_BRIDGE_PROTOCOL_VERSION,
 };
 use tokio::sync::watch;
 
-use super::{fallback_root::FallbackRootOutcome, runtime::BridgeShared};
+use super::{
+    fallback_root::FallbackRootOutcome, identity::CollectorIdentity, runtime::BridgeShared,
+};
 use crate::diagnostics_collector::supervisor::{
     DesktopDiagnosticsSupervisorStateV1, DiagnosticsCollectorSupervisor, ProtectedChildHandoff,
     SupervisorUnavailable,
@@ -30,32 +38,32 @@ use crate::diagnostics_collector::supervisor::{
 struct AcquiredCollectorState {
     state: BootstrapCollectorState,
     capability: Option<UnixStream>,
+    unsupported: bool,
     /// The generation watch advanced while this view was being acquired; the
     /// caller discards it and converges directly to the newest value.
     stale: bool,
 }
 
-/// PR 3 states map onto the closed wire vocabulary. `unsupported` never
-/// enters a bundled frame: a bundled bridge cannot exist on an unsupported
-/// target, so observing it fails closed to `handoff_unavailable`. A `Ready`
-/// state reaching this mapping means the ready handoff itself was not usable.
+/// Maps only states that may participate in a supported bundled launch. An
+/// `Unsupported` supervisor state disables protected activation at the owner
+/// before descriptor creation and is never normalized into a bundled frame.
 fn classification_for_state(
     state: &DesktopDiagnosticsSupervisorStateV1,
-) -> CollectorUnavailableClassification {
+) -> Option<CollectorUnavailableClassification> {
     match state {
         DesktopDiagnosticsSupervisorStateV1::Starting { .. } => {
-            CollectorUnavailableClassification::Starting
+            Some(CollectorUnavailableClassification::Starting)
         }
         DesktopDiagnosticsSupervisorStateV1::Degraded { .. } => {
-            CollectorUnavailableClassification::Degraded
+            Some(CollectorUnavailableClassification::Degraded)
         }
         DesktopDiagnosticsSupervisorStateV1::Stopped { .. } => {
-            CollectorUnavailableClassification::Stopped
+            Some(CollectorUnavailableClassification::Stopped)
         }
-        DesktopDiagnosticsSupervisorStateV1::Ready { .. }
-        | DesktopDiagnosticsSupervisorStateV1::Unsupported { .. } => {
-            CollectorUnavailableClassification::HandoffUnavailable
+        DesktopDiagnosticsSupervisorStateV1::Ready { .. } => {
+            Some(CollectorUnavailableClassification::HandoffUnavailable)
         }
+        DesktopDiagnosticsSupervisorStateV1::Unsupported { .. } => None,
     }
 }
 
@@ -64,17 +72,21 @@ fn classification_for_state(
 /// cross the bridge.
 fn classification_for_unavailable(
     unavailable: SupervisorUnavailable,
-) -> CollectorUnavailableClassification {
+) -> Option<CollectorUnavailableClassification> {
     match unavailable {
-        SupervisorUnavailable::Starting => CollectorUnavailableClassification::Starting,
-        SupervisorUnavailable::Degraded => CollectorUnavailableClassification::Degraded,
-        SupervisorUnavailable::Stopped => CollectorUnavailableClassification::Stopped,
-        SupervisorUnavailable::ShuttingDown => CollectorUnavailableClassification::ShuttingDown,
-        SupervisorUnavailable::Unsupported
-        | SupervisorUnavailable::Replaced
+        SupervisorUnavailable::Unsupported => None,
+        SupervisorUnavailable::Starting => Some(CollectorUnavailableClassification::Starting),
+        SupervisorUnavailable::Degraded => Some(CollectorUnavailableClassification::Degraded),
+        SupervisorUnavailable::Stopped => Some(CollectorUnavailableClassification::Stopped),
+        SupervisorUnavailable::ShuttingDown => {
+            Some(CollectorUnavailableClassification::ShuttingDown)
+        }
+        SupervisorUnavailable::Replaced
         | SupervisorUnavailable::CollectorRejected
         | SupervisorUnavailable::Deadline
-        | SupervisorUnavailable::Protocol => CollectorUnavailableClassification::HandoffUnavailable,
+        | SupervisorUnavailable::Protocol => {
+            Some(CollectorUnavailableClassification::HandoffUnavailable)
+        }
     }
 }
 
@@ -118,6 +130,10 @@ fn acquire_collector_state(
 ) -> AcquiredCollectorState {
     let generation = *generation_rx.borrow_and_update();
     let state = supervisor.state();
+    let mut unsupported = matches!(
+        &state,
+        DesktopDiagnosticsSupervisorStateV1::Unsupported { .. }
+    );
     let (state, capability) = if matches!(state, DesktopDiagnosticsSupervisorStateV1::Ready { .. })
     {
         match supervisor.protected_child_handoff() {
@@ -145,29 +161,35 @@ fn acquire_collector_state(
                 ),
                 None,
             ),
-            Err(unavailable) => (
-                unavailable_state(generation, classification_for_unavailable(unavailable)),
-                None,
-            ),
+            Err(unavailable) => match classification_for_unavailable(unavailable) {
+                Some(classification) => (unavailable_state(generation, classification), None),
+                None => {
+                    // The supervisor crossed to Unsupported after the state
+                    // snapshot. Preserve PR 3's Disabled/unprotected contract:
+                    // this placeholder is never framed because callers reject
+                    // the acquired view through `unsupported` below.
+                    unsupported = true;
+                    (
+                        unavailable_state(
+                            generation,
+                            CollectorUnavailableClassification::HandoffUnavailable,
+                        ),
+                        None,
+                    )
+                }
+            },
         }
     } else {
-        (
-            unavailable_state(generation, classification_for_state(&state)),
-            None,
-        )
+        let classification = classification_for_state(&state)
+            .unwrap_or(CollectorUnavailableClassification::HandoffUnavailable);
+        (unavailable_state(generation, classification), None)
     };
     let stale = generation_rx.has_changed().unwrap_or(false);
     AcquiredCollectorState {
         state,
         capability,
+        unsupported,
         stale,
-    }
-}
-
-fn frame_generation(state: &BootstrapCollectorState) -> u64 {
-    match state {
-        BootstrapCollectorState::Ready { generation, .. }
-        | BootstrapCollectorState::Unavailable { generation, .. } => *generation,
     }
 }
 
@@ -185,6 +207,10 @@ pub(super) fn send_bootstrap(
     fallback: FallbackRootOutcome,
 ) {
     let acquired = acquire_collector_state(supervisor, generation_rx);
+    if acquired.unsupported {
+        shared.mark_lost();
+        return;
+    }
     let (fallback_state, fallback_descriptor) = match fallback {
         FallbackRootOutcome::Available(descriptor) => (
             BootstrapFallbackState::Available {
@@ -196,7 +222,10 @@ pub(super) fn send_bootstrap(
             (BootstrapFallbackState::Unavailable { classification }, None)
         }
     };
-    let generation = frame_generation(&acquired.state);
+    let Some(identity) = CollectorIdentity::from_bootstrap(&acquired.state) else {
+        shared.mark_lost();
+        return;
+    };
     let frame = ParentFrame::Bootstrap {
         protocol_version: CHILD_BRIDGE_PROTOCOL_VERSION,
         component: shared.component(),
@@ -210,8 +239,16 @@ pub(super) fn send_bootstrap(
     if let Some(fallback_descriptor) = &fallback_descriptor {
         descriptors.push(fallback_descriptor.as_raw_fd());
     }
-    shared.set_current_generation(generation);
-    let _ = shared.send(&frame, &descriptors);
+    let deadline = Instant::now() + CHILD_BOOTSTRAP_READ_DEADLINE;
+    let Ok(_transaction) = shared.lock_transaction_until(deadline) else {
+        shared.mark_lost();
+        return;
+    };
+    if shared.publish_collector_until(identity, deadline).is_err() {
+        shared.mark_lost();
+        return;
+    }
+    let _ = shared.send_until(&frame, &descriptors, deadline);
 }
 
 /// Drives generation invalidation and reacquisition. On every generation
@@ -234,7 +271,14 @@ pub(super) async fn run_generation_task(
             if acquired.stale {
                 continue;
             }
-            let generation = frame_generation(&acquired.state);
+            if acquired.unsupported {
+                shared.mark_lost();
+                return;
+            }
+            let Some(identity) = CollectorIdentity::from_bootstrap(&acquired.state) else {
+                shared.mark_lost();
+                return;
+            };
             let frame = match acquired.state {
                 BootstrapCollectorState::Ready {
                     generation,
@@ -259,11 +303,29 @@ pub(super) async fn run_generation_task(
             if let Some(capability) = &acquired.capability {
                 descriptors.push(capability.as_raw_fd());
             }
-            shared.set_current_generation(generation);
-            if shared.send(&frame, &descriptors).is_err() {
+            let deadline = Instant::now() + Duration::from_millis(100);
+            let Ok(_transaction) = shared.lock_transaction_until(deadline) else {
+                shared.mark_lost();
+                return;
+            };
+            if shared.publish_collector_until(identity, deadline).is_err() {
+                shared.mark_lost();
+                return;
+            }
+            if shared.send_until(&frame, &descriptors, deadline).is_err() {
                 return;
             }
             break;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{classification_for_unavailable, SupervisorUnavailable};
+
+    #[test]
+    fn unsupported_has_no_bundled_unavailable_classification() {
+        assert!(classification_for_unavailable(SupervisorUnavailable::Unsupported).is_none());
     }
 }

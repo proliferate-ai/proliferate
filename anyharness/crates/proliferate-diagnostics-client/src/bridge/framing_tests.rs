@@ -215,6 +215,68 @@ mod unix_socket_tests {
     }
 
     #[test]
+    fn partial_header_held_open_obeys_one_absolute_deadline() {
+        let (receiver, mut sender) = UnixStream::pair().expect("socketpair");
+        sender.write_all(&[0, 1]).expect("partial header");
+        let started = std::time::Instant::now();
+        assert!(matches!(
+            receive_frame_until::<ParentFrame>(&receiver, started + Duration::from_millis(40),)
+                .map(|_| ()),
+            Err(FrameError::Deadline)
+        ));
+        assert!(started.elapsed() < Duration::from_millis(250));
+    }
+
+    #[test]
+    fn partial_body_held_open_obeys_the_same_deadline() {
+        let (receiver, mut sender) = UnixStream::pair().expect("socketpair");
+        sender.write_all(&50_u32.to_be_bytes()).expect("header");
+        sender.write_all(&[b'{'; 10]).expect("partial body");
+        let started = std::time::Instant::now();
+        assert!(matches!(
+            receive_frame_until::<ParentFrame>(&receiver, started + Duration::from_millis(40),)
+                .map(|_| ()),
+            Err(FrameError::Deadline)
+        ));
+        assert!(started.elapsed() < Duration::from_millis(250));
+    }
+
+    #[test]
+    fn saturated_peer_cannot_block_a_frame_send() {
+        let (sender, _receiver) = UnixStream::pair().expect("socketpair");
+        let bytes = [b'x'; 4096];
+        loop {
+            let written = unsafe {
+                libc::send(
+                    sender.as_raw_fd(),
+                    bytes.as_ptr().cast(),
+                    bytes.len(),
+                    libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
+                )
+            };
+            if written >= 0 {
+                continue;
+            }
+            assert_eq!(
+                std::io::Error::last_os_error().raw_os_error(),
+                Some(libc::EAGAIN)
+            );
+            break;
+        }
+        let started = std::time::Instant::now();
+        assert!(matches!(
+            send_frame_until(
+                &sender,
+                &status_request(44),
+                &[],
+                started + Duration::from_millis(40),
+            ),
+            Err(FrameError::Deadline)
+        ));
+        assert!(started.elapsed() < Duration::from_millis(250));
+    }
+
+    #[test]
     fn receive_frame_rejects_rights_beyond_the_declared_maximum() {
         let (mut receiver, sender) = UnixStream::pair().expect("socketpair");
         let (mut peer, spare) = UnixStream::pair().expect("spare fd source");

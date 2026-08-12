@@ -271,6 +271,11 @@ impl TauriDiagnosticsProducer {
     }
 
     pub(crate) async fn drain(&self, deadline: Duration) -> bool {
+        self.drain_until(tokio::time::Instant::now() + deadline)
+            .await
+    }
+
+    pub(crate) async fn drain_until(&self, deadline: tokio::time::Instant) -> bool {
         let wait = async {
             loop {
                 let empty = self
@@ -286,7 +291,9 @@ impl TauriDiagnosticsProducer {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         };
-        tokio::time::timeout(deadline, wait).await.unwrap_or(false)
+        tokio::time::timeout_at(deadline, wait)
+            .await
+            .unwrap_or(false)
     }
 
     pub(crate) fn close(&self) {

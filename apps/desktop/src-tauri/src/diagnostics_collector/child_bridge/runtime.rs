@@ -3,43 +3,41 @@
     any(target_arch = "aarch64", target_arch = "x86_64")
 ))]
 
-//! Parent-side runtime for one protected child diagnostics bridge.
-//!
-//! One bridge reader and one serialized writer exist per child; the status
-//! and flush request slots are fixed one-slot state, not growable maps. The
-//! runtime is stored by the identity-stable process owner together with the
-//! owned `Child`; a lost bridge is an observability degradation and never a
-//! product failure.
+//! Parent-side state machine for one protected child diagnostics bridge.
 
 use std::{
+    net::Shutdown,
     os::fd::OwnedFd,
     os::unix::net::UnixStream,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, MutexGuard, TryLockError,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use proliferate_diagnostics_client::{
     bridge::{
-        framing::{send_frame, ReceivedFrame},
-        wire::{
-            valid_protocol_version, ChildFrame, DeliveryFence, ParentFrame, WireComponent,
-            CHILD_BRIDGE_PROTOCOL_VERSION, CHILD_STATUS_RESPONSE_DEADLINE,
-        },
+        framing::{send_frame_until, ReceivedFrame},
+        wire::{valid_protocol_version, ChildFrame, DeliveryFence, ParentFrame, WireComponent},
     },
     ProducerStatusSnapshot,
 };
-use proliferate_diagnostics_protocol::v1::types::ComponentV1;
+use proliferate_diagnostics_protocol::v1::{limits::MAX_SAFE_INTEGER, types::ComponentV1};
 use tokio::sync::oneshot;
 
-use super::{bootstrap, fallback_root::FallbackRootOutcome, reader::run_reader};
+use super::{
+    bootstrap,
+    fallback_root::FallbackRootOutcome,
+    identity::{valid_id, CollectorIdentity},
+    reader::run_reader,
+    shutdown_signal::ChildShutdownSignal,
+};
 use crate::diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor;
 
-/// Maximum child share of the joined producer deadline.
 pub(crate) const MAX_CHILD_FLUSH_DEADLINE_MS: u64 = 500;
+pub(super) const FRAME_COMPLETION_DEADLINE: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ChildProcessPresence {
@@ -55,9 +53,6 @@ pub(crate) enum ChildBridgeConnection {
     Lost,
 }
 
-/// Bounded internal per-component state for PR 6 consumption. It never
-/// fabricates a producer snapshot: a lost bridge, a status timeout, or an
-/// invalid returned snapshot all leave `producer` empty.
 #[derive(Clone, Debug)]
 pub(crate) struct DesktopChildDiagnosticsState {
     pub(crate) process: ChildProcessPresence,
@@ -65,48 +60,62 @@ pub(crate) struct DesktopChildDiagnosticsState {
     pub(crate) producer: Option<ProducerStatusSnapshot>,
 }
 
-/// One flush or terminal result: the child's final snapshot plus, only when
-/// every dispatched request closed coherently, its ordered delivery fence.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ChildFlushResult {
     pub(crate) snapshot: ProducerStatusSnapshot,
     pub(crate) delivery_fence: Option<DeliveryFence>,
 }
 
-struct PendingRequest<T> {
-    request_id: u64,
-    respond: oneshot::Sender<T>,
+#[derive(Clone)]
+pub(super) struct RequestBinding {
+    pub(super) collector: CollectorIdentity,
+    pub(super) producer_boot_id: String,
 }
 
-struct SharedState {
-    connection: ChildBridgeConnection,
-    acked_producer_boot: Option<String>,
-    flush_completed: bool,
-    status_slot: Option<PendingRequest<ProducerStatusSnapshot>>,
-    flush_slot: Option<PendingRequest<ChildFlushResult>>,
-    completed_flush: Option<ChildFlushResult>,
-    terminal: Option<ChildFlushResult>,
+pub(super) struct PendingRequest<T> {
+    pub(super) request_id: u64,
+    pub(super) binding: RequestBinding,
+    pub(super) respond: oneshot::Sender<T>,
+}
+
+pub(super) struct SharedState {
+    pub(super) connection: ChildBridgeConnection,
+    pub(super) collector: CollectorIdentity,
+    pub(super) acked_producer_boot: Option<String>,
+    pub(super) flush_completed: bool,
+    pub(super) status_slot: Option<PendingRequest<ProducerStatusSnapshot>>,
+    pub(super) flush_slot: Option<PendingRequest<ChildFlushResult>>,
+    pub(super) completed_flush: Option<ChildFlushResult>,
+    pub(super) terminal: Option<ChildFlushResult>,
 }
 
 pub(super) struct BridgeShared {
     component: WireComponent,
+    transaction: Mutex<()>,
     writer: Mutex<Option<UnixStream>>,
+    reader_waker: Option<UnixStream>,
     reader_stop: AtomicBool,
-    current_generation: AtomicU64,
+    permanently_lost: AtomicBool,
+    pub(super) clean_eof_allowed: Arc<AtomicBool>,
     next_request_id: AtomicU64,
-    state: Mutex<SharedState>,
+    pub(super) state: Mutex<SharedState>,
 }
 
 impl BridgeShared {
-    fn new(component: WireComponent, writer: UnixStream) -> Self {
+    pub(super) fn new(component: WireComponent, writer: UnixStream) -> Self {
+        let reader_waker = writer.try_clone().ok();
         Self {
             component,
+            transaction: Mutex::new(()),
             writer: Mutex::new(Some(writer)),
+            reader_waker,
             reader_stop: AtomicBool::new(false),
-            current_generation: AtomicU64::new(0),
+            permanently_lost: AtomicBool::new(false),
+            clean_eof_allowed: Arc::new(AtomicBool::new(false)),
             next_request_id: AtomicU64::new(1),
             state: Mutex::new(SharedState {
                 connection: ChildBridgeConnection::NotActivated,
+                collector: CollectorIdentity::unavailable(0).expect("zero is safe"),
                 acked_producer_boot: None,
                 flush_completed: false,
                 status_slot: None,
@@ -121,52 +130,143 @@ impl BridgeShared {
         self.component
     }
 
-    pub(super) fn set_current_generation(&self, generation: u64) {
-        self.current_generation.store(generation, Ordering::Release);
-    }
-
-    /// Serializes one frame onto the bridge. Any send failure — including a
-    /// short send inside the framing layer — closes the bridge permanently.
-    pub(super) fn send(&self, frame: &ParentFrame, descriptors: &[i32]) -> Result<(), ()> {
-        {
-            let writer = self
-                .writer
-                .lock()
-                .unwrap_or_else(|error| error.into_inner());
-            let Some(stream) = writer.as_ref() else {
-                return Err(());
-            };
-            if send_frame(stream, frame, descriptors).is_ok() {
-                return Ok(());
+    /// Serializes collector publication/frame delivery with request
+    /// registration/frame delivery. Acquiring it is always charged to the
+    /// caller's existing absolute deadline.
+    pub(super) fn lock_transaction_until(
+        &self,
+        deadline: Instant,
+    ) -> Result<MutexGuard<'_, ()>, ()> {
+        loop {
+            match self.transaction.try_lock() {
+                Ok(transaction) => return Ok(transaction),
+                Err(TryLockError::Poisoned(error)) => return Ok(error.into_inner()),
+                Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
+                    thread::yield_now();
+                }
+                Err(TryLockError::WouldBlock) => return Err(()),
             }
         }
-        self.mark_lost();
-        Err(())
     }
 
-    /// Permanent bridge loss: drops the writer, fails both one-slot requests
-    /// (their senders drop, waking the callers with "unavailable"), and pins
-    /// the connection state.
+    /// Publishes availability, generation, and boot as one coherent value.
+    /// Any change cancels requests and revokes proof tied to the old value.
+    pub(super) fn publish_collector_until(
+        &self,
+        collector: CollectorIdentity,
+        deadline: Instant,
+    ) -> Result<(), ()> {
+        let mut state = self.lock_state_until(deadline)?;
+        if state.collector == collector {
+            return Ok(());
+        }
+        state.collector = collector;
+        state.status_slot = None;
+        state.flush_slot = None;
+        revoke_proof(&mut state);
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_ready_collector(&self, generation: u64, collector_boot_id: &str) {
+        self.publish_collector_until(
+            CollectorIdentity::ready(generation, collector_boot_id.to_owned())
+                .expect("test collector identity is valid"),
+            Instant::now() + Duration::from_secs(1),
+        )
+        .expect("test collector publication");
+    }
+
+    pub(super) fn send_until(
+        &self,
+        frame: &ParentFrame,
+        descriptors: &[i32],
+        deadline: Instant,
+    ) -> Result<(), ()> {
+        if self.is_permanently_lost() {
+            return Err(());
+        }
+        let result = loop {
+            match self.writer.try_lock() {
+                Ok(writer) => {
+                    let Some(stream) = writer.as_ref() else {
+                        break Err(());
+                    };
+                    break send_frame_until(stream, frame, descriptors, deadline).map_err(|_| ());
+                }
+                Err(TryLockError::Poisoned(error)) => {
+                    let writer = error.into_inner();
+                    let Some(stream) = writer.as_ref() else {
+                        break Err(());
+                    };
+                    break send_frame_until(stream, frame, descriptors, deadline).map_err(|_| ());
+                }
+                Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
+                    thread::yield_now();
+                }
+                Err(TryLockError::WouldBlock) => break Err(()),
+            }
+        };
+        if result.is_err() {
+            self.mark_lost();
+        }
+        result
+    }
+
+    pub(super) fn lock_state_until(
+        &self,
+        deadline: Instant,
+    ) -> Result<MutexGuard<'_, SharedState>, ()> {
+        loop {
+            match self.state.try_lock() {
+                Ok(state) => return Ok(state),
+                Err(TryLockError::Poisoned(error)) => return Ok(error.into_inner()),
+                Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
+                    thread::yield_now();
+                }
+                Err(TryLockError::WouldBlock) => return Err(()),
+            }
+        }
+    }
+
     pub(super) fn mark_lost(&self) {
-        *self
-            .writer
-            .lock()
-            .unwrap_or_else(|error| error.into_inner()) = None;
+        self.permanently_lost.store(true, Ordering::Release);
+        self.wake_reader();
+        match self.state.try_lock() {
+            Ok(mut state) => revoke_lost_state(&mut state),
+            Err(TryLockError::Poisoned(error)) => revoke_lost_state(&mut error.into_inner()),
+            Err(TryLockError::WouldBlock) => {}
+        }
+    }
+
+    /// EOF is proof-preserving only for a terminal frame, or for a completed
+    /// parent flush after the dedicated shutdown descriptor was signaled.
+    pub(super) fn mark_clean_eof(&self) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let preserve = state.terminal.is_some()
+            || (self.clean_eof_allowed.load(Ordering::Acquire) && state.completed_flush.is_some());
         state.connection = ChildBridgeConnection::Lost;
         state.status_slot = None;
         state.flush_slot = None;
+        if !preserve {
+            revoke_proof(&mut state);
+        }
     }
 
-    /// Validates and applies one received child frame. Any violation of the
-    /// closed protocol — rights on a child frame, an unknown version, a wrong
-    /// component, an unsolicited or mismatched response, or a duplicate /
-    /// pre-bootstrap / post-flush / wrong-boot / wrong-generation terminal —
-    /// fails closed and terminates the bridge.
     pub(super) fn handle_child_frame(&self, received: ReceivedFrame<ChildFrame>) -> Result<(), ()> {
         if !received.descriptors.is_empty() {
             return Err(());
         }
+        if self.permanently_lost.load(Ordering::Acquire) {
+            return Err(());
+        }
+        // Shares the request/publication transaction. A terminal frame can
+        // therefore either win before request registration (so no request is
+        // sent), or resolve a slot whose FlushRequest is already fully sent.
+        let _transaction = self
+            .transaction
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         match received.frame {
             ChildFrame::BootstrapAck {
@@ -175,6 +275,7 @@ impl BridgeShared {
                 producer_boot_id,
             } if valid_protocol_version(protocol_version)
                 && component == self.component
+                && valid_id(&producer_boot_id)
                 && state.connection == ChildBridgeConnection::NotActivated =>
             {
                 state.connection = ChildBridgeConnection::Connected;
@@ -185,12 +286,13 @@ impl BridgeShared {
                 request_id,
                 snapshot,
             } if valid_protocol_version(protocol_version)
-                && self.snapshot_matches(&state, &snapshot) =>
+                && request_id <= MAX_SAFE_INTEGER
+                && state.connection == ChildBridgeConnection::Connected =>
             {
-                let Some(pending) = state.status_slot.take() else {
-                    return Err(());
-                };
-                if pending.request_id != request_id {
+                let pending = state.status_slot.take().ok_or(())?;
+                if pending.request_id != request_id
+                    || !response_matches(self.component, &state, &pending.binding, &snapshot)
+                {
                     return Err(());
                 }
                 let _ = pending.respond.send(snapshot);
@@ -201,19 +303,18 @@ impl BridgeShared {
                 snapshot,
                 delivery_fence,
             } if valid_protocol_version(protocol_version)
-                && self.snapshot_matches(&state, &snapshot) =>
+                && request_id <= MAX_SAFE_INTEGER
+                && state.connection == ChildBridgeConnection::Connected =>
             {
-                let Some(pending) = state.flush_slot.take() else {
-                    return Err(());
-                };
-                if pending.request_id != request_id {
+                let pending = state.flush_slot.take().ok_or(())?;
+                if pending.request_id != request_id
+                    || !response_matches(self.component, &state, &pending.binding, &snapshot)
+                    || delivery_fence.as_ref().is_some_and(|fence| {
+                        !pending.binding.collector.matches_fence(&snapshot, fence)
+                    })
+                {
                     return Err(());
                 }
-                // A fence whose boot or generation does not match current
-                // state is rejected and cannot qualify delivery; the response
-                // itself still resolves the request.
-                let delivery_fence =
-                    delivery_fence.filter(|fence| self.fence_matches(&state, fence));
                 let result = ChildFlushResult {
                     snapshot,
                     delivery_fence,
@@ -228,31 +329,37 @@ impl BridgeShared {
                 producer_boot_id,
                 snapshot,
                 delivery_fence,
-            } if valid_protocol_version(protocol_version) && component == self.component => {
+            } if valid_protocol_version(protocol_version)
+                && component == self.component
+                && state.connection == ChildBridgeConnection::Connected =>
+            {
+                let binding = RequestBinding {
+                    collector: state.collector.clone(),
+                    producer_boot_id: producer_boot_id.clone(),
+                };
                 if state.terminal.is_some()
                     || state.flush_completed
                     || state.acked_producer_boot.as_deref() != Some(producer_boot_id.as_str())
-                    || !self.snapshot_matches(&state, &snapshot)
+                    || !response_matches(self.component, &state, &binding, &snapshot)
+                    || delivery_fence
+                        .as_ref()
+                        .is_some_and(|fence| !binding.collector.matches_fence(&snapshot, fence))
                 {
                     return Err(());
-                }
-                if let Some(fence) = &delivery_fence {
-                    if fence.producer_boot_id != producer_boot_id
-                        || !self.fence_matches(&state, fence)
-                    {
-                        return Err(());
-                    }
                 }
                 let result = ChildFlushResult {
                     snapshot,
                     delivery_fence,
                 };
                 state.terminal = Some(result.clone());
-                // If a parent flush request and natural return cross, this
-                // terminal result wins the one outstanding slot. The child
-                // then suppresses a second terminal response for that race.
                 if let Some(pending) = state.flush_slot.take() {
+                    if pending.binding.collector != binding.collector
+                        || pending.binding.producer_boot_id != binding.producer_boot_id
+                    {
+                        return Err(());
+                    }
                     state.flush_completed = true;
+                    state.completed_flush = Some(result.clone());
                     let _ = pending.respond.send(result);
                 }
             }
@@ -265,35 +372,92 @@ impl BridgeShared {
         self.reader_stop.load(Ordering::Acquire)
     }
 
-    fn fence_matches(&self, state: &SharedState, fence: &DeliveryFence) -> bool {
-        state.acked_producer_boot.as_deref() == Some(fence.producer_boot_id.as_str())
-            && fence.generation == self.current_generation.load(Ordering::Acquire)
+    pub(super) fn is_permanently_lost(&self) -> bool {
+        self.permanently_lost.load(Ordering::Acquire)
     }
 
-    fn snapshot_matches(&self, state: &SharedState, snapshot: &ProducerStatusSnapshot) -> bool {
-        let expected = match self.component {
-            WireComponent::Anyharness => ComponentV1::Anyharness,
-            WireComponent::DesktopWorker => ComponentV1::DesktopWorker,
-        };
-        snapshot.component == expected
-            && state.acked_producer_boot.as_deref() == Some(snapshot.producer_boot_id.as_str())
+    pub(super) fn allow_clean_eof(&self) {
+        self.clean_eof_allowed.store(true, Ordering::Release);
+    }
+
+    pub(super) fn request_reader_stop(&self, revoke: bool) {
+        self.reader_stop.store(true, Ordering::Release);
+        if revoke {
+            self.permanently_lost.store(true, Ordering::Release);
+            match self.state.try_lock() {
+                Ok(mut state) => revoke_lost_state(&mut state),
+                Err(TryLockError::Poisoned(error)) => revoke_lost_state(&mut error.into_inner()),
+                Err(TryLockError::WouldBlock) => {}
+            }
+        }
+        self.wake_reader();
+    }
+
+    pub(super) fn next_request_id(&self) -> Option<u64> {
+        loop {
+            let current = self.next_request_id.load(Ordering::Relaxed);
+            if current == 0 || current > MAX_SAFE_INTEGER {
+                return None;
+            }
+            if self
+                .next_request_id
+                .compare_exchange_weak(current, current + 1, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
+                return Some(current);
+            }
+        }
+    }
+
+    fn wake_reader(&self) {
+        if let Some(stream) = &self.reader_waker {
+            let _ = stream.shutdown(Shutdown::Both);
+        }
+        if let Ok(mut writer) = self.writer.try_lock() {
+            *writer = None;
+        }
     }
 }
 
-/// Parent-side bridge retained alongside the identity-stable owned `Child`.
+fn response_matches(
+    component: WireComponent,
+    state: &SharedState,
+    binding: &RequestBinding,
+    snapshot: &ProducerStatusSnapshot,
+) -> bool {
+    let expected_component = match component {
+        WireComponent::Anyharness => ComponentV1::Anyharness,
+        WireComponent::DesktopWorker => ComponentV1::DesktopWorker,
+    };
+    snapshot.component == expected_component
+        && state.collector == binding.collector
+        && state.acked_producer_boot.as_deref() == Some(binding.producer_boot_id.as_str())
+        && snapshot.producer_boot_id == binding.producer_boot_id
+        && binding.collector.matches_snapshot(snapshot)
+}
+
+fn revoke_proof(state: &mut SharedState) {
+    state.flush_completed = false;
+    state.completed_flush = None;
+    state.terminal = None;
+}
+
+fn revoke_lost_state(state: &mut SharedState) {
+    state.connection = ChildBridgeConnection::Lost;
+    state.status_slot = None;
+    state.flush_slot = None;
+    revoke_proof(state);
+}
+
 pub(crate) struct ChildDiagnosticsBridge {
-    shared: Arc<BridgeShared>,
-    supervisor: Option<Arc<DiagnosticsCollectorSupervisor>>,
-    shutdown_writer: Option<OwnedFd>,
-    shutdown_signaled: AtomicBool,
-    reader: Mutex<Option<thread::JoinHandle<()>>>,
-    generation_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    pub(super) shared: Arc<BridgeShared>,
+    pub(super) supervisor: Option<Arc<DiagnosticsCollectorSupervisor>>,
+    pub(super) shutdown_signal: Option<ChildShutdownSignal>,
+    pub(super) reader: Mutex<Option<thread::JoinHandle<()>>>,
+    pub(super) generation_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl ChildDiagnosticsBridge {
-    /// Sends the bootstrap frame, then starts the single reader thread and
-    /// the generation-watch task. The fallback directory descriptor is
-    /// consumed: transferred to the child, or closed on failure.
     pub(crate) fn start(
         component: WireComponent,
         bridge: UnixStream,
@@ -322,69 +486,76 @@ impl ChildDiagnosticsBridge {
                 generation_rx,
             ))
         });
+        let shutdown_signal =
+            ChildShutdownSignal::new(shutdown_writer, Arc::clone(&shared.clean_eof_allowed));
         Self {
             shared,
             supervisor: Some(supervisor),
-            shutdown_writer: Some(shutdown_writer),
-            shutdown_signaled: AtomicBool::new(false),
+            shutdown_signal: Some(shutdown_signal),
             reader: Mutex::new(reader),
             generation_task: Mutex::new(generation_task),
         }
     }
 
-    /// Signals the child's dedicated shutdown descriptor exactly once. This
-    /// closes child admission but starts no timer and keeps the bridge open
-    /// for the flush/status that follow.
     pub(crate) fn signal_shutdown(&self) {
-        if self.shutdown_signaled.swap(true, Ordering::AcqRel) {
-            return;
+        self.shared.allow_clean_eof();
+        if let Some(signal) = &self.shutdown_signal {
+            signal.signal();
         }
-        if let Some(writer) = self.shutdown_writer.as_ref() {
-            let byte = [1_u8];
-            // SAFETY: one single-byte write to an owned, otherwise unused
-            // pipe writer; the pipe buffer is empty so this cannot block.
-            let _ = unsafe { libc::write(writer.as_raw_fd(), byte.as_ptr().cast(), byte.len()) };
-        }
+    }
+
+    pub(crate) fn shutdown_signal(&self) -> Option<ChildShutdownSignal> {
+        self.shutdown_signal.clone()
     }
 
     pub(crate) fn connection(&self) -> ChildBridgeConnection {
-        self.shared
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .connection
+        if self.shared.is_permanently_lost() {
+            return ChildBridgeConnection::Lost;
+        }
+        match self.shared.state.try_lock() {
+            Ok(state) => state.connection,
+            Err(TryLockError::Poisoned(error)) => error.into_inner().connection,
+            Err(TryLockError::WouldBlock) => ChildBridgeConnection::Lost,
+        }
     }
 
     pub(crate) fn acknowledged_producer_boot(&self) -> Option<String> {
-        self.shared
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .acked_producer_boot
-            .clone()
+        match self.shared.state.try_lock() {
+            Ok(state) => state.acked_producer_boot.clone(),
+            Err(TryLockError::Poisoned(error)) => error.into_inner().acked_producer_boot.clone(),
+            Err(TryLockError::WouldBlock) => None,
+        }
     }
 
-    /// The cached at-most-once terminal status/fence, if the child returned
-    /// naturally outside a completed parent flush.
     pub(crate) fn terminal_result(&self) -> Option<ChildFlushResult> {
-        self.shared
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .terminal
-            .clone()
+        if self.shared.is_permanently_lost() {
+            return None;
+        }
+        match self.shared.state.try_lock() {
+            Ok(state) => state.terminal.clone(),
+            Err(TryLockError::Poisoned(error)) => error.into_inner().terminal.clone(),
+            Err(TryLockError::WouldBlock) => None,
+        }
     }
 
     pub(super) fn qualified_result(&self) -> Option<ChildFlushResult> {
-        let state = self
-            .shared
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        state
-            .completed_flush
-            .clone()
-            .or_else(|| state.terminal.clone())
+        if self.shared.is_permanently_lost() {
+            return None;
+        }
+        match self.shared.state.try_lock() {
+            Ok(state) => state
+                .completed_flush
+                .clone()
+                .or_else(|| state.terminal.clone()),
+            Err(TryLockError::Poisoned(error)) => {
+                let state = error.into_inner();
+                state
+                    .completed_flush
+                    .clone()
+                    .or_else(|| state.terminal.clone())
+            }
+            Err(TryLockError::WouldBlock) => None,
+        }
     }
 
     pub(super) fn component(&self) -> WireComponent {
@@ -394,195 +565,11 @@ impl ChildDiagnosticsBridge {
     pub(super) fn supervisor(&self) -> Option<&DiagnosticsCollectorSupervisor> {
         self.supervisor.as_deref()
     }
-
-    /// One-slot status RPC with the exact 100 ms caller-side deadline. A
-    /// timeout cancels the slot and yields status unavailable.
-    pub(crate) async fn request_status(&self) -> Option<ProducerStatusSnapshot> {
-        let (respond, receiver) = oneshot::channel();
-        let request_id = self.begin_request(|state| &mut state.status_slot, respond)?;
-        let frame = ParentFrame::StatusRequest {
-            protocol_version: CHILD_BRIDGE_PROTOCOL_VERSION,
-            request_id,
-        };
-        if self.shared.send(&frame, &[]).is_err() {
-            self.cancel_slot(|state| &mut state.status_slot, request_id);
-            return None;
-        }
-        match tokio::time::timeout(CHILD_STATUS_RESPONSE_DEADLINE, receiver).await {
-            Ok(Ok(snapshot)) => Some(snapshot),
-            _ => {
-                self.cancel_slot(|state| &mut state.status_slot, request_id);
-                None
-            }
-        }
-    }
-
-    /// One-slot flush RPC. The declared and awaited deadline both use only
-    /// the caller's remaining milliseconds, capped at the joined 500 ms
-    /// producer deadline; a missing response never extends it.
-    pub(crate) async fn request_flush(&self, remaining: Duration) -> Option<ChildFlushResult> {
-        let remaining_deadline_ms = u64::try_from(remaining.as_millis())
-            .unwrap_or(u64::MAX)
-            .min(MAX_CHILD_FLUSH_DEADLINE_MS);
-        let (respond, receiver) = oneshot::channel();
-        let request_id = self.begin_request(|state| &mut state.flush_slot, respond)?;
-        let frame = ParentFrame::FlushRequest {
-            protocol_version: CHILD_BRIDGE_PROTOCOL_VERSION,
-            request_id,
-            remaining_deadline_ms,
-        };
-        if self.shared.send(&frame, &[]).is_err() {
-            self.cancel_slot(|state| &mut state.flush_slot, request_id);
-            return None;
-        }
-        let deadline = Duration::from_millis(remaining_deadline_ms);
-        match tokio::time::timeout(deadline, receiver).await {
-            Ok(Ok(result)) => Some(result),
-            _ => {
-                self.cancel_slot(|state| &mut state.flush_slot, request_id);
-                None
-            }
-        }
-    }
-
-    /// Assembles the bounded per-component state. The producer snapshot is
-    /// requested only through the one-slot RPC and only for a running child
-    /// on a connected bridge; an invalid returned snapshot is discarded.
-    pub(crate) async fn diagnostics_state(
-        &self,
-        process: ChildProcessPresence,
-    ) -> DesktopChildDiagnosticsState {
-        let bridge = self.connection();
-        let producer = if process == ChildProcessPresence::Running
-            && bridge == ChildBridgeConnection::Connected
-        {
-            self.request_status().await
-        } else {
-            None
-        };
-        DesktopChildDiagnosticsState {
-            process,
-            bridge,
-            producer,
-        }
-    }
-
-    pub(super) async fn finish_reader_after_reap(&self) {
-        if let Some(task) = self
-            .generation_task
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .take()
-        {
-            task.abort();
-        }
-        *self
-            .shared
-            .writer
-            .lock()
-            .unwrap_or_else(|error| error.into_inner()) = None;
-        let join = self
-            .reader
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .take();
-        let Some(join) = join else {
-            return;
-        };
-        let mut result = tokio::task::spawn_blocking(move || join.join());
-        if tokio::time::timeout(Duration::from_millis(100), &mut result)
-            .await
-            .is_err()
-        {
-            // The reaped producer itself cannot retain the socket. A timeout
-            // therefore means an inherited descendant or ambiguous peer; no
-            // buffered terminal frame is qualified and no owner blocks.
-            self.shared.mark_lost();
-            let _ = tokio::time::timeout(Duration::from_millis(100), &mut result).await;
-        }
-    }
-
-    pub(crate) fn stop(&self) {
-        self.close_and_join(true);
-    }
-
-    fn close_and_join(&self, stop_reader: bool) {
-        if stop_reader {
-            self.shared.reader_stop.store(true, Ordering::Release);
-        }
-        if let Some(task) = self
-            .generation_task
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .take()
-        {
-            task.abort();
-        }
-        *self
-            .shared
-            .writer
-            .lock()
-            .unwrap_or_else(|error| error.into_inner()) = None;
-        if let Some(join) = self
-            .reader
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .take()
-        {
-            let _ = join.join();
-        }
-    }
-
-    fn begin_request<T>(
-        &self,
-        slot: impl Fn(&mut SharedState) -> &mut Option<PendingRequest<T>>,
-        respond: oneshot::Sender<T>,
-    ) -> Option<u64> {
-        let request_id = self.shared.next_request_id.fetch_add(1, Ordering::Relaxed);
-        let mut state = self
-            .shared
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        if state.connection != ChildBridgeConnection::Connected
-            || state.flush_completed
-            || state.terminal.is_some()
-            || slot(&mut state).is_some()
-        {
-            return None;
-        }
-        *slot(&mut state) = Some(PendingRequest {
-            request_id,
-            respond,
-        });
-        Some(request_id)
-    }
-
-    fn cancel_slot<T>(
-        &self,
-        slot: impl Fn(&mut SharedState) -> &mut Option<PendingRequest<T>>,
-        request_id: u64,
-    ) {
-        let mut state = self
-            .shared
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        if slot(&mut state)
-            .as_ref()
-            .is_some_and(|pending| pending.request_id == request_id)
-        {
-            *slot(&mut state) = None;
-        }
-    }
 }
 
-impl Drop for ChildDiagnosticsBridge {
-    fn drop(&mut self) {
-        self.stop();
-    }
-}
-
+#[cfg(test)]
+#[path = "runtime_identity_tests.rs"]
+mod identity_tests;
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod tests;

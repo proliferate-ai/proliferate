@@ -328,9 +328,9 @@ impl DiagnosticsProducerGuard {
         #[cfg(unix)]
         if !self.inner.parent_flush_observed() {
             if let Some(bridge) = self.bridge.as_mut() {
-                let remaining =
-                    absolute_deadline.saturating_duration_since(tokio::time::Instant::now());
-                bridge.send_terminal(remaining);
+                if absolute_deadline > tokio::time::Instant::now() {
+                    bridge.send_terminal_until(absolute_deadline).await;
+                }
             }
         }
         snapshot

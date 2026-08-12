@@ -7,6 +7,7 @@ use std::{
     io,
     os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd, RawFd},
     os::unix::net::UnixStream,
+    sync::{Mutex, MutexGuard, OnceLock},
 };
 
 use proliferate_diagnostics_client::bridge::wire::{
@@ -16,11 +17,24 @@ use tokio::process::{Child, Command};
 
 const FIRST_TEMPORARY_FD: RawFd = CHILD_SHUTDOWN_RESERVED_FD + 1;
 
+fn protected_spawn_lock() -> MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+}
+
 /// Descriptor authority prepared only after the direct child executable has
 /// been resolved. Passing the command by value makes the protected spawn
 /// one-shot: a caller that elects the frozen unprotected fallback must build a
 /// fresh command without this pre-exec hook.
 pub(crate) struct PreparedChildDiagnosticsLaunch {
+    // Darwin has no `pipe2` and exposes no atomic CLOEXEC socketpair flag.
+    // This serializes all launches owned by this protected-launch module from
+    // raw descriptor creation through spawn. Unrelated repository spawns are
+    // outside this lock; the prebuilt Command rule prevents this path itself
+    // from spawning a login shell inside the live-descriptor window.
+    _spawn_guard: MutexGuard<'static, ()>,
     parent_bridge: OwnedFd,
     child_bridge: OwnedFd,
     child_shutdown: OwnedFd,
@@ -37,9 +51,11 @@ pub(crate) struct ProtectedChildDiagnosticsLaunch {
 
 impl PreparedChildDiagnosticsLaunch {
     pub(crate) fn create() -> io::Result<Self> {
+        let spawn_guard = protected_spawn_lock();
         let [parent_bridge, child_bridge] = create_socket_pair()?;
         let [child_shutdown, parent_shutdown_writer] = create_shutdown_pipe()?;
         Ok(Self {
+            _spawn_guard: spawn_guard,
             parent_bridge,
             child_bridge,
             child_shutdown,
@@ -70,15 +86,27 @@ impl PreparedChildDiagnosticsLaunch {
             });
         }
 
-        let child = command.spawn()?;
         let Self {
+            _spawn_guard,
             parent_bridge,
             child_bridge,
             child_shutdown,
             parent_shutdown_writer,
         } = self;
+        let child = match command.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                drop(child_bridge);
+                drop(child_shutdown);
+                drop(parent_bridge);
+                drop(parent_shutdown_writer);
+                drop(_spawn_guard);
+                return Err(error);
+            }
+        };
         drop(child_bridge);
         drop(child_shutdown);
+        drop(_spawn_guard);
 
         // SAFETY: ownership moves exactly once from `OwnedFd` into the stream.
         let bridge = unsafe { UnixStream::from_raw_fd(parent_bridge.into_raw_fd()) };

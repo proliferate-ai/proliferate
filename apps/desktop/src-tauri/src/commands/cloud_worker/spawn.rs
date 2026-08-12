@@ -164,7 +164,13 @@ pub(super) async fn launch_and_watch(
             // Snapshot only after the EOF/cancellation fence so final bytes
             // cannot race the returned message; the fence never adds a
             // tail-only wait beyond the existing startup deadline.
-            process.finish_verified_reap(status, startup_deadline).await;
+            process
+                .finish_verified_reap(
+                    status,
+                    crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Natural,
+                    startup_deadline,
+                )
+                .await;
             let snapshot = process.tail.snapshot();
             tracing::error!(
                 launcher = %launcher,
@@ -200,6 +206,16 @@ fn spawn_worker(
     paths: &WorkerPaths,
     supervisor: &Arc<DiagnosticsCollectorSupervisor>,
 ) -> std::io::Result<SpawnedWorker> {
+    // Resolve the login-shell PATH and finish the complete Command before
+    // any protected descriptor exists. The fallback builds a fresh command
+    // only after `prepared` and every partial descriptor have dropped.
+    let protected_command = build_worker_command(launcher, paths);
+    if matches!(
+        supervisor.state(),
+        crate::diagnostics_collector::supervisor::DesktopDiagnosticsSupervisorStateV1::Unsupported { .. }
+    ) {
+        return spawn_unprotected(launcher, paths);
+    }
     let prepared = match PreparedChildDiagnosticsLaunch::create() {
         Ok(prepared) => prepared,
         Err(error) => {
@@ -211,7 +227,14 @@ fn spawn_worker(
         }
     };
     let fallback = worker_fallback_root();
-    match prepared.spawn(build_worker_command(launcher, paths)) {
+    if matches!(
+        supervisor.state(),
+        crate::diagnostics_collector::supervisor::DesktopDiagnosticsSupervisorStateV1::Unsupported { .. }
+    ) {
+        drop(prepared);
+        return spawn_unprotected(launcher, paths);
+    }
+    match prepared.spawn(protected_command) {
         Ok(launch) => {
             let bridge = ChildDiagnosticsBridge::start(
                 WireComponent::DesktopWorker,
@@ -360,6 +383,7 @@ impl CloudWorkerProcess {
     pub(super) async fn finish_verified_reap(
         &mut self,
         status: std::process::ExitStatus,
+        kind: crate::diagnostics_collector::child_bridge::reap::ChildReapKind,
         deadline: Instant,
     ) {
         self.fence_tail(deadline).await;
@@ -368,14 +392,16 @@ impl CloudWorkerProcess {
             any(target_arch = "aarch64", target_arch = "x86_64")
         ))]
         if let Some(bridge) = self.bridge.as_ref() {
-            let proof = crate::diagnostics_collector::child_bridge::reap::VerifiedChildReap::from_exit_status(status);
-            let _ = bridge.finish_verified_reap(proof).await;
+            let proof = crate::diagnostics_collector::child_bridge::reap::VerifiedChildReap::new(
+                status, kind,
+            );
+            let _ = bridge.finish_verified_reap(proof, deadline).await;
         }
         #[cfg(not(all(
             target_os = "macos",
             any(target_arch = "aarch64", target_arch = "x86_64")
         )))]
-        let _ = status;
+        let _ = (status, kind);
     }
 }
 

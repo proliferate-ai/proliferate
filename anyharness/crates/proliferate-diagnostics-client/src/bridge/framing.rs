@@ -12,6 +12,8 @@ pub enum FrameError {
     Invalid,
     #[error("bridge I/O failed")]
     Io,
+    #[error("bridge deadline exceeded")]
+    Deadline,
 }
 
 pub fn encode_frame<T: Serialize>(frame: &T) -> Result<Vec<u8>, FrameError> {
@@ -35,10 +37,10 @@ pub fn decode_body<T: DeserializeOwned>(body: &[u8]) -> Result<T, FrameError> {
 
 #[cfg(unix)]
 mod unix {
-    use std::io::Read;
     use std::mem::{size_of, zeroed};
     use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
     use std::os::unix::net::UnixStream;
+    use std::time::{Duration, Instant};
 
     use serde::{de::DeserializeOwned, Serialize};
 
@@ -54,26 +56,33 @@ mod unix {
         frame: &T,
         descriptors: &[RawFd],
     ) -> Result<(), FrameError> {
+        send_frame_until(
+            stream,
+            frame,
+            descriptors,
+            Instant::now() + Duration::from_secs(1),
+        )
+    }
+
+    /// Sends one complete frame without ever blocking past `deadline`.
+    ///
+    /// Rights accompany the first accepted byte in one `sendmsg`; any short
+    /// write is completed with ordinary nonblocking sends under the same
+    /// deadline, without ever retransmitting the rights.
+    pub fn send_frame_until<T: Serialize>(
+        stream: &UnixStream,
+        frame: &T,
+        descriptors: &[RawFd],
+        deadline: Instant,
+    ) -> Result<(), FrameError> {
         if descriptors.len() > MAX_CHILD_BRIDGE_ANCILLARY_FDS {
             return Err(FrameError::Invalid);
         }
-        let body = serde_json::to_vec(frame).map_err(|_| FrameError::Invalid)?;
-        if body.is_empty() || body.len() > super::MAX_CHILD_BRIDGE_FRAME_BYTES {
-            return Err(FrameError::Invalid);
-        }
-        let header = u32::try_from(body.len())
-            .map_err(|_| FrameError::Invalid)?
-            .to_be_bytes();
-        let mut iov = [
-            libc::iovec {
-                iov_base: header.as_ptr().cast_mut().cast(),
-                iov_len: header.len(),
-            },
-            libc::iovec {
-                iov_base: body.as_ptr().cast_mut().cast(),
-                iov_len: body.len(),
-            },
-        ];
+        let encoded = super::encode_frame(frame)?;
+        let mut iov = libc::iovec {
+            iov_base: encoded.as_ptr().cast_mut().cast(),
+            iov_len: encoded.len(),
+        };
         let control_len = if descriptors.is_empty() {
             0
         } else {
@@ -81,8 +90,8 @@ mod unix {
         };
         let mut control = vec![0_u8; control_len];
         let mut message: libc::msghdr = unsafe { zeroed() };
-        message.msg_iov = iov.as_mut_ptr();
-        message.msg_iovlen = iov.len() as _;
+        message.msg_iov = &mut iov;
+        message.msg_iovlen = 1;
         if !descriptors.is_empty() {
             message.msg_control = control.as_mut_ptr().cast();
             message.msg_controllen = control.len() as _;
@@ -102,63 +111,160 @@ mod unix {
                 );
             }
         }
-        let expected = header.len() + body.len();
-        let written = unsafe { libc::sendmsg(stream.as_raw_fd(), &message, libc::MSG_NOSIGNAL) };
-        if written < 0 {
-            return Err(FrameError::Io);
+        let mut written_total = 0;
+        loop {
+            wait_ready(stream.as_raw_fd(), libc::POLLOUT, deadline)?;
+            let written = if written_total == 0 {
+                unsafe {
+                    libc::sendmsg(
+                        stream.as_raw_fd(),
+                        &message,
+                        libc::MSG_NOSIGNAL | libc::MSG_DONTWAIT,
+                    )
+                }
+            } else {
+                unsafe {
+                    libc::send(
+                        stream.as_raw_fd(),
+                        encoded[written_total..].as_ptr().cast(),
+                        encoded.len() - written_total,
+                        libc::MSG_NOSIGNAL | libc::MSG_DONTWAIT,
+                    )
+                }
+            };
+            if written < 0 {
+                let error = std::io::Error::last_os_error();
+                if matches!(error.raw_os_error(), Some(libc::EAGAIN) | Some(libc::EINTR)) {
+                    continue;
+                }
+                return Err(FrameError::Io);
+            }
+            if written == 0 {
+                return Err(FrameError::Closed);
+            }
+            written_total += written as usize;
+            if written_total == encoded.len() {
+                return Ok(());
+            }
         }
-        if written as usize != expected {
-            return Err(FrameError::Closed);
-        }
-        Ok(())
     }
 
     pub fn receive_frame<T: DeserializeOwned>(
         stream: &mut UnixStream,
     ) -> Result<ReceivedFrame<T>, FrameError> {
+        receive_frame_until(stream, Instant::now() + Duration::from_secs(1))
+    }
+
+    /// Receives one complete frame under one absolute deadline. Every read is
+    /// a nonblocking `recvmsg`, so ancillary rights delivered on a later
+    /// fragment are still owned and closed before the frame is rejected.
+    pub fn receive_frame_until<T: DeserializeOwned>(
+        stream: &UnixStream,
+        deadline: Instant,
+    ) -> Result<ReceivedFrame<T>, FrameError> {
         let mut header = [0_u8; 4];
-        let mut iov = libc::iovec {
-            iov_base: header.as_mut_ptr().cast(),
-            iov_len: header.len(),
-        };
-        let control_len = unsafe {
-            libc::CMSG_SPACE(((MAX_CHILD_BRIDGE_ANCILLARY_FDS + 1) * size_of::<RawFd>()) as _)
-                as usize
-        };
-        let mut control = vec![0_u8; control_len];
-        let mut message: libc::msghdr = unsafe { zeroed() };
-        message.msg_iov = &mut iov;
-        message.msg_iovlen = 1;
-        message.msg_control = control.as_mut_ptr().cast();
-        message.msg_controllen = control.len() as _;
-        let received = unsafe { libc::recvmsg(stream.as_raw_fd(), &mut message, 0) };
-        if received == 0 {
-            return Err(FrameError::Closed);
-        }
-        if received < 0 {
-            return Err(FrameError::Io);
-        }
-        // `recvmsg` has already installed every delivered `SCM_RIGHTS` entry
-        // in this process. Wrap all of them before evaluating any rejection so
-        // truncated or otherwise malformed ancillary data cannot leak a raw
-        // descriptor on the error path.
-        let descriptors = collect_descriptors(&message, message.msg_flags & libc::MSG_CTRUNC != 0)?;
-        let received = received as usize;
-        if received < header.len() {
-            stream
-                .read_exact(&mut header[received..])
-                .map_err(|_| FrameError::Closed)?;
-        }
+        let (received, descriptors) = receive_chunk(stream, &mut header, deadline)?;
+        receive_remainder(stream, &mut header[received..], deadline)?;
         let length = u32::from_be_bytes(header) as usize;
         if length == 0 || length > super::MAX_CHILD_BRIDGE_FRAME_BYTES {
             return Err(FrameError::Invalid);
         }
         let mut body = vec![0_u8; length];
-        stream
-            .read_exact(&mut body)
-            .map_err(|_| FrameError::Closed)?;
+        receive_remainder(stream, &mut body, deadline)?;
         let frame = decode_body(&body)?;
         Ok(ReceivedFrame { frame, descriptors })
+    }
+
+    fn receive_remainder(
+        stream: &UnixStream,
+        mut output: &mut [u8],
+        deadline: Instant,
+    ) -> Result<(), FrameError> {
+        while !output.is_empty() {
+            let (received, descriptors) = receive_chunk(stream, output, deadline)?;
+            if !descriptors.is_empty() {
+                return Err(FrameError::Invalid);
+            }
+            output = &mut output[received..];
+        }
+        Ok(())
+    }
+
+    fn receive_chunk(
+        stream: &UnixStream,
+        output: &mut [u8],
+        deadline: Instant,
+    ) -> Result<(usize, Vec<OwnedFd>), FrameError> {
+        loop {
+            wait_ready(stream.as_raw_fd(), libc::POLLIN, deadline)?;
+            let mut iov = libc::iovec {
+                iov_base: output.as_mut_ptr().cast(),
+                iov_len: output.len(),
+            };
+            let control_len = unsafe {
+                libc::CMSG_SPACE(((MAX_CHILD_BRIDGE_ANCILLARY_FDS + 1) * size_of::<RawFd>()) as _)
+                    as usize
+            };
+            let mut control = vec![0_u8; control_len];
+            let mut message: libc::msghdr = unsafe { zeroed() };
+            message.msg_iov = &mut iov;
+            message.msg_iovlen = 1;
+            message.msg_control = control.as_mut_ptr().cast();
+            message.msg_controllen = control.len() as _;
+            let received =
+                unsafe { libc::recvmsg(stream.as_raw_fd(), &mut message, libc::MSG_DONTWAIT) };
+            if received == 0 {
+                return Err(FrameError::Closed);
+            }
+            if received < 0 {
+                let error = std::io::Error::last_os_error();
+                if matches!(error.raw_os_error(), Some(libc::EAGAIN) | Some(libc::EINTR)) {
+                    continue;
+                }
+                return Err(FrameError::Io);
+            }
+            // `recvmsg` has already installed every delivered `SCM_RIGHTS`
+            // entry. Wrap all of them before evaluating any rejection.
+            let descriptors =
+                collect_descriptors(&message, message.msg_flags & libc::MSG_CTRUNC != 0)?;
+            return Ok((received as usize, descriptors));
+        }
+    }
+
+    fn wait_ready(fd: RawFd, events: libc::c_short, deadline: Instant) -> Result<(), FrameError> {
+        loop {
+            let now = Instant::now();
+            if now >= deadline {
+                return Err(FrameError::Deadline);
+            }
+            let remaining = deadline.saturating_duration_since(now);
+            let timeout_ms =
+                remaining.as_millis().max(1).min(libc::c_int::MAX as u128) as libc::c_int;
+            let mut pollfd = libc::pollfd {
+                fd,
+                events,
+                revents: 0,
+            };
+            let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
+            if ready < 0 {
+                if std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+                    continue;
+                }
+                return Err(FrameError::Io);
+            }
+            if ready == 0 {
+                return Err(FrameError::Deadline);
+            }
+            if pollfd.revents & libc::POLLNVAL != 0 {
+                return Err(FrameError::Io);
+            }
+            if pollfd.revents & events != 0 || pollfd.revents & libc::POLLHUP != 0 {
+                return Ok(());
+            }
+            if pollfd.revents & libc::POLLERR != 0 {
+                return Err(FrameError::Io);
+            }
+        }
     }
 
     fn collect_descriptors(
@@ -220,7 +326,7 @@ mod unix {
 }
 
 #[cfg(unix)]
-pub use unix::{receive_frame, send_frame, ReceivedFrame};
+pub use unix::{receive_frame, receive_frame_until, send_frame, send_frame_until, ReceivedFrame};
 
 #[cfg(test)]
 #[path = "framing_tests.rs"]

@@ -61,8 +61,17 @@ pub(super) fn spawn_owned_anyharness(
         // launch but never inherit protected observability descriptors.
         return spawn_unprotected(&|| super::build_spawn_command(binary, port, launch_env));
     };
-    let build_protected = || super::build_spawn_command(&protected_binary, port, launch_env);
+    // Resolve the login-shell PATH and finish the complete Command before
+    // any protected descriptor exists. The fallback builds a fresh command
+    // only after `prepared` and every partial descriptor have dropped.
+    let protected_command = super::build_spawn_command(&protected_binary, port, launch_env);
     let build_unprotected = || super::build_spawn_command(binary, port, launch_env);
+    if matches!(
+        supervisor.state(),
+        crate::diagnostics_collector::supervisor::DesktopDiagnosticsSupervisorStateV1::Unsupported { .. }
+    ) {
+        return spawn_unprotected(&build_unprotected);
+    }
     let prepared = match PreparedChildDiagnosticsLaunch::create() {
         Ok(prepared) => prepared,
         Err(error) => {
@@ -74,7 +83,14 @@ pub(super) fn spawn_owned_anyharness(
         }
     };
     let fallback = anyharness_fallback_root();
-    match prepared.spawn(build_protected()) {
+    if matches!(
+        supervisor.state(),
+        crate::diagnostics_collector::supervisor::DesktopDiagnosticsSupervisorStateV1::Unsupported { .. }
+    ) {
+        drop(prepared);
+        return spawn_unprotected(&build_unprotected);
+    }
+    match prepared.spawn(protected_command) {
         Ok(launch) => {
             let bridge = ChildDiagnosticsBridge::start(
                 WireComponent::Anyharness,
@@ -188,10 +204,17 @@ impl super::SidecarProcess {
     /// Consumes one identity-stable child reap proof. The bridge may submit a
     /// producer-death control record only when it also retained a matching
     /// ordered delivery fence for this producer and collector generation.
-    pub(super) async fn finish_diagnostics_reap(&self, status: std::process::ExitStatus) {
+    pub(super) async fn finish_diagnostics_reap(
+        &self,
+        status: std::process::ExitStatus,
+        kind: crate::diagnostics_collector::child_bridge::reap::ChildReapKind,
+        deadline: tokio::time::Instant,
+    ) {
         if let Some(bridge) = self.diagnostics_bridge.as_ref() {
-            let proof = crate::diagnostics_collector::child_bridge::reap::VerifiedChildReap::from_exit_status(status);
-            let _ = bridge.finish_verified_reap(proof).await;
+            let proof = crate::diagnostics_collector::child_bridge::reap::VerifiedChildReap::new(
+                status, kind,
+            );
+            let _ = bridge.finish_verified_reap(proof, deadline).await;
         }
     }
 }
@@ -201,5 +224,11 @@ impl super::SidecarProcess {
     any(target_arch = "aarch64", target_arch = "x86_64")
 )))]
 impl super::SidecarProcess {
-    pub(super) async fn finish_diagnostics_reap(&self, _status: std::process::ExitStatus) {}
+    pub(super) async fn finish_diagnostics_reap(
+        &self,
+        _status: std::process::ExitStatus,
+        _kind: crate::diagnostics_collector::child_bridge::reap::ChildReapKind,
+        _deadline: tokio::time::Instant,
+    ) {
+    }
 }

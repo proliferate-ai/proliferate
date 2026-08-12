@@ -32,6 +32,7 @@ mod launcher;
 pub(crate) mod lifecycle;
 mod observer;
 mod spawn;
+mod state;
 #[cfg(all(
     target_os = "macos",
     any(target_arch = "aarch64", target_arch = "x86_64")
@@ -56,6 +57,13 @@ const WORKER_CREDENTIALS_LOCKED_ERROR: &str =
 pub struct CloudWorkerState {
     lifecycle: Mutex<CloudWorkerLifecycle>,
     terminal_shutdown_armed: AtomicBool,
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    child_shutdown_signal: std::sync::Mutex<
+        Option<crate::diagnostics_collector::child_bridge::shutdown_signal::ChildShutdownSignal>,
+    >,
 }
 
 pub type SharedCloudWorkerState = Arc<CloudWorkerState>;
@@ -91,33 +99,6 @@ struct CloudWorkerProcess {
         any(target_arch = "aarch64", target_arch = "x86_64")
     ))]
     tail: tail::SharedWorkerTail,
-}
-
-impl CloudWorkerProcess {
-    #[cfg(test)]
-    fn untracked(target_id: String, child: Child, config_path: PathBuf) -> Self {
-        Self {
-            target_id,
-            child,
-            config_path,
-            observer_generation: 0,
-            #[cfg(all(
-                target_os = "macos",
-                any(target_arch = "aarch64", target_arch = "x86_64")
-            ))]
-            bridge: None,
-            #[cfg(all(
-                target_os = "macos",
-                any(target_arch = "aarch64", target_arch = "x86_64")
-            ))]
-            drainers: Vec::new(),
-            #[cfg(all(
-                target_os = "macos",
-                any(target_arch = "aarch64", target_arch = "x86_64")
-            ))]
-            tail: tail::SharedWorkerTail::new(),
-        }
-    }
 }
 
 struct WorkerDatabaseLock {
@@ -275,6 +256,15 @@ async fn ensure_desktop_dispatch_worker_inner(
     };
     match launch {
         spawn::WorkerLaunchOutcome::Started(process) => {
+            #[cfg(all(
+                target_os = "macos",
+                any(target_arch = "aarch64", target_arch = "x86_64")
+            ))]
+            worker_state.set_child_shutdown_signal(
+                process
+                    .diagnostics_bridge()
+                    .and_then(|bridge| bridge.shutdown_signal()),
+            );
             lifecycle.process = Some(process);
             observer::start(worker_state.inner(), &mut lifecycle);
             Ok(result)
@@ -282,6 +272,15 @@ async fn ensure_desktop_dispatch_worker_inner(
         spawn::WorkerLaunchOutcome::RetainedAfterInspection { process, failure } => {
             // Ambiguity is not reap authority: retain the complete owner
             // under its observer before publishing the classified error.
+            #[cfg(all(
+                target_os = "macos",
+                any(target_arch = "aarch64", target_arch = "x86_64")
+            ))]
+            worker_state.set_child_shutdown_signal(
+                process
+                    .diagnostics_bridge()
+                    .and_then(|bridge| bridge.shutdown_signal()),
+            );
             lifecycle.process = Some(process);
             observer::start(worker_state.inner(), &mut lifecycle);
             Err(failure)

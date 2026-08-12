@@ -11,7 +11,7 @@ use std::{
     io::Read,
     os::fd::{AsRawFd, FromRawFd, OwnedFd},
     os::unix::net::UnixStream,
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -34,13 +34,13 @@ fn start_bridge(component: WireComponent) -> (ChildDiagnosticsBridge, UnixStream
     let (parent, child) = UnixStream::pair().expect("socketpair");
     let reader_stream = parent.try_clone().expect("clone bridge stream");
     let shared = Arc::new(BridgeShared::new(component, parent));
+    shared.set_ready_collector(1, COLLECTOR_BOOT);
     let reader_shared = Arc::clone(&shared);
     let reader = thread::spawn(move || run_reader(reader_shared, reader_stream));
     let bridge = ChildDiagnosticsBridge {
         shared,
         supervisor: None,
-        shutdown_writer: None,
-        shutdown_signaled: AtomicBool::new(false),
+        shutdown_signal: None,
         reader: Mutex::new(Some(reader)),
         generation_task: Mutex::new(None),
     };
@@ -48,14 +48,23 @@ fn start_bridge(component: WireComponent) -> (ChildDiagnosticsBridge, UnixStream
 }
 
 fn snapshot(component: ComponentV1, producer_boot_id: &str) -> ProducerStatusSnapshot {
+    snapshot_at(component, producer_boot_id, 1, COLLECTOR_BOOT)
+}
+
+fn snapshot_at(
+    component: ComponentV1,
+    producer_boot_id: &str,
+    generation: u64,
+    collector_boot_id: &str,
+) -> ProducerStatusSnapshot {
     ProducerStatusSnapshot {
         component,
         producer_boot_id: producer_boot_id.to_owned(),
         last_assigned_sequence: Some(4),
         next_sequence: Some(5),
         collector_state: proliferate_diagnostics_client::ProducerCollectorState::Ready {
-            collector_boot_id: COLLECTOR_BOOT.to_owned(),
-            generation_number: 1,
+            collector_boot_id: collector_boot_id.to_owned(),
+            generation_number: generation,
         },
         resident_records: 0,
         resident_bytes: 0,
@@ -274,12 +283,12 @@ async fn second_concurrent_status_request_is_refused_by_the_single_slot() {
 #[tokio::test(flavor = "multi_thread")]
 async fn flush_round_trip_keeps_matching_fence_and_caps_deadline() {
     let (bridge, child) = connect(WireComponent::Anyharness);
-    bridge.shared.set_current_generation(7);
-    let expected = snapshot(ComponentV1::Anyharness, PRODUCER_BOOT);
+    bridge.shared.set_ready_collector(7, COLLECTOR_BOOT);
+    let expected = snapshot_at(ComponentV1::Anyharness, PRODUCER_BOOT, 7, COLLECTOR_BOOT);
     let matching = fence(PRODUCER_BOOT, 7);
     let responder = answer_flush(child, expected.clone(), Some(matching.clone()));
     let result = bridge
-        .request_flush(Duration::from_secs(30))
+        .request_flush_until(tokio::time::Instant::now() + Duration::from_secs(30))
         .await
         .expect("flush result");
     assert_eq!(result.snapshot, expected);
@@ -289,27 +298,25 @@ async fn flush_round_trip_keeps_matching_fence_and_caps_deadline() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn flush_fence_with_stale_generation_is_dropped_but_snapshot_kept() {
+async fn flush_fence_with_stale_generation_rejects_the_whole_frame() {
     let (bridge, child) = connect(WireComponent::Anyharness);
-    bridge.shared.set_current_generation(7);
-    let expected = snapshot(ComponentV1::Anyharness, PRODUCER_BOOT);
+    bridge.shared.set_ready_collector(7, COLLECTOR_BOOT);
+    let expected = snapshot_at(ComponentV1::Anyharness, PRODUCER_BOOT, 7, COLLECTOR_BOOT);
     let responder = answer_flush(child, expected.clone(), Some(fence(PRODUCER_BOOT, 6)));
     let result = bridge
-        .request_flush(Duration::from_millis(200))
-        .await
-        .expect("flush result");
-    assert_eq!(result.snapshot, expected);
-    assert_eq!(result.delivery_fence, None);
+        .request_flush_until(tokio::time::Instant::now() + Duration::from_millis(200))
+        .await;
+    assert_eq!(result, None);
     let (_child, remaining_deadline_ms) = responder.join().expect("responder");
     assert_eq!(remaining_deadline_ms, 200);
-    assert_eq!(bridge.connection(), ChildBridgeConnection::Connected);
+    wait_connection(&bridge, ChildBridgeConnection::Lost);
 }
 
 #[test]
 fn terminal_status_is_cached_at_most_once() {
     let (bridge, child) = connect(WireComponent::Anyharness);
-    bridge.shared.set_current_generation(3);
-    let terminal_snapshot = snapshot(ComponentV1::Anyharness, PRODUCER_BOOT);
+    bridge.shared.set_ready_collector(3, COLLECTOR_BOOT);
+    let terminal_snapshot = snapshot_at(ComponentV1::Anyharness, PRODUCER_BOOT, 3, COLLECTOR_BOOT);
     let terminal = ChildFrame::TerminalStatus {
         protocol_version: CHILD_BRIDGE_PROTOCOL_VERSION,
         component: WireComponent::Anyharness,
@@ -321,9 +328,8 @@ fn terminal_status_is_cached_at_most_once() {
     wait_for("terminal cached", || bridge.terminal_result().is_some());
     send_frame(&child, &terminal, &[]).expect("send duplicate terminal");
     wait_connection(&bridge, ChildBridgeConnection::Lost);
-    let cached = bridge.terminal_result().expect("first terminal retained");
-    assert_eq!(cached.snapshot, terminal_snapshot);
-    assert_eq!(cached.delivery_fence, Some(fence(PRODUCER_BOOT, 3)));
+    assert_eq!(bridge.terminal_result(), None);
+    assert_eq!(bridge.qualified_result(), None);
 }
 
 #[test]
@@ -359,12 +365,12 @@ fn wrong_boot_terminal_is_rejected() {
 #[test]
 fn wrong_generation_terminal_fence_rejects_whole_frame() {
     let (bridge, child) = connect(WireComponent::Anyharness);
-    bridge.shared.set_current_generation(3);
+    bridge.shared.set_ready_collector(3, COLLECTOR_BOOT);
     let terminal = ChildFrame::TerminalStatus {
         protocol_version: CHILD_BRIDGE_PROTOCOL_VERSION,
         component: WireComponent::Anyharness,
         producer_boot_id: PRODUCER_BOOT.to_owned(),
-        snapshot: snapshot(ComponentV1::Anyharness, PRODUCER_BOOT),
+        snapshot: snapshot_at(ComponentV1::Anyharness, PRODUCER_BOOT, 3, COLLECTOR_BOOT),
         delivery_fence: Some(fence(PRODUCER_BOOT, 2)),
     };
     send_frame(&child, &terminal, &[]).expect("send terminal");
@@ -375,11 +381,11 @@ fn wrong_generation_terminal_fence_rejects_whole_frame() {
 #[tokio::test(flavor = "multi_thread")]
 async fn terminal_after_completed_flush_is_rejected() {
     let (bridge, child) = connect(WireComponent::Anyharness);
-    bridge.shared.set_current_generation(1);
+    bridge.shared.set_ready_collector(1, COLLECTOR_BOOT);
     let flushed = snapshot(ComponentV1::Anyharness, PRODUCER_BOOT);
     let responder = answer_flush(child, flushed, None);
     bridge
-        .request_flush(Duration::from_millis(300))
+        .request_flush_until(tokio::time::Instant::now() + Duration::from_millis(300))
         .await
         .expect("flush result");
     let (child, _) = responder.join().expect("responder");
@@ -445,7 +451,10 @@ fn signal_shutdown_writes_exactly_one_byte() {
             OwnedFd::from_raw_fd(pipe_ends[1]),
         )
     };
-    bridge.shutdown_writer = Some(write_end);
+    bridge.shutdown_signal = Some(super::super::shutdown_signal::ChildShutdownSignal::new(
+        write_end,
+        Arc::clone(&bridge.shared.clean_eof_allowed),
+    ));
     bridge.signal_shutdown();
     bridge.signal_shutdown();
     drop(bridge);
@@ -462,4 +471,29 @@ fn stop_is_idempotent_and_joins_the_reader() {
     bridge.stop();
     drop(child);
     assert!(bridge.reader.lock().expect("reader lock").is_none());
+}
+
+#[test]
+fn drop_does_not_wait_for_a_held_bridge_state_lock() {
+    let (bridge, child) = connect(WireComponent::Anyharness);
+    let shared = Arc::clone(&bridge.shared);
+    let _held = shared.state.lock().expect("state lock");
+    let started = std::time::Instant::now();
+    drop(bridge);
+    assert!(started.elapsed() < Duration::from_millis(100));
+    drop(child);
+}
+
+#[tokio::test]
+async fn reap_finish_is_bounded_when_an_inherited_peer_holds_the_socket_open() {
+    let (bridge, child) = connect(WireComponent::Anyharness);
+    let inherited_peer = child.try_clone().expect("inherited peer clone");
+    let started = std::time::Instant::now();
+    bridge
+        .finish_reader_after_reap(tokio::time::Instant::now() + Duration::from_millis(30))
+        .await;
+    assert!(started.elapsed() < Duration::from_millis(150));
+    assert_eq!(bridge.connection(), ChildBridgeConnection::Lost);
+    drop(inherited_peer);
+    drop(child);
 }

@@ -156,7 +156,7 @@ impl DiagnosticsShutdownCoordinator {
         self.enter_phase(&mut order, ShutdownPhase::Arm);
         self.supervisor.arm_shutdown();
         cloud_worker::lifecycle::arm_terminal_shutdown(&self.worker);
-        sidecar::arm_terminal_shutdown(&self.anyharness).await;
+        sidecar::arm_terminal_shutdown(&self.anyharness);
         self.enter_phase(&mut order, ShutdownPhase::CancelBrokerSessions);
         let broker = self.broker.lock().await.clone();
         if let Some(broker) = &broker {
@@ -174,7 +174,7 @@ impl DiagnosticsShutdownCoordinator {
         // missing response never extends it.
         let flush_deadline = Instant::now() + PRODUCER_DRAIN_TIMEOUT;
         let _ = tokio::join!(
-            self.producer.drain(PRODUCER_DRAIN_TIMEOUT),
+            self.producer.drain_until(flush_deadline),
             cloud_worker::lifecycle::flush_child_diagnostics(&self.worker, flush_deadline),
             sidecar::observer::flush_child_diagnostics(&self.anyharness, flush_deadline),
         );

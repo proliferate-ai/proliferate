@@ -7,6 +7,7 @@ use tokio::time::Duration;
 use super::{persist_sidecar_runtime_info, RuntimeStatus, SharedSidecar, SidecarProcess};
 
 const OBSERVATION_INTERVAL: Duration = Duration::from_millis(100);
+const NATURAL_REAP_FENCE_TIMEOUT: Duration = Duration::from_millis(500);
 
 pub(super) fn next_generation(current: u64) -> u64 {
     current.wrapping_add(1).max(1)
@@ -56,9 +57,20 @@ pub(super) async fn start(sidecar: &SharedSidecar) {
                 }
                 Ok(Some(status)) => {
                     guard.exit_observer.take();
-                    guard.finish_diagnostics_reap(status).await;
+                    guard
+                        .finish_diagnostics_reap(
+                            status,
+                            crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Natural,
+                            tokio::time::Instant::now() + NATURAL_REAP_FENCE_TIMEOUT,
+                        )
+                        .await;
                     guard.child = None;
                     guard.clear_diagnostics_bridge();
+                    #[cfg(all(
+                        target_os = "macos",
+                        any(target_arch = "aarch64", target_arch = "x86_64")
+                    ))]
+                    sidecar.set_child_shutdown_signal(None);
                     guard.info.status = RuntimeStatus::Failed;
                     persist_sidecar_runtime_info(&guard, None);
                     tracing::warn!(%status, "AnyHarness exited after healthy startup");
@@ -85,14 +97,16 @@ pub(crate) async fn flush_child_diagnostics(
     sidecar: &SharedSidecar,
     deadline: tokio::time::Instant,
 ) {
-    let guard = sidecar.lock().await;
+    let Ok(guard) = tokio::time::timeout_at(deadline, sidecar.lock()).await else {
+        return;
+    };
     let Some(bridge) = guard.diagnostics_bridge() else {
         return;
     };
+    // Retry the idempotent signal from stable process ownership. This also
+    // closes the narrow outer-slot handoff race without a fresh deadline.
     bridge.signal_shutdown();
-    let _ = bridge
-        .request_flush(deadline.saturating_duration_since(tokio::time::Instant::now()))
-        .await;
+    let _ = bridge.request_flush_until(deadline).await;
 }
 
 #[cfg(not(all(

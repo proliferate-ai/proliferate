@@ -20,7 +20,7 @@ use std::{
     mem::zeroed,
     os::fd::{AsRawFd, FromRawFd, OwnedFd},
     os::unix::ffi::OsStrExt,
-    path::Path,
+    path::{Component, Path},
 };
 
 use proliferate_diagnostics_client::bridge::wire::FallbackUnavailableClassification;
@@ -72,8 +72,7 @@ pub(crate) fn resolve_fallback_root(base: &Path, components: &[&str]) -> Fallbac
 }
 
 fn resolve_inner(base: &Path, components: &[&str]) -> Result<OwnedFd, RootError> {
-    let mut current = open_directory_path(base)?;
-    validate_owned_directory(&current, None)?;
+    let mut current = open_anchor(base)?;
     for component in components {
         current = open_directory_at(&current, component)?;
         validate_owned_directory(&current, None)?;
@@ -81,19 +80,44 @@ fn resolve_inner(base: &Path, components: &[&str]) -> Result<OwnedFd, RootError>
     open_or_create_leaf(&current)
 }
 
-fn open_directory_path(path: &Path) -> Result<OwnedFd, RootError> {
-    let path = CString::new(path.as_os_str().as_bytes())
-        .map_err(|_| RootError::Io(io::Error::from(io::ErrorKind::InvalidInput)))?;
-    // SAFETY: `path` is a valid NUL-terminated string for the open call.
-    let descriptor = unsafe { libc::open(path.as_ptr(), OPEN_DIR_FLAGS) };
+/// Opens every base-path component descriptor-relatively. `O_NOFOLLOW` thus
+/// protects ancestors as well as the final base directory; an attacker
+/// cannot replace an intermediate component with a symlink and escape the
+/// deterministic helper-owned hierarchy.
+fn open_anchor(path: &Path) -> Result<OwnedFd, RootError> {
+    let mut parts = path.components();
+    let anchor = match parts.next() {
+        Some(Component::RootDir) => "/",
+        _ => return Err(RootError::Security),
+    };
+    let anchor = CString::new(anchor).expect("static root has no NUL");
+    // SAFETY: `anchor` is one static NUL-terminated root path.
+    let descriptor = unsafe { libc::open(anchor.as_ptr(), OPEN_DIR_FLAGS) };
     if descriptor < 0 {
         return Err(RootError::last_os_error());
     }
     // SAFETY: the raw descriptor was just returned by `open` and is unowned.
-    Ok(unsafe { OwnedFd::from_raw_fd(descriptor) })
+    let mut current = unsafe { OwnedFd::from_raw_fd(descriptor) };
+    for component in parts {
+        let Component::Normal(name) = component else {
+            return Err(RootError::Security);
+        };
+        current = open_directory_at_bytes(&current, name.as_bytes())?;
+    }
+    // System ancestors may be root-owned. Only the deterministic helper base
+    // and its declared child components must belong to this effective UID.
+    validate_owned_directory(&current, None)?;
+    Ok(current)
 }
 
 fn open_directory_at(parent: &OwnedFd, name: &str) -> Result<OwnedFd, RootError> {
+    open_directory_at_bytes(parent, name.as_bytes())
+}
+
+fn open_directory_at_bytes(parent: &OwnedFd, name: &[u8]) -> Result<OwnedFd, RootError> {
+    if name.is_empty() || name == b"." || name == b".." || name.contains(&b'/') {
+        return Err(RootError::Security);
+    }
     let name = CString::new(name)
         .map_err(|_| RootError::Io(io::Error::from(io::ErrorKind::InvalidInput)))?;
     // SAFETY: `parent` is an owned directory descriptor and `name` is a valid

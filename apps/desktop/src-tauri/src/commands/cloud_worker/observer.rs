@@ -68,7 +68,13 @@ pub(super) fn start(state: &SharedCloudWorkerState, lifecycle: &mut CloudWorkerL
                         .process
                         .as_mut()
                         .expect("observer generation was validated");
-                    process.finish_verified_reap(status, deadline).await;
+                    process
+                        .finish_verified_reap(
+                            status,
+                            crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Natural,
+                            deadline,
+                        )
+                        .await;
                     lifecycle.process = None;
                     return;
                 }

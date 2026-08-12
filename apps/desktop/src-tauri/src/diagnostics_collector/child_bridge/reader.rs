@@ -5,15 +5,18 @@
 
 //! Single bounded reader for the protected child diagnostics bridge.
 
-use std::{os::fd::AsRawFd, os::unix::net::UnixStream, sync::Arc};
+use std::{os::fd::AsRawFd, os::unix::net::UnixStream, sync::Arc, time::Instant};
 
-use proliferate_diagnostics_client::bridge::{framing::receive_frame, wire::ChildFrame};
+use proliferate_diagnostics_client::bridge::{
+    framing::{receive_frame_until, FrameError},
+    wire::ChildFrame,
+};
 
-use super::runtime::BridgeShared;
+use super::runtime::{BridgeShared, FRAME_COMPLETION_DEADLINE};
 
 const READER_POLL_INTERVAL_MS: libc::c_int = 50;
 
-pub(super) fn run_reader(shared: Arc<BridgeShared>, mut stream: UnixStream) {
+pub(super) fn run_reader(shared: Arc<BridgeShared>, stream: UnixStream) {
     loop {
         if shared.reader_should_stop() {
             return;
@@ -31,14 +34,21 @@ pub(super) fn run_reader(shared: Arc<BridgeShared>, mut stream: UnixStream) {
         }
         if descriptors[0].revents & libc::POLLIN == 0 {
             if descriptors[0].revents & libc::POLLHUP != 0 {
-                shared.mark_lost();
+                shared.mark_clean_eof();
                 return;
             }
             continue;
         }
-        let received = match receive_frame::<ChildFrame>(&mut stream) {
+        let received = match receive_frame_until::<ChildFrame>(
+            &stream,
+            Instant::now() + FRAME_COMPLETION_DEADLINE,
+        ) {
             Ok(received) => received,
-            Err(_) => {
+            Err(FrameError::Closed) => {
+                shared.mark_clean_eof();
+                return;
+            }
+            Err(FrameError::Invalid | FrameError::Io | FrameError::Deadline) => {
                 shared.mark_lost();
                 return;
             }
