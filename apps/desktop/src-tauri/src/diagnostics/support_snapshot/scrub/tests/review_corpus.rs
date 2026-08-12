@@ -226,3 +226,19 @@ fn long_paths_urls_queries_and_monkey_survive_but_real_opaque_tokens_do_not() {
         "https://example.test/download?blob=[REDACTED:opaque_credential]&view=ordinary"
     );
 }
+
+#[test]
+fn multibyte_whitespace_bounds_contextual_path_and_query_candidates() {
+    let padded = "Aa0Bb1Cc2Dd3Ee4Ff5Gg6Hh7Ii8Jj9Kk0Ll1Mm2Nn3Oo4P==";
+    let path = format!("prefix\u{2003}path=/tmp/{padded}/support-report.json");
+    assert_eq!(
+        scrub(&path),
+        "prefix\u{2003}path=/tmp/[REDACTED:opaque_credential]/support-report.json"
+    );
+
+    let query = format!("prefix\u{2003}https://example.test/download?blob={padded}&view=ordinary");
+    assert_eq!(
+        scrub(&query),
+        "prefix\u{2003}https://example.test/download?blob=[REDACTED:opaque_credential]&view=ordinary"
+    );
+}

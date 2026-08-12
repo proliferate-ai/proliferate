@@ -345,9 +345,7 @@ enum ContextualRun {
 }
 
 fn classify_contextual_run(value: &str, start: usize, end: usize) -> ContextualRun {
-    let token_start = value[..start]
-        .rfind(opaque_context_boundary)
-        .map_or(0, |boundary| boundary + 1);
+    let token_start = contextual_token_start(value, start);
     let query_opener = value[token_start..start]
         .rfind(|character| matches!(character, '?' | '#'))
         .map(|boundary| token_start + boundary);
@@ -427,9 +425,7 @@ fn is_high_confidence_opaque(candidate: &str) -> bool {
 }
 
 fn approved_opaque_context(value: &str, start: usize, end: usize) -> bool {
-    let token_start = value[..start]
-        .rfind(opaque_context_boundary)
-        .map_or(0, |boundary| boundary + 1);
+    let token_start = contextual_token_start(value, start);
     let token_end = value[end..]
         .find(opaque_context_boundary)
         .map_or(value.len(), |boundary| end + boundary);
@@ -450,6 +446,16 @@ fn approved_opaque_context(value: &str, start: usize, end: usize) -> bool {
         || token.starts_with("../")
         || token.contains('\\')
         || (token.contains('/') && !token.contains('='))
+}
+
+fn contextual_token_start(value: &str, before: usize) -> usize {
+    value[..before]
+        .char_indices()
+        .rev()
+        .find_map(|(boundary, character)| {
+            opaque_context_boundary(character).then_some(boundary + character.len_utf8())
+        })
+        .unwrap_or(0)
 }
 
 fn opaque_context_boundary(character: char) -> bool {
