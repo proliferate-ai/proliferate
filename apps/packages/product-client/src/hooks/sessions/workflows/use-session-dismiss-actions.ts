@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { AnyHarnessError } from "@anyharness/sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
 import { useDismissedSessionCleanup } from "#product/hooks/sessions/workflows/use-dismissed-session-cleanup";
@@ -12,8 +13,8 @@ import type {
 } from "#product/lib/workflows/workspaces/chat-session-archive";
 import { isWorkspaceSetupSessionId } from "#product/lib/domain/workspaces/selection/setup-session";
 
-function isSessionAlreadyGone(error: unknown): boolean {
-  return (error as { status?: unknown } | null)?.status === 404;
+export function isSessionAlreadyGone(error: unknown): boolean {
+  return error instanceof AnyHarnessError && error.problem.status === 404;
 }
 
 export function useSessionDismissActions() {
