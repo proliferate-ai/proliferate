@@ -1,6 +1,7 @@
 import { FileEditorView } from "#product/components/workspace/files/FileEditorView";
 import { PromptAttachmentViewer } from "#product/components/workspace/files/PromptAttachmentViewer";
 import { GitPanel } from "#product/components/workspace/git/GitPanel";
+import { AgentsPane } from "#product/components/workspace/delegated-work/agents-pane/AgentsPane";
 import { ScratchPadPanel } from "#product/components/workspace/scratch/ScratchPadPanel";
 import { RightPanelPlaceholder } from "#product/components/workspace/shell/right-panel/RightPanelPlaceholder";
 import { TerminalPanel } from "#product/components/workspace/terminals/TerminalPanel";
@@ -80,6 +81,11 @@ export function RightPanelContent({
           {activeTool === "git" && (
             <div className="absolute inset-0">
               <GitPanel />
+            </div>
+          )}
+          {activeTool === "agents" && workspaceId && (
+            <div className="absolute inset-0">
+              <AgentsPane workspaceId={workspaceId} />
             </div>
           )}
           {activeViewerTarget && (

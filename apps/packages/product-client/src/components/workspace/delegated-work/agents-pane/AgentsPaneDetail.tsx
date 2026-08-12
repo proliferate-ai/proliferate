@@ -19,6 +19,7 @@ import {
 } from "#product/hooks/agents/workflows/use-agents-pane-lifecycle-actions";
 import { AgentsPaneComposer } from "#product/components/workspace/delegated-work/agents-pane/AgentsPaneComposer";
 import { AgentsPaneLifecycleDialogs } from "#product/components/workspace/delegated-work/agents-pane/AgentsPaneLifecycleDialogs";
+import type { AgentsPaneAction } from "#product/lib/domain/delegated-work/agents-pane-model";
 
 const STATUS_LABELS = {
   running: "Running",
@@ -42,6 +43,8 @@ export interface AgentsPaneDetailProps {
   onOpened?: (outcome: AgentsPaneOpenOutcome) => void;
   onPromoted?: (outcome: AgentsPanePromoteOutcome) => void;
   onLifecycleError?: (failure: AgentsPaneLifecycleFailure) => void;
+  requestedAction?: { token: number; action: AgentsPaneAction } | null;
+  onRequestedActionHandled?: (token: number) => void;
 }
 
 /**
@@ -63,6 +66,8 @@ export function AgentsPaneDetail({
   onOpened,
   onPromoted,
   onLifecycleError,
+  requestedAction = null,
+  onRequestedActionHandled,
 }: AgentsPaneDetailProps) {
   const rosterPresentation = child.agent.status.presentation;
   const identityKey = `${parentSessionId}:${childSessionId}`;
@@ -189,6 +194,33 @@ export function AgentsPaneDetail({
       onLifecycleError?.(outcome);
     }
   }, [identityKey, onLifecycleError, onPromoted, promoteChild, target]);
+
+  const handledActionTokenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (
+      !requestedAction
+      || handledActionTokenRef.current === requestedAction.token
+      || !isPaneRouteActive
+    ) {
+      return;
+    }
+    handledActionTokenRef.current = requestedAction.token;
+    if (requestedAction.action === "close") {
+      requestClose();
+    } else if (requestedAction.action === "open") {
+      void performOpen();
+    } else {
+      setPromoteConfirmFor(identityKey);
+    }
+    onRequestedActionHandled?.(requestedAction.token);
+  }, [
+    identityKey,
+    isPaneRouteActive,
+    onRequestedActionHandled,
+    performOpen,
+    requestClose,
+    requestedAction,
+  ]);
 
   const showConnecting = !isClosed && (
     lifecycle.streamRequestPending
