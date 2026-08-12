@@ -3,6 +3,8 @@
 Components render UI. Hooks own React behavior, `lib/**` owns reusable logic,
 and access layers own external systems.
 
+This file owns the behavioral rules (what a component may do). The visual-vocabulary rules — the four jobs of UI code, the tier placement algorithm (primitives vs patterns vs domain patterns vs surfaces), area kits, the rule of two for promoting shapes into the library, and the UI-conformance review checklist — live in [DESIGN_SYSTEM.md § Component Library](../DESIGN_SYSTEM.md#component-library). Read that section before creating any component that renders something new.
+
 ## Ownership
 
 - Components may render, call hooks, forward callbacks, and own local

@@ -10,6 +10,8 @@ Scope:
 
 This file covers styling-only rules. Read
 [README.md](../README.md) for structure, ownership, and data-flow guidance.
+
+For which layer may style what — the four jobs of UI code (paint/anatomy/layout/behavior) and the component placement algorithm — see [DESIGN_SYSTEM.md § Component Library](../DESIGN_SYSTEM.md#component-library).
 ProductClient's `src/domain/**` subtree is included in the package path above
 but is headless: it imports no CSS, Tailwind vocabulary, Design package, DOM
 primitive, or visual component.

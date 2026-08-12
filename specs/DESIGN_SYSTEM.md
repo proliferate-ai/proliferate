@@ -694,9 +694,7 @@ not a component: no index row below, no export subpath.
 
 ### The four jobs of UI code
 
-Every line of styling anywhere in the frontend does one of four jobs. Each job
-has one owner and one enforcement level; the whole governance model below is
-this table applied.
+Every line of styling anywhere in the frontend does one of four jobs. Each job has one owner and one enforcement level; the whole governance model below is this table applied.
 
 | Job | What it is | Owner | Feature code may | Enforcement |
 | --- | --- | --- | --- | --- |
@@ -705,15 +703,9 @@ this table applied.
 | **Layout** | Arrangement: flex, grid, gap, padding from the scale, width, ordering | feature code | free, always | none |
 | **Behavior** | Focus traps, dismissal, `role=` semantics, overlay positioning | primitives + patterns | compose, never rebuild | Mechanical (Radix/raw-DOM gates) + review |
 
-The litmus test for any ambiguous line: **if a designer changed how the app
-looks, would this line need to change?** Yes means it is paint or anatomy and
-belongs in the library. No means it is layout and is free.
+The litmus test for any ambiguous line: **if a designer changed how the app looks, would this line need to change?** Yes means it is paint or anatomy and belongs in the library. No means it is layout and is free.
 
-Slots are what keep the strictness livable. A pattern owns its skeleton and
-exposes `ReactNode` slots (`ListRow`'s `leading`/`title`/`trailing`); feature
-code filling a slot with a `Badge`, a status glyph, or a shortcut hint is the
-mechanism working, not a violation. What is banned is redrawing the skeleton
-around the slot contents.
+Slots are what keep the strictness livable. A pattern owns its skeleton and exposes `ReactNode` slots (`ListRow`'s `leading`/`title`/`trailing`); feature code filling a slot with a `Badge`, a status glyph, or a shortcut hint is the mechanism working, not a violation. What is banned is redrawing the skeleton around the slot contents.
 
 ### The library model
 
@@ -736,20 +728,9 @@ where it is used:
   the `Command` primitive — see the `Command` row below), `EmptyState`,
   `SidebarNavRow`, composer controls, and similar. A pattern is named for the
   job it does (`ListRow`, `PageHeader`), never for the feature that first needed
-  it. The admission test is the props: a pattern's props are only
-  `ReactNode`/`string`/`boolean`/callbacks — shapes, not nouns. A component
-  whose props mention a domain type belongs in the domain-aware tier below.
+  it. The admission test is the props: a pattern's props are only `ReactNode`/`string`/`boolean`/callbacks — shapes, not nouns. A component whose props mention a domain type belongs in the domain-aware tier below.
 
-  Inside this tier, an **area kit** is a family of patterns defining the
-  canonical look of one system — the composer kit (`ComposerTextareaFrame`,
-  `ComposerActionButton`, `ComposerControlButton`, `ComposerTextarea`), the
-  toast system (`Sonner` + `ToastBody`/`ToastExpansion`/`ToastHost`), the
-  sidebar rows (`SidebarNavRow`, `SidebarRowSurface`, `SidebarActionButton`).
-  A kit member is sanctioned even with a single consuming surface: the test
-  for a kit is not reuse but "does this define the canonical look of a
-  system." Kit cohesion beats tier purity — a kit lives in one place, at the
-  level its most domain-bound member requires; never split a kit across tiers
-  to satisfy the props test file by file.
+  Inside this tier, an **area kit** is a family of patterns defining the canonical look of one system — the composer kit (`ComposerTextareaFrame`, `ComposerActionButton`, `ComposerControlButton`, `ComposerTextarea`), the toast system (`Sonner` + `ToastBody`/`ToastExpansion`/`ToastHost`), the sidebar rows (`SidebarNavRow`, `SidebarRowSurface`, `SidebarActionButton`). A kit member is sanctioned even with a single consuming surface: the test for a kit is not reuse but "does this define the canonical look of a system." Kit cohesion beats tier purity — a kit lives in one place, at the level its most domain-bound member requires; never split a kit across tiers to satisfy the props test file by file.
 - **`icons/`** — concrete glyph modules split by general role, specific surface
   (command palette), or brand (Proliferate mark, auth/model provider glyphs).
   There is no aggregate icon barrel. Icon modules are glyph collections, not
@@ -769,13 +750,7 @@ not a different role:
   live here for that reason, not because they belong to a "settings" or
   "secrets" feature folder.
 
-  Admission to this tier is strict: an entry must be a domain **mapping** (the
-  one place that decides how Proliferate renders a PR status) or a domain
-  **assembly** reused across independent surfaces (`ModelTable`,
-  `SecretManagementPanel`). A trivial mapping with no composition should be a
-  presenter function feeding a pure pattern instead — the mapping still gets
-  exactly one home, and the library stays smaller. This tier is a shelf, not a
-  landfill; it should stay near its current size.
+  Admission to this tier is strict: an entry must be a domain **mapping** (the one place that decides how Proliferate renders a PR status) or a domain **assembly** reused across independent surfaces (`ModelTable`, `SecretManagementPanel`). A trivial mapping with no composition should be a presenter function feeding a pure pattern instead — the mapping still gets exactly one home, and the library stays smaller. This tier is a shelf, not a landfill; it should stay near its current size.
 
 There is no fourth content tier inside `product-client/src/primitives` (no
 `surfaces/`, no feature-keyed folder): a component's tier is always a root
@@ -806,66 +781,34 @@ components and `design` tokens. It does not invent new visual vocabulary:
   library primitive/pattern already owns — compose the existing one instead of
   shadowing it.
 
-Feature code may still define feature-specific components — a component that only
-composes library primitives/patterns and tokens does not need to live in the
-library. Graduation into the library follows the **rule of two**:
+Feature code may still define feature-specific components — a component that only composes library primitives/patterns and tokens does not need to live in the library. Graduation into the library follows the **rule of two**:
 
-- **First instance is free.** The first time a feature needs a genuinely novel
-  shape, it may build it in place — token paint only, composed from existing
-  primitives where they apply. It does not enter the library and does not get
-  an index row.
-- **Second appearance promotes.** The PR that would introduce the second
-  implementation of a shape anywhere in the tree must promote the shape into
-  the tier matching its role (with an index row and a registry entry) instead
-  of copying it. Duplicates are never merged as-is; the promotion absorbs
-  both call sites.
+- **First instance is free.** The first time a feature needs a genuinely novel shape, it may build it in place — token paint only, composed from existing primitives where they apply. It does not enter the library and does not get an index row.
+- **Second appearance promotes.** The PR that would introduce the second implementation of a shape anywhere in the tree must promote the shape into the tier matching its role (with an index row and a registry entry) instead of copying it. Duplicates are never merged as-is; the promotion absorbs both call sites.
 
-Promotion is earned by duplication, never speculative — a component is not
-moved into the library because it "looks reusable." The inverse also holds:
-every library component must have at least one non-playground call site, or
-carry an explicit incubating note in its index row. A sanctioned component
-with zero consumers while feature code hand-rolls its shape is the failure
-mode this rule exists to catch.
+Promotion is earned by duplication, never speculative — a component is not moved into the library because it "looks reusable." The inverse also holds: every library component must have at least one non-playground call site, or carry an explicit incubating note in its index row. A sanctioned component with zero consumers while feature code hand-rolls its shape is the failure mode this rule exists to catch.
 
 ### Placement algorithm
 
 For any new UI, ask in order:
 
 1. Is it a **value** (a color, size, duration)? → a `design` token.
-2. Is it **one thing being rendered** (an atom, an icon)? →
-   `product-client/src/primitives/` or `primitives/icons/`.
-3. Is it a **skeleton or a system's look**? Props are shapes only →
-   `primitives/patterns/` (as part of an area kit when it defines one
-   system). Props mention domain nouns → `components/patterns/`, under the
-   strict admission test above.
-4. Everything else is a **surface**: feature code that composes, fills slots,
-   and lays out. Free, and it stays in its feature directory permanently.
+2. Is it **one thing being rendered** (an atom, an icon)? → `product-client/src/primitives/` or `primitives/icons/`.
+3. Is it a **skeleton or a system's look**? Props are shapes only → `primitives/patterns/` (as part of an area kit when it defines one system). Props mention domain nouns → `components/patterns/`, under the strict admission test above.
+4. Everything else is a **surface**: feature code that composes, fills slots, and lays out. Free, and it stays in its feature directory permanently.
 
-Surfaces never relocate into the library wholesale. App-level coherence comes
-from surfaces calling the same patterns, not from merging surface files: two
-surfaces merge only after pattern adoption has hollowed them out and proven
-them structurally identical assemblies over different data.
+Surfaces never relocate into the library wholesale. App-level coherence comes from surfaces calling the same patterns, not from merging surface files: two surfaces merge only after pattern adoption has hollowed them out and proven them structurally identical assemblies over different data.
 
 ### UI-conformance review
 
-The judgment half of enforcement. Every PR touching frontend components gets
-reviewed against the current sanctioned index (never a memorized copy) for
-what the mechanical gates cannot decide:
+The judgment half of enforcement. Every PR touching frontend components gets reviewed against the current sanctioned index (never a memorized copy) for what the mechanical gates cannot decide:
 
-1. **New shape vs. redraw** — did the PR build row/card/banner/dialog DOM from
-   raw elements when a pattern already owns that skeleton?
-2. **Second instance** — is this shape already implemented somewhere? Flag for
-   promotion instead of merge (the rule of two).
-3. **Hand-rolled overlay semantics** — any new `role="dialog|menu|listbox|
-   tooltip"` outside the library instead of composing
-   `ModalShell`/`PopoverButton`/`Tooltip`.
-4. **Geometry escape hatches** — arbitrary values or inline styles without a
-   legitimate cause (virtualization math and grid positioning are legitimate;
-   decorative geometry is not).
-5. **Icon source** — glyphs come from `primitives/icons/`, never directly from
-   `lucide-react`.
-6. **New-pattern quality** — honest registry demo, correct tier (shapes vs
-   nouns), named for the job not the feature.
+1. **New shape vs. redraw** — did the PR build row/card/banner/dialog DOM from raw elements when a pattern already owns that skeleton?
+2. **Second instance** — is this shape already implemented somewhere? Flag for promotion instead of merge (the rule of two).
+3. **Hand-rolled overlay semantics** — any new `role="dialog|menu|listbox|tooltip"` outside the library instead of composing `ModalShell`/`PopoverButton`/`Tooltip`.
+4. **Geometry escape hatches** — arbitrary values or inline styles without a legitimate cause (virtualization math and grid positioning are legitimate; decorative geometry is not).
+5. **Icon source** — glyphs come from `primitives/icons/`, never directly from `lucide-react`.
+6. **New-pattern quality** — honest registry demo, correct tier (shapes vs nouns), named for the job not the feature.
 
 ### The sanctioned index
 
@@ -1013,16 +956,7 @@ grandfathered.
    export.
 4. **Add a row to the sanctioned index above** — component name, real path,
    one-line purpose, in the matching tier's table.
-5. **Add a registry entry with a self-contained demo.** Every library
-   component has a `LibraryEntry` in
-   [components/playground/library/](../apps/packages/product-client/src/components/playground/library/)
-   whose `render()` uses only fixture props and local state — no providers, no
-   stores. This is not optional documentation:
-   [library-registry.test.ts](../apps/packages/product-client/src/components/playground/library/library-registry.test.ts)
-   fails CI on any library file without an entry (and vice versa), so the demo
-   card is part of shipping the component. The registry is also the manifest
-   the Claude Design sync builds from, so the same entry is the component's
-   design-project card.
+5. **Add a registry entry with a self-contained demo.** Every library component has a `LibraryEntry` in [components/playground/library/](../apps/packages/product-client/src/components/playground/library/) whose `render()` uses only fixture props and local state — no providers, no stores. This is not optional documentation: [library-registry.test.ts](../apps/packages/product-client/src/components/playground/library/library-registry.test.ts) fails CI on any library file without an entry (and vice versa), so the demo card is part of shipping the component. The registry is also the manifest the Claude Design sync builds from, so the same entry is the component's design-project card.
 6. **Consume it** via the exact internal subpath
    (`#product/primitives/Button`,
    `#product/components/patterns/SettingsRow`) — never a relative import across
@@ -1192,21 +1126,9 @@ this document states is not mechanically enforced.
 - `DropdownMenu`'s four grandfathered consumers have no tracking mechanism beyond
   this document — nothing fails CI if a fifth call site starts importing
   `DropdownMenu` directly.
-- The rule of two, the at-least-one-call-site rule, and the whole
-  UI-conformance review checklist are review-enforced, not CI-enforced: no
-  script detects a second implementation of a shape, a dead library component,
-  or a hand-rolled `role="dialog|menu|listbox|tooltip"` shell. Known existing
-  violations predating the rules: direct `lucide-react` imports in ~44 feature
-  files (24 of them shadowing identically named tuned glyphs in
-  `primitives/icons/`), six hand-rolled overlay shells, and several duplicated
-  shapes (roster rows, card shells, status dots, disclosure state machines)
-  pending promotion.
-- Arbitrary width/height/padding/margin/inset brackets (`w-[…]`, `p-[…]`, and
-  siblings) have no gate rule — the appearance gate covers only the
-  `rounded`/`z`/`gap`/`size` families plus text and glyph sizing.
-- Area kits are a grouping stated by this document, not a directory structure:
-  the composer, toast, and sidebar kit files sit flat in
-  `primitives/patterns/` today.
+- The rule of two, the at-least-one-call-site rule, and the whole UI-conformance review checklist are review-enforced, not CI-enforced: no script detects a second implementation of a shape, a dead library component, or a hand-rolled `role="dialog|menu|listbox|tooltip"` shell. Known existing violations predating the rules: direct `lucide-react` imports in ~44 feature files (24 of them shadowing identically named tuned glyphs in `primitives/icons/`), six hand-rolled overlay shells, and several duplicated shapes (roster rows, card shells, status dots, disclosure state machines) pending promotion.
+- Arbitrary width/height/padding/margin/inset brackets (`w-[…]`, `p-[…]`, and siblings) have no gate rule — the appearance gate covers only the `rounded`/`z`/`gap`/`size` families plus text and glyph sizing.
+- Area kits are a grouping stated by this document, not a directory structure: the composer, toast, and sidebar kit files sit flat in `primitives/patterns/` today.
 
 Test coverage for the two mechanical library rules:
 [test_check_frontend_boundaries.py](../scripts/test_check_frontend_boundaries.py).
