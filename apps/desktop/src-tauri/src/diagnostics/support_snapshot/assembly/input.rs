@@ -5,12 +5,13 @@ use std::fmt;
 use proliferate_diagnostics_protocol::v1::types::CollectorAcceptedRecordV1;
 
 use super::super::schema::enums::{
-    SupportSessionOmissionReasonV1, SupportSourceManifestSourceV1, SupportSourceStateV1,
+    SupportLegacySourceKindV1, SupportSessionOmissionReasonV1, SupportSourceManifestSourceV1,
+    SupportSourceStateV1,
 };
 use super::super::schema::model::common::SupportJsonValueV1;
 use super::super::schema::model::evidence::{
     SupportCollectorEvidenceV1, SupportFallbackRecordV1, SupportLegacyLineV1,
-    SupportLegacySourceKindV1, SupportOpaqueFallbackLineV1, SupportSessionEndpointStatesV1,
+    SupportOpaqueFallbackLineV1, SupportSessionEndpointStatesV1,
 };
 use super::super::schema::model::health::SupportProducerHealthV1;
 use super::super::schema::model::snapshot::{

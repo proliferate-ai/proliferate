@@ -44,6 +44,18 @@ fn each_of_the_exact_eight_tiers_is_the_accounted_last_group() {
 }
 
 #[test]
+fn tier_three_requires_an_exact_owned_correlation() {
+    let exact = collector_input(3);
+    assert_eq!(removed_tiers(exact), [0, 0, 1, 0, 0, 0, 0, 0]);
+
+    for operation_ids in [Vec::new(), vec!["different-operation".to_owned()]] {
+        let mut input = collector_input(3);
+        input.correlations.operation_ids = operation_ids;
+        assert_eq!(removed_tiers(input), [0, 0, 0, 1, 0, 0, 0, 0]);
+    }
+}
+
+#[test]
 fn a_real_input_over_twenty_five_mib_degrades_to_the_exact_production_cap() {
     let input = production_cap_input();
     let canonical_candidate_bytes =
@@ -263,23 +275,44 @@ fn collector_input(tier: usize) -> super::super::SupportAssemblyInputV1 {
     }
     match tier {
         2 => record.record.severity = SeverityV1::Warn,
-        3 => record.record.severity = SeverityV1::Info,
+        3 => {
+            record.record.severity = SeverityV1::Info;
+            clear_incidental_correlations(&mut record.record);
+            input.correlations.operation_ids = vec![record.record.operation_id.clone()];
+        }
         4 => {
             record.record.severity = SeverityV1::Info;
-            record.record.parent_operation_id = None;
-            record.record.trace_id = None;
-            record.record.workspace_id = None;
-            record.record.session_id = None;
-            record.record.turn_id = None;
-            record.record.item_id = None;
-            record.record.request_id = None;
-            record.record.target_id = None;
-            record.record.prompt_id = None;
-            record.record.workflow_id = None;
+            clear_incidental_correlations(&mut record.record);
         }
         _ => unreachable!(),
     }
     with_collector_records(input, vec![record])
+}
+
+fn clear_incidental_correlations(
+    record: &mut proliferate_diagnostics_protocol::v1::types::ProducerRecordV1,
+) {
+    record.parent_operation_id = None;
+    record.trace_id = None;
+    record.workspace_id = None;
+    record.session_id = None;
+    record.turn_id = None;
+    record.item_id = None;
+    record.request_id = None;
+    record.target_id = None;
+    record.prompt_id = None;
+    record.workflow_id = None;
+}
+
+fn removed_tiers(input: super::super::SupportAssemblyInputV1) -> [u64; 8] {
+    let included = assemble_for_test(input.clone(), PACKAGE_BYTES, MANIFEST_BYTES)
+        .expect("included correlated record");
+    assemble_for_test(input, included.serialized_bytes - 1, MANIFEST_BYTES)
+        .expect("degraded correlated record")
+        .snapshot
+        .manifest
+        .degradation
+        .removed_by_tier
 }
 
 fn fallback_input() -> super::super::SupportAssemblyInputV1 {
