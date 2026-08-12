@@ -215,51 +215,60 @@ impl PlatformFallbackWriter {
 
     fn rotate(&mut self) -> Result<(), FallbackError> {
         self.validate_live_authority()?;
-        let mut rotated = [
-            open_existing(&self.directory, self.names.segments[1], false)?,
-            open_existing(&self.directory, self.names.segments[2], false)?,
-            open_existing(&self.directory, self.names.segments[3], false)?,
+        let rotated = [
+            open_or_create(&self.directory, self.names.segments[1], false)?,
+            open_or_create(&self.directory, self.names.segments[2], false)?,
+            open_or_create(&self.directory, self.names.segments[3], true)?,
         ];
-
-        let removed_bytes = match rotated[2].take() {
-            Some(oldest) => {
-                unlink_verified(
+        let mut identities = [
+            self.active_identity,
+            rotated[0].stat.identity,
+            rotated[1].stat.identity,
+            rotated[2].stat.identity,
+        ];
+        let swaps = [(2_usize, 3_usize), (1, 2), (0, 1)];
+        let mut completed = 0;
+        for (left, right) in swaps {
+            if let Err(error) = swap_verified(
+                &self.directory,
+                self.names.segments[left],
+                self.names.segments[right],
+                identities[left],
+                identities[right],
+                true,
+            ) {
+                rollback_swaps(
                     &self.directory,
-                    self.names.segments[3],
-                    oldest.stat.identity,
-                )?;
-                oldest.stat.bytes
+                    &self.names,
+                    &mut identities,
+                    &swaps,
+                    completed,
+                );
+                return Err(error);
             }
-            None => 0,
-        };
-        if let Some(segment) = rotated[1].take() {
-            rename_verified(
-                &self.directory,
-                self.names.segments[2],
-                self.names.segments[3],
-                segment.stat.identity,
-            )?;
+            identities.swap(left, right);
+            completed += 1;
         }
-        if let Some(segment) = rotated[0].take() {
-            rename_verified(
-                &self.directory,
-                self.names.segments[1],
-                self.names.segments[2],
-                segment.stat.identity,
-            )?;
-        }
-        rename_verified(
+
+        let [_, _, oldest] = rotated;
+        before_rotation_mutation(self.names.segments[0], self.names.segments[0]);
+        ensure_path_identity(
             &self.directory,
             self.names.segments[0],
-            self.names.segments[1],
-            self.active_identity,
+            oldest.stat.identity,
         )?;
-
-        let active = create_new(&self.directory, self.names.segments[0], true)?;
-        self.active_file = active.file;
-        self.active_identity = active.stat.identity;
+        if unsafe { libc::ftruncate(oldest.file.as_raw_fd(), 0) } != 0 {
+            return Err(FallbackError::WriteFailed);
+        }
+        let active = validate_file(&oldest.file)?;
+        ensure_path_identity(&self.directory, self.names.segments[0], active.identity)?;
+        if active.bytes != 0 {
+            return Err(FallbackError::WriteFailed);
+        }
+        self.active_file = oldest.file;
+        self.active_identity = active.identity;
         self.active_bytes = 0;
-        self.retained_bytes = self.retained_bytes.saturating_sub(removed_bytes);
+        self.retained_bytes = self.retained_bytes.saturating_sub(oldest.stat.bytes);
         Ok(())
     }
 
@@ -441,46 +450,83 @@ fn ensure_path_identity(
     Ok(())
 }
 
-fn unlink_verified(
+fn rollback_swaps(
     directory: &File,
-    name: &str,
-    expected: FileIdentity,
-) -> Result<(), FallbackError> {
-    ensure_path_identity(directory, name, expected)?;
-    if unsafe { libc::unlinkat(directory.as_raw_fd(), c_name(name).as_ptr(), 0) } != 0 {
-        return Err(FallbackError::WriteFailed);
-    }
-    ensure_absent(directory, name)
-}
-
-fn rename_verified(
-    directory: &File,
-    source: &str,
-    destination: &str,
-    expected: FileIdentity,
-) -> Result<(), FallbackError> {
-    ensure_path_identity(directory, source, expected)?;
-    ensure_absent(directory, destination)?;
-    if unsafe {
-        libc::renameat(
-            directory.as_raw_fd(),
-            c_name(source).as_ptr(),
-            directory.as_raw_fd(),
-            c_name(destination).as_ptr(),
+    names: &FamilyNames,
+    identities: &mut [FileIdentity; 4],
+    swaps: &[(usize, usize); 3],
+    completed: usize,
+) {
+    for &(left, right) in swaps[..completed].iter().rev() {
+        if swap_verified(
+            directory,
+            names.segments[left],
+            names.segments[right],
+            identities[left],
+            identities[right],
+            false,
         )
-    } != 0
-    {
-        return Err(FallbackError::WriteFailed);
+        .is_err()
+        {
+            break;
+        }
+        identities.swap(left, right);
     }
-    ensure_absent(directory, source)?;
-    ensure_path_identity(directory, destination, expected)
 }
 
-fn ensure_absent(directory: &File, name: &str) -> Result<(), FallbackError> {
-    match raw_fstatat_optional(directory.as_raw_fd(), name)? {
-        None => Ok(()),
-        Some(_) => Err(FallbackError::UnsafeEntry),
+fn swap_verified(
+    directory: &File,
+    left: &'static str,
+    right: &'static str,
+    left_identity: FileIdentity,
+    right_identity: FileIdentity,
+    invoke_hook: bool,
+) -> Result<(), FallbackError> {
+    ensure_path_identity(directory, left, left_identity)?;
+    ensure_path_identity(directory, right, right_identity)?;
+    if invoke_hook {
+        before_rotation_mutation(left, right);
     }
+    atomic_swap(directory, left, right)?;
+    let left_ok = ensure_path_identity(directory, left, right_identity).is_ok();
+    let right_ok = ensure_path_identity(directory, right, left_identity).is_ok();
+    if left_ok && right_ok {
+        return Ok(());
+    }
+    if left_ok || right_ok {
+        let _ = atomic_swap(directory, left, right);
+    }
+    Err(FallbackError::UnsafeEntry)
+}
+
+fn atomic_swap(directory: &File, left: &str, right: &str) -> Result<(), FallbackError> {
+    #[cfg(target_os = "macos")]
+    let result = unsafe {
+        libc::renameatx_np(
+            directory.as_raw_fd(),
+            c_name(left).as_ptr(),
+            directory.as_raw_fd(),
+            c_name(right).as_ptr(),
+            libc::RENAME_SWAP,
+        )
+    };
+    #[cfg(not(target_os = "macos"))]
+    let result = {
+        let _ = (directory, left, right);
+        -1
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(FallbackError::UnsafeEntry)
+    }
+}
+
+fn before_rotation_mutation(source: &'static str, destination: &'static str) {
+    #[cfg(test)]
+    super::tests::run_rotation_hook(source, destination);
+    #[cfg(not(test))]
+    let _ = (source, destination);
 }
 
 fn raw_fstat(fd: RawFd) -> io::Result<libc::stat> {

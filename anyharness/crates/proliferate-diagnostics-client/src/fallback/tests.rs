@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+use std::cell::RefCell;
 use std::fs::{self, File};
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
@@ -19,6 +21,50 @@ use crate::{bridge::activation::FallbackDirectoryHandle, DiagnosticsComponent};
 
 const ANYHARNESS_ACTIVE: &str = "anyharness.jsonl";
 const ANYHARNESS_LOCK: &str = "anyharness.lock";
+
+#[cfg(target_os = "macos")]
+type RotationHook = Box<dyn FnMut(&'static str, &'static str)>;
+
+#[cfg(target_os = "macos")]
+std::thread_local! {
+    static ROTATION_HOOK: RefCell<Option<RotationHook>> = RefCell::new(None);
+}
+
+#[cfg(target_os = "macos")]
+pub(super) fn run_rotation_hook(source: &'static str, destination: &'static str) {
+    ROTATION_HOOK.with(|slot| {
+        if let Some(hook) = slot.borrow_mut().as_mut() {
+            hook(source, destination);
+        }
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn run_rotation_hook(_source: &'static str, _destination: &'static str) {}
+
+#[cfg(target_os = "macos")]
+struct RotationHookReset;
+
+#[cfg(target_os = "macos")]
+impl Drop for RotationHookReset {
+    fn drop(&mut self) {
+        ROTATION_HOOK.with(|slot| {
+            slot.borrow_mut().take();
+        });
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn with_rotation_hook<T>(
+    hook: impl FnMut(&'static str, &'static str) + 'static,
+    run: impl FnOnce() -> T,
+) -> T {
+    ROTATION_HOOK.with(|slot| {
+        assert!(slot.borrow_mut().replace(Box::new(hook)).is_none());
+    });
+    let _reset = RotationHookReset;
+    run()
+}
 
 #[test]
 fn wrapper_has_exact_schema_reason_vocabulary_and_component_binding() {
@@ -286,6 +332,7 @@ fn active_path_swap_is_refused_before_append_and_disables_writer() {
 }
 
 #[test]
+#[cfg(target_os = "macos")]
 fn rotation_is_oldest_first_whole_line_and_stays_within_exact_family_cap() {
     let directory = safe_directory();
     let mut writer = writer(&directory, DiagnosticsComponent::AnyHarness).expect("writer");
@@ -324,6 +371,109 @@ fn rotation_is_oldest_first_whole_line_and_stays_within_exact_family_cap() {
     assert_eq!(sequences.last(), Some(&180));
     assert!(sequences.windows(2).all(|pair| pair[1] == pair[0] + 1));
     assert_eq!(1_048_576_u32 + 2 * FALLBACK_TOTAL_BYTES, 5_242_880);
+}
+
+#[test]
+#[cfg(target_os = "macos")]
+fn rotation_races_preserve_replacements_disable_writer_and_keep_the_cap() {
+    let cases = [
+        (
+            "anyharness.jsonl.2",
+            "anyharness.jsonl.3",
+            "anyharness.jsonl.2",
+            "swap-23-source",
+        ),
+        (
+            "anyharness.jsonl.2",
+            "anyharness.jsonl.3",
+            "anyharness.jsonl.3",
+            "swap-23-destination-oldest",
+        ),
+        (
+            "anyharness.jsonl.1",
+            "anyharness.jsonl.2",
+            "anyharness.jsonl.1",
+            "swap-12-source",
+        ),
+        (
+            "anyharness.jsonl.1",
+            "anyharness.jsonl.2",
+            "anyharness.jsonl.2",
+            "swap-12-destination",
+        ),
+        (
+            ANYHARNESS_ACTIVE,
+            "anyharness.jsonl.1",
+            ANYHARNESS_ACTIVE,
+            "swap-01-source",
+        ),
+        (
+            ANYHARNESS_ACTIVE,
+            "anyharness.jsonl.1",
+            "anyharness.jsonl.1",
+            "swap-01-destination",
+        ),
+        (
+            ANYHARNESS_ACTIVE,
+            ANYHARNESS_ACTIVE,
+            ANYHARNESS_ACTIVE,
+            "retire",
+        ),
+    ];
+
+    for (hook_source, hook_destination, raced_name, label) in cases {
+        let directory = safe_directory();
+        let mut writer = writer(&directory, DiagnosticsComponent::AnyHarness).expect("writer");
+        let full_segment = vec![b'x'; FALLBACK_SEGMENT_BYTES as usize];
+        for _ in 0..4 {
+            writer
+                .write_encoded_for_test(&full_segment)
+                .expect("fill family segment");
+        }
+
+        let raced_path = directory.path().join(raced_name);
+        let displaced_path = directory.path().join(format!("displaced-{label}"));
+        let canary = format!("replacement-{label}").into_bytes();
+        let injected_canary = canary.clone();
+        let result = with_rotation_hook(
+            move |source, destination| {
+                if source == hook_source && destination == hook_destination {
+                    fs::rename(&raced_path, &displaced_path).expect("displace validated entry");
+                    fs::write(&raced_path, &injected_canary).expect("inject replacement");
+                    fs::set_permissions(&raced_path, fs::Permissions::from_mode(0o600))
+                        .expect("replacement mode");
+                }
+            },
+            || writer.write_encoded_for_test(b"z"),
+        );
+
+        assert_eq!(result, Err(FallbackError::UnsafeEntry), "{label}");
+        assert!(!writer.current_status().active, "{label}");
+        assert_eq!(
+            fs::read(directory.path().join(raced_name)).expect("replacement"),
+            canary
+        );
+        assert_eq!(
+            fs::metadata(directory.path().join(format!("displaced-{label}")))
+                .expect("displaced metadata")
+                .len(),
+            u64::from(FALLBACK_SEGMENT_BYTES)
+        );
+        let mut total = 0_u64;
+        for name in [
+            ANYHARNESS_ACTIVE,
+            "anyharness.jsonl.1",
+            "anyharness.jsonl.2",
+            "anyharness.jsonl.3",
+        ] {
+            let bytes = fs::metadata(directory.path().join(name))
+                .expect("family metadata")
+                .len();
+            assert!(bytes <= u64::from(FALLBACK_SEGMENT_BYTES));
+            total += bytes;
+        }
+        assert!(total <= u64::from(FALLBACK_TOTAL_BYTES), "{label}: {total}");
+    }
 }
 
 fn safe_directory() -> TempDir {
