@@ -1,4 +1,5 @@
-import { Folder, Laptop } from "lucide-react";
+import { Folder } from "#product/primitives/icons/workspace";
+import { Laptop } from "#product/primitives/icons/platform";
 import { parseGitRepoId } from "#product/domain/repos/repo-id";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { Button } from "#product/primitives/Button";

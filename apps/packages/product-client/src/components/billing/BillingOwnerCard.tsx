@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Building2, Cloud, CreditCard, Gauge, Server } from "lucide-react";
+import { Building2, CloudIcon, CreditCard, Gauge, Server } from "#product/primitives/icons/platform";
 
 import { Badge } from "#product/primitives/Badge";
 
@@ -133,7 +133,7 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
               detail="Ready for cloud work"
             />
             <Metric
-              icon={<Cloud className="icon-paired" />}
+              icon={<CloudIcon className="icon-paired" />}
               label="Used"
               value={creditBalance.used}
               detail="Consumed this period"
@@ -148,7 +148,7 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
               detail="Currently running cloud work"
             />
             <Metric
-              icon={<Cloud className="icon-paired" />}
+              icon={<CloudIcon className="icon-paired" />}
               label="Cloud repos"
               value={formatLimit(plan.activeCloudRepoCount, repoLimit(plan))}
               detail="Enabled environments"

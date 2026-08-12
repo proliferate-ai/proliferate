@@ -1,5 +1,5 @@
 import { type ClipboardEvent, type FormEvent, useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "#product/primitives/icons/status";
 
 import { CloudUpload } from "#product/primitives/icons/platform";
 import { Button } from "#product/primitives/Button";

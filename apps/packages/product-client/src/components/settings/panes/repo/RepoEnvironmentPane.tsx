@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { KeyRound } from "#product/primitives/icons/core";
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";

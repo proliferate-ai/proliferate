@@ -1,4 +1,4 @@
-import { Edit3, Trash2 } from "lucide-react";
+import { Pencil, Trash } from "#product/primitives/icons/core";
 
 import { Button } from "#product/primitives/Button";
 
@@ -26,10 +26,10 @@ export function SecretRow({
       {canManage ? (
         <div className="flex shrink-0 items-center gap-1">
           <Button type="button" variant="ghost" size="icon-sm" aria-label={`Edit ${label}`} onClick={onEdit}>
-            <Edit3 className="icon-paired" />
+            <Pencil className="icon-paired" />
           </Button>
           <Button type="button" variant="ghost" size="icon-sm" aria-label={`Delete ${label}`} onClick={onDelete}>
-            <Trash2 className="icon-paired" />
+            <Trash className="icon-paired" />
           </Button>
         </div>
       ) : null}
