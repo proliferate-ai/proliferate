@@ -178,6 +178,27 @@ describe("ChatInputControlRow", () => {
     expect(mode.querySelector("svg")).toBeNull();
   });
 
+  it("mounts no trailing pending slot while a mode change is submitting", () => {
+    const controls = createControls();
+    controls[0] = { ...controls[0], pendingState: "submitting" };
+    renderControlRow({ sessionConfigControls: controls });
+
+    // Submitting renders no glyph, so the trailing wrapper must not mount:
+    // a zero-width flex item still claims the pill's gap, pushing the compact
+    // icon off-center and snapping the width when the pending state clears.
+    const mode = screen.getByRole("button", { name: "Mode: Default" });
+    expect(mode.querySelector(".ml-auto")).toBeNull();
+  });
+
+  it("keeps the queued clock in the mode pill's trailing slot", () => {
+    const controls = createControls();
+    controls[0] = { ...controls[0], pendingState: "queued" };
+    renderControlRow({ sessionConfigControls: controls });
+
+    const mode = screen.getByRole("button", { name: "Mode: Default" });
+    expect(mode.querySelector(".ml-auto svg")).not.toBeNull();
+  });
+
   it("swaps an icon-configured working mode's word for its icon under the compact tier", () => {
     const controls = createControls();
     controls[0] = {

@@ -16,7 +16,10 @@ import { Check } from "#product/primitives/icons/core";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
 import { AnimatedSwapText } from "#product/primitives/AnimatedSwapText";
-import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
+import {
+  PendingConfigIndicator,
+  showsPendingConfigIndicator,
+} from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 type ModeControlDescriptor = LiveSessionControlDescriptor & {
   key: ConfiguredSessionControlKey;
@@ -74,8 +77,10 @@ export function SessionModeControl({
     swapsToIconWhenCompact ? COMPOSER_COMPACT_SHRINK_NONE_CLASSNAME : ""
   } ${className}`;
   // No disclosure chevron on the compact trigger: the mode name itself steps
-  // immediately to the next runtime-provided value.
-  const triggerTrailing = control.pendingState
+  // immediately to the next runtime-provided value. Gated on the glyph being
+  // visible, not on pendingState existing — a trailing wrapper around a
+  // null-rendering indicator still claims the pill's gap.
+  const triggerTrailing = showsPendingConfigIndicator(control.pendingState)
     ? <PendingConfigIndicator pendingState={control.pendingState} />
     : null;
 

@@ -9,7 +9,10 @@ import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-s
 import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
-import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
+import {
+  PendingConfigIndicator,
+  showsPendingConfigIndicator,
+} from "#product/components/workspace/chat/input/PendingConfigIndicator";
 import { ComposerFieldInlineError } from "#product/components/workspace/chat/input/ComposerFieldInlineError";
 import { ComposerModelPickerPopover } from "#product/components/workspace/chat/input/ComposerModelPickerPopover";
 import { useModelSupportStore } from "#product/stores/chat/model-support-store";
@@ -132,8 +135,8 @@ export function ComposerModelSelectorControl({
             data-composer-selected-model={selectedModelId}
             icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-body)]" /> : undefined}
             label={triggerLabel}
-            trailing={currentModel?.pendingState
-              ? <PendingConfigIndicator pendingState={currentModel.pendingState} />
+            trailing={showsPendingConfigIndicator(currentModel?.pendingState ?? null)
+              ? <PendingConfigIndicator pendingState={currentModel?.pendingState ?? null} />
               : null}
             aria-label={`Model: ${triggerLabel}`}
             aria-invalid={unsupportedSelectionMessage ? true : undefined}
