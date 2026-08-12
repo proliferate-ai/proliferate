@@ -17,6 +17,7 @@ import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug
 import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import { selectSessionWithShellIntentRollback } from "#product/hooks/sessions/workflows/session-shell-selection";
 import {
+  findClientSessionIdByMaterializedSessionId,
   getSessionRecords,
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -135,14 +136,20 @@ export function useSessionFindOrCreateActions({
       session.agentKind === agentKind && session.modelId === modelId
     );
     if (backendSession) {
-      await selectSessionWithShellIntentRollback({
+      const selectionOutcome = await selectSessionWithShellIntentRollback({
         workspaceId,
         sessionId: backendSession.id,
         options: { latencyFlowId },
         selectSession,
       });
+      if (selectionOutcome?.result === "stale") {
+        return;
+      }
+      const selectedSessionId = selectionOutcome?.result === "completed"
+        ? selectionOutcome.sessionId
+        : findClientSessionIdByMaterializedSessionId(backendSession.id) ?? backendSession.id;
       await promptSession({
-        sessionId: backendSession.id,
+        sessionId: selectedSessionId,
         text,
         blocks,
         attachmentSnapshots,

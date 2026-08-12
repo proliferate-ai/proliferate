@@ -113,4 +113,39 @@ describe("session directory reducer", () => {
       },
     });
   });
+
+  it("promotes a claimant outside a removed workspace to materialized index owner", () => {
+    const sessionA = createDirectoryEntry({
+      sessionId: "session-a",
+      materializedSessionId: "runtime-shared",
+      workspaceId: "workspace-a",
+      agentKind: "proliferate",
+    });
+    const sessionB = createDirectoryEntry({
+      sessionId: "session-b",
+      materializedSessionId: "runtime-shared",
+      workspaceId: "workspace-b",
+      agentKind: "proliferate",
+    });
+    const state: SessionDirectoryReducerState = {
+      entriesById: {
+        "session-a": sessionA,
+        "session-b": sessionB,
+      },
+      clientSessionIdByMaterializedSessionId: {
+        "runtime-shared": "session-b",
+      },
+      sessionIdsByWorkspaceId: {
+        "workspace-a": ["session-a"],
+        "workspace-b": ["session-b"],
+      },
+      relationshipHintsBySessionId: {},
+    };
+
+    const result = removeWorkspaceDirectoryEntries(state, "workspace-b");
+
+    expect(result.state.clientSessionIdByMaterializedSessionId).toEqual({
+      "runtime-shared": "session-a",
+    });
+  });
 });

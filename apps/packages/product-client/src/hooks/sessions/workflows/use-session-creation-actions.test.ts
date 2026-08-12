@@ -57,6 +57,62 @@ describe("projected session materialization", () => {
     expect(useSessionSelectionStore.getState().activeSessionVersion).toBe(versionBefore);
   });
 
+  it("coalesces a hydrated runtime alias into the pending client slot", () => {
+    const clientSessionId = "client-session:codex:materializing-late";
+    const runtimeSessionId = "runtime-session-materializing-late";
+    putSessionRecord(
+      createEmptySessionRecord(clientSessionId, "codex", {
+        workspaceId: "workspace-1",
+        materializedSessionId: null,
+      }),
+    );
+    const runtimeAlias = createEmptySessionRecord(runtimeSessionId, "codex", {
+      workspaceId: "workspace-1",
+      materializedSessionId: runtimeSessionId,
+      title: "Loaded runtime alias",
+    });
+    putSessionRecord({
+      ...runtimeAlias,
+      transcript: {
+        ...runtimeAlias.transcript,
+        sessionMeta: {
+          ...runtimeAlias.transcript.sessionMeta,
+          title: "Hydrated runtime transcript",
+        },
+      },
+      transcriptHydrated: true,
+    });
+    useSessionSelectionStore.getState().setActiveSessionId(runtimeSessionId);
+
+    materializeSessionRecord(
+      clientSessionId,
+      runtimeSessionId,
+      createEmptySessionRecord(clientSessionId, "codex", {
+        workspaceId: "workspace-1",
+        materializedSessionId: runtimeSessionId,
+        title: "Published session summary",
+      }),
+    );
+
+    expect(getSessionRecord(runtimeSessionId)).toBeNull();
+    expect(getSessionRecord(clientSessionId)).toMatchObject({
+      sessionId: clientSessionId,
+      materializedSessionId: runtimeSessionId,
+      transcriptHydrated: true,
+      transcript: {
+        sessionMeta: {
+          sessionId: clientSessionId,
+          title: "Hydrated runtime transcript",
+        },
+      },
+    });
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe(clientSessionId);
+    expect(
+      useSessionDirectoryStore.getState()
+        .clientSessionIdByMaterializedSessionId[runtimeSessionId],
+    ).toBe(clientSessionId);
+  });
+
   it("clears active session when removing an active pending slot", () => {
     useSessionSelectionStore.getState().activateWorkspace({
       logicalWorkspaceId: "workspace-1",

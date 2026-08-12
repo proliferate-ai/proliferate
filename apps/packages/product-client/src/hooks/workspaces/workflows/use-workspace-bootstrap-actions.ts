@@ -27,11 +27,10 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementFinishReason } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { clearLastViewedSession, useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {
-  clearLastViewedSession,
-  useWorkspaceUiStore,
-} from "#product/stores/preferences/workspace-ui-store";
-import { getSessionRecord, patchSessionRecord, removeSessionRecord } from "#product/stores/sessions/session-records";
+  findClientSessionIdByMaterializedSessionId, getSessionRecord, patchSessionRecord, removeSessionRecord,
+} from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { markWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 import { useDeferredWorkspaceFileTreePrefetch } from "#product/hooks/workspaces/lifecycle/files/use-deferred-workspace-file-tree-prefetch";
@@ -347,6 +346,7 @@ export function useWorkspaceBootstrapActions() {
           isCurrent,
         }, {
           clearLastViewedSession,
+          findClientSessionIdByMaterializedSessionId,
           getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
           getSessionRecord,
           patchSessionRecord,

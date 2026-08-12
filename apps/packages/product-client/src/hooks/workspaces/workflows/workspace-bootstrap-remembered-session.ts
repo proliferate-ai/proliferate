@@ -34,6 +34,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
   },
   deps: {
     clearLastViewedSession: (workspaceId: string, sessionId?: string) => void;
+    findClientSessionIdByMaterializedSessionId: (materializedSessionId: string) => string | null;
     getActiveSessionId: () => string | null;
     getSessionRecord: (sessionId: string) => SessionRuntimeRecord | null;
     patchSessionRecord: (sessionId: string, patch: Partial<SessionRuntimeRecord>) => void;
@@ -62,18 +63,20 @@ export async function handleRememberedWorkspaceSessionBootstrap(
   if (!targetSession || !input.isCurrent()) {
     return { shouldReturn: false };
   }
+  const targetSessionId =
+    deps.findClientSessionIdByMaterializedSessionId(targetSession.id) ?? targetSession.id;
 
   const currentActiveSessionId = deps.getActiveSessionId();
   const currentActiveIsSetupSession = currentActiveSessionId
     ? isWorkspaceSetupSessionId(currentActiveSessionId)
     : false;
-  if (currentActiveSessionId && currentActiveSessionId !== targetSession.id) {
+  if (currentActiveSessionId && currentActiveSessionId !== targetSessionId) {
     const currentActiveSession = deps.getSessionRecord(currentActiveSessionId);
     if (!currentActiveSession || currentActiveSession.workspaceId !== input.workspaceId) {
       deps.setActiveSessionId(null);
       logLatency("workspace.select.stale_active_session_cleared", {
         workspaceId: input.workspaceId,
-        sessionId: targetSession.id,
+        sessionId: targetSessionId,
         currentActiveSessionId,
         currentActiveWorkspaceId: currentActiveSession?.workspaceId ?? null,
         reason: currentActiveSession ? "workspace_mismatch" : "missing_slot",
@@ -82,7 +85,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
     } else if (!currentActiveIsSetupSession) {
       logLatency("workspace.select.session_select.skipped", {
         workspaceId: input.workspaceId,
-        sessionId: targetSession.id,
+        sessionId: targetSessionId,
         currentActiveSessionId,
         reason: "active_session_changed",
         totalElapsedMs: elapsedMs(input.startedAt),
@@ -92,19 +95,22 @@ export async function handleRememberedWorkspaceSessionBootstrap(
   }
   logLatency("workspace.select.session_select.start", {
     workspaceId: input.workspaceId,
-    sessionId: targetSession.id,
+    sessionId: targetSessionId,
     totalElapsedMs: elapsedMs(input.startedAt),
   });
   const sessionSelectStartedAt = performance.now();
   const selectionOutcome = await selectSessionWithShellIntentRollback({
     workspaceId: input.workspaceId,
-    sessionId: targetSession.id,
+    sessionId: targetSessionId,
     options: { latencyFlowId: input.latencyFlowId },
     selectSession: deps.selectSession,
   });
   if (selectionOutcome?.result === "stale" || !input.isCurrent()) {
     return { shouldReturn: true };
   }
+  const selectedSessionId = selectionOutcome?.result === "completed"
+    ? selectionOutcome.sessionId
+    : deps.findClientSessionIdByMaterializedSessionId(targetSession.id) ?? targetSessionId;
   if (currentActiveIsSetupSession && currentActiveSessionId) {
     deps.removeSessionRecord(currentActiveSessionId);
   }
@@ -114,18 +120,18 @@ export async function handleRememberedWorkspaceSessionBootstrap(
     startedAt: sessionSelectStartedAt,
   });
   const hydrateStartedAt = startLatencyTimer();
-  await deps.rehydrateSessionSlotFromHistory(targetSession.id, {
+  await deps.rehydrateSessionSlotFromHistory(selectedSessionId, {
     replace: true,
     requestHeaders: input.requestHeaders,
     measurementOperationId: input.measurementOperationId,
     isCurrent: () =>
       input.isCurrent()
-      && deps.getActiveSessionId() === targetSession.id,
+      && deps.getActiveSessionId() === selectedSessionId,
   });
   if (!input.isCurrent()) {
     return { shouldReturn: true };
   }
-  deps.patchSessionRecord(targetSession.id, { transcriptHydrated: true });
+  deps.patchSessionRecord(selectedSessionId, { transcriptHydrated: true });
   recordMeasurementWorkflowStep({
     operationId: input.measurementOperationId,
     step: "session.select.history_hydrate",
@@ -133,7 +139,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
   });
   logLatency("workspace.select.success", {
     workspaceId: input.workspaceId,
-    sessionId: targetSession.id,
+    sessionId: selectedSessionId,
     sessionCount: input.sessions.length,
     totalElapsedMs: elapsedMs(input.startedAt),
   });

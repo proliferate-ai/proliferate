@@ -1,4 +1,5 @@
 import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
+import { replaceSessionIdInOpenShellState } from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
 import {
   getSessionRecord,
   patchSessionRecord,
@@ -14,13 +15,61 @@ export function materializeSessionRecord(
   materializedSessionId: string,
   record: SessionRuntimeRecord,
 ): void {
+  const materializedAlias = clientSessionId === materializedSessionId
+    ? null
+    : getSessionRecord(materializedSessionId);
   batchSessionStoreWrites(() => {
+    const nextRecord = preserveHydratedAliasTranscript(
+      record,
+      materializedAlias,
+      clientSessionId,
+    );
     patchSessionRecord(clientSessionId, {
-      ...record,
+      ...nextRecord,
       sessionId: clientSessionId,
       materializedSessionId,
     });
+    if (!materializedAlias || !getSessionRecord(clientSessionId)) {
+      return;
+    }
+
+    useSessionIntentStore.getState().reassignClientSession(
+      materializedSessionId,
+      clientSessionId,
+    );
+    const selection = useSessionSelectionStore.getState();
+    if (selection.activeSessionId === materializedSessionId) {
+      selection.setActiveSessionId(clientSessionId);
+    }
+    replaceSessionIdInOpenShellState({
+      replacedSessionId: materializedSessionId,
+      replacementSessionId: clientSessionId,
+    });
+    removeSessionRecord(materializedSessionId);
   });
+}
+
+function preserveHydratedAliasTranscript(
+  record: SessionRuntimeRecord,
+  materializedAlias: SessionRuntimeRecord | null,
+  clientSessionId: string,
+): SessionRuntimeRecord {
+  if (!materializedAlias?.transcriptHydrated) {
+    return record;
+  }
+  return {
+    ...record,
+    events: materializedAlias.events,
+    transcript: {
+      ...materializedAlias.transcript,
+      sessionMeta: {
+        ...materializedAlias.transcript.sessionMeta,
+        sessionId: clientSessionId,
+      },
+    },
+    optimisticPrompt: materializedAlias.optimisticPrompt ?? record.optimisticPrompt,
+    transcriptHydrated: true,
+  };
 }
 
 /**

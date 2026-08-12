@@ -23,6 +23,7 @@ import type {
   SelectSessionOptionsWithoutGuard,
 } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
 import { runDeferredChatTabActivation } from "#product/hooks/workspaces/workflows/tabs/chat-tab-activation-runner";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 export type { SelectSessionOptionsWithoutGuard };
 
@@ -43,13 +44,14 @@ export function useChatTabActivation() {
   const writeShellIntent = useWorkspaceUiStore((state) => state.writeShellIntent);
   const setPendingChatActivation = useWorkspaceUiStore((state) => state.setPendingChatActivation);
   const clearPendingChatActivation = useWorkspaceUiStore((state) => state.clearPendingChatActivation);
+  const replaceShellIntent = useWorkspaceUiStore((state) => state.replaceShellIntent);
   const rollbackShellIntent = useWorkspaceUiStore((state) => state.rollbackShellIntent);
   const { selectSession } = useSessionSelectionActions();
 
   return useCallback(({
     workspaceId,
     shellWorkspaceId,
-    sessionId,
+    sessionId: requestedSessionId,
     selection,
   }: {
     workspaceId: string;
@@ -59,6 +61,10 @@ export function useChatTabActivation() {
     source?: string;
     selection?: SelectSessionOptionsWithoutGuard;
   }): Promise<SessionActivationOutcome> => {
+    const sessionId =
+      useSessionDirectoryStore.getState()
+        .clientSessionIdByMaterializedSessionId[requestedSessionId]
+      ?? requestedSessionId;
     const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
     const guard = beginSessionActivationIntent(workspaceId);
     const intent = chatWorkspaceShellTabKey(sessionId);
@@ -118,8 +124,9 @@ export function useChatTabActivation() {
           clearPendingChatActivation,
           guard,
           hotOperationId,
-          intent,
           pending,
+          replaceShellIntent,
+          requestedSessionId,
           reuseHotOperationInSelect: hotMeasurement.reuseInSelect,
           rollbackShellIntent,
           selectSession,
@@ -139,6 +146,7 @@ export function useChatTabActivation() {
     });
   }, [
     clearPendingChatActivation,
+    replaceShellIntent,
     rollbackShellIntent,
     selectSession,
     setPendingChatActivation,

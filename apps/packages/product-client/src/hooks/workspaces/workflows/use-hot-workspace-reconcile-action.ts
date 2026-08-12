@@ -165,15 +165,15 @@ export function useHotWorkspaceReconcileAction({
         return "stale";
       }
 
-      const sessionMeta = sessions.find((session) =>
-        session.id === sessionId && !session.dismissedAt
-      ) ?? null;
-      if (!sessionMeta) {
-        return "session_missing";
-      }
-
       const currentSlot = getSessionRecord(sessionId);
       if (!currentSlot) {
+        return "session_missing";
+      }
+      const materializedSessionId = currentSlot.materializedSessionId ?? sessionId;
+      const sessionMeta = sessions.find((session) =>
+        session.id === materializedSessionId && !session.dismissedAt
+      ) ?? null;
+      if (!sessionMeta) {
         return "session_missing";
       }
       const storeStartedAt = performance.now();

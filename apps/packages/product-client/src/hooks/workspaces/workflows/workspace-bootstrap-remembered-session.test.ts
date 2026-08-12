@@ -47,6 +47,7 @@ describe("handleRememberedWorkspaceSessionBootstrap", () => {
       isCurrent: () => true,
     }, {
       clearLastViewedSession: vi.fn(),
+      findClientSessionIdByMaterializedSessionId: vi.fn(() => null),
       getActiveSessionId: () => null,
       getSessionRecord: vi.fn(),
       patchSessionRecord,
@@ -86,6 +87,7 @@ describe("handleRememberedWorkspaceSessionBootstrap", () => {
       isCurrent: () => true,
     }, {
       clearLastViewedSession: vi.fn(),
+      findClientSessionIdByMaterializedSessionId: vi.fn(() => null),
       getActiveSessionId: () => setupSessionId,
       getSessionRecord: vi.fn(() => ({
         sessionId: setupSessionId,
@@ -101,5 +103,105 @@ describe("handleRememberedWorkspaceSessionBootstrap", () => {
     expect(result.shouldReturn).toBe(false);
     expect(setActiveSessionId).not.toHaveBeenCalledWith(null);
     expect(removeSessionRecord).toHaveBeenCalledWith(setupSessionId);
+  });
+
+  it("selects and hydrates the existing client projection for a runtime session", async () => {
+    const clientSessionId = "client-session:codex:existing";
+    const materializedSessionId = "runtime-session-existing";
+    const rehydrateSessionSlotFromHistory = vi.fn().mockResolvedValue(true);
+    const patchSessionRecord = vi.fn();
+    const findClientSessionIdByMaterializedSessionId = vi.fn(
+      (sessionId: string) => sessionId === materializedSessionId
+        ? clientSessionId
+        : null,
+    );
+    vi.mocked(selectSessionWithShellIntentRollback).mockResolvedValueOnce(undefined);
+
+    await handleRememberedWorkspaceSessionBootstrap({
+      lastViewedSessionByWorkspace: {},
+      latencyFlowId: null,
+      logicalWorkspaceId: "logical-workspace-1",
+      measurementOperationId: null,
+      sessions: [session(materializedSessionId)],
+      startedAt: performance.now(),
+      workspaceId: "workspace-1",
+      isCurrent: () => true,
+    }, {
+      clearLastViewedSession: vi.fn(),
+      findClientSessionIdByMaterializedSessionId,
+      getActiveSessionId: () => null,
+      getSessionRecord: vi.fn(),
+      patchSessionRecord,
+      rehydrateSessionSlotFromHistory: rehydrateSessionSlotFromHistory as never,
+      removeSessionRecord: vi.fn(),
+      selectSession: vi.fn() as never,
+      setActiveSessionId: vi.fn(),
+    });
+
+    expect(findClientSessionIdByMaterializedSessionId).toHaveBeenCalledWith(
+      materializedSessionId,
+    );
+    expect(selectSessionWithShellIntentRollback).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceId: "workspace-1",
+      sessionId: clientSessionId,
+    }));
+    expect(rehydrateSessionSlotFromHistory).toHaveBeenCalledWith(
+      clientSessionId,
+      expect.any(Object),
+    );
+    expect(patchSessionRecord).toHaveBeenCalledWith(
+      clientSessionId,
+      { transcriptHydrated: true },
+    );
+  });
+
+  it("hydrates the client identity discovered while selecting a runtime session", async () => {
+    const clientSessionId = "client-session:codex:materializing";
+    const materializedSessionId = "runtime-session-materializing";
+    const rehydrateSessionSlotFromHistory = vi.fn().mockResolvedValue(true);
+    const patchSessionRecord = vi.fn();
+    vi.mocked(selectSessionWithShellIntentRollback).mockResolvedValueOnce({
+      result: "completed",
+      sessionId: clientSessionId,
+      guard: {
+        workspaceId: "workspace-1",
+        workspaceSelectionNonce: 1,
+        token: 1,
+      },
+      activeSessionVersion: 1,
+    });
+
+    await handleRememberedWorkspaceSessionBootstrap({
+      lastViewedSessionByWorkspace: {},
+      latencyFlowId: null,
+      logicalWorkspaceId: "logical-workspace-1",
+      measurementOperationId: null,
+      sessions: [session(materializedSessionId)],
+      startedAt: performance.now(),
+      workspaceId: "workspace-1",
+      isCurrent: () => true,
+    }, {
+      clearLastViewedSession: vi.fn(),
+      findClientSessionIdByMaterializedSessionId: vi.fn(() => null),
+      getActiveSessionId: () => clientSessionId,
+      getSessionRecord: vi.fn(),
+      patchSessionRecord,
+      rehydrateSessionSlotFromHistory: rehydrateSessionSlotFromHistory as never,
+      removeSessionRecord: vi.fn(),
+      selectSession: vi.fn() as never,
+      setActiveSessionId: vi.fn(),
+    });
+
+    expect(selectSessionWithShellIntentRollback).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: materializedSessionId,
+    }));
+    expect(rehydrateSessionSlotFromHistory).toHaveBeenCalledWith(
+      clientSessionId,
+      expect.any(Object),
+    );
+    expect(patchSessionRecord).toHaveBeenCalledWith(
+      clientSessionId,
+      { transcriptHydrated: true },
+    );
   });
 });

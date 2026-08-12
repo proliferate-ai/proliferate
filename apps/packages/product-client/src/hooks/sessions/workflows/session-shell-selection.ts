@@ -3,6 +3,7 @@ import type {
   SessionActivationOutcome,
 } from "#product/hooks/sessions/workflows/session-activation-guard";
 import { beginSessionActivationIntent } from "#product/hooks/sessions/workflows/session-activation-guard";
+import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
@@ -47,6 +48,33 @@ export async function selectSessionWithShellIntentRollback(input: {
       ...input.options,
       guard,
     });
+    if (
+      outcome?.result === "completed"
+      && outcome.sessionId !== input.sessionId
+      && shellWrite
+    ) {
+      const currentPending = useWorkspaceUiStore.getState()
+        .pendingChatActivationByWorkspace[shellWrite.shellWorkspaceId] ?? null;
+      if (currentPending?.attemptId === pendingAttemptId) {
+        const completedIntent = chatWorkspaceShellTabKey(outcome.sessionId);
+        const replacement = useWorkspaceUiStore.getState().replaceShellIntent({
+          workspaceId: shellWrite.shellWorkspaceId,
+          expectedIntent: shellWrite.currentIntent,
+          expectedEpoch: shellWrite.epoch,
+          nextIntent: completedIntent,
+        });
+        if (replacement.replaced || replacement.currentIntent === completedIntent) {
+          useWorkspaceUiStore.getState().setPendingChatActivation({
+            workspaceId: shellWrite.shellWorkspaceId,
+            pending: {
+              ...currentPending,
+              sessionId: outcome.sessionId,
+              intent: completedIntent,
+            },
+          });
+        }
+      }
+    }
     if (outcome?.result === "stale" && shellWrite) {
       useWorkspaceUiStore.getState().rollbackShellIntent({
         workspaceId: shellWrite.shellWorkspaceId,

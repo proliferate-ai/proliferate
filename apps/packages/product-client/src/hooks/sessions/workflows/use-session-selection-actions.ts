@@ -7,7 +7,6 @@ import {
   type SessionActivationOutcome,
 } from "#product/hooks/sessions/workflows/session-activation-guard";
 import type { SessionLatencyFlowOptions } from "#product/hooks/sessions/workflows/session-selection-options";
-import { resolveStatusFromExecutionSummary } from "#product/domain/sessions/activity";
 import { isHotReopenEligibleSessionSlot } from "#product/lib/domain/workspaces/selection/hot-reopen";
 import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import {
@@ -19,7 +18,6 @@ import {
   finishOrCancelMeasurementOperation,
   finishMeasurementOperation,
   markOperationForNextCommit,
-  recordMeasurementMetric,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "#product/lib/infra/measurement/measurement-port";
@@ -28,11 +26,9 @@ import { annotateLatencyFlow } from "#product/lib/infra/measurement/measurement-
 import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
 import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
 import {
-  createEmptySessionRecord,
+  findClientSessionIdByMaterializedSessionId,
   getSessionRecord,
   isPendingSessionId,
-  patchSessionRecord,
-  putSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
@@ -41,6 +37,7 @@ import {
   SESSION_HOT_SWITCH_MEASUREMENT_SURFACES,
   SESSION_SWITCH_MEASUREMENT_SURFACES,
 } from "#product/hooks/sessions/workflows/session-selection-measurement";
+import { syncSessionSelectionSlot } from "#product/hooks/sessions/workflows/session-selection-slot-sync";
 
 interface UseSessionSelectionWorkflowActionsOptions {
   activateSession: (sessionId: string) => void;
@@ -57,16 +54,24 @@ export function useSessionSelectionWorkflowActions({
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
 
   const selectSession = useCallback(async (
-    sessionId: string,
+    requestedSessionId: string,
     options?: SessionLatencyFlowOptions,
   ): Promise<SessionActivationOutcome | void> => {
+    let sessionId =
+      findClientSessionIdByMaterializedSessionId(requestedSessionId)
+      ?? requestedSessionId;
+    let committedSessionId: string | null = null;
     const guard = options?.guard ?? null;
     const commitSelection = (): SessionActivationOutcome | null => {
       if (!guard) {
         activateSession(sessionId);
+        committedSessionId = sessionId;
         return null;
       }
       const outcome = commitActiveSession(sessionId, guard);
+      if (outcome.result === "completed") {
+        committedSessionId = sessionId;
+      }
       return outcome;
     };
     const staleSelection = (
@@ -106,7 +111,7 @@ export function useSessionSelectionWorkflowActions({
       return staleSelection("intent-replaced");
     }
 
-    const sessionSelectionRelationship = classifyTrustedSessionSelection(sessionId);
+    let sessionSelectionRelationship = classifyTrustedSessionSelection(sessionId);
     if (existingSlot?.sessionRelationship.kind === "pending") {
       existingSlot = {
         ...existingSlot,
@@ -179,6 +184,7 @@ export function useSessionSelectionWorkflowActions({
         if (hotOperationId) {
           markOperationForNextCommit(hotOperationId, SESSION_SWITCH_MEASUREMENT_SURFACES);
         }
+        const hotSlot = existingSlot;
         scheduleAfterNextPaint(() => {
           const currentState = useSessionSelectionStore.getState();
           if (
@@ -193,12 +199,12 @@ export function useSessionSelectionWorkflowActions({
             finishMeasurementOperation(hotOperationId, "completed");
           }
           const selection = useSessionSelectionStore.getState();
-          const viewedSessionId = existingSlot.materializedSessionId ?? sessionId;
+          const viewedSessionId = hotSlot.materializedSessionId ?? sessionId;
           rememberLastViewedSession(
             resolveWorkspaceUiKey(
               selection.selectedLogicalWorkspaceId,
-              existingSlot.workspaceId!,
-            ) ?? existingSlot.workspaceId!,
+              hotSlot.workspaceId!,
+            ) ?? hotSlot.workspaceId!,
             viewedSessionId,
           );
         });
@@ -268,6 +274,19 @@ export function useSessionSelectionWorkflowActions({
     if (guard && !isSessionActivationCurrent(guard)) {
       return staleSelection("intent-replaced");
     }
+    const projectedSessionId =
+      findClientSessionIdByMaterializedSessionId(requestedSessionId);
+    const currentSlot = getSessionRecord(sessionId);
+    const latestSessionId = projectedSessionId
+      ?? (
+        sessionId === requestedSessionId
+        || currentSlot?.materializedSessionId === requestedSessionId
+          ? sessionId
+          : requestedSessionId
+      );
+    sessionId = latestSessionId;
+    sessionSelectionRelationship = classifyTrustedSessionSelection(sessionId);
+    existingSlot = getSessionRecord(sessionId);
     recordMeasurementWorkflowStep({
       operationId: measurementOperationId,
       step: "session.select.ensure_sessions",
@@ -282,83 +301,24 @@ export function useSessionSelectionWorkflowActions({
       elapsedMs: elapsedMs(sessionsLoadStartedAt),
       totalElapsedMs: elapsedMs(startedAt),
     });
-    const sessionMeta = sessions.find((session) => session.id === sessionId) ?? null;
-    const agentKind = existingSlot?.agentKind ?? sessionMeta?.agentKind ?? "unknown";
+    const metadataSessionId = existingSlot?.materializedSessionId
+      ?? (sessionId === requestedSessionId ? sessionId : requestedSessionId);
+    const sessionMeta = sessions.find((session) => session.id === metadataSessionId) ?? null;
+    syncSessionSelectionSlot({
+      existingSlot,
+      materializedSessionId: metadataSessionId,
+      measurementOperationId,
+      sessionId,
+      sessionMeta,
+      sessionRelationship: sessionSelectionRelationship,
+      workspaceId,
+    });
 
-    if (!existingSlot) {
-      const storeStartedAt = performance.now();
-      putSessionRecord({
-        ...createEmptySessionRecord(sessionId, agentKind, {
-          workspaceId,
-          modelId: sessionMeta?.modelId ?? null,
-          requestedModelId: sessionMeta?.requestedModelId ?? sessionMeta?.modelId ?? null,
-          modeId: sessionMeta?.modeId ?? null,
-          title: sessionMeta?.title ?? null,
-          liveConfig: sessionMeta?.liveConfig ?? null,
-          executionSummary: sessionMeta?.executionSummary ?? null,
-          mcpBindingSummaries: sessionMeta?.mcpBindingSummaries ?? null,
-          lastPromptAt: sessionMeta?.lastPromptAt ?? null,
-          sessionRelationship: sessionSelectionRelationship,
-        }),
-        status: resolveStatusFromExecutionSummary(
-          sessionMeta?.executionSummary ?? null,
-          sessionMeta?.status ?? "idle",
-        ),
-      });
-      if (measurementOperationId) {
-        recordMeasurementMetric({
-          type: "store",
-          category: "session.list",
-          operationId: measurementOperationId,
-          durationMs: performance.now() - storeStartedAt,
-        });
-      }
-      recordMeasurementWorkflowStep({
-        operationId: measurementOperationId,
-        step: "session.select.slot_store",
-        startedAt: storeStartedAt,
-        outcome: "cache_miss",
-      });
+    if (committedSessionId !== sessionId) {
       const commitOutcome = commitSelection();
       if (commitOutcome?.result === "stale") {
         return commitOutcome;
       }
-    } else {
-      const storeStartedAt = performance.now();
-      patchSessionRecord(sessionId, {
-        workspaceId,
-        agentKind,
-        modelId: sessionMeta?.modelId ?? existingSlot.modelId ?? null,
-        requestedModelId:
-          sessionMeta?.requestedModelId
-          ?? sessionMeta?.modelId
-          ?? existingSlot.requestedModelId
-          ?? null,
-        modeId: sessionMeta?.modeId ?? existingSlot.modeId ?? null,
-        title: sessionMeta?.title ?? existingSlot.title ?? null,
-        liveConfig: sessionMeta?.liveConfig ?? existingSlot.liveConfig ?? null,
-        executionSummary: sessionMeta?.executionSummary ?? existingSlot.executionSummary ?? null,
-        mcpBindingSummaries: sessionMeta?.mcpBindingSummaries ?? existingSlot.mcpBindingSummaries ?? null,
-        status: resolveStatusFromExecutionSummary(
-          sessionMeta?.executionSummary ?? existingSlot.executionSummary ?? null,
-          sessionMeta?.status ?? existingSlot.status,
-        ),
-        lastPromptAt: sessionMeta?.lastPromptAt ?? existingSlot.lastPromptAt ?? null,
-      });
-      if (measurementOperationId) {
-        recordMeasurementMetric({
-          type: "store",
-          category: "session.list",
-          operationId: measurementOperationId,
-          durationMs: performance.now() - storeStartedAt,
-        });
-      }
-      recordMeasurementWorkflowStep({
-        operationId: measurementOperationId,
-        step: "session.select.slot_store",
-        startedAt: storeStartedAt,
-        outcome: "cache_hit",
-      });
     }
 
     const completedSlot = getSessionRecord(sessionId);

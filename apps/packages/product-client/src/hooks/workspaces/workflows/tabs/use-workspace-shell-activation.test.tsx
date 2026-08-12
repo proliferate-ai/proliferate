@@ -4,6 +4,8 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createEmptySessionRecord,
+  getSessionRecord,
+  patchSessionRecord,
   putSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
@@ -154,6 +156,151 @@ describe("useWorkspaceShellActivation", () => {
     );
   });
 
+  it("opens a materialized session by focusing its existing client tab", async () => {
+    putSessionRecord(createEmptySessionRecord("client-session:codex:existing", "codex", {
+      materializedSessionId: "runtime-session-existing",
+      workspaceId: "workspace-1",
+    }));
+    const { result } = renderHook(() => useWorkspaceShellActivation());
+
+    let activationPromise!: Promise<unknown>;
+    act(() => {
+      activationPromise = result.current.activateChatTab({
+        workspaceId: "workspace-1",
+        sessionId: "runtime-session-existing",
+      });
+    });
+
+    expect(
+      useWorkspaceUiStore.getState().pendingChatActivationByWorkspace["workspace-1"],
+    ).toMatchObject({
+      sessionId: "client-session:codex:existing",
+      intent: "chat:client-session:codex:existing",
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(180);
+      hookMocks.scheduledCallbacks.shift()?.();
+      await activationPromise;
+    });
+
+    expect(hookMocks.selectSession).toHaveBeenCalledWith(
+      "client-session:codex:existing",
+      expect.any(Object),
+    );
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["workspace-1"])
+      .toBe("chat:client-session:codex:existing");
+    expect(useSessionDirectoryStore.getState().entriesById["runtime-session-existing"])
+      .toBeUndefined();
+  });
+
+  it("uses a client identity that materializes during deferred activation", async () => {
+    const clientSessionId = "client-session:codex:materializing";
+    const materializedSessionId = "runtime-session-materializing";
+    putSessionRecord(createEmptySessionRecord(clientSessionId, "codex", {
+      materializedSessionId: null,
+      workspaceId: "workspace-1",
+    }));
+    hookMocks.selectSession.mockImplementationOnce(async (sessionId: string, options: any) => {
+      if (!getSessionRecord(sessionId)) {
+        putSessionRecord(createEmptySessionRecord(sessionId, "codex", {
+          workspaceId: "workspace-1",
+        }));
+      }
+      return {
+        result: "completed",
+        sessionId,
+        guard: options.guard,
+        activeSessionVersion: useSessionSelectionStore.getState().activeSessionVersion,
+      };
+    });
+    const { result } = renderHook(() => useWorkspaceShellActivation());
+
+    let activationPromise!: Promise<unknown>;
+    act(() => {
+      activationPromise = result.current.activateChatTab({
+        workspaceId: "workspace-1",
+        sessionId: materializedSessionId,
+      });
+    });
+
+    expect(
+      useWorkspaceUiStore.getState().pendingChatActivationByWorkspace["workspace-1"],
+    ).toMatchObject({
+      sessionId: materializedSessionId,
+      intent: `chat:${materializedSessionId}`,
+    });
+
+    patchSessionRecord(clientSessionId, { materializedSessionId });
+
+    await act(async () => {
+      vi.advanceTimersByTime(180);
+      hookMocks.scheduledCallbacks.shift()?.();
+      await activationPromise;
+    });
+
+    expect(hookMocks.selectSession).toHaveBeenCalledWith(
+      clientSessionId,
+      expect.any(Object),
+    );
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["workspace-1"])
+      .toBe(`chat:${clientSessionId}`);
+    expect(useSessionDirectoryStore.getState().entriesById[materializedSessionId])
+      .toBeUndefined();
+  });
+
+  it("updates the durable tab intent when selection discovers a client identity", async () => {
+    const clientSessionId = "client-session:codex:selecting";
+    const materializedSessionId = "runtime-session-selecting";
+    putSessionRecord(createEmptySessionRecord(clientSessionId, "codex", {
+      materializedSessionId: null,
+      workspaceId: "workspace-1",
+    }));
+    const selectionGate = deferred<any>();
+    hookMocks.selectSession.mockImplementationOnce(() => selectionGate.promise);
+    const { result } = renderHook(() => useWorkspaceShellActivation());
+
+    let activationPromise!: Promise<unknown>;
+    act(() => {
+      activationPromise = result.current.activateChatTab({
+        workspaceId: "workspace-1",
+        sessionId: materializedSessionId,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(180);
+      hookMocks.scheduledCallbacks.shift()?.();
+      await Promise.resolve();
+    });
+
+    expect(hookMocks.selectSession).toHaveBeenCalledWith(
+      materializedSessionId,
+      expect.any(Object),
+    );
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["workspace-1"])
+      .toBe(`chat:${materializedSessionId}`);
+
+    patchSessionRecord(clientSessionId, { materializedSessionId });
+    const guard = hookMocks.selectSession.mock.calls[0]?.[1].guard;
+    await act(async () => {
+      selectionGate.resolve({
+        result: "completed",
+        sessionId: clientSessionId,
+        guard,
+        activeSessionVersion: useSessionSelectionStore.getState().activeSessionVersion,
+      });
+      await activationPromise;
+    });
+
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["workspace-1"])
+      .toBe(`chat:${clientSessionId}`);
+    expect(useWorkspaceUiStore.getState().pendingChatActivationByWorkspace["workspace-1"])
+      .toBeNull();
+    expect(useSessionDirectoryStore.getState().entriesById[materializedSessionId])
+      .toBeUndefined();
+  });
+
   it("resolves stale without real selection when superseded before phase two", async () => {
     const { result } = renderHook(() => useWorkspaceShellActivation());
 
@@ -256,3 +403,11 @@ describe("useWorkspaceShellActivation", () => {
     );
   });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}

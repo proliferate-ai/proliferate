@@ -113,6 +113,55 @@ describe("runHotWorkspaceReopen", () => {
     expect(deps.reconcileHotWorkspace).not.toHaveBeenCalled();
     expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-2");
   });
+
+  it("repeatedly restores a materialized session through its existing client slot", async () => {
+    useSessionDirectoryStore.getState().clearEntries();
+    useSessionTranscriptStore.getState().clearEntries();
+    putSessionRecord({
+      ...createEmptySessionRecord("client-session:codex:1", "codex", {
+        materializedSessionId: "runtime-session-1",
+        workspaceId: "workspace-1",
+      }),
+      transcriptHydrated: true,
+    });
+    putSessionRecord({
+      ...createEmptySessionRecord("client-session:codex:2", "codex", {
+        materializedSessionId: "runtime-session-2",
+        workspaceId: "workspace-1",
+      }),
+      transcriptHydrated: true,
+    });
+    useWorkspaceUiStore.setState({
+      lastViewedSessionByWorkspace: {
+        "workspace-1": "runtime-session-2",
+      },
+    });
+    const deps = depsForHotReopen();
+
+    expect(runHotWorkspaceReopen(deps, { workspaceId: "workspace-1" })).toBe(true);
+    expect(useSessionSelectionStore.getState().activeSessionId)
+      .toBe("client-session:codex:2");
+    await vi.runOnlyPendingTimersAsync();
+
+    setSelectedWorkspace("workspace-2");
+    expect(runHotWorkspaceReopen(deps, { workspaceId: "workspace-1" })).toBe(true);
+    expect(useSessionSelectionStore.getState().activeSessionId)
+      .toBe("client-session:codex:2");
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(deps.reconcileHotWorkspace).toHaveBeenCalledTimes(2);
+    expect(deps.reconcileHotWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        sessionId: "client-session:codex:2",
+      }),
+    );
+    expect(Object.keys(useSessionDirectoryStore.getState().entriesById).sort()).toEqual([
+      "client-session:codex:1",
+      "client-session:codex:2",
+    ]);
+    expect(useSessionDirectoryStore.getState().entriesById["runtime-session-2"])
+      .toBeUndefined();
+  });
 });
 
 function depsForHotReopen(): WorkspaceSelectionDeps {

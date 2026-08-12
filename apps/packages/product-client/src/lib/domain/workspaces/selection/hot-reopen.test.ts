@@ -75,6 +75,7 @@ describe("resolveHotReopenCandidate", () => {
       lastViewedSessionByWorkspace: {
         "workspace-1": "session-last",
       },
+      clientSessionIdByMaterializedSessionId: {},
       sessionSlots: {
         "session-initial": slot({
           sessionId: "session-initial",
@@ -105,6 +106,7 @@ describe("resolveHotReopenCandidate", () => {
       lastViewedSessionByWorkspace: {
         "logical:repo": "session-logical",
       },
+      clientSessionIdByMaterializedSessionId: {},
       sessionSlots: {
         "session-fallback": slot({
           sessionId: "session-fallback",
@@ -133,6 +135,7 @@ describe("resolveHotReopenCandidate", () => {
       logicalWorkspace: logicalWorkspace(),
       initialActiveSessionId: null,
       lastViewedSessionByWorkspace: {},
+      clientSessionIdByMaterializedSessionId: {},
       sessionSlots: {
         "session-cached": slot({
           sessionId: "session-cached",
@@ -145,6 +148,46 @@ describe("resolveHotReopenCandidate", () => {
 
     expect(candidate?.source).toBe("cached_slot");
     expect(candidate?.sessionId).toBe("session-cached");
+  });
+
+  it("restores a materialized identity to its existing client projection", () => {
+    const input = {
+      resolvedWorkspaceId: "workspace-1",
+      logicalWorkspace: logicalWorkspace(),
+      initialActiveSessionId: null,
+      lastViewedSessionByWorkspace: {
+        "logical:repo": "runtime-session-2",
+      },
+      clientSessionIdByMaterializedSessionId: {
+        "runtime-session-1": "client-session:codex:1",
+        "runtime-session-2": "client-session:codex:2",
+      },
+      sessionSlots: {
+        "client-session:codex:1": slot({
+          sessionId: "client-session:codex:1",
+          workspaceId: "workspace-1",
+          hydrated: true,
+        }),
+        "client-session:codex:2": slot({
+          sessionId: "client-session:codex:2",
+          workspaceId: "workspace-1",
+          hydrated: true,
+        }),
+      },
+      isPendingSessionId: () => false,
+    };
+
+    expect(resolveHotReopenCandidate(input)).toEqual({
+      sessionId: "client-session:codex:2",
+      workspaceId: "workspace-1",
+      source: "last_viewed",
+    });
+    expect(resolveHotReopenCandidate(input)).toEqual({
+      sessionId: "client-session:codex:2",
+      workspaceId: "workspace-1",
+      source: "last_viewed",
+    });
+    expect(Object.keys(input.sessionSlots)).toHaveLength(2);
   });
 });
 

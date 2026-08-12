@@ -4,9 +4,23 @@ export function updateMaterializedIndex(
   nextMaterializedSessionId: string | null,
   clientSessionId: string,
 ): Record<string, string> {
+  if (previousMaterializedSessionId === nextMaterializedSessionId) {
+    if (!nextMaterializedSessionId || nextMaterializedSessionId in index) {
+      return index;
+    }
+    return {
+      ...index,
+      [nextMaterializedSessionId]: clientSessionId,
+    };
+  }
+
   let next = index;
-  if (previousMaterializedSessionId && previousMaterializedSessionId !== nextMaterializedSessionId) {
-    next = removeMaterializedIndexEntry(next, previousMaterializedSessionId);
+  if (previousMaterializedSessionId) {
+    next = removeMaterializedIndexEntry(
+      next,
+      previousMaterializedSessionId,
+      clientSessionId,
+    );
   }
   if (!nextMaterializedSessionId) {
     return next;
@@ -20,11 +34,44 @@ export function updateMaterializedIndex(
   };
 }
 
+export function reconcileMaterializedIndex(
+  index: Record<string, string>,
+  entriesById: Record<
+    string,
+    { sessionId: string; materializedSessionId: string | null }
+  >,
+): Record<string, string> {
+  let next = index;
+  const mutableIndex = () => {
+    if (next === index) {
+      next = { ...index };
+    }
+    return next;
+  };
+
+  for (const [materializedSessionId, clientSessionId] of Object.entries(index)) {
+    if (entriesById[clientSessionId]?.materializedSessionId !== materializedSessionId) {
+      delete mutableIndex()[materializedSessionId];
+    }
+  }
+  for (const entry of Object.values(entriesById)) {
+    if (entry.materializedSessionId && !(entry.materializedSessionId in next)) {
+      mutableIndex()[entry.materializedSessionId] = entry.sessionId;
+    }
+  }
+  return next;
+}
+
 export function removeMaterializedIndexEntry(
   index: Record<string, string>,
   materializedSessionId: string | null,
+  expectedClientSessionId: string,
 ): Record<string, string> {
-  if (!materializedSessionId || !(materializedSessionId in index)) {
+  if (
+    !materializedSessionId
+    || !(materializedSessionId in index)
+    || index[materializedSessionId] !== expectedClientSessionId
+  ) {
     return index;
   }
   const { [materializedSessionId]: _removed, ...rest } = index;
