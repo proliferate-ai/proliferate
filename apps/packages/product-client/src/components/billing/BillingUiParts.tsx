@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "#product/primitives/icons/status";
 
 import { Button } from "#product/primitives/Button";
 

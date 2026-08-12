@@ -1,22 +1,24 @@
 import { Fragment, useMemo, type ComponentType, type ReactNode } from "react";
 import {
+  KeyRound,
+  LifeBuoy,
+  Link2,
+  Palette,
+  SlidersHorizontal,
+} from "#product/primitives/icons/core";
+import {
   Blocks,
-  Brain,
   Building2,
   CircleUser,
   CreditCard,
   Gauge,
-  KeyRound,
-  LifeBuoy,
-  Link2,
   MousePointerClick,
-  Palette,
   RefreshCw,
   Scissors,
   Settings2,
-  SlidersHorizontal,
   Users,
-} from "lucide-react";
+} from "#product/primitives/icons/platform";
+import { Brain } from "#product/primitives/icons/product";
 import { SidebarNavRow } from "#product/primitives/patterns/sidebar/SidebarNavRow";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";

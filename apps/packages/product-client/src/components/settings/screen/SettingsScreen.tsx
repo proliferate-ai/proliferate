@@ -29,7 +29,7 @@ import { RepoScopeHeaderControls } from "#product/components/settings/screen/Rep
 import { AgentScopeHeaderControls } from "#product/components/settings/screen/AgentScopeHeaderControls";
 import { SettingsSidebar } from "#product/components/settings/sidebar/SettingsSidebar";
 import { SettingsScopeTabs } from "#product/primitives/patterns/settings/SettingsScopeTabs";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "#product/primitives/icons/core";
 import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";

@@ -1,4 +1,4 @@
-import { Cloud } from "lucide-react";
+import { CloudIcon } from "#product/primitives/icons/platform";
 import { GitHub } from "#product/primitives/icons/platform";
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
@@ -49,7 +49,7 @@ export function RepoCloudAuthorizationRequired({
   if (status === "operator_configuration_required") {
     return (
       <SettingsEmptyState
-        icon={<Cloud aria-hidden="true" />}
+        icon={<CloudIcon aria-hidden="true" />}
         title="Cloud is not configured on this deployment"
         description={
           message
