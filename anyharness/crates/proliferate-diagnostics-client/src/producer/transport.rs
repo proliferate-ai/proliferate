@@ -1,4 +1,12 @@
-use std::{collections::BTreeSet, fmt, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeSet,
+    fmt,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tokio::time::Instant;
 
 use proliferate_diagnostics_protocol::v1::{
@@ -14,6 +22,26 @@ use zeroize::Zeroizing;
 
 pub(super) const TRANSPORT_DEADLINE: Duration = Duration::from_millis(500);
 pub(super) const MAX_RECEIPT_BYTES: usize = 65_536;
+
+/// Records whether an ingest future crossed the point after which the request
+/// may have reached the collector. The worker owns this alongside the pinned
+/// future so generation replacement can classify cancellation without keeping
+/// the old client alive.
+pub(super) struct DispatchObservation(AtomicBool);
+
+impl DispatchObservation {
+    pub(super) fn new() -> Self {
+        Self(AtomicBool::new(false))
+    }
+
+    fn mark_dispatched(&self) {
+        self.0.store(true, Ordering::Release);
+    }
+
+    pub(super) fn observed(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
+}
 
 struct SecretCapability(Zeroizing<String>);
 
@@ -73,10 +101,22 @@ impl CollectorClient {
         })
     }
 
+    #[cfg(test)]
     pub(crate) async fn ingest(
         &self,
         records: Vec<proliferate_diagnostics_protocol::v1::types::ProducerRecordV1>,
         shared_deadline: Option<Instant>,
+    ) -> Result<IngestReceiptV1, TransportFailure> {
+        let dispatch = DispatchObservation::new();
+        self.ingest_observed(records, shared_deadline, &dispatch)
+            .await
+    }
+
+    pub(super) async fn ingest_observed(
+        &self,
+        records: Vec<proliferate_diagnostics_protocol::v1::types::ProducerRecordV1>,
+        shared_deadline: Option<Instant>,
+        dispatch: &DispatchObservation,
     ) -> Result<IngestReceiptV1, TransportFailure> {
         let batch = IngestBatchV1 {
             schema_version: CURRENT_SCHEMA_VERSION,
@@ -104,6 +144,7 @@ impl CollectorClient {
             .body(body);
         let deadline = transport_deadline_at(Instant::now(), shared_deadline);
         let result = tokio::time::timeout_at(deadline, async {
+            dispatch.mark_dispatched();
             let mut response = request
                 .send()
                 .await
@@ -217,6 +258,13 @@ impl TransportFailure {
         Self {
             error,
             dispatched: true,
+        }
+    }
+
+    pub(super) fn cancelled(dispatched: bool) -> Self {
+        Self {
+            error: TransportError::Unavailable,
+            dispatched,
         }
     }
 }

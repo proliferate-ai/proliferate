@@ -26,6 +26,9 @@ mod worker;
 #[cfg(test)]
 #[path = "tests_filter.rs"]
 mod tests_filter;
+#[cfg(all(test, unix))]
+#[path = "tests_generation.rs"]
+mod tests_generation;
 #[cfg(test)]
 #[path = "tests_loss.rs"]
 mod tests_loss;

@@ -1,10 +1,15 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::{Arc, Weak},
+    time::Instant,
+};
 use tokio::time::Instant as TokioInstant;
 
 use proliferate_diagnostics_protocol::v1::types::IngestBatchV1;
 
 use super::{
-    transport::{TransportError, TransportFailure, TRANSPORT_DEADLINE},
+    transport::{
+        CollectorClient, DispatchObservation, TransportError, TransportFailure, TRANSPORT_DEADLINE,
+    },
     CollectorAvailability, ProducerFailureClassification, ProducerInner, ResidentRecord,
     CIRCUIT_INTERVAL, FLUSH_INTERVAL, MAX_BATCH_BODY_BYTES, MAX_BATCH_RECORDS,
 };
@@ -50,35 +55,67 @@ async fn run_suppressed(inner: Arc<ProducerInner>) {
                         route_fallback(&inner, records, deadline);
                         continue;
                     }
+                    let generation_identity = GenerationIdentity::capture(&generation);
+                    if !generation_is_current(&inner, &generation_identity) {
+                        drop(generation);
+                        finish_ingest(
+                            &inner,
+                            &generation_identity,
+                            records,
+                            Err(TransportFailure::cancelled(false)),
+                        );
+                        continue;
+                    }
                     let payload = records.iter().map(|record| record.record.clone()).collect();
                     let request_started_at = TokioInstant::now();
                     let request_deadline =
                         dispatch_deadline.unwrap_or(request_started_at + TRANSPORT_DEADLINE);
-                    let request = generation.client.ingest(payload, dispatch_deadline);
-                    tokio::pin!(request);
-                    let result = loop {
-                        tokio::select! {
-                            result = &mut request => break result,
-                            _ = inner.notify.notified() => {
-                                let parent_window = {
-                                    let state = inner.state.lock()
-                                        .unwrap_or_else(|error| error.into_inner());
-                                    state.parent_shutdown_observed.then_some(state.terminal_deadline)
-                                };
-                                if let Some(parent_deadline) = parent_window {
-                                    let revised = parent_deadline.map(|deadline| {
-                                        deadline - TERMINAL_FALLBACK_ALLOWANCE
-                                    });
-                                    if revised.map_or(true, |deadline| deadline < request_deadline) {
-                                        break Err(TransportFailure::dispatched(
-                                            TransportError::Deadline,
-                                        ));
+                    let dispatch = DispatchObservation::new();
+                    let result = {
+                        let request = generation.client.ingest_observed(
+                            payload,
+                            dispatch_deadline,
+                            &dispatch,
+                        );
+                        tokio::pin!(request);
+                        loop {
+                            tokio::select! {
+                                biased;
+                                _ = inner.notify.notified() => {
+                                    let (generation_current, parent_window) = {
+                                        let state = inner.state.lock()
+                                            .unwrap_or_else(|error| error.into_inner());
+                                        (
+                                            generation_matches(
+                                                &state.collector,
+                                                &generation_identity,
+                                            ),
+                                            state.parent_shutdown_observed
+                                                .then_some(state.terminal_deadline),
+                                        )
+                                    };
+                                    if !generation_current {
+                                        break Err(TransportFailure::cancelled(dispatch.observed()));
+                                    }
+                                    if let Some(parent_deadline) = parent_window {
+                                        let revised = parent_deadline.map(|deadline| {
+                                            deadline - TERMINAL_FALLBACK_ALLOWANCE
+                                        });
+                                        if revised.map_or(true, |deadline| deadline < request_deadline) {
+                                            break Err(TransportFailure::dispatched(
+                                                TransportError::Deadline,
+                                            ));
+                                        }
                                     }
                                 }
+                                result = &mut request => break result,
                             }
                         }
                     };
-                    finish_ingest(&inner, generation.generation, records, result);
+                    // Drop the cancelled future and generation handle before
+                    // fallback I/O or another generation's dispatch begins.
+                    drop(generation);
+                    finish_ingest(&inner, &generation_identity, records, result);
                 }
             }
         }
@@ -92,6 +129,42 @@ async fn run_suppressed(inner: Arc<ProducerInner>) {
         if terminal_and_empty {
             return;
         }
+    }
+}
+
+struct GenerationIdentity {
+    generation: u64,
+    client: Weak<CollectorClient>,
+}
+
+impl GenerationIdentity {
+    fn capture(generation: &Arc<crate::bridge::activation::CollectorGenerationHandle>) -> Self {
+        Self {
+            generation: generation.generation,
+            client: Arc::downgrade(&generation.client),
+        }
+    }
+}
+
+fn generation_is_current(inner: &ProducerInner, observed: &GenerationIdentity) -> bool {
+    let state = inner
+        .state
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    generation_matches(&state.collector, observed)
+}
+
+fn generation_matches(availability: &CollectorAvailability, observed: &GenerationIdentity) -> bool {
+    match availability {
+        CollectorAvailability::Ready(current)
+        | CollectorAvailability::Cooldown {
+            generation: current,
+            ..
+        } => {
+            current.generation == observed.generation
+                && Arc::as_ptr(&current.client) == observed.client.as_ptr()
+        }
+        CollectorAvailability::Unavailable { .. } => false,
     }
 }
 
@@ -240,7 +313,7 @@ fn empty_batch_envelope_bytes() -> usize {
 
 fn finish_ingest(
     inner: &ProducerInner,
-    generation_number: u64,
+    generation_identity: &GenerationIdentity,
     mut records: Vec<ResidentRecord>,
     result: Result<proliferate_diagnostics_protocol::v1::types::IngestReceiptV1, TransportFailure>,
 ) {
@@ -255,7 +328,10 @@ fn finish_ingest(
             | CollectorAvailability::Cooldown {
                 generation: current,
                 ..
-            } => current.generation == generation_number,
+            } => {
+                current.generation == generation_identity.generation
+                    && Arc::as_ptr(&current.client) == generation_identity.client.as_ptr()
+            }
             CollectorAvailability::Unavailable { .. } => false,
         };
         if !generation_current {
@@ -266,12 +342,10 @@ fn finish_ingest(
                 Ok(_) => true,
                 Err(failure) => failure.dispatched,
             };
-            let reason = if dispatched {
+            let reason = generation_change_reason(dispatched);
+            if dispatched {
                 state.delivery_fence_eligible = false;
-                FallbackReason::DeliveryUnknown
-            } else {
-                FallbackReason::GenerationChanged
-            };
+            }
             for record in &mut records {
                 record.fallback_reason = Some(reason);
             }
@@ -294,7 +368,7 @@ fn finish_ingest(
                         state.record_loss(ProducerFailureClassification::ReceiptInvalid);
                         state.delivery_fence_eligible = false;
                         state.collector = CollectorAvailability::Unavailable {
-                            generation: generation_number,
+                            generation: generation_identity.generation,
                         };
                         for record in &mut records {
                             record.fallback_reason = Some(FallbackReason::DeliveryUnknown);
@@ -379,6 +453,14 @@ fn finish_ingest(
     }
     if let Some((records, deadline)) = fallback {
         route_fallback(inner, records, deadline);
+    }
+}
+
+fn generation_change_reason(dispatched: bool) -> FallbackReason {
+    if dispatched {
+        FallbackReason::DeliveryUnknown
+    } else {
+        FallbackReason::GenerationChanged
     }
 }
 
@@ -478,4 +560,21 @@ fn route_fallback(
         state.release_record(record);
     }
     state.clear_in_flight();
+}
+
+#[cfg(test)]
+mod generation_change_tests {
+    use super::{generation_change_reason, FallbackReason};
+
+    #[test]
+    fn dispatch_boundary_controls_generation_change_fallback_reason() {
+        assert_eq!(
+            generation_change_reason(false),
+            FallbackReason::GenerationChanged
+        );
+        assert_eq!(
+            generation_change_reason(true),
+            FallbackReason::DeliveryUnknown
+        );
+    }
 }
