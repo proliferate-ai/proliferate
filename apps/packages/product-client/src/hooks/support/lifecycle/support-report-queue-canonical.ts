@@ -103,7 +103,7 @@ function serializeObject(value: object, visiting: WeakSet<object>): string {
 
 function serializeArray(value: unknown[], visiting: WeakSet<object>): string {
   const descriptors = ownDescriptors(value);
-  const ownKeys = ownPropertyKeys(value);
+  const ownKeys = Reflect.ownKeys(descriptors);
   if (ownKeys.some((key) => typeof key === "symbol")) {
     throw new QueueCanonicalError("array_invalid");
   }
@@ -140,7 +140,10 @@ function serializeRecord(value: object, visiting: WeakSet<object>): string {
   }
 
   const descriptors = ownDescriptors(value);
-  const keys = ownPropertyKeys(value);
+  // `getOwnPropertyDescriptors` is the one source inspection. Enumerating its
+  // trusted snapshot avoids a stateful Proxy changing the key set between two
+  // traps and making canonical bytes silently omit or add a property.
+  const keys = Reflect.ownKeys(descriptors);
   if (keys.some((key) => typeof key === "symbol")) {
     throw new QueueCanonicalError("property_invalid");
   }
@@ -159,14 +162,6 @@ function serializeRecord(value: object, visiting: WeakSet<object>): string {
 function ownDescriptors(value: object): Record<string, PropertyDescriptor> {
   try {
     return Object.getOwnPropertyDescriptors(value);
-  } catch {
-    throw new QueueCanonicalError("access_failed");
-  }
-}
-
-function ownPropertyKeys(value: object): PropertyKey[] {
-  try {
-    return Reflect.ownKeys(value);
   } catch {
     throw new QueueCanonicalError("access_failed");
   }

@@ -93,6 +93,18 @@ describe("support queue V1 migration", () => {
       failure: "legacy_conflict",
     });
     expect(conflicting.trace.filter((step) => step.startsWith("set:"))).toEqual([]);
+
+    const reordered = legacyStorage([
+      legacyEntry("order"),
+      {
+        nextAttemptAt: null,
+        attemptCount: 0,
+        job: { message: "help", jobId: "order" },
+      },
+    ]);
+    await expect(hydrateOrMigrateSupportQueue(reordered, parseEntry)).rejects.toMatchObject({
+      failure: "legacy_conflict",
+    });
   });
 
   it("rejects any legacy supportSnapshot before writing V2", async () => {

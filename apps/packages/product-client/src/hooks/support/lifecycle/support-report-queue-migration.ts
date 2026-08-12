@@ -135,7 +135,11 @@ function migrateEntry<TEntry extends MigratedSupportQueueEntryIdentity>(
 
   let legacyBytes: string;
   try {
-    legacyBytes = canonicalQueueJson(wrapper);
+    // The old queue was written by JSON.stringify. Keep its complete wrapper
+    // key order in the comparison so only byte-identical persisted wrappers
+    // collapse; canonical-equivalent but differently encoded duplicates block.
+    legacyBytes = JSON.stringify(wrapper);
+    canonicalQueueJson(wrapper);
   } catch {
     throw new SupportQueueMigrationError("legacy_invalid");
   }

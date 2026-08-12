@@ -88,6 +88,18 @@ describe("support queue canonical JSON", () => {
     expect(read).toBe(false);
   });
 
+  it("takes one key snapshot from a stateful Proxy", () => {
+    let ownKeyCalls = 0;
+    const proxy = new Proxy({ first: 1, second: 2 }, {
+      ownKeys() {
+        ownKeyCalls += 1;
+        return ownKeyCalls === 1 ? ["first", "second"] : ["first"];
+      },
+    });
+    expect(canonicalQueueJson(proxy)).toBe('{"first":1,"second":2}');
+    expect(ownKeyCalls).toBe(1);
+  });
+
   it("counts UTF-8 bytes and hashes the exact canonical text", async () => {
     expect(queueUtf8Bytes("é")).toBe(2);
     await expect(sha256QueueText("abc")).resolves.toBe(
