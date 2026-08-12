@@ -302,7 +302,7 @@ keeps `AdminOnlyPlaceholder`, `AgentHarnessConfigComposer`, and
 `RunCommandHelp`.
 Layout helpers use concrete ProductClient pattern imports
 (`#product/primitives/patterns/AutoHideScrollArea` and
-`#product/primitives/patterns/SidebarNavRow`); general controls use concrete
+`#product/primitives/patterns/sidebar/SidebarNavRow`); general controls use concrete
 root imports such as `#product/primitives/Button`,
 `#product/primitives/Input`, and `#product/primitives/Switch`.
 

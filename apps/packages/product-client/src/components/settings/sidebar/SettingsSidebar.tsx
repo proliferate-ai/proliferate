@@ -17,7 +17,7 @@ import {
   SlidersHorizontal,
   Users,
 } from "lucide-react";
-import { SidebarNavRow } from "#product/primitives/patterns/SidebarNavRow";
+import { SidebarNavRow } from "#product/primitives/patterns/sidebar/SidebarNavRow";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
 import { HarnessStatusDot } from "#product/components/settings/sidebar/HarnessStatusDot";

@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "#product/primitives/Button";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { ArrowUpRight, Settings } from "#product/primitives/icons/core";
 import { Globe } from "#product/primitives/icons/platform";

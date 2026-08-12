@@ -6,7 +6,7 @@ import {
 import { FolderPlus } from "#product/primitives/icons/workspace";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
-import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
+import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { ProductSidebarSectionHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
 import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";

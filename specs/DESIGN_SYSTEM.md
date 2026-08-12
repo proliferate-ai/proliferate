@@ -855,7 +855,7 @@ index is the closed set, not a sample of it.
 | `Select` | [Select.tsx](../apps/packages/product-client/src/primitives/Select.tsx) | Native select styled to tokens. |
 | `ShortcutBadge` | [ShortcutBadge.tsx](../apps/packages/product-client/src/primitives/ShortcutBadge.tsx) | Keyboard-shortcut badge. |
 | `Skeleton` | [Skeleton.tsx](../apps/packages/product-client/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. |
-| `Sonner` | [Sonner.tsx](../apps/packages/product-client/src/primitives/Sonner.tsx) | Sole toast treatment, split in two: `Sonner` is the transparent positioner (stacking, swipe, 3-visible cap), and the toast body pattern ([ToastBody.tsx](../apps/packages/product-client/src/primitives/patterns/ToastBody.tsx)) paints the whole card — popover frame, always-visible corner close, 28px action cluster with only the primary filled, and the in-place Details expansion (356→480px). |
+| `Sonner` | [Sonner.tsx](../apps/packages/product-client/src/primitives/Sonner.tsx) | Sole toast treatment, split in two: `Sonner` is the transparent positioner (stacking, swipe, 3-visible cap), and the toast body pattern ([ToastBody.tsx](../apps/packages/product-client/src/primitives/patterns/toast/ToastBody.tsx)) paints the whole card — popover frame, always-visible corner close, 28px action cluster with only the primary filled, and the in-place Details expansion (356→480px). |
 | `Spinner` | [Spinner.tsx](../apps/packages/product-client/src/primitives/Spinner.tsx) | Inline loading spinner. |
 | `Switch` | [Switch.tsx](../apps/packages/product-client/src/primitives/Switch.tsx) | Toggle switch. |
 | `Textarea` | [Textarea.tsx](../apps/packages/product-client/src/primitives/Textarea.tsx) | Multi-line text input (default/ghost/flush/code variants). |
@@ -900,14 +900,14 @@ above are not migration debt); click-only popovers use
 | `AuthProviderButton` | [AuthProviderButton.tsx](../apps/packages/product-client/src/primitives/patterns/AuthProviderButton.tsx) | Auth-provider sign-in button with a loading state, composes `Spinner`. |
 | `AutoHideScrollArea` | [AutoHideScrollArea.tsx](../apps/packages/product-client/src/primitives/patterns/AutoHideScrollArea.tsx) | Scroll area whose scrollbar affordance auto-hides. |
 | `CommandPalette` | [CommandPalette.tsx](../apps/packages/product-client/src/primitives/patterns/CommandPalette.tsx) | Command-palette shell/context, built directly on `cmdk` (not on the `Command` primitive — see `Command` row above). |
-| `ComposerActionButton` | [ComposerActionButton.tsx](../apps/packages/product-client/src/primitives/patterns/ComposerActionButton.tsx) | Composer primary-action button, composes `Button`. |
-| `ComposerControlButton` | [ComposerControlButton.tsx](../apps/packages/product-client/src/primitives/patterns/ComposerControlButton.tsx) | Composer control pill (icon/label/detail/trailing/active), composes `Button`. |
-| `ComposerTextarea` | [ComposerTextarea.tsx](../apps/packages/product-client/src/primitives/patterns/ComposerTextarea.tsx) | Composer-sized text input, composes `Textarea`. |
-| `ComposerTextareaFrame` | [ComposerTextareaFrame.tsx](../apps/packages/product-client/src/primitives/patterns/ComposerTextareaFrame.tsx) | Composer textarea's outer frame/top-inset shell. |
+| `ComposerActionButton` | [ComposerActionButton.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerActionButton.tsx) | Composer primary-action button, composes `Button`. |
+| `ComposerControlButton` | [ComposerControlButton.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerControlButton.tsx) | Composer control pill (icon/label/detail/trailing/active), composes `Button`. |
+| `ComposerTextarea` | [ComposerTextarea.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerTextarea.tsx) | Composer-sized text input, composes `Textarea`. |
+| `ComposerTextareaFrame` | [ComposerTextareaFrame.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerTextareaFrame.tsx) | Composer textarea's outer frame/top-inset shell. |
 | `ConfirmationDialog` | [ConfirmationDialog.tsx](../apps/packages/product-client/src/primitives/patterns/ConfirmationDialog.tsx) | Confirm/cancel dialog, built on `ModalShell` + `Button`. |
 | `EmptyState` | [EmptyState.tsx](../apps/packages/product-client/src/primitives/patterns/EmptyState.tsx) | Title/description/action empty-state block. |
 | `EnvironmentSearchSelect` | [EnvironmentSearchSelect.tsx](../apps/packages/product-client/src/primitives/patterns/EnvironmentSearchSelect.tsx) | Searchable environment picker, composes `PopoverButton`/`PopoverMenuItem`/`PickerPopoverContent`. |
-| `LevelBarsButton` | [LevelBarsButton.tsx](../apps/packages/product-client/src/primitives/patterns/LevelBarsButton.tsx) | Stepped-level control button (level-bars affordance), composes `ComposerControlButton`. |
+| `LevelBarsButton` | [LevelBarsButton.tsx](../apps/packages/product-client/src/primitives/patterns/composer/LevelBarsButton.tsx) | Stepped-level control button (level-bars affordance), composes `ComposerControlButton`. |
 | `ListRow` | [ListRow.tsx](../apps/packages/product-client/src/primitives/patterns/ListRow.tsx) | Clickable list row with leading/trailing slots. |
 | `ModalShell` | [ModalShell.tsx](../apps/packages/product-client/src/primitives/patterns/ModalShell.tsx) | Modal composition built on `Dialog`. |
 | `PageContentFrame` | [PageContentFrame.tsx](../apps/packages/product-client/src/primitives/patterns/PageContentFrame.tsx) | Page content frame with header slot and sticky action/title. |
@@ -916,13 +916,13 @@ above are not migration debt); click-only popovers use
 | `PickerPopoverContent` | [PickerPopoverContent.tsx](../apps/packages/product-client/src/primitives/patterns/PickerPopoverContent.tsx) | Popover content shell for pickers: search field + list + empty row. |
 | `SettingsGroup` | [SettingsGroup.tsx](../apps/packages/product-client/src/primitives/patterns/SettingsGroup.tsx) | Settings/list wash surface: borderless tinted card owning inset hairline dividers between children, optional label and empty slot. |
 | `SettingsMenu` | [SettingsMenu.tsx](../apps/packages/product-client/src/primitives/patterns/SettingsMenu.tsx) | Labeled select-style menu, composes `PopoverButton`/`PopoverMenuItem`. |
-| `SidebarActionButton` | [SidebarActionButton.tsx](../apps/packages/product-client/src/primitives/patterns/SidebarActionButton.tsx) | Sidebar action button, composes `RowActionIconButton`. |
-| `SidebarNavRow` | [SidebarNavRow.tsx](../apps/packages/product-client/src/primitives/patterns/SidebarNavRow.tsx) | Sidebar navigation row (icon/label/status/shortcut), composes the `ShortcutBadge` primitive + `SidebarRowSurface`; modifier-held shortcuts overlay an existing rightmost status instead of widening its trailing region. |
-| `SidebarRowSurface` | [SidebarRowSurface.tsx](../apps/packages/product-client/src/primitives/patterns/SidebarRowSurface.tsx) | Shared sidebar row interaction surface (active/disabled/press state) other sidebar rows build on. |
+| `SidebarActionButton` | [SidebarActionButton.tsx](../apps/packages/product-client/src/primitives/patterns/sidebar/SidebarActionButton.tsx) | Sidebar action button, composes `RowActionIconButton`. |
+| `SidebarNavRow` | [SidebarNavRow.tsx](../apps/packages/product-client/src/primitives/patterns/sidebar/SidebarNavRow.tsx) | Sidebar navigation row (icon/label/status/shortcut), composes the `ShortcutBadge` primitive + `SidebarRowSurface`; modifier-held shortcuts overlay an existing rightmost status instead of widening its trailing region. |
+| `SidebarRowSurface` | [SidebarRowSurface.tsx](../apps/packages/product-client/src/primitives/patterns/sidebar/SidebarRowSurface.tsx) | Shared sidebar row interaction surface (active/disabled/press state) other sidebar rows build on. |
 | `ThinkingText` | [ThinkingText.tsx](../apps/packages/product-client/src/primitives/patterns/ThinkingText.tsx) | Animated "thinking" gleam text. |
-| `ToastBody` | [ToastBody.tsx](../apps/packages/product-client/src/primitives/patterns/ToastBody.tsx) | Paints the whole toast card (popover frame, corner close, 28px action cluster) rendered inside the `Sonner` positioner; registry-exempt kit internal. |
-| `ToastExpansion` | [ToastExpansion.tsx](../apps/packages/product-client/src/primitives/patterns/ToastExpansion.tsx) | The toast's in-place Details expansion (356→480px unfold) and mono excerpt; registry-exempt kit internal. |
-| `ToastHost` | [ToastHost.tsx](../apps/packages/product-client/src/primitives/patterns/ToastHost.tsx) | The single toast mount — renders the kit `Toaster` and nothing else. |
+| `ToastBody` | [ToastBody.tsx](../apps/packages/product-client/src/primitives/patterns/toast/ToastBody.tsx) | Paints the whole toast card (popover frame, corner close, 28px action cluster) rendered inside the `Sonner` positioner; registry-exempt kit internal. |
+| `ToastExpansion` | [ToastExpansion.tsx](../apps/packages/product-client/src/primitives/patterns/toast/ToastExpansion.tsx) | The toast's in-place Details expansion (356→480px unfold) and mono excerpt; registry-exempt kit internal. |
+| `ToastHost` | [ToastHost.tsx](../apps/packages/product-client/src/primitives/patterns/toast/ToastHost.tsx) | The single toast mount — renders the kit `Toaster` and nothing else. |
 
 #### Icons (`product-client/src/primitives/icons/`)
 
@@ -1127,7 +1127,7 @@ this document states is not mechanically enforced.
   (`size-5`/`size-6`/`size-7`),
   [PaneIconButton.tsx](../apps/packages/product-client/src/primitives/PaneIconButton.tsx)
   (`size-6`),
-  [SidebarActionButton.tsx](../apps/packages/product-client/src/primitives/patterns/SidebarActionButton.tsx)
+  [SidebarActionButton.tsx](../apps/packages/product-client/src/primitives/patterns/sidebar/SidebarActionButton.tsx)
   (`size-6`) and
   [Button.tsx](../apps/packages/product-client/src/primitives/Button.tsx)
   (`icon-sm` = `h-7 w-7`). Closing it means either a gate rule or dropping the
@@ -1145,7 +1145,7 @@ this document states is not mechanically enforced.
   `PopoverButton`/`PopoverMenuItem` — that misrouting is review-caught only.
 - The rule of two, the at-least-one-call-site rule, and the whole UI-conformance review checklist are review-enforced, not CI-enforced: no script detects a second implementation of a shape, a dead library component, or a hand-rolled `role="dialog|menu|listbox|tooltip"` shell. Known existing violations predating the rules: direct `lucide-react` imports in ~43 feature files (33 of them shadowing at least one identically named tuned glyph in `primitives/icons/`), seven hand-rolled overlay shells, several duplicated shapes (roster rows, card shells, status dots, disclosure state machines) pending promotion, dead library vocabulary (`AuthProviderButton` and `ListRow` have no product call sites; `ProductNotice` sits outside every tier with zero call sites while feature code hand-rolls its shape), and `ModelTable` holding a domain-tier row with a single consumer.
 - Arbitrary width/height/padding/margin/inset brackets (`w-[…]`, `p-[…]`, and siblings) have no gate rule — the appearance gate's arbitrary-bracket rules stop at the `rounded`/`z`/`gap`/`size` families plus text and glyph sizing.
-- Area kits are a grouping stated by this document, not a directory structure: the composer and sidebar kit files sit flat in `primitives/patterns/` today, and two kits are split across tiers against the kit-cohesion rule — the toast kit's positioner (`Sonner`) is a root primitive, and the settings kit spans `primitives/patterns/` (`SettingsGroup`, `SettingsMenu`) and `components/patterns/` (the six `Settings*` patterns there, none of which import domain code; they are slated to move down).
+- Kit directories cover three of the named kits, not all of them: the composer, toast, and sidebar kits each own a subdirectory under `primitives/patterns/`, but two kits remain split across tiers against the kit-cohesion rule — the toast kit's positioner (`Sonner`) is a root primitive outside `patterns/toast/`, and the settings kit has no directory at all, spanning `primitives/patterns/` (`SettingsGroup`, `SettingsMenu`) and `components/patterns/` (the six `Settings*` patterns there, none of which import domain code; they are slated to move down). The tabs and panel kits named in the closed kit set have no members yet. Nothing mechanical enforces that a kit member lands in its kit directory.
 - The state job is review-enforced only: no gate detects a hand-assembled `hover:`/`active:`/`focus-visible:` stack on a raw element in feature code, and hundreds of such stacks predate the rule.
 - Every current domain-tier row except `SecretManagementPanel` is grandfathered against the mechanical admission test (domain type in the public props plus composing two or more library components): the six shape-only `Settings*` rows await the kit move, `PrStatusBadge` awaits its presenter-function conversion, and `ModelTable`, `ProductPageShell`, and `BillingGateState` await re-audit.
 

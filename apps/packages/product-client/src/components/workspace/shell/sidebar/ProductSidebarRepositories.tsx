@@ -2,7 +2,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { ChevronRight } from "#product/primitives/icons/core";
 import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
-import { SidebarRowSurface } from "#product/primitives/patterns/SidebarRowSurface";
+import { SidebarRowSurface } from "#product/primitives/patterns/sidebar/SidebarRowSurface";
 import { Tooltip } from "#product/primitives/Tooltip";
 
 import { PrStatusIconOverlay } from "#product/components/patterns/PrStatusBadge";

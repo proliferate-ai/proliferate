@@ -10,7 +10,7 @@ import { Check } from "#product/primitives/icons/core";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 import { SessionModeControl } from "#product/components/workspace/chat/input/SessionModeControl";
 

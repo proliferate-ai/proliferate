@@ -22,7 +22,7 @@ vi.mock("#product/components/workspace/chat/input/ComposerRichTextEditor", () =>
 vi.mock("#product/components/workspace/chat/input/ComposerCommandEditor", () => ({
   ComposerCommandEditor: () => <div />,
 }));
-vi.mock("#product/primitives/patterns/ComposerTextareaFrame", () => ({
+vi.mock("#product/primitives/patterns/composer/ComposerTextareaFrame", () => ({
   ComposerTextareaFrame: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("#product/components/workspace/chat/input/QueuedPromptEditBanner", () => ({

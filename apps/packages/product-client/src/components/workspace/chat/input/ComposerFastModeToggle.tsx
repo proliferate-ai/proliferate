@@ -5,7 +5,7 @@ import {
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { Zap } from "#product/primitives/icons/product";
 import { Tooltip } from "#product/primitives/Tooltip";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 interface ComposerFastModeToggleProps {
