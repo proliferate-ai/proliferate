@@ -580,9 +580,10 @@ describe("diagnostics", () => {
     expect(mocks.deleteStagedSupportReportAttachment).toHaveBeenCalledWith("/staged");
   });
 
-  it("wires the supportSnapshot subgroup directly to the support wrappers", () => {
+  it("exposes the supportSnapshot subgroup only through the native host", () => {
     // Full invoke/output/unavailable behavior is pinned in support.test.ts.
     const group = desktopBridge.diagnostics.supportSnapshot;
+    if (!group) throw new Error("native support snapshot bridge is missing");
     expect(group.beginPreparation).toBe(mocks.beginSupportSnapshotPreparation);
     expect(group.finishPreparation).toBe(mocks.finishSupportSnapshotPreparation);
     expect(group.cancelPreparation).toBe(mocks.cancelSupportSnapshotPreparation);
@@ -592,5 +593,7 @@ describe("diagnostics", () => {
     expect(group.reconcileArtifacts).toBe(mocks.reconcileStagedSupportSnapshots);
     expect(group.beginSubmission).toBe(mocks.beginSupportSnapshotSubmission);
     expect(group.finishSubmission).toBe(mocks.finishSupportSnapshotSubmission);
+    mocks.isTauriRuntimeAvailable.mockReturnValue(false);
+    expect(desktopBridge.diagnostics.supportSnapshot).toBeNull();
   });
 });

@@ -559,5 +559,6 @@ export interface DesktopDiagnosticsBridge {
   readAttachment(path: string): Promise<string>;
   deleteAttachment(path: string): Promise<void>;
 
-  supportSnapshot: DesktopSupportSnapshotBridge;
+  /** Present only when the packaged native support coordinator is available. */
+  supportSnapshot: DesktopSupportSnapshotBridge | null;
 }

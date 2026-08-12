@@ -1,5 +1,6 @@
 import type {
   DesktopBridge,
+  DesktopSupportSnapshotBridge,
   LocalRuntimeConnection,
   LocalRuntimeSnapshot,
   ProductCommand,
@@ -78,6 +79,18 @@ import {
   saveSupportSnapshotArchive,
   stageSupportReportAttachment,
 } from "./support";
+
+const desktopSupportSnapshotBridge: DesktopSupportSnapshotBridge = {
+  beginPreparation: beginSupportSnapshotPreparation,
+  finishPreparation: finishSupportSnapshotPreparation,
+  cancelPreparation: cancelSupportSnapshotPreparation,
+  saveArchive: saveSupportSnapshotArchive,
+  readArtifact: readStagedSupportSnapshot,
+  deleteArtifact: deleteStagedSupportSnapshot,
+  reconcileArtifacts: reconcileStagedSupportSnapshots,
+  beginSubmission: beginSupportSnapshotSubmission,
+  finishSubmission: finishSupportSnapshotSubmission,
+};
 
 /**
  * The concrete Desktop bridge. Every method is a thin shape adapter over an
@@ -252,16 +265,8 @@ export const desktopBridge: DesktopBridge = {
     stageAttachment: stageSupportReportAttachment,
     readAttachment: readStagedSupportReportAttachment,
     deleteAttachment: deleteStagedSupportReportAttachment,
-    supportSnapshot: {
-      beginPreparation: beginSupportSnapshotPreparation,
-      finishPreparation: finishSupportSnapshotPreparation,
-      cancelPreparation: cancelSupportSnapshotPreparation,
-      saveArchive: saveSupportSnapshotArchive,
-      readArtifact: readStagedSupportSnapshot,
-      deleteArtifact: deleteStagedSupportSnapshot,
-      reconcileArtifacts: reconcileStagedSupportSnapshots,
-      beginSubmission: beginSupportSnapshotSubmission,
-      finishSubmission: finishSupportSnapshotSubmission,
+    get supportSnapshot() {
+      return isTauriRuntimeAvailable() ? desktopSupportSnapshotBridge : null;
     },
   },
 
