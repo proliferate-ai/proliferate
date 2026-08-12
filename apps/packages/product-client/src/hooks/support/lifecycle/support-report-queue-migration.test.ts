@@ -107,6 +107,24 @@ describe("support queue V1 migration", () => {
     });
   });
 
+  it.each([
+    [
+      "escaped Unicode",
+      `[{"job":{"jobId":"same","message":"é"},"attemptCount":0,"nextAttemptAt":null},{"job":{"jobId":"same","message":"\\u00e9"},"attemptCount":0,"nextAttemptAt":null}]`,
+    ],
+    [
+      "alternate number spelling",
+      `[{"job":{"jobId":"same","message":"help"},"attemptCount":0,"nextAttemptAt":null},{"job":{"jobId":"same","message":"help"},"attemptCount":0e0,"nextAttemptAt":null}]`,
+    ],
+  ])("rejects lexically distinct V1 wrappers before writing: %s", async (_name, raw) => {
+    const storage = new MemoryStorage();
+    storage.values.set(SUPPORT_QUEUE_LEGACY_KEY, raw);
+    await expect(hydrateOrMigrateSupportQueue(storage, parseEntry)).rejects.toMatchObject({
+      failure: "legacy_invalid",
+    });
+    expect(storage.trace.filter((step) => step.startsWith("set:"))).toEqual([]);
+  });
+
   it("rejects any legacy supportSnapshot before writing V2", async () => {
     const invalid = legacyEntry("a") as Record<string, unknown>;
     invalid.job = { ...(invalid.job as object), supportSnapshot: { kind: "none" } };

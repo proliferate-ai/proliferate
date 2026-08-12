@@ -88,6 +88,19 @@ describe("support queue canonical JSON", () => {
     expect(read).toBe(false);
   });
 
+  it("rejects arrays with altered or uninspectable prototypes", () => {
+    const altered = ["value"];
+    Object.setPrototypeOf(altered, null);
+    expect(() => canonicalQueueJson(altered)).toThrow(QueueCanonicalError);
+
+    const uninspectable = new Proxy(["value"], {
+      getPrototypeOf() {
+        throw new Error("prototype trap");
+      },
+    });
+    expect(() => canonicalQueueJson(uninspectable)).toThrow(QueueCanonicalError);
+  });
+
   it("takes one key snapshot from a stateful Proxy", () => {
     let ownKeyCalls = 0;
     const proxy = new Proxy({ first: 1, second: 2 }, {

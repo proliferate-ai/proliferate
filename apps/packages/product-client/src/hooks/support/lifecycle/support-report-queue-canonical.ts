@@ -102,6 +102,15 @@ function serializeObject(value: object, visiting: WeakSet<object>): string {
 }
 
 function serializeArray(value: unknown[], visiting: WeakSet<object>): string {
+  let prototype: object | null;
+  try {
+    prototype = Object.getPrototypeOf(value);
+  } catch {
+    throw new QueueCanonicalError("access_failed");
+  }
+  if (prototype !== Array.prototype) {
+    throw new QueueCanonicalError("array_invalid");
+  }
   const descriptors = ownDescriptors(value);
   const ownKeys = Reflect.ownKeys(descriptors);
   if (ownKeys.some((key) => typeof key === "symbol")) {

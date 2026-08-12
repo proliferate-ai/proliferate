@@ -98,6 +98,12 @@ function validateAndMigrateLegacy<TEntry extends MigratedSupportQueueEntryIdenti
   if (!Array.isArray(decoded)) {
     throw new SupportQueueMigrationError("legacy_invalid");
   }
+  // The V1 owner persisted the complete queue with compact JSON.stringify.
+  // Reject any lexical representation that it could not have written so two
+  // distinct persisted wrappers cannot normalize to the same comparison bytes.
+  if (JSON.stringify(decoded) !== raw) {
+    throw new SupportQueueMigrationError("legacy_invalid");
+  }
 
   const validated = decoded.map((value, index) => migrateEntry(value, index, parseEntry));
   if (validated.length > 10) {
