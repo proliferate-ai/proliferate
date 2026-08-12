@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil } from "#product/primitives/icons/core";
 import { Button } from "#product/primitives/Button";
 import {
   goalResultStats,

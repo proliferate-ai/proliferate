@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
-import { GitFork, RotateCw, SquareTerminal } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import type { ComponentType, ReactNode } from "react";
+import { Fork } from "#product/primitives/icons/core";
+import { RotateCw } from "#product/primitives/icons/status";
+import { SquareTerminal } from "#product/primitives/icons/workspace";
+import type { IconProps } from "#product/primitives/icons/types";
 import { Button } from "#product/primitives/Button";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { twMerge } from "#product/primitives/utils/tw-merge";
@@ -10,10 +12,10 @@ import type {
 } from "#product/domain/activity/chips";
 import { ComposerPopoverSurface } from "../chat/composer/ComposerPopoverSurface";
 
-const CHIP_ICON: Record<ActivityChipKind, LucideIcon> = {
+const CHIP_ICON: Record<ActivityChipKind, ComponentType<IconProps>> = {
   loops: RotateCw,
   terminals: SquareTerminal,
-  agents: GitFork,
+  agents: Fork,
 };
 
 export interface ActivityChipsProps {

@@ -1,8 +1,8 @@
 import { useState } from "react";
 // Matches the goal bar's own iconography exactly (GoalBar.tsx sources the
-// same three glyphs from lucide-react directly — Target/CircleCheck aren't
-// in the curated ProductClient icon set).
-import { CircleAlert, CircleCheck, Target } from "lucide-react";
+// same glyphs).
+import { Target } from "#product/primitives/icons/product";
+import { CircleAlert, CircleCheck } from "#product/primitives/icons/status";
 import { truncateGoalObjective } from "#product/domain/activity/goal";
 import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
 import { Button } from "#product/primitives/Button";

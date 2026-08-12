@@ -1,12 +1,10 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-// CircleCheck isn't in the curated ProductClient icon set — the goal bar
-// and goal transcript rows source it directly from lucide-react too.
-import { CircleCheck } from "lucide-react";
 import {
   CircleQuestion,
   MessageCircleQuestion,
 } from "#product/primitives/icons/core";
 import { Sparkles } from "#product/primitives/icons/product";
+import { CircleCheck } from "#product/primitives/icons/status";
 import type { PendingInteraction, TurnRecord } from "@anyharness/sdk";
 import { formatWorkedForDuration } from "#product/domain/chats/transcript/transcript-work-duration";
 import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";

@@ -1,4 +1,4 @@
-import { SquareTerminal } from "lucide-react";
+import { SquareTerminal } from "#product/primitives/icons/workspace";
 import {
   processElapsedLabel,
   processStatusLabel,
