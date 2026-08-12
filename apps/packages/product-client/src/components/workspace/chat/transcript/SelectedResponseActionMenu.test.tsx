@@ -22,9 +22,8 @@ afterEach(() => {
 });
 
 describe("SelectedResponseActionMenu", () => {
-  it("exposes all actions and supports roving keyboard focus", async () => {
-    const onAction = vi.fn<(action: SelectedResponseAction) => void>();
-    renderMenu({ focusRequestNonce: 1, onAction });
+  it("exposes all three actions in order as menu items", async () => {
+    renderMenu();
 
     const items = await screen.findAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual([
@@ -32,23 +31,131 @@ describe("SelectedResponseActionMenu", () => {
       "More details",
       "Ask in side chat",
     ]);
-    expect(items.map((item) => item.tabIndex)).toEqual([0, -1, -1]);
+  });
+
+  it("highlights the first item when the keyboard requested focus", async () => {
+    renderMenu({ focusRequestNonce: 1 });
+
+    const items = await screen.findAllByRole("menuitem");
+    await waitFor(() => expect(document.activeElement).toBe(items[0]));
+    expect(items[0]!.hasAttribute("data-highlighted")).toBe(true);
+  });
+
+  it("leaves focus alone when the selection was made with the pointer", async () => {
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+
+    renderMenu({ focusRequestNonce: 0 });
+    await screen.findAllByRole("menuitem");
+    await Promise.resolve();
+
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
+  it("wraps arrow navigation at both ends", async () => {
+    renderMenu({ focusRequestNonce: 1 });
+    const items = await screen.findAllByRole("menuitem");
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
 
+    // Forward to the last item, then one more to wrap onto the first.
     fireEvent.keyDown(items[0]!, { key: "ArrowDown" });
-    expect(document.activeElement).toBe(items[1]);
-    expect(items.map((item) => item.tabIndex)).toEqual([-1, 0, -1]);
-    fireEvent.click(items[2]!);
+    await waitFor(() => expect(document.activeElement).toBe(items[1]));
+    fireEvent.keyDown(items[1]!, { key: "ArrowDown" });
+    await waitFor(() => expect(document.activeElement).toBe(items[2]));
+    fireEvent.keyDown(items[2]!, { key: "ArrowDown" });
+    await waitFor(() => expect(document.activeElement).toBe(items[0]));
+
+    // Backward off the first item wraps onto the last.
+    fireEvent.keyDown(items[0]!, { key: "ArrowUp" });
+    await waitFor(() => expect(document.activeElement).toBe(items[2]));
+  });
+
+  it("supports Home and End", async () => {
+    renderMenu({ focusRequestNonce: 1 });
+    const items = await screen.findAllByRole("menuitem");
+    await waitFor(() => expect(document.activeElement).toBe(items[0]));
+
+    fireEvent.keyDown(items[0]!, { key: "End" });
+    await waitFor(() => expect(document.activeElement).toBe(items[2]));
+
+    fireEvent.keyDown(items[2]!, { key: "Home" });
+    await waitFor(() => expect(document.activeElement).toBe(items[0]));
+  });
+
+  it("activates the focused item with Enter", async () => {
+    const onAction = vi.fn<(action: SelectedResponseAction) => void>();
+    renderMenu({ focusRequestNonce: 1, onAction });
+    const items = await screen.findAllByRole("menuitem");
+    await waitFor(() => expect(document.activeElement).toBe(items[0]));
+
+    fireEvent.keyDown(items[0]!, { key: "End" });
+    await waitFor(() => expect(document.activeElement).toBe(items[2]));
+    fireEvent.keyDown(items[2]!, { key: "Enter" });
+
     expect(onAction).toHaveBeenCalledWith("side-chat");
   });
 
-  it("dismisses on Escape", async () => {
-    const onEscape = vi.fn();
-    renderMenu({ onEscape });
-    const menu = await screen.findByRole("menu", { name: "Selected response actions" });
+  it("activates the focused item with Space", async () => {
+    const onAction = vi.fn<(action: SelectedResponseAction) => void>();
+    renderMenu({ focusRequestNonce: 1, onAction });
+    const items = await screen.findAllByRole("menuitem");
+    await waitFor(() => expect(document.activeElement).toBe(items[0]));
 
-    fireEvent.keyDown(menu, { key: "Escape" });
+    fireEvent.keyDown(items[0]!, { key: " " });
+
+    expect(onAction).toHaveBeenCalledWith("add-to-chat");
+  });
+
+  it("dismisses on Escape without running an action", async () => {
+    const onAction = vi.fn<(action: SelectedResponseAction) => void>();
+    const onEscape = vi.fn();
+    renderMenu({ onAction, onEscape });
+    await screen.findByRole("menu", { name: "Selected response actions" });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
     expect(onEscape).toHaveBeenCalledOnce();
+    expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it("runs the action on click without collapsing the live text selection", async () => {
+    const onAction = vi.fn<(action: SelectedResponseAction) => void>();
+    renderMenu({ onAction });
+    const items = await screen.findAllByRole("menuitem");
+
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Selected response";
+    document.body.append(paragraph);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    const domSelection = document.getSelection()!;
+    domSelection.removeAllRanges();
+    domSelection.addRange(range);
+
+    fireEvent.pointerDown(items[1]!, { button: 0, ctrlKey: false });
+    fireEvent.click(items[1]!);
+
+    expect(onAction).toHaveBeenCalledWith("more-details");
+    expect(document.getSelection()?.isCollapsed).toBe(false);
+    paragraph.remove();
+  });
+
+  it("keeps the dismissal-suppression hook reachable from every item", async () => {
+    renderMenu();
+    const items = await screen.findAllByRole("menuitem");
+
+    for (const item of items) {
+      expect(item.closest("[data-selected-response-actions]")).not.toBeNull();
+    }
+  });
+
+  it("does not make the page inert while open", async () => {
+    renderMenu();
+    await screen.findAllByRole("menuitem");
+
+    expect(document.body.style.pointerEvents).not.toBe("none");
   });
 });
 
