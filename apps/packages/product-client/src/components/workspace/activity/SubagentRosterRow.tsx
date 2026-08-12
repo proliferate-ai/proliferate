@@ -1,4 +1,4 @@
-import { GitFork } from "lucide-react";
+import { Fork } from "#product/primitives/icons/core";
 import {
   subagentDisplayTitle,
   subagentStatusLabel,
@@ -37,7 +37,7 @@ export function SubagentRosterRow({ subagent, nowMs, onOpen }: SubagentRosterRow
   const displayTitle = subagentDisplayTitle(subagent);
   const content = (
     <>
-      <GitFork className={twMerge("mt-0.5 icon-paired shrink-0", TONE_CLASSNAME[tone])} aria-hidden />
+      <Fork className={twMerge("mt-0.5 icon-paired shrink-0", TONE_CLASSNAME[tone])} aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="truncate text-ui text-foreground" data-telemetry-mask title={displayTitle}>
           {displayTitle}

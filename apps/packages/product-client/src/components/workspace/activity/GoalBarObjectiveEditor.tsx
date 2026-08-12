@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Check, X } from "lucide-react";
+import { Check, X } from "#product/primitives/icons/core";
 import { Textarea } from "#product/primitives/Textarea";
 import { GoalBarIconAction } from "./GoalBarIconAction";
 

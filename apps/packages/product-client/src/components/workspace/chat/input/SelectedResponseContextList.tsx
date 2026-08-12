@@ -1,4 +1,5 @@
-import { Quote, X } from "lucide-react";
+import { X } from "#product/primitives/icons/core";
+import { Quote } from "#product/primitives/icons/product";
 import type { SelectedResponseContext } from "#product/domain/chats/transcript/selected-response-context";
 import { selectedResponseContextPreview } from "#product/domain/chats/transcript/selected-response-context";
 import { Button } from "#product/primitives/Button";

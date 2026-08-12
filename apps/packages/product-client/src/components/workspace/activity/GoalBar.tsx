@@ -1,15 +1,7 @@
 import { useState, type ReactNode } from "react";
-import {
-  ChevronUp,
-  CircleAlert,
-  CircleCheck,
-  Pause,
-  Pencil,
-  Play,
-  Target,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Pause, Pencil, Play, Trash, X } from "#product/primitives/icons/core";
+import { Target } from "#product/primitives/icons/product";
+import { ChevronUp, CircleAlert, CircleCheck } from "#product/primitives/icons/status";
 import {
   deriveGoalBarState,
   goalStatusLabel,
@@ -183,7 +175,7 @@ export function GoalBar({
           />
           <GoalBarIconAction
             label="Delete goal"
-            icon={<Trash2 className="icon-paired" />}
+            icon={<Trash className="icon-paired" />}
             destructive
             onClick={onClear}
           />

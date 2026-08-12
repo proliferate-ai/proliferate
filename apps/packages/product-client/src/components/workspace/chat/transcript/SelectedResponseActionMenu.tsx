@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { MessageCircleQuestion, MessageSquarePlus, MessagesSquare } from "lucide-react";
+import { MessageCircleQuestion } from "#product/primitives/icons/core";
+import { MessageSquarePlus, MessagesSquare } from "#product/primitives/icons/product";
 import { CHAT_SELECTED_RESPONSE_ACTIONS } from "#product/copy/chat/chat-copy";
 import type { SelectedResponseSelection } from "#product/domain/chats/transcript/selected-response-context";
 import { useSelectedResponseActions } from "#product/hooks/chat/workflows/use-selected-response-actions";
