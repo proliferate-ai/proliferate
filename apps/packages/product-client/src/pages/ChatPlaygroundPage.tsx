@@ -3,7 +3,7 @@ import { PlaygroundComposer } from "#product/components/playground/PlaygroundCom
 import { PlaygroundScenarioBar } from "#product/components/playground/PlaygroundScenarioBar";
 import { PlaygroundSidebarGitDiff } from "#product/components/playground/PlaygroundSidebarGitDiff";
 import { PlaygroundTranscript } from "#product/components/playground/transcript/PlaygroundTranscript";
-import { ChromeWorkspaceTab } from "#product/components/workspace/shell/tabs/ChromeWorkspaceTab";
+import { ChromeTab } from "#product/primitives/patterns/tabs/ChromeTab";
 // This dev-only route sits outside AuthenticatedProductClient, so load the
 // authenticated presentation rules explicitly for direct playground URLs.
 import "../app/authenticated.css";
@@ -64,7 +64,7 @@ export function ChatPlaygroundPage() {
             aria-label="Populated session preview"
             className="relative flex h-[46px] shrink-0 items-stretch bg-sidebar px-3 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border after:content-['']"
           >
-            <ChromeWorkspaceTab
+            <ChromeTab
               isActive
               width={256}
               label="Chat playground"

@@ -2,14 +2,14 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ChromeWorkspaceTab } from "#product/components/workspace/shell/tabs/ChromeWorkspaceTab";
+import { ChromeTab } from "#product/primitives/patterns/tabs/ChromeTab";
 
-describe("ChromeWorkspaceTab", () => {
+describe("ChromeTab", () => {
   afterEach(cleanup);
 
   it("renders an active tab full-height with an instant bottom underline", () => {
     const { container } = render(
-      <ChromeWorkspaceTab
+      <ChromeTab
         isActive
         width={180}
         label="Session one"
@@ -44,7 +44,7 @@ describe("ChromeWorkspaceTab", () => {
 
   it("does not render an underline or label-edge mask for an inactive tab", () => {
     const { container } = render(
-      <ChromeWorkspaceTab
+      <ChromeTab
         isActive={false}
         width={180}
         label="Session two"
@@ -63,7 +63,7 @@ describe("ChromeWorkspaceTab", () => {
 
   it("yields the trailing status slot to a revealed shortcut", () => {
     render(
-      <ChromeWorkspaceTab
+      <ChromeTab
         isActive
         width={180}
         label="Session one"
