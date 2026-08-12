@@ -32,7 +32,13 @@ pub async fn restart_runtime(
     let _ = diagnostics_supervisor.wait_startup_barrier().await;
     let mut launch_env = keychain::load_all_secrets_for_sidecar();
     launch_env.extend(agent_seed_env::launch_env(&app));
-    sidecar::restart(&sidecar, launch_env, &diagnostics_producer).await?;
+    sidecar::restart(
+        &sidecar,
+        launch_env,
+        &diagnostics_producer,
+        &diagnostics_supervisor,
+    )
+    .await?;
     let guard = sidecar.lock().await;
     Ok(guard.info.clone())
 }

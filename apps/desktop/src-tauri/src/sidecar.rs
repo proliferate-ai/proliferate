@@ -13,6 +13,7 @@ use crate::desktop_telemetry_mode::{
     current_api_origin, resolve_desktop_telemetry_mode, DesktopTelemetryMode,
 };
 use crate::diagnostics_collector::producer::TauriDiagnosticsProducer;
+use crate::diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor;
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -50,6 +51,16 @@ struct RuntimeHealthRecord {
 
 pub struct SidecarProcess {
     child: Option<Child>,
+    /// Parent side of the protected child diagnostics bridge; `None` for
+    /// external, unprotected, or never-launched children.
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    diagnostics_bridge:
+        Option<crate::diagnostics_collector::child_bridge::runtime::ChildDiagnosticsBridge>,
+    observer_generation: u64,
+    exit_observer: Option<tokio::task::JoinHandle<()>>,
     pub info: RuntimeInfo,
     pub launch_env: HashMap<String, String>,
     terminal_shutdown_armed: bool,
@@ -61,6 +72,13 @@ impl SidecarProcess {
     fn new(port: u16) -> Self {
         Self {
             child: None,
+            #[cfg(all(
+                target_os = "macos",
+                any(target_arch = "aarch64", target_arch = "x86_64")
+            ))]
+            diagnostics_bridge: None,
+            observer_generation: 0,
+            exit_observer: None,
             info: RuntimeInfo {
                 url: format!("http://{DEFAULT_HOST}:{port}"),
                 port,
@@ -72,10 +90,27 @@ impl SidecarProcess {
             suppress_runtime_info_persistence: false,
         }
     }
+
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    fn clear_diagnostics_bridge(&mut self) {
+        self.diagnostics_bridge = None;
+    }
+
+    #[cfg(not(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    )))]
+    fn clear_diagnostics_bridge(&mut self) {}
 }
 
 impl Drop for SidecarProcess {
     fn drop(&mut self) {
+        if let Some(observer) = self.exit_observer.take() {
+            observer.abort();
+        }
         if let Some(ref mut child) = self.child {
             let _ = child.start_kill();
         }
@@ -301,8 +336,12 @@ pub(crate) fn resolve_shell_path() -> Option<String> {
     }
 }
 
+#[path = "sidecar/diagnostics.rs"]
+mod diagnostics;
 #[path = "sidecar/lifecycle.rs"]
 mod lifecycle;
+#[path = "sidecar/observer.rs"]
+pub(crate) mod observer;
 #[cfg(test)]
 #[path = "sidecar/tests.rs"]
 mod tests;
@@ -316,8 +355,7 @@ fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, Str
         ANYHARNESS_DEFER_STARTUP_RETENTION_ENV.to_string(),
         "1".to_string(),
     );
-    // Unconditional (unlike the hosted-only block above): every desktop
-    // install, self-hosted or not, needs this so the render plane can tell a
+    // Every desktop install needs this so the render plane can tell a
     // stale-server state file apart from a fresh one.
     runtime_env.insert(
         PROLIFERATE_API_BASE_URL_ORIGIN_ENV.to_string(),
@@ -341,9 +379,13 @@ fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, Str
     cmd
 }
 
-pub async fn boot(sidecar: &SharedSidecar, producer: &TauriDiagnosticsProducer) {
+pub async fn boot(
+    sidecar: &SharedSidecar,
+    producer: &TauriDiagnosticsProducer,
+    supervisor: &Arc<DiagnosticsCollectorSupervisor>,
+) {
     let operation = producer.begin_lifecycle("desktop.anyharness_process.start");
-    finish_boot_operation(operation, boot_inner(sidecar).await);
+    finish_boot_operation(operation, boot_inner(sidecar, supervisor).await);
 }
 
 fn finish_boot_operation(
@@ -372,6 +414,7 @@ pub async fn restart(
     sidecar: &SharedSidecar,
     launch_env: HashMap<String, String>,
     producer: &TauriDiagnosticsProducer,
+    supervisor: &Arc<DiagnosticsCollectorSupervisor>,
 ) -> Result<(), String> {
     let operation = producer.begin_lifecycle("desktop.anyharness_process.restart");
     {
@@ -380,16 +423,16 @@ pub async fn restart(
             operation.terminal(TerminalOutcomeV1::Rejected, Some("shutdown_armed"));
             return Err("AnyHarness restart rejected because shutdown is armed".to_string());
         }
-        if let Some(ref mut child) = guard.child {
-            match child.try_wait() {
-                Ok(Some(_)) => {}
+        let reaped = if let Some(ref mut child) = guard.child {
+            Some(match child.try_wait() {
+                Ok(Some(status)) => status,
                 Ok(None) => {
                     if let Err(error) = child.start_kill() {
                         operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
                         return Err(format!("Failed to stop AnyHarness for restart: {error}"));
                     }
                     match tokio::time::timeout(Duration::from_secs(2), child.wait()).await {
-                        Ok(Ok(_)) => {}
+                        Ok(Ok(status)) => status,
                         Ok(Err(error)) => {
                             operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
                             return Err(format!("Failed to reap AnyHarness for restart: {error}"));
@@ -405,15 +448,22 @@ pub async fn restart(
                     operation.terminal(TerminalOutcomeV1::Failed, Some("child_inspection_failed"));
                     return Err(format!("Failed to inspect AnyHarness for restart: {error}"));
                 }
-            }
+            })
+        } else {
+            None
+        };
+        if let Some(status) = reaped {
+            guard.finish_diagnostics_reap(status).await;
         }
+        observer::cancel_locked(&mut guard);
         guard.child = None;
+        guard.clear_diagnostics_bridge();
         guard.info.status = RuntimeStatus::Stopped;
         guard.launch_env = launch_env;
         persist_sidecar_runtime_info(&guard, None);
     }
 
-    finish_boot_operation(operation, boot_inner(sidecar).await);
+    finish_boot_operation(operation, boot_inner(sidecar, supervisor).await);
     Ok(())
 }
 
@@ -430,15 +480,15 @@ pub async fn stop(
         operation.terminal(TerminalOutcomeV1::Skipped, None);
         return Ok(false);
     };
-    match child.try_wait() {
-        Ok(Some(_)) => {}
+    let reaped = match child.try_wait() {
+        Ok(Some(status)) => status,
         Ok(None) => {
             if let Err(error) = child.start_kill() {
                 operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
                 return Err(format!("Failed to stop AnyHarness: {error}"));
             }
             match tokio::time::timeout(Duration::from_secs(2), child.wait()).await {
-                Ok(Ok(_)) => {}
+                Ok(Ok(status)) => status,
                 Ok(Err(error)) => {
                     operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
                     return Err(format!("Failed to reap AnyHarness: {error}"));
@@ -453,8 +503,11 @@ pub async fn stop(
             operation.terminal(TerminalOutcomeV1::Failed, Some("child_inspection_failed"));
             return Err(format!("Failed to inspect AnyHarness shutdown: {error}"));
         }
-    }
+    };
+    guard.finish_diagnostics_reap(reaped).await;
+    observer::cancel_locked(&mut guard);
     guard.child = None;
+    guard.clear_diagnostics_bridge();
     guard.info.status = RuntimeStatus::Stopped;
     persist_sidecar_runtime_info(&guard, None);
     operation.terminal(TerminalOutcomeV1::Succeeded, None);

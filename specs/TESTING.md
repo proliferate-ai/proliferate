@@ -61,6 +61,12 @@ integration absent. Run `cargo test -p proliferate-diagnostics-collector` for
 the deterministic contract/process suite. The release-only RSS profile runner
 is a separate bounded proof and writes its JSON/CSV evidence outside the repo.
 
+The bounded producer adapter (`proliferate-diagnostics-client`) and the
+Desktop child-bridge, launch, fallback-root, and Worker-tail seams are also
+Tier 1: colocated deterministic tests use in-process descriptors, local
+sockets/pipes, and the test binary itself as any needed child fixture. They
+never invoke nested Cargo and never require an unbuilt binary.
+
 Desktop collector ownership is also Tier 1 at the native seam. Colocated tests
 pin target packaging, protected descriptor/capability handling, authenticated
 startup and replacement generations, bounded restart policy, renderer ingest

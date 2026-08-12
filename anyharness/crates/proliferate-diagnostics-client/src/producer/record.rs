@@ -304,7 +304,6 @@ fn secret_regexes() -> &'static [Regex] {
             r"(?i)\b[A-Z][A-Z0-9_]*(?:TOKEN|KEY|SECRET|PASSWORD|PASS|CREDENTIAL)[A-Z0-9_]*\s*=\s*[^\s]+",
             r"(?i)(?:[?&](?:x-amz-signature|x-amz-credential|signature|sig|token|access_token|api_key)=)[^&#\s]+",
             r"(?s)-----BEGIN [^-\n]*PRIVATE KEY-----.*?-----END [^-\n]*PRIVATE KEY-----",
-            r"\b[A-Za-z0-9_-]{43}\b",
         ]
         .into_iter()
         .map(|pattern| Regex::new(pattern).expect("fixed secret regex is valid"))

@@ -1,12 +1,17 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use super::{
-    build_spawn_command, find_anyharness_binary, persist_runtime_info, runtime_health_url,
-    runtime_url_port, BootOutcome, RuntimeHealthRecord, RuntimeStatus, SharedSidecar,
-    HEALTH_POLL_INTERVAL, HEALTH_POLL_TIMEOUT,
+    build_spawn_command, diagnostics, find_anyharness_binary, observer, persist_runtime_info,
+    runtime_health_url, runtime_url_port, BootOutcome, RuntimeHealthRecord, RuntimeStatus,
+    SharedSidecar, HEALTH_POLL_INTERVAL, HEALTH_POLL_TIMEOUT,
 };
+use crate::diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor;
 
-pub(super) async fn boot_inner(sidecar: &SharedSidecar) -> BootOutcome {
+pub(super) async fn boot_inner(
+    sidecar: &SharedSidecar,
+    supervisor: &Arc<DiagnosticsCollectorSupervisor>,
+) -> BootOutcome {
     if sidecar.lock().await.terminal_shutdown_armed {
         return BootOutcome::Rejected;
     }
@@ -55,23 +60,39 @@ pub(super) async fn boot_inner(sidecar: &SharedSidecar) -> BootOutcome {
         "Launching AnyHarness sidecar"
     );
 
-    let mut command = build_spawn_command(&binary, port, &launch_env);
     let mut guard = sidecar.lock().await;
     if guard.terminal_shutdown_armed {
         return BootOutcome::Rejected;
     }
     guard.info.status = RuntimeStatus::Starting;
     persist_runtime_info(&guard.info, None);
-    let child_result = command.spawn();
+    // The direct executable and full command are prepared before any
+    // observability descriptor exists; the spawn itself may carry the
+    // protected bridge/shutdown descriptors on supported targets.
+    let spawn_result = diagnostics::spawn_owned_anyharness(
+        || build_spawn_command(&binary, port, &launch_env),
+        supervisor,
+    );
 
-    match child_result {
-        Ok(child) => {
+    match spawn_result {
+        Ok(spawned) => {
             tracing::info!("AnyHarness sidecar spawned; waiting for health");
-            guard.child = Some(child);
+            guard.child = Some(spawned.child);
+            #[cfg(all(
+                target_os = "macos",
+                any(target_arch = "aarch64", target_arch = "x86_64")
+            ))]
+            {
+                guard.diagnostics_bridge = spawned.bridge;
+            }
             guard.info.status = RuntimeStatus::Starting;
             persist_runtime_info(&guard.info, None);
             drop(guard);
-            wait_healthy(sidecar, true).await
+            let outcome = wait_healthy(sidecar, true).await;
+            if matches!(outcome, BootOutcome::Succeeded) {
+                observer::start(sidecar).await;
+            }
+            outcome
         }
         Err(e) => {
             tracing::error!(
@@ -108,6 +129,9 @@ pub(super) async fn wait_healthy(sidecar: &SharedSidecar, require_child: bool) -
                 };
                 match child.try_wait() {
                     Ok(Some(status)) => {
+                        guard.finish_diagnostics_reap(status).await;
+                        guard.child = None;
+                        guard.clear_diagnostics_bridge();
                         guard.info.status = RuntimeStatus::Failed;
                         persist_runtime_info(&guard.info, None);
                         tracing::error!(

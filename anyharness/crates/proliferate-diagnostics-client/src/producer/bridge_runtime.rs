@@ -76,14 +76,19 @@ fn run(
         producer_boot_id: inner.producer_boot_id.clone(),
     };
     if send_frame(&bridge, &ack, &[]).is_err() {
-        inner.mark_generation_unavailable(MAX_SAFE_INTEGER);
+        inner.mark_bridge_lost();
         return;
     }
     let mut terminal_sent = false;
+    let mut shutdown_armed = false;
     loop {
         match commands.try_recv() {
-            Ok(BridgeCommand::Terminal(remaining)) if !terminal_sent => {
-                let snapshot = runtime.block_on(inner.flush_until(remaining));
+            Ok(BridgeCommand::Terminal(_remaining)) if !terminal_sent => {
+                // The guard already drained or cancelled its worker under its
+                // chosen terminal deadline before enqueueing this command.
+                // Emitting the cached current result starts no bridge-local
+                // wait and cannot extend a parent-owned shutdown phase.
+                let snapshot = inner.snapshot();
                 let frame = ChildFrame::TerminalStatus {
                     protocol_version: CHILD_BRIDGE_PROTOCOL_VERSION,
                     component: inner.component.wire_name(),
@@ -104,24 +109,31 @@ fn run(
                 revents: 0,
             },
             libc::pollfd {
-                fd: shutdown.as_raw_fd(),
+                // Once armed, the closed pipe would report POLLHUP forever;
+                // a negative descriptor tells poll to ignore the slot.
+                fd: if shutdown_armed {
+                    -1
+                } else {
+                    shutdown.as_raw_fd()
+                },
                 events: libc::POLLIN | libc::POLLHUP,
                 revents: 0,
             },
         ];
         let ready = unsafe { libc::poll(descriptors.as_mut_ptr(), descriptors.len() as _, 10) };
         if ready < 0 {
-            inner.mark_generation_unavailable(MAX_SAFE_INTEGER);
+            inner.mark_bridge_lost();
             return;
         }
-        if descriptors[1].revents & (libc::POLLIN | libc::POLLHUP) != 0 {
+        if !shutdown_armed && descriptors[1].revents & (libc::POLLIN | libc::POLLHUP) != 0 {
             let mut byte = [0_u8; 1];
             let _ =
                 unsafe { libc::read(shutdown.as_raw_fd(), byte.as_mut_ptr().cast(), byte.len()) };
-            inner.arm_terminal();
+            inner.arm_parent_shutdown();
+            shutdown_armed = true;
         }
         if descriptors[0].revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0 {
-            inner.mark_generation_unavailable(MAX_SAFE_INTEGER);
+            inner.mark_bridge_lost();
             return;
         }
         if descriptors[0].revents & libc::POLLIN == 0 {
@@ -130,12 +142,12 @@ fn run(
         let received = match receive_frame::<ParentFrame>(&mut bridge) {
             Ok(received) => received,
             Err(_) => {
-                inner.mark_generation_unavailable(MAX_SAFE_INTEGER);
+                inner.mark_bridge_lost();
                 return;
             }
         };
         if handle_parent_frame(&inner, &bridge, &runtime, received, &mut terminal_sent).is_err() {
-            inner.mark_generation_unavailable(MAX_SAFE_INTEGER);
+            inner.mark_bridge_lost();
             return;
         }
     }
@@ -196,6 +208,7 @@ fn handle_parent_frame(
         } if valid_protocol_version(protocol_version)
             && request_id <= MAX_SAFE_INTEGER
             && remaining_deadline_ms <= 500
+            && !*terminal_sent
             && descriptors.next().is_none() =>
         {
             let snapshot =
@@ -211,9 +224,25 @@ fn handle_parent_frame(
                 &[],
             )
             .map_err(|_| ())?;
-            if inner.snapshot().resident_records == 0 {
-                *terminal_sent = true;
-            }
+            // Any completed parent flush supersedes the terminal status:
+            // it is sent only for a natural return outside one.
+            *terminal_sent = true;
+        }
+        // A natural terminal result can cross the already-registered parent
+        // flush request in the socket. It already resolves that one parent
+        // slot, so consuming the late request without a second response is
+        // the idempotent winner path rather than a protocol failure.
+        ParentFrame::FlushRequest {
+            protocol_version,
+            request_id,
+            remaining_deadline_ms,
+        } if valid_protocol_version(protocol_version)
+            && request_id <= MAX_SAFE_INTEGER
+            && remaining_deadline_ms <= 500
+            && *terminal_sent
+            && descriptors.next().is_none() =>
+        {
+            inner.begin_parent_flush(Duration::from_millis(remaining_deadline_ms));
         }
         ParentFrame::Bootstrap { .. }
         | ParentFrame::GenerationReady { .. }

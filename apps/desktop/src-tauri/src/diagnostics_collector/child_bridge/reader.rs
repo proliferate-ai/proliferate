@@ -1,0 +1,51 @@
+#![cfg(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+
+//! Single bounded reader for the protected child diagnostics bridge.
+
+use std::{os::fd::AsRawFd, os::unix::net::UnixStream, sync::Arc};
+
+use proliferate_diagnostics_client::bridge::{framing::receive_frame, wire::ChildFrame};
+
+use super::runtime::BridgeShared;
+
+const READER_POLL_INTERVAL_MS: libc::c_int = 50;
+
+pub(super) fn run_reader(shared: Arc<BridgeShared>, mut stream: UnixStream) {
+    loop {
+        if shared.reader_should_stop() {
+            return;
+        }
+        let mut descriptors = [libc::pollfd {
+            fd: stream.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        }];
+        // SAFETY: `descriptors` is a valid single-element pollfd array.
+        let ready = unsafe { libc::poll(descriptors.as_mut_ptr(), 1, READER_POLL_INTERVAL_MS) };
+        if ready < 0 || descriptors[0].revents & (libc::POLLERR | libc::POLLNVAL) != 0 {
+            shared.mark_lost();
+            return;
+        }
+        if descriptors[0].revents & libc::POLLIN == 0 {
+            if descriptors[0].revents & libc::POLLHUP != 0 {
+                shared.mark_lost();
+                return;
+            }
+            continue;
+        }
+        let received = match receive_frame::<ChildFrame>(&mut stream) {
+            Ok(received) => received,
+            Err(_) => {
+                shared.mark_lost();
+                return;
+            }
+        };
+        if shared.handle_child_frame(received).is_err() {
+            shared.mark_lost();
+            return;
+        }
+    }
+}

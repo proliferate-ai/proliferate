@@ -122,11 +122,13 @@ failure remains a renderer delivery loss and never falls back.
 ### Desktop-only product behavior
 
 Raw native startup remains app-owned: Tauri initialization, native window
-setup, diagnostics collector supervision and query brokering, sidecar/process
-startup, operating-system deep-link registration, and vendor installation run
-from the Desktop host. On supported Desktop builds the collector startup
-barrier resolves before owned AnyHarness starts; Worker ensure observes that
-same barrier. A degraded observability path releases product startup.
+setup, diagnostics collector supervision and query brokering, the protected
+child diagnostics bridge carried by owned AnyHarness/Worker launches on
+supported macOS targets, sidecar/process startup, operating-system deep-link
+registration, and vendor installation run from the Desktop host. On supported
+Desktop builds the collector startup barrier resolves before owned AnyHarness
+starts; Worker ensure observes that same barrier. A degraded observability
+path releases product startup.
 
 Product-aware Desktop behavior may live in ProductClient behind the optional
 bridge. It mounts only when a Desktop bridge exists:

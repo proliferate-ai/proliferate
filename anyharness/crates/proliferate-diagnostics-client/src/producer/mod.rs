@@ -3,11 +3,9 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
+use tokio::time::Instant as TokioInstant;
 
-use proliferate_diagnostics_protocol::v1::{
-    limits::MAX_SAFE_INTEGER,
-    types::{ProducerRecordV1, SeverityV1},
-};
+use proliferate_diagnostics_protocol::v1::{limits::MAX_SAFE_INTEGER, types::ProducerRecordV1};
 
 use crate::{
     bridge::activation::{BundledDesktopDiagnosticsBootstrap, InitialCollectorState},
@@ -19,11 +17,41 @@ use crate::{
 mod admission;
 #[cfg(unix)]
 mod bridge_runtime;
+mod emit;
 pub(crate) mod record;
 pub(crate) mod status;
 pub(crate) mod transport;
 mod worker;
 
+#[cfg(test)]
+#[path = "tests_filter.rs"]
+mod tests_filter;
+#[cfg(test)]
+#[path = "tests_loss.rs"]
+mod tests_loss;
+#[cfg(test)]
+#[path = "tests_queue.rs"]
+mod tests_queue;
+#[cfg(test)]
+#[path = "tests_receipt.rs"]
+mod tests_receipt;
+#[cfg(test)]
+#[path = "tests_sequence.rs"]
+mod tests_sequence;
+#[cfg(test)]
+#[path = "tests_status.rs"]
+mod tests_status;
+#[cfg(test)]
+#[path = "tests_support.rs"]
+mod tests_support;
+#[cfg(test)]
+#[path = "tests_terminal.rs"]
+mod tests_terminal;
+#[cfg(test)]
+#[path = "tests_transport.rs"]
+mod tests_transport;
+
+use admission::{LossSnapshot, PendingLossRange};
 use record::RecordFactory;
 use status::{
     BoundedLossCounters, ProducerCollectorState, ProducerFailureClassification,
@@ -67,6 +95,7 @@ pub(crate) struct ResidentRecord {
     record: ProducerRecordV1,
     serialized_bytes: usize,
     protected: bool,
+    is_loss_summary: bool,
     fallback_reason: Option<FallbackReason>,
     admitted_at: Instant,
 }
@@ -86,10 +115,18 @@ pub(crate) struct AdmissionState {
     collector: CollectorAvailability,
     pressure: PressureSuppression,
     terminal: bool,
+    parent_shutdown_observed: bool,
+    parent_flush_observed: bool,
+    terminal_deadline: Option<TokioInstant>,
+    parent_flush_snapshot: Option<ProducerStatusSnapshot>,
     delivery_fence_eligible: bool,
     dropped: BoundedLossCounters,
     last_failure: Option<ProducerFailureClassification>,
     fallback_routed: u64,
+    pending_loss: BoundedLossCounters,
+    pending_loss_total: u64,
+    pending_loss_range: PendingLossRange,
+    open_loss_snapshot: Option<LossSnapshot>,
 }
 
 pub(crate) enum CollectorAvailability {
@@ -116,9 +153,6 @@ pub(crate) fn install(
     release: &str,
     environment: &str,
 ) -> Result<DiagnosticsInstallation, InstallError> {
-    let producer_boot_id = uuid::Uuid::new_v4().to_string();
-    let factory = RecordFactory::new(component, release, environment, producer_boot_id.clone())
-        .map_err(|_| InstallError::BootstrapInvalid)?;
     #[cfg(unix)]
     let (initial_state, fallback_handle, degraded, platform_channels) = match activation {
         BundledDesktopDiagnosticsBootstrap::Ready(bootstrap) => (
@@ -156,6 +190,19 @@ pub(crate) fn install(
     if degraded.is_some() {
         eprintln!("[desktop-diagnostics] bundled bootstrap degraded");
     }
+    let fallback =
+        fallback_handle.and_then(|handle| FallbackWriter::from_directory(component, handle).ok());
+    // Ownership of the Desktop bridge remains authoritative bundled mode, so
+    // the caller still suppresses legacy broad logging. With neither usable
+    // collector nor validated fallback authority, however, a degraded
+    // bootstrap must not create a producer boot, queue, timer, HTTP client,
+    // bridge thread, tracing layer, or worker task.
+    if degraded.is_some() && fallback.is_none() {
+        return Err(InstallError::BootstrapInvalid);
+    }
+    let producer_boot_id = uuid::Uuid::new_v4().to_string();
+    let factory = RecordFactory::new(component, release, environment, producer_boot_id.clone())
+        .map_err(|_| InstallError::BootstrapInvalid)?;
     let collector = match initial_state {
         InitialCollectorState::Ready(generation) => {
             CollectorAvailability::Ready(Arc::new(generation))
@@ -164,8 +211,6 @@ pub(crate) fn install(
             CollectorAvailability::Unavailable { generation }
         }
     };
-    let fallback =
-        fallback_handle.and_then(|handle| FallbackWriter::from_directory(component, handle).ok());
     let inner = Arc::new(ProducerInner {
         component,
         producer_boot_id,
@@ -181,10 +226,18 @@ pub(crate) fn install(
             collector,
             pressure: PressureSuppression::Normal,
             terminal: false,
+            parent_shutdown_observed: false,
+            parent_flush_observed: false,
+            terminal_deadline: None,
+            parent_flush_snapshot: None,
             delivery_fence_eligible: true,
             dropped: BoundedLossCounters::default(),
             last_failure: None,
             fallback_routed: 0,
+            pending_loss: BoundedLossCounters::default(),
+            pending_loss_total: 0,
+            pending_loss_range: PendingLossRange::Empty,
+            open_loss_snapshot: None,
         }),
         fallback: Mutex::new(fallback),
         notify: tokio::sync::Notify::new(),
@@ -225,75 +278,7 @@ impl DiagnosticsProducerHandle {
     }
 
     pub(crate) fn try_emit(&self, input: crate::DetailedDiagnosticInput) -> EmitDisposition {
-        let prepared = match self.inner.factory.prepare(input) {
-            Ok(prepared) => prepared,
-            Err(()) => {
-                self.inner
-                    .record_loss(ProducerFailureClassification::FilterInvalid);
-                return EmitDisposition::Dropped(ProducerFailureClassification::FilterInvalid);
-            }
-        };
-        let mut state = self
-            .inner
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        if state.terminal {
-            return EmitDisposition::Inactive;
-        }
-        let Some(sequence) = state.next_sequence else {
-            state.record_loss(ProducerFailureClassification::SequenceExhausted);
-            return EmitDisposition::Dropped(ProducerFailureClassification::SequenceExhausted);
-        };
-        let record = match self.inner.factory.build(&prepared, sequence) {
-            Ok(record) => record,
-            Err(()) => {
-                state.record_loss(ProducerFailureClassification::FilterInvalid);
-                return EmitDisposition::Dropped(ProducerFailureClassification::FilterInvalid);
-            }
-        };
-        state.last_assigned_sequence = Some(sequence);
-        state.next_sequence = sequence
-            .checked_add(1)
-            .filter(|value| *value <= MAX_SAFE_INTEGER);
-        let protected = matches!(record.severity, SeverityV1::Warn | SeverityV1::Error)
-            || record.detailed.as_ref().is_some_and(|detail| {
-                matches!(
-                    detail.kind,
-                    proliferate_diagnostics_protocol::v1::types::DetailedKindV1::LossSummary
-                )
-            });
-        if state.pressure_suppresses(record.severity, Instant::now(), protected) {
-            state.record_loss(ProducerFailureClassification::Pressure);
-            return EmitDisposition::Dropped(ProducerFailureClassification::Pressure);
-        }
-        let serialized_bytes = match serde_json::to_vec(&record) {
-            Ok(value) => value.len(),
-            Err(_) => {
-                state.record_loss(ProducerFailureClassification::FilterInvalid);
-                return EmitDisposition::Dropped(ProducerFailureClassification::FilterInvalid);
-            }
-        };
-        let fallback_reason = state.route_for_current_collector();
-        if let Err(reason) = state.make_capacity(serialized_bytes, protected) {
-            state.record_loss(reason);
-            return EmitDisposition::Dropped(reason);
-        }
-        state.resident_bytes += serialized_bytes;
-        if !protected {
-            state.ordinary_records += 1;
-            state.ordinary_bytes += serialized_bytes;
-        }
-        state.queue.push_back(ResidentRecord {
-            record,
-            serialized_bytes,
-            protected,
-            fallback_reason,
-            admitted_at: Instant::now(),
-        });
-        drop(state);
-        self.inner.notify.notify_one();
-        EmitDisposition::Admitted
+        self.inner.try_emit_inner(input, false)
     }
 
     pub fn status_snapshot(&self) -> ProducerStatusSnapshot {
@@ -303,34 +288,42 @@ impl DiagnosticsProducerHandle {
 
 impl DiagnosticsProducerGuard {
     pub(crate) async fn shutdown_inner(mut self, deadline: Duration) -> ProducerStatusSnapshot {
-        let absolute_deadline = tokio::time::Instant::now() + deadline;
-        {
-            let mut state = self
-                .inner
-                .state
-                .lock()
-                .unwrap_or_else(|error| error.into_inner());
-            state.terminal = true;
-            for record in &mut state.queue {
-                record.fallback_reason = Some(FallbackReason::FinalTeardown);
-            }
-        }
+        let absolute_deadline = self.inner.begin_guard_shutdown(deadline);
         self.inner.notify.notify_one();
         if let Some(mut join) = self.join.take() {
-            let remaining =
-                absolute_deadline.saturating_duration_since(tokio::time::Instant::now());
-            if tokio::time::timeout(remaining, &mut join).await.is_err() {
-                join.abort();
-                self.inner
-                    .record_loss(ProducerFailureClassification::ShutdownTimeout);
+            loop {
+                if join.is_finished() {
+                    let _ = join.await;
+                    break;
+                }
+                let Some(deadline) = self.inner.guard_deadline(absolute_deadline) else {
+                    // The parent signal owns shutdown but carries no clock.
+                    // Do not invent a new wait while a flush/terminal frame
+                    // crossing this return can still win on the bridge.
+                    join.abort();
+                    self.inner.discard_resident_on_shutdown_timeout();
+                    break;
+                };
+                let remaining = deadline.saturating_duration_since(TokioInstant::now());
+                if remaining.is_zero() {
+                    join.abort();
+                    self.inner.discard_resident_on_shutdown_timeout();
+                    break;
+                }
+                tokio::time::sleep(remaining.min(Duration::from_millis(5))).await;
             }
         }
-        let snapshot = self.inner.snapshot();
+        let snapshot = self
+            .inner
+            .parent_flush_snapshot()
+            .unwrap_or_else(|| self.inner.snapshot());
         #[cfg(unix)]
-        if let Some(bridge) = self.bridge.as_mut() {
-            let remaining =
-                absolute_deadline.saturating_duration_since(tokio::time::Instant::now());
-            bridge.send_terminal(remaining);
+        if !self.inner.parent_flush_observed() {
+            if let Some(bridge) = self.bridge.as_mut() {
+                let remaining =
+                    absolute_deadline.saturating_duration_since(tokio::time::Instant::now());
+                bridge.send_terminal(remaining);
+            }
         }
         snapshot
     }
@@ -340,9 +333,6 @@ impl Drop for DiagnosticsProducerGuard {
     fn drop(&mut self) {
         if let Ok(mut state) = self.inner.state.lock() {
             state.terminal = true;
-            for record in &mut state.queue {
-                record.fallback_reason = Some(FallbackReason::FinalTeardown);
-            }
         }
         self.inner.notify.notify_one();
         #[cfg(unix)]
@@ -359,12 +349,16 @@ impl ProducerInner {
     }
 
     pub(crate) fn snapshot(&self) -> ProducerStatusSnapshot {
-        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        let fallback = self
+        // The writer holds this mutex across bounded disk I/O. Never hold the
+        // admission mutex while waiting for it: tracing callers need the
+        // admission critical section even when fallback storage is slow.
+        let fallback_status = self
             .fallback
             .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        let fallback_status = fallback.as_ref().map(FallbackWriter::current_status);
+            .unwrap_or_else(|error| error.into_inner())
+            .as_ref()
+            .map(FallbackWriter::current_status);
+        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         ProducerStatusSnapshot {
             component: self.component.protocol_component(),
             producer_boot_id: self.producer_boot_id.clone(),
@@ -446,18 +440,47 @@ impl ProducerInner {
     }
 
     #[cfg(unix)]
-    pub(crate) fn arm_terminal(&self) {
+    pub(crate) fn arm_parent_shutdown(&self) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         state.terminal = true;
-        for record in &mut state.queue {
-            record.fallback_reason = Some(FallbackReason::FinalTeardown);
+        state.parent_shutdown_observed = true;
+        // A natural guard may already have installed its independent budget.
+        // The parent signal transfers clock ownership immediately; dispatch
+        // pauses until the request supplies the parent's remaining window.
+        state.terminal_deadline = None;
+        drop(state);
+        self.notify.notify_one();
+    }
+
+    /// Permanent bridge loss: no strictly newer generation can ever arrive, so
+    /// the sentinel generation latches the producer unavailable. Queued records
+    /// keep their existing routing; the worker assigns `collector_unavailable`
+    /// when it drains them.
+    #[cfg(unix)]
+    pub(crate) fn mark_bridge_lost(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if matches!(
+            &state.collector,
+            CollectorAvailability::Unavailable { generation } if *generation == MAX_SAFE_INTEGER
+        ) {
+            return;
+        }
+        state.collector = CollectorAvailability::Unavailable {
+            generation: MAX_SAFE_INTEGER,
+        };
+        if !state.in_flight.is_empty() {
+            state.delivery_fence_eligible = false;
         }
         drop(state);
         self.notify.notify_one();
     }
 
+    /// Waits for residency to drain within the deadline. Records still
+    /// resident afterwards are not losses: they either keep draining, ride the
+    /// terminal teardown, or are counted by the shutdown-timeout discard.
     #[cfg(unix)]
     pub(crate) async fn flush_until(&self, deadline: Duration) -> ProducerStatusSnapshot {
+        self.begin_parent_flush(deadline);
         self.notify.notify_one();
         let wait = async {
             loop {
@@ -471,10 +494,11 @@ impl ProducerInner {
                 tokio::time::sleep(Duration::from_millis(5)).await;
             }
         };
-        if tokio::time::timeout(deadline, wait).await.is_err() {
-            self.record_loss(ProducerFailureClassification::ShutdownTimeout);
-        }
-        self.snapshot()
+        let absolute_deadline = self.terminal_deadline().unwrap_or_else(TokioInstant::now);
+        let _ = tokio::time::timeout_at(absolute_deadline, wait).await;
+        let snapshot = self.snapshot();
+        self.finish_parent_flush(snapshot.clone());
+        snapshot
     }
 
     #[cfg(unix)]
@@ -493,5 +517,79 @@ impl ProducerInner {
             generation: generation.generation,
             last_assigned_sequence: state.last_assigned_sequence,
         })
+    }
+
+    fn begin_guard_shutdown(&self, deadline: Duration) -> TokioInstant {
+        let now = TokioInstant::now();
+        let proposed = now + deadline;
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        state.terminal = true;
+        let absolute = if state.parent_shutdown_observed {
+            state.terminal_deadline.unwrap_or(now)
+        } else {
+            let absolute = state
+                .terminal_deadline
+                .map_or(proposed, |current| current.min(proposed));
+            state.terminal_deadline = Some(absolute);
+            absolute
+        };
+        absolute
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn begin_parent_flush(&self, remaining: Duration) {
+        let proposed = TokioInstant::now() + remaining;
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        state.terminal = true;
+        state.parent_shutdown_observed = true;
+        state.parent_flush_observed = true;
+        state.terminal_deadline = Some(
+            state
+                .terminal_deadline
+                .map_or(proposed, |current| current.min(proposed)),
+        );
+    }
+
+    fn terminal_deadline(&self) -> Option<TokioInstant> {
+        self.state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .terminal_deadline
+    }
+
+    #[cfg(unix)]
+    fn finish_parent_flush(&self, snapshot: ProducerStatusSnapshot) {
+        self.state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .parent_flush_snapshot = Some(snapshot);
+    }
+
+    fn parent_flush_snapshot(&self) -> Option<ProducerStatusSnapshot> {
+        self.state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .parent_flush_snapshot
+            .clone()
+    }
+
+    fn parent_flush_observed(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .parent_flush_observed
+    }
+
+    fn guard_deadline(&self, natural_deadline: TokioInstant) -> Option<TokioInstant> {
+        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if state.parent_shutdown_observed {
+            state.terminal_deadline
+        } else {
+            Some(
+                state
+                    .terminal_deadline
+                    .map_or(natural_deadline, |deadline| deadline.min(natural_deadline)),
+            )
+        }
     }
 }

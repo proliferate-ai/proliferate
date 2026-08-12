@@ -1,4 +1,5 @@
 use std::{collections::BTreeSet, fmt, sync::Arc, time::Duration};
+use tokio::time::Instant;
 
 use proliferate_diagnostics_protocol::v1::{
     limits::CURRENT_SCHEMA_VERSION,
@@ -11,7 +12,7 @@ use reqwest::{
 };
 use zeroize::Zeroizing;
 
-const TRANSPORT_DEADLINE: Duration = Duration::from_millis(500);
+pub(super) const TRANSPORT_DEADLINE: Duration = Duration::from_millis(500);
 const MAX_RECEIPT_BYTES: usize = 65_536;
 
 struct SecretCapability(Zeroizing<String>);
@@ -75,6 +76,7 @@ impl CollectorClient {
     pub(crate) async fn ingest(
         &self,
         records: Vec<proliferate_diagnostics_protocol::v1::types::ProducerRecordV1>,
+        shared_deadline: Option<Instant>,
     ) -> Result<IngestReceiptV1, TransportFailure> {
         let batch = IngestBatchV1 {
             schema_version: CURRENT_SCHEMA_VERSION,
@@ -100,7 +102,8 @@ impl CollectorClient {
             )
             .header(CONTENT_TYPE, "application/json")
             .body(body);
-        let result = tokio::time::timeout(TRANSPORT_DEADLINE, async {
+        let deadline = transport_deadline_at(Instant::now(), shared_deadline);
+        let result = tokio::time::timeout_at(deadline, async {
             let response = request
                 .send()
                 .await
@@ -137,6 +140,12 @@ impl CollectorClient {
         .await;
         result.unwrap_or_else(|_| Err(TransportFailure::dispatched(TransportError::Deadline)))
     }
+}
+
+pub(super) fn transport_deadline_at(now: Instant, shared_deadline: Option<Instant>) -> Instant {
+    shared_deadline.map_or(now + TRANSPORT_DEADLINE, |deadline| {
+        deadline.min(now + TRANSPORT_DEADLINE)
+    })
 }
 
 fn validate_receipt(
@@ -194,7 +203,7 @@ impl TransportFailure {
         }
     }
 
-    fn dispatched(error: TransportError) -> Self {
+    pub(super) fn dispatched(error: TransportError) -> Self {
         Self {
             error,
             dispatched: true,

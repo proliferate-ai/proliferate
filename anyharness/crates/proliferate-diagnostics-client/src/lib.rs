@@ -139,7 +139,7 @@ impl DiagnosticsProducerHandle {
     }
 
     pub fn new_operation_context(&self, mut seed: DiagnosticCorrelation) -> DiagnosticCorrelation {
-        if !producer::record::valid_id(seed.operation_id.as_deref()) {
+        if seed.operation_id.is_none() {
             seed.operation_id = Some(uuid::Uuid::new_v4().to_string());
         }
         seed

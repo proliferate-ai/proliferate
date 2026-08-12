@@ -1,5 +1,6 @@
 pub(crate) mod artifact;
 pub mod broker;
+pub(crate) mod child_bridge;
 pub(crate) mod client;
 pub(crate) mod fallback;
 #[cfg(test)]

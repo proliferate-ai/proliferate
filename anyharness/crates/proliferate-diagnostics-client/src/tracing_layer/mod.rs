@@ -1,5 +1,6 @@
 use std::{cell::Cell, sync::Arc};
 
+use proliferate_diagnostics_protocol::v1::limits::MAX_ARGUMENTS;
 use proliferate_diagnostics_protocol::v1::types::{
     ArgumentValueV1, DetailedKindV1, SeverityV1, StandardStreamV1,
 };
@@ -171,6 +172,7 @@ where
                 value: ArgumentValueV1::Integer(i64::from(line)),
             });
         }
+        let arguments = bound_tracing_arguments(arguments);
         let input = DetailedDiagnosticInput {
             name: name.into(),
             severity: map_level(metadata.level()),
@@ -202,6 +204,20 @@ fn push_metadata(arguments: &mut Vec<DiagnosticArgument>, name: &'static str, va
     });
 }
 
+fn bound_tracing_arguments(mut arguments: Vec<DiagnosticArgument>) -> Vec<DiagnosticArgument> {
+    if arguments.len() <= MAX_ARGUMENTS {
+        return arguments;
+    }
+    let dropped = arguments.len().saturating_sub(MAX_ARGUMENTS - 1);
+    arguments.truncate(MAX_ARGUMENTS - 1);
+    arguments.push(DiagnosticArgument {
+        name: "diagnostics.arguments_truncated".into(),
+        privacy: DiagnosticPrivacy::Operational,
+        value: ArgumentValueV1::Integer(i64::try_from(dropped).unwrap_or(i64::MAX)),
+    });
+    arguments
+}
+
 fn map_level(level: &tracing::Level) -> SeverityV1 {
     match *level {
         tracing::Level::TRACE => SeverityV1::Trace,
@@ -223,4 +239,27 @@ pub(crate) fn with_suppression<T>(operation: impl FnOnce() -> T) -> T {
 
 fn suppressed() -> bool {
     SUPPRESSED.with(Cell::get)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tracing_arguments_are_bounded_with_structural_loss_evidence() {
+        let arguments = (0..(MAX_ARGUMENTS + 7))
+            .map(|index| DiagnosticArgument {
+                name: format!("field.{index}").into(),
+                privacy: DiagnosticPrivacy::Operational,
+                value: ArgumentValueV1::Integer(index as i64),
+            })
+            .collect();
+
+        let bounded = bound_tracing_arguments(arguments);
+
+        assert_eq!(bounded.len(), MAX_ARGUMENTS);
+        let marker = bounded.last().expect("truncation marker");
+        assert_eq!(marker.name, "diagnostics.arguments_truncated");
+        assert_eq!(marker.value, ArgumentValueV1::Integer(8));
+    }
 }

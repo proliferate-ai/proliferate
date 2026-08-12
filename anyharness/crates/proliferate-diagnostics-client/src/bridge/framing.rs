@@ -138,10 +138,11 @@ mod unix {
         if received < 0 {
             return Err(FrameError::Io);
         }
-        if message.msg_flags & libc::MSG_CTRUNC != 0 {
-            return Err(FrameError::Invalid);
-        }
-        let descriptors = collect_descriptors(&message)?;
+        // `recvmsg` has already installed every delivered `SCM_RIGHTS` entry
+        // in this process. Wrap all of them before evaluating any rejection so
+        // truncated or otherwise malformed ancillary data cannot leak a raw
+        // descriptor on the error path.
+        let descriptors = collect_descriptors(&message, message.msg_flags & libc::MSG_CTRUNC != 0)?;
         let received = received as usize;
         if received < header.len() {
             stream
@@ -160,48 +161,67 @@ mod unix {
         Ok(ReceivedFrame { frame, descriptors })
     }
 
-    fn collect_descriptors(message: &libc::msghdr) -> Result<Vec<OwnedFd>, FrameError> {
+    fn collect_descriptors(
+        message: &libc::msghdr,
+        control_truncated: bool,
+    ) -> Result<Vec<OwnedFd>, FrameError> {
         let mut output = Vec::new();
+        let mut invalid = control_truncated;
+        let mut io_failed = false;
         unsafe {
             let mut cmsg = libc::CMSG_FIRSTHDR(message);
             while !cmsg.is_null() {
                 if (*cmsg).cmsg_level != libc::SOL_SOCKET || (*cmsg).cmsg_type != libc::SCM_RIGHTS {
-                    return Err(FrameError::Invalid);
-                }
-                let header_len = libc::CMSG_LEN(0) as usize;
-                if (*cmsg).cmsg_len < header_len as _ {
-                    return Err(FrameError::Invalid);
-                }
-                let bytes = (*cmsg).cmsg_len as usize - header_len;
-                if bytes % size_of::<RawFd>() != 0 {
-                    return Err(FrameError::Invalid);
-                }
-                let count = bytes / size_of::<RawFd>();
-                let values =
-                    std::slice::from_raw_parts(libc::CMSG_DATA(cmsg).cast::<RawFd>(), count);
-                for raw in values {
-                    let descriptor = OwnedFd::from_raw_fd(*raw);
-                    let flags = libc::fcntl(descriptor.as_raw_fd(), libc::F_GETFD);
-                    if flags < 0
-                        || libc::fcntl(
-                            descriptor.as_raw_fd(),
-                            libc::F_SETFD,
-                            flags | libc::FD_CLOEXEC,
-                        ) < 0
-                    {
-                        return Err(FrameError::Io);
+                    invalid = true;
+                } else {
+                    let header_len = libc::CMSG_LEN(0) as usize;
+                    if (*cmsg).cmsg_len < header_len as _ {
+                        invalid = true;
+                    } else {
+                        let bytes = (*cmsg).cmsg_len as usize - header_len;
+                        if bytes % size_of::<RawFd>() != 0 {
+                            invalid = true;
+                        }
+                        let count = bytes / size_of::<RawFd>();
+                        let values = std::slice::from_raw_parts(
+                            libc::CMSG_DATA(cmsg).cast::<RawFd>(),
+                            count,
+                        );
+                        for raw in values {
+                            let descriptor = OwnedFd::from_raw_fd(*raw);
+                            let flags = libc::fcntl(descriptor.as_raw_fd(), libc::F_GETFD);
+                            if flags < 0
+                                || libc::fcntl(
+                                    descriptor.as_raw_fd(),
+                                    libc::F_SETFD,
+                                    flags | libc::FD_CLOEXEC,
+                                ) < 0
+                            {
+                                io_failed = true;
+                            }
+                            output.push(descriptor);
+                        }
                     }
-                    output.push(descriptor);
                 }
                 cmsg = libc::CMSG_NXTHDR(message, cmsg);
             }
         }
         if output.len() > MAX_CHILD_BRIDGE_ANCILLARY_FDS {
-            return Err(FrameError::Invalid);
+            invalid = true;
         }
-        Ok(output)
+        if io_failed {
+            Err(FrameError::Io)
+        } else if invalid {
+            Err(FrameError::Invalid)
+        } else {
+            Ok(output)
+        }
     }
 }
 
 #[cfg(unix)]
 pub use unix::{receive_frame, send_frame, ReceivedFrame};
+
+#[cfg(test)]
+#[path = "framing_tests.rs"]
+mod tests;

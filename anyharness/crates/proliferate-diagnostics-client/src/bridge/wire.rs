@@ -119,6 +119,7 @@ pub enum ParentFrame {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DeliveryFence {
     pub producer_boot_id: String,
     pub collector_boot_id: String,
@@ -182,3 +183,7 @@ pub fn parent_frame_fd_count(frame: &ParentFrame) -> usize {
 pub fn valid_protocol_version(version: u16) -> bool {
     version == CHILD_BRIDGE_PROTOCOL_VERSION
 }
+
+#[cfg(test)]
+#[path = "wire_tests.rs"]
+mod tests;

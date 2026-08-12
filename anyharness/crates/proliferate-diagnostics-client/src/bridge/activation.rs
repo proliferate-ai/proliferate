@@ -476,3 +476,19 @@ mod platform {
         DesktopDiagnosticsActivation::Disabled
     }
 }
+
+#[cfg(all(
+    test,
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+#[path = "activation_tests.rs"]
+mod tests;
+
+#[cfg(all(
+    test,
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+#[path = "activation_parse_tests.rs"]
+mod parse_tests;
