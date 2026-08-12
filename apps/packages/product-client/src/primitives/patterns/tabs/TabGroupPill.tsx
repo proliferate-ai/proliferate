@@ -1,15 +1,23 @@
 import type { CSSProperties } from "react";
 import { Button } from "#product/primitives/Button";
 
+/**
+ * The tabs kit's group pill: the collapse/expand affordance that heads a run
+ * of grouped tabs. `tone="filled"` paints the pill in the caller's `color`
+ * (the shape a named, colored group takes); `tone="outline"` is the bordered
+ * neutral pill.
+ *
+ * incubating: shell slice adopts, wave 2
+ */
 export function TabGroupPill({
-  groupKind,
+  tone,
   label,
   color,
   width,
   isCollapsed,
   onToggle,
 }: {
-  groupKind: "manual" | "subagent";
+  tone: "filled" | "outline";
   label: string;
   color: string | null;
   width: number;
@@ -18,14 +26,14 @@ export function TabGroupPill({
 }) {
   const style = {
     width,
-    ...(groupKind === "manual" && color
+    ...(tone === "filled" && color
       ? {
         backgroundColor: color,
         color: "var(--color-background)",
       }
       : {}),
   } as CSSProperties;
-  const className = groupKind === "manual"
+  const className = tone === "filled"
     ? "h-5 min-w-0 justify-center rounded-full border-0 px-1 py-0 text-ui font-semibold hover:opacity-90"
     : "h-5 min-w-0 justify-center rounded-full border border-border/70 bg-foreground/5 px-1 py-0 text-ui font-medium text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active";
 

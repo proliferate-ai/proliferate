@@ -33,6 +33,9 @@ import { Switch } from "#product/primitives/Switch";
 import { Home } from "#product/primitives/icons/platform";
 import { Trash } from "#product/primitives/icons/core";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
+// The tabs kit is a pattern subdirectory, so its demos live beside it in their
+// own module and spread into this tier's entries.
+import { TABS_KIT_ENTRIES } from "./tabs";
 import type { LibraryEntry, LibraryTier } from "./types";
 
 function CommandPaletteDemo() {
@@ -350,6 +353,7 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
   { name: "SidebarActionButton", subpath: "#product/primitives/patterns/sidebar/SidebarActionButton", render: SidebarActionButtonDemo },
   { name: "SidebarNavRow", subpath: "#product/primitives/patterns/sidebar/SidebarNavRow", render: SidebarNavRowDemo },
   { name: "SidebarRowSurface", subpath: "#product/primitives/patterns/sidebar/SidebarRowSurface", render: SidebarRowSurfaceDemo },
+  ...TABS_KIT_ENTRIES,
   { name: "ThinkingText", subpath: "#product/primitives/patterns/ThinkingText", render: () => <ThinkingText /> },
   { name: "ToastHost", subpath: "#product/primitives/patterns/toast/ToastHost", render: ToastHostDemo },
 ];

@@ -10,7 +10,7 @@ import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
 import { TypewriterRevealText } from "#product/primitives/TypewriterRevealText";
 import { X } from "#product/primitives/icons/core";
 
-interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> {
+interface ChromeTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> {
   isActive: boolean;
   isMultiSelected?: boolean;
   width: number;
@@ -25,14 +25,25 @@ interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "
   badge?: ReactNode;
   shortcutLabel?: string | null;
   shortcutRevealVisible?: boolean;
+  /** Accepted and ignored today: the grouped/divider treatment these four
+   *  describe is not painted by this component. Carried across the promotion
+   *  unchanged so the strip's call sites keep compiling; the shell slice
+   *  either wires them up or drops them. */
   groupColor?: string | null;
   isChild?: boolean;
   hideLeftDivider?: boolean;
   hideRightDivider?: boolean;
 }
 
-export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabProps>(
-  function ChromeWorkspaceTab({
+/**
+ * The tabs kit's chrome-style tab: full-height surface, truncating label,
+ * trailing status slot, hover-revealed close, active underline. Slots take
+ * ReactNodes (`badge`) and the strip that owns it supplies geometry (`width`).
+ *
+ * incubating: shell slice adopts, wave 2
+ */
+export const ChromeTab = forwardRef<HTMLDivElement, ChromeTabProps>(
+  function ChromeTab({
     isActive,
     isMultiSelected = false,
     width,
