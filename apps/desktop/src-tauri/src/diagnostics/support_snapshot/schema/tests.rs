@@ -352,6 +352,8 @@ fn projected_json_values_enforce_scrub_bounds() {
 mod aggregate_tests;
 #[path = "tests/evidence.rs"]
 mod evidence_tests;
+#[path = "tests/gap_prefix.rs"]
+mod gap_prefix_tests;
 #[path = "tests/literals.rs"]
 mod literal_tests;
 #[path = "tests/manifest_residuals.rs"]

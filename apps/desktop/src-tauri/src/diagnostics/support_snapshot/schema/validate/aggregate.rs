@@ -9,7 +9,7 @@ use super::super::enums::{
     SupportSessionOmissionReasonV1, SupportSessionSelectionV1, SupportSourceManifestSourceV1,
     SupportSourceStateV1,
 };
-use super::super::limits::PACKAGE_BYTES;
+use super::super::limits::{MAX_GAP_ENTRIES, PACKAGE_BYTES};
 use super::super::model::evidence::SupportFallbackComponentV1;
 use super::super::model::health::SupportTauriProducerHealthV1;
 use super::super::model::manifest::{SupportSessionCollectionManifestV1, SupportSourceManifestV1};
@@ -275,7 +275,12 @@ fn validate_collector_relationships(
     snapshot: &SupportSnapshotV3,
 ) -> Result<(), SupportSchemaError> {
     let collector = &snapshot.collector;
-    if collector.coverage != snapshot.manifest.collector || collector.gaps != snapshot.manifest.gaps
+    let retained_gaps = collector.gaps.len().min(MAX_GAP_ENTRIES);
+    let additional_gaps = u64::try_from(collector.gaps.len() - retained_gaps)
+        .map_err(|_| SupportSchemaError::UnsafeInteger)?;
+    if collector.coverage != snapshot.manifest.collector
+        || collector.gaps[..retained_gaps] != snapshot.manifest.gaps
+        || snapshot.manifest.additional_entries.gaps != additional_gaps
     {
         return Err(SupportSchemaError::InvariantViolation(
             "manifest collector/gap preservation",

@@ -1,7 +1,7 @@
-//! Consented support snapshot (PR 6). This slice owns only the exact
-//! schema-3 model, validation foundation, native artifact store, and
-//! purpose-specific pure support-export scrubber.
+//! Consented support snapshot (PR 6): exact schema, pure scrub/assembly, and
+//! the native durable artifact store.
 
+pub mod assembly;
 pub(crate) mod artifact_store;
 pub mod schema;
 pub mod scrub;
