@@ -13,7 +13,7 @@ use reqwest::{
 use zeroize::Zeroizing;
 
 pub(super) const TRANSPORT_DEADLINE: Duration = Duration::from_millis(500);
-const MAX_RECEIPT_BYTES: usize = 65_536;
+pub(super) const MAX_RECEIPT_BYTES: usize = 65_536;
 
 struct SecretCapability(Zeroizing<String>);
 
@@ -104,7 +104,7 @@ impl CollectorClient {
             .body(body);
         let deadline = transport_deadline_at(Instant::now(), shared_deadline);
         let result = tokio::time::timeout_at(deadline, async {
-            let response = request
+            let mut response = request
                 .send()
                 .await
                 .map_err(|_| TransportFailure::dispatched(TransportError::Unavailable))?;
@@ -124,12 +124,22 @@ impl CollectorClient {
             {
                 return Err(TransportFailure::dispatched(TransportError::Protocol));
             }
-            let bytes = response
-                .bytes()
+            let mut bytes = Vec::with_capacity(
+                response
+                    .content_length()
+                    .unwrap_or_default()
+                    .min(MAX_RECEIPT_BYTES as u64) as usize,
+            );
+            while let Some(chunk) = response
+                .chunk()
                 .await
-                .map_err(|_| TransportFailure::dispatched(TransportError::Unavailable))?;
-            if bytes.len() > MAX_RECEIPT_BYTES {
-                return Err(TransportFailure::dispatched(TransportError::Protocol));
+                .map_err(|_| TransportFailure::dispatched(TransportError::Unavailable))?
+            {
+                let remaining = MAX_RECEIPT_BYTES - bytes.len();
+                if chunk.len() > remaining {
+                    return Err(TransportFailure::dispatched(TransportError::Protocol));
+                }
+                bytes.extend_from_slice(&chunk);
             }
             let receipt: IngestReceiptV1 = serde_json::from_slice(&bytes)
                 .map_err(|_| TransportFailure::dispatched(TransportError::Protocol))?;

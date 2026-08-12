@@ -7,12 +7,19 @@ use std::{
     time::{Duration, Instant},
 };
 
+use proliferate_diagnostics_protocol::v1::types::ProducerRecordV1;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+};
+
 use super::status::ProducerCollectorState;
 use super::tests_support::{
-    accepted_receipt, drained, dropped, emit, ordinary, producer, queued_sequences,
+    accepted_receipt, drained, dropped, emit, ordinary, producer, queued_records, queued_sequences,
     refused_generation, settle, spawn_worker, wait_for, with_state, CollectorFixture,
     FixtureResponse, TEST_COLLECTOR_BOOT,
 };
+use super::transport::{CollectorClient, TransportError, MAX_RECEIPT_BYTES};
 use super::{CollectorAvailability, ProducerInner, CIRCUIT_INTERVAL};
 use crate::{DiagnosticsComponent, EmitDisposition};
 
@@ -21,6 +28,123 @@ const OTHER_COLLECTOR_BOOT: &str = "collector-boot-0002";
 #[test]
 fn frozen_circuit_interval() {
     assert_eq!(CIRCUIT_INTERVAL, Duration::from_secs(1));
+}
+
+fn one_transport_record() -> Vec<ProducerRecordV1> {
+    let inner = producer(
+        DiagnosticsComponent::AnyHarness,
+        CollectorAvailability::Unavailable { generation: 0 },
+        None,
+    );
+    assert_eq!(emit(&inner, ordinary("event")), EmitDisposition::Admitted);
+    queued_records(&inner)
+}
+
+async fn read_complete_request(stream: &mut TcpStream) {
+    let mut request = Vec::new();
+    loop {
+        if let Some(head_end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+            let head = String::from_utf8_lossy(&request[..head_end]);
+            let content_length = head
+                .lines()
+                .skip(1)
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.trim()
+                        .eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().ok())
+                        .flatten()
+                })
+                .expect("request content length");
+            if request.len() >= head_end + 4 + content_length {
+                return;
+            }
+        }
+        let mut chunk = [0_u8; 8_192];
+        let read = stream.read(&mut chunk).await.expect("read request");
+        assert_ne!(read, 0, "request closed before its complete body");
+        request.extend_from_slice(&chunk[..read]);
+    }
+}
+
+async fn write_chunk(stream: &mut TcpStream, bytes: &[u8]) {
+    let head = format!("{:x}\r\n", bytes.len());
+    stream
+        .write_all(head.as_bytes())
+        .await
+        .expect("write chunk head");
+    stream.write_all(bytes).await.expect("write chunk body");
+    stream.write_all(b"\r\n").await.expect("write chunk tail");
+}
+
+async fn chunked_endpoint(
+    body: Vec<u8>,
+    split_at: usize,
+    terminator_delay: Option<Duration>,
+) -> String {
+    assert!(split_at <= body.len());
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("loopback listener");
+    let port = listener.local_addr().expect("listener address").port();
+    tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.expect("accept request");
+        read_complete_request(&mut stream).await;
+        stream
+            .write_all(
+                b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ntransfer-encoding: chunked\r\nconnection: close\r\n\r\n",
+            )
+            .await
+            .expect("write response head");
+        write_chunk(&mut stream, &body[..split_at]).await;
+        write_chunk(&mut stream, &body[split_at..]).await;
+        stream.flush().await.expect("flush response chunks");
+        if let Some(delay) = terminator_delay {
+            tokio::time::sleep(delay).await;
+        }
+        let _ = stream.write_all(b"0\r\n\r\n").await;
+    });
+    format!("http://127.0.0.1:{port}/")
+}
+
+#[tokio::test]
+async fn exact_bound_chunked_receipt_without_content_length_is_accepted() {
+    let expected = accepted_receipt(TEST_COLLECTOR_BOOT, 1);
+    let mut body = serde_json::to_vec(&expected).expect("serializable receipt");
+    assert!(body.len() < MAX_RECEIPT_BYTES);
+    body.resize(MAX_RECEIPT_BYTES, b' ');
+    let endpoint = chunked_endpoint(body, MAX_RECEIPT_BYTES - 1, None).await;
+    let client =
+        CollectorClient::new(&endpoint, "test-capability".to_owned()).expect("collector client");
+
+    let receipt = client
+        .ingest(one_transport_record(), None)
+        .await
+        .expect("exact-bound receipt");
+
+    assert_eq!(receipt, expected);
+}
+
+#[tokio::test]
+async fn oversized_chunked_receipt_without_content_length_aborts_on_the_next_byte() {
+    let mut body = serde_json::to_vec(&accepted_receipt(TEST_COLLECTOR_BOOT, 1))
+        .expect("serializable receipt");
+    body.resize(MAX_RECEIPT_BYTES + 1, b' ');
+    let endpoint =
+        chunked_endpoint(body, MAX_RECEIPT_BYTES, Some(Duration::from_millis(900))).await;
+    let client =
+        CollectorClient::new(&endpoint, "test-capability".to_owned()).expect("collector client");
+
+    let failure = tokio::time::timeout(
+        Duration::from_millis(400),
+        client.ingest(one_transport_record(), None),
+    )
+    .await
+    .expect("the extra byte aborts before the delayed terminator")
+    .expect_err("oversized receipt must fail");
+
+    assert_eq!(failure.error, TransportError::Protocol);
+    assert!(failure.dispatched);
 }
 
 /// Reads the cooldown deadline currently latched on the producer.
