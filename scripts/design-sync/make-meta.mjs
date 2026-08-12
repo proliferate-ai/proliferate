@@ -151,7 +151,18 @@ async function computeRenderAndSourceKeys(entries) {
 }
 
 async function computeScriptsSha() {
-  const files = (await readdir(HERE)).filter((f) => f.endsWith(".mjs")).sort();
+  // Everything that shapes the payload bytes: top-level scripts, the React
+  // shims, the card/README templates, and the CSS inputs. Skips .out/.
+  const all = await readdir(HERE, { recursive: true });
+  const files = all
+    .filter((f) => !f.startsWith(".out"))
+    .filter(
+      (f) =>
+        f.endsWith(".mjs") ||
+        f.startsWith(`templates${path.sep}`) ||
+        f.startsWith(`css${path.sep}`),
+    )
+    .sort();
   const buffers = await Promise.all(files.map((f) => readFile(path.join(HERE, f))));
   return sha256_16(Buffer.concat(buffers));
 }

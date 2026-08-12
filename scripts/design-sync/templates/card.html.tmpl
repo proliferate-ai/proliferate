@@ -10,8 +10,8 @@
        column beside phantom empty columns */
     .ds-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;align-items:start}
     .ds-grid.ds-col{grid-template-columns:1fr}
-    .ds-cell{border:1px solid #e5e7eb;border-radius:8px;padding:12px;min-width:0;overflow:hidden;transform:translateZ(0)}
-    .ds-cell>h4{margin:0 0 8px;font:600 12px system-ui;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}
+    .ds-cell{border:1px solid var(--color-border,#e5e7eb);border-radius:8px;padding:12px;min-width:0;overflow:hidden;transform:translateZ(0)}
+    .ds-cell>h4{margin:0 0 8px;font:600 12px system-ui;color:var(--color-muted-foreground,#6b7280);text-transform:uppercase;letter-spacing:.04em}
     .ds-single{transform:translateZ(0)}
   </style>
 </head><body>

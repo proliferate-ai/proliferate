@@ -88,12 +88,15 @@ const ambiguousExportWarnings = warnings.filter(
     /re-exported/i.test(warning.message ?? ""),
 );
 if (ambiguousExportWarnings.length > 0) {
-  console.warn(
-    `build-bundle: ${ambiguousExportWarnings.length} ambiguous-export warning(s) from Rollup — pin these in make-entry.mjs's PIN_EXPORTS if the name matters:`,
+  console.error(
+    `build-bundle: ${ambiguousExportWarnings.length} ambiguous-export warning(s) from Rollup — pin these in make-entry.mjs's PIN_EXPORTS:`,
   );
   for (const warning of ambiguousExportWarnings) {
-    console.warn(`  - ${warning.message}`);
+    console.error(`  - ${warning.message}`);
   }
+  // An ambiguous export means Rollup silently drops the binding from the
+  // namespace — the component would ship broken, so refuse to build.
+  throw new Error("build-bundle: unresolved export collision(s), see above");
 }
 if (warnings.some((w) => /from "react"|from 'react'/.test(w.message ?? ""))) {
   console.warn("build-bundle: a warning mentioned a bare react import — verify the alias caught it.");
@@ -131,8 +134,11 @@ function sha256_12(buffer) {
 const components = [];
 const sourceHashes = {};
 for (const entry of registryEntries) {
-  const group = groupFor(entry.name, entry.tierId);
-  const sourcePath = `components/${group}/${entry.name}/${entry.name}.jsx`;
+  // Slash-bearing registry names (secrets/SecretManagementPanel) sanitize to
+  // their last segment for file paths — must match emit-cards/make-meta.
+  const displayName = entry.name.split("/").pop();
+  const group = groupFor(displayName, entry.tierId);
+  const sourcePath = `components/${group}/${displayName}/${displayName}.jsx`;
   components.push({ name: entry.name, sourcePath });
 
   const resolved = resolveSourceFile(entry.subpath);

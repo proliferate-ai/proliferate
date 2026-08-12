@@ -29,7 +29,7 @@ Vite lib-mode IIFE, global name `ProliferateUI`, entry = generated `.ds-entry.ts
 { shape: "registry", styleSha: sha256(_ds_bundle.css),
   renderHashes: { name -> sha256_16(demo-relevant source) },
   sourceKeys:   { name -> sha256_16(component source files) },
-  keyRecipe: 8, scriptsSha: sha256_16(concat of scripts/design-sync/*.mjs),
+  keyRecipe: 8, scriptsSha: sha256_16(concat of scripts/design-sync/**.mjs + templates/* + css/*),
   sourceHashes: { "components/<g>/<N>/<N>.jsx" -> sha256_12, ...(.prompt.md, .d.ts if present) },
   auxSha: sha256_16(README+styles+fonts.css), bundleSha12: sha256_12(_ds_bundle.js) }
 ```

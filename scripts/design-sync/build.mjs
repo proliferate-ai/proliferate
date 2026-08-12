@@ -32,11 +32,12 @@ const run = (cmd, args, opts = {}) => {
 
 const skipCheck = process.argv.includes("--no-check");
 
-if (!existsSync(join(repo, "apps/packages/design/dist/css/product.css"))) {
-  run("pnpm", ["--filter", "@proliferate/design", "build"], {
-    env: { ...process.env, COREPACK_ENABLE_STRICT: "0" },
-  });
-}
+// Always rebuild the design package: dist/ is the token authority for the
+// CSS stage, and a presence-only check would silently ship stale tokens
+// after a src/tokens.ts edit. The build is cheap (tsc + node scripts).
+run("pnpm", ["--filter", "@proliferate/design", "build"], {
+  env: { ...process.env, COREPACK_ENABLE_STRICT: "0" },
+});
 
 run("node", [join(here, "make-entry.mjs")]);
 run("node", [join(here, "build-vendor-react.mjs")]);

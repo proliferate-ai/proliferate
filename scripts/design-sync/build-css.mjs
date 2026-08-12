@@ -19,6 +19,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -72,30 +73,25 @@ function ensureDesignPackageBuilt() {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Resolve the Tailwind v4 Node API + oxide scanner from the pnpm store.
-//    Neither is a direct dependency anywhere reachable by normal `import`
-//    resolution (only @tailwindcss/vite, in apps/web, depends on them), so
-//    we locate their content-addressed store directories directly. Both are
-//    version-named (not hash-named) under node_modules/.pnpm.
+// 1. Resolve the Tailwind v4 Node API + oxide scanner through the real
+//    dependency graph: neither is a direct dependency anywhere reachable
+//    from this script, but @tailwindcss/vite (in apps/web) depends on both,
+//    so resolve THAT first and then resolve from its entry file. Survives
+//    version bumps and never guesses at pnpm store directory naming.
 // ---------------------------------------------------------------------------
 function resolveTailwindNodeApi() {
-  const pnpmDir = path.join(repoRoot, "node_modules/.pnpm");
-  if (!existsSync(pnpmDir)) {
-    throw new Error(`${pnpmDir} does not exist — has \`pnpm install\` finished?`);
-  }
-  const entries = readdirSync(pnpmDir);
-  const nodePkgDir = entries.find((e) => e.startsWith("@tailwindcss+node@"));
-  const oxidePkgDir = entries.find((e) => e.startsWith("@tailwindcss+oxide@"));
-  if (!nodePkgDir || !oxidePkgDir) {
+  try {
+    const fromWeb = createRequire(path.join(repoRoot, "apps/web/package.json"));
+    const fromVitePlugin = createRequire(fromWeb.resolve("@tailwindcss/vite"));
+    return {
+      nodeEntry: fromVitePlugin.resolve("@tailwindcss/node"),
+      oxideEntry: fromVitePlugin.resolve("@tailwindcss/oxide"),
+    };
+  } catch (err) {
     throw new Error(
-      `could not find @tailwindcss/node or @tailwindcss/oxide under ${pnpmDir} ` +
-        `(found @tailwindcss+node@*: ${nodePkgDir ?? "none"}, @tailwindcss+oxide@*: ${oxidePkgDir ?? "none"})`
+      `could not resolve @tailwindcss/node + @tailwindcss/oxide via apps/web's @tailwindcss/vite — has \`pnpm install\` finished? (${err.message})`
     );
   }
-  return {
-    nodeEntry: path.join(pnpmDir, nodePkgDir, "node_modules/@tailwindcss/node/dist/index.js"),
-    oxideEntry: path.join(pnpmDir, oxidePkgDir, "node_modules/@tailwindcss/oxide/index.js"),
-  };
 }
 
 // ---------------------------------------------------------------------------
