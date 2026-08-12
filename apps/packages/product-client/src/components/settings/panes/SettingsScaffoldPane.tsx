@@ -3,8 +3,8 @@ import {
   type SettingsScaffoldPageCopy,
   type SettingsScaffoldPageId,
 } from "#product/copy/settings/settings-scaffold-copy";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 
 interface SettingsScaffoldPaneProps {

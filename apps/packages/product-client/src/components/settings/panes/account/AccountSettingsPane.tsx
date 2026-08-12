@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { UserAvatar } from "#product/primitives/UserAvatar";
 
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import type { AccountProviderView } from "#product/lib/domain/auth/account-profile-presentation";
 import {

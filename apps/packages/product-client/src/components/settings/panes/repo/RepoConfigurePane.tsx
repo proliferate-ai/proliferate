@@ -3,9 +3,9 @@ import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHea
 import {
   SETTINGS_CONTROL_WIDTH_CLASS,
   SettingsRow,
-} from "#product/components/patterns/SettingsRow";
-import { SettingsSaveFooter } from "#product/components/patterns/SettingsSaveFooter";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+} from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsSaveFooter } from "#product/primitives/patterns/settings/SettingsSaveFooter";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import {
   EnvironmentSearchSelect,
   type EnvironmentSearchSelectOption,

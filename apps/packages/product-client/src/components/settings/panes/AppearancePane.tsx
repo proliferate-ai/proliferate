@@ -1,6 +1,6 @@
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsMenu } from "#product/primitives/patterns/SettingsMenu";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsMenu } from "#product/primitives/patterns/settings/SettingsMenu";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { Button } from "#product/primitives/Button";
 import { AppearanceCodePreview } from "#product/components/settings/panes/AppearanceCodePreview";

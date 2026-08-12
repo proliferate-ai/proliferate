@@ -7,7 +7,7 @@ import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { Select } from "#product/primitives/Select";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 
 export interface OrganizationSsoConnectionView {
   id: string;

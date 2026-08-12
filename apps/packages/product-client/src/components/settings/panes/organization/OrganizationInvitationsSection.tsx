@@ -1,7 +1,7 @@
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Copy, Plus } from "#product/primitives/icons/core";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { OrganizationSelectMenu } from "#product/components/settings/panes/organization/OrganizationSelectMenu";
 
 const INVITE_ROLE_OPTIONS = [

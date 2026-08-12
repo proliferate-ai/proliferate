@@ -6,8 +6,8 @@ import {
   type EnvironmentSearchSelectOption,
 } from "#product/primitives/patterns/EnvironmentSearchSelect";
 import { Input } from "#product/primitives/Input";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { ScriptBlock } from "#product/components/settings/panes/repo/ScriptBlock";
 
 export interface CloudEnvironmentConfigSectionProps {

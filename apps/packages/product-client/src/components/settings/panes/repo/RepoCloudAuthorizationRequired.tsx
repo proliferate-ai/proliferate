@@ -1,7 +1,7 @@
 import { Cloud } from "lucide-react";
 import { GitHub } from "#product/primitives/icons/platform";
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { Button } from "#product/primitives/Button";
 import type { GitHubRepoAuthorityAction } from "@proliferate/cloud-sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";

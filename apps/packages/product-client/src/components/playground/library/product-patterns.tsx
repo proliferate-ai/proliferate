@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   BillingBalanceNotice,
   BillingGateState,
@@ -7,14 +6,8 @@ import {
 import { ModelTable } from "#product/components/patterns/ModelTable";
 import { PrStatusDot } from "#product/components/patterns/PrStatusBadge";
 import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsSaveFooter } from "#product/components/patterns/SettingsSaveFooter";
-import { SettingsScopeTabs } from "#product/components/patterns/SettingsScopeTabs";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
-import { Switch } from "#product/primitives/Switch";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import type { LibraryEntry, LibraryTier } from "./types";
 
@@ -28,39 +21,6 @@ function ModelTableDemo() {
         enabled: true,
       }]}
       onToggle={noop}
-    />
-  );
-}
-
-function SettingsRowDemo() {
-  const [checked, setChecked] = useState(true);
-  return (
-    <SettingsRow label="Setting label" description="Setting description">
-      <Switch checked={checked} onChange={setChecked} />
-    </SettingsRow>
-  );
-}
-
-function SettingsSectionDemo() {
-  return (
-    <SettingsSection title="Section title" description="Section description">
-      <SettingsRow label="Row label" description="Row description">
-        <Switch checked onChange={noop} />
-      </SettingsRow>
-      <SettingsRow label="Another row">
-        <Switch checked={false} onChange={noop} />
-      </SettingsRow>
-    </SettingsSection>
-  );
-}
-
-function SettingsScopeTabsDemo() {
-  const [value, setValue] = useState("user");
-  return (
-    <SettingsScopeTabs
-      items={[{ id: "user", label: "User" }, { id: "org", label: "Org" }]}
-      value={value}
-      onChange={setValue}
     />
   );
 }
@@ -124,18 +84,9 @@ export const PRODUCT_PATTERNS_ENTRIES: LibraryEntry[] = [
     <PrStatusDot status={{ kind: "open", number: 42 }} />
   ) },
   { name: "ProductPageShell", subpath: "#product/components/patterns/ProductPageShell", render: ProductPageShellDemo },
-  { name: "SettingsEmptyState", subpath: "#product/components/patterns/SettingsEmptyState", render: () => (
-    <SettingsEmptyState title="No results" description="Nothing to show yet." size="compact" />
-  ) },
   { name: "SettingsPageHeader", subpath: "#product/components/patterns/SettingsPageHeader", render: () => (
     <SettingsPageHeader title="Settings" description="Page description" />
   ) },
-  { name: "SettingsRow", subpath: "#product/components/patterns/SettingsRow", render: SettingsRowDemo },
-  { name: "SettingsSaveFooter", subpath: "#product/components/patterns/SettingsSaveFooter", render: () => (
-    <SettingsSaveFooter onSave={noop} onRevert={noop} />
-  ) },
-  { name: "SettingsScopeTabs", subpath: "#product/components/patterns/SettingsScopeTabs", render: SettingsScopeTabsDemo },
-  { name: "SettingsSection", subpath: "#product/components/patterns/SettingsSection", render: SettingsSectionDemo },
   { name: "secrets/SecretManagementPanel", subpath: "#product/components/patterns/secrets/SecretManagementPanel", render: SecretManagementPanelDemo },
 ];
 
