@@ -12,7 +12,7 @@ use super::super::enums::{
 
 /// Desktop collector supervisor state as captured for support.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "state", rename_all = "snake_case")]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
 pub enum DesktopDiagnosticsSupervisorStateV1 {
     #[serde(rename_all = "camelCase")]
     Unsupported {
@@ -95,7 +95,7 @@ impl SupportLossCountsV1 {
 
 /// Child producer collector-connection state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SupportChildCollectorStateV1 {
     Unavailable,
     Cooldown,
@@ -129,7 +129,7 @@ pub struct SupportChildProducerSnapshotV1 {
 
 /// Child producer status: a concrete snapshot or an honest omission.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "state", rename_all = "snake_case")]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SupportChildProducerStatusV1 {
     #[serde(rename_all = "camelCase")]
     Available {
@@ -163,7 +163,7 @@ impl Default for SupportOmittedProducerStatusV1 {
 
 /// Tauri producer health: supervisor wrapper only, or an honest omission.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "state", rename_all = "snake_case")]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SupportTauriProducerHealthV1 {
     #[serde(rename_all = "camelCase")]
     SupervisorOnly {

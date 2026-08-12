@@ -81,7 +81,7 @@ pub struct SupportOpaqueFallbackLineV1 {
 
 /// Structured fallback evidence grouped by family.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "family", rename_all = "snake_case")]
+#[serde(tag = "family", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SupportFallbackComponentV1 {
     #[serde(rename_all = "camelCase")]
     Pr3DesktopNativeMixed {

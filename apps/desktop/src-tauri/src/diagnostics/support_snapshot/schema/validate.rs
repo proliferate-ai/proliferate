@@ -1,31 +1,31 @@
-//! Validation and bounds helpers for the schema-3 support snapshot.
+//! Validation for the schema-3 support snapshot.
 //!
-//! Serde derives establish shape (closed enums, deny-unknown-fields); this
-//! module enforces everything the type system cannot: JS-safe integers,
-//! finite numbers, byte bounds, pinned literals, and the fixed manifest
-//! collection caps.
+//! Serde establishes the closed wire shape. These validators additionally
+//! prove bounds, embedded protocol validity, deterministic ordering, and the
+//! aggregate relationships that make the manifest truthful.
 
 use std::fmt;
 
+use chrono::{DateTime, Utc};
+
 use super::limits::{
-    COLLECTOR_SCHEMA_MAJOR, CONTAINER_ITEMS, CONTENT_STRING_BYTES, COVERAGE_REQUEST_BYTE_LIMIT,
-    COVERAGE_REQUEST_RECORD_LIMIT, DEGRADATION_POLICY_VERSION, GENERIC_STRING_BYTES,
-    MANIFEST_SCHEMA_VERSION, MAX_GAP_ENTRIES, MAX_ID_BYTES, MAX_OMISSION_ENTRIES, MAX_SAFE_INTEGER,
-    MAX_SOURCE_ENTRIES, MAX_TRUNCATION_ENTRIES, NESTING_DEPTH, SESSIONS, SNAPSHOT_SCHEMA_VERSION,
+    CONTAINER_ITEMS, CONTENT_STRING_BYTES, GENERIC_STRING_BYTES, MAX_ID_BYTES, MAX_SAFE_INTEGER,
+    NESTING_DEPTH, SNAPSHOT_SCHEMA_VERSION,
 };
-use super::model::evidence::{
-    SupportCollectorCoverageV1, SupportCollectorEvidenceV1, SupportFallbackComponentV1,
-    SupportFallbackRecordV1, SupportLegacySourceV1, SupportOpaqueFallbackLineV1,
-    SupportSessionLedgerV1,
-};
-use super::model::health::{
-    DesktopDiagnosticsHealthV1, DesktopDiagnosticsSupervisorStateV1, SupportChildProducerStatusV1,
-    SupportTauriProducerHealthV1,
-};
-use super::model::manifest::{SupportSnapshotLimitsV1, SupportSnapshotManifestV1};
+use super::model::common::SupportJsonValueV1;
+use super::model::evidence::{SupportCollectorCoverageV1, SupportCollectorEvidenceV1};
+use super::model::manifest::SupportSnapshotManifestV1;
 use super::model::snapshot::SupportSnapshotV3;
 
-/// A concrete bounds or pinned-literal violation.
+mod aggregate;
+mod evidence;
+mod health;
+mod json_value;
+mod manifest;
+mod ordering;
+mod protocol;
+
+/// A concrete schema, bound, protocol, or aggregate-truth violation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SupportSchemaError {
     /// An integer exceeds the JS-safe range (2^53 - 1) or is negative.
@@ -38,7 +38,7 @@ pub enum SupportSchemaError {
     OversizedGenericString,
     /// A content string exceeds its byte bound.
     OversizedContentString,
-    /// A timestamp is not RFC 3339 UTC (`YYYY-MM-DDTHH:MM:SS[.fff]Z`).
+    /// A timestamp is not a real RFC 3339 UTC instant.
     InvalidTimestamp,
     /// A projected container exceeds the item cap.
     TooManyItems,
@@ -48,6 +48,12 @@ pub enum SupportSchemaError {
     CapExceeded(&'static str),
     /// A pinned literal field carries a value other than its literal.
     PinnedLiteralMismatch(&'static str),
+    /// An accepted diagnostics-protocol value fails its public validator.
+    InvalidProtocolValue(&'static str),
+    /// Two individually valid fields make an untruthful aggregate claim.
+    InvariantViolation(&'static str),
+    /// The complete artifact could not be encoded as JSON for byte proof.
+    SerializationFailed,
 }
 
 impl fmt::Display for SupportSchemaError {
@@ -58,11 +64,16 @@ impl fmt::Display for SupportSchemaError {
             Self::OversizedId => write!(f, "id/name/timestamp empty or over 128 UTF-8 bytes"),
             Self::OversizedGenericString => write!(f, "generic string over byte bound"),
             Self::OversizedContentString => write!(f, "content string over byte bound"),
-            Self::InvalidTimestamp => write!(f, "timestamp is not RFC 3339 UTC"),
+            Self::InvalidTimestamp => write!(f, "timestamp is not a real RFC 3339 UTC instant"),
             Self::TooManyItems => write!(f, "container exceeds item cap"),
             Self::TooDeep => write!(f, "value exceeds nesting depth cap"),
             Self::CapExceeded(what) => write!(f, "collection cap exceeded: {what}"),
             Self::PinnedLiteralMismatch(what) => write!(f, "pinned literal mismatch: {what}"),
+            Self::InvalidProtocolValue(what) => {
+                write!(f, "embedded diagnostics protocol value is invalid: {what}")
+            }
+            Self::InvariantViolation(what) => write!(f, "schema invariant violated: {what}"),
+            Self::SerializationFailed => write!(f, "snapshot JSON serialization failed"),
         }
     }
 }
@@ -77,9 +88,9 @@ pub fn validate_safe_u64(value: u64) -> Result<(), SupportSchemaError> {
     Ok(())
 }
 
-/// A signed integer must be JS-safe in magnitude.
+/// A signed schema integer must be nonnegative and JS-safe.
 pub fn validate_safe_i64(value: i64) -> Result<(), SupportSchemaError> {
-    if value.unsigned_abs() > MAX_SAFE_INTEGER {
+    if value < 0 || value as u64 > MAX_SAFE_INTEGER {
         return Err(SupportSchemaError::UnsafeInteger);
     }
     Ok(())
@@ -89,6 +100,16 @@ pub fn validate_safe_i64(value: i64) -> Result<(), SupportSchemaError> {
 pub fn validate_finite_f64(value: f64) -> Result<(), SupportSchemaError> {
     if !value.is_finite() {
         return Err(SupportSchemaError::NonFiniteNumber);
+    }
+    Ok(())
+}
+
+/// A projected JSON number is finite; integral values additionally obey the
+/// artifact's nonnegative JavaScript-safe integer boundary.
+pub fn validate_support_number(value: f64) -> Result<(), SupportSchemaError> {
+    validate_finite_f64(value)?;
+    if value.fract() == 0.0 && (value < 0.0 || value > MAX_SAFE_INTEGER as f64) {
+        return Err(SupportSchemaError::UnsafeInteger);
     }
     Ok(())
 }
@@ -133,285 +154,105 @@ pub fn validate_container_items(count: usize) -> Result<(), SupportSchemaError> 
     Ok(())
 }
 
-/// Projected values nest at most 16 levels deep.
+/// Projected values may have sixteen container edges below the root.
 pub fn validate_nesting_depth(depth: usize) -> Result<(), SupportSchemaError> {
-    if depth >= NESTING_DEPTH {
+    if depth > NESTING_DEPTH {
         return Err(SupportSchemaError::TooDeep);
     }
     Ok(())
 }
 
-/// Timestamps are RFC 3339 UTC: `YYYY-MM-DDTHH:MM:SS[.fractional]Z`.
+/// Validate a directly-constructed projected value recursively.
+pub fn validate_support_json_value(value: &SupportJsonValueV1) -> Result<(), SupportSchemaError> {
+    json_value::validate_support_json_value_at(value, 0)
+}
+
+/// Timestamps are real RFC 3339 UTC instants and use the canonical `Z` zone.
 pub fn validate_timestamp(value: &str) -> Result<(), SupportSchemaError> {
+    parse_timestamp(value).map(|_| ())
+}
+
+pub(super) fn parse_timestamp(value: &str) -> Result<DateTime<Utc>, SupportSchemaError> {
     validate_id(value)?;
     let bytes = value.as_bytes();
-    if bytes.len() < 20 || *bytes.last().unwrap() != b'Z' {
+    let digits = [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18];
+    let canonical_shape = if bytes.len() < 20 {
+        false
+    } else {
+        let fraction = &bytes[19..bytes.len() - 1];
+        bytes.get(4) == Some(&b'-')
+            && bytes.get(7) == Some(&b'-')
+            && bytes.get(10) == Some(&b'T')
+            && bytes.get(13) == Some(&b':')
+            && bytes.get(16) == Some(&b':')
+            && bytes.last() == Some(&b'Z')
+            && digits
+                .iter()
+                .all(|index| bytes.get(*index).is_some_and(u8::is_ascii_digit))
+            && (fraction.is_empty()
+                || (fraction.first() == Some(&b'.')
+                    && fraction.len() > 1
+                    && fraction[1..].iter().all(u8::is_ascii_digit)))
+            && bytes.get(17..19) != Some(&b"60"[..])
+    };
+    if !canonical_shape {
         return Err(SupportSchemaError::InvalidTimestamp);
     }
-    let digit_positions = [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18];
-    let separator_positions: [(usize, u8); 5] =
-        [(4, b'-'), (7, b'-'), (10, b'T'), (13, b':'), (16, b':')];
-    for position in digit_positions {
-        if !bytes[position].is_ascii_digit() {
-            return Err(SupportSchemaError::InvalidTimestamp);
-        }
+    let parsed =
+        DateTime::parse_from_rfc3339(value).map_err(|_| SupportSchemaError::InvalidTimestamp)?;
+    if parsed.offset().local_minus_utc() != 0 {
+        return Err(SupportSchemaError::InvalidTimestamp);
     }
-    for (position, expected) in separator_positions {
-        if bytes[position] != expected {
-            return Err(SupportSchemaError::InvalidTimestamp);
-        }
-    }
-    let tail = &bytes[19..bytes.len() - 1];
-    if !tail.is_empty() {
-        if tail[0] != b'.' || tail.len() < 2 || !tail[1..].iter().all(u8::is_ascii_digit) {
-            return Err(SupportSchemaError::InvalidTimestamp);
-        }
-    }
-    Ok(())
+    Ok(parsed.with_timezone(&Utc))
 }
 
-fn validate_segment(segment: u8, max: u8) -> Result<(), SupportSchemaError> {
-    if segment > max {
-        return Err(SupportSchemaError::CapExceeded("rotation segment index"));
-    }
-    Ok(())
-}
-
-/// The limits object must equal its fixed value exactly.
-pub fn validate_limits(limits: &SupportSnapshotLimitsV1) -> Result<(), SupportSchemaError> {
-    if *limits != SupportSnapshotLimitsV1::fixed() {
-        return Err(SupportSchemaError::PinnedLiteralMismatch("manifest.limits"));
-    }
-    Ok(())
-}
-
-/// Collector coverage: pinned request limits/selection honesty plus JS-safe
-/// counts and cursors.
+/// Validate the collector coverage literals, caps, and honesty matrix.
 pub fn validate_collector_coverage(
     coverage: &SupportCollectorCoverageV1,
 ) -> Result<(), SupportSchemaError> {
-    if coverage.request_record_limit != COVERAGE_REQUEST_RECORD_LIMIT {
-        return Err(SupportSchemaError::PinnedLiteralMismatch(
-            "coverage.requestRecordLimit",
-        ));
-    }
-    if coverage.request_byte_limit != COVERAGE_REQUEST_BYTE_LIMIT {
-        return Err(SupportSchemaError::PinnedLiteralMismatch(
-            "coverage.requestByteLimit",
-        ));
-    }
-    if coverage.newest_edge_claimed {
-        return Err(SupportSchemaError::PinnedLiteralMismatch(
-            "coverage.newestEdgeClaimed",
-        ));
-    }
-    validate_safe_u64(coverage.returned_records)?;
-    validate_safe_u64(coverage.returned_record_bytes)?;
-    validate_optional_safe_u64(coverage.cursor_start)?;
-    validate_optional_safe_u64(coverage.cursor_end)?;
-    validate_optional_safe_u64(coverage.health_oldest_cursor)?;
-    validate_optional_safe_u64(coverage.health_newest_cursor)?;
-    Ok(())
+    evidence::validate_collector_coverage(coverage)
 }
 
-fn validate_desktop_health(health: &DesktopDiagnosticsHealthV1) -> Result<(), SupportSchemaError> {
-    match &health.supervisor {
-        DesktopDiagnosticsSupervisorStateV1::Ready {
-            collector_boot_id,
-            schema_major,
-            restart_count,
-        } => {
-            validate_id(collector_boot_id)?;
-            if *schema_major != COLLECTOR_SCHEMA_MAJOR {
-                return Err(SupportSchemaError::PinnedLiteralMismatch(
-                    "supervisor.schemaMajor",
-                ));
-            }
-            validate_safe_u64(*restart_count)
-        }
-        DesktopDiagnosticsSupervisorStateV1::Starting {
-            attempt,
-            restart_count,
-            ..
-        } => {
-            validate_safe_u64(*attempt)?;
-            validate_safe_u64(*restart_count)
-        }
-        DesktopDiagnosticsSupervisorStateV1::Degraded { restart_count, .. } => {
-            validate_safe_u64(*restart_count)
-        }
-        DesktopDiagnosticsSupervisorStateV1::Unsupported { .. }
-        | DesktopDiagnosticsSupervisorStateV1::Stopped { .. } => Ok(()),
-    }
-}
-
-/// Collector evidence: timestamp, embedded health, and coverage bounds.
+/// Validate collector evidence including every embedded protocol value.
 pub fn validate_collector_evidence(
     evidence: &SupportCollectorEvidenceV1,
 ) -> Result<(), SupportSchemaError> {
-    validate_timestamp(&evidence.captured_at)?;
-    if let Some(desktop_health) = &evidence.desktop_health {
-        validate_desktop_health(desktop_health)?;
-    }
-    validate_collector_coverage(&evidence.coverage)
+    evidence::validate_collector_evidence(evidence)
 }
 
-fn validate_child_status(status: &SupportChildProducerStatusV1) -> Result<(), SupportSchemaError> {
-    match status {
-        SupportChildProducerStatusV1::Available {
-            captured_at,
-            snapshot,
-        } => {
-            validate_timestamp(captured_at)?;
-            validate_id(&snapshot.producer_boot_id)?;
-            validate_optional_safe_u64(snapshot.last_assigned_sequence)?;
-            validate_optional_safe_u64(snapshot.next_sequence)?;
-            validate_safe_u64(snapshot.resident_records)?;
-            validate_safe_u64(snapshot.resident_bytes)?;
-            validate_safe_u64(snapshot.fallback_bytes)?;
-            validate_safe_u64(snapshot.fallback_write_failures)?;
-            validate_safe_u64(snapshot.fallback_routed)?;
-            Ok(())
-        }
-        SupportChildProducerStatusV1::Omitted { captured_at, .. } => {
-            validate_timestamp(captured_at)
-        }
-    }
-}
-
-fn validate_fallback_record(record: &SupportFallbackRecordV1) -> Result<(), SupportSchemaError> {
-    validate_segment(record.segment, 3)?;
-    validate_safe_u64(record.line)
-}
-
-fn validate_opaque_line(line: &SupportOpaqueFallbackLineV1) -> Result<(), SupportSchemaError> {
-    validate_segment(line.segment, 3)?;
-    validate_safe_u64(line.line)?;
-    if line.semantic_claims {
-        return Err(SupportSchemaError::PinnedLiteralMismatch(
-            "opaqueLine.semanticClaims",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_fallback_component(
-    component: &SupportFallbackComponentV1,
-) -> Result<(), SupportSchemaError> {
-    match component {
-        SupportFallbackComponentV1::Pr3DesktopNativeMixed {
-            records,
-            opaque_lines,
-        } => {
-            for record in records {
-                validate_fallback_record(record)?;
-            }
-            for line in opaque_lines {
-                validate_opaque_line(line)?;
-            }
-            Ok(())
-        }
-        SupportFallbackComponentV1::Pr5Wrapped {
-            records,
-            opaque_lines,
-            ..
-        } => {
-            if !opaque_lines.is_empty() {
-                return Err(SupportSchemaError::PinnedLiteralMismatch(
-                    "pr5Wrapped.opaqueLines",
-                ));
-            }
-            for record in records {
-                validate_fallback_record(record)?;
-            }
-            Ok(())
-        }
-    }
-}
-
-fn validate_legacy_source(source: &SupportLegacySourceV1) -> Result<(), SupportSchemaError> {
-    if source.semantic_claims {
-        return Err(SupportSchemaError::PinnedLiteralMismatch(
-            "legacy.semanticClaims",
-        ));
-    }
-    for line in &source.lines {
-        validate_segment(line.segment, 5)?;
-        validate_safe_u64(line.line)?;
-        validate_content_string(&line.value)?;
-    }
-    Ok(())
-}
-
-fn validate_session_ledger(ledger: &SupportSessionLedgerV1) -> Result<(), SupportSchemaError> {
-    validate_id(&ledger.workspace_id)?;
-    validate_id(&ledger.anyharness_workspace_id)?;
-    if ledger.sessions.len() as u64 > SESSIONS {
-        return Err(SupportSchemaError::CapExceeded("sessionLedger.sessions"));
-    }
-    for session in &ledger.sessions {
-        validate_id(&session.session_id)?;
-        validate_timestamp(&session.summary_captured_at)?;
-    }
-    Ok(())
-}
-
-/// Manifest: pinned schema/policy versions, fixed limits, and the fixed
-/// collection caps (nine sources, 128 gaps, 64 omissions, 64 truncations,
-/// exactly eight degradation tier counters via the array type).
+/// Validate the standalone manifest fields and bounded collections.
 pub fn validate_manifest(manifest: &SupportSnapshotManifestV1) -> Result<(), SupportSchemaError> {
-    if manifest.schema_version != MANIFEST_SCHEMA_VERSION {
-        return Err(SupportSchemaError::PinnedLiteralMismatch(
-            "manifest.schemaVersion",
-        ));
-    }
-    validate_timestamp(&manifest.generated_at)?;
-    validate_safe_u64(manifest.serialized_bytes)?;
-    validate_limits(&manifest.limits)?;
-    validate_collector_coverage(&manifest.collector)?;
-    if manifest.sources.len() > MAX_SOURCE_ENTRIES {
-        return Err(SupportSchemaError::CapExceeded("manifest.sources"));
-    }
-    for source in &manifest.sources {
-        validate_timestamp(&source.captured_at)?;
-        validate_safe_u64(source.read_bytes)?;
-        validate_safe_u64(source.included_bytes)?;
-        validate_safe_u64(source.included_items)?;
-    }
-    if manifest.gaps.len() > MAX_GAP_ENTRIES {
-        return Err(SupportSchemaError::CapExceeded("manifest.gaps"));
-    }
-    if manifest.omissions.len() > MAX_OMISSION_ENTRIES {
-        return Err(SupportSchemaError::CapExceeded("manifest.omissions"));
-    }
-    for omission in &manifest.omissions {
-        validate_safe_u64(omission.count)?;
-        validate_optional_safe_u64(omission.known_bytes)?;
-    }
-    if manifest.truncations.len() > MAX_TRUNCATION_ENTRIES {
-        return Err(SupportSchemaError::CapExceeded("manifest.truncations"));
-    }
-    for truncation in &manifest.truncations {
-        validate_safe_u64(truncation.count)?;
-        validate_optional_safe_u64(truncation.omitted_bytes)?;
-    }
-    if manifest.degradation.policy_version != DEGRADATION_POLICY_VERSION {
-        return Err(SupportSchemaError::PinnedLiteralMismatch(
-            "degradation.policyVersion",
-        ));
-    }
-    for removed in manifest.degradation.removed_by_tier {
-        validate_safe_u64(removed)?;
-    }
-    validate_safe_u64(manifest.additional_entries.gaps)?;
-    validate_safe_u64(manifest.additional_entries.omissions)?;
-    validate_safe_u64(manifest.additional_entries.truncations)?;
-    Ok(())
+    manifest::validate_manifest(manifest)
 }
 
-/// Validate a complete snapshot against every support-owned bound and
-/// pinned literal. Embedded accepted protocol values are trusted as already
-/// validated by the protocol crate and are not re-validated here.
+/// Encode the complete snapshot once and return the exact UTF-8 JSON bytes.
+/// This helper performs no candidate selection or degradation.
+pub fn serialized_snapshot_bytes(snapshot: &SupportSnapshotV3) -> Result<u64, SupportSchemaError> {
+    serde_json::to_vec(snapshot)
+        .map(|bytes| bytes.len() as u64)
+        .map_err(|_| SupportSchemaError::SerializationFailed)
+}
+
+/// Set `manifest.serializedBytes` to its stable self-referential fixed point.
+/// The only possible changes after the first pass are decimal digit-width
+/// transitions, so the loop is bounded by the 20 digits in a `u64`.
+pub fn stabilize_serialized_bytes(
+    snapshot: &mut SupportSnapshotV3,
+) -> Result<u64, SupportSchemaError> {
+    const MAX_DIGIT_TRANSITIONS: usize = 20;
+    for _ in 0..=MAX_DIGIT_TRANSITIONS {
+        let bytes = serialized_snapshot_bytes(snapshot)?;
+        if snapshot.manifest.serialized_bytes == bytes {
+            return Ok(bytes);
+        }
+        snapshot.manifest.serialized_bytes = bytes;
+    }
+    Err(SupportSchemaError::InvariantViolation(
+        "manifest.serializedBytes did not stabilize",
+    ))
+}
+
+/// Validate a complete snapshot against all owned and aggregate invariants.
 pub fn validate_snapshot(snapshot: &SupportSnapshotV3) -> Result<(), SupportSchemaError> {
     if snapshot.schema_version != SNAPSHOT_SCHEMA_VERSION {
         return Err(SupportSchemaError::PinnedLiteralMismatch(
@@ -420,9 +261,22 @@ pub fn validate_snapshot(snapshot: &SupportSnapshotV3) -> Result<(), SupportSche
     }
     validate_id(&snapshot.snapshot_id)?;
     validate_timestamp(&snapshot.generated_at)?;
-    validate_generic_string(&snapshot.app.version)?;
-    validate_generic_string(&snapshot.app.release)?;
-    validate_generic_string(&snapshot.app.platform)?;
+    for value in [
+        &snapshot.app.version,
+        &snapshot.app.release,
+        &snapshot.app.platform,
+    ] {
+        validate_generic_string(value)?;
+    }
+    for value in [
+        snapshot.app.runtime_version.as_deref(),
+        snapshot.app.runtime_status.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        validate_generic_string(value)?;
+    }
     validate_timestamp(&snapshot.consent.granted_at)?;
     validate_timestamp(&snapshot.selection.report_opened_at)?;
     validate_timestamp(&snapshot.selection.source_time_from)?;
@@ -438,22 +292,15 @@ pub fn validate_snapshot(snapshot: &SupportSnapshotV3) -> Result<(), SupportSche
     {
         validate_id(id)?;
     }
-    validate_collector_evidence(&snapshot.collector)?;
-    if let SupportTauriProducerHealthV1::SupervisorOnly { desktop_health, .. } =
-        &snapshot.producer_health.tauri
-    {
-        validate_desktop_health(desktop_health)?;
-    }
-    validate_child_status(&snapshot.producer_health.anyharness)?;
-    validate_child_status(&snapshot.producer_health.desktop_worker)?;
-    for component in &snapshot.fallback_evidence {
-        validate_fallback_component(component)?;
-    }
-    for source in &snapshot.legacy_evidence {
-        validate_legacy_source(source)?;
-    }
+
+    evidence::validate_collector_evidence(&snapshot.collector)?;
+    health::validate_producer_health(&snapshot.producer_health)?;
+    evidence::validate_records(&snapshot.records)?;
+    evidence::validate_fallback_evidence(&snapshot.fallback_evidence)?;
+    evidence::validate_legacy_evidence(&snapshot.legacy_evidence)?;
     if let Some(ledger) = &snapshot.session_ledger {
-        validate_session_ledger(ledger)?;
+        evidence::validate_session_ledger(ledger)?;
     }
-    validate_manifest(&snapshot.manifest)
+    manifest::validate_manifest(&snapshot.manifest)?;
+    aggregate::validate_snapshot_relationships(snapshot)
 }

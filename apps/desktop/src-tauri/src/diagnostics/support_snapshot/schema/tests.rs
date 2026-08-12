@@ -28,14 +28,15 @@ use super::model::snapshot::{
     SupportAppV1, SupportConsentV1, SupportSelectionV1, SupportSnapshotV3,
 };
 use super::validate::{
-    validate_content_string, validate_id, validate_manifest, validate_snapshot, validate_timestamp,
-    SupportSchemaError,
+    stabilize_serialized_bytes, validate_content_string, validate_id, validate_manifest,
+    validate_snapshot, validate_timestamp, SupportSchemaError,
 };
 
 const GOLDEN_SKELETON: &str = include_str!("fixtures/golden_no_evidence_skeleton.json");
-const TS: &str = "2026-08-12T00:00:00Z";
+pub(super) const TS: &str = "2026-08-12T00:00:00Z";
+pub(super) const WINDOW_START: &str = "2026-08-11T23:45:00Z";
 
-fn empty_coverage() -> SupportCollectorCoverageV1 {
+pub(super) fn empty_coverage() -> SupportCollectorCoverageV1 {
     SupportCollectorCoverageV1 {
         status: SupportCollectorStatusV1::Unavailable,
         completeness: SupportCollectorCompletenessV1::Unknown,
@@ -53,7 +54,7 @@ fn empty_coverage() -> SupportCollectorCoverageV1 {
     }
 }
 
-fn skeleton_manifest() -> SupportSnapshotManifestV1 {
+pub(super) fn skeleton_manifest() -> SupportSnapshotManifestV1 {
     SupportSnapshotManifestV1 {
         schema_version: 1,
         generated_at: TS.to_string(),
@@ -80,8 +81,8 @@ fn skeleton_manifest() -> SupportSnapshotManifestV1 {
     }
 }
 
-fn no_evidence_skeleton() -> SupportSnapshotV3 {
-    SupportSnapshotV3 {
+pub(super) fn no_evidence_skeleton() -> SupportSnapshotV3 {
+    let mut snapshot = SupportSnapshotV3 {
         schema_version: 3,
         snapshot_id: "support-snapshot-fixture-0001".to_string(),
         generated_at: TS.to_string(),
@@ -100,7 +101,7 @@ fn no_evidence_skeleton() -> SupportSnapshotV3 {
         },
         selection: SupportSelectionV1 {
             report_opened_at: TS.to_string(),
-            source_time_from: TS.to_string(),
+            source_time_from: WINDOW_START.to_string(),
             source_time_to: TS.to_string(),
             workspace_id: None,
             anyharness_workspace_id: None,
@@ -134,7 +135,15 @@ fn no_evidence_skeleton() -> SupportSnapshotV3 {
         legacy_evidence: Vec::new(),
         session_ledger: None,
         manifest: skeleton_manifest(),
-    }
+    };
+    snapshot.manifest.omissions.push(SupportOmissionV1 {
+        source: SupportEvidenceSourceV1::Collector,
+        reason: SupportOmissionReasonV1::CollectorUnavailable,
+        count: 1,
+        known_bytes: None,
+    });
+    stabilize_serialized_bytes(&mut snapshot).expect("skeleton byte fixed point");
+    snapshot
 }
 
 #[test]
@@ -268,17 +277,17 @@ fn timestamps_must_be_rfc3339_utc() {
 
 #[test]
 fn projected_json_values_enforce_scrub_bounds() {
-    let deep = (0..16).fold(serde_json::json!(null), |inner, _| {
+    let at_depth = (0..16).fold(serde_json::json!(null), |inner, _| {
+        serde_json::json!([inner])
+    });
+    assert!(SupportJsonValueV1::try_from_json(&at_depth).is_ok());
+    let too_deep = (0..17).fold(serde_json::json!(null), |inner, _| {
         serde_json::json!([inner])
     });
     assert_eq!(
-        SupportJsonValueV1::try_from_json(&deep),
+        SupportJsonValueV1::try_from_json(&too_deep),
         Err(SupportSchemaError::TooDeep)
     );
-    let shallower = (0..15).fold(serde_json::json!(null), |inner, _| {
-        serde_json::json!([inner])
-    });
-    assert!(SupportJsonValueV1::try_from_json(&shallower).is_ok());
 
     let wide = serde_json::Value::Array(vec![serde_json::json!(0); 257]);
     assert_eq!(
@@ -295,6 +304,15 @@ fn projected_json_values_enforce_scrub_bounds() {
     );
     assert!(SupportJsonValueV1::try_from_json(&serde_json::json!(MAX_SAFE_INTEGER)).is_ok());
 }
+
+#[path = "tests/aggregate.rs"]
+mod aggregate_tests;
+#[path = "tests/evidence.rs"]
+mod evidence_tests;
+#[path = "tests/protocol.rs"]
+mod protocol_tests;
+#[path = "tests/unions.rs"]
+mod union_tests;
 
 fn manifest_gap() -> GapV1 {
     GapV1 {
@@ -336,10 +354,24 @@ fn manifest_collections_enforce_fixed_caps() {
     };
 
     let mut at_cap = skeleton_manifest();
-    at_cap.sources = vec![manifest_source(); 9];
+    at_cap.sources = [
+        SupportSourceManifestSourceV1::Collector,
+        SupportSourceManifestSourceV1::DesktopNativeFallback,
+        SupportSourceManifestSourceV1::AnyharnessFallback,
+        SupportSourceManifestSourceV1::DesktopWorkerFallback,
+        SupportSourceManifestSourceV1::RendererLegacy,
+        SupportSourceManifestSourceV1::AnyharnessLegacy,
+        SupportSourceManifestSourceV1::WorkerLegacyV2,
+        SupportSourceManifestSourceV1::WorkerLegacyV1,
+        SupportSourceManifestSourceV1::SessionLedger,
+    ]
+    .into_iter()
+    .map(|source| SupportSourceManifestV1 {
+        source,
+        ..manifest_source()
+    })
+    .collect();
     at_cap.gaps = vec![manifest_gap(); 128];
-    at_cap.omissions = vec![omission.clone(); 64];
-    at_cap.truncations = vec![truncation.clone(); 64];
     validate_manifest(&at_cap).expect("caps are inclusive");
 
     let mut over_sources = skeleton_manifest();
@@ -384,12 +416,29 @@ fn session_ledger_enforces_session_cap() {
         },
     };
     let mut snapshot = no_evidence_skeleton();
+    snapshot.selection.workspace_id = Some("ws-1".to_string());
+    snapshot.selection.anyharness_workspace_id = Some("ahws-1".to_string());
     snapshot.session_ledger = Some(SupportSessionLedgerV1 {
         workspace_id: "ws-1".to_string(),
         anyharness_workspace_id: "ahws-1".to_string(),
         selection: SupportSessionSelectionV1::RecentActivity,
-        sessions: vec![session.clone(); SESSIONS as usize],
+        sessions: (1..=SESSIONS)
+            .map(|index| SupportSessionV1 {
+                session_id: format!("session-{index}"),
+                ..session.clone()
+            })
+            .collect(),
     });
+    snapshot.manifest.session_collection = SupportSessionCollectionManifestV1::Included {
+        workspace_id: "ws-1".to_string(),
+        anyharness_workspace_id: "ahws-1".to_string(),
+        selected_sessions: SESSIONS,
+        session_included_bytes: 0,
+        event_included_bytes: 0,
+        raw_notification_included_bytes: 0,
+        limit_uncertain_endpoints: 0,
+    };
+    stabilize_serialized_bytes(&mut snapshot).expect("stabilize session snapshot");
     validate_snapshot(&snapshot).expect("three sessions are allowed");
 
     snapshot

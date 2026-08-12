@@ -21,7 +21,7 @@ pub enum SupportJsonValueV1 {
     Number(f64),
     String(String),
     Array(Vec<SupportJsonValueV1>),
-    /// Ordered own-key entries; order is preserved as captured and is the
+    /// Own-key entries in strict Unicode-scalar order, which is the
     /// deterministic serialization order.
     Object(Vec<(String, SupportJsonValueV1)>),
 }
@@ -41,9 +41,12 @@ impl SupportJsonValueV1 {
                 if let Some(integer) = number.as_i64() {
                     validate::validate_safe_i64(integer)?;
                     Ok(Self::Integer(integer))
+                } else if let Some(integer) = number.as_u64() {
+                    validate::validate_safe_u64(integer)?;
+                    Ok(Self::Integer(integer as i64))
                 } else {
                     let float = number.as_f64().ok_or(SupportSchemaError::UnsafeInteger)?;
-                    validate::validate_finite_f64(float)?;
+                    validate::validate_support_number(float)?;
                     Ok(Self::Number(float))
                 }
             }
@@ -66,6 +69,7 @@ impl SupportJsonValueV1 {
                     validate::validate_generic_string(key)?;
                     converted.push((key.clone(), Self::convert(entry, depth + 1)?));
                 }
+                converted.sort_by(|left, right| left.0.chars().cmp(right.0.chars()));
                 Ok(Self::Object(converted))
             }
         }
