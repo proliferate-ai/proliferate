@@ -175,9 +175,49 @@ fn set_cloexec_adds_the_flag_when_absent() {
     let fd = read_end.as_raw_fd();
     let before = unsafe { libc::fcntl(fd, libc::F_GETFD) };
     assert_eq!(before & libc::FD_CLOEXEC, 0);
-    set_cloexec(fd);
+    assert!(set_cloexec(fd));
     let after = unsafe { libc::fcntl(fd, libc::F_GETFD) };
     assert_ne!(after & libc::FD_CLOEXEC, 0);
+}
+
+#[test]
+fn set_cloexec_reports_a_closed_descriptor() {
+    let (read_end, _write_end) = pipe_pair();
+    let fd = read_end.as_raw_fd();
+    drop(read_end);
+    assert!(!set_cloexec(fd));
+}
+
+#[test]
+fn owned_bridge_with_failed_cloexec_degrades_and_closes_both_authorities() {
+    let (bridge, shutdown) = pipe_pair();
+    let bridge_fd = bridge.as_raw_fd();
+    let shutdown_fd = shutdown.as_raw_fd();
+    std::mem::forget(bridge);
+    std::mem::forget(shutdown);
+
+    assert_eq!(
+        resolve_descriptor_authority(bridge_fd, shutdown_fd, true, false),
+        DescriptorDisposition::Degraded
+    );
+    assert!(!descriptor_exists(bridge_fd));
+    assert!(!descriptor_exists(shutdown_fd));
+}
+
+#[test]
+fn unrelated_bridge_probe_remains_disabled_when_cloexec_fails() {
+    let (bridge, shutdown) = pipe_pair();
+    let bridge_fd = bridge.as_raw_fd();
+    let shutdown_fd = shutdown.as_raw_fd();
+    std::mem::forget(bridge);
+    std::mem::forget(shutdown);
+
+    assert_eq!(
+        resolve_descriptor_authority(bridge_fd, shutdown_fd, false, false),
+        DescriptorDisposition::Disabled
+    );
+    assert!(!descriptor_exists(bridge_fd));
+    assert!(!descriptor_exists(shutdown_fd));
 }
 
 #[test]

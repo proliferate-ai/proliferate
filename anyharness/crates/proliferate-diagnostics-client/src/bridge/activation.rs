@@ -147,12 +147,19 @@ mod platform {
             close_if_open(CHILD_SHUTDOWN_RESERVED_FD);
             return DesktopDiagnosticsActivation::Disabled;
         }
-        set_cloexec(CHILD_BRIDGE_RESERVED_FD);
-        set_cloexec(CHILD_SHUTDOWN_RESERVED_FD);
-        if !owned_bridge_probe(CHILD_BRIDGE_RESERVED_FD) {
-            close_if_open(CHILD_BRIDGE_RESERVED_FD);
-            close_if_open(CHILD_SHUTDOWN_RESERVED_FD);
-            return DesktopDiagnosticsActivation::Disabled;
+        let bridge_cloexec = set_cloexec(CHILD_BRIDGE_RESERVED_FD);
+        let shutdown_cloexec = set_cloexec(CHILD_SHUTDOWN_RESERVED_FD);
+        match resolve_descriptor_authority(
+            CHILD_BRIDGE_RESERVED_FD,
+            CHILD_SHUTDOWN_RESERVED_FD,
+            owned_bridge_probe(CHILD_BRIDGE_RESERVED_FD),
+            bridge_cloexec && shutdown_cloexec,
+        ) {
+            DescriptorDisposition::Ready => {}
+            DescriptorDisposition::Disabled => return DesktopDiagnosticsActivation::Disabled,
+            DescriptorDisposition::Degraded => {
+                return degraded(DegradedClassification::DescriptorInvalid, None, None, None)
+            }
         }
         let bridge = unsafe { UnixStream::from_raw_fd(CHILD_BRIDGE_RESERVED_FD) };
         if !valid_shutdown_descriptor(CHILD_SHUTDOWN_RESERVED_FD) {
@@ -281,7 +288,7 @@ mod platform {
                         DegradedClassification::DescriptorInvalid,
                         Some(bridge),
                         Some(shutdown),
-                        None,
+                        fallback,
                     );
                 }
                 let capability =
@@ -316,10 +323,20 @@ mod platform {
             BootstrapCollectorState::Unavailable {
                 generation,
                 classification,
-            } => InitialCollectorState::Unavailable {
-                generation: (*generation).min(MAX_SAFE_INTEGER),
-                classification: map_unavailable(*classification),
-            },
+            } => {
+                if *generation > MAX_SAFE_INTEGER {
+                    return degraded(
+                        DegradedClassification::DescriptorInvalid,
+                        Some(bridge),
+                        Some(shutdown),
+                        fallback,
+                    );
+                }
+                InitialCollectorState::Unavailable {
+                    generation: *generation,
+                    classification: map_unavailable(*classification),
+                }
+            }
         };
 
         if descriptors.next().is_some() {
@@ -372,16 +389,43 @@ mod platform {
         (unsafe { libc::fcntl(fd, libc::F_GETFD) }) >= 0
     }
 
-    fn set_cloexec(fd: RawFd) {
+    fn set_cloexec(fd: RawFd) -> bool {
         let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-        if flags >= 0 {
-            unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) };
+        if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } != 0 {
+            return false;
         }
+        let installed = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+        installed >= 0 && installed & libc::FD_CLOEXEC != 0
     }
 
     fn close_if_open(fd: RawFd) {
         if descriptor_exists(fd) {
             unsafe { libc::close(fd) };
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum DescriptorDisposition {
+        Ready,
+        Disabled,
+        Degraded,
+    }
+
+    fn resolve_descriptor_authority(
+        bridge_fd: RawFd,
+        shutdown_fd: RawFd,
+        owned_bridge: bool,
+        cloexec_installed: bool,
+    ) -> DescriptorDisposition {
+        if owned_bridge && cloexec_installed {
+            return DescriptorDisposition::Ready;
+        }
+        close_if_open(bridge_fd);
+        close_if_open(shutdown_fd);
+        if owned_bridge {
+            DescriptorDisposition::Degraded
+        } else {
+            DescriptorDisposition::Disabled
         }
     }
 
@@ -489,3 +533,11 @@ mod tests;
 ))]
 #[path = "activation_parse_tests.rs"]
 mod parse_tests;
+
+#[cfg(all(
+    test,
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+#[path = "activation_review_tests.rs"]
+mod review_tests;

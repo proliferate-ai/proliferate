@@ -302,6 +302,41 @@ mod tests {
     }
 
     #[test]
+    fn string_debug_and_error_redact_labeled_json_credentials() {
+        struct CanaryDebug(String);
+        struct CanaryError(String);
+        impl fmt::Debug for CanaryDebug {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str(&self.0)
+            }
+        }
+        impl fmt::Display for CanaryError {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str(&self.0)
+            }
+        }
+        impl fmt::Debug for CanaryError {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("redacted test error")
+            }
+        }
+        impl std::error::Error for CanaryError {}
+
+        let value = "request-canary {\"Authorization\":\"debug-secret-9f31\"} \
+            password=\"error-secret-9f31\" fallback-canary";
+        for retained in [
+            bound_str(value),
+            bound_debug(&CanaryDebug(value.to_owned())),
+            bound_display(&CanaryError(value.to_owned())),
+        ] {
+            assert!(retained.contains("request-canary"));
+            assert!(retained.contains("fallback-canary"));
+            assert!(!retained.contains("debug-secret-9f31"));
+            assert!(!retained.contains("error-secret-9f31"));
+        }
+    }
+
+    #[test]
     fn field_and_ancestor_merges_are_capped_with_structural_evidence() {
         let mut nearest = CollectedFields::default();
         for index in 0..(MAX_CAPTURED_FIELDS + 20) {

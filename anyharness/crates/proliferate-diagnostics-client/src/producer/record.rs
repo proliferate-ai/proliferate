@@ -305,6 +305,11 @@ pub(crate) fn redact_and_bound(mut value: String, limit: usize) -> String {
     let scan_limit = limit.saturating_add(8_192);
     redact_secret_crossing_cutoff(&mut value, scan_limit);
     truncate_utf8_in_place(&mut value, scan_limit);
+    for regex in labeled_secret_regexes() {
+        value = regex
+            .replace_all(&value, "${prefix}[REDACTED]")
+            .into_owned();
+    }
     for regex in secret_regexes() {
         value = regex.replace_all(&value, "[REDACTED]").into_owned();
     }
@@ -368,7 +373,33 @@ pub(crate) fn redact_secret_crossing_cutoff(value: &mut String, cutoff: usize) {
 }
 
 pub(crate) fn secret_value(value: &str) -> bool {
-    secret_regexes().iter().any(|regex| regex.is_match(value))
+    labeled_secret_regexes()
+        .iter()
+        .chain(secret_regexes())
+        .any(|regex| regex.is_match(value))
+}
+
+fn labeled_secret_regexes() -> &'static [Regex] {
+    static REGEXES: OnceLock<Vec<Regex>> = OnceLock::new();
+    REGEXES.get_or_init(|| {
+        [
+            // Header values can contain spaces, semicolons, and auth-scheme
+            // metadata. Quoted JSON/debug values stop at their closing quote;
+            // an unquoted header consumes only its physical log line.
+            r#"(?i)(?P<prefix>^|[\s{\[(,;])["']?(?:authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-auth-token)["']?\s*(?::|=)\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\r\n]+)"#,
+            // The closed credential vocabulary requires an exact field label
+            // followed immediately by ':' or '='. This avoids substring
+            // matches such as `passwordless`, `credentialed`, or `monkey`.
+            r#"(?i)(?P<prefix>^|[\s{\[(,;])["']?(?:password|passphrase|client_secret|api_key|access_token|refresh_token|session_token|security_token|credential)["']?\s*(?::|=)\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s,;}\]\)&]+)"#,
+            // Preserve the prior env-style protection without the old broad
+            // "contains KEY/PASS" false positives: the secret word must be a
+            // complete underscore-delimited suffix.
+            r#"(?i)(?P<prefix>^|[\s{\[(,;])["']?(?:[a-z][a-z0-9]*_)+(?:token|key|secret|password|pass|credential)["']?\s*(?::|=)\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s,;}\]\)&]+)"#,
+        ]
+        .into_iter()
+        .map(|pattern| Regex::new(pattern).expect("fixed labeled-secret regex is valid"))
+        .collect()
+    })
 }
 
 fn secret_regexes() -> &'static [Regex] {
@@ -376,7 +407,6 @@ fn secret_regexes() -> &'static [Regex] {
     REGEXES.get_or_init(|| {
         [
             r"(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{4,}",
-            r"(?i)\b[A-Z][A-Z0-9_]*(?:TOKEN|KEY|SECRET|PASSWORD|PASS|CREDENTIAL)[A-Z0-9_]*\s*=\s*[^\s]+",
             r"(?i)(?:[?&](?:x-amz-signature|x-amz-credential|x-amz-security-token|signature|sig|token|access_token|api_key)=)[^&#\s]+",
             r"(?s)-----BEGIN [^-\n]*PRIVATE KEY-----.*?(?:-----END [^-\n]*PRIVATE KEY-----|$)",
             r"\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b",

@@ -27,6 +27,28 @@ tokio::task_local! {
     static TASK_SUPPRESSED: Cell<bool>;
 }
 
+struct SuppressionGuard {
+    previous: bool,
+}
+
+impl SuppressionGuard {
+    fn enter() -> Self {
+        Self {
+            previous: SUPPRESSED.with(|suppressed| suppressed.replace(true)),
+        }
+    }
+
+    fn enter_callback() -> Option<Self> {
+        (!suppressed()).then(Self::enter)
+    }
+}
+
+impl Drop for SuppressionGuard {
+    fn drop(&mut self) {
+        SUPPRESSED.with(|suppressed| suppressed.set(self.previous));
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct TargetMapping {
     pub target: &'static str,
@@ -106,9 +128,9 @@ where
         id: &span::Id,
         context: Context<'_, S>,
     ) {
-        if suppressed() {
+        let Some(_suppression) = SuppressionGuard::enter_callback() else {
             return;
-        }
+        };
         let mut visitor = FieldVisitor::default();
         attributes.record(&mut visitor);
         if let Some(span) = context.span(id) {
@@ -117,9 +139,9 @@ where
     }
 
     fn on_record(&self, id: &span::Id, values: &span::Record<'_>, context: Context<'_, S>) {
-        if suppressed() {
+        let Some(_suppression) = SuppressionGuard::enter_callback() else {
             return;
-        }
+        };
         let Some(span) = context.span(id) else {
             return;
         };
@@ -135,9 +157,9 @@ where
     }
 
     fn on_event(&self, event: &Event<'_>, context: Context<'_, S>) {
-        if suppressed() {
+        let Some(_suppression) = SuppressionGuard::enter_callback() else {
             return;
-        }
+        };
         let mut merged = CollectedFields::default();
         if let Some(scope) = context.event_scope(event) {
             // `Scope` is nearest-to-farthest and does not allocate. Nearest
@@ -216,9 +238,7 @@ where
             dropped_count: None,
             milestone: None,
         };
-        with_suppression(|| {
-            let _ = self.handle.try_emit_detailed(input);
-        });
+        let _ = self.handle.try_emit_detailed(input);
     }
 }
 
@@ -263,12 +283,8 @@ fn map_level(level: &tracing::Level) -> SeverityV1 {
 }
 
 pub(crate) fn with_suppression<T>(operation: impl FnOnce() -> T) -> T {
-    SUPPRESSED.with(|suppressed| {
-        let previous = suppressed.replace(true);
-        let result = operation();
-        suppressed.set(previous);
-        result
-    })
+    let _suppression = SuppressionGuard::enter();
+    operation()
 }
 
 pub(crate) async fn with_task_suppression<T>(future: impl std::future::Future<Output = T>) -> T {
@@ -276,9 +292,7 @@ pub(crate) async fn with_task_suppression<T>(future: impl std::future::Future<Ou
 }
 
 fn suppressed() -> bool {
-    TASK_SUPPRESSED
-        .try_with(Cell::get)
-        .unwrap_or_else(|_| SUPPRESSED.with(Cell::get))
+    TASK_SUPPRESSED.try_with(Cell::get).unwrap_or(false) || SUPPRESSED.with(Cell::get)
 }
 
 #[cfg(test)]
@@ -314,6 +328,15 @@ mod tests {
             assert!(suppressed());
         })
         .await;
+        assert!(!suppressed());
+    }
+
+    #[test]
+    fn suppression_restores_prior_state_after_a_panic() {
+        let result = std::panic::catch_unwind(|| {
+            with_suppression(|| panic!("suppression proof"));
+        });
+        assert!(result.is_err());
         assert!(!suppressed());
     }
 }
