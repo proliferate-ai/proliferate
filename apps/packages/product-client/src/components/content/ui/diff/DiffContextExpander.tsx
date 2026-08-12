@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
+import { ChevronDown, ChevronUpDown } from "#product/primitives/icons/core";
+import { ChevronUp } from "#product/primitives/icons/status";
 import { Button } from "#product/primitives/Button";
 import type { InterHunkGap } from "#product/lib/domain/files/diff-parser";
 
@@ -29,7 +30,7 @@ export function formatUnmodifiedLinesLabel(lineCount: number): string {
 /**
  * Gutter-column expand controls for inter-hunk gap rows.
  *
- * Small gaps (<=7 lines): single expand-both (ChevronsUpDown) icon.
+ * Small gaps (<=7 lines): single expand-both (ChevronUpDown) icon.
  * Large gaps: expand-down chevron on top (extends hunk above), expand-up
  * below (extends hunk below) — matching reference ordering where each control
  * is adjacent to the hunk it extends.
@@ -57,7 +58,7 @@ export function DiffGapGutterControls({
           title={`Expand ${label}`}
           className={ICON_BUTTON_CLASS}
         >
-          <ChevronsUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
+          <ChevronUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
         </Button>
       ) : (
         <>
@@ -144,7 +145,7 @@ export function DiffCollapsedGutterIcon() {
         aria-hidden="true"
         className="flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground/60"
       >
-        <ChevronsUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
+        <ChevronUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
       </span>
     </div>
   );
@@ -214,7 +215,7 @@ export function DiffContextExpander({
             title={`Expand ${label}`}
             className={ICON_BUTTON_CLASS}
           >
-            <ChevronsUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
+            <ChevronUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
           </Button>
         ) : (
           <div className="flex flex-col items-center gap-0">
@@ -293,7 +294,7 @@ export function DiffCollapsedContextCluster({
         aria-hidden="true"
         className="flex shrink-0 items-center justify-center rounded p-0.5"
       >
-        <ChevronsUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
+        <ChevronUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
       </span>
       <span className="shrink-0 pl-1">
         {formatUnmodifiedLinesLabel(lineCount)}

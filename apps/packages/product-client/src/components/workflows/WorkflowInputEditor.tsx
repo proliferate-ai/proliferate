@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash } from "#product/primitives/icons/core";
 import type {
   WorkflowDefinitionInput,
   WorkflowInputType,
@@ -116,7 +116,7 @@ export function WorkflowInputEditor({
                   disabled={disabled}
                   onClick={() => onChange(inputs.filter((_, candidateIndex) => candidateIndex !== index))}
                 >
-                  <Trash2 className="icon-paired" aria-hidden />
+                  <Trash className="icon-paired" aria-hidden />
                 </Button>
               </div>
             );
