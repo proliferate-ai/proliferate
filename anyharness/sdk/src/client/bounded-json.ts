@@ -54,7 +54,7 @@ export async function requestBoundedJson(
 ): Promise<AnyHarnessBoundedJsonResponse> {
   assertResponseByteLimit(limits.successBytes, "successBytes");
   assertResponseByteLimit(limits.errorBytes, "errorBytes");
-  if (signal !== undefined && !isNativeAbortSignal(signal)) {
+  if (signal !== undefined && !(await isNativeAbortSignal(signal))) {
     throw new TypeError(
       "signal must be an unmodified local native AbortSignal",
     );

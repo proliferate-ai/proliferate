@@ -12,7 +12,10 @@ const abortSignalReasonGetter = Object.getOwnPropertyDescriptor(
 )?.get;
 const eventTargetAddEventListener = EventTarget.prototype.addEventListener;
 const eventTargetRemoveEventListener = EventTarget.prototype.removeEventListener;
-const nodeProxyDetector = captureNodeProxyDetector();
+const hasNonTrappingBrandCheck = captureNonTrappingBrandCheck();
+const nodeProxyDetector = hasNonTrappingBrandCheck
+  ? undefined
+  : loadNodeProxyDetector();
 
 const CANCELLATION_PROPERTIES = [
   "aborted",
@@ -21,7 +24,7 @@ const CANCELLATION_PROPERTIES = [
   "removeEventListener",
 ] as const;
 
-export function isNativeAbortSignal(value: unknown): value is AbortSignal {
+export async function isNativeAbortSignal(value: unknown): Promise<boolean> {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -34,17 +37,15 @@ export function isNativeAbortSignal(value: unknown): value is AbortSignal {
     return false;
   }
   try {
-    // Node implements AbortSignal's brand in JavaScript, so a forwarding
-    // Proxy can relay its private-symbol reads. Supported Node releases expose
-    // the non-trapping proxy test below; it must run before the getter or any
-    // reflection. Standards hosts use the Web-IDL internal-slot brand check
-    // before reflection instead. A detected Node host without its detector
-    // rejects closed rather than taking the standards-host path.
-    if (nodeProxyDetector === null) {
-      return false;
-    }
-    if (nodeProxyDetector?.(value)) {
-      return false;
+    // Standards hosts reject a Proxy through AbortSignal's Web-IDL brand
+    // before entering caller traps. Hosts whose getter forwards through a
+    // Proxy must first obtain Node's non-trapping detector from the real
+    // built-in module loader. No caller value reaches module loading.
+    if (!hasNonTrappingBrandCheck) {
+      const detector = await nodeProxyDetector;
+      if (!detector || detector(value)) {
+        return false;
+      }
     }
     reflectApply(abortSignalAbortedGetter, value, []);
 
@@ -105,83 +106,55 @@ export function removeNativeAbortListener(
 type NodeProxyDetector = (value: object) => boolean;
 
 /**
- * Capture Node's non-trapping proxy detector without introducing a static
- * Node import into this browser-compatible SDK. A browser process shim does
- * not expose `getBuiltinModule`, so standards hosts take the Web-IDL path in
- * `isNativeAbortSignal`.
+ * Determine whether this realm's AbortSignal getter is itself a safe first
+ * brand check. The probe uses only an SDK-created signal and SDK-owned traps;
+ * it never observes a caller value or an ambient runtime marker.
  */
-function captureNodeProxyDetector(): NodeProxyDetector | null | undefined {
-  let detectedNodeRuntime = false;
+function captureNonTrappingBrandCheck(): boolean {
+  if (!abortSignalAbortedGetter) {
+    return false;
+  }
+  let enteredTrap = false;
+  const rejectTrap = (): never => {
+    enteredTrap = true;
+    throw new TypeError("AbortSignal brand probe entered a Proxy trap");
+  };
   try {
-    const processDescriptor = reflectApply(
-      getOwnPropertyDescriptor,
-      Object,
-      [globalThis, "process"],
-    ) as PropertyDescriptor | undefined;
-    if (!processDescriptor) {
-      return undefined;
-    }
-
-    const processValue = "value" in processDescriptor
-      ? processDescriptor.value as unknown
-      : typeof processDescriptor.get === "function"
-        ? reflectApply(processDescriptor.get, globalThis, []) as unknown
-        : undefined;
-    if (!isObjectOrFunction(processValue)) {
-      return undefined;
-    }
-
-    const versions = ownDataProperty(processValue, "versions");
-    const nodeVersion = isObjectOrFunction(versions)
-      ? ownDataProperty(versions, "node")
-      : undefined;
-    detectedNodeRuntime = typeof nodeVersion === "string"
-      && nodeVersion.length > 0;
-
-    const getBuiltinModule = ownDataProperty(
-      processValue,
-      "getBuiltinModule",
-    );
-    if (typeof getBuiltinModule !== "function") {
-      return detectedNodeRuntime ? null : undefined;
-    }
-
-    const utilModule = reflectApply(getBuiltinModule, processValue, [
-      "util",
-    ]) as unknown;
-    if (!isObjectOrFunction(utilModule)) {
-      return detectedNodeRuntime ? null : undefined;
-    }
-    const types = ownDataProperty(utilModule, "types");
-    if (!isObjectOrFunction(types)) {
-      return detectedNodeRuntime ? null : undefined;
-    }
-    const isProxy = ownDataProperty(types, "isProxy");
-    if (typeof isProxy !== "function") {
-      return detectedNodeRuntime ? null : undefined;
-    }
-
-    return (value: object): boolean => (
-      reflectApply(isProxy, types, [value]) === true
-    );
+    const probe = new Proxy(new AbortController().signal, {
+      get: rejectTrap,
+      getOwnPropertyDescriptor: rejectTrap,
+      getPrototypeOf: rejectTrap,
+      has: rejectTrap,
+      isExtensible: rejectTrap,
+      ownKeys: rejectTrap,
+    });
+    reflectApply(abortSignalAbortedGetter, probe, []);
+    return false;
   } catch {
-    return detectedNodeRuntime ? null : undefined;
+    return !enteredTrap;
   }
 }
 
-function ownDataProperty(value: object, property: string): unknown {
-  const descriptor = reflectApply(getOwnPropertyDescriptor, Object, [
-    value,
-    property,
-  ]) as PropertyDescriptor | undefined;
-  return descriptor && "value" in descriptor
-    ? descriptor.value as unknown
-    : undefined;
-}
-
-function isObjectOrFunction(value: unknown): value is object {
-  return (
-    (typeof value === "object" && value !== null)
-    || typeof value === "function"
-  );
+/**
+ * Load Node's detector through the reserved `node:` module namespace. The
+ * ignored dynamic import remains runtime-only in browser bundles; standards
+ * hosts never execute it because their local brand check is non-trapping.
+ */
+async function loadNodeProxyDetector(): Promise<NodeProxyDetector | undefined> {
+  try {
+    const specifier = "node:util";
+    const util = await import(/* @vite-ignore */ specifier) as {
+      types?: { isProxy?: unknown };
+    };
+    const types = util.types;
+    const detector = types?.isProxy;
+    if (!types || typeof detector !== "function") {
+      return undefined;
+    }
+    return (value: object): boolean => (
+      reflectApply(detector, types, [value]) === true
+    );
+  } catch {
+    return undefined;
+  }
 }

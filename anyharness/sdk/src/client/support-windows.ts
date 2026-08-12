@@ -15,7 +15,10 @@ import {
 import type { AnyHarnessRequestOptions } from "./core.js";
 import { normalizeOwnQueryParameter } from "./query.js";
 import { retainSupportWindowResponseBytes } from "./support-window-response-bytes.js";
-import { normalizeSupportWindowRequestOptions } from "./support-window-request.js";
+import {
+  assertSupportWindowRequestSignal,
+  normalizeSupportWindowRequestOptions,
+} from "./support-window-request.js";
 import {
   validateSupportEventItem,
   validateSupportRawNotificationItem,
@@ -56,6 +59,7 @@ export async function listSupportSessionWindow(
 ): Promise<AnyHarnessSessionSupportWindowV1> {
   assertSupportId(workspaceId, "workspaceId");
   const prepared = prepareSessionWindowRequest(options);
+  await assertSupportWindowRequestSignal(prepared.request);
   const response = await transport.getBoundedJson<unknown>(
     `/v1/workspaces/${encodeURIComponent(workspaceId)}/sessions/support-window?${prepared.query}`,
     prepared.maxResponseBytes,
@@ -78,6 +82,7 @@ export async function listSupportEventWindow(
     200,
     EVENT_RESPONSE_BYTES,
   );
+  await assertSupportWindowRequestSignal(prepared.request);
   const response = await transport.getBoundedJson<unknown>(
     `/v1/sessions/${encodeURIComponent(sessionId)}/events/support-window?${prepared.query}`,
     prepared.maxResponseBytes,
@@ -100,6 +105,7 @@ export async function listSupportRawNotificationWindow(
     100,
     RAW_NOTIFICATION_RESPONSE_BYTES,
   );
+  await assertSupportWindowRequestSignal(prepared.request);
   const response = await transport.getBoundedJson<unknown>(
     `/v1/sessions/${encodeURIComponent(sessionId)}/raw-notifications/support-window?${prepared.query}`,
     prepared.maxResponseBytes,

@@ -31,6 +31,17 @@ export function normalizeSupportWindowRequestOptions(
   return normalized;
 }
 
+export async function assertSupportWindowRequestSignal(
+  request: AnyHarnessRequestOptions,
+): Promise<void> {
+  if (
+    request.signal !== undefined
+    && !(await isNativeAbortSignal(request.signal))
+  ) {
+    throw invalidRequest("signal must be a local native AbortSignal");
+  }
+}
+
 function assignRequestOption(
   output: AnyHarnessRequestOptions,
   key: string,
@@ -41,9 +52,8 @@ function assignRequestOption(
       output.headers = normalizeHeaders(value);
       return;
     case "signal":
-      if (value !== undefined && !isNativeAbortSignal(value)) {
-        throw invalidRequest("signal must be a local native AbortSignal");
-      }
+      // The platform detector is asynchronous; the owning support-window
+      // method validates this captured data value before calling transport.
       output.signal = value as AbortSignal | undefined;
       return;
     case "measurementOperationId":

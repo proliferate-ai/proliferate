@@ -1,3 +1,5 @@
+import { getEventListeners } from "node:events";
+
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -6,13 +8,6 @@ import {
 } from "./bounded-json.js";
 
 const encoder = new TextEncoder();
-const getEventListeners = (
-  Reflect.get(globalThis, "process") as {
-    getBuiltinModule(id: string): {
-      getEventListeners(target: EventTarget, type: string): unknown[];
-    };
-  }
-).getBuiltinModule("events").getEventListeners;
 const limits = (successBytes: number, errorBytes = successBytes) => ({
   successBytes,
   errorBytes,
@@ -340,7 +335,9 @@ describe("requestBoundedJson", () => {
       controller.signal,
     );
     await waitingForNextChunk;
-    expect(abortListenerCount(controller.signal)).toBe(1);
+    await vi.waitFor(() => {
+      expect(abortListenerCount(controller.signal)).toBe(1);
+    });
     controller.abort(reason);
 
     await expect(result).rejects.toBe(reason);
