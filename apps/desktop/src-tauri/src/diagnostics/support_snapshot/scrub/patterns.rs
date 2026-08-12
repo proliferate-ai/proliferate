@@ -262,6 +262,7 @@ fn replace_high_confidence_opaque(
     let mut mapped_visible_end = None;
     let mut count = 0_u64;
     let bytes = value.as_bytes();
+    let mut matches = Vec::new();
     let mut start = 0;
     while start < bytes.len() {
         if start >= old_visible_end {
@@ -275,22 +276,27 @@ fn replace_high_confidence_opaque(
         while end < bytes.len() && opaque_byte(bytes[end]) {
             end += 1;
         }
-        if end - start >= 48
-            && is_high_confidence_opaque(&value[start..end])
-            && !approved_opaque_context(value, start, end)
-        {
-            output.push_str(&value[prior..start]);
-            output.push_str(redaction_marker(SupportSecretClassV1::OpaqueCredential));
-            prior = end;
-            count = count
-                .checked_add(1)
-                .ok_or(SupportScrubError::AccountingOverflow)?;
-            if end >= old_visible_end {
-                mapped_visible_end = Some(output.len());
-                break;
-            }
+        if approved_opaque_context(value, start, end) {
+            collect_contextual_opaque_matches(value, start, end, &mut matches);
+        } else if end - start >= 48 && is_high_confidence_opaque(&value[start..end]) {
+            matches.push((start, end));
         }
         start = end;
+    }
+    for (start, end) in matches {
+        if start >= old_visible_end {
+            break;
+        }
+        output.push_str(&value[prior..start]);
+        output.push_str(redaction_marker(SupportSecretClassV1::OpaqueCredential));
+        prior = end;
+        count = count
+            .checked_add(1)
+            .ok_or(SupportScrubError::AccountingOverflow)?;
+        if end >= old_visible_end {
+            mapped_visible_end = Some(output.len());
+            break;
+        }
     }
     if count == 0 {
         return Ok(false);
@@ -305,6 +311,27 @@ fn replace_high_confidence_opaque(
     *value = output;
     *visible_end = mapped_visible_end;
     Ok(true)
+}
+
+fn collect_contextual_opaque_matches(
+    value: &str,
+    start: usize,
+    end: usize,
+    matches: &mut Vec<(usize, usize)>,
+) {
+    let bytes = value.as_bytes();
+    let mut candidate_start = start;
+    for boundary in start..=end {
+        if boundary < end && !matches!(bytes[boundary], b'/' | b'=') {
+            continue;
+        }
+        if boundary - candidate_start >= 48
+            && is_high_confidence_opaque(&value[candidate_start..boundary])
+        {
+            matches.push((candidate_start, boundary));
+        }
+        candidate_start = boundary.saturating_add(1);
+    }
 }
 
 fn opaque_byte(byte: u8) -> bool {

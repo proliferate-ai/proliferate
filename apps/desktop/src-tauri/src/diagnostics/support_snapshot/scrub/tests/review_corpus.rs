@@ -182,4 +182,18 @@ fn long_paths_urls_queries_and_monkey_survive_but_real_opaque_tokens_do_not() {
 
     let opaque = "Aa0_Bb1_Cc2_Dd3_Ee4_Ff5_Gg6_Hh7_Ii8_Jj9_Kk0_Ll1";
     assert_eq!(scrub(opaque), "[REDACTED:opaque_credential]");
+
+    let url = format!("https://example.test/download?blob={opaque}&view=ordinary");
+    let retained = scrub(&url);
+    assert_eq!(
+        retained,
+        "https://example.test/download?blob=[REDACTED:opaque_credential]&view=ordinary"
+    );
+
+    let path = format!("path=/tmp/{opaque}/support-report.json");
+    let retained = scrub(&path);
+    assert_eq!(
+        retained,
+        "path=/tmp/[REDACTED:opaque_credential]/support-report.json"
+    );
 }

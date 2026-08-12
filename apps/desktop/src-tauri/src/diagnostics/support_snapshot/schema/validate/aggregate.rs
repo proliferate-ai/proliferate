@@ -366,8 +366,20 @@ fn validate_export_filters(
     ]
     .into_iter()
     .all(|value| value.is_none());
-    if filters.source_time_from.as_deref() != Some(snapshot.selection.source_time_from.as_str())
-        || filters.source_time_to.as_deref() != Some(snapshot.selection.source_time_to.as_str())
+    let filter_from = filters
+        .source_time_from
+        .as_deref()
+        .map(parse_protocol_timestamp)
+        .transpose()?;
+    let filter_to = filters
+        .source_time_to
+        .as_deref()
+        .map(parse_protocol_timestamp)
+        .transpose()?;
+    let selection_from = parse_timestamp(&snapshot.selection.source_time_from)?;
+    let selection_to = parse_timestamp(&snapshot.selection.source_time_to)?;
+    if filter_from != Some(selection_from)
+        || filter_to != Some(selection_to)
         || filters.components.as_slice() != &exact_components[..]
         || filters.record_classes.as_slice() != &exact_classes[..]
         || !filters.severities.is_empty()

@@ -113,6 +113,36 @@ fn export_manifest_protocol_timestamps_accept_offsets_but_reject_invalid_dates()
 }
 
 #[test]
+fn snapshot_compares_protocol_filter_offsets_as_instants() {
+    let mut snapshot = completed_snapshot();
+    let manifest = snapshot
+        .collector
+        .export_manifest
+        .as_mut()
+        .expect("export manifest");
+    manifest.generated_at = OFFSET_TO.to_owned();
+    manifest.filters.source_time_from = Some(OFFSET_FROM.to_owned());
+    manifest.filters.source_time_to = Some(OFFSET_TO.to_owned());
+    stabilize_serialized_bytes(&mut snapshot).expect("stabilize offset filters");
+    validate_snapshot(&snapshot).expect("equivalent protocol filter instants");
+
+    snapshot
+        .collector
+        .export_manifest
+        .as_mut()
+        .expect("export manifest")
+        .filters
+        .source_time_from = Some("2026-08-12T05:14:59+05:30".to_owned());
+    stabilize_serialized_bytes(&mut snapshot).expect("stabilize different filter instant");
+    assert_eq!(
+        validate_snapshot(&snapshot),
+        Err(SupportSchemaError::InvariantViolation(
+            "exact support collector filters"
+        ))
+    );
+}
+
+#[test]
 fn support_owned_timestamps_still_require_canonical_z() {
     let mut snapshot = no_evidence_skeleton();
     snapshot.generated_at = OFFSET_TO.to_owned();
