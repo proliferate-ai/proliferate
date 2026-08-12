@@ -3,6 +3,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use super::wire::DegradedClassification;
 use crate::{producer::transport::CollectorClient, DiagnosticsComponent};
 
+#[cfg(unix)]
+#[path = "activation_capability.rs"]
+mod capability;
+
 static ACTIVATION_TAKEN: AtomicBool = AtomicBool::new(false);
 
 pub enum DesktopDiagnosticsActivation {
@@ -80,15 +84,15 @@ pub(crate) fn collector_generation_from_received(
     mut descriptor: proliferate_diagnostics_protocol::v1::types::ConnectionDescriptorV1,
     capability_fd: std::os::fd::OwnedFd,
 ) -> Result<CollectorGenerationHandle, ()> {
-    use std::fs::File;
-    use std::io::Read;
     use std::os::fd::AsRawFd;
 
     use proliferate_diagnostics_protocol::v1::{
         limits::MAX_SAFE_INTEGER, types::TokenReferenceKindV1,
         validation::validate_connection_descriptor,
     };
-    use zeroize::Zeroize;
+
+    let capability_deadline =
+        std::time::Instant::now() + super::wire::CHILD_BOOTSTRAP_READ_DEADLINE;
 
     if generation > MAX_SAFE_INTEGER {
         return Err(());
@@ -99,20 +103,7 @@ pub(crate) fn collector_generation_from_received(
     {
         return Err(());
     }
-    let mut file = File::from(capability_fd);
-    let mut bytes = Vec::new();
-    file.by_ref()
-        .take(257)
-        .read_to_end(&mut bytes)
-        .map_err(|_| ())?;
-    while matches!(bytes.last(), Some(b'\n' | b'\r')) {
-        bytes.pop();
-    }
-    if bytes.is_empty() || bytes.len() > 256 || !bytes.iter().all(|byte| byte.is_ascii_graphic()) {
-        bytes.zeroize();
-        return Err(());
-    }
-    let capability = String::from_utf8(bytes).map_err(|_| ())?;
+    let capability = capability::read_capability_until(capability_fd, capability_deadline)?;
     let client = CollectorClient::new(&descriptor.endpoint, capability).map_err(|_| ())?;
     Ok(CollectorGenerationHandle {
         generation,
@@ -133,12 +124,11 @@ pub fn take_desktop_activation(component: DiagnosticsComponent) -> DesktopDiagno
     any(target_arch = "aarch64", target_arch = "x86_64")
 ))]
 mod platform {
-    use std::fs::File;
-    use std::io::Read;
     use std::mem::{size_of, zeroed};
     use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
     use std::os::unix::net::UnixStream;
     use std::sync::Arc;
+    use std::time::Instant;
 
     use proliferate_diagnostics_protocol::v1::limits::MAX_SAFE_INTEGER;
     use proliferate_diagnostics_protocol::v1::types::TokenReferenceKindV1;
@@ -175,7 +165,9 @@ mod platform {
             );
         }
         let shutdown = unsafe { OwnedFd::from_raw_fd(CHILD_SHUTDOWN_RESERVED_FD) };
-        let _ = bridge.set_read_timeout(Some(CHILD_BOOTSTRAP_READ_DEADLINE));
+        let bootstrap_deadline = Instant::now() + CHILD_BOOTSTRAP_READ_DEADLINE;
+        let remaining = bootstrap_deadline.saturating_duration_since(Instant::now());
+        let _ = bridge.set_read_timeout(Some(remaining));
         let mut reader = match bridge.try_clone() {
             Ok(reader) => reader,
             Err(_) => {
@@ -188,7 +180,9 @@ mod platform {
             }
         };
         match receive_frame::<ParentFrame>(&mut reader) {
-            Ok(received) => parse_bootstrap(component, bridge, shutdown, received),
+            Ok(received) => {
+                parse_bootstrap_until(component, bridge, shutdown, received, bootstrap_deadline)
+            }
             Err(FrameError::Closed | FrameError::Io) => degraded(
                 DegradedClassification::BootstrapTimeout,
                 Some(bridge),
@@ -204,11 +198,12 @@ mod platform {
         }
     }
 
-    fn parse_bootstrap(
+    fn parse_bootstrap_until(
         component: DiagnosticsComponent,
         bridge: UnixStream,
         shutdown: OwnedFd,
         mut received: ReceivedFrame<ParentFrame>,
+        bootstrap_deadline: Instant,
     ) -> DesktopDiagnosticsActivation {
         let ParentFrame::Bootstrap {
             protocol_version,
@@ -289,17 +284,18 @@ mod platform {
                         None,
                     );
                 }
-                let capability = match read_capability(capability_fd) {
-                    Ok(value) => value,
-                    Err(_) => {
-                        return degraded(
-                            DegradedClassification::DescriptorInvalid,
-                            Some(bridge),
-                            Some(shutdown),
-                            fallback,
-                        )
-                    }
-                };
+                let capability =
+                    match capability::read_capability_until(capability_fd, bootstrap_deadline) {
+                        Ok(value) => value,
+                        Err(_) => {
+                            return degraded(
+                                DegradedClassification::DescriptorInvalid,
+                                Some(bridge),
+                                Some(shutdown),
+                                fallback,
+                            )
+                        }
+                    };
                 let client = match CollectorClient::new(&descriptor.endpoint, capability) {
                     Ok(client) => Arc::new(client),
                     Err(_) => {
@@ -356,24 +352,20 @@ mod platform {
         })
     }
 
-    fn read_capability(descriptor: OwnedFd) -> Result<String, ()> {
-        let mut file = File::from(descriptor);
-        let mut bytes = Vec::new();
-        file.by_ref()
-            .take(257)
-            .read_to_end(&mut bytes)
-            .map_err(|_| ())?;
-        while matches!(bytes.last(), Some(b'\n' | b'\r')) {
-            bytes.pop();
-        }
-        if bytes.is_empty()
-            || bytes.len() > 256
-            || !bytes.iter().all(|byte| byte.is_ascii_graphic())
-        {
-            bytes.fill(0);
-            return Err(());
-        }
-        String::from_utf8(bytes).map_err(|_| ())
+    #[cfg(test)]
+    fn parse_bootstrap(
+        component: DiagnosticsComponent,
+        bridge: UnixStream,
+        shutdown: OwnedFd,
+        received: ReceivedFrame<ParentFrame>,
+    ) -> DesktopDiagnosticsActivation {
+        parse_bootstrap_until(
+            component,
+            bridge,
+            shutdown,
+            received,
+            Instant::now() + CHILD_BOOTSTRAP_READ_DEADLINE,
+        )
     }
 
     fn descriptor_exists(fd: RawFd) -> bool {

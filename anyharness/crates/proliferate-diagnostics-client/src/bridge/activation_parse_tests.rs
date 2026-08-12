@@ -11,6 +11,7 @@ use std::io::Write;
 use std::os::fd::{FromRawFd, OwnedFd};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
+use std::time::{Duration, Instant};
 
 use proliferate_diagnostics_protocol::v1::limits::{CURRENT_SCHEMA_VERSION, MAX_SAFE_INTEGER};
 use proliferate_diagnostics_protocol::v1::types::{
@@ -284,6 +285,39 @@ fn invalid_collector_capability_retains_independent_valid_fallback() {
         );
         assert_degraded(outcome, DegradedClassification::DescriptorInvalid, true);
     }
+}
+
+#[test]
+fn timed_out_collector_capability_retains_independent_valid_fallback() {
+    let (bridge, shutdown) = context();
+    let frame = bootstrap(
+        WireComponent::Anyharness,
+        BootstrapCollectorState::Ready {
+            generation: 1,
+            descriptor: descriptor(),
+            capability_fd_role: CapabilityFdRole::CollectorCapability,
+        },
+        fallback_available(),
+    );
+    let (capability, capability_write) = pipe_pair();
+    let mut writer = std::fs::File::from(capability_write);
+    writer
+        .write_all(b"partial-token")
+        .expect("write capability");
+    let (_directory, fallback) = fallback_dir_fd(0o700);
+    let started = Instant::now();
+    let deadline = started + Duration::from_millis(50);
+    let outcome = parse_bootstrap_until(
+        DiagnosticsComponent::AnyHarness,
+        bridge,
+        shutdown,
+        received(frame, vec![capability, fallback]),
+        deadline,
+    );
+
+    assert_degraded(outcome, DegradedClassification::DescriptorInvalid, true);
+    assert!(started.elapsed() < Duration::from_millis(750));
+    drop(writer);
 }
 
 // ---------------------------------------------------------------------
