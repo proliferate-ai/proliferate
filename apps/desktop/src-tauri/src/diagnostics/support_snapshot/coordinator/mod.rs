@@ -1,8 +1,13 @@
 mod artifacts;
 mod byte_allocation;
 mod capture;
+mod control;
+#[cfg(test)]
+mod deadline_race_tests;
 mod file_accounting;
 mod finish;
+#[cfg(test)]
+mod lifecycle_tests;
 pub(crate) mod model;
 mod preparation;
 mod runtime;
@@ -13,6 +18,12 @@ mod session_values;
 mod state;
 mod submission;
 mod submission_flow;
+#[cfg(test)]
+mod submission_matrix_tests;
+mod terminal;
+#[cfg(test)]
+mod test_support;
+mod watchdog;
 
 use std::sync::Arc;
 
@@ -38,6 +49,8 @@ pub(crate) struct SupportSnapshotCoordinator {
     pub(super) worker: SharedCloudWorkerState,
     pub(super) sidecar: SharedSidecar,
     pub(super) runtime: Arc<dyn CoordinatorRuntime>,
+    pub(super) artifact_gate: Arc<Mutex<()>>,
+    pub(super) shutdown_gate: Arc<Mutex<()>>,
 }
 
 impl SupportSnapshotCoordinator {
@@ -71,6 +84,8 @@ impl SupportSnapshotCoordinator {
             worker,
             sidecar,
             runtime,
+            artifact_gate: Arc::new(Mutex::new(())),
+            shutdown_gate: Arc::new(Mutex::new(())),
         })
     }
 
@@ -91,6 +106,8 @@ impl SupportSnapshotCoordinator {
             worker,
             sidecar,
             runtime,
+            artifact_gate: Arc::new(Mutex::new(())),
+            shutdown_gate: Arc::new(Mutex::new(())),
         })
     }
 }

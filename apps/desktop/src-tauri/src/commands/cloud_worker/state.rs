@@ -35,6 +35,19 @@ pub(crate) struct DesktopWorkerDiagnosticsState {
 }
 
 impl CloudWorkerState {
+    /// Takes the finite Worker compatibility-log binding before support file
+    /// capture starts. The lifecycle mutex is held only long enough to clone
+    /// the current owned target identifier; no file read or status RPC runs
+    /// under Worker process authority.
+    pub(crate) fn support_evidence_target_id(&self) -> Option<String> {
+        self.lifecycle
+            .try_lock()
+            .ok()?
+            .process
+            .as_ref()
+            .map(|process| process.target_id.clone())
+    }
+
     /// Returns only a cloned target identifier and classified child status;
     /// the identity-stable process and bridge owners never escape the mutex.
     #[cfg(all(

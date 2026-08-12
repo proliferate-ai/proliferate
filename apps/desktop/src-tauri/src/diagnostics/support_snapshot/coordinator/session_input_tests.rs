@@ -20,7 +20,7 @@ fn window(
 }
 
 #[test]
-fn endpoint_requires_exact_cap_and_allows_the_plus_five_second_boundary() {
+fn endpoint_freshness_is_anchored_after_native_capture() {
     let exact = window(
         EVENTS_PER_SESSION,
         EVENT_RESPONSE_BYTES,
@@ -37,7 +37,7 @@ fn endpoint_requires_exact_cap_and_allows_the_plus_five_second_boundary() {
             EVENTS_PER_SESSION,
             EVENT_RESPONSE_BYTES,
             WindowPresentationOrderV1::SeqAsc,
-            "2026-08-12T00:00:00Z",
+            "2026-08-12T00:00:05Z",
         ),
         Ok(SupportEndpointStateV1::Included)
     );
@@ -49,7 +49,7 @@ fn endpoint_requires_exact_cap_and_allows_the_plus_five_second_boundary() {
     );
     assert_eq!(
         validate_endpoint(
-            "2026-08-12T00:00:00Z",
+            "2026-08-12T00:00:05Z",
             EndpointCaptureState::Included,
             None,
             1,
@@ -57,13 +57,13 @@ fn endpoint_requires_exact_cap_and_allows_the_plus_five_second_boundary() {
             EVENTS_PER_SESSION,
             EVENT_RESPONSE_BYTES,
             WindowPresentationOrderV1::SeqAsc,
-            "2026-08-12T00:00:00Z",
+            "2026-08-12T00:00:05Z",
         ),
         Err(SessionInputError::Incoherent)
     );
     assert_eq!(
         validate_endpoint(
-            "2026-08-12T00:00:05.001Z",
+            "2026-08-12T00:00:10.001Z",
             EndpointCaptureState::Included,
             None,
             1,
@@ -71,7 +71,7 @@ fn endpoint_requires_exact_cap_and_allows_the_plus_five_second_boundary() {
             EVENTS_PER_SESSION,
             EVENT_RESPONSE_BYTES,
             WindowPresentationOrderV1::SeqAsc,
-            "2026-08-12T00:00:00Z",
+            "2026-08-12T00:00:05Z",
         ),
         Err(SessionInputError::Incoherent)
     );
@@ -291,6 +291,7 @@ fn zero_item_uncertain_recent_list_is_preserved_without_a_phantom_shell() {
         &collection,
         &begin,
         "2026-08-11T23:45:00Z",
+        "2026-08-12T00:00:00Z",
         "2026-08-12T00:00:00Z",
         &SupportExportScrubber::default(),
     )

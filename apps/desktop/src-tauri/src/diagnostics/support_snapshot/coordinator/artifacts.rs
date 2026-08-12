@@ -13,8 +13,9 @@ use super::model::{
     ReconcileStagedSupportSnapshotsInput, ReconciledSupportArtifactOutput,
     SaveSupportSnapshotArchiveInput,
 };
-use super::preparation::take_operation;
-use super::state::{ArtifactAuthorization, ReadVerificationProof, ReadinessState};
+use super::state::{
+    ArtifactAuthorization, ClosingPreparation, ReadVerificationProof, ReadinessState,
+};
 use super::SupportSnapshotCoordinator;
 use crate::diagnostics::support_snapshot::schema::validate::validate_id;
 
@@ -176,8 +177,12 @@ impl SupportSnapshotCoordinator {
             return Err("support_snapshot_artifact_invalid".to_string());
         }
         let store = self.store.as_ref().cloned();
+        let _artifact_guard = self.artifact_gate.lock().await;
         {
             let mut state = self.state.lock().await;
+            if state.shutdown_armed || state.readiness != ReadinessState::Ready {
+                return Err("support_snapshot_not_ready".to_string());
+            }
             if state
                 .submission
                 .as_ref()
@@ -185,7 +190,12 @@ impl SupportSnapshotCoordinator {
             {
                 return Err("support_snapshot_submission_busy".to_string());
             }
-            state.artifacts.remove(&input.artifact_id);
+            if state.artifacts.remove(&input.artifact_id).is_none() {
+                // Unknown IDs are idempotent at the command boundary, but do
+                // not grant filesystem deletion authority merely because the
+                // deterministic leaf happens to exist.
+                return Ok(());
+            }
             state.read_proofs.remove(&input.artifact_id);
         }
         let Some(store) = store else {
@@ -248,14 +258,26 @@ impl SupportSnapshotCoordinator {
     }
 
     pub(crate) async fn cancel_support(&self) {
-        let (preparation, submission, deletes) = {
+        let _shutdown_guard = self.shutdown_gate.lock().await;
+        let (preparation, control, submission, mut deletes) = {
             let mut state = self.state.lock().await;
             state.shutdown_armed = true;
-            let preparation = state.preparation.take().map(|open| {
-                open.cancelled
-                    .store(true, std::sync::atomic::Ordering::Release);
-                let _ = open.cancellation.send(true);
-                open.operation
+            let preparation = state.preparation.take();
+            let preparation = preparation.map(|open| {
+                if self.runtime.instant_now() >= open.deadline {
+                    open.control
+                        .request(super::control::PreparationInterruption::Deadline);
+                }
+                open.control
+                    .request(super::control::PreparationInterruption::Abandoned);
+                let control = Arc::clone(&open.control);
+                let artifact_id = SupportArtifactStore::artifact_id(&open.input.client_job_id).ok();
+                let operation = open.operation;
+                state.closing_preparation = artifact_id.map(|artifact_id| ClosingPreparation {
+                    control: Arc::clone(&control),
+                    artifact_id,
+                });
+                (operation, control)
             });
             let submission = state
                 .submission
@@ -271,17 +293,64 @@ impl SupportSnapshotCoordinator {
                 state.artifacts.remove(id);
                 state.read_proofs.remove(id);
             }
-            (preparation, submission, deletes)
+            let (preparation, control) = match preparation {
+                Some((operation, control)) => (Some(operation), Some(control)),
+                None => (
+                    None,
+                    state
+                        .closing_preparation
+                        .as_ref()
+                        .map(|closing| Arc::clone(&closing.control)),
+                ),
+            };
+            (preparation, control, submission, deletes)
         };
-        if let Some(preparation) = preparation {
-            if let Some(operation) = take_operation(&preparation) {
-                operation.abandoned();
+        if let Some(control) = &control {
+            control.wait_idle().await;
+        }
+        if let Some(success) = control
+            .as_ref()
+            .and_then(|control| control.finish_completion().claim_cleanup())
+        {
+            if !deletes.contains(&success.reference.artifact_id) {
+                deletes.push(success.reference.artifact_id);
             }
+        }
+        if let (Some(preparation), Some(control)) = (preparation.as_ref(), control.as_ref()) {
+            super::terminal::terminal_for_interruption(preparation, control.interruption());
         }
         if let Some(submission) = submission {
             submission.abandoned();
         }
+        let detached_artifact = self
+            .state
+            .lock()
+            .await
+            .closing_preparation
+            .as_ref()
+            .map(|closing| closing.artifact_id.clone());
+        // A detached finisher can stage only this deterministic job-bound
+        // artifact. Delete it after the shared work fence, even when no
+        // command future remains to consume the FinishResult.
+        if let Some(artifact_id) = detached_artifact {
+            if !deletes.contains(&artifact_id) {
+                deletes.push(artifact_id);
+            }
+        }
+        // Serialize every reentrant shutdown through the same publication /
+        // cleanup gate. No caller can return while another still owns final
+        // staged-artifact deletion.
+        let _artifact_guard = self.artifact_gate.lock().await;
         self.delete_artifacts(deletes).await;
+        let mut state = self.state.lock().await;
+        if control.as_ref().is_some_and(|control| {
+            state
+                .closing_preparation
+                .as_ref()
+                .is_some_and(|closing| Arc::ptr_eq(&closing.control, control))
+        }) {
+            state.closing_preparation = None;
+        }
     }
 }
 

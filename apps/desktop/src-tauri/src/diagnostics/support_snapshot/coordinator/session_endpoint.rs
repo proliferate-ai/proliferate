@@ -30,16 +30,16 @@ pub(super) fn validate_endpoint(
     item_cap: u64,
     response_cap: u64,
     order: WindowPresentationOrderV1,
-    native_captured_at: &str,
+    session_phase_started_at: &str,
 ) -> Result<SupportEndpointStateV1, SessionInputError> {
     validate_timestamp(captured_at).map_err(|_| SessionInputError::Invalid)?;
     let captured = DateTime::parse_from_rfc3339(captured_at)
         .map_err(|_| SessionInputError::Invalid)?
         .with_timezone(&Utc);
-    let native = DateTime::parse_from_rfc3339(native_captured_at)
+    let session_phase = DateTime::parse_from_rfc3339(session_phase_started_at)
         .map_err(|_| SessionInputError::Invalid)?
         .with_timezone(&Utc);
-    if captured < native || captured > native + chrono::Duration::seconds(5) {
+    if captured < session_phase || captured > session_phase + chrono::Duration::seconds(5) {
         return Err(SessionInputError::Incoherent);
     }
     if window.schema_version != 1

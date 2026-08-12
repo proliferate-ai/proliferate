@@ -1,7 +1,5 @@
 use std::collections::BTreeMap;
-use std::sync::{atomic::AtomicBool, Arc, Mutex as StdMutex};
-
-use tokio::sync::watch;
+use std::sync::{Arc, Mutex as StdMutex};
 use tokio::time::Instant;
 
 use crate::diagnostics_collector::producer::lifecycle::support_lifecycle::{
@@ -10,6 +8,7 @@ use crate::diagnostics_collector::producer::lifecycle::support_lifecycle::{
 
 use super::super::artifact_store::SupportArtifactReference;
 use super::capture::CapturedNativeSupportEvidence;
+use super::control::{PreparationControl, PreparationInterruption};
 use super::model::BeginSupportSnapshotInput;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,10 +35,10 @@ pub(super) struct OpenPreparation {
     pub source_time_to: String,
     pub deadline: Instant,
     pub phase: PreparationPhase,
-    pub cancellation: watch::Sender<bool>,
-    pub cancelled: Arc<AtomicBool>,
+    pub control: Arc<PreparationControl>,
     pub operation: Arc<StdMutex<Option<SupportPreparationOperation>>>,
     pub captured: Option<CapturedNativeSupportEvidence>,
+    pub session_phase_started_at: Option<String>,
 }
 
 pub(super) struct OpenSubmission {
@@ -47,6 +46,13 @@ pub(super) struct OpenSubmission {
     pub artifact_id: String,
     pub client_job_id: String,
     pub operation: Option<SupportSubmissionOperation>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct ClosedPreparation {
+    pub preparation_id: String,
+    pub consent_epoch: String,
+    pub interruption: PreparationInterruption,
 }
 
 #[derive(Clone)]
@@ -67,6 +73,8 @@ pub(super) struct CoordinatorState {
     pub shutdown_armed: bool,
     pub readiness: ReadinessState,
     pub preparation: Option<OpenPreparation>,
+    pub closing_preparation: Option<ClosingPreparation>,
+    pub closed_preparation: Option<ClosedPreparation>,
     pub submission: Option<OpenSubmission>,
     pub artifacts: BTreeMap<String, ArtifactAuthorization>,
     pub read_proofs: BTreeMap<String, ReadVerificationProof>,
@@ -78,11 +86,18 @@ impl Default for CoordinatorState {
             shutdown_armed: false,
             readiness: ReadinessState::Unreconciled,
             preparation: None,
+            closing_preparation: None,
+            closed_preparation: None,
             submission: None,
             artifacts: BTreeMap::new(),
             read_proofs: BTreeMap::new(),
         }
     }
+}
+
+pub(super) struct ClosingPreparation {
+    pub control: Arc<PreparationControl>,
+    pub artifact_id: String,
 }
 
 impl CoordinatorState {

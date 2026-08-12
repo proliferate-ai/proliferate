@@ -10,7 +10,6 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::Instant,
 };
 
 use proliferate_diagnostics_client::FallbackRecordV1;
@@ -167,21 +166,21 @@ pub(crate) enum EvidenceCaptureInterrupted {
 
 pub(crate) struct EvidenceCaptureGuard {
     cancelled: Arc<AtomicBool>,
-    deadline: Instant,
+    deadline_expired: Arc<AtomicBool>,
 }
 
 impl EvidenceCaptureGuard {
-    pub(crate) fn new(cancelled: Arc<AtomicBool>, deadline: Instant) -> Self {
+    pub(crate) fn new(cancelled: Arc<AtomicBool>, deadline_expired: Arc<AtomicBool>) -> Self {
         Self {
             cancelled,
-            deadline,
+            deadline_expired,
         }
     }
 
     pub(crate) fn check(&self) -> Result<(), EvidenceCaptureInterrupted> {
         if self.cancelled.load(Ordering::Acquire) {
             Err(EvidenceCaptureInterrupted::Cancelled)
-        } else if Instant::now() >= self.deadline {
+        } else if self.deadline_expired.load(Ordering::Acquire) {
             Err(EvidenceCaptureInterrupted::Deadline)
         } else {
             Ok(())
@@ -259,13 +258,13 @@ mod guard_tests {
     #[test]
     fn capture_guard_fails_closed_for_cancel_and_deadline() {
         let cancelled = Arc::new(AtomicBool::new(true));
-        let guard = EvidenceCaptureGuard::new(
-            cancelled,
-            Instant::now() + std::time::Duration::from_secs(1),
-        );
+        let guard = EvidenceCaptureGuard::new(cancelled, Arc::new(AtomicBool::new(false)));
         assert_eq!(guard.check(), Err(EvidenceCaptureInterrupted::Cancelled));
 
-        let guard = EvidenceCaptureGuard::new(Arc::new(AtomicBool::new(false)), Instant::now());
+        let guard = EvidenceCaptureGuard::new(
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(true)),
+        );
         assert_eq!(guard.check(), Err(EvidenceCaptureInterrupted::Deadline));
     }
 }

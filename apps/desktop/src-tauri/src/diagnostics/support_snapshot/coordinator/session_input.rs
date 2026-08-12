@@ -163,6 +163,7 @@ pub(super) fn parse_session_input(
     begin: &BeginSupportSnapshotInput,
     source_time_from: &str,
     source_time_to: &str,
+    session_phase_started_at: &str,
     scrubber: &SupportExportScrubber,
 ) -> Result<(SupportSessionAssemblyV1, SupportScrubAccounting), SessionInputError> {
     match (session_evidence_json, collection) {
@@ -189,6 +190,7 @@ pub(super) fn parse_session_input(
                 begin,
                 source_time_from,
                 source_time_to,
+                session_phase_started_at,
                 scrubber,
             )
         }
@@ -202,6 +204,7 @@ fn parse_included(
     begin: &BeginSupportSnapshotInput,
     source_time_from: &str,
     source_time_to: &str,
+    session_phase_started_at: &str,
     scrubber: &SupportExportScrubber,
 ) -> Result<(SupportSessionAssemblyV1, SupportScrubAccounting), SessionInputError> {
     let (workspace_id, anyharness_workspace_id, expected_selection, active_session) =
@@ -233,7 +236,7 @@ fn parse_included(
         summary_item_limit,
         SESSION_LIST_RESPONSE_BYTES,
         WindowPresentationOrderV1::UpdatedDescIdAsc,
-        source_time_to,
+        session_phase_started_at,
     )?;
     if active_session.is_none() && session_list_state == SupportEndpointStateV1::Omitted {
         return Err(SessionInputError::Incoherent);
@@ -283,7 +286,7 @@ fn parse_included(
             summary_item_limit,
             SESSION_LIST_RESPONSE_BYTES,
             WindowPresentationOrderV1::UpdatedDescIdAsc,
-            source_time_to,
+            session_phase_started_at,
         )?;
         let expected_summary_bytes = if index == 0 { session_bytes } else { 0 };
         if session.summary.captured_at != envelope.session_list.captured_at
@@ -304,7 +307,7 @@ fn parse_included(
             EVENTS_PER_SESSION,
             EVENT_RESPONSE_BYTES,
             WindowPresentationOrderV1::SeqAsc,
-            source_time_to,
+            session_phase_started_at,
         )?;
         let raw_state = validate_endpoint(
             &session.raw_notifications.captured_at,
@@ -315,7 +318,7 @@ fn parse_included(
             RAW_NOTIFICATIONS_PER_SESSION,
             RAW_NOTIFICATION_RESPONSE_BYTES,
             WindowPresentationOrderV1::SeqAsc,
-            source_time_to,
+            session_phase_started_at,
         )?;
         for endpoint_time in [
             &session.summary.captured_at,

@@ -1,14 +1,11 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::future::Future;
+use std::sync::Arc;
 
 use proliferate_diagnostics_client::{
     ProducerCollectorState, ProducerFailureClassification, ProducerStatusSnapshot,
 };
 use proliferate_diagnostics_protocol::v1::types::CollectorAcceptedRecordV1;
 use proliferate_diagnostics_protocol::v1::types::ComponentV1;
-use tokio::sync::watch;
 use tokio::time::Instant;
 
 use crate::commands::cloud_worker::SharedCloudWorkerState;
@@ -42,6 +39,7 @@ use super::super::schema::model::health::{
     SupportChildProducerSnapshotV1, SupportChildProducerStatusV1, SupportLossCountsV1,
     SupportOmittedProducerStatusV1, SupportProducerHealthV1, SupportTauriProducerHealthV1,
 };
+use super::control::{PreparationControl, PreparationInterruption};
 use super::runtime::CoordinatorRuntime;
 
 pub(super) struct CapturedNativeSupportEvidence {
@@ -59,13 +57,28 @@ pub(super) async fn capture_native_support_evidence(
     source_time_from: &str,
     source_time_to: &str,
     deadline: Instant,
-    cancellation: watch::Receiver<bool>,
-    cancelled: Arc<AtomicBool>,
+    control: Arc<PreparationControl>,
     runtime: Arc<dyn CoordinatorRuntime>,
 ) -> Result<CapturedNativeSupportEvidence, CaptureError> {
-    if cancellation_failed_closed(&cancellation, &cancelled) {
-        return Err(CaptureError::Cancelled);
+    if let Some(error) = capture_interruption(&control, runtime.as_ref(), deadline) {
+        return Err(error);
     }
+    let logs_dir = crate::app_config::logs_dir_path().map_err(|_| CaptureError::Invalid)?;
+    let app_dir = crate::app_config::app_dir_path().map_err(|_| CaptureError::Invalid)?;
+    let runtime_home = crate::app_config::anyharness_runtime_home_path().ok();
+    let worker_target_ids = worker
+        .support_evidence_target_id()
+        .into_iter()
+        .collect::<Vec<_>>();
+    if let Some(error) = capture_interruption(&control, runtime.as_ref(), deadline) {
+        return Err(error);
+    }
+    let roots = FiniteEvidenceRoots::new(
+        &logs_dir,
+        runtime_home.as_deref(),
+        &app_dir,
+        &worker_target_ids,
+    );
     let invocation = issue_support_export_for_coordinator(
         preparation_id,
         source_time_from.to_owned(),
@@ -74,130 +87,66 @@ pub(super) async fn capture_native_support_evidence(
     )
     .map_err(|_| CaptureError::Invalid)?;
     let export_supervisor = Arc::clone(&supervisor);
-    let export_cancellation = cancellation.clone();
+    let export_cancellation = control.subscribe();
+    let export_work = control.begin_work();
     let mut export_task = tokio::spawn(async move {
+        let _work = export_work;
         export_supervisor
             .export_support_snapshot(invocation, export_cancellation)
             .await
     });
     let health_supervisor = Arc::clone(&supervisor);
-    let mut health_task = tokio::spawn(async move { health_supervisor.health().await });
-    let mut child_task =
-        tokio::spawn(async move { capture_native_child_statuses(&sidecar, &worker).await });
-    let mut cancellation_wait = cancellation.clone();
-    let children = tokio::select! {
-        _ = tokio::time::sleep_until(deadline) => {
-            Err((CaptureError::Deadline, false))
-        }
-        changed = cancellation_wait.changed() => {
-            if changed.is_err() || *cancellation_wait.borrow() {
-                Err((CaptureError::Cancelled, false))
-            } else {
-                (&mut child_task)
-                    .await
-                    .map_err(|_| (CaptureError::Invalid, true))
-            }
-        }
-        result = &mut child_task => result.map_err(|_| (CaptureError::Invalid, true)),
-    };
-    let children = match children {
-        Ok(children) => children,
-        Err((error, child_completed)) => {
-            export_task.abort();
-            health_task.abort();
-            if child_completed {
-                let _ = tokio::join!(&mut export_task, &mut health_task);
-            } else {
-                child_task.abort();
-                let _ = tokio::join!(&mut export_task, &mut health_task, &mut child_task);
-            }
-            return Err(error);
-        }
-    };
-    if cancellation_failed_closed(&cancellation, &cancelled) {
-        export_task.abort();
-        health_task.abort();
-        let _ = tokio::join!(&mut export_task, &mut health_task);
-        return Err(CaptureError::Cancelled);
-    }
-    let logs_dir = match crate::app_config::logs_dir_path() {
-        Ok(path) => path,
-        Err(_) => {
-            export_task.abort();
-            health_task.abort();
-            let _ = tokio::join!(&mut export_task, &mut health_task);
-            return Err(CaptureError::Invalid);
-        }
-    };
-    let app_dir = match crate::app_config::app_dir_path() {
-        Ok(path) => path,
-        Err(_) => {
-            export_task.abort();
-            health_task.abort();
-            let _ = tokio::join!(&mut export_task, &mut health_task);
-            return Err(CaptureError::Invalid);
-        }
-    };
-    let roots = FiniteEvidenceRoots::new(
-        &logs_dir,
-        crate::app_config::anyharness_runtime_home_path()
-            .ok()
-            .as_deref(),
-        &app_dir,
-        &children
-            .desktop_worker
-            .target_id
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>(),
-    );
-    let cancelled_now = cancellation_failed_closed(&cancellation, &cancelled);
-    if cancelled_now || runtime.instant_now() >= deadline {
-        export_task.abort();
-        health_task.abort();
-        let _ = tokio::join!(&mut export_task, &mut health_task);
-        return Err(if cancelled_now {
-            CaptureError::Cancelled
-        } else {
-            CaptureError::Deadline
-        });
-    }
-    let file_guard = EvidenceCaptureGuard::new(Arc::clone(&cancelled), deadline.into_std());
-    let mut file_task =
-        tokio::task::spawn_blocking(move || collect_finite_evidence_guarded(&roots, &file_guard));
+    let health_work = control.begin_work();
+    let mut health_task = tokio::spawn(async move {
+        let _work = health_work;
+        health_supervisor.health().await
+    });
+    let child_work = control.begin_work();
+    let mut child_task = tokio::spawn(async move {
+        let _work = child_work;
+        capture_native_child_statuses(&sidecar, &worker).await
+    });
+    let file_guard = EvidenceCaptureGuard::new(control.cancelled_flag(), control.deadline_flag());
+    let file_work = control.begin_work();
+    let mut file_task = tokio::task::spawn_blocking(move || {
+        let _work = file_work;
+        collect_finite_evidence_guarded(&roots, &file_guard)
+    });
     let export_abort = export_task.abort_handle();
     let health_abort = health_task.abort_handle();
-    let remaining = join_capture_tasks(&mut export_task, &mut health_task, &mut file_task);
+    let child_abort = child_task.abort_handle();
+    let remaining = join_capture_tasks(
+        &mut export_task,
+        &mut health_task,
+        &mut child_task,
+        &mut file_task,
+    );
     tokio::pin!(remaining);
-    let mut cancellation = cancellation;
-    let joined = loop {
-        tokio::select! {
-            _ = tokio::time::sleep_until(deadline) => break Err(CaptureError::Deadline),
-            changed = cancellation.changed() => {
-                if changed.is_err() || *cancellation.borrow() {
-                    break Err(CaptureError::Cancelled);
-                }
-            }
-            result = &mut remaining => break Ok(result),
+    let mut interruption = control.subscribe();
+    let interruption_signal = async {
+        if !*interruption.borrow() {
+            let _ = interruption.changed().await;
         }
     };
-    let (export, native_health, files) = match joined {
+    tokio::pin!(interruption_signal);
+    let joined = tokio::select! {
+        _ = &mut interruption_signal => Err(interruption_error(&control)),
+        result = &mut remaining => Ok(result),
+    };
+    let (export, native_health, children, files) = match joined {
         Ok(result) => result?,
         Err(error) => {
-            cancelled.store(true, Ordering::Release);
             export_abort.abort();
             health_abort.abort();
+            child_abort.abort();
             // A blocking task cannot be aborted safely. Its cooperative guard
             // is set above and the owned task is always joined before return.
             let _ = remaining.await;
             return Err(error);
         }
     };
-    if cancellation_failed_closed(&cancellation, &cancelled) {
-        return Err(CaptureError::Cancelled);
-    }
-    if runtime.instant_now() >= deadline {
-        return Err(CaptureError::Deadline);
+    if let Some(error) = capture_interruption(&control, runtime.as_ref(), deadline) {
+        return Err(error);
     }
     let (collector, collector_records) =
         collector_evidence(source_time_to, native_health.clone(), export);
@@ -213,6 +162,7 @@ pub(super) async fn capture_native_support_evidence(
 async fn join_capture_tasks(
     export_task: &mut tokio::task::JoinHandle<Result<ValidatedSupportExport, SupportExportError>>,
     health_task: &mut tokio::task::JoinHandle<NativeDesktopHealth>,
+    child_task: &mut tokio::task::JoinHandle<NativeChildStatusCapture>,
     file_task: &mut tokio::task::JoinHandle<
         Result<FiniteEvidenceCapture, EvidenceCaptureInterrupted>,
     >,
@@ -220,20 +170,38 @@ async fn join_capture_tasks(
     (
         Result<ValidatedSupportExport, SupportExportError>,
         NativeDesktopHealth,
+        NativeChildStatusCapture,
         FiniteEvidenceCapture,
     ),
     CaptureError,
 > {
-    let (export, native_health, files) = tokio::join!(export_task, health_task, file_task);
+    let (export, native_health, children, files) =
+        join_concurrently(export_task, health_task, child_task, file_task).await;
     let export = export.map_err(|_| CaptureError::Invalid)?;
     let native_health = native_health.map_err(|_| CaptureError::Invalid)?;
+    let children = children.map_err(|_| CaptureError::Invalid)?;
     let files = files
         .map_err(|_| CaptureError::Invalid)?
         .map_err(|error| match error {
             EvidenceCaptureInterrupted::Cancelled => CaptureError::Cancelled,
             EvidenceCaptureInterrupted::Deadline => CaptureError::Deadline,
         })?;
-    Ok((export, native_health, files))
+    Ok((export, native_health, children, files))
+}
+
+async fn join_concurrently<A, B, C, D>(
+    a: A,
+    b: B,
+    c: C,
+    d: D,
+) -> (A::Output, B::Output, C::Output, D::Output)
+where
+    A: Future,
+    B: Future,
+    C: Future,
+    D: Future,
+{
+    tokio::join!(a, b, c, d)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -243,9 +211,32 @@ pub(super) enum CaptureError {
     Invalid,
 }
 
-fn cancellation_failed_closed(receiver: &watch::Receiver<bool>, cancelled: &AtomicBool) -> bool {
-    cancelled.load(Ordering::Acquire) || *receiver.borrow() || receiver.has_changed().is_err()
+fn capture_interruption(
+    control: &PreparationControl,
+    runtime: &dyn CoordinatorRuntime,
+    deadline: Instant,
+) -> Option<CaptureError> {
+    if control.interruption() == PreparationInterruption::Running
+        && runtime.instant_now() >= deadline
+    {
+        control.request(PreparationInterruption::Deadline);
+    }
+    (control.interruption() != PreparationInterruption::Running)
+        .then(|| interruption_error(control))
 }
+
+fn interruption_error(control: &PreparationControl) -> CaptureError {
+    match control.interruption() {
+        PreparationInterruption::Deadline => CaptureError::Deadline,
+        PreparationInterruption::Cancelled
+        | PreparationInterruption::Abandoned
+        | PreparationInterruption::Running => CaptureError::Cancelled,
+    }
+}
+
+#[cfg(test)]
+#[path = "capture_tests.rs"]
+mod tests;
 
 fn collector_evidence(
     captured_at: &str,
@@ -329,7 +320,7 @@ fn collector_evidence(
     }
 }
 
-fn empty_coverage(
+pub(super) fn empty_coverage(
     status: SupportCollectorStatusV1,
     completeness: SupportCollectorCompletenessV1,
 ) -> SupportCollectorCoverageV1 {

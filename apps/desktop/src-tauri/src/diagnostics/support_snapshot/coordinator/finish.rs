@@ -1,4 +1,3 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::Instant;
 
@@ -32,6 +31,7 @@ use super::super::schema::validate::validate_snapshot;
 use super::super::scrub::{SupportExportScrubber, SupportOptionalScrubbed, SupportScrubAccounting};
 use super::byte_allocation::allocate_exact_response_bytes;
 use super::capture::CapturedNativeSupportEvidence;
+use super::control::{PreparationControl, PreparationInterruption};
 use super::file_accounting::record_file_residuals;
 use super::model::{
     reference_from_stored, BeginSupportSnapshotInput, PreparedSupportSnapshotOutput,
@@ -48,6 +48,7 @@ pub(super) struct FinishWork {
     pub captured_at: String,
     pub source_time_from: String,
     pub source_time_to: String,
+    pub session_phase_started_at: String,
     pub captured: CapturedNativeSupportEvidence,
     pub session_evidence_json: Option<String>,
     pub session_collection:
@@ -62,25 +63,26 @@ pub(super) struct FinishResult {
 pub(super) fn finish_and_stage(
     store: Arc<SupportArtifactStore>,
     work: FinishWork,
-    cancelled: &AtomicBool,
+    control: &PreparationControl,
     deadline: Instant,
     runtime: &dyn CoordinatorRuntime,
 ) -> Result<FinishResult, FinishError> {
-    check_finish(cancelled, deadline, runtime)?;
+    check_finish(control, deadline, runtime)?;
     let home = crate::app_config::home_dir().map_err(|_| FinishError::Scrub)?;
     let home = home.to_str().ok_or(FinishError::Scrub)?.to_owned();
     let scrubber = SupportExportScrubber::new(Some(home)).map_err(|_| FinishError::Scrub)?;
-    check_finish(cancelled, deadline, runtime)?;
+    check_finish(control, deadline, runtime)?;
     let (sessions, mut accounting) = parse_session_input(
         work.session_evidence_json.as_deref(),
         &work.session_collection,
         &work.begin,
         &work.source_time_from,
         &work.source_time_to,
+        &work.session_phase_started_at,
         &scrubber,
     )
     .map_err(map_session_error)?;
-    check_finish(cancelled, deadline, runtime)?;
+    check_finish(control, deadline, runtime)?;
     let mandatory = SupportAssemblyMandatoryV1 {
         snapshot_id: work.snapshot_id.clone(),
         generated_at: work.captured_at.clone(),
@@ -115,7 +117,7 @@ pub(super) fn finish_and_stage(
         &scrubber,
         &mut accounting,
     )?;
-    check_finish(cancelled, deadline, runtime)?;
+    check_finish(control, deadline, runtime)?;
     let assembled = assemble_support_snapshot(SupportAssemblyInputV1 {
         mandatory,
         file_sources,
@@ -128,7 +130,7 @@ pub(super) fn finish_and_stage(
     })
     .map_err(|_| FinishError::Manifest)?;
     validate_snapshot(&assembled.snapshot).map_err(|_| FinishError::Manifest)?;
-    check_finish(cancelled, deadline, runtime)?;
+    check_finish(control, deadline, runtime)?;
     let stored = store
         .stage(
             &work.begin.client_job_id,
@@ -137,7 +139,7 @@ pub(super) fn finish_and_stage(
             &assembled.compact_json,
         )
         .map_err(map_store_error)?;
-    if let Err(error) = check_finish(cancelled, deadline, runtime) {
+    if let Err(error) = check_finish(control, deadline, runtime) {
         let _ = store.delete(&stored.artifact_id);
         return Err(error);
     }
@@ -410,16 +412,21 @@ fn selection_kind(begin: &BeginSupportSnapshotInput) -> SupportSessionSelectionV
 }
 
 pub(super) fn check_finish(
-    cancelled: &AtomicBool,
+    control: &PreparationControl,
     deadline: Instant,
     runtime: &dyn CoordinatorRuntime,
 ) -> Result<(), FinishError> {
-    if cancelled.load(Ordering::Acquire) {
-        Err(FinishError::Cancelled)
-    } else if runtime.instant_now() >= deadline {
-        Err(FinishError::Deadline)
-    } else {
-        Ok(())
+    if control.interruption() == PreparationInterruption::Running
+        && runtime.instant_now() >= deadline
+    {
+        control.request(PreparationInterruption::Deadline);
+    }
+    match control.interruption() {
+        PreparationInterruption::Cancelled | PreparationInterruption::Abandoned => {
+            Err(FinishError::Cancelled)
+        }
+        PreparationInterruption::Deadline => Err(FinishError::Deadline),
+        PreparationInterruption::Running => Ok(()),
     }
 }
 

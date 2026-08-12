@@ -283,6 +283,22 @@ impl TauriDiagnosticsProducer {
             .unwrap_or_default()
     }
 
+    #[cfg(test)]
+    pub(crate) fn support_lifecycle_snapshot(&self) -> Vec<ProducerRecordV1> {
+        self.inner
+            .state
+            .lock()
+            .map(|state| {
+                state
+                    .queued
+                    .iter()
+                    .filter(|queued| queued.record.name.starts_with("desktop.support_snapshot."))
+                    .map(|queued| queued.record.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     fn next_record(
         &self,
         name: &str,
