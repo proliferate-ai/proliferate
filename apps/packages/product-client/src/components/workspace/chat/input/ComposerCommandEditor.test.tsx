@@ -448,9 +448,11 @@ describe("ComposerCommandEditor", () => {
 
     await waitFor(() => expect(fileMentionMock.lastQuery).toBe("set"));
     fireEvent.keyDown(textarea, { key: "Enter", repeat: false });
+    // The document ends with a code block, so the fenced-code plugin keeps a
+    // continuation paragraph after it — serialized as the trailing newline.
     await waitFor(() => expect(onDraftChange.mock.calls.some(
       ([draft]) => serializeChatDraftToPrompt(draft)
-        === "[setup.md](docs/setup.md) \n\n```\nconst ready = true;\n```",
+        === "[setup.md](docs/setup.md) \n\n```\nconst ready = true;\n```\n",
     )).toBe(true));
   });
 

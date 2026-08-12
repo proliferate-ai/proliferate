@@ -111,6 +111,18 @@ edits — submits on plain Enter or Cmd/Ctrl-Enter, including from a list item o
 code block, and Shift-Enter inserts a newline without submitting. Queued edits
 use the workspace editor's minimum height, row cap, and overflow scrolling.
 
+Rich clipboard code is normalized on entry. A pasted rendered code block
+(`text/html` `<pre><code>`) imports as one editable code block — Lexical's
+double `<pre>`/`<code>` conversion is dissolved — and a code block that ends
+the draft always keeps a continuation paragraph after it, so the caret can
+always leave the block (the same continuation the typed-fence path creates).
+The inline-code text format is not part of the composer's document model:
+there is no way to author it (typed backticks stay literal), so rich pastes
+that carry it keep their characters and drop the format. An external draft
+replacement resets inherited selection formats along with the content;
+without that reset the format bits survive the clear and re-apply to
+everything typed after a send (PRO-159).
+
 Lexical's high-priority Enter and Tab commands own this decision before native
 editor mutation. The surface applies the shared submit contract exactly once;
 Shift-Enter and list indentation stay Lexical-owned. The
