@@ -31,6 +31,7 @@ pub(crate) struct FallbackStatus {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum FallbackError {
+    #[cfg(not(unix))]
     #[error("component fallback is unsupported")]
     Unsupported,
     #[error("component fallback directory is unsafe")]
@@ -78,6 +79,7 @@ impl FallbackWriter {
         self.platform.write(reason, record)
     }
 
+    #[cfg(all(test, unix))]
     pub(crate) fn bytes(&self) -> u32 {
         self.platform.current_status().bytes
     }

@@ -184,8 +184,7 @@ impl CollectorClient {
             }
             let receipt: IngestReceiptV1 = serde_json::from_slice(&bytes)
                 .map_err(|_| TransportFailure::dispatched(TransportError::Protocol))?;
-            validate_receipt(&batch, &receipt)
-                .map_err(|error| TransportFailure::dispatched(error))?;
+            validate_receipt(&batch, &receipt).map_err(TransportFailure::dispatched)?;
             Ok(receipt)
         })
         .await;

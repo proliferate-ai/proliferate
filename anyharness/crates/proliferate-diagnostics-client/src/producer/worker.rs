@@ -108,7 +108,7 @@ async fn run_suppressed(inner: Arc<ProducerInner>) {
                                         let revised = parent_deadline.map(|deadline| {
                                             deadline - TERMINAL_FALLBACK_ALLOWANCE
                                         });
-                                        if revised.map_or(true, |deadline| deadline < request_deadline) {
+                                        if revised.is_none_or(|deadline| deadline < request_deadline) {
                                             break Err(deadline_failure(&dispatch));
                                         }
                                     }

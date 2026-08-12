@@ -122,7 +122,7 @@ impl PlatformFallbackWriter {
             return Err(FallbackError::RecordTooLarge);
         }
 
-        let result = self.write_line(&line, line_bytes);
+        let result = self.write_line(line, line_bytes);
         if matches!(
             result,
             Err(FallbackError::UnsafeDirectory
@@ -151,7 +151,7 @@ impl PlatformFallbackWriter {
         if self
             .active_bytes
             .checked_add(line_bytes)
-            .map_or(true, |bytes| bytes > FALLBACK_SEGMENT_BYTES)
+            .is_none_or(|bytes| bytes > FALLBACK_SEGMENT_BYTES)
         {
             self.rotate()?;
             self.validate_live_authority()?;
@@ -227,8 +227,7 @@ impl PlatformFallbackWriter {
             rotated[2].stat.identity,
         ];
         let swaps = [(2_usize, 3_usize), (1, 2), (0, 1)];
-        let mut completed = 0;
-        for (left, right) in swaps {
+        for (completed, (left, right)) in swaps.iter().copied().enumerate() {
             if let Err(error) = swap_verified(
                 &self.directory,
                 self.names.segments[left],
@@ -247,7 +246,6 @@ impl PlatformFallbackWriter {
                 return Err(error);
             }
             identities.swap(left, right);
-            completed += 1;
         }
 
         let [_, _, oldest] = rotated;

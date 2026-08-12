@@ -65,7 +65,7 @@ fn decode_body_rejects_empty_and_oversized_bodies() {
 #[cfg(unix)]
 mod unix_socket_tests {
     use std::io::{Read, Write};
-    use std::mem::{size_of, zeroed};
+    use std::mem::{size_of_val, zeroed};
     use std::net::Shutdown;
     use std::os::fd::{AsRawFd, RawFd};
     use std::os::unix::net::UnixStream;
@@ -91,8 +91,8 @@ mod unix_socket_tests {
                 iov_len: body.len(),
             },
         ];
-        let control_len =
-            unsafe { libc::CMSG_SPACE((descriptors.len() * size_of::<RawFd>()) as _) as usize };
+        let descriptor_bytes = size_of_val(descriptors);
+        let control_len = unsafe { libc::CMSG_SPACE(descriptor_bytes as _) as usize };
         let mut control = vec![0_u8; control_len.max(1)];
         let mut message: libc::msghdr = unsafe { zeroed() };
         message.msg_iov = iov.as_mut_ptr();
@@ -105,12 +105,11 @@ mod unix_socket_tests {
                 assert!(!cmsg.is_null());
                 (*cmsg).cmsg_level = libc::SOL_SOCKET;
                 (*cmsg).cmsg_type = libc::SCM_RIGHTS;
-                (*cmsg).cmsg_len =
-                    libc::CMSG_LEN((descriptors.len() * size_of::<RawFd>()) as _) as _;
+                (*cmsg).cmsg_len = libc::CMSG_LEN(descriptor_bytes as _) as _;
                 std::ptr::copy_nonoverlapping(
                     descriptors.as_ptr().cast::<u8>(),
                     libc::CMSG_DATA(cmsg),
-                    descriptors.len() * size_of::<RawFd>(),
+                    descriptor_bytes,
                 );
             }
         }

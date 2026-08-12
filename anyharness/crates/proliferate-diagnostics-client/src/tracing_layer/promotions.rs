@@ -91,19 +91,19 @@ impl PromotionCandidates {
         &mut self,
         values: &mut BTreeMap<String, ArgumentValueV1>,
     ) -> DiagnosticCorrelation {
-        let mut output = DiagnosticCorrelation::default();
-        output.operation_id = self.take_id("operation_id", values);
-        output.parent_operation_id = self.take_id("parent_operation_id", values);
-        output.trace_id = self.take_id("trace_id", values);
-        output.workspace_id = self.take_id("workspace_id", values);
-        output.session_id = self.take_id("session_id", values);
-        output.turn_id = self.take_id("turn_id", values);
-        output.item_id = self.take_id("item_id", values);
-        output.request_id = self.take_id("request_id", values);
-        output.target_id = self.take_id("target_id", values);
-        output.prompt_id = self.take_id("prompt_id", values);
-        output.workflow_id = self.take_id("workflow_id", values);
-        output
+        DiagnosticCorrelation {
+            operation_id: self.take_id("operation_id", values),
+            parent_operation_id: self.take_id("parent_operation_id", values),
+            trace_id: self.take_id("trace_id", values),
+            workspace_id: self.take_id("workspace_id", values),
+            session_id: self.take_id("session_id", values),
+            turn_id: self.take_id("turn_id", values),
+            item_id: self.take_id("item_id", values),
+            request_id: self.take_id("request_id", values),
+            target_id: self.take_id("target_id", values),
+            prompt_id: self.take_id("prompt_id", values),
+            workflow_id: self.take_id("workflow_id", values),
+        }
     }
 
     pub(super) fn take_error_classification(

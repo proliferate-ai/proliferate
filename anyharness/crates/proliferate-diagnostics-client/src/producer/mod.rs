@@ -298,7 +298,7 @@ impl DiagnosticsProducerGuard {
     pub(crate) async fn shutdown_inner(mut self, deadline: Duration) -> ProducerStatusSnapshot {
         let absolute_deadline = self.inner.begin_guard_shutdown(deadline);
         self.inner.notify.notify_one();
-        if let Some(mut join) = self.join.take() {
+        if let Some(join) = self.join.take() {
             loop {
                 if join.is_finished() {
                     let _ = join.await;
@@ -351,11 +351,6 @@ impl Drop for DiagnosticsProducerGuard {
 }
 
 impl ProducerInner {
-    pub(crate) fn record_loss(&self, reason: ProducerFailureClassification) {
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        state.record_loss(reason);
-    }
-
     pub(crate) fn snapshot(&self) -> ProducerStatusSnapshot {
         let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         // Cached atomics keep terminal status coherent without blocking on disk I/O.
@@ -528,7 +523,7 @@ impl ProducerInner {
         let proposed = now + deadline;
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         state.terminal = true;
-        let absolute = if state.parent_shutdown_observed {
+        if state.parent_shutdown_observed {
             state.terminal_deadline.unwrap_or(now)
         } else {
             let absolute = state
@@ -536,8 +531,7 @@ impl ProducerInner {
                 .map_or(proposed, |current| current.min(proposed));
             state.terminal_deadline = Some(absolute);
             absolute
-        };
-        absolute
+        }
     }
 
     #[cfg(unix)]

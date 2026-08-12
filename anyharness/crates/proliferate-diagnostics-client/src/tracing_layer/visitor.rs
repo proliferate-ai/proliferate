@@ -276,8 +276,12 @@ mod tests {
 
     #[test]
     fn string_debug_and_error_redact_secrets_crossing_the_output_cutoff() {
-        #[derive(Debug)]
         struct CanaryDebug(String);
+        impl fmt::Debug for CanaryDebug {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str(&self.0)
+            }
+        }
         #[derive(Debug)]
         struct CanaryError(String);
         impl fmt::Display for CanaryError {

@@ -42,7 +42,7 @@ pub fn decode_body<T: DeserializeOwned>(body: &[u8]) -> Result<T, FrameError> {
 
 #[cfg(unix)]
 mod unix {
-    use std::mem::{size_of, zeroed};
+    use std::mem::{size_of, size_of_val, zeroed};
     use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
     use std::os::unix::net::UnixStream;
     use std::time::{Duration, Instant};
@@ -107,7 +107,7 @@ mod unix {
         let control_len = if descriptors.is_empty() {
             0
         } else {
-            unsafe { libc::CMSG_SPACE((descriptors.len() * size_of::<RawFd>()) as _) as usize }
+            unsafe { libc::CMSG_SPACE(size_of_val(descriptors) as _) as usize }
         };
         let mut control = vec![0_u8; control_len];
         let mut message: libc::msghdr = unsafe { zeroed() };
@@ -123,12 +123,11 @@ mod unix {
                 }
                 (*cmsg).cmsg_level = libc::SOL_SOCKET;
                 (*cmsg).cmsg_type = libc::SCM_RIGHTS;
-                (*cmsg).cmsg_len =
-                    libc::CMSG_LEN((descriptors.len() * size_of::<RawFd>()) as _) as _;
+                (*cmsg).cmsg_len = libc::CMSG_LEN(size_of_val(descriptors) as _) as _;
                 std::ptr::copy_nonoverlapping(
                     descriptors.as_ptr().cast::<u8>(),
                     libc::CMSG_DATA(cmsg),
-                    descriptors.len() * size_of::<RawFd>(),
+                    size_of_val(descriptors),
                 );
             }
         }
@@ -340,7 +339,7 @@ mod unix {
                             let available_bytes = control_end - data_start;
                             let captured_bytes = declared_bytes.min(available_bytes);
                             if declared_bytes > available_bytes
-                                || captured_bytes % size_of::<RawFd>() != 0
+                                || !captured_bytes.is_multiple_of(size_of::<RawFd>())
                             {
                                 invalid = true;
                             }
