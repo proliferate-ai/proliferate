@@ -24,7 +24,16 @@ export function ClosedChatTabsMenu({
           <div
             key={row.id}
             data-telemetry-mask="true"
-            className={`group/row flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-hover active:bg-active ${row.isActive ? "bg-selected" : ""}`}
+            className={`group/row flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-hover active:bg-active ${row.isActive ? "bg-selected" : ""}`}
+            onClick={(event) => {
+              const targetButton = event.target instanceof Element
+                ? event.target.closest("button")
+                : null;
+              if (targetButton && event.currentTarget.contains(targetButton)) {
+                return;
+              }
+              onRestoreSession(row.id);
+            }}
           >
             <Button
               type="button"
