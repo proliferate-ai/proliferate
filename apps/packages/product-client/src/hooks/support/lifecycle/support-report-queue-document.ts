@@ -49,13 +49,19 @@ export async function createSupportQueueDocument<TJob>(
   jobs: readonly TJob[],
 ): Promise<SupportQueueDocumentV2<TJob>> {
   validateRevision(revision);
-  if (jobs.length > SUPPORT_QUEUE_MAX_JOBS) {
+  let canonicalJobs: TJob[];
+  try {
+    canonicalJobs = JSON.parse(canonicalQueueJson(jobs)) as TJob[];
+  } catch (error) {
+    throw mapCanonicalError(error);
+  }
+  if (canonicalJobs.length > SUPPORT_QUEUE_MAX_JOBS) {
     throw new SupportQueueDocumentError("jobs_exceeded");
   }
   const hashInput = {
     schemaVersion: SUPPORT_QUEUE_SCHEMA_VERSION,
     revision,
-    jobs: [...jobs],
+    jobs: canonicalJobs,
   };
   let hashBytes: string;
   try {

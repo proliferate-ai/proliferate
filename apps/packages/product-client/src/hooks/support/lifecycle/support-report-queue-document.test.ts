@@ -96,6 +96,16 @@ describe("support queue V2 document", () => {
     )).rejects.toMatchObject({ failure: "shape_invalid" });
   });
 
+  it("creates from descriptor-safe job bytes without invoking array getters", async () => {
+    const jobs = [Object.defineProperty({ id: "job-1" }, "secret", {
+      enumerable: true,
+      get: () => "must not run",
+    })];
+    await expect(createSupportQueueDocument(0, jobs)).rejects.toMatchObject({
+      failure: "shape_invalid",
+    });
+  });
+
   it("round-trips the canonical journal and rejects wrapper drift", async () => {
     const target = await createSupportQueueDocument(2, [{ id: "job-1" }]);
     const raw = encodeSupportQueueJournal(target);

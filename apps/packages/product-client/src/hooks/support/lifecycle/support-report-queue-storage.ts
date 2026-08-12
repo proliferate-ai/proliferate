@@ -7,6 +7,7 @@ import {
   encodeSupportQueueJournal,
   parseSupportQueueDocument,
   parseSupportQueueJournal,
+  SupportQueueDocumentError,
   type SupportQueueDocumentV2,
   type SupportQueueJobParser,
 } from "./support-report-queue-document";
@@ -80,7 +81,7 @@ export async function commitSupportQueueMutation<TJob>(
   try {
     next = await createNextSupportQueueDocument(current, jobs);
   } catch (error) {
-    if (error instanceof Error && "failure" in error
+    if (error instanceof SupportQueueDocumentError
       && error.failure === "revision_exhausted") {
       throw new SupportQueueStorageError("revision_exhausted");
     }
