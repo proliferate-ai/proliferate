@@ -4,11 +4,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentOperationsToolActionRow } from "#product/components/workspace/chat/tool-calls/AgentOperationsToolActionRow";
 import { TranscriptContextProviders } from "#product/components/workspace/chat/transcript/TranscriptContexts";
+import { type ToolCallItem } from "@anyharness/sdk";
 import type {
   AgentOperationsAgentTarget,
   AgentOperationsReceiptAction,
   AgentOperationsReceiptPresentation,
 } from "#product/domain/chats/tools/agent-operations-tool-presentation";
+import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 import type { SessionRelationship } from "#product/lib/domain/sessions/directory/relationship";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
@@ -203,6 +205,118 @@ describe("AgentOperationsToolActionRow navigation", () => {
     expect(onOpenSession).not.toHaveBeenCalled();
   });
 
+  it("does not navigate to a promote output whose identity disagrees with the input", () => {
+    upsertDirectoryEntry(
+      "client-session:wrong",
+      "different-child",
+      { kind: "root" },
+      "Wrong child",
+    );
+    const rowPresentation = presentation({
+      action: "promote_subagent",
+      targetAgentId: "durable-child",
+      agent: agent({
+        sessionId: "different-child",
+        role: "ordinary",
+        parentSessionId: null,
+      }),
+    });
+    const item = operationItem(rowPresentation);
+    item.rawOutput = authorityAgentView({
+      sessionId: "different-child",
+      role: "ordinary",
+      parentSessionId: null,
+    });
+
+    const { container } = renderRow({
+      presentation: rowPresentation,
+      onOpenSession: vi.fn(),
+      item,
+    });
+
+    expect(container.querySelector("[data-agent-identity-chip]")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /open .*schema audit/i })).toBeNull();
+    expect(mocks.openAgentsPaneTarget).not.toHaveBeenCalled();
+    expect(mocks.openWorkspaceSession).not.toHaveBeenCalled();
+  });
+
+  it("opens a strictly correlated ordinary-agent creation in its projected workspace", () => {
+    mocks.projectedWorkspaceIds.add("workspace-other");
+    const onOpenSession = vi.fn();
+    const rowPresentation = presentation({
+      action: "create_agent",
+      targetAgentId: null,
+      agent: agent({
+        sessionId: "ordinary-child",
+        workspaceId: "workspace-other",
+        parentSessionId: null,
+        role: "ordinary",
+      }),
+    });
+    const item = operationItem(rowPresentation);
+    item.rawInput = { workspaceId: "workspace-other", kind: "ordinary", task: "Schema audit" };
+    item.rawOutput = authorityAgentView({
+      sessionId: "ordinary-child",
+      workspaceId: "workspace-other",
+      role: "ordinary",
+      parentSessionId: null,
+    });
+    delete (item.rawOutput as Record<string, unknown>).parent;
+
+    renderRow({ presentation: rowPresentation, onOpenSession, item });
+    fireEvent.click(screen.getByRole("button", { name: /open .*schema audit/i }));
+
+    expect(mocks.openWorkspaceSession).toHaveBeenCalledWith({
+      workspaceId: "workspace-other",
+      sessionId: "ordinary-child",
+    });
+    expect(onOpenSession).not.toHaveBeenCalled();
+  });
+
+  it("opens a promoted result whose wire AgentView omits its empty parent", () => {
+    const onOpenSession = vi.fn();
+    const rowPresentation = presentation({
+      action: "promote_subagent",
+      agent: agent({ role: "ordinary", parentSessionId: null }),
+    });
+    const item = operationItem(rowPresentation);
+    item.rawOutput = authorityAgentView({
+      sessionId: "durable-child",
+      role: "ordinary",
+      parentSessionId: null,
+    });
+    delete (item.rawOutput as Record<string, unknown>).parent;
+
+    renderRow({ presentation: rowPresentation, onOpenSession, item });
+    fireEvent.click(screen.getByRole("button", { name: /open .*schema audit/i }));
+
+    expect(onOpenSession).toHaveBeenCalledWith("durable-child", "generic");
+  });
+
+  it("keeps a failed create output display-only even when it looks complete", () => {
+    upsertDirectoryEntry(
+      "client-session:pending", "durable-child", { kind: "pending" }, "Schema audit",
+    );
+    const rowPresentation = presentation({ action: "create_agent", isFailed: true });
+    const item = operationItem(rowPresentation);
+    item.status = "failed";
+    item.rawOutput = authorityAgentView({
+      sessionId: "durable-child",
+      role: "subagent",
+      parentSessionId: "durable-parent",
+    });
+
+    const { container } = renderRow({
+      presentation: rowPresentation,
+      onOpenSession: vi.fn(),
+      item,
+    });
+
+    expect(container.querySelector("[data-agent-identity-chip]")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /open .*schema audit/i })).toBeNull();
+    expect(mocks.openAgentsPaneTarget).not.toHaveBeenCalled();
+  });
+
   it("keeps a promoted current root on ordinary navigation despite historical subagent output", () => {
     upsertDirectoryEntry(
       "client-session:promoted",
@@ -290,22 +404,64 @@ describe("AgentOperationsToolActionRow navigation", () => {
 function renderRow({
   presentation: rowPresentation,
   onOpenSession,
+  item = operationItem(rowPresentation),
 }: {
   presentation: AgentOperationsReceiptPresentation;
   onOpenSession: ReturnType<typeof vi.fn>;
+  item?: ToolCallItem;
 }) {
   return render(
     <TranscriptContextProviders
-      sessionId="active-main-session"
+      sessionId="durable-parent"
       onOpenSession={onOpenSession}
       canOpenSession={() => true}
     >
       <AgentOperationsToolActionRow
+        item={item}
         presentation={rowPresentation}
         currentWorkspaceId="workspace-1"
       />
     </TranscriptContextProviders>,
   );
+}
+
+function operationItem(
+  rowPresentation: AgentOperationsReceiptPresentation,
+): ToolCallItem {
+  return toolCallItem({
+    nativeToolName: `mcp__workspace__${rowPresentation.action}`,
+    rawInput: rowPresentation.action === "create_agent"
+      ? { workspaceId: "workspace-1", kind: "subagent", task: "Schema audit" }
+      : { agentId: rowPresentation.targetAgentId ?? "durable-child" },
+    rawOutput: null,
+  });
+}
+
+function authorityAgentView({
+  sessionId,
+  workspaceId = "workspace-1",
+  role,
+  parentSessionId,
+}: {
+  sessionId: string;
+  workspaceId?: string;
+  role: "ordinary" | "subagent";
+  parentSessionId: string | null;
+}) {
+  return {
+    identity: { runtimeId: "runtime-1", sessionId },
+    workspace: { runtimeId: "runtime-1", workspaceId },
+    role,
+    parent: parentSessionId
+      ? { runtimeId: "runtime-1", sessionId: parentSessionId }
+      : null,
+    title: "Wrong child",
+    status: { presentation: "available", execution: "idle", hasLiveActor: true },
+    configuration: { agentKind: "codex", modelId: null, modeId: null },
+    capabilities: ["get_agent", "send_message"],
+    createdAt: "2026-04-04T00:00:00Z",
+    updatedAt: "2026-04-04T00:00:01Z",
+  };
 }
 
 function presentation(overrides: Partial<AgentOperationsReceiptPresentation> = {})

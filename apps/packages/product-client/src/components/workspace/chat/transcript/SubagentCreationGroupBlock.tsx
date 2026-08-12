@@ -32,6 +32,7 @@ import {
   resolveCurrentSessionRelationship,
   useAgentsPaneNavigationActions,
 } from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
+import { deriveAuthoritativeAgentOperation } from "#product/lib/domain/sessions/agent-operations-authority";
 
 interface SpawnReceipt {
   key: string;
@@ -40,6 +41,7 @@ interface SpawnReceipt {
   workspaceId: string | null;
   title: string;
   failed: boolean;
+  historicalNavigationAuthorized: boolean;
 }
 
 export function SubagentCreationGroupBlock({
@@ -64,6 +66,7 @@ export function SubagentCreationGroupBlock({
   );
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const parentAuthorityWorkspaceId = parentWorkspaceId ?? selectedWorkspaceId;
   const { data: workspaceCollections } = useWorkspaces({ enabled: false });
   const projectedWorkspaceIds = useMemo(
     () => new Set(workspaceCollections?.allWorkspaces.map((workspace) => workspace.id) ?? []),
@@ -72,7 +75,9 @@ export function SubagentCreationGroupBlock({
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const receipts = itemIds.flatMap((itemId) => {
     const item = transcript.itemsById[itemId];
-    return item?.kind === "tool_call" ? [spawnReceipt(item)] : [];
+    return item?.kind === "tool_call"
+      ? [spawnReceipt(item, parentDurableSessionId, parentAuthorityWorkspaceId)]
+      : [];
   });
   const visibleReceipts = receipts.filter((receipt) => receipt.sessionId || receipt.failed);
   if (visibleReceipts.length === 0) {
@@ -118,7 +123,7 @@ export function SubagentCreationGroupBlock({
             canOpenSession={canOpenSession}
             openWorkspaceSession={openWorkspaceSession}
             parentDurableSessionId={parentDurableSessionId}
-            parentWorkspaceId={parentWorkspaceId}
+            parentWorkspaceId={parentAuthorityWorkspaceId}
             animateEntry={animateEntries}
           />
         );
@@ -225,6 +230,7 @@ function SpawnIdentityReceipt({
   const navigationWorkspaceId = directoryWorkspaceId ?? historicalTargetWorkspaceId;
   const hasDurableSubagentAuthority = isDurableSubagentRelationship(directoryRelationship);
   const hasMatchingPendingSubagentAuthority = directoryRelationship?.kind === "pending"
+    && receipt.historicalNavigationAuthorized
     && historicalSubagentProvenanceRemainsAuthoritative(
       directoryRelationship,
       directoryWorkspaceId !== null,
@@ -316,9 +322,16 @@ function SpawnIdentityReceipt({
   );
 }
 
-function spawnReceipt(item: ToolCallItem): SpawnReceipt {
+function spawnReceipt(
+  item: ToolCallItem,
+  parentDurableSessionId: string | null,
+  parentWorkspaceId: string | null,
+): SpawnReceipt {
   const workspacePresentation = deriveAgentOperationsReceiptPresentation(item);
   if (workspacePresentation?.action === "create_agent") {
+    const authoritativePresentation = parentDurableSessionId
+      ? deriveAuthoritativeAgentOperation(item, parentDurableSessionId, parentWorkspaceId)
+      : null;
     return {
       key: item.itemId,
       item,
@@ -326,6 +339,7 @@ function spawnReceipt(item: ToolCallItem): SpawnReceipt {
       workspaceId: workspacePresentation.agent?.workspaceId ?? null,
       title: workspacePresentation.agent?.title ?? readInputTitle(item) ?? "Subagent",
       failed: item.status === "failed",
+      historicalNavigationAuthorized: authoritativePresentation?.action === "create_agent",
     };
   }
 
@@ -337,6 +351,7 @@ function spawnReceipt(item: ToolCallItem): SpawnReceipt {
     workspaceId: null,
     title: resolveSubagentLaunchDisplay(item).title,
     failed: item.status === "failed",
+    historicalNavigationAuthorized: true,
   };
 }
 

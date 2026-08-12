@@ -8,10 +8,12 @@ import {
 import {
   useTranscriptCanOpenSession,
   useTranscriptOpenSession,
+  useTranscriptSessionId,
 } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import type { ToolCallItem } from "@anyharness/sdk";
 import type { AgentOperationsReceiptPresentation } from "#product/domain/chats/tools/agent-operations-tool-presentation";
 import type { TranscriptOpenSessionRole } from "#product/domain/chats/transcript/transcript-open-target";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
@@ -24,12 +26,16 @@ import {
   resolveCurrentSessionRelationship,
   useAgentsPaneNavigationActions,
 } from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
+import { deriveAuthoritativeAgentOperation } from "#product/lib/domain/sessions/agent-operations-authority";
+import { targetAgentFromDurableId } from "#product/domain/chats/tools/agent-operations-tool-output";
 
 export function AgentOperationsToolActionRow({
+  item,
   presentation,
   resultText,
   currentWorkspaceId,
 }: {
+  item: ToolCallItem;
   presentation: AgentOperationsReceiptPresentation;
   resultText?: string | null;
   currentWorkspaceId: string | null;
@@ -37,11 +43,40 @@ export function AgentOperationsToolActionRow({
   const [expanded, setExpanded] = useState(false);
   const openSession = useTranscriptOpenSession();
   const canOpenSession = useTranscriptCanOpenSession();
+  const transcriptSessionId = useTranscriptSessionId();
   const { selectWorkspace } = useWorkspaceSelection();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const { openAgentsPaneTarget } = useAgentsPaneNavigationActions();
   const { data: workspaceCollections } = useWorkspaces({ enabled: false });
-  const targetSessionId = presentation.agent?.sessionId ?? null;
+  const callerDurableSessionId = useSessionDirectoryStore((state) =>
+    transcriptSessionId
+      ? state.entriesById[transcriptSessionId]?.materializedSessionId ?? transcriptSessionId
+      : null
+  );
+  const strictCompletedOperation = callerDurableSessionId
+    && item.status === "completed"
+    && presentation.source === "workspace"
+    && (presentation.action === "create_agent" || presentation.action === "promote_subagent")
+      ? deriveAuthoritativeAgentOperation(item, callerDurableSessionId, currentWorkspaceId)
+      : null;
+  const navigationAgent = presentation.source === "workspace"
+    && presentation.action === "create_agent"
+      ? item.status === "completed"
+        ? presentation.agent
+        : null
+      : presentation.source === "workspace"
+        && presentation.action === "promote_subagent"
+        ? item.status === "completed"
+          ? strictCompletedOperation?.agent ?? null
+          : presentation.targetAgentId
+            ? targetAgentFromDurableId(presentation.targetAgentId)
+            : null
+        : presentation.source === "workspace"
+      && (presentation.isRunning || presentation.isFailed)
+      && presentation.targetAgentId
+      ? targetAgentFromDurableId(presentation.targetAgentId)
+      : presentation.agent;
+  const targetSessionId = navigationAgent?.sessionId ?? null;
   const directoryAgent = useSessionDirectoryStore((state) => {
     if (!targetSessionId) {
       return null;
@@ -82,7 +117,7 @@ export function AgentOperationsToolActionRow({
     });
   }, [directoryAgent?.workspaceId, presentation.agent, presentation.targetAgentId, resolvedAgentTitle]);
   const openRole: TranscriptOpenSessionRole = presentation.action === "promote_subagent"
-    || presentation.agent?.role === "ordinary"
+    || navigationAgent?.role === "ordinary"
     || currentRelationship?.kind === "root"
       ? "generic"
       : "linked-child";
@@ -91,21 +126,25 @@ export function AgentOperationsToolActionRow({
       ? currentWorkspaceId
       : null;
   const navigationWorkspaceId = currentRelationshipWorkspaceId
-    ?? presentation.agent?.workspaceId
+    ?? navigationAgent?.workspaceId
     ?? legacySendWorkspaceId;
   const navigationSessionId = currentClientSessionId ?? targetSessionId;
   const paneParentCandidate = isDurableSubagentRelationship(currentRelationship)
     ? currentRelationship.parentSessionId
-    : presentation.agent?.parentSessionId;
+    : navigationAgent?.parentSessionId;
   const paneParentSessionId = useSessionDirectoryStore((state) =>
     paneParentCandidate
       ? state.entriesById[paneParentCandidate]?.materializedSessionId ?? paneParentCandidate
       : null
   );
-  const historicalSubagentProvenance = presentation.agent?.role === "subagent";
+  const historicalSubagentProvenance = navigationAgent?.role === "subagent";
   const hasDurableSubagentAuthority = isDurableSubagentRelationship(currentRelationship);
-  const historicalTargetWorkspaceId = presentation.agent?.workspaceId ?? currentWorkspaceId;
+  const historicalTargetWorkspaceId = navigationAgent?.workspaceId ?? currentWorkspaceId;
   const hasMatchingPendingSubagentAuthority = historicalSubagentProvenance
+    && (
+      presentation.action !== "create_agent"
+      || strictCompletedOperation?.action === "create_agent"
+    )
     && currentRelationship?.kind === "pending"
     && historicalSubagentProvenanceRemainsAuthoritative(
       currentRelationship,
@@ -143,7 +182,7 @@ export function AgentOperationsToolActionRow({
     openSession
     && (
       isCurrentWorkspace
-      || (legacySendWorkspaceId && !presentation.agent?.workspaceId && !directoryAgent)
+      || (legacySendWorkspaceId && !navigationAgent?.workspaceId && !directoryAgent)
     )
     && (canOpenSession?.(navigationSessionId ?? "", openRole) ?? true),
   );
@@ -152,10 +191,16 @@ export function AgentOperationsToolActionRow({
       isCurrentWorkspace
       || directoryAgent
       || legacySendWorkspaceId
-      || (presentation.agent?.workspaceId && isProjectedWorkspace),
+      || (navigationAgent?.workspaceId && isProjectedWorkspace),
   );
   const canUseOrdinaryNavigation = Boolean(
     !currentSubagentOwnsNavigation
+    && (
+      presentation.action !== "create_agent"
+      || strictCompletedOperation?.action === "create_agent"
+      || currentRelationshipKeepsOrdinaryNavigation
+      || hasDurableSubagentAuthority
+    )
     && (
       !historicalSubagentProvenance
       || currentRelationshipKeepsOrdinaryNavigation
@@ -185,7 +230,7 @@ export function AgentOperationsToolActionRow({
           workspaceId: navigationWorkspaceId,
           parentSessionId: paneParentSessionId,
           childSessionId: targetSessionId,
-          historicalSubagentProvenance: presentation.agent?.role === "subagent",
+          historicalSubagentProvenance,
         });
         return;
       }

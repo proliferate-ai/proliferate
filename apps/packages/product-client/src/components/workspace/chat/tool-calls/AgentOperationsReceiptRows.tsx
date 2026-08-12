@@ -50,7 +50,7 @@ export function AgentOperationsWorkspaceReceipt({
           </span>
           {presentation.detailLabel ? (
             <span className="min-w-0 truncate text-muted-foreground/70">
-              — {presentation.detailLabel} ·
+              · {presentation.detailLabel} ·
             </span>
           ) : null}
           {workspace.workspaceId && onOpen ? (
@@ -125,7 +125,7 @@ export function AgentOperationsLifecycleReceipt({
       )}
       {presentation.detailLabel ? (
         <span className="min-w-0 truncate text-muted-foreground/70">
-          — {presentation.detailLabel}
+          · {presentation.detailLabel}
         </span>
       ) : null}
     </div>

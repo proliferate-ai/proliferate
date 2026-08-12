@@ -18,6 +18,8 @@ export function deriveAuthoritativeAgentOperation(
   const presentation = deriveAgentOperationsReceiptPresentation(item);
   const output = readAgentOperationsStructuredOutput(item);
   if (
+    item.status !== "completed"
+    ||
     !presentation
     || !output
     || !isCompleteAgentOperationsAuthorityView(output)
@@ -54,25 +56,31 @@ function isCorrelatedAgentOperationsAuthority(
   const runtimeId = authorityString(identity, "runtimeId");
   const workspaceId = authorityString(workspace, "workspaceId");
   const workspaceRuntimeId = authorityString(workspace, "runtimeId");
-  if (
-    !sessionId
-    || !runtimeId
-    || !workspaceId
-    || runtimeId !== workspaceRuntimeId
-    || (callerWorkspaceId !== null && workspaceId !== callerWorkspaceId)
-  ) {
+  if (!sessionId || !runtimeId || !workspaceId || runtimeId !== workspaceRuntimeId) {
     return false;
   }
   if (action === "promote_subagent") {
-    return output.role === "ordinary"
-      && output.parent === null
+    return callerWorkspaceId !== null
+      && workspaceId === callerWorkspaceId
+      && output.role === "ordinary"
+      && (output.parent === null || output.parent === undefined)
       && authorityString(input, "agentId") === sessionId
       && sessionId !== callerSessionId;
   }
+  const inputKind = authorityString(input, "kind");
+  const inputWorkspaceId = authorityString(input, "workspaceId");
+  if (inputKind === "ordinary") {
+    return output.role === "ordinary"
+      && (output.parent === null || output.parent === undefined)
+      && inputWorkspaceId === workspaceId
+      && sessionId !== callerSessionId;
+  }
   const parent = isRecord(output.parent) ? output.parent : null;
-  return output.role === "subagent"
-    && authorityString(input, "kind") === "subagent"
-    && authorityString(input, "workspaceId") === workspaceId
+  return callerWorkspaceId !== null
+    && workspaceId === callerWorkspaceId
+    && output.role === "subagent"
+    && inputKind === "subagent"
+    && inputWorkspaceId === workspaceId
     && parent !== null
     && authorityString(parent, "runtimeId") === runtimeId
     && authorityString(parent, "sessionId") === callerSessionId

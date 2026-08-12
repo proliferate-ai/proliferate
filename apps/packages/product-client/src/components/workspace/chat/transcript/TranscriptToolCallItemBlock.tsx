@@ -218,6 +218,7 @@ export function TranscriptToolCallItemBlock({
     rows.push(
       <AgentOperationsToolActionRow
         key="agent-operations-receipt"
+        item={item}
         presentation={agentOperationsReceipt}
         resultText={agentOperationsResultText}
         currentWorkspaceId={workspaceId}

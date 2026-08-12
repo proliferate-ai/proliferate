@@ -5,11 +5,14 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { createTranscriptState, type ToolCallItem } from "@anyharness/sdk";
+import { createTranscriptState } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { toolItem } from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
 import { SubagentCreationGroupBlock } from "#product/components/workspace/chat/transcript/SubagentCreationGroupBlock";
-import { TranscriptEntryMotionProvider } from "#product/components/workspace/chat/transcript/TranscriptEntryMotionContext";
+import {
+  SpawnMotionFixture,
+  transcriptWithCreates,
+  workspaceCreateAgent,
+} from "#product/components/workspace/chat/transcript/SubagentCreationGroupBlock.test-fixtures";
 import { TranscriptContextProviders } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import {
   createEmptySessionRecord,
@@ -249,7 +252,14 @@ describe("SubagentCreationGroupBlock", () => {
       }
       const transcript = createTranscriptState("parent-session");
       transcript.itemsById = {
-        "create-1": workspaceCreateAgent("create-1", "durable-child", "Schema audit"),
+        "create-1": workspaceCreateAgent(
+          "create-1",
+          "durable-child",
+          "Schema audit",
+          "completed",
+          "workspace-1",
+          "durable-parent",
+        ),
       };
       const onOpenSession = vi.fn();
 
@@ -287,7 +297,14 @@ describe("SubagentCreationGroupBlock", () => {
         : "session-child-pending";
       const transcript = createTranscriptState("parent-session");
       transcript.itemsById = {
-        "create-1": workspaceCreateAgent("create-1", sessionId, "Pending audit"),
+        "create-1": workspaceCreateAgent(
+          "create-1",
+          sessionId,
+          "Pending audit",
+          "completed",
+          "workspace-1",
+          "parent-session",
+        ),
       };
 
       const { container } = render(
@@ -300,6 +317,31 @@ describe("SubagentCreationGroupBlock", () => {
       expect(screen.queryByRole("button", { name: /open .*pending audit/i })).toBeNull();
     },
   );
+
+  it("withholds navigation when a create result disagrees with the transcript parent", () => {
+    putSessionRecord(createEmptySessionRecord("client-session:pending", "codex", {
+      workspaceId: "workspace-1",
+      materializedSessionId: "durable-child",
+      title: "Wrong parent audit",
+    }));
+    const transcript = createTranscriptState("parent-session");
+    transcript.itemsById = {
+      "create-1": workspaceCreateAgent(
+        "create-1", "durable-child", "Wrong parent audit", "completed",
+        "workspace-1", "different-parent",
+      ),
+    };
+
+    const { container } = render(
+      <TranscriptContextProviders sessionId="parent-session" onOpenSession={vi.fn()}>
+        <SubagentCreationGroupBlock itemIds={["create-1"]} transcript={transcript} />
+      </TranscriptContextProviders>,
+    );
+
+    expect(container.querySelector("[data-agent-identity-chip]")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /open .*wrong parent audit/i })).toBeNull();
+    expect(mocks.openAgentsPaneTarget).not.toHaveBeenCalled();
+  });
 
   it("opens a mapped spawned session through its ProductClient session key", () => {
     putSessionRecord(createEmptySessionRecord("client-session:child", "codex", {
@@ -324,7 +366,11 @@ describe("SubagentCreationGroupBlock", () => {
       ),
     };
 
-    render(<SubagentCreationGroupBlock itemIds={["create-1"]} transcript={transcript} />);
+    render(
+      <TranscriptContextProviders sessionId="session-1" onOpenSession={vi.fn()}>
+        <SubagentCreationGroupBlock itemIds={["create-1"]} transcript={transcript} />
+      </TranscriptContextProviders>,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /open .*schema audit/i }));
     expect(mocks.openWorkspaceSession).toHaveBeenCalledWith({
@@ -346,7 +392,14 @@ describe("SubagentCreationGroupBlock", () => {
     );
     const transcript = createTranscriptState("parent-session");
     transcript.itemsById = {
-      "create-1": workspaceCreateAgent("create-1", "session-child-1", "Schema audit"),
+      "create-1": workspaceCreateAgent(
+        "create-1",
+        "session-child-1",
+        "Schema audit",
+        "completed",
+        "workspace-1",
+        "parent-session",
+      ),
     };
     const onOpenSession = vi.fn();
 
@@ -381,7 +434,11 @@ describe("SubagentCreationGroupBlock", () => {
       ),
     };
 
-    render(<SubagentCreationGroupBlock itemIds={["create-1"]} transcript={transcript} />);
+    render(
+      <TranscriptContextProviders sessionId="session-1" onOpenSession={vi.fn()}>
+        <SubagentCreationGroupBlock itemIds={["create-1"]} transcript={transcript} />
+      </TranscriptContextProviders>,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /open .*schema audit/i }));
     expect(mocks.openWorkspaceSession).toHaveBeenCalledWith({
@@ -529,56 +586,3 @@ describe("SubagentCreationGroupBlock", () => {
     expect(onOpenSession).toHaveBeenCalledWith("client-session:child", "linked-child");
   });
 });
-
-function SpawnMotionFixture({
-  transcript,
-  itemIds,
-  show = true,
-}: {
-  transcript: ReturnType<typeof createTranscriptState>;
-  itemIds: readonly string[];
-  show?: boolean;
-}) {
-  return (
-    <TranscriptEntryMotionProvider transcript={transcript}>
-      {show ? (
-        <SubagentCreationGroupBlock
-          itemIds={itemIds}
-          transcript={transcript}
-          animateEntries
-        />
-      ) : (
-        <div>temporarily virtualized</div>
-      )}
-    </TranscriptEntryMotionProvider>
-  );
-}
-
-function transcriptWithCreates(items: readonly ToolCallItem[]) {
-  const transcript = createTranscriptState("session-1");
-  transcript.itemsById = Object.fromEntries(items.map((item) => [item.itemId, item]));
-  return transcript;
-}
-
-function workspaceCreateAgent(
-  itemId: string,
-  sessionId: string | null,
-  title: string,
-  status: ToolCallItem["status"] = "completed",
-  workspaceId: string = "workspace-1",
-): ToolCallItem {
-  return {
-    ...toolItem(itemId, "turn-1", 1, "other", status),
-    nativeToolName: "mcp__workspace__create_agent",
-    rawInput: { workspaceId, kind: "subagent", task: title },
-    rawOutput: sessionId
-      ? {
-        identity: { runtimeId: "runtime-1", sessionId },
-        workspace: { runtimeId: "runtime-1", workspaceId },
-        role: "subagent",
-        title,
-        status: { presentation: "available", execution: "idle", hasLiveActor: true },
-      }
-      : null,
-  };
-}

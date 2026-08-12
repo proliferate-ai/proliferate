@@ -1,22 +1,18 @@
 // @vitest-environment jsdom
 
-import { createElement, type PropsWithChildren, type ReactElement } from "react";
-import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
-import {
-  cleanup,
-  fireEvent,
-  render as testingRender,
-  screen,
-} from "@testing-library/react";
+import { createElement } from "react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { reduceEvents, type SessionEventEnvelope, type ToolCallItem } from "@anyharness/sdk";
-import type { ProductHost } from "@proliferate/product-client/host/product-host";
-import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 import { TranscriptContextProviders } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { TranscriptToolCallItemBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock";
 import {
   agentView,
+  buildDirectoryState,
+  renderWithProductHost as render,
+  renderWithProductHostToStaticMarkup as renderToStaticMarkup,
+  TestResizeObserver,
   workspaceTool,
 } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock.test-fixtures";
 import { delegatedWorkVisualIdentity } from "#product/lib/domain/delegated-work/identity";
@@ -25,29 +21,16 @@ import { deriveAgentOperationsReceiptPresentation } from "#product/domain/chats/
 import { buildTurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
 import agentOperationsTranscriptFixture from "../../../../../../../../fixtures/contracts/agent-operations-transcript/v1.json";
 
-const webTestHost = { desktop: null } as ProductHost;
 const mocks = vi.hoisted(() => ({
   selectWorkspace: vi.fn(),
   openWorkspaceSession: vi.fn(),
+  openAgentsPaneTarget: vi.fn(),
   directoryEntries: {} as Record<string, unknown>,
+  directoryRelationshipHints: {} as Record<string, unknown>,
   promotedRootSessionIds: new Set<string>(),
   promotedRootWorkspaceIdBySessionId: {} as Record<string, string | null>,
   projectedWorkspaceIds: new Set<string>(),
 }));
-
-function WebProductHostWrapper({ children }: PropsWithChildren) {
-  return <ProductHostProvider host={webTestHost}>{children}</ProductHostProvider>;
-}
-
-function render(ui: ReactElement) {
-  return testingRender(ui, { wrapper: WebProductHostWrapper });
-}
-
-function renderToStaticMarkup(ui: ReactElement) {
-  return renderReactToStaticMarkup(
-    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
-  );
-}
 
 vi.mock("#product/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),
@@ -74,7 +57,7 @@ vi.mock("#product/hooks/agents/workflows/use-agents-pane-navigation-actions", as
       target.childSessionId && mocks.promotedRootSessionIds.has(target.childSessionId)
         ? "promoted" as const
         : "subagent" as const,
-    openAgentsPaneTarget: () => false,
+    openAgentsPaneTarget: mocks.openAgentsPaneTarget,
   }),
 }));
 
@@ -87,19 +70,12 @@ vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
 }));
 
 vi.mock("#product/stores/sessions/session-directory-store", () => {
-  const directoryState = () => ({
-    entriesById: mocks.directoryEntries,
-    clientSessionIdByMaterializedSessionId: Object.fromEntries(
-      Object.entries(mocks.directoryEntries).flatMap(([sessionId, entry]) => {
-        const materializedSessionId = (entry as { materializedSessionId?: string })
-          .materializedSessionId;
-        return materializedSessionId ? [[materializedSessionId, sessionId]] : [];
-      }),
-    ),
-    promotedRootSessionIds: mocks.promotedRootSessionIds,
-    promotedRootWorkspaceIdBySessionId: mocks.promotedRootWorkspaceIdBySessionId,
-    relationshipHintsBySessionId: {},
-  });
+  const directoryState = () => buildDirectoryState(
+    mocks.directoryEntries,
+    mocks.promotedRootSessionIds,
+    mocks.promotedRootWorkspaceIdBySessionId,
+    mocks.directoryRelationshipHints,
+  );
   const useSessionDirectoryStore = (selector: (state: unknown) => unknown) => selector(
     directoryState(),
   );
@@ -142,15 +118,13 @@ describe("TranscriptToolCallItemBlock", () => {
   beforeEach(() => {
     mocks.selectWorkspace.mockReset();
     mocks.openWorkspaceSession.mockReset();
+    mocks.openAgentsPaneTarget.mockReset();
+    mocks.openAgentsPaneTarget.mockReturnValue(true);
     mocks.directoryEntries = {};
+    mocks.directoryRelationshipHints = {};
     mocks.promotedRootSessionIds = new Set();
     mocks.promotedRootWorkspaceIdBySessionId = {};
     mocks.projectedWorkspaceIds = new Set(["workspace-1", "workspace-other"]);
-    class TestResizeObserver {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
       callback(0);
@@ -344,7 +318,7 @@ describe("TranscriptToolCallItemBlock", () => {
 
     expect(screen.getByText("Created workspace")).toBeTruthy();
     expect(screen.getByText("Agent ops")).toBeTruthy();
-    expect(screen.getByText("— worktree from agent-ops ·")).toBeTruthy();
+    expect(screen.getByText("· worktree from agent-ops ·")).toBeTruthy();
     expect(screen.queryByText(/fact-only-in-details/)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Show agent operation details" }));
@@ -388,19 +362,20 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(screen.getByRole("img", { name: /schema audit.* identity/i }).style.opacity).toBe("1");
   });
 
-  it("opens a promoted agent through its client session key while preserving durable glyph identity", () => {
+  it("opens a strictly correlated promoted agent through its client key", () => {
     mocks.directoryEntries["client-session:promoted"] = {
       sessionId: "client-session:promoted",
       materializedSessionId: "agent-session-1",
       title: "Schema audit",
-      workspaceId: "workspace-other",
+      workspaceId: "workspace-1",
       activity: { transcriptTitle: null },
       sessionRelationship: { kind: "root" },
     };
     const item = workspaceTool("promote_subagent", {
       rawOutput: agentView({
         role: "ordinary",
-        workspace: { runtimeId: "runtime-1", workspaceId: "workspace-other" },
+        parent: null,
+        workspace: { runtimeId: "runtime-1", workspaceId: "workspace-1" },
       }),
     });
     const onOpenSession = vi.fn();
@@ -412,11 +387,8 @@ describe("TranscriptToolCallItemBlock", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /open .*schema audit/i }));
-    expect(mocks.openWorkspaceSession).toHaveBeenCalledWith({
-      workspaceId: "workspace-other",
-      sessionId: "client-session:promoted",
-    });
-    expect(onOpenSession).not.toHaveBeenCalled();
+    expect(onOpenSession).toHaveBeenCalledWith("client-session:promoted", "generic");
+    expect(mocks.openWorkspaceSession).not.toHaveBeenCalled();
 
     const expectedGeometry = solidSealGeometry(
       delegatedWorkVisualIdentity("agent-session-1").glyphSeedHash,
@@ -426,8 +398,21 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(notch?.getAttribute("cy")).toBe(String(expectedGeometry.notchY));
   });
 
-  it("opens an uncached direct AgentView through exact workspace activation", () => {
+  it("withholds navigation from a create result that disagrees with the caller workspace", () => {
+    mocks.directoryEntries["client-session:pending"] = {
+      sessionId: "client-session:pending",
+      materializedSessionId: "agent-session-new",
+      title: "Schema audit",
+      workspaceId: "workspace-other",
+      activity: { transcriptTitle: null },
+      sessionRelationship: { kind: "pending" },
+    };
     const item = workspaceTool("create_agent", {
+      rawInput: {
+        workspaceId: "workspace-other",
+        kind: "subagent",
+        task: "Schema audit",
+      },
       rawOutput: agentView({
         identity: { runtimeId: "runtime-1", sessionId: "agent-session-new" },
         workspace: { runtimeId: "runtime-1", workspaceId: "workspace-other" },
@@ -440,15 +425,18 @@ describe("TranscriptToolCallItemBlock", () => {
       </TranscriptContextProviders>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /open .*schema audit/i }));
-    expect(mocks.openWorkspaceSession).toHaveBeenCalledWith({
-      workspaceId: "workspace-other",
-      sessionId: "agent-session-new",
-    });
+    expect(screen.queryByRole("button", { name: /open .*schema audit/i })).toBeNull();
+    expect(mocks.openWorkspaceSession).not.toHaveBeenCalled();
     expect(mocks.selectWorkspace).not.toHaveBeenCalled();
   });
 
-  it("uses the transcript exact-open seam for a same-workspace direct AgentView", () => {
+  it("routes a same-workspace durable AgentView to Agents without changing the main tab", () => {
+    mocks.directoryRelationshipHints["agent-session-1"] = {
+      kind: "subagent_child",
+      parentSessionId: "parent-session",
+      relation: "subagent",
+      workspaceId: "workspace-1",
+    };
     const item = workspaceTool("resume_agent", { rawOutput: agentView() });
     const onOpenSession = vi.fn();
 
@@ -459,7 +447,13 @@ describe("TranscriptToolCallItemBlock", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /open .*schema audit/i }));
-    expect(onOpenSession).toHaveBeenCalledWith("agent-session-1", "linked-child");
+    expect(mocks.openAgentsPaneTarget).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      parentSessionId: "parent-session",
+      childSessionId: "agent-session-1",
+      historicalSubagentProvenance: true,
+    });
+    expect(onOpenSession).not.toHaveBeenCalled();
     expect(mocks.openWorkspaceSession).not.toHaveBeenCalled();
   });
 
@@ -549,7 +543,13 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(screen.queryByText("closed")).toBeNull();
   });
 
-  it("keeps current-workspace navigation only for legacy linked-child sends", () => {
+  it("keeps ordinary navigation for an explicit non-subagent linked relationship", () => {
+    mocks.directoryRelationshipHints["legacy-session"] = {
+      kind: "linked_child",
+      parentSessionId: "parent-session",
+      relation: "cowork_coding_session",
+      workspaceId: "workspace-current",
+    };
     const legacySend = toolCallItem({
       semanticKind: "subagent",
       nativeToolName: "mcp__subagents__send_subagent_message",
