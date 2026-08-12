@@ -13,7 +13,9 @@ import type { TranscriptOpenSessionRole } from "#product/domain/chats/transcript
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
+  historicalSubagentProvenanceRemainsAuthoritative,
   isDurableSubagentRelationship,
+  resolveCurrentSessionRelationship,
   useAgentsPaneNavigationActions,
 } from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
 
@@ -50,12 +52,27 @@ export function AgentOriginPromptReceipt({
       state.clientSessionIdByMaterializedSessionId[targetSessionId] ?? targetSessionId;
     return state.entriesById[clientSessionId] ?? null;
   });
+  const currentRelationship = useSessionDirectoryStore((state) =>
+    targetSessionId
+      ? resolveCurrentSessionRelationship(state, targetSessionId).relationship
+      : null
+  );
+  const currentWorkspaceId = useSessionDirectoryStore((state) =>
+    targetSessionId
+      ? resolveCurrentSessionRelationship(state, targetSessionId).workspaceId
+      : null
+  );
+  const currentClientSessionId = useSessionDirectoryStore((state) =>
+    targetSessionId
+      ? resolveCurrentSessionRelationship(state, targetSessionId).clientSessionId
+      : null
+  );
   const { openAgentsPaneTarget } = useAgentsPaneNavigationActions();
   const receiptProvenance = agentSessionProvenance ?? wakeProvenance;
-  const targetRole: TranscriptOpenSessionRole = agentSessionProvenance
-    ? directoryAgent
-      ? roleFromDirectoryRelationship(directoryAgent.sessionRelationship.kind)
-      : "agent-parent"
+  const targetRole: TranscriptOpenSessionRole = currentRelationship
+    ? roleFromDirectoryRelationship(currentRelationship.kind)
+    : agentSessionProvenance
+      ? "agent-parent"
     : wakeProvenance?.type === "linkWake"
       && wakeProvenance.relation === "cowork_coding_session"
       ? "cowork-coding-child"
@@ -70,7 +87,7 @@ export function AgentOriginPromptReceipt({
     ? buildDelegatedAgentIdentity({
       id: targetSessionId,
       title: fallbackLabel,
-      workspaceId: directoryAgent?.workspaceId ?? workspaceId,
+      workspaceId: currentWorkspaceId ?? workspaceId,
       sessionId: targetSessionId,
       sessionLinkId:
         wakeProvenance?.sessionLinkId
@@ -78,34 +95,66 @@ export function AgentOriginPromptReceipt({
         ?? null,
     })
     : null;
-  const navigationSessionId = directoryAgent?.sessionId ?? targetSessionId;
-  const relationship = directoryAgent?.sessionRelationship;
-  const paneSourceIsSubagent = wakeProvenance?.type === "subagentWake"
-    || (wakeProvenance?.type === "linkWake" && wakeProvenance.relation === "subagent")
-    || (agentSessionProvenance !== null && isDurableSubagentRelationship(relationship));
-  const paneParentCandidate = completion?.parentSessionId
-    ?? (isDurableSubagentRelationship(relationship) ? relationship.parentSessionId : null)
-    ?? parentSessionId;
+  const navigationSessionId = currentClientSessionId ?? targetSessionId;
+  const relationship = currentRelationship;
+  const historicalWakeIsSubagent = wakeProvenance?.type === "subagentWake"
+    || (wakeProvenance?.type === "linkWake" && wakeProvenance.relation === "subagent");
+  const hasDurableSubagentAuthority = isDurableSubagentRelationship(relationship)
+    && currentWorkspaceId !== null;
+  const historicalWakeHasMatchingPendingAuthority = historicalWakeIsSubagent
+    && relationship?.kind === "pending"
+    && historicalSubagentProvenanceRemainsAuthoritative(
+      relationship,
+      currentWorkspaceId !== null,
+    )
+    && currentWorkspaceId === workspaceId;
+  const currentRelationshipKeepsOrdinaryNavigation = Boolean(
+    relationship
+    && relationship.kind !== "pending"
+    && !isDurableSubagentRelationship(relationship),
+  );
+  const paneSourceIsSubagent = (
+    historicalWakeIsSubagent
+    && (hasDurableSubagentAuthority || historicalWakeHasMatchingPendingAuthority)
+  )
+    || (agentSessionProvenance !== null && hasDurableSubagentAuthority);
+  const paneParentCandidate = isDurableSubagentRelationship(relationship)
+    ? relationship.parentSessionId
+    : completion?.parentSessionId ?? parentSessionId;
   const paneParentSessionId = useSessionDirectoryStore((state) =>
     paneParentCandidate
       ? state.entriesById[paneParentCandidate]?.materializedSessionId ?? paneParentCandidate
       : null
   );
-  const navigationWorkspaceId = directoryAgent?.workspaceId ?? workspaceId;
-  const canOpenInAgentsPane = Boolean(
+  const navigationWorkspaceId = currentWorkspaceId ?? workspaceId;
+  const currentSubagentOwnsNavigation = Boolean(
     paneSourceIsSubagent
+    && navigationWorkspaceId
+    && workspaceId
+    && navigationWorkspaceId === workspaceId,
+  );
+  const canOpenInAgentsPane = Boolean(
+    currentSubagentOwnsNavigation
     && targetSessionId
     && paneParentSessionId
     && navigationWorkspaceId
     && navigationWorkspaceId === workspaceId,
   );
+  const canUseOrdinaryNavigation = Boolean(
+    !currentSubagentOwnsNavigation
+    && (
+      !historicalWakeIsSubagent
+      || currentRelationshipKeepsOrdinaryNavigation
+      || hasDurableSubagentAuthority
+    ),
+  );
   const canOpen = Boolean(
     canOpenInAgentsPane
-    || (
+    || (canUseOrdinaryNavigation && (
       navigationSessionId
       && openSession
       && (canOpenSession?.(navigationSessionId, targetRole) ?? true)
-    ),
+    )),
   );
   const handleOpen = canOpen && targetSessionId
     ? () => {
@@ -113,31 +162,18 @@ export function AgentOriginPromptReceipt({
         canOpenInAgentsPane
         && paneParentSessionId
         && navigationWorkspaceId
-        && openAgentsPaneTarget({
+      ) {
+        const target = {
           workspaceId: navigationWorkspaceId,
           parentSessionId: paneParentSessionId,
           childSessionId: targetSessionId,
-        })
-      ) {
+          historicalSubagentProvenance: historicalWakeIsSubagent,
+        };
+        openAgentsPaneTarget(target);
         return;
       }
       if (!navigationSessionId) {
         return;
-      }
-      if (wakeProvenance) {
-        useSessionDirectoryStore.getState().recordRelationshipHint(navigationSessionId, {
-          kind: wakeProvenance.type === "subagentWake"
-            ? "subagent_child"
-            : targetRole === "cowork-coding-child"
-              ? "cowork_child"
-              : "linked_child",
-          parentSessionId,
-          sessionLinkId: wakeProvenance.sessionLinkId,
-          relation: wakeProvenance.type === "linkWake"
-            ? wakeProvenance.relation
-            : "subagent",
-          workspaceId: directoryAgent?.workspaceId ?? workspaceId,
-        });
       }
       openSession?.(navigationSessionId, targetRole);
     }

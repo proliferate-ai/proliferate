@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import { useWorkspaceShellActions } from "#product/hooks/workspaces/workflows/use-workspace-shell-actions";
 import { useWorkspaceStatusModel } from "#product/hooks/workspaces/derived/use-workspace-status-model";
 import { useRuntimePressureControlState } from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";

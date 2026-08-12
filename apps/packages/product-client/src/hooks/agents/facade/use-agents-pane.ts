@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type {
-  SubagentParentRoster,
-  SubagentRosterEntry,
-} from "@anyharness/sdk";
+import type { SubagentParentRoster } from "@anyharness/sdk";
 import {
   useSessionSubagentsQuery,
   useWorkspaceSessionsQuery,
   useWorkspaceSubagentsQuery,
 } from "@anyharness/sdk-react";
 import {
-  filterAgentsPaneRosters,
-  focusedAgentsPaneRoster,
-  useAgentsPaneModel,
-} from "#product/hooks/agents/derived/use-agents-pane-model";
+  useAgentsPaneRosterProjection,
+} from "#product/hooks/agents/derived/use-agents-pane-roster-projection";
+import {
+  agentsPaneLifecycleTargetKey,
+  type AgentsPanePresentationTruth,
+} from "#product/lib/domain/delegated-work/agents-pane-roster-projection";
 import type {
+  AgentsPaneCloseOutcome,
   AgentsPaneLifecycleFailure,
+  AgentsPaneOpenOutcome,
   AgentsPanePromoteOutcome,
 } from "#product/hooks/agents/workflows/use-agents-pane-lifecycle-actions";
 import type {
@@ -38,15 +39,6 @@ function rosterHasChild(
   )) ?? false;
 }
 
-function childFromRoster(
-  roster: SubagentParentRoster | null,
-  childSessionId: string,
-): SubagentRosterEntry | null {
-  return roster?.children.find(
-    (entry) => entry.agent.identity.sessionId === childSessionId,
-  ) ?? null;
-}
-
 export interface AgentsPaneActionRequest {
   token: number;
   parentSessionId: string;
@@ -67,12 +59,23 @@ export function useAgentsPane({ workspaceId }: { workspaceId: string }) {
   );
   const [actionRequest, setActionRequest] = useState<AgentsPaneActionRequest | null>(null);
   const [nextActionToken, setNextActionToken] = useState(1);
-  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
+  const [presentationTruthByTarget, setPresentationTruthByTarget] = useState<
+    ReadonlyMap<string, AgentsPanePresentationTruth>
+  >(() => new Map());
+  const [lifecycleError, setLifecycleError] = useState<{
+    parentSessionId: string;
+    childSessionId: string;
+    message: string;
+  } | null>(null);
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
+  const promotedRootSessionIds = useSessionDirectoryStore(
+    (state) => state.promotedRootSessionIds,
+  );
 
   useEffect(() => {
     setSuppressedChildIds(new Set());
     setActionRequest(null);
+    setPresentationTruthByTarget(new Map());
     setLifecycleError(null);
   }, [workspaceId]);
 
@@ -92,32 +95,39 @@ export function useAgentsPane({ workspaceId }: { workspaceId: string }) {
     enabled: false,
   });
 
-  const rosters = useMemo(
-    () => filterAgentsPaneRosters(workspaceRosterQuery.data, suppressedChildIds),
-    [suppressedChildIds, workspaceRosterQuery.data],
-  );
-  const overviewModel = useAgentsPaneModel(
-    workspaceRosterQuery.data ? rosters : null,
-  );
-  const fallbackRoster = useMemo(() =>
-    parentSessionId
-      ? rosters.find((roster) => roster.parent.identity.sessionId === parentSessionId) ?? null
-      : null,
-  [parentSessionId, rosters]);
-  const focusedRoster = useMemo(() => focusedAgentsPaneRoster(
-    parentRosterQuery.data,
-    fallbackRoster,
-    suppressedChildIds,
-  ), [fallbackRoster, parentRosterQuery.data, suppressedChildIds]);
-  const focusedRosters = useMemo(
-    () => focusedRoster ? [focusedRoster] : null,
-    [focusedRoster],
-  );
-  const focusedModel = useAgentsPaneModel(focusedRosters);
-  const focusedParent = focusedModel?.parents[0] ?? null;
-  const selectedChild = route.kind === "detail"
-    ? childFromRoster(focusedRoster, route.childDurableId)
-    : null;
+  const hiddenChildIds = useMemo(() => new Set([
+    ...suppressedChildIds,
+    ...promotedRootSessionIds,
+  ]), [promotedRootSessionIds, suppressedChildIds]);
+  const rosterProjection = useAgentsPaneRosterProjection({
+    parentSessionId,
+    selectedChildSessionId: route.kind === "detail" ? route.childDurableId : null,
+    hiddenChildIds,
+    presentationTruthByTarget,
+    workspace: {
+      data: workspaceRosterQuery.data,
+      dataUpdatedAt: workspaceRosterQuery.dataUpdatedAt,
+      isError: workspaceRosterQuery.isError,
+      isFetching: workspaceRosterQuery.isFetching,
+      isSuccess: workspaceRosterQuery.isSuccess,
+    },
+    parent: {
+      data: parentRosterQuery.data,
+      dataUpdatedAt: parentRosterQuery.dataUpdatedAt,
+      isError: parentRosterQuery.isError,
+      isFetching: parentRosterQuery.isFetching,
+      isSuccess: parentRosterQuery.isSuccess,
+    },
+  });
+  const {
+    overviewModel,
+    focusedParent,
+    focusedRoster,
+    selectedChild,
+    liveParentIds,
+    liveChildIdsByParent,
+    canRepairRoute,
+  } = rosterProjection;
   const selectedClientSessionId = useSessionDirectoryStore((state) => {
     if (route.kind !== "detail") {
       return null;
@@ -125,22 +135,51 @@ export function useAgentsPane({ workspaceId }: { workspaceId: string }) {
     return state.clientSessionIdByMaterializedSessionId[route.childDurableId]
       ?? route.childDurableId;
   });
-  const setSessionRelationship = useSessionDirectoryStore(
-    (state) => state.setSessionRelationship,
+  const markSessionPromoted = useSessionDirectoryStore(
+    (state) => state.markSessionPromoted,
   );
 
-  const liveParentIds = useMemo(
-    () => new Set(rosters.map((roster) => roster.parent.identity.sessionId)),
-    [rosters],
-  );
-  const liveChildIdsByParent = useMemo(() => new Map(
-    rosters.map((roster) => [
-      roster.parent.identity.sessionId,
-      new Set(roster.children.map((entry) => entry.agent.identity.sessionId)),
-    ]),
-  ), [rosters]);
   useEffect(() => {
-    if (!workspaceRosterQuery.data) {
+    setPresentationTruthByTarget((current) => {
+      let next: Map<string, AgentsPanePresentationTruth> | null = null;
+      for (const [key, truth] of current) {
+        const workspaceRosterIsFresh = Boolean(
+          workspaceRosterQuery.isSuccess
+          && !workspaceRosterQuery.isFetching
+          && workspaceRosterQuery.dataUpdatedAt > truth.workspaceRosterUpdatedAt,
+        );
+        const parentRosterIsFresh = Boolean(
+          truth.parentRosterUpdatedAt !== null
+          && parentSessionId === truth.parentSessionId
+          && parentRosterQuery.isSuccess
+          && !parentRosterQuery.isFetching
+          && parentRosterQuery.dataUpdatedAt > truth.parentRosterUpdatedAt,
+        );
+        if (
+          workspaceRosterIsFresh
+          && (parentSessionId !== truth.parentSessionId || parentRosterIsFresh)
+        ) {
+          next ??= new Map(current);
+          next.delete(key);
+        }
+      }
+      return next ?? current;
+    });
+  }, [
+    parentRosterQuery.data,
+    parentRosterQuery.dataUpdatedAt,
+    parentRosterQuery.isFetching,
+    parentRosterQuery.isSuccess,
+    parentSessionId,
+    presentationTruthByTarget,
+    workspaceRosterQuery.data,
+    workspaceRosterQuery.dataUpdatedAt,
+    workspaceRosterQuery.isFetching,
+    workspaceRosterQuery.isSuccess,
+  ]);
+
+  useEffect(() => {
+    if (!canRepairRoute) {
       return;
     }
     repairRoute(workspaceId, liveParentIds, liveChildIdsByParent);
@@ -149,7 +188,7 @@ export function useAgentsPane({ workspaceId }: { workspaceId: string }) {
     liveParentIds,
     repairRoute,
     workspaceId,
-    workspaceRosterQuery.data,
+    canRepairRoute,
   ]);
 
   const selectParent = useCallback((parent: AgentsPaneParent) => {
@@ -183,6 +222,7 @@ export function useAgentsPane({ workspaceId }: { workspaceId: string }) {
   }, [nextActionToken, openDetail, parentSessionId, workspaceId]);
 
   const completePromotion = useCallback((target: {
+    parentSessionId: string;
     childSessionId: string;
     clientSessionId: string;
   }) => {
@@ -191,10 +231,8 @@ export function useAgentsPane({ workspaceId }: { workspaceId: string }) {
       next.add(target.childSessionId);
       return next;
     });
-    setSessionRelationship(target.clientSessionId, { kind: "root" });
-    if (parentSessionId) {
-      openCluster(workspaceId, parentSessionId);
-    }
+    markSessionPromoted([target.childSessionId, target.clientSessionId], workspaceId);
+    openCluster(workspaceId, target.parentSessionId);
     void openWorkspaceSession({
       workspaceId,
       sessionId: target.clientSessionId,
@@ -203,42 +241,108 @@ export function useAgentsPane({ workspaceId }: { workspaceId: string }) {
   }, [
     openCluster,
     openWorkspaceSession,
-    parentSessionId,
-    setSessionRelationship,
+    markSessionPromoted,
     workspaceId,
   ]);
 
   const handlePromoted = useCallback((outcome: AgentsPanePromoteOutcome) => {
-    setLifecycleError(null);
+    setLifecycleError((current) => current
+      && current.parentSessionId === outcome.parentSessionId
+      && current.childSessionId === outcome.childSessionId
+        ? null
+        : current
+    );
     completePromotion(outcome);
   }, [completePromotion]);
+
+  const handleLifecycleSuccess = useCallback((
+    outcome: AgentsPaneCloseOutcome | AgentsPaneOpenOutcome,
+  ) => {
+    const key = agentsPaneLifecycleTargetKey(
+      outcome.parentSessionId,
+      outcome.childSessionId,
+    );
+    setPresentationTruthByTarget((current) => {
+      const next = new Map(current);
+      next.set(key, {
+        parentSessionId: outcome.parentSessionId,
+        childSessionId: outcome.childSessionId,
+        status: outcome.agent.status,
+        workspaceRosterUpdatedAt: workspaceRosterQuery.dataUpdatedAt,
+        parentRosterUpdatedAt: parentSessionId === outcome.parentSessionId
+          ? parentRosterQuery.dataUpdatedAt
+          : null,
+      });
+      return next;
+    });
+    setLifecycleError((current) => current
+      && current.parentSessionId === outcome.parentSessionId
+      && current.childSessionId === outcome.childSessionId
+        ? null
+        : current
+    );
+  }, [
+    parentRosterQuery.dataUpdatedAt,
+    parentSessionId,
+    workspaceRosterQuery.dataUpdatedAt,
+  ]);
 
   const handleLifecycleError = useCallback(async (
     failure: AgentsPaneLifecycleFailure,
   ) => {
     const rosterResultPromise = workspaceRosterQuery.refetch();
+    const focusedResultPromise = parentSessionId === failure.parentSessionId
+      ? parentRosterQuery.refetch()
+      : Promise.resolve(null);
     if (failure.action === "promote" && failure.kind === "not_found") {
       const [rosterResult, sessionsResult] = await Promise.all([
         rosterResultPromise,
         workspaceSessionsQuery.refetch(),
+        focusedResultPromise,
       ]);
       const childStillLinked = rosterHasChild(
         rosterResult.data?.parents,
         failure.childSessionId,
       );
-      const isOrdinarySession = sessionsResult.data?.some(
+      const isListedSession = sessionsResult.data?.some(
         (session) => session.id === failure.childSessionId,
       ) ?? false;
-      if (!childStillLinked && isOrdinarySession) {
+      if (
+        rosterResult.isSuccess
+        && sessionsResult.isSuccess
+        && !childStillLinked
+        && isListedSession
+      ) {
         setLifecycleError(null);
         completePromotion(failure);
         return;
       }
     } else {
-      await rosterResultPromise;
+      await Promise.all([rosterResultPromise, focusedResultPromise]);
     }
-    setLifecycleError(failure.message || "The agent action could not be completed.");
-  }, [completePromotion, workspaceRosterQuery, workspaceSessionsQuery]);
+    const currentRoute = selectAgentsPaneRoute(
+      useAgentsPaneNavigationStore.getState(),
+      workspaceId,
+    );
+    if (
+      currentRoute.kind === "detail"
+      && currentRoute.parentDurableId === failure.parentSessionId
+      && currentRoute.childDurableId === failure.childSessionId
+    ) {
+      setLifecycleError({
+        parentSessionId: failure.parentSessionId,
+        childSessionId: failure.childSessionId,
+        message: failure.message || "The agent action could not be completed.",
+      });
+    }
+  }, [
+    completePromotion,
+    parentRosterQuery,
+    parentSessionId,
+    workspaceId,
+    workspaceRosterQuery,
+    workspaceSessionsQuery,
+  ]);
 
   const retryRoster = useCallback(() => {
     setLifecycleError(null);
@@ -256,8 +360,15 @@ export function useAgentsPane({ workspaceId }: { workspaceId: string }) {
     selectedChild,
     selectedClientSessionId,
     actionRequest,
-    lifecycleError,
-    initialLoading: !workspaceRosterQuery.data && workspaceRosterQuery.isLoading,
+    lifecycleError: route.kind === "detail"
+      && lifecycleError?.parentSessionId === route.parentDurableId
+      && lifecycleError.childSessionId === route.childDurableId
+        ? lifecycleError.message
+        : null,
+    // TanStack reports isLoading=false while an enabled query is paused
+    // offline. With no data and no error that is still an explicit initial
+    // loading state, never a blank pane.
+    initialLoading: !workspaceRosterQuery.data && !workspaceRosterQuery.isError,
     initialError: !workspaceRosterQuery.data && workspaceRosterQuery.isError
       ? "Agents are unavailable."
       : null,
@@ -273,6 +384,7 @@ export function useAgentsPane({ workspaceId }: { workspaceId: string }) {
     requestChildAction,
     handlePromoted,
     handleLifecycleError,
+    handleLifecycleSuccess,
     clearActionRequest: (token: number) => setActionRequest((current) =>
       current?.token === token ? null : current
     ),

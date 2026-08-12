@@ -93,13 +93,13 @@ describe("AgentsPaneOverview", () => {
     expect(rows[0]?.className).not.toContain("opacity-60");
   });
 
-  it("shows an 18px Solid Seal stack per parent with Closed dim and a count", () => {
+  it("shows 12px Solid Seals in 20px stack slots with Closed dim and a count", () => {
     renderOverview();
     const activeRow = screen.getByTitle("Feature build");
     const seals = activeRow.querySelectorAll("svg");
     expect(seals).toHaveLength(4);
     for (const seal of seals) {
-      expect(seal.getAttribute("width")).toBe("18");
+      expect(seal.getAttribute("width")).toBe("12");
       expect(seal.querySelector("[data-solid-seal-notch]")).not.toBeNull();
     }
     const closedSeal = within(activeRow).getByLabelText("Identity mark for Old sweep");

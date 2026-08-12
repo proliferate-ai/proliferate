@@ -137,6 +137,8 @@ export function AgentsPane({ workspaceId }: { workspaceId: string }) {
         child={pane.selectedChild}
         isPaneRouteActive
         onBack={pane.back}
+        onClosed={pane.handleLifecycleSuccess}
+        onOpened={pane.handleLifecycleSuccess}
         onPromoted={pane.handlePromoted}
         onLifecycleError={(failure) => void pane.handleLifecycleError(failure)}
         requestedAction={requestedAction}

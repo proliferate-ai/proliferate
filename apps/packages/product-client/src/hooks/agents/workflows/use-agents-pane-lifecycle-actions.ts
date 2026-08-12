@@ -5,7 +5,6 @@ import {
   useOpenSubagentMutation,
   usePromoteSubagentMutation,
 } from "@anyharness/sdk-react";
-import { closeSessionSlotStream } from "#product/hooks/sessions/lifecycle/session-stream-slot-connection";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 export type AgentsPaneLifecycleErrorKind =
@@ -34,6 +33,7 @@ export interface AgentsPaneLifecycleFailure {
 export interface AgentsPaneCloseOutcome {
   ok: true;
   agent: AgentOperationsAgent;
+  parentSessionId: string;
   childSessionId: string;
   clientSessionId: string;
 }
@@ -43,6 +43,7 @@ export interface AgentsPaneOpenOutcome {
   agent: AgentOperationsAgent;
   /** Response truth: an opened child reports running OR available. */
   presentation: AgentOperationsAgent["status"]["presentation"];
+  parentSessionId: string;
   childSessionId: string;
   clientSessionId: string;
 }
@@ -53,6 +54,7 @@ export interface AgentsPanePromoteOutcome {
   /** Enough for integration to suppress the roster row, set the root hint,
    * and open the exact mapped ordinary tab. */
   workspaceId: string;
+  parentSessionId: string;
   childSessionId: string;
   clientSessionId: string;
 }
@@ -114,13 +116,15 @@ export function useAgentsPaneLifecycleActions({ workspaceId }: { workspaceId: st
         parentSessionId: input.parentSessionId,
         childSessionId: input.childSessionId,
       });
-      // Close discards queued prompts and disconnects the pane-owned stream,
-      // but preserves the transcript stores and writes no transcript receipt.
+      // Close discards queued prompts but preserves transcript state. The
+      // detail's accepted response flips it to Closed, and the pane lifecycle
+      // then releases only the exact stream lease that pane owns. Never close
+      // the shared slot here: hot-session ingestion may own its handle.
       useSessionIntentStore.getState().clearSession(input.clientSessionId);
-      closeSessionSlotStream(input.clientSessionId);
       return {
         ok: true,
         agent: response.agent,
+        parentSessionId: input.parentSessionId,
         childSessionId: input.childSessionId,
         clientSessionId: input.clientSessionId,
       };
@@ -141,6 +145,7 @@ export function useAgentsPaneLifecycleActions({ workspaceId }: { workspaceId: st
         ok: true,
         agent: response.agent,
         presentation: response.agent.status.presentation,
+        parentSessionId: input.parentSessionId,
         childSessionId: input.childSessionId,
         clientSessionId: input.clientSessionId,
       };
@@ -161,6 +166,7 @@ export function useAgentsPaneLifecycleActions({ workspaceId }: { workspaceId: st
         ok: true,
         agent: response.agent,
         workspaceId: response.agent.workspace.workspaceId,
+        parentSessionId: input.parentSessionId,
         childSessionId: input.childSessionId,
         clientSessionId: input.clientSessionId,
       };

@@ -10,6 +10,7 @@ import {
   useTranscriptSessionId,
 } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { deriveAgentOperationsReceiptPresentation } from "#product/domain/chats/tools/agent-operations-tool-presentation";
+import type { TranscriptOpenSessionRole } from "#product/domain/chats/transcript/transcript-open-target";
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
@@ -25,7 +26,12 @@ import {
   subagentCreationReceiptEntryId,
   useTranscriptEntryMotion,
 } from "#product/components/workspace/chat/transcript/TranscriptEntryMotionContext";
-import { useAgentsPaneNavigationActions } from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
+import {
+  historicalSubagentProvenanceRemainsAuthoritative,
+  isDurableSubagentRelationship,
+  resolveCurrentSessionRelationship,
+  useAgentsPaneNavigationActions,
+} from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
 
 interface SpawnReceipt {
   key: string;
@@ -200,35 +206,74 @@ function SpawnIdentityReceipt({
   const navigationSessionId = useSessionDirectoryStore((state) =>
     state.clientSessionIdByMaterializedSessionId[sessionId] ?? sessionId
   );
-  const directoryWorkspaceId = useSessionDirectoryStore(
-    (state) => state.entriesById[navigationSessionId]?.workspaceId ?? null,
+  const directoryWorkspaceId = useSessionDirectoryStore((state) =>
+    state.entriesById[navigationSessionId]?.workspaceId
+      ?? resolveCurrentSessionRelationship(state, sessionId).workspaceId
   );
   const hasDirectoryEntry = useSessionDirectoryStore(
     (state) => Boolean(state.entriesById[navigationSessionId]),
+  );
+  const directoryRelationship = useSessionDirectoryStore((state) =>
+    resolveCurrentSessionRelationship(state, sessionId).relationship
   );
   const identity = buildDelegatedAgentIdentity({
     id: sessionId,
     title: receipt.title,
     sessionId,
   });
-  const navigationWorkspaceId = receipt.workspaceId ?? directoryWorkspaceId ?? parentWorkspaceId;
+  const historicalTargetWorkspaceId = receipt.workspaceId ?? parentWorkspaceId;
+  const navigationWorkspaceId = directoryWorkspaceId ?? historicalTargetWorkspaceId;
+  const hasDurableSubagentAuthority = isDurableSubagentRelationship(directoryRelationship);
+  const hasMatchingPendingSubagentAuthority = directoryRelationship?.kind === "pending"
+    && historicalSubagentProvenanceRemainsAuthoritative(
+      directoryRelationship,
+      directoryWorkspaceId !== null,
+    )
+    && directoryWorkspaceId === historicalTargetWorkspaceId
+    && directoryWorkspaceId === selectedWorkspaceId;
+  const currentRelationshipKeepsOrdinaryNavigation = Boolean(
+    directoryRelationship
+    && directoryRelationship.kind !== "pending"
+    && !isDurableSubagentRelationship(directoryRelationship),
+  );
+  const openRole: TranscriptOpenSessionRole = directoryRelationship?.kind === "root"
+    ? "generic"
+    : directoryRelationship?.kind === "cowork_child"
+      ? "cowork-coding-child"
+      : "linked-child";
   const isCurrentWorkspace = navigationWorkspaceId !== null
     && navigationWorkspaceId === selectedWorkspaceId;
+  const currentSubagentOwnsNavigation = isCurrentWorkspace
+    && (hasDurableSubagentAuthority || hasMatchingPendingSubagentAuthority);
+  const paneParentCandidate = isDurableSubagentRelationship(directoryRelationship)
+    ? directoryRelationship.parentSessionId
+    : parentDurableSessionId;
+  const paneParentSessionId = useSessionDirectoryStore((state) =>
+    paneParentCandidate
+      ? state.entriesById[paneParentCandidate]?.materializedSessionId ?? paneParentCandidate
+      : null
+  );
+  const canOpenInAgentsPane = Boolean(
+    currentSubagentOwnsNavigation
+    && navigationWorkspaceId
+    && paneParentSessionId,
+  );
   const usesTranscriptNavigation = Boolean(
     openSession
     && (isCurrentWorkspace || !navigationWorkspaceId)
-    && (canOpenSession?.(navigationSessionId, "linked-child") ?? true),
+    && (canOpenSession?.(navigationSessionId, openRole) ?? true),
+  );
+  const canUseOrdinaryNavigation = Boolean(
+    !currentSubagentOwnsNavigation
+    && (hasDurableSubagentAuthority || currentRelationshipKeepsOrdinaryNavigation),
   );
   const canOpen = Boolean(
-    (
-      navigationWorkspaceId === selectedWorkspaceId
-      && parentDurableSessionId
-    )
-    || usesTranscriptNavigation
-    || (
+    canOpenInAgentsPane
+    || (canUseOrdinaryNavigation && usesTranscriptNavigation)
+    || (canUseOrdinaryNavigation && (
       navigationWorkspaceId
       && (hasDirectoryEntry || projectedWorkspaceIds.has(navigationWorkspaceId))
-    ),
+    )),
   );
 
   return (
@@ -242,18 +287,20 @@ function SpawnIdentityReceipt({
         onOpen={canOpen
           ? () => {
             if (
-              navigationWorkspaceId
-              && parentDurableSessionId
-              && openAgentsPaneTarget({
-                workspaceId: navigationWorkspaceId,
-                parentSessionId: parentDurableSessionId,
-                childSessionId: sessionId,
-              })
+              canOpenInAgentsPane
+              && navigationWorkspaceId
+              && paneParentSessionId
             ) {
+              openAgentsPaneTarget({
+                workspaceId: navigationWorkspaceId,
+                parentSessionId: paneParentSessionId,
+                childSessionId: sessionId,
+                historicalSubagentProvenance: true,
+              });
               return;
             }
             if (usesTranscriptNavigation) {
-              openSession?.(navigationSessionId, "linked-child");
+              openSession?.(navigationSessionId, openRole);
               return;
             }
             if (navigationWorkspaceId) {

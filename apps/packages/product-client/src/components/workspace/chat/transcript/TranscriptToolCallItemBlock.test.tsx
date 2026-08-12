@@ -15,6 +15,10 @@ import { ProductHostProvider } from "@proliferate/product-client/host/ProductHos
 import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 import { TranscriptContextProviders } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { TranscriptToolCallItemBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock";
+import {
+  agentView,
+  workspaceTool,
+} from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock.test-fixtures";
 import { delegatedWorkVisualIdentity } from "#product/lib/domain/delegated-work/identity";
 import { solidSealGeometry } from "#product/lib/domain/delegated-work/solid-seal";
 import { deriveAgentOperationsReceiptPresentation } from "#product/domain/chats/tools/agent-operations-tool-presentation";
@@ -26,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   selectWorkspace: vi.fn(),
   openWorkspaceSession: vi.fn(),
   directoryEntries: {} as Record<string, unknown>,
+  promotedRootSessionIds: new Set<string>(),
+  promotedRootWorkspaceIdBySessionId: {} as Record<string, string | null>,
   projectedWorkspaceIds: new Set<string>(),
 }));
 
@@ -59,6 +65,19 @@ vi.mock("#product/hooks/workspaces/workflows/use-workspace-activation-workflow",
   }),
 }));
 
+vi.mock("#product/hooks/agents/workflows/use-agents-pane-navigation-actions", async (importOriginal) => ({
+  ...await importOriginal<
+    typeof import("#product/hooks/agents/workflows/use-agents-pane-navigation-actions")
+  >(),
+  useAgentsPaneNavigationActions: () => ({
+    classifyAgentsPaneTarget: (target: { childSessionId?: string | null }) =>
+      target.childSessionId && mocks.promotedRootSessionIds.has(target.childSessionId)
+        ? "promoted" as const
+        : "subagent" as const,
+    openAgentsPaneTarget: () => false,
+  }),
+}));
+
 vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: () => ({
     data: {
@@ -77,12 +96,21 @@ vi.mock("#product/stores/sessions/session-directory-store", () => {
         return materializedSessionId ? [[materializedSessionId, sessionId]] : [];
       }),
     ),
+    promotedRootSessionIds: mocks.promotedRootSessionIds,
+    promotedRootWorkspaceIdBySessionId: mocks.promotedRootWorkspaceIdBySessionId,
+    relationshipHintsBySessionId: {},
   });
   const useSessionDirectoryStore = (selector: (state: unknown) => unknown) => selector(
     directoryState(),
   );
   useSessionDirectoryStore.getState = () => ({
     ...directoryState(),
+    markSessionPromoted: (sessionIds: readonly string[], workspaceId: string | null) => {
+      for (const sessionId of sessionIds) {
+        mocks.promotedRootSessionIds.add(sessionId);
+        mocks.promotedRootWorkspaceIdBySessionId[sessionId] = workspaceId;
+      }
+    },
     recordRelationshipHint: vi.fn(),
   });
   return { useSessionDirectoryStore };
@@ -115,6 +143,8 @@ describe("TranscriptToolCallItemBlock", () => {
     mocks.selectWorkspace.mockReset();
     mocks.openWorkspaceSession.mockReset();
     mocks.directoryEntries = {};
+    mocks.promotedRootSessionIds = new Set();
+    mocks.promotedRootWorkspaceIdBySessionId = {};
     mocks.projectedWorkspaceIds = new Set(["workspace-1", "workspace-other"]);
     class TestResizeObserver {
       observe() {}
@@ -567,23 +597,3 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(receipt?.textContent?.startsWith(`Schema audit${verb}`)).toBe(true);
   });
 });
-
-function workspaceTool(action: string, overrides: Parameters<typeof toolCallItem>[0] = {}) {
-  return toolCallItem({
-    nativeToolName: `mcp__workspace__${action}`,
-    rawInput: { agentId: "agent-1" },
-    rawOutput: agentView(),
-    ...overrides,
-  });
-}
-
-function agentView(overrides: Record<string, unknown> = {}) {
-  return {
-    identity: { runtimeId: "runtime-1", sessionId: "agent-session-1" },
-    workspace: { runtimeId: "runtime-1", workspaceId: "workspace-1" },
-    role: "subagent",
-    title: "Schema audit",
-    status: { presentation: "available", execution: "idle", hasLiveActor: true },
-    ...overrides,
-  };
-}

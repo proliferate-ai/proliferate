@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   openMutate: vi.fn(),
   promoteMutate: vi.fn(),
   clearSession: vi.fn(),
-  closeSessionSlotStream: vi.fn(),
 }));
 
 vi.mock("@anyharness/sdk", () => {
@@ -34,10 +33,6 @@ vi.mock("#product/stores/sessions/session-intent-store", () => ({
   useSessionIntentStore: {
     getState: () => ({ clearSession: mocks.clearSession }),
   },
-}));
-
-vi.mock("#product/hooks/sessions/lifecycle/session-stream-slot-connection", () => ({
-  closeSessionSlotStream: mocks.closeSessionSlotStream,
 }));
 
 const TARGET = {
@@ -78,7 +73,7 @@ describe("useAgentsPaneLifecycleActions", () => {
     cleanup();
   });
 
-  it("close success purges local intents for the mapped client session and disconnects the pane stream", async () => {
+  it("close success purges local intents without tearing down a shared stream slot", async () => {
     mocks.closeMutate.mockResolvedValue(agentResponse("closed"));
     const { result } = renderHook(() => useAgentsPaneLifecycleActions({ workspaceId: "ws-1" }));
 
@@ -90,7 +85,6 @@ describe("useAgentsPaneLifecycleActions", () => {
     });
     expect(outcome.ok).toBe(true);
     expect(mocks.clearSession).toHaveBeenCalledWith("client-child");
-    expect(mocks.closeSessionSlotStream).toHaveBeenCalledWith("client-child");
   });
 
   it("close failure never purges intents or touches the stream", async () => {
@@ -101,7 +95,6 @@ describe("useAgentsPaneLifecycleActions", () => {
 
     expect(outcome.ok).toBe(false);
     expect(mocks.clearSession).not.toHaveBeenCalled();
-    expect(mocks.closeSessionSlotStream).not.toHaveBeenCalled();
   });
 
   it("open returns the response presentation truth (running or available)", async () => {

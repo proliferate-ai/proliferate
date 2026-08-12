@@ -130,6 +130,26 @@ describe("useAgentsPaneSessionLifecycle stream ownership", () => {
     expect(getSessionStreamHandle("child-a")).toBe(handle);
   });
 
+  it("releases only its own stream lease when accepted Close makes the child read-only", async () => {
+    const handle = installChild("client-a", "child-a");
+    const rendered = renderHook(
+      ({ isClosed }: { isClosed: boolean }) => useAgentsPaneSessionLifecycle({
+        ...createInput("client-a", "child-a"),
+        isClosed,
+      }),
+      { initialProps: { isClosed: false } },
+    );
+    await waitFor(() => {
+      expect(getSessionStreamHandle("child-a")).toBe(handle);
+    });
+
+    rendered.rerender({ isClosed: true });
+
+    expect(handle.close).toHaveBeenCalledTimes(1);
+    expect(getSessionStreamHandle("child-a")).toBeNull();
+    expect(rendered.result.current.streamConnectionState).toBeNull();
+  });
+
   it("closes a pane-owned handle registered by an in-flight connect", async () => {
     const handle = installChild("client-a", "child-a");
     let finishConnect!: () => void;
@@ -155,6 +175,23 @@ describe("useAgentsPaneSessionLifecycle stream ownership", () => {
     await act(async () => {
       finishConnect();
       await connectGate;
+    });
+  });
+
+  it("settles a rejected stream request as disconnected without leaking a rejection", async () => {
+    installChild("client-a", "child-a");
+    mocks.ensureSessionStreamConnected.mockImplementation(async (sessionId: string) => {
+      patchSessionRecord(sessionId, { streamConnectionState: "connecting" });
+      throw new Error("stream unavailable");
+    });
+
+    const rendered = renderHook(() =>
+      useAgentsPaneSessionLifecycle(createInput("client-a", "child-a"))
+    );
+
+    await waitFor(() => {
+      expect(rendered.result.current.streamRequestPending).toBe(false);
+      expect(rendered.result.current.streamConnectionState).toBe("disconnected");
     });
   });
 });

@@ -210,6 +210,16 @@ export function useAgentsPaneSessionLifecycle(
         materializedSessionId: currentMaterializedSessionId,
         handle: currentHandle,
       };
+    }).catch(() => {
+      const record = getSessionRecord(sessionId);
+      if (
+        isCurrent(sessionId)
+        && record
+        && record.streamConnectionState !== "open"
+        && !isHotSessionClientId(sessionId)
+      ) {
+        patchSessionRecord(sessionId, { streamConnectionState: "disconnected" });
+      }
     }).finally(() => {
       if (paneStreamAttemptRef.current?.token === attempt.token) {
         paneStreamAttemptRef.current = null;

@@ -139,6 +139,8 @@ describe("buildAgentsPaneModel", () => {
     expect(groups[1]?.children[0]?.detailLabel).toBe("Available");
     expect(groups[2]?.children.map((child) => child.sessionId))
       .toEqual(["closed-1"]);
+    expect(model.parents[0]?.children.map((child) => child.sessionId))
+      .toEqual(["run-1", "avail-1", "run-2", "closed-1", "avail-2"]);
   });
 
   it("keeps execution=errored in Available with a truthful Failed detail", () => {

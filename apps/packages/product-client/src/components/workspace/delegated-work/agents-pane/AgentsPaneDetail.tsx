@@ -4,6 +4,7 @@ import { ArrowLeft } from "#product/primitives/icons/core";
 import { Button } from "#product/primitives/Button";
 import { AgentIdentityGlyph } from "#product/components/workspace/delegated-work/AgentIdentityGlyph";
 import { MessageList } from "#product/components/workspace/chat/transcript/MessageList";
+import { useTranscriptSessionNavigationActions } from "#product/hooks/chat/workflows/use-transcript-session-navigation-actions";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
 import { useTranscriptPaneStateForSession } from "#product/hooks/chat/derived/use-active-session-transcript-state";
@@ -69,31 +70,13 @@ export function AgentsPaneDetail({
   requestedAction = null,
   onRequestedActionHandled,
 }: AgentsPaneDetailProps) {
-  const rosterPresentation = child.agent.status.presentation;
+  const presentation = child.agent.status.presentation;
   const identityKey = `${parentSessionId}:${childSessionId}`;
   const currentIdentityRef = useRef({ identityKey, token: Symbol(identityKey) });
   if (currentIdentityRef.current.identityKey !== identityKey) {
     currentIdentityRef.current = { identityKey, token: Symbol(identityKey) };
   }
   const identityToken = currentIdentityRef.current.token;
-  // Accepted lifecycle responses are immediate truth even while a roster
-  // invalidation is still in flight. Key the override to the durable target so
-  // a late response from child A can never change child B after navigation.
-  const [presentationTruth, setPresentationTruth] = useState<{
-    identityToken: symbol;
-    presentation: SubagentRosterEntry["agent"]["status"]["presentation"];
-  } | null>(null);
-  const presentation = presentationTruth?.identityToken === identityToken
-    ? presentationTruth.presentation
-    : rosterPresentation;
-  useEffect(() => {
-    if (
-      presentationTruth?.identityToken === identityToken
-      && presentationTruth.presentation === rosterPresentation
-    ) {
-      setPresentationTruth(null);
-    }
-  }, [identityToken, presentationTruth, rosterPresentation]);
   const isClosed = presentation === "closed";
 
   const identity = useMemo(() => buildDelegatedAgentIdentity({
@@ -122,6 +105,12 @@ export function AgentsPaneDetail({
     isPaneRouteActive,
   });
   const paneState = useTranscriptPaneStateForSession(clientSessionId);
+  const { canOpenTranscriptSession, openTranscriptSession } =
+    useTranscriptSessionNavigationActions({
+      sourceSessionId: clientSessionId,
+      fallbackWorkspaceId: workspaceId,
+      transcript: paneState.transcript,
+    });
   const {
     closeChild,
     openChild,
@@ -130,6 +119,7 @@ export function AgentsPaneDetail({
     openPending,
     promotePending,
   } = useAgentsPaneLifecycleActions({ workspaceId });
+  const lifecyclePending = closePending || openPending || promotePending;
 
   const [closeConfirmFor, setCloseConfirmFor] = useState<symbol | null>(null);
   const [promoteConfirmFor, setPromoteConfirmFor] = useState<symbol | null>(null);
@@ -148,12 +138,6 @@ export function AgentsPaneDetail({
       setCloseConfirmFor(null);
     }
     if (outcome.ok) {
-      if (currentIdentityRef.current.token === operationIdentity) {
-        setPresentationTruth({
-          identityToken: operationIdentity,
-          presentation: outcome.agent.status.presentation,
-        });
-      }
       onClosed?.(outcome);
     } else {
       onLifecycleError?.(outcome);
@@ -170,20 +154,13 @@ export function AgentsPaneDetail({
   }, [identityToken, performClose, presentation]);
 
   const performOpen = useCallback(async () => {
-    const operationIdentity = identityToken;
     const outcome = await openChild(target);
     if (outcome.ok) {
-      if (currentIdentityRef.current.token === operationIdentity) {
-        setPresentationTruth({
-          identityToken: operationIdentity,
-          presentation: outcome.presentation,
-        });
-      }
       onOpened?.(outcome);
     } else {
       onLifecycleError?.(outcome);
     }
-  }, [identityToken, onLifecycleError, onOpened, openChild, target]);
+  }, [onLifecycleError, onOpened, openChild, target]);
 
   const performPromote = useCallback(async () => {
     const operationIdentity = identityToken;
@@ -232,7 +209,10 @@ export function AgentsPaneDetail({
   const showDisconnected = !isClosed
     && lifecycle.historyPhase === "ready"
     && !lifecycle.streamRequestPending
-    && lifecycle.streamConnectionState === "disconnected";
+    && (
+      lifecycle.streamConnectionState === "disconnected"
+      || lifecycle.streamConnectionState === "ended"
+    );
 
   return (
     <section
@@ -275,7 +255,7 @@ export function AgentsPaneDetail({
               variant="ghost"
               size="sm"
               loading={openPending}
-              disabled={openPending}
+              disabled={lifecyclePending}
               onClick={() => void performOpen()}
             >
               Open
@@ -286,7 +266,7 @@ export function AgentsPaneDetail({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={closePending}
+              disabled={lifecyclePending}
               loading={closePending}
               onClick={requestClose}
             >
@@ -298,7 +278,7 @@ export function AgentsPaneDetail({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={promotePending}
+              disabled={lifecyclePending}
               onClick={() => setPromoteConfirmFor(identityToken)}
             >
               Promote
@@ -351,6 +331,8 @@ export function AgentsPaneDetail({
             sessionViewState={isClosed ? "idle" : paneState.sessionViewState}
             goalEvents={paneState.goalEvents}
             contentSearchEnabled={false}
+            onOpenSession={openTranscriptSession}
+            canOpenSession={canOpenTranscriptSession}
           />
         )}
       </div>

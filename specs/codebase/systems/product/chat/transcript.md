@@ -27,6 +27,28 @@ In-app find (Cmd+F) over transcript prose is documented separately in
   keep requests abortable, key top-of-scroll prefetches by the oldest loaded
   sequence, and do not spin forever when a page returns no new rows.
 
+### Embedded Non-Active Transcripts
+
+The Agents right-pane detail renders a child transcript without making that
+child the active main chat. It must reuse the mapped ProductClient session's
+existing directory entry, transcript store, history hydration, transcript row
+model, and send-or-queue intent path. Do not create a pane-specific transcript
+cache or reducer, and do not write the child's ID into the main
+`activeSessionId` as a rendering shortcut.
+
+A non-Closed detail explicitly requests an arbitrary-session stream through the
+shared stream lifecycle. The pane releases only the handle it opened; it must
+not tear down a pre-existing handle or one owned by hot-session ingestion.
+Closed detail hydrates persisted history read-only and opens no stream. The
+embedded `MessageList` uses the same transcript-session target resolver as the
+main transcript so cowork, linked-child, and ordinary-session navigation keeps
+its existing workspace semantics.
+
+This embedded transcript opts out of transcript content search
+(`contentSearchEnabled={false}`). It must not register or paint matches for the
+workspace Cmd+F surface while the active main transcript remains the search
+owner.
+
 Before merging transcript or stream-runtime changes, run focused coverage for
 stream flushing, session runtime/history loading, transcript row modeling, SDK
 transcript reducer immutability, plus:
@@ -279,9 +301,22 @@ Communication receipts:
   source opens as generic, linked-child, or cowork. Relationship hints and
   open actions use the mapped ProductClient session ID, never the durable glyph
   seed when those IDs differ.
+- In the selected workspace, authoritative subagent creation chips, Agent
+  Operations receipts, incoming agent-origin receipts, and pending
+  `From subagents` glyphs open the child's Agents-pane detail without selecting
+  a chat tab. A receipt whose current relationship is ordinary/promoted,
+  cowork, review, or another non-subagent relationship keeps its existing
+  transcript/session navigation.
+  Historical subagent provenance is not enough to override a conflicting live
+  relationship.
 - Close preserves the same glyph and dims that glyph to 45% opacity only after
   a successful/actually closed result. Open and Promote restore/reuse the same
   durable identity; a failed Close is not dimmed.
+- A successful Promote result records root authority for both the durable
+  runtime ID and its mapped ProductClient session ID. Receipt replay, directory
+  relationship hints, roster refreshes, and header hierarchy refreshes must not
+  resurrect that session as an Agents-pane child; the Promote receipt and later
+  opens route to the ordinary session.
 - Compact rows keep detailed structured output inspectable through their own
   quiet verb or operation mark. They do not add a second generic tool glyph.
 - `create_workspace` uses a one-line Proliferate-mark receipt and a lower-case
@@ -295,7 +330,9 @@ reduced to one final `From subagents` aggregate after user/review rows. The
 aggregate shows one deterministic 14px glyph per resolved durable sender in a
 20px overlapping shell, the total update count, and no edit/delete/reorder
 controls. Unresolved wake prompts count toward the total without creating a
-glyph. Reordering replaces only eligible runtime-owned plain-message slots;
+glyph. An authoritative same-workspace subagent glyph opens the Agents-pane
+detail; a promoted or otherwise non-subagent target uses its current session
+route. Reordering replaces only eligible runtime-owned plain-message slots;
 review, local-outbox, and hidden-agent slots retain their exact positions in
 both optimistic rendering and the compare-and-swap payload. A pending glyph
 is clickable only when directory metadata supplies an authoritative workspace,

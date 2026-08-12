@@ -60,8 +60,11 @@ function useSubagentLifecycleMutation(
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions[action](input.parentSessionId, input.childSessionId);
     },
-    onSuccess: async (_response, variables) => {
-      await Promise.all([
+    onSuccess: (_response, variables) => {
+      // Reconciliation belongs to this hook, but an accepted lifecycle
+      // response is immediate product truth. Do not hold mutateAsync (and the
+      // Close/Open/Promote UI transition) behind active-query refetches.
+      void Promise.allSettled([
         queryClient.invalidateQueries({
           queryKey: anyHarnessWorkspaceSubagentsKey(cacheScopeKey, workspaceId),
         }),

@@ -21,9 +21,11 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 const mocks = vi.hoisted(() => {
   const query = () => ({
     data: undefined as unknown,
+    dataUpdatedAt: 0,
     isLoading: false,
     isError: false,
     isFetching: false,
+    isSuccess: false,
     refetch: vi.fn(),
   });
   const workspaceQuery = query();
@@ -145,6 +147,7 @@ function promotion(): AgentsPanePromoteOutcome {
     ok: true,
     agent: CHILD_ENTRY.agent,
     workspaceId: WORKSPACE_ID,
+    parentSessionId: PARENT_ID,
     childSessionId: CHILD_ID,
     clientSessionId: CLIENT_CHILD_ID,
   };
@@ -158,19 +161,31 @@ function allOverviewChildIds(
   ) ?? [];
 }
 
+function openChildDetail(result: { current: ReturnType<typeof useAgentsPane> }) {
+  act(() => result.current.selectParent(result.current.overviewModel!.parents[0]!));
+  const child = result.current.focusedParent!.groups
+    .flatMap((group) => group.children)
+    .find((entry) => entry.sessionId === CHILD_ID)!;
+  act(() => result.current.selectChild(child));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(mocks.workspaceQuery, {
     data: WORKSPACE_RESPONSE,
+    dataUpdatedAt: 1,
     isLoading: false,
     isError: false,
     isFetching: false,
+    isSuccess: true,
   });
   Object.assign(mocks.parentQuery, {
     data: PARENT_RESPONSE,
+    dataUpdatedAt: 1,
     isLoading: false,
     isError: false,
     isFetching: false,
+    isSuccess: true,
   });
   Object.assign(mocks.sessionsQuery, {
     data: undefined,
@@ -287,6 +302,21 @@ describe("useAgentsPane", () => {
       .toBe(PARENT_ID);
   });
 
+  it("shows initial loading while the no-data workspace roster is paused", () => {
+    Object.assign(mocks.workspaceQuery, {
+      data: undefined,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+    });
+
+    const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
+
+    expect(result.current.overviewModel).toBeNull();
+    expect(result.current.initialLoading).toBe(true);
+    expect(result.current.initialError).toBeNull();
+  });
+
   it("suppresses a successful Promote, roots the mapped session, and opens that exact ordinary tab", () => {
     const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
     act(() => result.current.selectParent(result.current.overviewModel!.parents[0]!));
@@ -296,6 +326,9 @@ describe("useAgentsPane", () => {
     expect(allOverviewChildIds(result.current.overviewModel)).toEqual([SIBLING_ID]);
     expect(useSessionDirectoryStore.getState().entriesById[CLIENT_CHILD_ID]?.sessionRelationship)
       .toEqual({ kind: "root" });
+    expect(useSessionDirectoryStore.getState().promotedRootSessionIds).toEqual(
+      new Set([CHILD_ID, CLIENT_CHILD_ID]),
+    );
     expect(mocks.openWorkspaceSession).toHaveBeenCalledTimes(1);
     expect(mocks.openWorkspaceSession).toHaveBeenCalledWith({
       workspaceId: WORKSPACE_ID,
@@ -305,12 +338,16 @@ describe("useAgentsPane", () => {
   });
 
   it("converges a Promote 404 only when the child left the roster and exists as an ordinary session", async () => {
-    mocks.workspaceQuery.refetch.mockResolvedValueOnce({ data: { parents: [] } });
+    mocks.workspaceQuery.refetch.mockResolvedValueOnce({
+      data: { parents: [] },
+      isSuccess: true,
+    });
     mocks.sessionsQuery.refetch.mockResolvedValueOnce({
       data: [{ id: CHILD_ID }],
+      isSuccess: true,
     });
     const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
-    act(() => result.current.selectParent(result.current.overviewModel!.parents[0]!));
+    openChildDetail(result);
 
     await act(async () => {
       await result.current.handleLifecycleError(failure());
@@ -320,6 +357,9 @@ describe("useAgentsPane", () => {
     expect(allOverviewChildIds(result.current.overviewModel)).toEqual([SIBLING_ID]);
     expect(useSessionDirectoryStore.getState().entriesById[CLIENT_CHILD_ID]?.sessionRelationship)
       .toEqual({ kind: "root" });
+    expect(useSessionDirectoryStore.getState().promotedRootSessionIds).toEqual(
+      new Set([CHILD_ID, CLIENT_CHILD_ID]),
+    );
     expect(mocks.openWorkspaceSession).toHaveBeenCalledWith({
       workspaceId: WORKSPACE_ID,
       sessionId: CLIENT_CHILD_ID,
@@ -342,10 +382,16 @@ describe("useAgentsPane", () => {
     rosterData,
     sessionData,
   }) => {
-    mocks.workspaceQuery.refetch.mockResolvedValueOnce({ data: rosterData });
-    mocks.sessionsQuery.refetch.mockResolvedValueOnce({ data: sessionData });
+    mocks.workspaceQuery.refetch.mockResolvedValueOnce({
+      data: rosterData,
+      isSuccess: true,
+    });
+    mocks.sessionsQuery.refetch.mockResolvedValueOnce({
+      data: sessionData,
+      isSuccess: true,
+    });
     const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
-    act(() => result.current.selectParent(result.current.overviewModel!.parents[0]!));
+    openChildDetail(result);
 
     await act(async () => {
       await result.current.handleLifecycleError(failure());
@@ -354,8 +400,8 @@ describe("useAgentsPane", () => {
     expect(result.current.lifecycleError).toBe("The durable child was not found.");
     expect(allOverviewChildIds(result.current.overviewModel))
       .toEqual([CHILD_ID, SIBLING_ID]);
-    expect(useSessionDirectoryStore.getState().entriesById[CLIENT_CHILD_ID]?.sessionRelationship)
-      .toMatchObject({ kind: "subagent_child" });
+    expect(useSessionDirectoryStore.getState().entriesById[CLIENT_CHILD_ID]?.sessionRelationship.kind)
+      .toBe("subagent_child");
     expect(mocks.openWorkspaceSession).not.toHaveBeenCalled();
   });
 
@@ -363,7 +409,7 @@ describe("useAgentsPane", () => {
     mocks.workspaceQuery.refetch.mockResolvedValueOnce({ data: { parents: [] } });
     mocks.sessionsQuery.refetch.mockResolvedValueOnce({ data: [{ id: CHILD_ID }] });
     const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
-    act(() => result.current.selectParent(result.current.overviewModel!.parents[0]!));
+    openChildDetail(result);
 
     await act(async () => {
       await result.current.handleLifecycleError(failure({ action: "close" }));
@@ -374,5 +420,181 @@ describe("useAgentsPane", () => {
     expect(mocks.openWorkspaceSession).not.toHaveBeenCalled();
     expect(useSessionDirectoryStore.getState().entriesById[CLIENT_CHILD_ID]?.sessionRelationship)
       .toMatchObject({ kind: "subagent_child" });
+  });
+
+  it("does not converge Promote from stale sessions data when the sessions refetch fails", async () => {
+    mocks.workspaceQuery.refetch.mockResolvedValueOnce({
+      data: { parents: [] },
+      isSuccess: true,
+    });
+    mocks.sessionsQuery.refetch.mockResolvedValueOnce({
+      data: [{ id: CHILD_ID }],
+      isSuccess: false,
+      isError: true,
+    });
+    const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
+    openChildDetail(result);
+
+    await act(async () => {
+      await result.current.handleLifecycleError(failure());
+    });
+
+    expect(result.current.lifecycleError).toBe("The durable child was not found.");
+    expect(mocks.openWorkspaceSession).not.toHaveBeenCalled();
+  });
+
+  it("repairs stale detail from settled focused truth even when the workspace roster failed", () => {
+    useAgentsPaneNavigationStore.getState().openDetail(
+      WORKSPACE_ID,
+      PARENT_ID,
+      CHILD_ID,
+    );
+    Object.assign(mocks.workspaceQuery, {
+      data: undefined,
+      isError: true,
+      isFetching: false,
+    });
+    Object.assign(mocks.parentQuery, {
+      data: { parent: ROSTER.parent, children: [] },
+      isError: false,
+      isFetching: false,
+    });
+
+    const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
+
+    expect(result.current.route).toEqual({ kind: "overview" });
+  });
+
+  it("repairs from newer workspace truth instead of an older settled parent cache", () => {
+    useAgentsPaneNavigationStore.getState().openDetail(
+      WORKSPACE_ID,
+      PARENT_ID,
+      CHILD_ID,
+    );
+    Object.assign(mocks.workspaceQuery, {
+      data: { parents: [] },
+      dataUpdatedAt: 12,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+    });
+    Object.assign(mocks.parentQuery, {
+      data: PARENT_RESPONSE,
+      dataUpdatedAt: 11,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+    });
+
+    const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
+
+    expect(result.current.route).toEqual({ kind: "overview" });
+    expect(result.current.focusedLoading).toBe(false);
+  });
+
+  it("preserves detail while a newer focused roster is still refetching", () => {
+    useAgentsPaneNavigationStore.getState().openDetail(WORKSPACE_ID, PARENT_ID, CHILD_ID);
+    Object.assign(mocks.workspaceQuery, { data: { parents: [] }, dataUpdatedAt: 10 });
+    Object.assign(mocks.parentQuery, {
+      data: PARENT_RESPONSE, dataUpdatedAt: 11, isFetching: true,
+    });
+
+    const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
+
+    expect(result.current.route).toEqual(
+      { kind: "detail", parentDurableId: PARENT_ID, childDurableId: CHILD_ID },
+    );
+    expect(result.current.selectedChild?.agent.identity.sessionId).toBe(CHILD_ID);
+  });
+
+  it("preserves a new detail route while its invalidated workspace roster is refetching", () => {
+    useAgentsPaneNavigationStore.getState().openDetail(
+      WORKSPACE_ID,
+      PARENT_ID,
+      "new-child",
+    );
+    Object.assign(mocks.workspaceQuery, {
+      data: WORKSPACE_RESPONSE,
+      isError: false,
+      isFetching: true,
+    });
+    Object.assign(mocks.parentQuery, {
+      data: undefined,
+      isError: false,
+      isFetching: true,
+    });
+
+    const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
+
+    expect(result.current.route).toEqual({
+      kind: "detail",
+      parentDurableId: PARENT_ID,
+      childDurableId: "new-child",
+    });
+  });
+
+  it("preserves a detail route while both roster queries are paused without data", () => {
+    useAgentsPaneNavigationStore.getState().openDetail(
+      WORKSPACE_ID,
+      PARENT_ID,
+      "paused-child",
+    );
+    Object.assign(mocks.workspaceQuery, {
+      data: undefined,
+      isError: false,
+      isFetching: false,
+    });
+    Object.assign(mocks.parentQuery, {
+      data: undefined,
+      isError: false,
+      isFetching: false,
+    });
+
+    const { result } = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
+
+    expect(result.current.route).toEqual({
+      kind: "detail",
+      parentDurableId: PARENT_ID,
+      childDurableId: "paused-child",
+    });
+  });
+
+  it("refetches focused parent truth after a lifecycle race", async () => {
+    const closedChild = {
+      ...CHILD_ENTRY,
+      agent: agent(CHILD_ID, "Primary worker", "closed"),
+    };
+    const closedWorkspaceData = {
+      parents: [{ ...ROSTER, children: [closedChild, SIBLING_ENTRY] }],
+    };
+    const closedParentData = {
+      parent: ROSTER.parent,
+      children: [closedChild, SIBLING_ENTRY],
+    };
+    mocks.workspaceQuery.refetch.mockImplementationOnce(async () => {
+      mocks.workspaceQuery.data = closedWorkspaceData;
+      return { data: closedWorkspaceData };
+    });
+    mocks.parentQuery.refetch.mockImplementationOnce(async () => {
+      mocks.parentQuery.data = closedParentData;
+      return { data: closedParentData };
+    });
+    const rendered = renderHook(() => useAgentsPane({ workspaceId: WORKSPACE_ID }));
+    const { result } = rendered;
+    openChildDetail(result);
+
+    await act(async () => {
+      await result.current.handleLifecycleError(failure({
+        action: "promote",
+        kind: "closed_race",
+        status: 409,
+        code: "SUBAGENT_OPEN_REQUIRED",
+      }));
+    });
+    rendered.rerender();
+
+    expect(mocks.parentQuery.refetch).toHaveBeenCalledTimes(1);
+    expect(mocks.workspaceQuery.refetch).toHaveBeenCalledTimes(1);
+    expect(result.current.selectedChild?.agent.status.presentation).toBe("closed");
   });
 });

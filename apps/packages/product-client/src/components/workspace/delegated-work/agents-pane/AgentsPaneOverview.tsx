@@ -3,14 +3,9 @@ import { Spinner } from "#product/primitives/Spinner";
 import { AgentIdentityGlyph } from "#product/components/workspace/delegated-work/AgentIdentityGlyph";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import type {
-  AgentsPaneChild,
   AgentsPaneModel,
   AgentsPaneParent,
 } from "#product/lib/domain/delegated-work/agents-pane-model";
-
-function parentChildren(parent: AgentsPaneParent): readonly AgentsPaneChild[] {
-  return parent.groups.flatMap((group) => group.children);
-}
 
 function ParentSealStack({
   workspaceId,
@@ -19,24 +14,29 @@ function ParentSealStack({
   workspaceId: string;
   parent: AgentsPaneParent;
 }) {
-  const children = parentChildren(parent);
+  const children = parent.children;
+  const visibleChildren = children.slice(0, 5);
   return (
     <span className="flex shrink-0 items-center gap-2">
       <span className="flex items-center -space-x-1">
-        {children.map((child) => (
-          <AgentIdentityGlyph
+        {visibleChildren.map((child) => (
+          <span
             key={child.sessionId}
-            identity={buildDelegatedAgentIdentity({
-              id: child.sessionLinkId,
-              title: child.title,
-              workspaceId,
-              sessionId: child.sessionId,
-              sessionLinkId: child.sessionLinkId,
-            })}
-            dimension={18}
-            closed={child.group === "closed"}
-            label={`Identity mark for ${child.title}`}
-          />
+            className="flex size-5 items-center justify-center rounded-full bg-surface-elevated ring-1 ring-border"
+          >
+            <AgentIdentityGlyph
+              identity={buildDelegatedAgentIdentity({
+                id: child.sessionLinkId,
+                title: child.title,
+                workspaceId,
+                sessionId: child.sessionId,
+                sessionLinkId: child.sessionLinkId,
+              })}
+              dimension={12}
+              closed={child.group === "closed"}
+              label={`Identity mark for ${child.title}`}
+            />
+          </span>
         ))}
       </span>
       <span className="text-ui-sm text-muted-foreground">{children.length}</span>
@@ -71,7 +71,7 @@ export function AgentsPaneOverview({
   if (!model) {
     if (error) {
       return (
-        <div className="flex min-w-0 flex-col items-start gap-2 px-2 py-3">
+        <div role="alert" className="flex min-w-0 flex-col items-start gap-2 px-2 py-3">
           <p className="text-ui text-muted-foreground">{error}</p>
           <Button type="button" variant="outline" size="sm" onClick={onRetry}>
             Retry

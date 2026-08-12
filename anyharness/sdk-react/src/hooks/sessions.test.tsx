@@ -238,6 +238,34 @@ describe("sdk-react subagent lifecycle mutations", () => {
       },
     ]);
   });
+
+  it("resolves an accepted lifecycle response before active-query reconciliation", async () => {
+    mocks.closeSubagent.mockResolvedValue({
+      agent: { identity: { sessionId: "child-1" } },
+      relationship: { sessionLinkId: "link-1" },
+    });
+    const queryClient = createQueryClient();
+    let releaseInvalidation!: () => void;
+    const invalidationPending = new Promise<void>((resolve) => {
+      releaseInvalidation = resolve;
+    });
+    vi.spyOn(queryClient, "invalidateQueries").mockReturnValue(invalidationPending);
+    const { result } = renderHook(() => useCloseSubagentMutation(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    let response: Awaited<ReturnType<typeof result.current.mutateAsync>> | null = null;
+    await act(async () => {
+      response = await result.current.mutateAsync({
+        parentSessionId: "parent-1",
+        childSessionId: "child-1",
+      });
+    });
+
+    expect(response?.agent.identity.sessionId).toBe("child-1");
+    expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(5);
+    releaseInvalidation();
+  });
 });
 
 function createQueryClient(): QueryClient {

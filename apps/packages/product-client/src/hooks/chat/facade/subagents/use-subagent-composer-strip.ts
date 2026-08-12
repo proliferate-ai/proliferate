@@ -5,8 +5,9 @@ import {
   useActiveSessionId,
   useActiveSessionWorkspaceId,
 } from "#product/hooks/chat/derived/use-active-session-identity";
+import { useAgentsPaneNavigationActions } from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
 import { recordSubagentChildRelationshipHint } from "#product/hooks/sessions/workflows/session-relationship-hints";
-import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { isPendingSessionId } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { formatSubagentLabel } from "#product/domain/chats/subagents/provenance";
@@ -38,7 +39,10 @@ export interface SubagentComposerStripViewModel {
   summary: SubagentComposerStripSummary;
   overflowCount: number;
   openSubagent: (childSessionId: string) => void;
-  openParent: (parentSessionId: string) => void;
+  /** Opens the cluster that supplied the visible child rows. */
+  openCluster: () => void;
+  /** Opens the explicit ancestor shown by the Parent agent row. */
+  openParent: () => void;
 }
 
 export interface SubagentComposerStripSummary {
@@ -55,30 +59,66 @@ export interface SubagentComposerParent {
 export function useSubagentComposerStrip(): SubagentComposerStripViewModel | null {
   const activeSessionId = useActiveSessionId();
   const activeWorkspaceId = useActiveSessionWorkspaceId();
-  const { activateChatTab } = useWorkspaceShellActivation();
+  const { openAgentsPaneTarget, resolveAgentsPaneTarget } =
+    useAgentsPaneNavigationActions();
+  const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   // Hot client-keyed session ids never resolve on the runtime; query with
   // the materialized id (404-retry loop otherwise).
-  const materializedSessionId = useSessionDirectoryStore((state) =>
+  const materializedSessionId = useSessionDirectoryStore((state) => {
+    if (!activeSessionId) return null;
+    const entry = state.entriesById[activeSessionId];
+    return entry ? entry.materializedSessionId : activeSessionId;
+  });
+  const activeSessionIsPromoted = useSessionDirectoryStore((state) => Boolean(
     activeSessionId
-      ? state.entriesById[activeSessionId]?.materializedSessionId ?? activeSessionId
-      : null);
+    && materializedSessionId
+    && (
+      state.promotedRootSessionIds.has(activeSessionId)
+      || state.promotedRootSessionIds.has(materializedSessionId)
+    )
+  ));
   const subagentsQuery = useSessionSubagentsQuery(materializedSessionId, {
     enabled: !!materializedSessionId && !isPendingSessionId(materializedSessionId),
     workspaceId: activeWorkspaceId,
   });
-  const parentSessionId = subagentsQuery.data?.parent.parent?.sessionId ?? null;
+  // Promotion is monotonic local authority. A stale child-roster response may
+  // still name the former parent while offline; never resurrect that cluster.
+  const queryParentSessionId = activeSessionIsPromoted
+    ? null
+    : subagentsQuery.data?.parent.parent?.sessionId ?? null;
   // The session subagents endpoint intentionally returns only the requested
   // session's direct parent and direct children, so child sessions read the
   // parent's context to render the sibling strip.
-  const parentSubagentsQuery = useSessionSubagentsQuery(parentSessionId, {
-    enabled: !!parentSessionId && parentSessionId !== activeSessionId,
+  const parentSubagentsQuery = useSessionSubagentsQuery(queryParentSessionId, {
+    enabled: !!queryParentSessionId && queryParentSessionId !== materializedSessionId,
     workspaceId: activeWorkspaceId,
   });
 
-  const children = parentSubagentsQuery.data?.children
-    ?? subagentsQuery.data?.children
-    ?? EMPTY_CHILDREN;
-  const childParentSessionId = parentSessionId ?? activeSessionId;
+  const usesParentRoster = Boolean(
+    !activeSessionIsPromoted && parentSubagentsQuery.data,
+  );
+  const cachedChildren = usesParentRoster
+    ? parentSubagentsQuery.data!.children
+    : subagentsQuery.data?.children ?? EMPTY_CHILDREN;
+  const promotedRootSessionIds = useSessionDirectoryStore(
+    (state) => state.promotedRootSessionIds,
+  );
+  const clientSessionIdByMaterializedSessionId = useSessionDirectoryStore(
+    (state) => state.clientSessionIdByMaterializedSessionId,
+  );
+  const children = useMemo(() => cachedChildren.filter((child) => {
+    const durableSessionId = child.agent.identity.sessionId;
+    const clientSessionId = clientSessionIdByMaterializedSessionId[durableSessionId];
+    return !promotedRootSessionIds.has(durableSessionId)
+      && (!clientSessionId || !promotedRootSessionIds.has(clientSessionId));
+  }), [
+    cachedChildren,
+    clientSessionIdByMaterializedSessionId,
+    promotedRootSessionIds,
+  ]);
+  const durableParentSessionId = usesParentRoster
+    ? queryParentSessionId
+    : materializedSessionId;
   const childBySessionId = useMemo(
     () => new Map(children.map((child) => [child.agent.identity.sessionId, child])),
     [children],
@@ -91,8 +131,10 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
     [children],
   );
   const parent = useMemo(
-    () => buildParent(subagentsQuery.data?.parent ?? null),
-    [subagentsQuery.data?.parent],
+    () => activeSessionIsPromoted
+      ? null
+      : buildParent(subagentsQuery.data?.parent ?? null),
+    [activeSessionIsPromoted, subagentsQuery.data?.parent],
   );
   const summary = useMemo(
     () => buildSummary(rows, parent),
@@ -100,28 +142,56 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
   );
 
   const openSubagent = useCallback((childSessionId: string) => {
-    if (!activeWorkspaceId || !childParentSessionId) return;
+    if (!activeWorkspaceId || !durableParentSessionId) return;
     const child = childBySessionId.get(childSessionId);
+    if (!child) return;
+    const directoryState = useSessionDirectoryStore.getState();
+    const hintSessionId =
+      directoryState.clientSessionIdByMaterializedSessionId[childSessionId]
+      ?? childSessionId;
+    const target = {
+      workspaceId: activeWorkspaceId,
+      parentSessionId: durableParentSessionId,
+      childSessionId,
+      authoritativeCurrentRosterSubagent: true,
+    };
+    const resolution = resolveAgentsPaneTarget(target);
+    if (resolution.classification !== "subagent") {
+      void openWorkspaceSession({
+        workspaceId: resolution.workspaceId,
+        sessionId: resolution.clientSessionId ?? hintSessionId,
+      });
+      return;
+    }
     recordSubagentChildRelationshipHint({
-      sessionId: childSessionId,
-      parentSessionId: childParentSessionId,
-      sessionLinkId: child?.relationship.sessionLinkId ?? null,
+      sessionId: hintSessionId,
+      parentSessionId: durableParentSessionId,
+      sessionLinkId: child.relationship.sessionLinkId,
       workspaceId: activeWorkspaceId,
     });
-    void activateChatTab({
+    openAgentsPaneTarget(target);
+  }, [
+    activeWorkspaceId,
+    childBySessionId,
+    durableParentSessionId,
+    openAgentsPaneTarget,
+    openWorkspaceSession,
+    resolveAgentsPaneTarget,
+  ]);
+  const openCluster = useCallback(() => {
+    if (!activeWorkspaceId || !durableParentSessionId) return;
+    openAgentsPaneTarget({
       workspaceId: activeWorkspaceId,
-      sessionId: childSessionId,
-      source: "subagent-composer-strip",
+      parentSessionId: durableParentSessionId,
     });
-  }, [activateChatTab, activeWorkspaceId, childBySessionId, childParentSessionId]);
-  const openParent = useCallback((parentSessionId: string) => {
-    if (!activeWorkspaceId) return;
-    void activateChatTab({
+  }, [activeWorkspaceId, durableParentSessionId, openAgentsPaneTarget]);
+  const openParent = useCallback(() => {
+    if (!activeWorkspaceId || !parent?.parentSessionId) return;
+    openAgentsPaneTarget({
       workspaceId: activeWorkspaceId,
-      sessionId: parentSessionId,
-      source: "subagent-composer-strip",
+      parentSessionId: parent.parentSessionId,
     });
-  }, [activateChatTab, activeWorkspaceId]);
+  }, [activeWorkspaceId, openAgentsPaneTarget, parent?.parentSessionId]);
 
   if (!activeSessionId || children.length === 0) {
     return null;
@@ -133,6 +203,7 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
     summary,
     overflowCount: 0,
     openSubagent,
+    openCluster,
     openParent,
   };
 }
@@ -230,7 +301,7 @@ function formatSessionStatus(agent: AgentOperationsAgent): string {
     case "running":
       return "Working";
     case "idle":
-      return "Idle";
+      return "Available";
     case "errored":
       return "Failed";
     case "starting":

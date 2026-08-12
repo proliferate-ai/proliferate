@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import type { SubagentRosterEntry } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentsPaneDetail } from "#product/components/workspace/delegated-work/agents-pane/AgentsPaneDetail";
@@ -14,9 +14,11 @@ const mocks = vi.hoisted(() => ({
   closeChild: vi.fn(),
   openChild: vi.fn(),
   promoteChild: vi.fn(),
+  openTranscriptSession: vi.fn(),
+  canOpenTranscriptSession: vi.fn(() => true),
   lifecycle: {
     historyPhase: "ready" as "loading" | "ready" | "error",
-    streamConnectionState: "connected" as "connecting" | "connected" | "disconnected" | null,
+    streamConnectionState: "open" as "connecting" | "open" | "disconnected" | "ended" | null,
     streamRequestPending: false,
     sessionViewState: "idle",
     retryHistory: vi.fn(),
@@ -112,6 +114,13 @@ vi.mock("#product/components/workspace/chat/transcript/MessageList", () => ({
   },
 }));
 
+vi.mock("#product/hooks/chat/workflows/use-transcript-session-navigation-actions", () => ({
+  useTranscriptSessionNavigationActions: () => ({
+    openTranscriptSession: mocks.openTranscriptSession,
+    canOpenTranscriptSession: mocks.canOpenTranscriptSession,
+  }),
+}));
+
 vi.mock("#product/hooks/agents/lifecycle/use-agents-pane-session-lifecycle", () => ({
   useAgentsPaneSessionLifecycle: (input: unknown) => {
     mocks.lifecycleInput(input);
@@ -184,8 +193,35 @@ function deferred<T>() {
 
 function headerActionLabels(container: HTMLElement): string[] {
   const row = container.querySelector("header > div:last-child");
-  return Array.from(row?.querySelectorAll("button") ?? []).map(
-    (button) => button.textContent?.trim() ?? "",
+  return Array.from(row?.querySelectorAll("button") ?? [])
+    .map((button) => button.textContent?.trim() ?? "");
+}
+
+function DetailTruthHarness({
+  initialPresentation,
+  onClosed,
+  onOpened,
+}: {
+  initialPresentation: "running" | "closed";
+  onClosed?: ReturnType<typeof vi.fn>;
+  onOpened?: ReturnType<typeof vi.fn>;
+}) {
+  const [entry, setEntry] = useState(() => child("a", initialPresentation));
+  const applyResponse = (outcome: { agent: SubagentRosterEntry["agent"] }) => {
+    setEntry((current) => ({
+      ...current,
+      agent: { ...current.agent, ...outcome.agent, status: outcome.agent.status },
+    }));
+  };
+  return (
+    <AgentsPaneDetail
+      {...detailProps(entry, "a")}
+      onClosed={(outcome) => { applyResponse(outcome); onClosed?.(outcome); }}
+      onOpened={(outcome) => {
+        applyResponse(outcome);
+        onOpened?.(outcome);
+      }}
+    />
   );
 }
 
@@ -193,15 +229,28 @@ describe("AgentsPaneDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.lifecycle.historyPhase = "ready";
-    mocks.lifecycle.streamConnectionState = "connected";
+    mocks.lifecycle.streamConnectionState = "open";
     mocks.lifecycle.streamRequestPending = false;
     mocks.pane.transcript = { sessionId: "client-a" };
     mocks.pane.sessionViewState = "working";
     mocks.pending.close = false;
     mocks.pending.open = false;
     mocks.pending.promote = false;
-    mocks.closeChild.mockResolvedValue({ ok: true, agent: { status: { presentation: "closed" } } });
-    mocks.openChild.mockResolvedValue({ ok: true, presentation: "available" });
+    mocks.closeChild.mockResolvedValue({
+      ok: true,
+      agent: { status: { presentation: "closed" } },
+      parentSessionId: "parent-1",
+      childSessionId: "a",
+      clientSessionId: "client-a",
+    });
+    mocks.openChild.mockResolvedValue({
+      ok: true,
+      agent: { status: { presentation: "available" } },
+      presentation: "available",
+      parentSessionId: "parent-1",
+      childSessionId: "a",
+      clientSessionId: "client-a",
+    });
     mocks.promoteChild.mockResolvedValue({ ok: true });
   });
 
@@ -220,6 +269,10 @@ describe("AgentsPaneDetail", () => {
     expect(headerActionLabels(container)).toEqual(actions);
     expect(container.querySelector("form") !== null).toBe(hasComposer);
     expect(screen.queryByTestId("message-list")).not.toBeNull();
+    expect(mocks.messageListProps).toHaveBeenLastCalledWith(expect.objectContaining({
+      onOpenSession: mocks.openTranscriptSession,
+      canOpenSession: mocks.canOpenTranscriptSession,
+    }));
     if (presentation === "available") {
       mocks.closeChild.mockReturnValueOnce(new Promise(() => {}));
       fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -258,12 +311,7 @@ describe("AgentsPaneDetail", () => {
 
   it("makes an accepted Close response immediate Closed truth while the roster is stale", async () => {
     const onClosed = vi.fn();
-    render(
-      <AgentsPaneDetail
-        {...detailProps(child("a", "running"), "a")}
-        onClosed={onClosed}
-      />,
-    );
+    render(<DetailTruthHarness initialPresentation="running" onClosed={onClosed} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
@@ -280,6 +328,19 @@ describe("AgentsPaneDetail", () => {
       clientSessionId: "client-a",
     });
     expect(onClosed).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes an accepted Open response immediate writable truth while the roster is stale", async () => {
+    const onOpened = vi.fn();
+    render(<DetailTruthHarness initialPresentation="closed" onOpened={onOpened} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Close" })).not.toBeNull());
+    expect(screen.getByRole("button", { name: "Promote" })).not.toBeNull();
+    expect(document.querySelector("form")).not.toBeNull();
+    expect(screen.queryByText("Closed. Transcript preserved and read-only.")).toBeNull();
+    expect(onOpened).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the child writable when Close fails", async () => {
@@ -304,7 +365,13 @@ describe("AgentsPaneDetail", () => {
   });
 
   it("does not let a late Open for child A contaminate Closed child B", async () => {
-    const openA = deferred<{ ok: true; presentation: "available" }>();
+    const openA = deferred<{
+      ok: true;
+      presentation: "available";
+      parentSessionId: string;
+      childSessionId: string;
+      clientSessionId: string;
+    }>();
     mocks.openChild.mockReturnValueOnce(openA.promise);
     const view = render(
       <AgentsPaneDetail {...detailProps(child("a", "closed"), "a")} />,
@@ -315,7 +382,13 @@ describe("AgentsPaneDetail", () => {
       <AgentsPaneDetail {...detailProps(child("b", "closed"), "b")} />,
     );
     await act(async () => {
-      openA.resolve({ ok: true, presentation: "available" });
+      openA.resolve({
+        ok: true,
+        presentation: "available",
+        parentSessionId: "parent-1",
+        childSessionId: "a",
+        clientSessionId: "client-a",
+      });
       await openA.promise;
     });
 
@@ -395,5 +468,31 @@ describe("AgentsPaneDetail", () => {
     expect(document.querySelector("form")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(mocks.lifecycle.retryHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers manual reconnect when an externally owned live stream ends", () => {
+    mocks.lifecycle.streamConnectionState = "ended";
+    render(<AgentsPaneDetail {...detailProps(child("a", "running"), "a")} />);
+
+    expect(screen.getByText("Live updates paused")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+    expect(mocks.lifecycle.reconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends to the mapped child without changing another active main session", () => {
+    render(<AgentsPaneDetail {...detailProps(child("a", "available"), "a")} />);
+    const textarea = screen.getByRole("textbox", { name: /message/i });
+
+    fireEvent.change(textarea, { target: { value: "Line one" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+    expect(mocks.sendPrompt).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(mocks.sendPrompt).toHaveBeenCalledWith({
+      sessionId: "client-a",
+      workspaceId: "workspace-1",
+      text: "Line one",
+    });
+    expect(textarea).toHaveValue("");
   });
 });

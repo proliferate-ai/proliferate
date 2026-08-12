@@ -19,7 +19,15 @@ export function AgentsPopoverSubagentSection({
   onClose: () => void;
 }) {
   return (
-    <PopoverSection title="Subagents" detail={detail}>
+    <PopoverSection
+      title="Subagents"
+      detail={detail}
+      headerAriaLabel="Open subagents in Agents"
+      onHeaderClick={() => {
+        subagents.openCluster();
+        onClose();
+      }}
+    >
       {subagents.parent && (
         <Button
           type="button"
@@ -27,7 +35,7 @@ export function AgentsPopoverSubagentSection({
           size="sm"
           className="mb-1 flex h-auto w-full justify-between gap-2 rounded-md px-2 py-1 text-left hover:bg-muted/40"
           onClick={() => {
-            subagents.openParent(subagents.parent!.parentSessionId);
+            subagents.openParent();
             onClose();
           }}
         >

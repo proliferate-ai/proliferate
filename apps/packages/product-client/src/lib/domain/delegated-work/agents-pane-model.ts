@@ -39,6 +39,8 @@ export interface AgentsPaneGroup {
 export interface AgentsPaneParent {
   sessionId: string;
   title: string;
+  /** Children in the exact order returned by the workspace roster. */
+  children: readonly AgentsPaneChild[];
   groups: readonly AgentsPaneGroup[];
   closedOnly: boolean;
 }
@@ -108,6 +110,7 @@ function buildParent(roster: SubagentParentRoster): AgentsPaneParent {
   return {
     sessionId: roster.parent.identity.sessionId,
     title: roster.parent.title?.trim() || "Parent agent",
+    children,
     groups,
     closedOnly:
       children.length > 0 && children.every((child) => child.group === "closed"),
