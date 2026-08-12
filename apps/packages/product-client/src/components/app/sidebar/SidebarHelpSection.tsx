@@ -1,12 +1,7 @@
-import {
-  BookMarked,
-  BookOpen,
-  Globe,
-  Lightbulb,
-  MessageSquare,
-} from "lucide-react";
 import { ArrowUpRight } from "#product/primitives/icons/core";
-import { Discord, Mail } from "#product/primitives/icons/platform";
+import { Discord, Globe, Mail } from "#product/primitives/icons/platform";
+import { Lightbulb, MessageSquare } from "#product/primitives/icons/product";
+import { BookMarked, BookOpen } from "#product/primitives/icons/workspace";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { PROLIFERATE_DOCS_URL } from "#product/config/capabilities";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
