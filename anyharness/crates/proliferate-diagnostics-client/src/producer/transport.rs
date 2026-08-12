@@ -241,6 +241,7 @@ pub(crate) enum TransportError {
     Protocol,
 }
 
+#[derive(Debug)]
 pub(crate) struct TransportFailure {
     pub(crate) error: TransportError,
     pub(crate) dispatched: bool,

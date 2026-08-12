@@ -152,15 +152,15 @@ fn wrapper_rejects_unknown_keys_reasons_schema_and_noncurrent_records() {
 #[test]
 fn writer_creates_exact_family_and_reopens_without_replay_or_truncation() {
     let directory = safe_directory();
-    let mut writer = writer(&directory, DiagnosticsComponent::AnyHarness).expect("writer");
+    let mut active_writer = writer(&directory, DiagnosticsComponent::AnyHarness).expect("writer");
     let record = record(DiagnosticsComponent::AnyHarness);
-    let line_bytes = writer
+    let line_bytes = active_writer
         .write(FallbackReason::CollectorUnavailable, &record)
         .expect("fallback write");
 
-    assert_eq!(writer.bytes(), line_bytes);
+    assert_eq!(active_writer.bytes(), line_bytes);
     assert_eq!(
-        writer.current_status(),
+        active_writer.current_status(),
         super::FallbackStatus {
             active: true,
             bytes: line_bytes,
@@ -178,7 +178,7 @@ fn writer_creates_exact_family_and_reopens_without_replay_or_truncation() {
     );
     assert_eq!(wrappers.len(), 1);
     assert_eq!(wrappers[0].record, record);
-    drop(writer);
+    drop(active_writer);
 
     let mut reopened = writer(&directory, DiagnosticsComponent::AnyHarness).expect("reopen");
     assert_eq!(reopened.bytes(), line_bytes);

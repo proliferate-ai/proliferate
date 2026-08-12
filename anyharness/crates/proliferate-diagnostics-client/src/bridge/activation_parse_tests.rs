@@ -23,8 +23,9 @@ use super::platform::*;
 use super::*;
 use crate::bridge::framing::ReceivedFrame;
 use crate::bridge::wire::{
-    CapabilityFdRole, FallbackFdRole, FallbackUnavailableClassification, WireComponent,
-    CHILD_BRIDGE_PROTOCOL_VERSION,
+    BootstrapCollectorState, BootstrapFallbackState, CapabilityFdRole,
+    CollectorUnavailableClassification, FallbackFdRole, FallbackUnavailableClassification,
+    ParentFrame, WireComponent, CHILD_BRIDGE_PROTOCOL_VERSION,
 };
 
 fn context() -> (UnixStream, OwnedFd) {

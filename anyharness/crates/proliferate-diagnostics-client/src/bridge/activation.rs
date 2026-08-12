@@ -205,7 +205,7 @@ mod platform {
         }
     }
 
-    fn parse_bootstrap_until(
+    pub(super) fn parse_bootstrap_until(
         component: DiagnosticsComponent,
         bridge: UnixStream,
         shutdown: OwnedFd,
@@ -356,7 +356,7 @@ mod platform {
         })
     }
 
-    fn degraded(
+    pub(super) fn degraded(
         classification: DegradedClassification,
         bridge: Option<UnixStream>,
         shutdown: Option<OwnedFd>,
@@ -371,7 +371,7 @@ mod platform {
     }
 
     #[cfg(test)]
-    fn parse_bootstrap(
+    pub(super) fn parse_bootstrap(
         component: DiagnosticsComponent,
         bridge: UnixStream,
         shutdown: OwnedFd,
@@ -490,7 +490,7 @@ mod platform {
         (unsafe { libc::fstat(fd, &mut stat) }) == 0 && stat.st_mode & libc::S_IFMT == libc::S_IFIFO
     }
 
-    fn valid_fallback_directory(fd: RawFd) -> bool {
+    pub(super) fn valid_fallback_directory(fd: RawFd) -> bool {
         let mut stat: libc::stat = unsafe { zeroed() };
         (unsafe { libc::fstat(fd, &mut stat) }) == 0
             && stat.st_mode & libc::S_IFMT == libc::S_IFDIR
