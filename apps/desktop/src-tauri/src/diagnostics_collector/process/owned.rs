@@ -5,7 +5,7 @@ use std::os::unix::net::UnixStream as StdUnixStream;
 use std::sync::Arc;
 
 use proliferate_diagnostics_protocol::v1::types::ConnectionDescriptorV1;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::diagnostics_collector::client::{CollectorHttpClient, SecretCapability};
 
@@ -70,14 +70,14 @@ impl OwnedCollectorProcess {
             .control
             .as_mut()
             .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "control channel closed"))?;
-        write_typed_control_line(control, &encoded).await?;
+        write_orderly_shutdown_line(control, &encoded).await?;
         self.orderly_shutdown_requested = true;
         Ok(())
     }
 
     /// Duplicates the protected collector control descriptor for one terminal
-    /// command. The caller must reserve its one-shot producer slot before
-    /// requesting this authority.
+    /// command. Duplication and async-stream setup happen before slot
+    /// reservation because neither operation can place bytes on the wire.
     pub(crate) fn duplicate_terminal_control_descriptor(&self) -> Result<OwnedFd, io::Error> {
         let control = self
             .control
@@ -178,19 +178,53 @@ impl OwnedCollectorProcess {
 }
 
 impl OwnedCollectorProcess {
-    /// Sends exactly one already-typed control document plus its newline.
-    /// The descriptor is consumed so an ambiguous write cannot be retried
-    /// through this authority.
-    pub(crate) async fn write_terminal_control_line(
+    /// Converts one already-duplicated terminal authority into an async stream.
+    /// Callers do this before reserving a producer slot so local setup failures
+    /// cannot consume that slot.
+    pub(crate) fn prepare_terminal_control_stream(
         descriptor: OwnedFd,
-        encoded: &[u8],
-    ) -> Result<(), io::Error> {
+    ) -> Result<tokio::net::UnixStream, io::Error> {
         let raw = descriptor.into_raw_fd();
         // SAFETY: ownership was transferred out of the OwnedFd exactly once.
         let stream = unsafe { StdUnixStream::from_raw_fd(raw) };
+        // The original tokio stream is already nonblocking. Setting the flag on
+        // this duplicate is therefore idempotent for the shared file description.
         stream.set_nonblocking(true)?;
-        let mut stream = tokio::net::UnixStream::from_std(stream)?;
-        write_typed_control_line(&mut stream, encoded).await
+        tokio::net::UnixStream::from_std(stream)
+    }
+
+    /// Attempts exactly one write of an already-typed control document plus
+    /// its newline. A partial write is ambiguous and is never retried.
+    pub(crate) async fn write_terminal_control_line<W>(
+        control: &mut W,
+        encoded: &[u8],
+    ) -> Result<(), io::Error>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        validate_control_document(encoded)?;
+        let mut line = Vec::with_capacity(encoded.len() + 1);
+        line.extend_from_slice(encoded);
+        line.push(b'\n');
+        let written = control.write(&line).await?;
+        if written != line.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::WriteZero,
+                "collector control command write was partial",
+            ));
+        }
+        control.flush().await
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn write_shutdown_control_line_for_test<W>(
+        control: &mut W,
+        encoded: &[u8],
+    ) -> Result<(), io::Error>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        write_orderly_shutdown_line(control, encoded).await
     }
 }
 
@@ -206,10 +240,19 @@ pub(super) fn typed_shutdown_command() -> Result<Vec<u8>, io::Error> {
     Ok(encoded)
 }
 
-async fn write_typed_control_line(
-    control: &mut tokio::net::UnixStream,
-    encoded: &[u8],
-) -> Result<(), io::Error> {
+async fn write_orderly_shutdown_line<W>(control: &mut W, encoded: &[u8]) -> Result<(), io::Error>
+where
+    W: AsyncWrite + Unpin,
+{
+    validate_control_document(encoded)?;
+    // Preserve the accepted PR 3 shutdown behavior: retry short writes until
+    // the document and newline are complete, then flush the control stream.
+    control.write_all(encoded).await?;
+    control.write_all(b"\n").await?;
+    control.flush().await
+}
+
+fn validate_control_document(encoded: &[u8]) -> Result<(), io::Error> {
     if encoded.is_empty()
         || encoded.contains(&b'\n')
         || encoded.len().saturating_add(1) > MAX_CONTROL_COMMAND_BYTES
@@ -219,17 +262,7 @@ async fn write_typed_control_line(
             "collector control command is invalid",
         ));
     }
-    let mut line = Vec::with_capacity(encoded.len() + 1);
-    line.extend_from_slice(encoded);
-    line.push(b'\n');
-    let written = control.write(&line).await?;
-    if written != line.len() {
-        return Err(io::Error::new(
-            io::ErrorKind::WriteZero,
-            "collector control command write was partial",
-        ));
-    }
-    control.flush().await
+    Ok(())
 }
 
 impl Drop for OwnedCollectorProcess {
