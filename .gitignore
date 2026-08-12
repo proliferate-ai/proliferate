@@ -32,7 +32,9 @@ Thumbs.db
 # Editor / IDE
 .vscode/
 .idea/
-.claude/
+.claude/*
+# ...except repo-committed Claude Code skills, which are shared tooling.
+!.claude/skills/
 *.swp
 *.swo
 .cursorindexingignore
