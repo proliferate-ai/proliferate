@@ -142,6 +142,7 @@ export function deriveLegacySubagentAgentOperationsReceipt(
       runtimeId: null,
       sessionId,
       workspaceId: null,
+      parentSessionId: null,
       title,
       role: "subagent",
       presentationStatus: action === "close_subagent" && !isFailed ? "closed" : null,

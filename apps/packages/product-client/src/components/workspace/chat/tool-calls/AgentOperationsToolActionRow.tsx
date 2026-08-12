@@ -17,6 +17,10 @@ import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
+import {
+  isDurableSubagentRelationship,
+  useAgentsPaneNavigationActions,
+} from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
 
 export function AgentOperationsToolActionRow({
   presentation,
@@ -32,6 +36,7 @@ export function AgentOperationsToolActionRow({
   const canOpenSession = useTranscriptCanOpenSession();
   const { selectWorkspace } = useWorkspaceSelection();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
+  const { openAgentsPaneTarget } = useAgentsPaneNavigationActions();
   const { data: workspaceCollections } = useWorkspaces({ enabled: false });
   const targetSessionId = presentation.agent?.sessionId ?? null;
   const directoryAgent = useSessionDirectoryStore((state) => {
@@ -71,6 +76,25 @@ export function AgentOperationsToolActionRow({
     ?? directoryAgent?.workspaceId
     ?? legacySendWorkspaceId;
   const navigationSessionId = directoryAgent?.sessionId ?? targetSessionId;
+  const paneParentCandidate = presentation.agent?.parentSessionId
+    ?? (isDurableSubagentRelationship(directoryAgent?.sessionRelationship)
+      ? directoryAgent.sessionRelationship.parentSessionId
+      : null);
+  const paneParentSessionId = useSessionDirectoryStore((state) =>
+    paneParentCandidate
+      ? state.entriesById[paneParentCandidate]?.materializedSessionId ?? paneParentCandidate
+      : null
+  );
+  const isDefiniteSubagent = presentation.agent?.role === "subagent"
+    || isDurableSubagentRelationship(directoryAgent?.sessionRelationship);
+  const canOpenInAgentsPane = Boolean(
+    presentation.action !== "promote_subagent"
+    && isDefiniteSubagent
+    && targetSessionId
+    && paneParentSessionId
+    && navigationWorkspaceId
+    && navigationWorkspaceId === currentWorkspaceId,
+  );
   const isCurrentWorkspace = navigationWorkspaceId !== null
     && navigationWorkspaceId === currentWorkspaceId;
   const isProjectedWorkspace = navigationWorkspaceId !== null
@@ -96,20 +120,40 @@ export function AgentOperationsToolActionRow({
   );
   const canOpenAgent = Boolean(
     navigationSessionId
-    && hasAuthoritativeNavigation
-    && (usesTranscriptNavigation || navigationWorkspaceId),
+    && (
+      canOpenInAgentsPane
+      || (
+        hasAuthoritativeNavigation
+        && (usesTranscriptNavigation || navigationWorkspaceId)
+      )
+    ),
   );
   const openAgent = canOpenAgent && navigationSessionId
-    ? usesTranscriptNavigation
-      ? () => openSession?.(navigationSessionId, openRole)
-      : navigationWorkspaceId
-        ? () => {
-          void openWorkspaceSession({
-            workspaceId: navigationWorkspaceId,
-            sessionId: navigationSessionId,
-          });
-        }
-        : undefined
+    ? () => {
+      if (
+        canOpenInAgentsPane
+        && targetSessionId
+        && paneParentSessionId
+        && navigationWorkspaceId
+        && openAgentsPaneTarget({
+          workspaceId: navigationWorkspaceId,
+          parentSessionId: paneParentSessionId,
+          childSessionId: targetSessionId,
+        })
+      ) {
+        return;
+      }
+      if (usesTranscriptNavigation) {
+        openSession?.(navigationSessionId, openRole);
+        return;
+      }
+      if (navigationWorkspaceId) {
+        void openWorkspaceSession({
+          workspaceId: navigationWorkspaceId,
+          sessionId: navigationSessionId,
+        });
+      }
+    }
     : undefined;
   const toggleDetails = resultText ? () => setExpanded((value) => !value) : undefined;
 

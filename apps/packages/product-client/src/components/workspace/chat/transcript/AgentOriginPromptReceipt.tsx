@@ -12,6 +12,10 @@ import {
 import type { TranscriptOpenSessionRole } from "#product/domain/chats/transcript/transcript-open-target";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import {
+  isDurableSubagentRelationship,
+  useAgentsPaneNavigationActions,
+} from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
 
 export function AgentOriginPromptReceipt({
   provenance,
@@ -46,11 +50,8 @@ export function AgentOriginPromptReceipt({
       state.clientSessionIdByMaterializedSessionId[targetSessionId] ?? targetSessionId;
     return state.entriesById[clientSessionId] ?? null;
   });
+  const { openAgentsPaneTarget } = useAgentsPaneNavigationActions();
   const receiptProvenance = agentSessionProvenance ?? wakeProvenance;
-  if (!receiptProvenance) {
-    return null;
-  }
-
   const targetRole: TranscriptOpenSessionRole = agentSessionProvenance
     ? directoryAgent
       ? roleFromDirectoryRelationship(directoryAgent.sessionRelationship.kind)
@@ -78,13 +79,51 @@ export function AgentOriginPromptReceipt({
     })
     : null;
   const navigationSessionId = directoryAgent?.sessionId ?? targetSessionId;
-  const canOpen = Boolean(
-    navigationSessionId
-    && openSession
-    && (canOpenSession?.(navigationSessionId, targetRole) ?? true),
+  const relationship = directoryAgent?.sessionRelationship;
+  const paneSourceIsSubagent = wakeProvenance?.type === "subagentWake"
+    || (wakeProvenance?.type === "linkWake" && wakeProvenance.relation === "subagent")
+    || (agentSessionProvenance !== null && isDurableSubagentRelationship(relationship));
+  const paneParentCandidate = completion?.parentSessionId
+    ?? (isDurableSubagentRelationship(relationship) ? relationship.parentSessionId : null)
+    ?? parentSessionId;
+  const paneParentSessionId = useSessionDirectoryStore((state) =>
+    paneParentCandidate
+      ? state.entriesById[paneParentCandidate]?.materializedSessionId ?? paneParentCandidate
+      : null
   );
-  const handleOpen = canOpen && navigationSessionId
+  const navigationWorkspaceId = directoryAgent?.workspaceId ?? workspaceId;
+  const canOpenInAgentsPane = Boolean(
+    paneSourceIsSubagent
+    && targetSessionId
+    && paneParentSessionId
+    && navigationWorkspaceId
+    && navigationWorkspaceId === workspaceId,
+  );
+  const canOpen = Boolean(
+    canOpenInAgentsPane
+    || (
+      navigationSessionId
+      && openSession
+      && (canOpenSession?.(navigationSessionId, targetRole) ?? true)
+    ),
+  );
+  const handleOpen = canOpen && targetSessionId
     ? () => {
+      if (
+        canOpenInAgentsPane
+        && paneParentSessionId
+        && navigationWorkspaceId
+        && openAgentsPaneTarget({
+          workspaceId: navigationWorkspaceId,
+          parentSessionId: paneParentSessionId,
+          childSessionId: targetSessionId,
+        })
+      ) {
+        return;
+      }
+      if (!navigationSessionId) {
+        return;
+      }
       if (wakeProvenance) {
         useSessionDirectoryStore.getState().recordRelationshipHint(navigationSessionId, {
           kind: wakeProvenance.type === "subagentWake"
@@ -103,6 +142,10 @@ export function AgentOriginPromptReceipt({
       openSession?.(navigationSessionId, targetRole);
     }
     : undefined;
+
+  if (!receiptProvenance) {
+    return null;
+  }
 
   return (
     <div className="flex justify-end" data-agent-origin-prompt>

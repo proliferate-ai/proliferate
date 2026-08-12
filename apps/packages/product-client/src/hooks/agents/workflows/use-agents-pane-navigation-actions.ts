@@ -2,11 +2,25 @@ import { useCallback } from "react";
 import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { useAgentsPaneNavigationStore } from "#product/stores/agents/agents-pane-navigation-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { SessionRelationship } from "#product/lib/domain/sessions/directory/relationship";
 
 export interface AgentsPaneNavigationTarget {
   workspaceId: string;
   parentSessionId: string;
   childSessionId?: string | null;
+}
+
+export function isDurableSubagentRelationship(
+  relationship: SessionRelationship | null | undefined,
+): relationship is Extract<
+  SessionRelationship,
+  { kind: "subagent_child" | "linked_child" }
+> {
+  return relationship?.kind === "subagent_child"
+    || (
+      relationship?.kind === "linked_child"
+      && relationship.relation === "subagent"
+    );
 }
 
 /**

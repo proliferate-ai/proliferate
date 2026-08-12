@@ -7,6 +7,7 @@ import { Button } from "#product/primitives/Button";
 import {
   useTranscriptCanOpenSession,
   useTranscriptOpenSession,
+  useTranscriptSessionId,
 } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { deriveAgentOperationsReceiptPresentation } from "#product/domain/chats/tools/agent-operations-tool-presentation";
 import {
@@ -24,6 +25,7 @@ import {
   subagentCreationReceiptEntryId,
   useTranscriptEntryMotion,
 } from "#product/components/workspace/chat/transcript/TranscriptEntryMotionContext";
+import { useAgentsPaneNavigationActions } from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
 
 interface SpawnReceipt {
   key: string;
@@ -45,6 +47,15 @@ export function SubagentCreationGroupBlock({
 }) {
   const openSession = useTranscriptOpenSession();
   const canOpenSession = useTranscriptCanOpenSession();
+  const transcriptSessionId = useTranscriptSessionId();
+  const parentDurableSessionId = useSessionDirectoryStore((state) =>
+    transcriptSessionId
+      ? state.entriesById[transcriptSessionId]?.materializedSessionId ?? transcriptSessionId
+      : null
+  );
+  const parentWorkspaceId = useSessionDirectoryStore((state) =>
+    transcriptSessionId ? state.entriesById[transcriptSessionId]?.workspaceId ?? null : null
+  );
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const { data: workspaceCollections } = useWorkspaces({ enabled: false });
@@ -100,6 +111,8 @@ export function SubagentCreationGroupBlock({
             openSession={openSession}
             canOpenSession={canOpenSession}
             openWorkspaceSession={openWorkspaceSession}
+            parentDurableSessionId={parentDurableSessionId}
+            parentWorkspaceId={parentWorkspaceId}
             animateEntry={animateEntries}
           />
         );
@@ -162,6 +175,8 @@ function SpawnIdentityReceipt({
   openSession,
   canOpenSession,
   openWorkspaceSession,
+  parentDurableSessionId,
+  parentWorkspaceId,
   animateEntry,
 }: {
   receipt: SpawnReceipt;
@@ -173,8 +188,11 @@ function SpawnIdentityReceipt({
   openWorkspaceSession: ReturnType<
     typeof useWorkspaceActivationWorkflow
   >["openWorkspaceSession"];
+  parentDurableSessionId: string | null;
+  parentWorkspaceId: string | null;
   animateEntry: boolean;
 }) {
+  const { openAgentsPaneTarget } = useAgentsPaneNavigationActions();
   const shouldAnimateEntry = useTranscriptEntryMotion(
     subagentCreationReceiptEntryId(receipt.key),
     animateEntry,
@@ -193,7 +211,7 @@ function SpawnIdentityReceipt({
     title: receipt.title,
     sessionId,
   });
-  const navigationWorkspaceId = receipt.workspaceId ?? directoryWorkspaceId;
+  const navigationWorkspaceId = receipt.workspaceId ?? directoryWorkspaceId ?? parentWorkspaceId;
   const isCurrentWorkspace = navigationWorkspaceId !== null
     && navigationWorkspaceId === selectedWorkspaceId;
   const usesTranscriptNavigation = Boolean(
@@ -202,7 +220,11 @@ function SpawnIdentityReceipt({
     && (canOpenSession?.(navigationSessionId, "linked-child") ?? true),
   );
   const canOpen = Boolean(
-    usesTranscriptNavigation
+    (
+      navigationWorkspaceId === selectedWorkspaceId
+      && parentDurableSessionId
+    )
+    || usesTranscriptNavigation
     || (
       navigationWorkspaceId
       && (hasDirectoryEntry || projectedWorkspaceIds.has(navigationWorkspaceId))
@@ -218,16 +240,29 @@ function SpawnIdentityReceipt({
       <AgentIdentityChip
         identity={identity}
         onOpen={canOpen
-          ? usesTranscriptNavigation
-            ? () => openSession?.(navigationSessionId, "linked-child")
-            : navigationWorkspaceId
-              ? () => {
-                void openWorkspaceSession({
-                  workspaceId: navigationWorkspaceId,
-                  sessionId: navigationSessionId,
-                });
-              }
-              : undefined
+          ? () => {
+            if (
+              navigationWorkspaceId
+              && parentDurableSessionId
+              && openAgentsPaneTarget({
+                workspaceId: navigationWorkspaceId,
+                parentSessionId: parentDurableSessionId,
+                childSessionId: sessionId,
+              })
+            ) {
+              return;
+            }
+            if (usesTranscriptNavigation) {
+              openSession?.(navigationSessionId, "linked-child");
+              return;
+            }
+            if (navigationWorkspaceId) {
+              void openWorkspaceSession({
+                workspaceId: navigationWorkspaceId,
+                sessionId: navigationSessionId,
+              });
+            }
+          }
           : undefined}
       />
     </span>
