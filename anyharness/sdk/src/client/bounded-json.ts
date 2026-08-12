@@ -1,3 +1,11 @@
+import {
+  addNativeAbortListener,
+  isNativeAbortSignal,
+  readNativeAbortSignalAborted,
+  readNativeAbortSignalReason,
+  removeNativeAbortListener,
+} from "./abort-signal.js";
+
 export type AnyHarnessBoundedJsonFailure =
   | "invalid_content_length"
   | "response_too_large"
@@ -46,6 +54,9 @@ export async function requestBoundedJson(
 ): Promise<AnyHarnessBoundedJsonResponse> {
   assertResponseByteLimit(limits.successBytes, "successBytes");
   assertResponseByteLimit(limits.errorBytes, "errorBytes");
+  if (signal !== undefined && !isNativeAbortSignal(signal)) {
+    throw new TypeError("signal must be an unmodified native AbortSignal");
+  }
 
   const response = await request(signal);
   const responseOk = response.ok;
@@ -69,7 +80,7 @@ async function readBoundedBody(
   maxResponseBytes: number,
   signal: AbortSignal | undefined,
 ): Promise<Uint8Array> {
-  if (signal?.aborted) {
+  if (signal && readNativeAbortSignalAborted(signal)) {
     const reason = abortReason(signal);
     cancelBody(response.body, reason);
     throw reason;
@@ -216,7 +227,7 @@ function readWithAbort(
   if (!signal) {
     return reader.read();
   }
-  if (signal.aborted) {
+  if (readNativeAbortSignalAborted(signal)) {
     const reason = abortReason(signal);
     cancelReader(reader, reason);
     return Promise.reject(reason);
@@ -231,18 +242,18 @@ function readWithAbort(
       settled = true;
       const reason = abortReason(signal);
       cancelReader(reader, reason);
-      signal.removeEventListener("abort", onAbort);
+      removeNativeAbortListener(signal, onAbort);
       reject(reason);
     };
 
-    signal.addEventListener("abort", onAbort, { once: true });
+    addNativeAbortListener(signal, onAbort);
     reader.read().then(
       (result) => {
         if (settled) {
           return;
         }
         settled = true;
-        signal.removeEventListener("abort", onAbort);
+        removeNativeAbortListener(signal, onAbort);
         resolve(result);
       },
       (error) => {
@@ -250,7 +261,7 @@ function readWithAbort(
           return;
         }
         settled = true;
-        signal.removeEventListener("abort", onAbort);
+        removeNativeAbortListener(signal, onAbort);
         reject(error);
       },
     );
@@ -258,9 +269,10 @@ function readWithAbort(
 }
 
 function abortReason(signal: AbortSignal): unknown {
-  return signal.reason === undefined
+  const reason = readNativeAbortSignalReason(signal);
+  return reason === undefined
     ? new DOMException("The operation was aborted", "AbortError")
-    : signal.reason;
+    : reason;
 }
 
 function cancelBody(

@@ -1,4 +1,5 @@
 import type { AnyHarnessRequestOptions } from "./core.js";
+import { isNativeAbortSignal } from "./abort-signal.js";
 
 const ALLOWED_REQUEST_PROPERTIES = [
   "headers",
@@ -8,10 +9,6 @@ const ALLOWED_REQUEST_PROPERTIES = [
   "timingScope",
   "timingLifecycle",
 ];
-const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
-  AbortSignal.prototype,
-  "aborted",
-)?.get;
 const headersForEach = Headers.prototype.forEach;
 const headersAppend = Headers.prototype.append;
 
@@ -44,7 +41,7 @@ function assignRequestOption(
       output.headers = normalizeHeaders(value);
       return;
     case "signal":
-      if (value !== undefined && !isAbortSignal(value)) {
+      if (value !== undefined && !isNativeAbortSignal(value)) {
         throw invalidRequest("signal must be an AbortSignal");
       }
       output.signal = value as AbortSignal | undefined;
@@ -200,18 +197,6 @@ function normalizeTimingLifecycle(
   return { onRequestStart: onRequestStart as NonNullable<
     AnyHarnessRequestOptions["timingLifecycle"]
   >["onRequestStart"] };
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  if (!isObjectLike(value) || !abortSignalAbortedGetter) {
-    return false;
-  }
-  try {
-    Reflect.apply(abortSignalAbortedGetter, value, []);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function ownData(value: object, property: string, label: string): unknown {
