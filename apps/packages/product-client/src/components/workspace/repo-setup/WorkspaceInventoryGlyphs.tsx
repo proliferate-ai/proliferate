@@ -1,15 +1,15 @@
 import type { CSSProperties } from "react";
 import { twMerge } from "#product/primitives/utils/tw-merge";
+import { CircleQuestion } from "#product/primitives/icons/core";
 import {
-  Bot,
-  Braces,
   CalendarClock,
-  Cloud,
-  HelpCircle,
+  CloudIcon,
   Monitor,
   Smartphone,
   UsersRound,
-} from "lucide-react";
+} from "#product/primitives/icons/platform";
+import { Robot } from "#product/primitives/icons/product";
+import { Braces } from "#product/primitives/icons/workspace";
 
 import type {
   WorkspaceInventorySourceKind,
@@ -39,7 +39,7 @@ export function SourceGlyph({
       case "desktop_exposed":
         return <Monitor className={iconClass} aria-hidden />;
       case "cloud_sandbox":
-        return <Cloud className={iconClass} aria-hidden />;
+        return <CloudIcon className={iconClass} aria-hidden />;
       case "web":
         return <Smartphone className={iconClass} aria-hidden />;
       case "mobile":
@@ -47,13 +47,13 @@ export function SourceGlyph({
       case "personal_automation":
         return <CalendarClock className={iconClass} aria-hidden />;
       case "team_automation":
-        return <Bot className={iconClass} aria-hidden />;
+        return <Robot className={iconClass} aria-hidden />;
       case "slack":
         return <UsersRound className={iconClass} aria-hidden />;
       case "api":
         return <Braces className={iconClass} aria-hidden />;
       case "unknown":
-        return <HelpCircle className={iconClass} aria-hidden />;
+        return <CircleQuestion className={iconClass} aria-hidden />;
     }
   })();
   return (

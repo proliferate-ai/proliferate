@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash } from "#product/primitives/icons/core";
 import {
   workflowAgentOptions,
   workflowAgentSupportsGoals,
@@ -69,7 +69,7 @@ export function WorkflowStageEditor({
           disabled={disabled || stageCount === 1}
           onClick={onRemove}
         >
-          <Trash2 className="icon-paired" aria-hidden />
+          <Trash className="icon-paired" aria-hidden />
         </Button>
       </div>
 
@@ -243,7 +243,7 @@ function PromptStepEditor({
           disabled={disabled || stepCount === 1}
           onClick={onRemove}
         >
-          <Trash2 className="icon-paired" aria-hidden />
+          <Trash className="icon-paired" aria-hidden />
         </Button>
       </div>
       <Label htmlFor={`workflow-stage-${stageIndex}-step-${stepIndex}-prompt`}>
