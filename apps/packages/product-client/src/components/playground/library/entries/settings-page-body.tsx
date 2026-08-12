@@ -1,5 +1,5 @@
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
-import { SettingsGroup } from "#product/primitives/patterns/SettingsGroup";
+import { SettingsGroup } from "#product/primitives/patterns/settings/SettingsGroup";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import type { LibraryEntry } from "../types";
 

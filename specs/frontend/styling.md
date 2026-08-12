@@ -128,16 +128,34 @@ container.
 
 ## Card Surfaces
 
-For card-like containers (diff cards, file entries):
+Reach for the `Card` pattern
+(`#product/primitives/patterns/Card`) before hand-rolling a card-like
+container (diff cards, file entries). It owns the whole recipe below.
+The recipe is documented here because it is what `Card` paints, not as a
+licence to re-assemble it.
 
-- Background: `bg-foreground/5` for subtle tint against any surface
-- Header: double-layer pattern for opaque sticky headers:
-  outer `bg-sidebar-background`, inner `bg-foreground/5`
-- Border radius: `rounded-lg` with `overflow-clip`
-- Spacing between cards: `gap-2`
+- Background: `bg-surface-elevated-secondary` for a subtle tint against
+  any surface. This is the token form of the theme-stable card tint —
+  3% white in dark, 4.9% light ink in light. Do not write
+  `bg-foreground/5`: the appearance gate's `FOREGROUND_ALPHA_RE` rejects
+  raw `foreground/<alpha>` fills, and the token is the sanctioned way to
+  name the same wash.
+- Header: double-layer pattern for opaque sticky headers. A sticky
+  header over a tinted card cannot just repeat the tint, or the body
+  shows through it — so the outer layer paints the opaque plane behind
+  the card and the inner layer repaints the tint on top, resolving to
+  exactly the body's colour. On the main content pane the outer ground
+  is `bg-background`; on a side panel or rail it is `bg-sidebar`. Not
+  `bg-sidebar-background`: nothing paints a rail with it, and its dark
+  value (`#181818`) differs from `bg-sidebar` (`#222222`), so a header
+  grounded on it seams against the rail behind it.
+- Border radius: `rounded-lg` with `overflow-clip`. Never
+  `overflow-hidden`, which establishes a scroll container and freezes a
+  sticky header inside a box that never scrolls.
+- Spacing between cards: `gap-2`, owned by the container.
 
 Do not use `bg-hover/30` or similar opacity-based backgrounds that
-shift meaning across themes. `bg-foreground/5` is theme-stable.
+shift meaning across themes.
 
 ## RTL Truncation for File Paths
 

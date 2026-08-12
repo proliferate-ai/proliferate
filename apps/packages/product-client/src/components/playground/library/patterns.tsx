@@ -13,9 +13,9 @@ import { LevelBarsButton } from "#product/primitives/patterns/composer/LevelBars
 import { ListRow } from "#product/primitives/patterns/ListRow";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { PageContentFrame } from "#product/primitives/patterns/PageContentFrame";
-import { PageHeader } from "#product/primitives/patterns/PageHeader";
-import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMenuItem";
+import { PaneOptionsMenuItem } from "#product/primitives/patterns/panel/PaneOptionsMenuItem";
 import { PickerPopoverContent } from "#product/primitives/patterns/PickerPopoverContent";
+import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { SettingsGroup } from "#product/primitives/patterns/settings/SettingsGroup";
 import { SettingsMenu } from "#product/primitives/patterns/settings/SettingsMenu";
@@ -33,9 +33,18 @@ import { Switch } from "#product/primitives/Switch";
 import { Home } from "#product/primitives/icons/platform";
 import { Trash } from "#product/primitives/icons/core";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
-// The tabs kit is a pattern subdirectory, so its demos live beside it in their
-// own module and spread into this tier's entries.
+// Area kits are pattern subdirectories, so their demos live beside them in
+// their own modules and spread into this tier's entries.
+import { PANEL_KIT_ENTRIES } from "./panel";
 import { TABS_KIT_ENTRIES } from "./tabs";
+// Demos with more than a one-liner's worth of fixture live in `entries/` so
+// several authors can add vocabulary without editing this file.
+import { CARD_ENTRY } from "./entries/Card";
+import { DISCLOSURE_LIBRARY_ENTRY } from "./entries/disclosure";
+import { NOTICE_BANNER_ENTRY } from "./entries/NoticeBanner";
+import { PAGE_HEADER_ENTRY } from "./entries/page-header";
+import { ROSTER_ROW_ENTRY } from "./entries/roster-row";
+import { SETTINGS_PAGE_BODY_ENTRY } from "./entries/settings-page-body";
 import type { LibraryEntry, LibraryTier } from "./types";
 
 function CommandPaletteDemo() {
@@ -178,6 +187,16 @@ function AutoHideScrollAreaDemo() {
   );
 }
 
+function ProductPageShellDemo() {
+  return (
+    <div className="h-32 overflow-hidden rounded-md border border-border">
+      <ProductPageShell title="Page title" description="Page description">
+        <p className="text-ui-sm text-muted-foreground">Shell body.</p>
+      </ProductPageShell>
+    </div>
+  );
+}
+
 function PickerPopoverContentDemo() {
   const [value, setValue] = useState("");
   return (
@@ -298,6 +317,7 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
     <AuthProviderButton onClick={noop}>Continue with GitHub</AuthProviderButton>
   ) },
   { name: "AutoHideScrollArea", subpath: "#product/primitives/patterns/AutoHideScrollArea", render: AutoHideScrollAreaDemo },
+  CARD_ENTRY,
   { name: "CommandPalette", subpath: "#product/primitives/patterns/CommandPalette", render: CommandPaletteDemo },
   { name: "ComposerActionButton", subpath: "#product/primitives/patterns/composer/ComposerActionButton", render: () => (
     <ComposerActionButton onClick={noop}><Home className="icon-paired" /></ComposerActionButton>
@@ -314,6 +334,7 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
     </ComposerTextareaFrame>
   ) },
   { name: "ConfirmationDialog", subpath: "#product/primitives/patterns/ConfirmationDialog", render: ConfirmationDialogDemo },
+  DISCLOSURE_LIBRARY_ENTRY,
   { name: "EmptyState", subpath: "#product/primitives/patterns/EmptyState", render: () => (
     <EmptyState title="No results" description="Nothing to show yet." />
   ) },
@@ -323,6 +344,7 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
     <ListRow title="Row title" description="Row description" onClick={noop} />
   ) },
   { name: "ModalShell", subpath: "#product/primitives/patterns/ModalShell", render: ModalShellDemo },
+  NOTICE_BANNER_ENTRY,
   { name: "PageContentFrame", subpath: "#product/primitives/patterns/PageContentFrame", render: () => (
     <div className="h-24 overflow-hidden rounded-md border border-border">
       <PageContentFrame header={<div className="text-ui font-medium text-foreground">Header</div>}>
@@ -330,20 +352,22 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
       </PageContentFrame>
     </div>
   ) },
-  { name: "PageHeader", subpath: "#product/primitives/patterns/PageHeader", render: () => (
-    <PageHeader title="Page title" description="Page description" />
-  ) },
-  { name: "PaneOptionsMenuItem", subpath: "#product/primitives/patterns/PaneOptionsMenuItem", render: () => (
+  PAGE_HEADER_ENTRY,
+  ...PANEL_KIT_ENTRIES,
+  { name: "PaneOptionsMenuItem", subpath: "#product/primitives/patterns/panel/PaneOptionsMenuItem", render: () => (
     <div className="w-48 rounded-lg border border-border p-1">
       <PaneOptionsMenuItem label="Menu item" icon={<Trash />} onClick={noop} />
     </div>
   ) },
   { name: "PickerPopoverContent", subpath: "#product/primitives/patterns/PickerPopoverContent", render: PickerPopoverContentDemo },
+  { name: "ProductPageShell", subpath: "#product/primitives/patterns/ProductPageShell", render: ProductPageShellDemo },
+  ROSTER_ROW_ENTRY,
   { name: "SettingsEmptyState", subpath: "#product/primitives/patterns/settings/SettingsEmptyState", render: () => (
     <SettingsEmptyState title="No results" description="Nothing to show yet." size="compact" />
   ) },
   { name: "SettingsGroup", subpath: "#product/primitives/patterns/settings/SettingsGroup", render: SettingsGroupDemo },
   { name: "SettingsMenu", subpath: "#product/primitives/patterns/settings/SettingsMenu", render: SettingsMenuDemo },
+  SETTINGS_PAGE_BODY_ENTRY,
   { name: "SettingsRow", subpath: "#product/primitives/patterns/settings/SettingsRow", render: SettingsRowDemo },
   { name: "SettingsSaveFooter", subpath: "#product/primitives/patterns/settings/SettingsSaveFooter", render: () => (
     <SettingsSaveFooter onSave={noop} onRevert={noop} />

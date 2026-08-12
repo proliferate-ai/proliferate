@@ -4,7 +4,7 @@ import { RosterRow } from "#product/primitives/patterns/RosterRow";
 import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 import { Fork, Trash } from "#product/primitives/icons/core";
 import { ClipboardList } from "#product/primitives/icons/product";
-import type { LibraryEntry } from "./types";
+import type { LibraryEntry } from "../types";
 
 const DEMO_AGENTS = [
   { id: "a", title: "Review the migration diff", secondary: "Running · 2m 14s · sonnet", meta: "2m" },

@@ -5,7 +5,6 @@ import { twMerge } from "#product/primitives/utils/tw-merge";
 export type NoticeBannerTone =
   | "neutral"
   | "info"
-  | "success"
   | "warning"
   | "destructive";
 
@@ -27,11 +26,6 @@ const TONE_STYLES: Record<NoticeBannerTone, ToneStyle> = {
   info: {
     frame: "border-info/40 bg-info/10 text-foreground",
     body: "text-muted-foreground",
-    role: "status",
-  },
-  success: {
-    frame: "border-success/25 bg-success-subtle text-success",
-    body: "opacity-90",
     role: "status",
   },
   warning: {

@@ -21,9 +21,6 @@ function NoticeBannerDemo() {
       >
         Claim this session to send messages.
       </NoticeBanner>
-      <NoticeBanner tone="success" title="Connection verified">
-        The identity provider responded to the last probe.
-      </NoticeBanner>
       <NoticeBanner
         tone="warning"
         icon={<CircleAlert />}

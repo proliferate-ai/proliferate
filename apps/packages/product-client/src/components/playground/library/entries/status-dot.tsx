@@ -1,5 +1,5 @@
 import { StatusDot, type StatusDotTone } from "#product/primitives/StatusDot";
-import type { LibraryEntry } from "./types";
+import type { LibraryEntry } from "../types";
 
 const TONES: StatusDotTone[] = [
   "success",
