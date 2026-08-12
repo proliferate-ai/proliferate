@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   lifecycleInput: vi.fn(),
   glyphProps: vi.fn(),
   messageListProps: vi.fn(),
+  messageListRows: 0,
   sendPrompt: vi.fn(),
   closeChild: vi.fn(),
   openChild: vi.fn(),
@@ -110,7 +111,13 @@ vi.mock("#product/components/workspace/delegated-work/AgentIdentityGlyph", () =>
 vi.mock("#product/components/workspace/chat/transcript/MessageList", () => ({
   MessageList: (props: { activeSessionId: string; sessionViewState: string }) => {
     mocks.messageListProps(props);
-    return <div data-testid="message-list" />;
+    return (
+      <div data-testid="message-list">
+        {Array.from({ length: mocks.messageListRows }, (_, index) => (
+          <div key={index}>Transcript row {index + 1}</div>
+        ))}
+      </div>
+    );
   },
 }));
 
@@ -231,6 +238,7 @@ describe("AgentsPaneDetail", () => {
     mocks.lifecycle.historyPhase = "ready";
     mocks.lifecycle.streamConnectionState = "open";
     mocks.lifecycle.streamRequestPending = false;
+    mocks.messageListRows = 0;
     mocks.pane.transcript = { sessionId: "client-a" };
     mocks.pane.sessionViewState = "working";
     mocks.pending.close = false;
@@ -286,6 +294,32 @@ describe("AgentsPaneDetail", () => {
       }));
     }
   });
+
+  it.each(["running", "closed"] as const)(
+    "contains a long %s transcript above its shrink-proof footer",
+    (presentation) => {
+      mocks.messageListRows = 80;
+      render(<AgentsPaneDetail {...detailProps(child("a", presentation), "a")} />);
+
+      const messageList = screen.getByTestId("message-list");
+      expect(messageList.childElementCount).toBe(80);
+      const transcriptSlot = messageList.parentElement;
+      expect(transcriptSlot?.className).toBe(
+        "flex min-h-0 flex-1 flex-col overflow-hidden",
+      );
+
+      const footer = transcriptSlot?.nextElementSibling;
+      expect(footer?.tagName).toBe("FOOTER");
+      expect(footer?.className.split(" ")).toContain("shrink-0");
+      if (presentation === "closed") {
+        expect(within(footer as HTMLElement).getByText(
+          "Closed. Transcript preserved and read-only.",
+        )).not.toBeNull();
+      } else {
+        expect(footer?.querySelector("form")).not.toBeNull();
+      }
+    },
+  );
 
   it("uses exact neutral confirmation copy for Running Close and Promote", () => {
     const { container } = render(

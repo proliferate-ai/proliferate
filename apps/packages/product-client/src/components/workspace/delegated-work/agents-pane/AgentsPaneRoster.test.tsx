@@ -120,7 +120,9 @@ describe("AgentsPaneOverview", () => {
 
   it("shows loading before a model exists", () => {
     renderOverview({ model: null, loading: true });
-    expect(screen.getByText("Loading agents…")).toBeTruthy();
+    const statuses = screen.getAllByRole("status");
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]?.textContent).toContain("Loading agents…");
   });
 
   it("shows the empty state for a model without parents", () => {

@@ -81,7 +81,10 @@ export function AgentsPaneOverview({
     }
     if (loading) {
       return (
-        <div className="flex min-h-11 items-center gap-2 px-2 text-ui text-muted-foreground">
+        <div
+          role="status"
+          className="flex min-h-11 items-center gap-2 px-2 text-ui text-muted-foreground"
+        >
           <Spinner className="icon-compact" />
           Loading agents…
         </div>

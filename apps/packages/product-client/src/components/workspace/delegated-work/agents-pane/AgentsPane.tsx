@@ -41,7 +41,11 @@ export function AgentsPane({ workspaceId }: { workspaceId: string }) {
 
   if (pane.route.kind === "overview") {
     return (
-      <section aria-label="Agents" className="flex h-full min-h-0 min-w-0 flex-col">
+      <section
+        aria-label="Agents"
+        aria-busy={pane.initialLoading}
+        className="flex h-full min-h-0 min-w-0 flex-col"
+      >
         <PaneHeader title="Agents" />
         <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2">
           <AgentsPaneOverview
