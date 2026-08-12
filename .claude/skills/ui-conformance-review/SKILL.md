@@ -4,9 +4,9 @@ description: >-
   Run the UI-conformance review checklist from specs/DESIGN_SYSTEM.md against a PR diff.
   Use when reviewing any PR that touches frontend components (apps/packages/product-client,
   apps/desktop, apps/web) - it checks shape placement, duplicate shapes pending promotion,
-  hand-rolled overlay semantics, unsanctioned geometry, the lucide-react glyph ratchet, raw
-  DOM controls, hand-assembled interaction-state stacks, and scaffold rhythm drift, with the
-  doctrine's carve-outs applied so sanctioned patterns do not get flagged.
+  hand-rolled overlay semantics, unsanctioned geometry, the lucide-react glyph ratchet,
+  new-pattern quality, hand-assembled interaction-state stacks, and scaffold rhythm drift,
+  with the doctrine's carve-outs applied so sanctioned patterns do not get flagged.
 ---
 
 # UI-conformance review
@@ -26,6 +26,7 @@ Read the doctrine section before reviewing. Read the sanctioned index **from the
 
 ```bash
 REPO=$(git rev-parse --show-toplevel)
+cd "$REPO"          # every path below is repository-relative
 PR=<number>
 BASE=$(gh pr view "$PR" --json baseRefOid --jq .baseRefOid)
 HEAD=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
@@ -37,6 +38,18 @@ LIB="apps/packages/product-client/src/primitives apps/packages/product-client/sr
 ```
 
 If the PR touches no `.tsx` under those roots, stop and report "no frontend surface".
+
+**Which checkout the tree signatures read.** Checks 1, 2, 3 and 8 index or census *the working tree*, not the diff, so the answer depends on what is checked out. Review from a **base** checkout: on a checkout that already contains the PR, check 2's index holds the PR's own additions, and "this shape already exists elsewhere" stops distinguishing a pre-existing duplicate from one this PR just made. `signatures.py` resolves its roots against the repository root and exits non-zero if they are missing, so a wrong directory fails loudly instead of reporting a clean tree.
+
+**Re-run the mechanical gates first**, so review only spends judgment on what they cannot decide. All are cheap Python or Node; none builds anything.
+
+```bash
+python3 "$REPO/scripts/report_frontend_structure.py" --strict   # RAW_DOM_CONTROL
+python3 "$REPO/scripts/check_appearance_scaling.py"
+python3 "$REPO/scripts/check_frontend_boundaries.py"
+```
+
+A red gate is the author's to fix and is not a review finding; note it and move on.
 
 ---
 
@@ -113,7 +126,7 @@ done
 
 A sanctioned component with zero consumers while feature code hand-rolls its shape is the exact failure the rule exists to catch. If the PR hand-rolls a shape that a dead library component already owns, that is a finding against the PR.
 
-**Known duplicates already in the tree** (Current Gaps - do not charge these to a PR that merely touches the file):
+**Known duplicates already in the tree** - do not charge these to a PR that merely touches the file. This is a census taken on the appendix's date, not a fact to reproduce: re-run `dupes --tree` for the current shape of the tree, and read DESIGN_SYSTEM.md § Current Gaps for the authoritative list. A row that has since been promoted away is a win, not a discrepancy.
 
 | Shape | Where |
 | --- | --- |
@@ -124,7 +137,7 @@ A sanctioned component with zero consumers while feature code hand-rolls its sha
 | Inline error `rounded-md border border-destructive/25 bg-destructive-subtle px-3 py-2 text-ui text-destructive` | `ApiKeyCreatorModal.tsx`, `SecretEditorDialog.tsx` - byte-identical |
 | Settings row `flex items-center gap-3.5 px-3.5 py-[13px]` | ~10 files under `settings/panes/**` |
 | Dead library vocabulary | `AuthProviderButton`, `ListRow`, `RangeSlider` (zero call sites), `ProductNotice` (outside every tier, zero call sites), `TypewriterRevealText` (live consumer and registry entry but no index row) |
-| Split kits | toast positioner `Sonner` is a root primitive while the kit lives in `patterns/`; the settings kit spans `primitives/patterns/` and `components/patterns/` |
+| Split kits | The toast kit's positioner (`Sonner`) is a root primitive outside the kit's own directory. Whether any other kit is still split across tiers changes as the kit-cohesion work lands - read DESIGN_SYSTEM.md § Current Gaps for the live list rather than trusting this row. A member left outside its kit directory *deliberately*, with the reason recorded in the doctrine, is not a finding. |
 
 **Carve-outs.**
 - Promotion is earned by duplication, never speculative. Do not ask for a library component because a shape "looks reusable".
@@ -157,9 +170,9 @@ grep -nE '^\+.*(useFloating|createPortal|getBoundingClientRect\(\).*(top|left)|a
 ```
 
 **Carve-outs.**
-- `DropdownMenu` is the **sanctioned** path for menus that need keyboard navigation until `PopoverButton`/`PopoverMenuItem` reach parity (roving tabindex, typeahead, managed focus return). Its four current consumers - `WorkspaceItemMenu`, `RightPanelNewTabMenu`, `WorkspaceActionsMenu`, `ProposedPlanCard` - are not migration debt, and a *new* keyboard-menu consumer is legitimate. What is a finding is a **click-only** menu reaching for `DropdownMenu` instead of `PopoverButton`/`PopoverMenuItem`.
+- `DropdownMenu` is the **sanctioned** path for menus that need keyboard navigation until `PopoverButton`/`PopoverMenuItem` reach parity (roving tabindex, typeahead, managed focus return). Its existing consumers are not migration debt, and a *new* keyboard-menu consumer is legitimate. What is a finding is a **click-only** menu reaching for `DropdownMenu` instead of `PopoverButton`/`PopoverMenuItem`. Enumerate the current consumers rather than reciting a list: `grep -rln 'primitives/DropdownMenu' apps --include='*.tsx' | grep -v /playground/`.
 - `role=` inside a test file, a `querySelector` string, or an aria assertion is not a shell.
-- Seven hand-rolled shells predate the rule (see the appendix). Touching one of those files is not a finding; adding an eighth is.
+- The hand-rolled shells that predate the rule are grandfathered: touching one of those files is not a finding, adding one that is not already in the baseline is. Establish the baseline by running the tree grep above **at `$BASE`**, not from the appendix's count - that number is a snapshot and migrating a shell away should lower it.
 
 ---
 
@@ -207,22 +220,46 @@ Any output is a finding. Fix: add or reuse the glyph in the matching module unde
 
 ---
 
-## Check 6 - raw DOM control gate
+## Check 6 - new-pattern quality
 
-**Doctrine.** `report_frontend_structure.py --strict` (rule `RAW_DOM_CONTROL`) is the mechanical half. Review covers what the regex cannot see.
+**Doctrine.** Honest registry demo, correct tier (shapes vs nouns), named for the job not the feature.
+
+Check 1 asks whether a new library file is in the tier its role demands and carries its index row. Check 6 asks the three quality questions about that same file, none of which any gate can answer. It fires only when the PR adds or moves a file under `$LIB`; if it adds none, say so and move on.
+
+**Named for the job, not the feature.** A pattern is `ListRow` or `PageHeader`, never `WorkspaceSettingsCardRow`. A name that carries the feature that first needed the component is the tell that it was extracted rather than designed, and it is what makes the next surface hand-roll a near-copy instead of reusing it. Read the added file's name against the doctrine's own examples in § The library model.
+
+**Correct tier - shapes vs nouns.** The admission test is mechanical enough to run by eye on the props:
 
 ```bash
-python3 "$REPO/scripts/report_frontend_structure.py" --strict
-grep -nE '^\+.*<\s*(button|input|label|select|textarea)\b' /tmp/pr$PR.diff | grep -v '\.test\.'
+git diff --name-only --diff-filter=AR "$BASE...$HEAD" -- \
+  'apps/packages/product-client/src/primitives/*' \
+  'apps/packages/product-client/src/components/patterns/*'
+# For each added/moved file, read the exported prop type:
+grep -nE 'from "#product/(domain|lib/domain)/' <file>
+```
+
+`primitives/patterns/` demands props that are only ReactNode/string/boolean/callbacks - shapes. `components/patterns/` demands a public prop referencing a `#product/domain/**` noun **and** composition of two or more library components. A file that satisfies neither is a presenter function feeding a pure pattern, not a new tier row.
+
+**Honest registry demo.** A demo that renders the component in one contrived happy-path state is worse than no demo: it certifies a shape nobody has seen fail.
+
+```bash
+grep -n '<name>' apps/packages/product-client/src/components/playground/library/*.tsx
+```
+
+Read the demo, not just its presence. It should exercise the states a consumer will actually hit - empty, long text, loading, disabled, destructive tone - not one static row. A `Demo` wrapper that hard-codes props the real consumer never passes is a finding.
+
+**Also: the lookalike primitive.** The `RAW_DOM_CONTROL` gate you re-ran in Setup catches raw `<button>`/`<input>` in feature code. What no regex catches is a *locally defined* `Button` / `Input` / `Dialog` / `Menu` lookalike under another name - which is the same violation wearing a component's clothes, and it is a tier question, so it belongs here. Read [components.md § Shared UI](../../../specs/frontend/components.md), then check added files for a component that wraps or restyles a raw control.
+
+```bash
 grep -nE '^\+.*React\.createElement\(\s*["'"'"'](button|input|label|select|textarea)' /tmp/pr$PR.diff
 ```
 
-Also read [components.md § Shared UI](../../../specs/frontend/components.md): a locally defined `Button` / `Input` / `Dialog` / `Menu` lookalike under any other name is the same violation, and no regex catches it. Check added files for a component that wraps or restyles a raw control.
-
 **Carve-outs.**
+- Registry exemptions are exactly the two toast kit internals (`ToastBody`, `ToastExpansion`) that the registry test's glob names. Nothing else is exempt by convention.
 - `document.createElement("textarea")` in a clipboard helper renders nothing - not a control.
 - A polymorphic `as="button"` on a library primitive (`SidebarRowSurface as="button"`) is the primitive's own API.
 - Files under `primitives/**` are the layer that is *allowed* to render raw controls.
+- A grandfathered domain-tier row that the PR merely touches is not this PR's tier debt; DESIGN_SYSTEM.md § Current Gaps names which rows are grandfathered.
 
 ---
 
@@ -244,7 +281,9 @@ The script splits candidates two ways:
 - **Hover-reveal idiom.** `group` + `opacity-0 group-hover:opacity-100` (with `transition-opacity duration-200`, group named when nesting is possible) is slot-content layout, not a state stack. Sanctioned by [styling.md § Hover Reveal Pattern](../../../specs/frontend/styling.md).
 - **Colour-promotion idiom.** Never animate opacity between two *visible* values on an always-visible glyph; express muted-to-prominent as a colour change (`text-current/75 transition-colors group-hover:text-current`). A bare semantic foreground token under `hover:` is that idiom and is sanctioned. An alpha-suffixed background overlay is not.
 - **Neutralization.** `hover:bg-transparent` on a library component is turning the primitive's own state off, not assembling a new one.
-- 69 off-vocabulary occurrences across 49 files predate the rule (appendix). Charge the PR only for what it adds.
+- Off-vocabulary stacks predate the rule across most of feature code (the appendix has the census as of its date). Charge the PR only for what it *adds* - the script is diff-scoped for exactly that reason.
+
+**What the classifier can and cannot see.** It reads `hover:` / `active:` / `focus:` / `focus-visible:` / `focus-within:`, each optionally prefixed `group-` or `peer-` and optionally carrying a group name - `group-hover/file-diff:opacity-100`, the named form styling.md § Hover Reveal Pattern actually teaches. It does **not** see multi-variant stacks (`dark:hover:…`, `data-[state=open]:hover:…`); there are none in the tree today, so a hit means the vocabulary needs widening, not that the line is fine. A `CHECK7` section that reports zero on a diff full of interaction work is a reason to read the diff by hand, not a pass.
 
 ---
 
@@ -294,13 +333,15 @@ One entry per finding:
 
 Then a header block with the counts per check and, explicitly, the checks that ran clean. Close with the carve-outs you applied and why, so the author can see what was *not* charged to them - a silent suppression is indistinguishable from a missed check.
 
-State the residual risk honestly: checks 1, 2, 6 (lookalike-primitive half) and 8 are judgment calls where a signature can only nominate candidates. None of the eight is CI-enforced today (Current Gaps).
+State the residual risk honestly: checks 1, 2, 6 and 8 are judgment calls where a signature can only nominate candidates. None of the eight is CI-enforced today (Current Gaps).
 
 ---
 
 ## Appendix - signature validation
 
 Validated 2026-08-12 against `origin/main` at `cb8edce4d`, one commit after the doctrine merged (#1779).
+
+**Every number below is point-in-time, not a fact to reproduce.** They exist to show the signatures fire on the violations the doctrine already names, and to make the tuning auditable. A later reviewer whose run disagrees has learned that the tree moved - which is the intended outcome of the work these checks exist to prompt - not that the signature broke. Re-derive the current numbers with the commands in "Reproducing" below; never carry one of these counts into a finding.
 
 ### Hit rate on the known gaps still in the tree
 
@@ -309,13 +350,13 @@ Each signature was run against the tree and scored against the violations named 
 | Check | Signature | Doctrine claim | Measured | Verdict |
 | --- | --- | --- | --- | --- |
 | 1 | index-row completeness over `$LIB` | (not itemised) | 7 raw hits, 6 absorbed by carve-outs (5 `secrets/*` internals, 1 `utils/`), leaving `TypewriterRevealText.tsx` - a real un-indexed primitive with a live consumer (`ChromeWorkspaceTab`) and a registry entry | HIT, plus one gap the doctrine had not recorded |
-| 2 | paint-fingerprint index, `--tree --min-files 2` | "several duplicated shapes (roster rows, card shells, status dots, disclosure state machines) pending promotion" | 29 fingerprints in 2+ files after the neutralizer filter; top cluster `bg-card border border-border rounded-lg` in 9 files; two byte-identical cross-file pairs (`AccountPane`/`OrganizationPane` notice, `ApiKeyCreatorModal`/`SecretEditorDialog` inline error) | HIT |
+| 2 | paint-fingerprint index, `--tree --min-files 2` | "several duplicated shapes (roster rows, card shells, status dots, disclosure state machines) pending promotion" | 31 fingerprints in 2+ files after the neutralizer filter; top cluster `bg-card border border-border rounded-lg` in 9 files; two byte-identical cross-file pairs (`AccountPane`/`OrganizationPane` notice, `ApiKeyCreatorModal`/`SecretEditorDialog` inline error); 3 clusters pair a feature file with a library file that already paints that shape | HIT |
 | 2 | dead-component scan | "`AuthProviderButton` and `ListRow` have no product call sites" | exactly those two, plus `RangeSlider` (a third the doctrine had not recorded). `ProductNotice` confirmed separately: zero call sites, and its `rounded-lg border` + tone map is hand-rolled at 5+ feature sites | HIT (2/2 named, +1) |
 | 3 | `role="dialog\|alertdialog\|menu\|listbox\|tooltip"` outside `primitives/`, tests excluded | "seven hand-rolled overlay shells" | exactly 7: `PaneSideOverlay`, `OpenTargetMenu`, `ComposerInlineMenu`, `SelectedResponseActionMenu`, `DelegatedAgentHoverCard`, `FileTreeOverlay`, `PublishDialog` | HIT (7/7) |
-| 4 | ungated bracket families, `[var(` and grid excluded | "arbitrary width/height/padding/margin/inset brackets have no gate rule" | 173 sites in feature code; top literals `py-[13px]` x17, `h-[46px]` x10, `w-[18px]` x8. Sanction comments exist at a handful of sites (e.g. `ComposerInlineMenu` max-height), proving the convention has precedent | HIT |
+| 4 | ungated bracket families, `[var(` and grid excluded | "arbitrary width/height/padding/margin/inset brackets have no gate rule" | 173 sites under `product-client/src/components` with tests and `playground/` excluded (200 across the full `$FEATURE` roots); top literals `py-[13px]` x12, `h-[46px]` x11, `w-[18px]` x6. Sanction comments exist at a handful of sites (e.g. `ComposerInlineMenu` max-height), proving the convention has precedent | HIT |
 | 5 | lucide identifier-set diff | "direct `lucide-react` imports in ~43 feature files (33 of them shadowing at least one identically named tuned glyph)" | 49 files, 36 shadowing, against 158 exported glyph names in `primitives/icons/`. The tree has drifted up from the doctrine's approximation; the shape of the claim holds | HIT (counts refreshed) |
-| 6 | `<button\|input\|label\|select\|textarea` outside `primitives/` | mechanical gate, expected clean | 1 raw hit, and it is a code comment - the gate is genuinely green tree-wide. `React.createElement("button")` evasions: 0 | CLEAN (as expected) |
-| 7 | state-utility classifier, HARD vs SOFT | "no gate detects a hand-assembled stack ... hundreds of such stacks predate the rule" | 474 state utilities in feature code, of which 69 off-vocabulary across 49 files. Top offenders are the exact ones the specs name: `hover:bg-muted` x15 (banned by styling.md), `hover:bg-hover/30` x2 (styling.md's own anti-example), `hover:opacity-65`/`focus-visible:opacity-65` (the banned partial-opacity glyph transition) | HIT - and the 405 sanctioned uses are correctly suppressed |
+| 6 | domain-tier admission test over `components/patterns/**` | "every current domain-tier row except `SecretManagementPanel` is grandfathered ... the six shape-only `Settings*` rows await the kit move" | 3 of 16 files import a `#product/domain/**` type at all (`PrStatusBadge`, `SecretEditorDialog`, `SecretManagementPanel`); the 13 that do not include exactly the six shape-only `Settings*` rows the doctrine names | HIT (6/6 named) |
+| 7 | state-utility classifier, HARD vs SOFT | "no gate detects a hand-assembled stack ... hundreds of such stacks predate the rule" | 547 state utilities in feature code, of which 73 off-vocabulary across 49 files. Top offenders are the exact ones the specs name: `hover:bg-muted` x15 (banned by styling.md), `hover:bg-hover/30` x2 (styling.md's own anti-example), `focus-visible:opacity-65` (the banned partial-opacity glyph transition) | HIT - and the 474 sanctioned uses are correctly suppressed |
 | 8 | pane-root rhythm census | (not itemised) | settings panes: 20 roots at `space-y-6`, 3 `repo/*Pane.tsx` at `space-y-5`, 1 at `space-y-1.5` - a live drift of exactly the kind the doctrine describes | HIT |
 
 ### False positives on two recently merged control PRs
@@ -327,10 +368,10 @@ Controls: **#1777** `feat(product): settings wash restyle` (43 files, heaviest r
 | 1 (redraw tell) | 1 | 1 note - a warning banner card that duplicates `HarnessConfigIssueBanner`'s shape | 0 | 0 | true positive |
 | 2 | 1 | 1 note - table-header row shape shared with `BillingPlanComparison` | 0 | 0 | true positive, low severity |
 | 3 | 0 | 0 | 0 | 0 | clean |
-| 4 | 22 lines | 4 grouped literals (grid-positioning brackets excluded): `py-[13px]` x15 across 10 files (strong - a new hand-tuned row height with no token and no comment, and simultaneously the check-2 settings-row duplicate), `py-[30px]` x2, `min-h-[5.25rem]` x2, `lg:w-[22rem]` x1 | 0 | 0 | 1 strong + 3 notes; no false positives, but the grouping step is load-bearing |
+| 4 | 22 lines | 4 grouped literals (grid-positioning brackets excluded): `py-[13px]` x17 across 11 files, of which 14 across 10 are product files and 3 are the playground demo (strong - a new hand-tuned row height with no token and no comment, and simultaneously the check-2 settings-row duplicate), `py-[30px]` x2, `min-h-[5.25rem]` x2, `lg:w-[22rem]` x1 | 0 | 0 | 1 strong + 3 notes; no false positives, but the grouping step is load-bearing |
 | 5 (naive `^+.*lucide-react`) | 1 | - | 0 | - | **false positive** - the line only *removed* `KeyRound`. This is why the naive grep was replaced. |
 | 5 (identifier-set diff) | 0 | 0 | 0 | 0 | clean - the tuned signature |
-| 6 | 0 | 0 | 0 | 0 | clean |
+| 6 | 1 library file added (`primitives/patterns/SettingsGroup.tsx`) | 0 - shape-only props, named for the job, registry demo present | 0 added | 0 | clean; the raw-DOM gate it re-runs is green tree-wide (`React.createElement` evasions: 0) |
 | 7 (naive `hover:\|active:\|focus-visible:`) | 4 | - | 3 | - | 7 undifferentiated candidates |
 | 7 (HARD/SOFT classifier) | 0 HARD / 4 SOFT | 0 findings - all four are `hover:bg-hover active:bg-active hover:text-foreground` on first-instance rows | 1 HARD / 2 SOFT | 1 finding - `hover:bg-destructive/10` (ad-hoc alpha overlay; the companion `hover:text-destructive` is correctly suppressed as colour promotion) | true positive |
 | 8 (naive `^+.*space-y-`) | 7 | - | 0 | - | all seven are intra-pattern spacing inside rows and cards |
@@ -343,20 +384,73 @@ Three naive spellings were measured and discarded because they *did* produce fal
 ### Tuning decisions and why
 
 1. **Check 5 must diff identifier sets, not lines.** A shrinking lucide import line matches `^+.*lucide-react`. Negative control: run the tuned script over `e93d98636~1..e93d98636` (#1744) and it correctly reports 5 new identifiers across two files.
-2. **Check 7 needs a vocabulary, not a keyword.** 474 of 474 state utilities match the naive keyword; only 69 are off-vocabulary. The sanctioned set encodes the shared state fills, the hover-reveal idiom, neutralization, the focus ring, and bare-semantic colour promotion - with the deliberate line that `hover:text-destructive` is promotion while `hover:bg-destructive/10` is an ad-hoc overlay.
-3. **Check 2 fingerprints paint, not the whole class string.** Keeping layout classes makes every near-copy unique and the detector finds nothing; dropping them makes rows that differ only in gap match, which is the doctrine's own definition of shape identity. All-neutralizer fingerprints are dropped, which removed the 8-file `bg-transparent border-0 shadow-none` cluster.
-4. **Check 4 is scoped to the ungated families and grouped by literal.** Un-grouped it produced 21 lines on #1777 for what is really one decision repeated eleven times.
-5. **Check 8 is scoped to the pane root by indentation and role suffix.** Un-scoped it produced 7 intra-pattern hits on #1777, none of them rhythm.
+2. **Check 7 needs a vocabulary, not a keyword.** All 547 state utilities match the naive keyword; only 73 are off-vocabulary. The sanctioned set encodes the shared state fills, the hover-reveal idiom, neutralization, the focus ring, and bare-semantic colour promotion - with the deliberate line that `hover:text-destructive` is promotion while `hover:bg-destructive/10` is an ad-hoc overlay.
+3. **Check 7's variant prefix has to admit named groups.** `group-hover/file-diff:opacity-100` is the form styling.md § Hover Reveal Pattern teaches, and a prefix pattern that only accepts bare `group-` matches none of the 69 named-group utilities in feature code - silent under-reporting, the worst failure mode for a review signature. Four of those 69 are genuinely off-vocabulary and were invisible until the prefix was widened.
+4. **Check 2 fingerprints paint, not the whole class string.** Keeping layout classes makes every near-copy unique and the detector finds nothing; dropping them makes rows that differ only in gap match, which is the doctrine's own definition of shape identity. All-neutralizer fingerprints are dropped, which removed the 8-file `bg-transparent border-0 shadow-none` cluster.
+5. **Check 2's index keeps the library; only the diff side skips it.** Excluding `primitives/**` from the index too would blind the check to its single strongest finding shape - feature code repainting what a primitive already owns. Including it costs 2 extra tree clusters (29 to 31) and added no candidates on either control PR.
+6. **Check 4 is scoped to the ungated families and grouped by literal.** Un-grouped it produced 22 lines on #1777 for what is really one decision repeated a dozen times.
+7. **Check 8 is scoped to the pane root by indentation and role suffix.** Un-scoped it produced 7 intra-pattern hits on #1777, none of them rhythm.
 
 ### Reproducing
 
+Every number in this appendix, in the order the tables list them. Run from the repository root.
+
 ```bash
+cd "$(git rev-parse --show-toplevel)"
+SIG=.claude/skills/ui-conformance-review/signatures.py
+FEATURE="apps/packages/product-client/src/components apps/desktop/src apps/web/src"
+LIB="apps/packages/product-client/src/primitives apps/packages/product-client/src/components/patterns"
 gh pr diff 1777 > /tmp/pr1777.diff && gh pr diff 1778 > /tmp/pr1778.diff
 git fetch origin pull/1777/head pull/1778/head --quiet
-SIG=.claude/skills/ui-conformance-review/signatures.py
-python3 "$SIG" dupes  --tree --min-files 2
-python3 "$SIG" dupes  --diff /tmp/pr1777.diff
-python3 "$SIG" states --diff /tmp/pr1778.diff
+
+# check 1 - library files with no sanctioned-index row (expects 7 raw, 1 after carve-outs)
+for f in $(find $LIB -name '*.tsx' -not -name '*.test.tsx' -not -path '*__tests__*' | sort); do
+  grep -q "$(basename "$f")" specs/DESIGN_SYSTEM.md || echo "NO INDEX ROW: $f"
+done
+
+# check 2 - tree census (31 fingerprints) and the two control diffs (1 and 0)
+python3 "$SIG" dupes --tree --min-files 2
+python3 "$SIG" dupes --diff /tmp/pr1777.diff
+python3 "$SIG" dupes --diff /tmp/pr1778.diff
+# check 2 - dead library vocabulary (expects 3)
+for f in $(find $LIB -name '*.tsx' -not -name '*.test.tsx' -not -path '*__tests__*' \
+             -not -path '*/icons/*' -not -path '*/utils/*' | sort); do
+  n=$(basename "$f" .tsx)
+  hits=$(grep -rl "[^A-Za-z0-9_]$n[^A-Za-z0-9_]" apps --include='*.tsx' --include='*.ts' \
+          | grep -v "/$n.tsx$" | grep -v '/playground/' | grep -v '__tests__' | grep -v '\.test\.' | wc -l)
+  [ "$hits" -eq 0 ] && echo "DEAD: $f"
+done
+
+# check 3 - hand-rolled overlay shells (expects 7)
+grep -rnE 'role="(dialog|alertdialog|menu|listbox|tooltip)"' $FEATURE --include='*.tsx' \
+  | grep -v '/primitives/' | grep -v '\.test\.tsx'
+
+# check 4 - ungated bracket census (expects 173 here, 200 across all of $FEATURE)
+GEOM='[ "]([a-z]+:)*((min-|max-)?[wh]|p[xytblr]?|m[xytblr]?|inset|top|bottom|left|right|translate-[xy]|basis)-\[[^]]+\]'
+grep -rnE "$GEOM" apps/packages/product-client/src/components --include='*.tsx' \
+  | grep -v '\[var(' | grep -v 'grid-cols-\[' | grep -v 'grid-rows-\[' \
+  | grep -v '\.test\.' | grep -v '/playground/' | wc -l
+
+# check 5 - importers (49) and tuned glyph names (158); the 36-shadowing figure is the
+# intersection of each importer's identifier set with these names
+grep -rl 'lucide-react' apps --include='*.tsx' --include='*.ts' | grep -v '/primitives/icons/' | wc -l
+grep -rhoE '^export (const|function) [A-Za-z0-9_]+' apps/packages/product-client/src/primitives/icons \
+  | awk '{print $3}' | sort -u | wc -l
 python3 "$SIG" lucide --base 44da7da20abd5dad6f75cecf4d7a0b5294a7829b --head 6918b9438107214d5b71160ffb0691d269406100
 python3 "$SIG" lucide --base e93d98636~1 --head e93d98636   # negative control: expects 5
+
+# check 6 - domain-tier admission (expects 3 of 16 importing a domain type)
+grep -rlE 'from "#product/(domain|lib/domain)/' \
+  apps/packages/product-client/src/components/patterns --include='*.tsx' | grep -v '\.test\.'
+
+# check 7 - control diffs (0 HARD / 4 SOFT, then 1 HARD / 2 SOFT)
+python3 "$SIG" states --diff /tmp/pr1777.diff
+python3 "$SIG" states --diff /tmp/pr1778.diff
+
+# check 8 - pane-root rhythm census (expects 19 section + 1 div at space-y-6, 3 at space-y-5)
+grep -rhoE '^    <(section|div) className="space-y-[0-9.]+"' \
+  apps/packages/product-client/src/components/settings/panes --include='*Pane.tsx' \
+  | sort | uniq -c | sort -rn
 ```
+
+The check-7 tree census (547 utilities, 73 off-vocabulary across 49 files) has no one-line spelling: it is `STATE_UTIL`/`SANCTIONED` from `signatures.py` applied to every `.tsx` under `$FEATURE` that `SKIP_PATH` does not drop. Import the module rather than re-deriving the regexes by hand, so the census and the diff-scoped check always agree.

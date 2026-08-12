@@ -12,25 +12,53 @@ Everything else in the checklist is a plain grep and lives in SKILL.md.
 Read-only: no builds, no installs, no network. Cheap enough to run on any machine.
 
 Usage:
-  python3 signatures.py dupes  --diff <file.diff> [--root apps/packages/product-client/src]
-  python3 signatures.py dupes  --tree [--root ...] [--min-files 2]
+  python3 signatures.py dupes  --diff <file.diff> [--root <dir> ...] [--min-paint 3]
+  python3 signatures.py dupes  --tree [--root <dir> ...] [--min-files 2] [--min-paint 3]
   python3 signatures.py lucide --base <sha> --head <sha>
   python3 signatures.py states --diff <file.diff>
+
+`--min-paint` is check 2's sensitivity dial: the number of paint classes a
+`className` literal must carry before its fingerprint is indexed at all. Three is
+the default because two-class fingerprints (`rounded-md bg-card`) match almost
+everything. Lower it to widen the net; raise it to see only elaborate shapes.
+
+Paths are resolved against the repository root, so these run from any directory.
 """
 
 from __future__ import annotations
 
 import argparse
 import collections
+import os
 import re
 import subprocess
 import sys
 
-DEFAULT_ROOT = "apps/packages/product-client/src"
+# Both the ProductClient library+feature tree and the two thin app shells, because
+# SKILL.md's $FEATURE spans all three.
+DEFAULT_ROOTS = (
+    "apps/packages/product-client/src",
+    "apps/desktop/src",
+    "apps/web/src",
+)
 
-# Library tiers, generated demos and tests are not feature code. The library is
-# allowed to own the shapes and the state stacks; that is the whole point of it.
+# Generated demos and tests are not product code in either direction.
+INDEX_SKIP = re.compile(r"(/playground/|\.test\.|__tests__|\.md$|\.css$)")
+
+# ...and on the *diff* side the library tiers are skipped as well: the library is
+# allowed to own the shapes and the state stacks, that is the whole point of it.
+# The index deliberately keeps them, so that a feature file repainting a shape a
+# primitive already owns is a match rather than a blind spot.
 SKIP_PATH = re.compile(r"(/primitives/|/playground/|\.test\.|__tests__|\.md$|\.css$)")
+
+
+def repo_root() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        sys.exit("not inside a git repository")
+    return result.stdout.strip()
 
 
 # --------------------------------------------------------------------------- diff
@@ -87,19 +115,26 @@ def fingerprint(class_string: str) -> tuple[str, ...]:
     return tuple(sorted(tokens))
 
 
-def build_index(root: str, min_paint: int) -> dict[tuple[str, ...], set[str]]:
+def build_index(roots: list[str], min_paint: int) -> dict[tuple[str, ...], set[str]]:
+    missing = [root for root in roots if not os.path.isdir(root)]
+    if missing:
+        # Silence here would be the worst possible failure for review tooling: an
+        # empty index reports "no duplicates" for every diff it is handed.
+        sys.exit(f"index root(s) not found (run from the repository root): {', '.join(missing)}")
     grep = subprocess.run(
-        ["grep", "-rn", "--include=*.tsx", "-E", "className", root],
+        ["grep", "-rn", "--include=*.tsx", "-E", "className", *roots],
         capture_output=True,
         text=True,
-    ).stdout.splitlines()
+    )
+    if grep.returncode > 1:  # 0 = matches, 1 = no matches, >1 = a real error
+        sys.exit(f"grep failed while building the index: {grep.stderr.strip()}")
     index: dict[tuple[str, ...], set[str]] = collections.defaultdict(set)
-    for line in grep:
+    for line in grep.stdout.splitlines():
         parts = line.split(":", 2)
         if len(parts) != 3:
             continue
         path, _, text = parts
-        if SKIP_PATH.search(path):
+        if INDEX_SKIP.search(path):
             continue
         for match in CLASS_LITERAL.finditer(text):
             fp = fingerprint(match.group(1) or match.group(2))
@@ -109,7 +144,7 @@ def build_index(root: str, min_paint: int) -> dict[tuple[str, ...], set[str]]:
 
 
 def cmd_dupes(args) -> int:
-    index = build_index(args.root, args.min_paint)
+    index = build_index(args.root or list(DEFAULT_ROOTS), args.min_paint)
 
     if args.tree:
         rows = sorted(((len(v), k, v) for k, v in index.items() if len(v) >= args.min_files), reverse=True)
@@ -183,7 +218,33 @@ def cmd_lucide(args) -> int:
 
 # ------------------------------------------------------ check 7: state-stack audit
 
-STATE_UTIL = re.compile(r"(?:^|[\s\"'`])((?:group-)?(?:hover|active|focus|focus-visible|focus-within):[a-z0-9:/\[\].%_-]+)")
+# The variant prefix has to admit the *named* group form, because that is the form
+# styling.md § Hover Reveal Pattern actually teaches ("Name the group when nesting
+# is possible"): `group-hover/file-diff:opacity-100`. Without the `/<name>` branch
+# the whole named-group family - 69 utilities in feature code today - is invisible,
+# which is silent under-reporting rather than a visible miss.
+# Known remaining blind spot: multi-variant stacks (`dark:hover:…`,
+# `data-[state=open]:hover:…`). There are none in the tree today; if one appears,
+# widen this rather than assuming the check saw it.
+STATE_UTIL = re.compile(
+    r"(?:^|[\s\"'`{])"
+    r"((?:(?:group|peer)-)?(?:hover|active|focus-visible|focus-within|focus)"
+    r"(?:/[a-z0-9-]+)?"
+    r":[a-z0-9:/\[\]().%_-]+)"
+)
+
+
+def trim_unbalanced(util: str) -> str:
+    """Drop trailing `)` that closes something outside the utility.
+
+    `(` and `)` are in the value character class so that `hover:bg-[var(--x)]`
+    reports in full instead of truncating to `hover:bg-[var`. The cost is that a
+    utility ending a JSX expression - `cn(active && "hover:bg-hover")` - can pick up
+    a stray closer. Trim back until the parens balance.
+    """
+    while util.endswith(")") and util.count(")") > util.count("("):
+        util = util[:-1]
+    return util
 
 # The sanctioned state vocabulary:
 #   - the three shared interaction fills (bg-hover / bg-selected / bg-active)
@@ -193,7 +254,8 @@ STATE_UTIL = re.compile(r"(?:^|[\s\"'`])((?:group-)?(?:hover|active|focus|focus-
 #     promotion; `hover:bg-destructive/10` is an ad-hoc overlay and stays a finding.
 #   - the 0 -> 100 hover-reveal idiom and the focus ring
 SANCTIONED = re.compile(
-    r"^(?:group-)?(?:hover|active|focus|focus-visible|focus-within):(?:"
+    r"^(?:(?:group|peer)-)?(?:hover|active|focus-visible|focus-within|focus)"
+    r"(?:/[a-z0-9-]+)?:(?:"
     r"bg-hover|bg-selected|bg-active|bg-transparent|bg-inherit"
     r"|text-(?:foreground|muted-foreground|current|sidebar-foreground|sidebar-muted-foreground"
     r"|popover-foreground|destructive|warning|warning-foreground|success|info|primary)"
@@ -212,7 +274,7 @@ def cmd_states(args) -> int:
     for path, lineno, text in added_lines(args.diff):
         if not path or SKIP_PATH.search(path) or not path.endswith((".tsx", ".ts")):
             continue
-        utils = [m.group(1) for m in STATE_UTIL.finditer(text)]
+        utils = [trim_unbalanced(m.group(1)) for m in STATE_UTIL.finditer(text)]
         if not utils:
             continue
         bad = [u for u in utils if not SANCTIONED.match(u)]
@@ -241,9 +303,18 @@ def main() -> int:
     p = sub.add_parser("dupes", help="check 2 - paint-fingerprint duplicate detection")
     p.add_argument("--diff")
     p.add_argument("--tree", action="store_true")
-    p.add_argument("--root", default=DEFAULT_ROOT)
+    p.add_argument(
+        "--root",
+        action="append",
+        help=f"index root, repeatable (default: {' '.join(DEFAULT_ROOTS)})",
+    )
     p.add_argument("--min-files", type=int, default=2)
-    p.add_argument("--min-paint", type=int, default=3)
+    p.add_argument(
+        "--min-paint",
+        type=int,
+        default=3,
+        help="paint classes a className literal must carry to be indexed (default 3)",
+    )
     p.set_defaults(fn=cmd_dupes)
 
     p = sub.add_parser("lucide", help="check 5 - new lucide-react identifiers vs base")
@@ -258,6 +329,18 @@ def main() -> int:
     args = parser.parse_args()
     if args.cmd == "dupes" and not args.tree and not args.diff:
         parser.error("dupes needs either --diff <file> or --tree")
+    # Every path below is repository-relative, so pin the working directory before
+    # anything reads the tree - but resolve the caller's own arguments first, since
+    # those are relative to where they typed the command.
+    if getattr(args, "diff", None):
+        args.diff = os.path.abspath(args.diff)
+    roots = [os.path.abspath(root) for root in (getattr(args, "root", None) or [])]
+    root = repo_root()
+    os.chdir(root)
+    # Keep index paths repository-relative: they are compared against, and printed
+    # beside, the repository-relative paths a unified diff carries.
+    if roots:
+        args.root = [os.path.relpath(each, root) for each in roots]
     return args.fn(args)
 
 
