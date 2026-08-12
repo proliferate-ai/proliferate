@@ -386,11 +386,11 @@ mod platform {
         )
     }
 
-    fn descriptor_exists(fd: RawFd) -> bool {
+    pub(super) fn descriptor_exists(fd: RawFd) -> bool {
         (unsafe { libc::fcntl(fd, libc::F_GETFD) }) >= 0
     }
 
-    fn set_cloexec(fd: RawFd) -> bool {
+    pub(super) fn set_cloexec(fd: RawFd) -> bool {
         let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
         if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } != 0 {
             return false;
@@ -399,20 +399,20 @@ mod platform {
         installed >= 0 && installed & libc::FD_CLOEXEC != 0
     }
 
-    fn close_if_open(fd: RawFd) {
+    pub(super) fn close_if_open(fd: RawFd) {
         if descriptor_exists(fd) {
             unsafe { libc::close(fd) };
         }
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    enum DescriptorDisposition {
+    pub(super) enum DescriptorDisposition {
         Ready,
         Disabled,
         Degraded,
     }
 
-    fn resolve_descriptor_authority(
+    pub(super) fn resolve_descriptor_authority(
         bridge_fd: RawFd,
         shutdown_fd: RawFd,
         owned_bridge: bool,
@@ -430,7 +430,7 @@ mod platform {
         }
     }
 
-    fn owned_bridge_probe(fd: RawFd) -> bool {
+    pub(super) fn owned_bridge_probe(fd: RawFd) -> bool {
         let mut socket_type = 0_i32;
         let mut socket_type_len = size_of::<i32>() as libc::socklen_t;
         let type_ok = unsafe {
@@ -480,7 +480,7 @@ mod platform {
             && peer_pid == unsafe { libc::getppid() }
     }
 
-    fn valid_shutdown_descriptor(fd: RawFd) -> bool {
+    pub(super) fn valid_shutdown_descriptor(fd: RawFd) -> bool {
         if !descriptor_exists(fd)
             || (unsafe { libc::fcntl(fd, libc::F_GETFL) }) & libc::O_ACCMODE != libc::O_RDONLY
         {

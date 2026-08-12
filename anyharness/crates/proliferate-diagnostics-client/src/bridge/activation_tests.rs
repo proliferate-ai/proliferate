@@ -22,6 +22,7 @@ use tempfile::TempDir;
 
 use super::platform::*;
 use super::*;
+use crate::bridge::wire::{CHILD_BRIDGE_RESERVED_FD, CHILD_SHUTDOWN_RESERVED_FD};
 
 fn tempdir_fd(mode: u32) -> (TempDir, OwnedFd) {
     let directory = tempfile::tempdir().expect("tempdir");
