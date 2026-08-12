@@ -61,8 +61,10 @@ pub(crate) struct SupportWindowMeta {
     pub(crate) completeness: SupportWindowCompleteness,
 }
 
-pub(crate) struct SupportWindowCandidateItem {
-    encoded: Vec<u8>,
+enum PreparedSupportWindowCandidate {
+    MetadataOversized,
+    EncodedOversized,
+    Item(Vec<u8>),
 }
 
 pub(crate) struct SupportWindowResult {
@@ -109,15 +111,15 @@ impl SessionService {
             request.limit,
             cancellation,
         )?;
-        let candidates = prepare_candidates(rows.candidates, cancellation, encode_item)?;
         select_bounded_window(
-            candidates,
+            rows.candidates,
             rows.has_more,
             request.limit,
             request.max_response_bytes,
             SupportWindowPresentationOrder::UpdatedDescIdAsc,
             false,
             cancellation,
+            encode_item,
         )
     }
 
@@ -144,15 +146,15 @@ impl SessionService {
         else {
             return Ok(None);
         };
-        let candidates = prepare_candidates(rows.candidates, cancellation, encode_item)?;
         select_bounded_window(
-            candidates,
+            rows.candidates,
             rows.has_more,
             request.limit,
             request.max_response_bytes,
             SupportWindowPresentationOrder::SeqAsc,
             true,
             cancellation,
+            encode_item,
         )
         .map(Some)
     }
@@ -180,56 +182,58 @@ impl SessionService {
         else {
             return Ok(None);
         };
-        let candidates = prepare_candidates(rows.candidates, cancellation, encode_item)?;
         select_bounded_window(
-            candidates,
+            rows.candidates,
             rows.has_more,
             request.limit,
             request.max_response_bytes,
             SupportWindowPresentationOrder::SeqAsc,
             true,
             cancellation,
+            encode_item,
         )
         .map(Some)
     }
 }
 
-fn prepare_candidates<T, F>(
-    candidates: Vec<SupportWindowCandidate<T>>,
+fn prepare_candidate<T, F>(
+    candidate: SupportWindowCandidate<T>,
     cancellation: &InterruptibleQuery,
-    mut serialize: F,
-) -> anyhow::Result<Vec<Option<SupportWindowCandidateItem>>>
+    serialize: &mut F,
+) -> anyhow::Result<PreparedSupportWindowCandidate>
 where
     F: FnMut(T) -> anyhow::Result<Vec<u8>>,
 {
-    let mut prepared = Vec::with_capacity(candidates.len());
-    for candidate in candidates {
-        cancellation.check_cancelled()?;
-        let item = match candidate {
-            SupportWindowCandidate::Oversized => None,
-            SupportWindowCandidate::Item(item) => serialize(item)
-                .map(|encoded| SupportWindowCandidateItem { encoded })
-                .map(Some)?
-                .filter(|item| item.encoded.len() <= SUPPORT_WINDOW_ITEM_BYTES),
-        };
-        prepared.push(item);
-    }
     cancellation.check_cancelled()?;
-    Ok(prepared)
+    match candidate {
+        SupportWindowCandidate::Oversized => Ok(PreparedSupportWindowCandidate::MetadataOversized),
+        SupportWindowCandidate::Item(item) => {
+            let encoded = serialize(item)?;
+            if encoded.len() > SUPPORT_WINDOW_ITEM_BYTES {
+                Ok(PreparedSupportWindowCandidate::EncodedOversized)
+            } else {
+                Ok(PreparedSupportWindowCandidate::Item(encoded))
+            }
+        }
+    }
 }
 
-fn select_bounded_window(
-    candidates: Vec<Option<SupportWindowCandidateItem>>,
+fn select_bounded_window<T, F>(
+    candidates: Vec<SupportWindowCandidate<T>>,
     has_more: bool,
     item_limit: usize,
     response_byte_limit: usize,
     presentation_order: SupportWindowPresentationOrder,
     reverse_for_presentation: bool,
     cancellation: &InterruptibleQuery,
-) -> anyhow::Result<SupportWindowResult> {
-    let omitted_oversized_items = candidates
+    mut serialize: F,
+) -> anyhow::Result<SupportWindowResult>
+where
+    F: FnMut(T) -> anyhow::Result<Vec<u8>>,
+{
+    let mut omitted_oversized_items = candidates
         .iter()
-        .filter(|candidate| candidate.is_none())
+        .filter(|candidate| matches!(candidate, SupportWindowCandidate::Oversized))
         .count();
     let mut selected = Vec::with_capacity(candidates.len());
     let mut selected_item_bytes = 0usize;
@@ -237,14 +241,19 @@ fn select_bounded_window(
 
     for candidate in candidates {
         cancellation.check_cancelled()?;
-        let Some(item) = candidate else {
-            continue;
-        };
         if selected.len() == item_limit {
             break;
         }
+        let item = match prepare_candidate(candidate, cancellation, &mut serialize)? {
+            PreparedSupportWindowCandidate::MetadataOversized => continue,
+            PreparedSupportWindowCandidate::EncodedOversized => {
+                omitted_oversized_items = omitted_oversized_items.saturating_add(1);
+                break;
+            }
+            PreparedSupportWindowCandidate::Item(encoded) => encoded,
+        };
         let prospective_count = selected.len() + 1;
-        let prospective_item_bytes = selected_item_bytes.saturating_add(item.encoded.len());
+        let prospective_item_bytes = selected_item_bytes.saturating_add(item.len());
         let admission_meta = window_meta(
             item_limit,
             response_byte_limit,
@@ -260,22 +269,32 @@ fn select_bounded_window(
             break;
         }
         selected_item_bytes = prospective_item_bytes;
-        selected.push(item.encoded);
+        selected.push(item);
     }
 
-    let completeness = if has_more || omitted_oversized_items > 0 || byte_excluded {
-        SupportWindowCompleteness::LimitUncertain
-    } else {
-        SupportWindowCompleteness::Complete
+    let meta = loop {
+        let completeness = if has_more || omitted_oversized_items > 0 || byte_excluded {
+            SupportWindowCompleteness::LimitUncertain
+        } else {
+            SupportWindowCompleteness::Complete
+        };
+        let meta = window_meta(
+            item_limit,
+            response_byte_limit,
+            selected.len(),
+            omitted_oversized_items,
+            presentation_order,
+            completeness,
+        );
+        if encoded_window_len(&meta, selected_item_bytes, selected.len())? <= response_byte_limit {
+            break meta;
+        }
+        let removed = selected
+            .pop()
+            .ok_or_else(|| anyhow::anyhow!("support-window metadata exceeds response limit"))?;
+        selected_item_bytes = selected_item_bytes.saturating_sub(removed.len());
+        byte_excluded = true;
     };
-    let meta = window_meta(
-        item_limit,
-        response_byte_limit,
-        selected.len(),
-        omitted_oversized_items,
-        presentation_order,
-        completeness,
-    );
     if reverse_for_presentation {
         selected.reverse();
     }
@@ -340,15 +359,15 @@ fn encoded_meta_len(meta: &SupportWindowMeta) -> anyhow::Result<usize> {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use super::*;
 
-    fn candidate(encoded: impl Into<Vec<u8>>) -> Option<SupportWindowCandidateItem> {
-        Some(SupportWindowCandidateItem {
-            encoded: encoded.into(),
-        })
+    fn candidate(encoded: impl Into<Vec<u8>>) -> SupportWindowCandidate<Vec<u8>> {
+        SupportWindowCandidate::Item(encoded.into())
     }
 
-    fn sized_candidate(bytes: usize) -> Option<SupportWindowCandidateItem> {
+    fn sized_candidate(bytes: usize) -> SupportWindowCandidate<Vec<u8>> {
         candidate(vec![b'x'; bytes])
     }
 
@@ -357,13 +376,14 @@ mod tests {
         let db = crate::persistence::Db::open_in_memory().expect("open DB");
         let (cancellation, guard) = db.begin_interruptible_query();
         let window = select_bounded_window(
-            Vec::new(),
+            Vec::<SupportWindowCandidate<Vec<u8>>>::new(),
             false,
             3,
             SUPPORT_WINDOW_MIN_RESPONSE_BYTES,
             SupportWindowPresentationOrder::UpdatedDescIdAsc,
             false,
             &cancellation,
+            |encoded| Ok(encoded),
         )
         .expect("select empty window");
         guard.disarm();
@@ -383,13 +403,17 @@ mod tests {
         let db = crate::persistence::Db::open_in_memory().expect("open DB");
         let (cancellation, guard) = db.begin_interruptible_query();
         let window = select_bounded_window(
-            vec![None, candidate(b"session-older".to_vec())],
+            vec![
+                SupportWindowCandidate::Oversized,
+                candidate(b"session-older".to_vec()),
+            ],
             false,
             2,
             SUPPORT_WINDOW_MIN_RESPONSE_BYTES,
             SupportWindowPresentationOrder::UpdatedDescIdAsc,
             false,
             &cancellation,
+            |encoded| Ok(encoded),
         )
         .expect("select bounded window");
         guard.disarm();
@@ -416,6 +440,7 @@ mod tests {
     fn response_byte_exclusion_stops_without_backfilling_an_older_candidate() {
         let db = crate::persistence::Db::open_in_memory().expect("open DB");
         let (cancellation, guard) = db.begin_interruptible_query();
+        let encoded_items = Cell::new(0);
         let window = select_bounded_window(
             vec![
                 sized_candidate(SUPPORT_WINDOW_MIN_RESPONSE_BYTES),
@@ -427,6 +452,10 @@ mod tests {
             SupportWindowPresentationOrder::SeqAsc,
             true,
             &cancellation,
+            |encoded| {
+                encoded_items.set(encoded_items.get() + 1);
+                Ok(encoded)
+            },
         )
         .expect("select response-bounded evidence window");
         guard.disarm();
@@ -436,6 +465,7 @@ mod tests {
             window.meta.completeness,
             SupportWindowCompleteness::LimitUncertain
         ));
+        assert_eq!(encoded_items.get(), 1, "older row must not be encoded");
     }
 
     #[test]
@@ -450,6 +480,7 @@ mod tests {
             SupportWindowPresentationOrder::SeqAsc,
             true,
             &cancellation,
+            |encoded| Ok(encoded),
         )
         .expect("select item-bounded evidence window");
         guard.disarm();
@@ -462,20 +493,58 @@ mod tests {
     }
 
     #[test]
-    fn exact_encoded_item_size_turns_normalization_expansion_into_an_omission() {
-        let db = crate::persistence::Db::open_in_memory().expect("open DB");
-        let (cancellation, guard) = db.begin_interruptible_query();
+    fn post_admission_expansion_stops_shared_selection_without_backfilling() {
         let normalized =
             serde_json::to_vec(&"x".repeat(SUPPORT_WINDOW_ITEM_BYTES)).expect("encode valid JSON");
         assert!(normalized.len() > SUPPORT_WINDOW_ITEM_BYTES);
-        let prepared = prepare_candidates(
-            vec![SupportWindowCandidate::Item(true)],
-            &cancellation,
-            |_| Ok(normalized.clone()),
-        )
-        .expect("prepare exact encoded item");
-        guard.disarm();
-        assert!(matches!(prepared.as_slice(), [None]));
+        for (kind, presentation_order, reverse_for_presentation) in [
+            (
+                "session",
+                SupportWindowPresentationOrder::UpdatedDescIdAsc,
+                false,
+            ),
+            ("event", SupportWindowPresentationOrder::SeqAsc, true),
+            ("raw", SupportWindowPresentationOrder::SeqAsc, true),
+        ] {
+            let db = crate::persistence::Db::open_in_memory().expect("open DB");
+            let (cancellation, guard) = db.begin_interruptible_query();
+            let encoded_items = Cell::new(0);
+            let window = select_bounded_window(
+                vec![candidate(b"newest".to_vec()), candidate(b"older".to_vec())],
+                false,
+                2,
+                SUPPORT_WINDOW_MIN_RESPONSE_BYTES,
+                presentation_order,
+                reverse_for_presentation,
+                &cancellation,
+                |item| {
+                    encoded_items.set(encoded_items.get() + 1);
+                    if item.as_slice() == b"newest" {
+                        Ok(normalized.clone())
+                    } else {
+                        Ok(item)
+                    }
+                },
+            )
+            .expect("select exact-encoded window");
+            guard.disarm();
+
+            assert!(window.items.is_empty(), "{kind}");
+            assert_eq!(window.meta.returned_items, 0, "{kind}");
+            assert_eq!(window.meta.omitted_oversized_items, 1, "{kind}");
+            assert!(
+                matches!(
+                    window.meta.completeness,
+                    SupportWindowCompleteness::LimitUncertain
+                ),
+                "{kind}"
+            );
+            assert_eq!(
+                encoded_items.get(),
+                1,
+                "{kind} must not inspect the older row"
+            );
+        }
     }
 
     fn assert_oversized_evidence_candidate_is_omitted(is_event: bool) {
@@ -483,13 +552,18 @@ mod tests {
         let (cancellation, guard) = db.begin_interruptible_query();
         let item = |seq| format!("{}:{seq}", if is_event { "event" } else { "raw" }).into_bytes();
         let window = select_bounded_window(
-            vec![None, candidate(item(2)), candidate(item(1))],
+            vec![
+                SupportWindowCandidate::Oversized,
+                candidate(item(2)),
+                candidate(item(1)),
+            ],
             false,
             3,
             SUPPORT_WINDOW_MIN_RESPONSE_BYTES,
             SupportWindowPresentationOrder::SeqAsc,
             true,
             &cancellation,
+            |encoded| Ok(encoded),
         )
         .expect("select bounded evidence window");
         guard.disarm();
