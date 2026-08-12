@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { UserAvatar } from "#product/primitives/UserAvatar";
-import { Badge } from "#product/primitives/Badge";
 
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
@@ -44,7 +43,6 @@ export interface AccountSettingsPaneProps {
   displayName: string;
   email: string;
   avatarUrl?: string | null;
-  planLabel?: string | null;
   profileSummary: string;
   githubLabel: string;
   providers: AccountProviderView[];
@@ -72,7 +70,6 @@ export function AccountSettingsPane({
   displayName,
   email,
   avatarUrl,
-  planLabel,
   profileSummary,
   githubLabel,
   providers,
@@ -81,7 +78,7 @@ export function AccountSettingsPane({
   providersTitle = "Sign-in methods",
   providersDescription,
   connectedServicesTitle = "Connected services",
-  connectedServicesDescription,
+  connectedServicesDescription = "Authorize services Proliferate uses inside managed cloud sandboxes.",
   connectedServices = [],
   passwordCredential,
   error,
@@ -104,7 +101,6 @@ export function AccountSettingsPane({
       <AccountProfileHeader
         avatarUrl={avatarUrl ?? null}
         displayName={displayName}
-        planLabel={planLabel}
         email={email}
         githubLabel={githubLabel}
         profileSummary={profileSummary}
@@ -145,7 +141,6 @@ export function AccountSettingsPane({
 function AccountProfileHeader({
   avatarUrl,
   displayName,
-  planLabel,
   email,
   githubLabel,
   profileSummary,
@@ -153,7 +148,6 @@ function AccountProfileHeader({
 }: {
   avatarUrl: string | null;
   displayName: string;
-  planLabel?: string | null;
   email: string;
   githubLabel: string;
   profileSummary: string;
@@ -173,16 +167,9 @@ function AccountProfileHeader({
         className="size-16 shrink-0 rounded-full text-heading font-medium"
       />
       <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-body-emphasis font-medium text-foreground">
-            {displayName}
-          </span>
-          {planLabel ? (
-            <Badge tone="neutral" className="shrink-0 whitespace-nowrap">
-              {planLabel}
-            </Badge>
-          ) : null}
-        </div>
+        <span className="block truncate text-body-emphasis font-medium text-foreground">
+          {displayName}
+        </span>
         <div className="truncate text-ui-sm text-muted-foreground">{email}</div>
         {hasGitHubHandle ? (
           <div className="flex items-center gap-1.5 text-ui-sm text-muted-foreground">

@@ -125,7 +125,7 @@ export function OrganizationIntegrationsPane() {
       ) : (
         <SettingsSection title="Available integrations">
           {showSearch ? (
-            <div className="px-3.5 pt-3.5">
+            <div className="px-3.5 pt-3.5 pb-3.5">
               <Input
                 aria-label="Search integrations"
                 className="h-8 px-2"

@@ -47,41 +47,43 @@ export function OrganizationMembersList({
   return (
     <div className="w-full overflow-hidden">
       <div className="w-full">
-        <div className={`${PEOPLE_GRID_CLASS} border-b border-border-light px-3.5 pb-3 text-ui-sm text-muted-foreground`}>
+        <div className={`${PEOPLE_GRID_CLASS} border-b border-border-light px-3.5 py-3 text-ui-sm text-muted-foreground`}>
           <span>Name</span>
           <span>Date joined</span>
           <span>Role</span>
           <span>Authenticated with</span>
           <span aria-label="Actions" />
         </div>
-        {rows.map((row) => row.kind === "member" && row.member ? (
-          <MemberRow
-            key={row.key}
-            row={row}
-            member={row.member}
-            canManage={canManage}
-            canManageOwners={canManageOwners}
-            currentUserId={currentUserId}
-            updating={updating}
-            onRoleChange={onRoleChange}
-            onRemove={onRemove}
-          />
-        ) : row.invitation ? (
-          <InvitationRow
-            key={row.key}
-            row={row}
-            invitation={row.invitation}
-            canManage={canManage}
-            updating={updating}
-            onRevokeInvitation={onRevokeInvitation}
-          />
-        ) : null)}
-        {hasRows && rows.length === 0 ? (
-          <EmptyPeopleRow label="No members match these filters." />
-        ) : null}
-        {!hasRows ? (
-          <EmptyPeopleRow label="No members yet." />
-        ) : null}
+        <div className="divide-y divide-border-light">
+          {rows.map((row) => row.kind === "member" && row.member ? (
+            <MemberRow
+              key={row.key}
+              row={row}
+              member={row.member}
+              canManage={canManage}
+              canManageOwners={canManageOwners}
+              currentUserId={currentUserId}
+              updating={updating}
+              onRoleChange={onRoleChange}
+              onRemove={onRemove}
+            />
+          ) : row.invitation ? (
+            <InvitationRow
+              key={row.key}
+              row={row}
+              invitation={row.invitation}
+              canManage={canManage}
+              updating={updating}
+              onRevokeInvitation={onRevokeInvitation}
+            />
+          ) : null)}
+          {hasRows && rows.length === 0 ? (
+            <EmptyPeopleRow label="No members match these filters." />
+          ) : null}
+          {!hasRows ? (
+            <EmptyPeopleRow label="No members yet." />
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -113,7 +115,7 @@ function MemberRow({
   const showStatusBadge = status.label !== "Active";
 
   return (
-    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border-light px-3.5 py-5 last:border-b-0`}>
+    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] px-3.5 py-5`}>
       <div className="flex min-w-0 items-center gap-3">
         <Avatar member={member} />
         <div className="min-w-0">
@@ -201,7 +203,7 @@ function InvitationRow({
   }
 
   return (
-    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border-light px-3.5 py-5 last:border-b-0`}>
+    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] px-3.5 py-5`}>
       <div className="flex min-w-0 items-center gap-3">
         {/* ui-foundation-escalation: bg-foreground/10 mapped to bg-muted (closest
             semantic role for a muted icon-badge circle; no exact 10%-alpha
@@ -269,7 +271,7 @@ function MemberMeta({ value }: { value: ReactNode }) {
 
 function EmptyPeopleRow({ label }: { label: string }) {
   return (
-    <div className="border-b border-border-light px-3.5 py-6 text-center text-ui-sm text-muted-foreground last:border-b-0">
+    <div className="px-3.5 py-6 text-center text-ui-sm text-muted-foreground">
       {label}
     </div>
   );

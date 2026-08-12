@@ -304,13 +304,13 @@ function OrgUsageTable({
   return (
     <SettingsSection title="Usage by member" description="Select a member to see their usage over time.">
       {loading ? (
-        <div className="space-y-2 py-3">
+        <div className="space-y-2 px-3.5 py-3">
           {[0, 1, 2].map((row) => (
             <SkeletonBlock key={row} className="h-10 w-full" style={shimmerDelay(row)} />
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="py-6 text-ui-sm text-muted-foreground">No usage recorded in this range.</div>
+        <div className="px-6 py-[30px] text-center text-ui text-muted-foreground">No usage recorded in this range.</div>
       ) : (
         rows.map((row) => (
           <Button

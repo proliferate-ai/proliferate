@@ -1,6 +1,5 @@
 import type { ChangeEvent } from "react";
 
-import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import {
   EnvironmentSearchSelect,
@@ -129,31 +128,38 @@ export function CloudEnvironmentConfigSection({
             className="w-full"
           />
         </SettingsRow>
-
-        <div className="flex items-center justify-end gap-2 px-3.5 py-[13px]">
-          <Badge tone={statusTone}>{statusLabel}</Badge>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={revertDisabled || saving}
-            onClick={onRevert}
-          >
-            Revert
-          </Button>
-          <Button
-            type="button"
-            loading={saving}
-            disabled={saveDisabled}
-            onClick={onSave}
-          >
-            Save
-          </Button>
-        </div>
       </SettingsSection>
 
       {error ? (
-        <p className="mt-2 text-ui-sm text-destructive">{error}</p>
+        <p className="border-t border-border pt-3 text-ui-sm text-destructive">{error}</p>
       ) : null}
+      <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
+        <span
+          className={
+            statusTone === "destructive"
+              ? "text-ui-sm text-destructive"
+              : "text-ui-sm text-muted-foreground"
+          }
+        >
+          {statusLabel}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={revertDisabled || saving}
+          onClick={onRevert}
+        >
+          Revert
+        </Button>
+        <Button
+          type="button"
+          loading={saving}
+          disabled={saveDisabled}
+          onClick={onSave}
+        >
+          Save
+        </Button>
+      </div>
     </div>
   );
 }

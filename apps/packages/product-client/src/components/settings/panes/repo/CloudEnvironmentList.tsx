@@ -1,6 +1,5 @@
 import { Cloud, Folder, Plus } from "lucide-react";
 
-import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
@@ -40,12 +39,14 @@ export function CloudEnvironmentList({
   const hasItems = cloudEnvironments.length > 0;
   const unavailableRow = cloudUnavailableReason ? (
     <SettingsRow
+      key="unavailable"
       label="Cloud environments unavailable"
       description={cloudUnavailableReason}
     />
   ) : null;
   const errorRow = !cloudUnavailableReason && cloudErrorMessage ? (
     <SettingsRow
+      key="error"
       label="Couldn't load cloud environments"
       description={cloudErrorMessage}
     >
@@ -70,20 +71,23 @@ export function CloudEnvironmentList({
         surface={usingEmptyState ? "plain" : "group"}
       >
         {hasItems ? (
-          <>
-            {cloudEnvironments.map((environment) => (
+          // Direct array of children, not a fragment: SettingsGroup dividers
+          // key off Children.toArray(children), which treats a single
+          // fragment as one child and drops dividers between rows inside it.
+          [
+            ...cloudEnvironments.map((environment) => (
               <EnvironmentRow
                 key={environment.id}
                 environment={environment}
                 onSelectCloudEnvironment={onSelectCloudEnvironment}
               />
-            ))}
-            {unavailableRow}
-            {errorRow}
-            {loadingCloudEnvironments ? (
-              <SettingsRow label="Cloud environments" description="Loading…" />
-            ) : null}
-          </>
+            )),
+            unavailableRow,
+            errorRow,
+            loadingCloudEnvironments ? (
+              <SettingsRow key="loading" label="Cloud environments" description="Loading…" />
+            ) : null,
+          ].filter(Boolean)
         ) : unavailableRow ? (
           unavailableRow
         ) : errorRow ? (
@@ -139,12 +143,12 @@ function EnvironmentRow({
       )}
       description={environment.description}
     >
-      <Badge tone="neutral">Cloud</Badge>
+      <span className="text-ui-sm text-muted-foreground">Cloud</span>
       {environment.cloudStatus === "error" ? (
-        <Badge tone="destructive">Setup failed</Badge>
+        <span className="text-ui-sm text-muted-foreground">Setup failed</span>
       ) : null}
       {environment.cloudStatus === "pending" || environment.cloudStatus === "running" ? (
-        <Badge tone="info">Setting up</Badge>
+        <span className="text-ui-sm text-muted-foreground">Setting up</span>
       ) : null}
       <Button
         type="button"

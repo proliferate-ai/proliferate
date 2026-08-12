@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Copy, Trash } from "#product/primitives/icons/core";
 import { RefreshCw } from "#product/primitives/icons/platform";
-import { ShieldCheckFilled } from "#product/primitives/icons/status";
 import { Button } from "#product/primitives/Button";
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { Input } from "#product/primitives/Input";
@@ -104,9 +103,6 @@ export function OrganizationSsoSettingsSurface({
       <div className="space-y-2">
         <SettingsSection title="Connection">
           <div className="flex items-center gap-3.5 px-3.5 py-[13px]">
-            <div className="flex w-5 shrink-0 items-center justify-center">
-              <ShieldCheckFilled className="icon-paired text-foreground" />
-            </div>
             <div className="min-w-0 flex-1">
               <div className="text-ui text-foreground">
                 {connection?.displayName || "OIDC connection"}

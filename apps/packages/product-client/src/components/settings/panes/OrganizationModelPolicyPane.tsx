@@ -191,20 +191,19 @@ export function OrganizationModelPolicyPane() {
                 No conflicts with current policy.
               </div>
             ) : (
-              <table className="w-full text-left">
+              <table className="w-full divide-y divide-border-light text-left">
                 <thead>
-                  <tr className="border-b border-border-light">
+                  <tr>
                     <th className="px-3.5 pb-2 pt-3 text-left text-ui-sm font-normal text-muted-foreground">Member</th>
                     <th className="px-3.5 pb-2 pt-3 text-left text-ui-sm font-normal text-muted-foreground">Harness</th>
                     <th className="px-3.5 pb-2 pt-3 text-left text-ui-sm font-normal text-muted-foreground">Surface</th>
                     <th className="px-3.5 pb-2 pt-3 text-left text-ui-sm font-normal text-muted-foreground">Route</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border-light">
                   {violationRows.map((violation) => (
                     <tr
                       key={`${violation.userId}-${violation.harnessKind}-${violation.surface}`}
-                      className="border-b border-border-light last:border-b-0"
                     >
                       <td className="px-3.5 py-2.5 text-ui text-foreground">
                         {violation.displayName ?? violation.email ?? violation.userId}

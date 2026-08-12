@@ -229,7 +229,7 @@ export function UserIntegrationsPane({ focus = {} }: UserIntegrationsPaneProps) 
           ) : null}
         >
           {filteredIntegrations.length === 0 ? (
-            <p className="px-1 py-3 text-ui-sm text-muted-foreground">No integrations found</p>
+            <p className="px-3.5 py-3 text-ui-sm text-muted-foreground">No integrations found</p>
           ) : (
             filteredIntegrations.map((integration) => (
               <IntegrationRow

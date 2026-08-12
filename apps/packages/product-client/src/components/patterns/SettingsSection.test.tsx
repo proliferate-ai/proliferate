@@ -99,5 +99,10 @@ describe("SettingsRow", () => {
 
     const row = container.firstElementChild;
     expect(row?.className).not.toContain("border-t");
+    expect(row?.className).not.toContain("border-b");
+    // Divider ownership belongs to SettingsGroup — a row should never carry
+    // any border-* hairline class (color or side), including variant-prefixed
+    // ones like `last:border-b-0`.
+    expect(row?.className).not.toMatch(/\bborder-\S*/);
   });
 });
