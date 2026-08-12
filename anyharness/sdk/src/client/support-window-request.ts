@@ -42,7 +42,7 @@ function assignRequestOption(
       return;
     case "signal":
       if (value !== undefined && !isNativeAbortSignal(value)) {
-        throw invalidRequest("signal must be an AbortSignal");
+        throw invalidRequest("signal must be a local native AbortSignal");
       }
       output.signal = value as AbortSignal | undefined;
       return;

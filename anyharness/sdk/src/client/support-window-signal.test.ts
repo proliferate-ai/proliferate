@@ -13,6 +13,27 @@ const cancellationProperties = [
 ] as const;
 
 describe("support-window AbortSignal safety", () => {
+  it.each(["transparent", "forwarding", "lying", "revoked"] as const)(
+    "rejects a %s signal proxy before traps, fetch, or body cancellation",
+    async (kind) => {
+      const controller = new AbortController();
+      const trap = vi.fn();
+      const signal = proxySignal(kind, controller.signal, trap);
+      const bodyCancel = vi.fn();
+      const fetch = vi.fn(async () => responseForEmptyEventWindow(bodyCancel));
+      const client = clientUsing(fetch);
+
+      await expect(client.listEventsSupportWindow(
+        "session-1",
+        eventOptions(signal),
+      )).rejects.toThrow("signal must be a local native AbortSignal");
+
+      expect(trap).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+      expect(bodyCancel).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(cancellationProperties)(
     "rejects a branded signal with an own %s accessor without invoking it or fetch",
     async (property) => {
@@ -37,7 +58,7 @@ describe("support-window AbortSignal safety", () => {
     },
   );
 
-  it("rejects a branded signal with a custom prototype without invoking it or fetch", async () => {
+  it("pins signals to the exact local prototype without invoking inherited accessors", async () => {
     const controller = new AbortController();
     const inheritedAccessor = vi.fn(() => {
       throw new Error("must not invoke inherited accessor");
@@ -144,8 +165,46 @@ function eventOptions(signal: AbortSignal) {
   } as const;
 }
 
-function responseForEmptyEventWindow(): Response {
-  return new Response(JSON.stringify({
+function proxySignal(
+  kind: "transparent" | "forwarding" | "lying" | "revoked",
+  signal: AbortSignal,
+  trap: ReturnType<typeof vi.fn>,
+): AbortSignal {
+  if (kind === "transparent") {
+    return new Proxy(signal, {});
+  }
+  const handler: ProxyHandler<AbortSignal> = {
+    get(target, property) {
+      trap(`get:${String(property)}`);
+      return Reflect.get(target, property, target) as unknown;
+    },
+    getOwnPropertyDescriptor() {
+      trap("getOwnPropertyDescriptor");
+      return undefined;
+    },
+    getPrototypeOf() {
+      trap("getPrototypeOf");
+      return AbortSignal.prototype;
+    },
+  };
+  if (kind === "forwarding") {
+    return new Proxy(signal, handler);
+  }
+  if (kind === "lying") {
+    Object.setPrototypeOf(signal, Object.create(AbortSignal.prototype));
+    Object.defineProperty(signal, "aborted", {
+      configurable: true,
+      get: trap,
+    });
+    return new Proxy(signal, handler);
+  }
+  const revocable = Proxy.revocable(signal, handler);
+  revocable.revoke();
+  return revocable.proxy;
+}
+
+function responseForEmptyEventWindow(cancel?: () => void): Response {
+  const bytes = new TextEncoder().encode(JSON.stringify({
     window: {
       schemaVersion: 1,
       selection: "newest_matching",
@@ -157,5 +216,12 @@ function responseForEmptyEventWindow(): Response {
       completeness: "complete",
     },
     items: [],
+  }));
+  return new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+    cancel,
   }));
 }

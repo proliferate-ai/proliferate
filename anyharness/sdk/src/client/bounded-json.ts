@@ -55,7 +55,9 @@ export async function requestBoundedJson(
   assertResponseByteLimit(limits.successBytes, "successBytes");
   assertResponseByteLimit(limits.errorBytes, "errorBytes");
   if (signal !== undefined && !isNativeAbortSignal(signal)) {
-    throw new TypeError("signal must be an unmodified native AbortSignal");
+    throw new TypeError(
+      "signal must be an unmodified local native AbortSignal",
+    );
   }
 
   const response = await request(signal);
@@ -235,6 +237,13 @@ function readWithAbort(
 
   return new Promise((resolve, reject) => {
     let settled = false;
+    const removeAbortListener = () => {
+      try {
+        removeNativeAbortListener(signal, onAbort);
+      } catch {
+        // Cleanup failure must not replace the read or abort result.
+      }
+    };
     const onAbort = () => {
       if (settled) {
         return;
@@ -242,18 +251,39 @@ function readWithAbort(
       settled = true;
       const reason = abortReason(signal);
       cancelReader(reader, reason);
-      removeNativeAbortListener(signal, onAbort);
+      removeAbortListener();
       reject(reason);
     };
 
-    addNativeAbortListener(signal, onAbort);
-    reader.read().then(
+    try {
+      addNativeAbortListener(signal, onAbort);
+      if (readNativeAbortSignalAborted(signal)) {
+        onAbort();
+        return;
+      }
+    } catch (error) {
+      settled = true;
+      removeAbortListener();
+      reject(error);
+      return;
+    }
+
+    let readResult: Promise<ReadableStreamReadResult<Uint8Array>>;
+    try {
+      readResult = reader.read();
+    } catch (error) {
+      settled = true;
+      removeAbortListener();
+      reject(error);
+      return;
+    }
+    readResult.then(
       (result) => {
         if (settled) {
           return;
         }
         settled = true;
-        removeNativeAbortListener(signal, onAbort);
+        removeAbortListener();
         resolve(result);
       },
       (error) => {
@@ -261,7 +291,7 @@ function readWithAbort(
           return;
         }
         settled = true;
-        removeNativeAbortListener(signal, onAbort);
+        removeAbortListener();
         reject(error);
       },
     );

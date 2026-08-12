@@ -6,6 +6,13 @@ import {
 } from "./bounded-json.js";
 
 const encoder = new TextEncoder();
+const getEventListeners = (
+  Reflect.get(globalThis, "process") as {
+    getBuiltinModule(id: string): {
+      getEventListeners(target: EventTarget, type: string): unknown[];
+    };
+  }
+).getBuiltinModule("events").getEventListeners;
 const limits = (successBytes: number, errorBytes = successBytes) => ({
   successBytes,
   errorBytes,
@@ -92,6 +99,22 @@ describe("requestBoundedJson", () => {
     expect(cancellation.cancel).toHaveBeenCalledOnce();
   });
 
+  it("preserves the bounded error when body cancellation rejects", async () => {
+    const cancel = vi.fn(async () => {
+      throw new Error("body cancellation failed");
+    });
+    const response = new Response(new ReadableStream<Uint8Array>({ cancel }), {
+      headers: { "content-length": "65" },
+    });
+
+    const error = await captureRejection(
+      requestBoundedJson(async () => response, limits(64)),
+    );
+
+    expect(error).toMatchObject({ failure: "response_too_large" });
+    expect(cancel).toHaveBeenCalledWith(error);
+  });
+
   it("rejects incremental stream overflow and cancels the reader", async () => {
     const cancellation = cancellationResponse({
       chunks: ["{\"value\":", "\"too large\"}"],
@@ -104,6 +127,25 @@ describe("requestBoundedJson", () => {
       maxResponseBytes: 10,
     });
     expect(cancellation.cancel).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the overflow error when reader cancellation rejects", async () => {
+    const cancel = vi.fn(async () => {
+      throw new Error("reader cancellation failed");
+    });
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode("too large"));
+      },
+      cancel,
+    });
+
+    const error = await captureRejection(
+      requestBoundedJson(async () => new Response(stream), limits(2)),
+    );
+
+    expect(error).toMatchObject({ failure: "response_too_large" });
+    expect(cancel).toHaveBeenCalledWith(error);
   });
 
   it("enforces incremental overflow on non-success response bodies", async () => {
@@ -243,6 +285,24 @@ describe("requestBoundedJson", () => {
     expect(request).toHaveBeenCalledWith(controller.signal);
   });
 
+  it.each(["transparent", "forwarding", "lying", "revoked"] as const)(
+    "rejects a %s signal proxy before traps, request, or body cancellation",
+    async (kind) => {
+      const trap = vi.fn();
+      const signal = proxySignal(kind, new AbortController().signal, trap);
+      const cancellation = closedCancellationResponse("{}");
+      const request = vi.fn(async () => cancellation.response);
+
+      await expect(
+        requestBoundedJson(request, limits(64), signal),
+      ).rejects.toThrow("unmodified local native AbortSignal");
+
+      expect(trap).not.toHaveBeenCalled();
+      expect(request).not.toHaveBeenCalled();
+      expect(cancellation.cancel).not.toHaveBeenCalled();
+    },
+  );
+
   it("cancels a returned body for an already-aborted request", async () => {
     const controller = new AbortController();
     const reason = new DOMException("cancelled", "AbortError");
@@ -255,6 +315,7 @@ describe("requestBoundedJson", () => {
     ).rejects.toBe(reason);
     expect(request).toHaveBeenCalledWith(controller.signal);
     expect(cancellation.cancel).toHaveBeenCalledWith(reason);
+    expect(abortListenerCount(controller.signal)).toBe(0);
   });
 
   it("cancels an in-flight reader when the request is aborted", async () => {
@@ -265,14 +326,8 @@ describe("requestBoundedJson", () => {
     const waitingForNextChunk = new Promise<void>((resolve) => {
       markWaitingForNextChunk = resolve;
     });
-    let pullCount = 0;
     const stream = new ReadableStream<Uint8Array>({
-      pull(streamController) {
-        pullCount += 1;
-        if (pullCount === 1) {
-          streamController.enqueue(encoder.encode("{"));
-          return;
-        }
+      pull() {
         markWaitingForNextChunk?.();
       },
       cancel,
@@ -285,10 +340,99 @@ describe("requestBoundedJson", () => {
       controller.signal,
     );
     await waitingForNextChunk;
+    expect(abortListenerCount(controller.signal)).toBe(1);
     controller.abort(reason);
 
     await expect(result).rejects.toBe(reason);
     expect(cancel).toHaveBeenCalledWith(reason);
+    expect(abortListenerCount(controller.signal)).toBe(0);
+  });
+
+  it("removes the abort listener after a successful body read", async () => {
+    const controller = new AbortController();
+    const cancellation = closedCancellationResponse("{}");
+
+    await expect(requestBoundedJson(
+      async () => cancellation.response,
+      limits(64),
+      controller.signal,
+    )).resolves.toMatchObject({ body: {} });
+
+    expect(abortListenerCount(controller.signal)).toBe(0);
+    controller.abort(new DOMException("late", "AbortError"));
+    expect(cancellation.cancel).not.toHaveBeenCalled();
+  });
+
+  it("removes the abort listener while preserving a body read error", async () => {
+    const controller = new AbortController();
+    const readError = new Error("bounded body read failed");
+    const cancel = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({
+      pull(streamController) {
+        streamController.error(readError);
+      },
+      cancel,
+    });
+
+    await expect(requestBoundedJson(
+      async () => new Response(stream),
+      limits(64),
+      controller.signal,
+    )).rejects.toBe(readError);
+
+    expect(abortListenerCount(controller.signal)).toBe(0);
+    controller.abort(new DOMException("late", "AbortError"));
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it("preserves the abort reason when reader cancellation rejects", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("deadline", "AbortError");
+    const cancelFailure = new Error("reader cancellation failed");
+    let markPulling: (() => void) | undefined;
+    const pulling = new Promise<void>((resolve) => {
+      markPulling = resolve;
+    });
+    const cancel = vi.fn(async () => {
+      throw cancelFailure;
+    });
+    const stream = new ReadableStream<Uint8Array>({
+      pull() {
+        markPulling?.();
+      },
+      cancel,
+    });
+
+    const result = requestBoundedJson(
+      async () => new Response(stream),
+      limits(64),
+      controller.signal,
+    );
+    await pulling;
+    controller.abort(reason);
+
+    await expect(result).rejects.toBe(reason);
+    expect(cancel).toHaveBeenCalledWith(reason);
+    expect(abortListenerCount(controller.signal)).toBe(0);
+  });
+
+  it("preserves a pre-abort reason when body cancellation rejects", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("cancelled", "AbortError");
+    const cancel = vi.fn(async () => {
+      throw new Error("body cancellation failed");
+    });
+    const response = new Response(new ReadableStream<Uint8Array>({ cancel }));
+    controller.abort(reason);
+
+    await expect(requestBoundedJson(
+      async () => response,
+      limits(64),
+      controller.signal,
+    )).rejects.toBe(reason);
+
+    expect(cancel).toHaveBeenCalledWith(reason);
+    expect(abortListenerCount(controller.signal)).toBe(0);
   });
 
   it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
@@ -363,4 +507,70 @@ function cancellationResponse(input: {
     }),
     cancel,
   };
+}
+
+function closedCancellationResponse(body: string): {
+  response: Response;
+  cancel: ReturnType<typeof vi.fn>;
+} {
+  const cancel = vi.fn();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(body));
+      controller.close();
+    },
+    cancel,
+  });
+  return { response: new Response(stream), cancel };
+}
+
+function proxySignal(
+  kind: "transparent" | "forwarding" | "lying" | "revoked",
+  signal: AbortSignal,
+  trap: ReturnType<typeof vi.fn>,
+): AbortSignal {
+  if (kind === "transparent") {
+    return new Proxy(signal, {});
+  }
+  const handler: ProxyHandler<AbortSignal> = {
+    get(target, property) {
+      trap(`get:${String(property)}`);
+      return Reflect.get(target, property, target) as unknown;
+    },
+    getOwnPropertyDescriptor() {
+      trap("getOwnPropertyDescriptor");
+      return undefined;
+    },
+    getPrototypeOf() {
+      trap("getPrototypeOf");
+      return AbortSignal.prototype;
+    },
+  };
+  if (kind === "forwarding") {
+    return new Proxy(signal, handler);
+  }
+  if (kind === "lying") {
+    Object.setPrototypeOf(signal, Object.create(AbortSignal.prototype));
+    Object.defineProperty(signal, "aborted", {
+      configurable: true,
+      get: trap,
+    });
+    return new Proxy(signal, handler);
+  }
+  const revocable = Proxy.revocable(signal, handler);
+  revocable.revoke();
+  return revocable.proxy;
+}
+
+function abortListenerCount(signal: AbortSignal): number {
+  return Reflect.apply(getEventListeners, undefined, [signal, "abort"]).length;
+}
+
+async function captureRejection(result: Promise<unknown>): Promise<unknown> {
+  try {
+    await result;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("Expected request to reject");
 }
