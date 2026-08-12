@@ -1,6 +1,6 @@
 import type { ProductStorage } from "@proliferate/product-client/host/product-host";
 
-import { getPreferencesStore } from "@/lib/access/tauri/store";
+import { getPreferencesStore, type StoreInstance } from "@/lib/access/tauri/store";
 
 const LEGACY_SUPPORT_REPORT_QUEUE_KEY = "proliferate.supportReportJobs.v1";
 const DURABLE_SUPPORT_REPORT_QUEUE_KEYS = new Set([
@@ -8,9 +8,81 @@ const DURABLE_SUPPORT_REPORT_QUEUE_KEYS = new Set([
   "proliferate.supportReportJobs.v2.pending",
 ]);
 const TAURI_STORE_RETRY_MESSAGE = "Tauri preferences storage is temporarily unavailable.";
+const LEGACY_SUPPORT_REPORT_QUEUE_CONFLICT_MESSAGE =
+  "Legacy support report queue copies conflict.";
+const LEGACY_SUPPORT_REPORT_QUEUE_INVALID_MESSAGE =
+  "Legacy support report queue contains a non-JSON value.";
+
+interface LegacySupportReportQueueCopies {
+  value: string | null;
+  pluginValue: string | null;
+  rawValue: string | null;
+  nestedValue: string | null;
+}
 
 function isDurableSupportReportQueueKey(key: string): boolean {
   return DURABLE_SUPPORT_REPORT_QUEUE_KEYS.has(key);
+}
+
+function normalizeLegacySupportReportQueueValue(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) {
+    throw new Error(LEGACY_SUPPORT_REPORT_QUEUE_INVALID_MESSAGE);
+  }
+  return serialized;
+}
+
+function resolveLegacySupportReportQueueValue(
+  values: ReadonlyArray<string | null>,
+): string | null {
+  let resolved: string | null = null;
+  for (const value of values) {
+    if (value === null) {
+      continue;
+    }
+    if (resolved !== null && resolved !== value) {
+      throw new Error(LEGACY_SUPPORT_REPORT_QUEUE_CONFLICT_MESSAGE);
+    }
+    resolved = value;
+  }
+  return resolved;
+}
+
+async function readLegacySupportReportQueueCopies(
+  store: StoreInstance,
+): Promise<LegacySupportReportQueueCopies> {
+  if (store.backend === "tauri_fallback") {
+    // A plugin-backed V1 value may still exist. Missing fallback bytes cannot
+    // prove an empty queue, so hydration must retry after plugin recovery.
+    throw new Error(TAURI_STORE_RETRY_MESSAGE);
+  }
+
+  const pluginValue = normalizeLegacySupportReportQueueValue(
+    store.backend === "tauri"
+      ? await store.get<unknown>(LEGACY_SUPPORT_REPORT_QUEUE_KEY)
+      : undefined,
+  );
+  const rawValue = window.localStorage.getItem(LEGACY_SUPPORT_REPORT_QUEUE_KEY);
+  const nestedValue = normalizeLegacySupportReportQueueValue(
+    await store.readBrowserFallbackStrict<unknown>(LEGACY_SUPPORT_REPORT_QUEUE_KEY),
+  );
+
+  return {
+    value: resolveLegacySupportReportQueueValue([
+      pluginValue,
+      rawValue,
+      nestedValue,
+    ]),
+    pluginValue,
+    rawValue,
+    nestedValue,
+  };
 }
 
 // ProductStorage backed by the Desktop Tauri preferences store — the same
@@ -44,32 +116,13 @@ export const desktopProductStorage: ProductStorage = {
     if (!store) {
       return window.localStorage.getItem(key);
     }
-    if (key === LEGACY_SUPPORT_REPORT_QUEUE_KEY && store.backend === "tauri_fallback") {
-      // A plugin-backed V1 value may still exist. Missing fallback bytes cannot
-      // prove an empty queue, so hydration must retry after plugin recovery.
-      throw new Error(TAURI_STORE_RETRY_MESSAGE);
-    }
-    if (key === LEGACY_SUPPORT_REPORT_QUEUE_KEY && store.backend === "browser") {
-      const rawValue = window.localStorage.getItem(key);
-      if (rawValue !== null) {
-        return rawValue;
-      }
+    if (key === LEGACY_SUPPORT_REPORT_QUEUE_KEY) {
+      const copies = await readLegacySupportReportQueueCopies(store);
+      return copies.value;
     }
     const value = await store.get<unknown>(key);
     if (value === undefined || value === null) {
-      // Store miss: prefer the raw recovery key used by current fallback
-      // writes, then recover a pre-repair nested fallback value if one exists.
-      const rawValue = window.localStorage.getItem(key);
-      if (rawValue !== null || key !== LEGACY_SUPPORT_REPORT_QUEUE_KEY) {
-        return rawValue;
-      }
-      const nestedValue = await store.readBrowserFallbackStrict<unknown>(key);
-      if (nestedValue === undefined || nestedValue === null) {
-        return null;
-      }
-      return typeof nestedValue === "string"
-        ? nestedValue
-        : JSON.stringify(nestedValue);
+      return window.localStorage.getItem(key);
     }
     return typeof value === "string" ? value : JSON.stringify(value);
   },
@@ -107,12 +160,18 @@ export const desktopProductStorage: ProductStorage = {
       return;
     }
     if (key === LEGACY_SUPPORT_REPORT_QUEUE_KEY) {
-      if (store.backend === "tauri_fallback") {
-        // Neither fallback copy can prove that the plugin has no V1 value.
-        // Keep every recovery copy and let migration retry after plugin load.
-        throw new Error(TAURI_STORE_RETRY_MESSAGE);
-      }
+      const copies = await readLegacySupportReportQueueCopies(store);
       if (store.backend === "tauri") {
+        if (
+          copies.pluginValue !== null &&
+          copies.rawValue === null &&
+          copies.nestedValue === null
+        ) {
+          // Plugin deletion mutates the in-memory store before save flushes it.
+          // Seed a strict raw recovery copy first so a failed save can be
+          // retried in this process and safely reconciled after a restart.
+          window.localStorage.setItem(key, copies.pluginValue);
+        }
         await store.delete(key);
         // Migration may remove V1 only after the plugin deletion is durably
         // flushed. If save rejects, retain the raw read-through copy so a later

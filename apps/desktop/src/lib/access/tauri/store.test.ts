@@ -65,8 +65,9 @@ describe("getPreferencesStore browser fallback", () => {
 
   it("propagates strict nested V1 cleanup failure without deleting the raw recovery key", async () => {
     const key = "proliferate.supportReportJobs.v1";
-    localStorage.setItem("proliferate.preferences", JSON.stringify({ [key]: "nested" }));
-    localStorage.setItem(key, "raw");
+    const value = "identical-recovery";
+    localStorage.setItem("proliferate.preferences", JSON.stringify({ [key]: value }));
+    localStorage.setItem(key, value);
     const { desktopProductStorage } = await import("../browser/product-storage");
     const quotaError = new DOMException("full", "QuotaExceededError");
     const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
@@ -74,7 +75,7 @@ describe("getPreferencesStore browser fallback", () => {
     });
 
     await expect(desktopProductStorage.removeItem(key)).rejects.toBe(quotaError);
-    expect(localStorage.getItem(key)).toBe("raw");
+    expect(localStorage.getItem(key)).toBe(value);
 
     setItem.mockRestore();
   });
@@ -172,6 +173,55 @@ describe("getPreferencesStore inside Tauri", () => {
     expect(realStore.delete).toHaveBeenCalledWith(key);
     expect(realStore.save).toHaveBeenCalledOnce();
     expect(localStorage.getItem(key)).toBeNull();
+  });
+
+  it("seeds recovery bytes before deleting a plugin-only V1 value and retries after save failure", async () => {
+    const key = "proliferate.supportReportJobs.v1";
+    const value = '[{"job":{"jobId":"plugin-only"}}]';
+    const saveError = new Error("disk unavailable");
+    let pluginValue: string | undefined = value;
+    let saveCalls = 0;
+    const realStore = {
+      get: vi.fn(async (requestedKey: string) =>
+        requestedKey === key ? pluginValue : undefined,
+      ),
+      set: vi.fn(async () => undefined),
+      delete: vi.fn(async (requestedKey: string) => {
+        if (requestedKey !== key || pluginValue === undefined) {
+          return false;
+        }
+        pluginValue = undefined;
+        return true;
+      }),
+      save: vi.fn(async () => {
+        saveCalls += 1;
+        if (saveCalls === 1) {
+          throw saveError;
+        }
+      }),
+    };
+    vi.doMock("@tauri-apps/plugin-store", () => ({
+      Store: { load: vi.fn(async () => realStore) },
+    }));
+    const { desktopProductStorage } = await import("../browser/product-storage");
+
+    expect(localStorage.getItem(key)).toBeNull();
+    await expect(desktopProductStorage.getItem(key)).resolves.toBe(value);
+
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    await expect(desktopProductStorage.removeItem(key)).rejects.toBe(saveError);
+    expect(pluginValue).toBeUndefined();
+    expect(localStorage.getItem(key)).toBe(value);
+    expect(setItem.mock.invocationCallOrder[0]).toBeLessThan(
+      realStore.delete.mock.invocationCallOrder[0],
+    );
+
+    await expect(desktopProductStorage.getItem(key)).resolves.toBe(value);
+    await expect(desktopProductStorage.removeItem(key)).resolves.toBeUndefined();
+    expect(realStore.delete).toHaveBeenCalledTimes(2);
+    expect(realStore.save).toHaveBeenCalledTimes(2);
+    expect(localStorage.getItem(key)).toBeNull();
+    setItem.mockRestore();
   });
 
   it("blocks V1 hydration and cleanup until the real Tauri store recovers", async () => {

@@ -215,6 +215,83 @@ describe("desktopProductStorage (Tauri-store backed)", () => {
     expect(store.delete).toHaveBeenCalledTimes(2);
   });
 
+  it("accepts identical legacy V1 copies from the plugin, raw key, and nested fallback", async () => {
+    const key = "proliferate.supportReportJobs.v1";
+    const value = '[{"job":{"jobId":"identical"}}]';
+    const store = makeStore({
+      get: vi.fn(async () => value),
+      readBrowserFallbackStrict: vi.fn(async () => value),
+    });
+    getPreferencesStore.mockResolvedValue(store);
+    window.localStorage.setItem(key, value);
+
+    await expect(desktopProductStorage.getItem(key)).resolves.toBe(value);
+
+    expect(store.get).toHaveBeenCalledWith(key);
+    expect(store.readBrowserFallbackStrict).toHaveBeenCalledWith(key);
+  });
+
+  it("rejects conflicting legacy V1 plugin and raw copies before cleanup", async () => {
+    const key = "proliferate.supportReportJobs.v1";
+    const pluginValue = '[{"job":{"jobId":"plugin"}}]';
+    const rawValue = '[{"job":{"jobId":"raw"}}]';
+    const store = makeStore({ get: vi.fn(async () => pluginValue) });
+    getPreferencesStore.mockResolvedValue(store);
+    window.localStorage.setItem(key, rawValue);
+
+    await expect(desktopProductStorage.getItem(key)).rejects.toThrow(
+      "Legacy support report queue copies conflict.",
+    );
+    await expect(desktopProductStorage.removeItem(key)).rejects.toThrow(
+      "Legacy support report queue copies conflict.",
+    );
+
+    expect(store.delete).not.toHaveBeenCalled();
+    expect(store.save).not.toHaveBeenCalled();
+    expect(store.deleteBrowserFallbackStrict).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(key)).toBe(rawValue);
+  });
+
+  it("rejects conflicting legacy V1 plugin and nested fallback copies", async () => {
+    const key = "proliferate.supportReportJobs.v1";
+    const store = makeStore({
+      get: vi.fn(async () => '[{"job":{"jobId":"plugin"}}]'),
+      readBrowserFallbackStrict: vi.fn(
+        async () => '[{"job":{"jobId":"nested"}}]',
+      ),
+    });
+    getPreferencesStore.mockResolvedValue(store);
+
+    await expect(desktopProductStorage.getItem(key)).rejects.toThrow(
+      "Legacy support report queue copies conflict.",
+    );
+  });
+
+  it("rejects conflicting legacy V1 raw and nested copies in the browser backend", async () => {
+    const key = "proliferate.supportReportJobs.v1";
+    const rawValue = '[{"job":{"jobId":"raw"}}]';
+    const store = makeStore({
+      backend: "browser",
+      readBrowserFallbackStrict: vi.fn(
+        async () => '[{"job":{"jobId":"nested"}}]',
+      ),
+    });
+    getPreferencesStore.mockResolvedValue(store);
+    window.localStorage.setItem(key, rawValue);
+
+    await expect(desktopProductStorage.getItem(key)).rejects.toThrow(
+      "Legacy support report queue copies conflict.",
+    );
+    await expect(desktopProductStorage.removeItem(key)).rejects.toThrow(
+      "Legacy support report queue copies conflict.",
+    );
+
+    expect(store.get).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+    expect(store.deleteBrowserFallbackStrict).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(key)).toBe(rawValue);
+  });
+
   it("reads a legacy V1 raw recovery copy after a plugin miss", async () => {
     const store = makeStore({ get: vi.fn(async () => undefined) });
     getPreferencesStore.mockResolvedValue(store);
