@@ -252,9 +252,22 @@ export function useMainScreenRightPanel({
       setRightPanelWidthForWorkspace(workspaceUiKey, draggedWidth);
     }
   }, [setRightPanelWidthForWorkspace, workspaceUiKey]);
+  // The rail's rendered width can sit below the persisted width while the
+  // main-pane floor clamps it (MAIN_PANE_MIN_WIDTH in the rail's width
+  // style). Seeding the drag from the rendered edge keeps the separator under
+  // the pointer from the first pixel — starting from the larger persisted
+  // value would replay the clamped-away difference as dead travel before
+  // anything moved.
+  const resolveRenderedRailWidth = useCallback(() => {
+    const railWidth = document
+      .querySelector("[data-right-panel-rail]")
+      ?.getBoundingClientRect().width;
+    return railWidth ? railWidth : rightPanelWidth;
+  }, [rightPanelWidth]);
   const beginRightSeparatorDrag = useResize({
     direction: "horizontal",
     size: rightPanelWidth,
+    resolveSize: resolveRenderedRailWidth,
     onResize: handleRightPanelDrag,
     onResizeEnd: handleRightSeparatorDragEnd,
     reverse: true,

@@ -76,6 +76,37 @@ function renderRightPanel() {
 }
 
 describe("useMainScreenRightPanel drag wiring", () => {
+  it("seeds a drag from the rendered rail width when the floor clamp holds it below the persisted width", () => {
+    // A rail whose rendered width sits below the persisted 700 — the shape
+    // the MAIN_PANE_MIN_WIDTH clamp produces on a small window.
+    const rail = document.createElement("div");
+    rail.setAttribute("data-right-panel-rail", "");
+    rail.getBoundingClientRect = () =>
+      ({ width: 420 } as DOMRect);
+    document.body.appendChild(rail);
+
+    try {
+      const { result, rerender } = renderRightPanel();
+      act(() => {
+        result.current.setRightPanelOpen(true);
+      });
+      act(() => {
+        result.current.setRightPanelWidth(700);
+      });
+      rerender();
+
+      // Drag 30px narrower. Seeded from the rendered 420 this lands at 390;
+      // seeded from the persisted 700 it would land at 670 — the first 280px
+      // of pointer travel would be dead.
+      fireDrag(result.current.onRightSeparatorDown, [-30]);
+      rerender();
+
+      expect(result.current.rightPanelWidth).toBe(390);
+    } finally {
+      rail.remove();
+    }
+  });
+
   it("resizes the panel through a real mousedown/mousemove/mouseup sequence", () => {
     const { result, rerender } = renderRightPanel();
     act(() => {
