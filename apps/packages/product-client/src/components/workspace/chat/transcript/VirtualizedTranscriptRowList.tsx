@@ -368,12 +368,14 @@ export function VirtualizedTranscriptRowList({
   return (
     <div className="relative h-full">
       <VirtualTranscriptViewport
+        bottomInsetPx={bottomInsetPx}
         bottomSpacerHeight={bottomSpacerHeight}
         nonDisplacingBottomInsetPx={effectiveNonDisplacingBottomInsetPx}
         columnClassName={columnClassName}
         contentRef={contentRef}
         gutterClassName={gutterClassName}
         measureElement={virtualizer.measureElement}
+        notifyProgrammaticScroll={notifyProgrammaticScroll}
         onUserScrollIntent={notifyUserScrollIntent}
         onViewportScroll={handleViewportScroll}
         renderableRows={renderableRows}
@@ -381,6 +383,7 @@ export function VirtualizedTranscriptRowList({
         getRowRenderRevision={getRowRenderRevision}
         scrollRef={scrollRef}
         selectionRootRef={selectionRootRef}
+        setPinned={setPinned}
         topSpacerHeight={topSpacerHeight}
         virtualItems={virtualItems}
         virtualizationMode={virtualizationMode}
