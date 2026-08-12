@@ -106,6 +106,7 @@ export async function finalizePendingWorkspaceSelection(
   deps.setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
     workspaceId: input.workspaceId,
     source: input.entry.source,
+    receiptClientSessionId: projectedActiveSessionId,
     setupScript: input.entry.setupScript,
     baseBranchName: input.entry.baseBranchName,
   }));

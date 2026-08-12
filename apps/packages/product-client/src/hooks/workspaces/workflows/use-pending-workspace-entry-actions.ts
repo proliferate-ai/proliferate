@@ -120,6 +120,7 @@ export function usePendingWorkspaceEntryActions() {
             setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
               workspaceId: entry.request.workspaceId,
               source: current.source,
+              receiptClientSessionId: initialActiveSessionId,
               setupScript: current.setupScript,
               baseBranchName: current.baseBranchName,
             }));

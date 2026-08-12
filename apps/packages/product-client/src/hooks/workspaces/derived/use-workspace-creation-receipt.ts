@@ -96,15 +96,16 @@ export function useWorkspaceCreationReceiptKey(): string | null {
     if (!workspace) {
       return null;
     }
-    // Live-arrival bridge: the arrival event is published in the same flow
-    // that clears the pending entry, so its presence means this very
-    // selection just performed the creation — definitionally the workspace's
-    // first session. Skipping the query-backed proof below keeps the receipt
-    // mounted across the creating→created handoff; without it the key goes
-    // null for a round trip and the pending row flashes back to "Thinking".
+    // Live-arrival bridge: finalization records the stable ProductClient alias
+    // that owned the pending creation. That owner can keep the receipt mounted
+    // before its runtime session and the query-backed proof below exist,
+    // avoiding a creating→Thinking→created flash without leaking the synthetic
+    // row into sibling sessions in the same workspace.
     if (
       workspaceArrivalEvent?.workspaceId === workspace.id
       && (workspace.kind === "worktree" || workspaceArrivalEvent.source === "local-created")
+      && workspaceArrivalEvent.receiptClientSessionId !== null
+      && workspaceArrivalEvent.receiptClientSessionId === activeSessionId
     ) {
       return workspaceUiKey;
     }
@@ -131,6 +132,7 @@ export function useWorkspaceCreationReceiptKey(): string | null {
     }
     return null;
   }, [
+    activeSessionId,
     activeMaterializedSessionId,
     materializedWorkspaceId,
     pendingWorkspaceEntry,

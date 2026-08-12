@@ -73,6 +73,7 @@ describe("session selection store invariants", () => {
       workspaceArrivalEvent: {
         workspaceId: "workspace-a",
         source: "local-created",
+        receiptClientSessionId: "session-old",
         createdAt: 100,
       },
       activeSessionId: "session-old",
@@ -103,6 +104,7 @@ describe("session selection store invariants", () => {
       workspaceArrivalEvent: {
         workspaceId: "workspace-a",
         source: "local-created",
+        receiptClientSessionId: "session-old",
         createdAt: 100,
       },
       activeSessionId: "session-a",
@@ -120,6 +122,7 @@ describe("session selection store invariants", () => {
       workspaceArrivalEvent: {
         workspaceId: "workspace-a",
         source: "local-created",
+        receiptClientSessionId: "session-a",
         createdAt: 100,
       },
       activeSessionId: "session-a",
