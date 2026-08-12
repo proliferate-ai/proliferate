@@ -2,8 +2,8 @@
 
 Status: target. This document describes the accepted destination for private
 support reporting and the consented Desktop diagnostic snapshot. The body is
-written in the ideal state. Every difference from the frozen implementation
-base is listed in [Current gaps](#current-gaps).
+written in the ideal state. Every difference from `main` today is listed in
+[Current gaps](#current-gaps).
 
 Support reporting captures private customer feedback and diagnostic evidence.
 It does not own issue triage, automated repair, release tracking, or reporter
@@ -233,9 +233,13 @@ Native emits one `desktop.support_snapshot.prepare` lifecycle for each admitted
 preparation and one child `desktop.support_snapshot.submit` lifecycle for each
 admitted upload attempt. Every admitted operation has exactly one closed,
 typed terminal. Snapshot-missing, snapshot-mismatch, and legacy-consent-required
-paths happen before submit admission, make no server call, and emit no synthetic
-submit pair. Cancellation, timeout, window/app teardown, and retry are bounded;
-late results from a superseded consent epoch cannot enqueue.
+paths happen before submit admission and emit no synthetic submit pair.
+Snapshot-missing and snapshot-mismatch make no server call. A migrated legacy
+job still attempts ordinary report creation with diagnostics false; only a
+server-side immutable-intent conflict concludes
+`consent_required_for_legacy_job`. Cancellation, timeout, window/app teardown,
+and retry are bounded; late results from a superseded consent epoch cannot
+enqueue.
 
 Server-side `cloud-diagnostics.json` collection remains disabled and reports
 `cloudDiagnosticsStatus=not_applicable`. Session SQLite remains replay truth;
@@ -388,8 +392,7 @@ Only an authorized future outreach step may resolve and snapshot the address.
 
 ## Current gaps
 
-At the frozen implementation base, these are the only differences from the
-target state above:
+On `main` today, these are the only differences from the target state above:
 
 - [ ] Both modal flows still use `includeLogs`: feedback initializes it true,
       prompt reports force it true, and neither surface has the explicit
@@ -424,6 +427,14 @@ target state above:
       ([support-report-upload-persistence.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/support-report-upload-persistence.ts),
       [use-support-report-upload-queue.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/use-support-report-upload-queue.ts),
       [support-report-job-events.ts](../../../../../apps/packages/product-client/src/lib/access/browser/support-report-job-events.ts)).
+- [ ] Persisted v1 jobs have no bounded, verified one-way migration to the v2
+      queue: false, truthy, and missing `includeLogs` values are not yet mapped
+      safely to no snapshot; over-cap or conflicting legacy state does not fail
+      hydration visibly; and a server report already locked to diagnostics true
+      has no queue-only `consent_required_for_legacy_job` conclusion with
+      resubmit guidance
+      ([support-report-upload-persistence.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/support-report-upload-persistence.ts),
+      [use-support-report-upload-queue.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/use-support-report-upload-queue.ts)).
 - [ ] The upload workflow creates the server report before collecting schema-2
       diagnostics and recollects on every retry; it does not verify and hold one
       immutable staged Blob through create, target, PUT, and complete
