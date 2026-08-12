@@ -233,7 +233,7 @@ mod tests {
         assert!(instruction.contains("cannot create agents"));
         assert!(instruction.contains("concise completion report"));
         assert!(instruction.contains("absolute file paths"));
-        assert!(instruction.contains("standalone report"));
+        assert!(instruction.contains("Do not create a standalone report"));
     }
 
     #[test]
