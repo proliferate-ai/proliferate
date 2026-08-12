@@ -14,3 +14,5 @@ pub(crate) mod supervisor;
 #[cfg(not(unix))]
 #[path = "supervisor_unsupported.rs"]
 pub(crate) mod supervisor;
+#[cfg(test)]
+mod test_binary;

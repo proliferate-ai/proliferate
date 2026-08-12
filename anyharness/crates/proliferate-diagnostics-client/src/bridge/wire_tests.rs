@@ -202,10 +202,10 @@ fn child_frames_round_trip_including_optional_delivery_fence() {
         delivery_fence: None,
     };
     round_trips(&without_fence);
-    let text = serde_json::to_string(&without_fence).expect("serializable");
+    let value = serde_json::to_value(&without_fence).expect("serializable");
     assert!(
-        !text.contains("delivery_fence"),
-        "absent fence must be omitted, not null: {text}"
+        value.get("delivery_fence").is_none(),
+        "absent fence must be omitted, not null: {value}"
     );
 
     round_trips(&ChildFrame::TerminalStatus {

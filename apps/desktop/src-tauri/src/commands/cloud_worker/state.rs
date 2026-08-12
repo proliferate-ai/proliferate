@@ -11,7 +11,60 @@ use tokio::process::Child;
 
 use super::{CloudWorkerProcess, CloudWorkerState};
 
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+use crate::diagnostics_collector::child_bridge::runtime::{
+    ChildProcessPresence, DesktopChildDiagnosticsState,
+};
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+use proliferate_diagnostics_client::bridge::wire::CHILD_STATUS_RESPONSE_DEADLINE;
+
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+#[derive(Clone, Debug)]
+pub(crate) struct DesktopWorkerDiagnosticsState {
+    pub(crate) target_id: Option<String>,
+    pub(crate) child: DesktopChildDiagnosticsState,
+}
+
 impl CloudWorkerState {
+    /// Returns only a cloned target identifier and classified child status;
+    /// the identity-stable process and bridge owners never escape the mutex.
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    pub(crate) async fn child_diagnostics_state(&self) -> DesktopWorkerDiagnosticsState {
+        let deadline = tokio::time::Instant::now() + CHILD_STATUS_RESPONSE_DEADLINE;
+        let Ok(mut lifecycle) = tokio::time::timeout_at(deadline, self.lifecycle.lock()).await
+        else {
+            return DesktopWorkerDiagnosticsState {
+                target_id: None,
+                child: DesktopChildDiagnosticsState::without_bridge(ChildProcessPresence::Invalid),
+            };
+        };
+        let Some(process) = lifecycle.process.as_mut() else {
+            return DesktopWorkerDiagnosticsState {
+                target_id: None,
+                child: DesktopChildDiagnosticsState::without_bridge(ChildProcessPresence::Missing),
+            };
+        };
+        let target_id = Some(process.target_id.clone());
+        let presence = ChildProcessPresence::from_observation(process.child.try_wait());
+        let child = match process.diagnostics_bridge() {
+            Some(bridge) => bridge.diagnostics_state_until(presence, deadline).await,
+            None => DesktopChildDiagnosticsState::without_bridge(presence),
+        };
+        DesktopWorkerDiagnosticsState { target_id, child }
+    }
+
     #[cfg(all(
         target_os = "macos",
         any(target_arch = "aarch64", target_arch = "x86_64")
@@ -102,8 +155,12 @@ mod tests {
     use std::sync::{mpsc, Arc, Barrier};
     use std::time::{Duration, Instant};
 
-    use super::super::{lifecycle, CloudWorkerState};
-    use crate::diagnostics_collector::child_bridge::shutdown_signal::ChildShutdownSignal;
+    use super::super::{lifecycle, CloudWorkerProcess, CloudWorkerState};
+    use crate::diagnostics_collector::child_bridge::{
+        runtime::{ChildBridgeConnection, ChildProcessPresence, ChildProducerStatus},
+        shutdown_signal::ChildShutdownSignal,
+    };
+    use tokio::process::Command;
 
     fn signal_pair() -> (ChildShutdownSignal, OwnedFd) {
         let mut descriptors = [0_i32; 2];
@@ -124,6 +181,42 @@ mod tests {
             1
         );
         assert_eq!(byte, [1]);
+    }
+
+    #[tokio::test]
+    async fn child_status_accessor_returns_only_target_and_classified_state() {
+        let state = Arc::new(CloudWorkerState::default());
+        let missing = state.child_diagnostics_state().await;
+        assert_eq!(missing.target_id, None);
+        assert_eq!(missing.child.process, ChildProcessPresence::Missing);
+        assert_eq!(missing.child.producer, ChildProducerStatus::Unavailable);
+
+        let child = Command::new("/bin/sh")
+            .args(["-c", "sleep 10"])
+            .kill_on_drop(true)
+            .spawn()
+            .expect("spawn worker fixture");
+        state.lifecycle.lock().await.process = Some(CloudWorkerProcess::untracked(
+            "target-for-status".to_owned(),
+            child,
+            "status-fixture.toml".into(),
+        ));
+        let running = state.child_diagnostics_state().await;
+        assert_eq!(running.target_id.as_deref(), Some("target-for-status"));
+        assert_eq!(running.child.process, ChildProcessPresence::Running);
+        assert_eq!(running.child.bridge, ChildBridgeConnection::NotActivated);
+        assert_eq!(running.child.producer, ChildProducerStatus::Unavailable);
+    }
+
+    #[tokio::test]
+    async fn child_status_accessor_classifies_a_contended_owner_as_invalid() {
+        let state = Arc::new(CloudWorkerState::default());
+        let _owner = state.lifecycle.lock().await;
+        let started = Instant::now();
+        let unavailable = state.child_diagnostics_state().await;
+        assert!(started.elapsed() < Duration::from_millis(500));
+        assert_eq!(unavailable.child.process, ChildProcessPresence::Invalid);
+        assert_eq!(unavailable.child.producer, ChildProducerStatus::Invalid);
     }
 
     #[tokio::test]

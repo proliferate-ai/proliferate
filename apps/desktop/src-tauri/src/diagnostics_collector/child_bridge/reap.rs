@@ -78,6 +78,7 @@ mod supported {
                     &fence.collector_boot_id,
                     fence.generation,
                     &fence.producer_boot_id,
+                    deadline,
                 )
                 .await
         }

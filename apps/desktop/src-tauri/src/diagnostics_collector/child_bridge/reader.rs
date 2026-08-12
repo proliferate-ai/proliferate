@@ -48,13 +48,17 @@ pub(super) fn run_reader(shared: Arc<BridgeShared>, stream: UnixStream) {
                 shared.mark_clean_eof();
                 return;
             }
-            Err(FrameError::Invalid | FrameError::Io | FrameError::Deadline) => {
+            Err(FrameError::Invalid | FrameError::Deadline) => {
+                shared.mark_invalid();
+                return;
+            }
+            Err(FrameError::Io) => {
                 shared.mark_lost();
                 return;
             }
         };
         if shared.handle_child_frame(received).is_err() {
-            shared.mark_lost();
+            shared.mark_invalid();
             return;
         }
     }

@@ -21,10 +21,7 @@ use crate::diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor;
 use crate::diagnostics_collector::child_bridge::{
     fallback_root::{resolve_fallback_root, FallbackRootOutcome},
     launch::PreparedChildDiagnosticsLaunch,
-    runtime::{
-        ChildBridgeConnection, ChildDiagnosticsBridge, ChildProcessPresence,
-        DesktopChildDiagnosticsState,
-    },
+    runtime::{ChildDiagnosticsBridge, ChildProcessPresence, DesktopChildDiagnosticsState},
 };
 #[cfg(all(
     target_os = "macos",
@@ -185,19 +182,11 @@ impl super::SidecarProcess {
     pub(crate) async fn child_diagnostics_state(&mut self) -> DesktopChildDiagnosticsState {
         let process = match self.child.as_mut() {
             None => ChildProcessPresence::Missing,
-            Some(child) => match child.try_wait() {
-                Ok(Some(_)) => ChildProcessPresence::Exited,
-                Ok(None) => ChildProcessPresence::Running,
-                Err(_) => ChildProcessPresence::Missing,
-            },
+            Some(child) => ChildProcessPresence::from_observation(child.try_wait()),
         };
         match self.diagnostics_bridge.as_ref() {
             Some(bridge) => bridge.diagnostics_state(process).await,
-            None => DesktopChildDiagnosticsState {
-                process,
-                bridge: ChildBridgeConnection::NotActivated,
-                producer: None,
-            },
+            None => DesktopChildDiagnosticsState::without_bridge(process),
         }
     }
 

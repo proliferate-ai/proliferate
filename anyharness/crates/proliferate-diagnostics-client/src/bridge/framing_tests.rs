@@ -135,15 +135,23 @@ mod unix_socket_tests {
     }
 
     fn assert_peer_observes_all_received_rights_closed(peer: &mut UnixStream) {
-        peer.set_read_timeout(Some(Duration::from_millis(100)))
-            .expect("read timeout");
+        peer.set_nonblocking(true).expect("nonblocking peer");
         let mut byte = [0_u8; 1];
-        assert_eq!(
-            peer.read(&mut byte)
-                .expect("all transferred writers closed"),
-            0,
-            "a received SCM_RIGHTS descriptor leaked on rejection"
-        );
+        let deadline = std::time::Instant::now() + Duration::from_millis(100);
+        loop {
+            match peer.read(&mut byte) {
+                Ok(0) => return,
+                Ok(_) => panic!("unexpected payload from transferred descriptor"),
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "a received SCM_RIGHTS descriptor leaked on rejection"
+                    );
+                    thread::sleep(Duration::from_millis(1));
+                }
+                Err(error) => panic!("peer read failed: {error}"),
+            }
+        }
     }
 
     #[test]
@@ -244,6 +252,7 @@ mod unix_socket_tests {
     #[test]
     fn saturated_peer_cannot_block_a_frame_send() {
         let (sender, _receiver) = UnixStream::pair().expect("socketpair");
+        sender.set_nonblocking(true).expect("nonblocking sender");
         let bytes = [b'x'; 4096];
         loop {
             let written = unsafe {
@@ -295,11 +304,12 @@ mod unix_socket_tests {
     }
 
     #[test]
-    fn receive_frame_rejects_ancillary_data_that_overflows_msg_ctrunc() {
+    fn receive_frame_captures_and_closes_a_large_rejected_rights_message() {
         let (mut receiver, sender) = UnixStream::pair().expect("socketpair");
         let (mut peer, spare) = UnixStream::pair().expect("spare fd source");
-        // Far more descriptors than the receiver's fixed control buffer can
-        // hold, forcing the kernel to set `MSG_CTRUNC`.
+        // Far more descriptors than the wire contract permits. The receiver
+        // captures the kernel's entire bounded SCM_RIGHTS message so every
+        // installed descriptor can be closed before rejection.
         let many = duplicated_fds(spare.as_raw_fd(), 40);
         raw_send_with_rights(&sender, &status_request(4), &many);
         close_all(&many);

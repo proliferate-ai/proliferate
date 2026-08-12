@@ -44,6 +44,7 @@ pub(crate) enum ChildProcessPresence {
     Missing,
     Running,
     Exited,
+    Invalid,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,7 +58,14 @@ pub(crate) enum ChildBridgeConnection {
 pub(crate) struct DesktopChildDiagnosticsState {
     pub(crate) process: ChildProcessPresence,
     pub(crate) bridge: ChildBridgeConnection,
-    pub(crate) producer: Option<ProducerStatusSnapshot>,
+    pub(crate) producer: ChildProducerStatus,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ChildProducerStatus {
+    Available(ProducerStatusSnapshot),
+    Unavailable,
+    Invalid,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,7 +91,7 @@ pub(super) struct SharedState {
     pub(super) collector: CollectorIdentity,
     pub(super) acked_producer_boot: Option<String>,
     pub(super) flush_completed: bool,
-    pub(super) status_slot: Option<PendingRequest<ProducerStatusSnapshot>>,
+    pub(super) status_slot: Option<PendingRequest<ChildProducerStatus>>,
     pub(super) flush_slot: Option<PendingRequest<ChildFlushResult>>,
     pub(super) completed_flush: Option<ChildFlushResult>,
     pub(super) terminal: Option<ChildFlushResult>,
@@ -95,7 +103,7 @@ pub(super) struct BridgeShared {
     writer: Mutex<Option<UnixStream>>,
     reader_waker: Option<UnixStream>,
     reader_stop: AtomicBool,
-    permanently_lost: AtomicBool,
+    pub(super) permanently_lost: AtomicBool,
     pub(super) clean_eof_allowed: Arc<AtomicBool>,
     next_request_id: AtomicU64,
     pub(super) state: Mutex<SharedState>,
@@ -289,13 +297,17 @@ impl BridgeShared {
                 && request_id <= MAX_SAFE_INTEGER
                 && state.connection == ChildBridgeConnection::Connected =>
             {
-                let pending = state.status_slot.take().ok_or(())?;
-                if pending.request_id != request_id
+                let pending = state.status_slot.as_ref().ok_or(())?;
+                if pending.respond.is_closed()
+                    || pending.request_id != request_id
                     || !response_matches(self.component, &state, &pending.binding, &snapshot)
                 {
                     return Err(());
                 }
-                let _ = pending.respond.send(snapshot);
+                let pending = state.status_slot.take().ok_or(())?;
+                let _ = pending
+                    .respond
+                    .send(ChildProducerStatus::Available(snapshot));
             }
             ChildFrame::FlushResponse {
                 protocol_version,
@@ -409,7 +421,7 @@ impl BridgeShared {
         }
     }
 
-    fn wake_reader(&self) {
+    pub(super) fn wake_reader(&self) {
         if let Some(stream) = &self.reader_waker {
             let _ = stream.shutdown(Shutdown::Both);
         }

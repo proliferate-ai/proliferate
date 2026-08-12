@@ -17,7 +17,9 @@ use proliferate_diagnostics_client::bridge::{
 use proliferate_diagnostics_client::{ProducerCollectorState, ProducerStatusSnapshot};
 use proliferate_diagnostics_protocol::v1::{limits::MAX_SAFE_INTEGER, types::ComponentV1};
 
-use super::{run_reader, BridgeShared, ChildBridgeConnection, ChildDiagnosticsBridge};
+use super::{
+    run_reader, BridgeShared, ChildBridgeConnection, ChildDiagnosticsBridge, ChildProducerStatus,
+};
 
 const PRODUCER_BOOT: &str = "producer-boot-identity";
 const COLLECTOR_BOOT: &str = "collector-boot-identity";
@@ -109,7 +111,10 @@ async fn generation_publication_cancels_the_old_pending_request() {
     });
     let old = receive_frame::<ParentFrame>(&mut child).expect("old request");
     bridge.shared.set_ready_collector(2, "collector-boot-new");
-    assert_eq!(request.await.expect("request task"), None);
+    assert_eq!(
+        request.await.expect("request task"),
+        ChildProducerStatus::Unavailable
+    );
     let ParentFrame::StatusRequest { request_id, .. } = old.frame else {
         panic!("expected status request");
     };
@@ -145,35 +150,41 @@ async fn same_generation_wrong_boot_rejects_the_whole_status_frame() {
         )
         .expect("response");
     });
-    assert_eq!(bridge.request_status().await, None);
+    assert_eq!(bridge.request_status().await, ChildProducerStatus::Invalid);
     response.join().expect("response thread");
     wait_for(|| bridge.connection() == ChildBridgeConnection::Lost);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn cooldown_snapshot_cannot_prove_the_current_ready_identity() {
+async fn cooldown_snapshot_uses_the_request_bound_current_ready_identity() {
     let (bridge, mut child) = bridge();
+    let mut expected = snapshot(COLLECTOR_BOOT, 1);
+    expected.collector_state = ProducerCollectorState::Cooldown;
+    let response_snapshot = expected.clone();
     let response = thread::spawn(move || {
         let request = receive_frame::<ParentFrame>(&mut child).expect("request");
         let ParentFrame::StatusRequest { request_id, .. } = request.frame else {
             panic!("expected status request");
         };
-        let mut unverifiable = snapshot(COLLECTOR_BOOT, 1);
-        unverifiable.collector_state = ProducerCollectorState::Cooldown;
         send_frame(
             &child,
             &ChildFrame::StatusResponse {
                 protocol_version: CHILD_BRIDGE_PROTOCOL_VERSION,
                 request_id,
-                snapshot: unverifiable,
+                snapshot: response_snapshot,
             },
             &[],
         )
         .expect("response");
+        child
     });
-    assert_eq!(bridge.request_status().await, None);
-    response.join().expect("response thread");
-    wait_for(|| bridge.connection() == ChildBridgeConnection::Lost);
+    assert_eq!(
+        bridge.request_status().await,
+        ChildProducerStatus::Available(expected)
+    );
+    let child = response.join().expect("response thread");
+    assert_eq!(bridge.connection(), ChildBridgeConnection::Connected);
+    drop(child);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -227,7 +238,7 @@ async fn unsafe_integer_in_snapshot_loses_bridge_and_never_qualifies() {
         )
         .expect("response");
     });
-    assert_eq!(bridge.request_status().await, None);
+    assert_eq!(bridge.request_status().await, ChildProducerStatus::Invalid);
     response.join().expect("response thread");
     wait_for(|| bridge.connection() == ChildBridgeConnection::Lost);
     assert_eq!(bridge.qualified_result(), None);

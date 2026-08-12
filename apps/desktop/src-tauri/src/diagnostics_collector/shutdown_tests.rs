@@ -1,4 +1,5 @@
 use super::*;
+use crate::diagnostics_collector::test_binary::built_collector_binary;
 use fs2::FileExt;
 use proliferate_diagnostics_protocol::v1::types::{
     ExportPurposeV1, ExportRequestV1, ExportStreamFrameV1, LifecyclePhaseV1, ProducerRecordV1,
@@ -13,15 +14,6 @@ use tokio::process::{Child, Command};
 const CHILD_LOCK_ENV: &str = "PROLIFERATE_PR3_SHUTDOWN_CHILD_LOCK";
 const CHILD_FIXTURE: &str =
     "diagnostics_collector::shutdown::integration_tests::shutdown_live_child_fixture";
-
-fn built_collector_binary() -> PathBuf {
-    std::env::current_exe()
-        .expect("current test executable")
-        .parent()
-        .and_then(Path::parent)
-        .expect("target profile directory")
-        .join("proliferate-diagnostics-collector")
-}
 
 fn empty_filters() -> RecordsFilterV1 {
     RecordsFilterV1 {

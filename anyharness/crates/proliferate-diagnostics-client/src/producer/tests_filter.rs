@@ -225,8 +225,8 @@ fn credential_like_words_without_an_exact_label_are_not_false_positives() {
 fn labeled_secrets_crossing_the_message_boundary_are_removed() {
     for label in ["Authorization: ", "\"password\": \""] {
         let value = format!(
-            "{}{}boundary-secret-value-9f31",
-            "x".repeat(4_096 - label.len() - 5),
+            "{} {}boundary-secret-value-9f31",
+            "x".repeat(4_096 - label.len() - 6),
             label,
         );
         let retained = super::record::redact_and_bound(value, 4_096);

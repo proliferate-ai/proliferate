@@ -263,8 +263,13 @@ impl TerminalControlState {
         W: FnOnce(Vec<u8>) -> F,
         F: Future<Output = Result<(), io::Error>>,
     {
-        self.dispatch_with_timeout(reservation, command, TERMINAL_CONTROL_WRITE_TIMEOUT, write)
-            .await
+        self.dispatch_until(
+            reservation,
+            command,
+            tokio::time::Instant::now() + TERMINAL_CONTROL_WRITE_TIMEOUT,
+            write,
+        )
+        .await
     }
 
     async fn dispatch_with_timeout<'a, W, F>(
@@ -278,11 +283,36 @@ impl TerminalControlState {
         W: FnOnce(Vec<u8>) -> F,
         F: Future<Output = Result<(), io::Error>>,
     {
-        let deadline = tokio::time::Instant::now() + timeout;
+        self.dispatch_until(
+            reservation,
+            command,
+            tokio::time::Instant::now() + timeout,
+            write,
+        )
+        .await
+    }
+
+    async fn dispatch_until<'a, W, F>(
+        &'a self,
+        mut reservation: TerminalReservation<'a>,
+        command: Vec<u8>,
+        deadline: tokio::time::Instant,
+        write: W,
+    ) -> TerminalControlOutcome
+    where
+        W: FnOnce(Vec<u8>) -> F,
+        F: Future<Output = Result<(), io::Error>>,
+    {
+        if tokio::time::Instant::now() >= deadline {
+            return TerminalControlOutcome::Unavailable;
+        }
         let _writer = match tokio::time::timeout_at(deadline, self.writer.lock()).await {
             Ok(writer) => writer,
             Err(_) => return TerminalControlOutcome::Unavailable,
         };
+        if tokio::time::Instant::now() >= deadline {
+            return TerminalControlOutcome::Unavailable;
+        }
         if self.writer_ambiguous.load(Ordering::Acquire) {
             return TerminalControlOutcome::Ambiguous;
         }
@@ -316,24 +346,42 @@ impl TerminalControlState {
     pub(super) fn writer_is_ambiguous(&self) -> bool {
         self.writer_ambiguous.load(Ordering::Acquire)
     }
+
+    /// Collector shutdown takes this same gate before writing its control
+    /// line, so a reserved producer-death command cannot interleave with it.
+    pub(super) async fn lock_writer(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.writer.lock().await
+    }
 }
 
 impl DiagnosticsCollectorSupervisor {
+    #[cfg(test)]
+    pub(crate) async fn hold_lifecycle_decision_for_test(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.decisions.lock().await
+    }
+
     pub(crate) async fn send_producer_dead_if_current(
         &self,
         slot: TerminalProducerSlot,
         expected_collector_boot_id: &str,
         expected_generation: u64,
         producer_boot_id: &str,
+        deadline: tokio::time::Instant,
     ) -> TerminalControlOutcome {
+        if tokio::time::Instant::now() >= deadline {
+            return TerminalControlOutcome::Unavailable;
+        }
         let command = match typed_producer_dead_command(producer_boot_id) {
             Ok(command) => command,
             Err(_) => return TerminalControlOutcome::Unavailable,
         };
-        // The lifecycle mutex serializes the current-process check and bounded
-        // terminal write with collector replacement and shutdown. Dispatch has
-        // one absolute deadline, so this ownership is never held indefinitely.
-        let _decision = self.decisions.lock().await;
+        // The async lifecycle mutex keeps the validated collector generation
+        // stable through the bounded write. The synchronous inner mutex below
+        // is released before any await on the control writer.
+        let _decision = match tokio::time::timeout_at(deadline, self.decisions.lock()).await {
+            Ok(decision) => decision,
+            Err(_) => return TerminalControlOutcome::Unavailable,
+        };
         let (reservation, mut control) = {
             let inner = match self.inner.lock() {
                 Ok(inner) => inner,
@@ -379,9 +427,8 @@ impl DiagnosticsCollectorSupervisor {
             };
             (reservation, control)
         };
-
         self.terminal_control
-            .dispatch(reservation, command, move |command| async move {
+            .dispatch_until(reservation, command, deadline, move |command| async move {
                 super::OwnedCollectorProcess::write_terminal_control_line(&mut control, &command)
                     .await
             })
@@ -404,6 +451,9 @@ fn valid_id(value: &str) -> bool {
     !value.is_empty() && value.len() <= MAX_ID_BYTES
 }
 
+#[cfg(test)]
+#[path = "terminal_control_deadline_tests.rs"]
+mod deadline_tests;
 #[cfg(test)]
 #[path = "terminal_control_tests.rs"]
 mod tests;

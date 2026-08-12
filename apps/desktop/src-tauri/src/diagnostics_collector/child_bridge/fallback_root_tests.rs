@@ -115,7 +115,13 @@ fn wrong_mode_pre_existing_leaf_is_rejected_without_a_rewrite() {
 
 #[test]
 fn missing_base_is_directory_unavailable() {
-    let base = std::env::temp_dir().join(format!("proliferate-missing-{}", uuid::Uuid::new_v4()));
+    // macOS exposes the temporary directory through `/var`, which is itself a
+    // symlink to `/private/var`. Canonicalize the existing trusted ancestor so
+    // this fixture exercises a missing base component rather than the separate
+    // symlink-ancestor rejection path.
+    let base = fs::canonicalize(std::env::temp_dir())
+        .expect("canonical temporary directory")
+        .join(format!("proliferate-missing-{}", uuid::Uuid::new_v4()));
     expect_unavailable(
         resolve_fallback_root(&base, &[]),
         FallbackUnavailableClassification::DirectoryUnavailable,

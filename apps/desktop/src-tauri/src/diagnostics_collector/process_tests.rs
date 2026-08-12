@@ -1,20 +1,8 @@
 use super::*;
+use crate::diagnostics_collector::test_binary::built_collector_binary;
 
 const CLOEXEC_CHILD_ENV: &str = "PROLIFERATE_PR3_CLOEXEC_FDS";
 const CLOEXEC_CHILD_FIXTURE: &str = "diagnostics_collector::process::tests::cloexec_child_fixture";
-
-fn built_collector_binary() -> PathBuf {
-    std::env::current_exe()
-        .expect("current test executable")
-        .parent()
-        .and_then(Path::parent)
-        .expect("target profile directory")
-        .join(if cfg!(windows) {
-            "proliferate-diagnostics-collector.exe"
-        } else {
-            "proliferate-diagnostics-collector"
-        })
-}
 
 #[test]
 fn capability_is_url_safe_unpadded_and_not_debuggable() {

@@ -8,15 +8,20 @@ mod unsupported;
 #[cfg(test)]
 #[cfg(unix)]
 mod tests;
+#[cfg(test)]
+mod wire_public_tests;
 
 use crate::{bridge::activation::FallbackDirectoryHandle, DiagnosticsComponent};
 use proliferate_diagnostics_protocol::v1::types::ProducerRecordV1;
 
-pub(crate) use wire::FallbackReason;
+pub use wire::{parse_fallback_record_line, FallbackReason, FallbackRecordV1, FALLBACK_SCHEMA};
 
-pub(crate) const FALLBACK_SEGMENT_BYTES: u32 = 524_288;
-pub(crate) const FALLBACK_SEGMENTS: usize = 4;
-pub(crate) const FALLBACK_TOTAL_BYTES: u32 = FALLBACK_SEGMENT_BYTES * FALLBACK_SEGMENTS as u32;
+/// Maximum bytes in one component fallback segment.
+pub const FALLBACK_SEGMENT_BYTES: u32 = 524_288;
+/// Number of segments retained for each component fallback family.
+pub const FALLBACK_SEGMENTS: usize = 4;
+/// Maximum bytes retained by one component fallback family.
+pub const FALLBACK_TOTAL_BYTES: u32 = FALLBACK_SEGMENT_BYTES * FALLBACK_SEGMENTS as u32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct FallbackStatus {

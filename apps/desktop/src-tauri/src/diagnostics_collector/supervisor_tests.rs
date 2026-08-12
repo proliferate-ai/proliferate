@@ -2,6 +2,7 @@ use super::lifecycle::{
     classify_steady_health_error, classify_steady_health_response, SteadyHealthAssessment,
 };
 use super::*;
+use crate::diagnostics_collector::test_binary::built_collector_binary;
 use proliferate_diagnostics_protocol::v1::types::{
     ComponentV1, DetailedDiagnosticV1, DetailedKindV1, FallbackStateV1, PressureV1,
     PrivacyClassificationV1, ProducerRecordV1, RecordClassV1, RecordsFilterV1,
@@ -9,15 +10,6 @@ use proliferate_diagnostics_protocol::v1::types::{
 };
 use std::io::Read;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-fn built_collector_binary() -> std::path::PathBuf {
-    std::env::current_exe()
-        .expect("current test executable")
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("target profile directory")
-        .join("proliferate-diagnostics-collector")
-}
 
 fn renderer_batch() -> IngestBatchV1 {
     IngestBatchV1 {

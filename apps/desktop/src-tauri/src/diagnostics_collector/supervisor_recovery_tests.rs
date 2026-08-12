@@ -1,18 +1,10 @@
 use super::*;
+use crate::diagnostics_collector::test_binary::built_collector_binary;
 use proliferate_diagnostics_protocol::v1::types::{
     ComponentV1, LifecyclePhaseV1, ProducerRecordV1, RecordClassV1, RecordsFilterV1,
 };
 use std::io::Read;
 use std::path::PathBuf;
-
-fn built_collector_binary() -> PathBuf {
-    std::env::current_exe()
-        .expect("current test executable")
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("target profile directory")
-        .join("proliferate-diagnostics-collector")
-}
 
 fn lifecycle_query(name: &str) -> RecordsQueryV1 {
     RecordsQueryV1 {

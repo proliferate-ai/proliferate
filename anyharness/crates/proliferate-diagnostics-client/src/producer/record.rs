@@ -275,6 +275,7 @@ pub(crate) fn secret_name(value: &str) -> bool {
         "refreshtoken",
         "identitytoken",
         "bearertoken",
+        "githubtoken",
         "apikey",
         "clientsecret",
         "password",
@@ -367,8 +368,13 @@ pub(crate) fn redact_secret_crossing_cutoff(value: &mut String, cutoff: usize) {
         }
     }
     if let Some(start) = crossing_start {
-        value.truncate(start);
-        value.push_str("[REDACTED]");
+        const REDACTION: &str = "[REDACTED]";
+        let mut boundary = start.min(cutoff.saturating_sub(REDACTION.len()));
+        while !value.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        value.truncate(boundary);
+        value.push_str(REDACTION);
     }
 }
 

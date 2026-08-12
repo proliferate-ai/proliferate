@@ -1,19 +1,11 @@
 use super::*;
+use crate::diagnostics_collector::test_binary::built_collector_binary;
 use proliferate_diagnostics_protocol::v1::types::{
     ExportPurposeV1, ExportRequestV1, ExportStreamFrameV1, RecordsFilterV1, RecordsQueryV1,
     TailFrameV1,
 };
 use std::os::unix::fs::PermissionsExt;
 use tokio::io::AsyncWriteExt;
-
-fn built_collector_binary() -> std::path::PathBuf {
-    std::env::current_exe()
-        .expect("current test executable")
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("target profile directory")
-        .join("proliferate-diagnostics-collector")
-}
 
 fn empty_filters() -> RecordsFilterV1 {
     RecordsFilterV1 {

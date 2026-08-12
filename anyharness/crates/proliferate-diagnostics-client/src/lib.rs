@@ -19,6 +19,10 @@ pub use bridge::activation::{
     DesktopDiagnosticsActivation, DesktopDiagnosticsBootstrap, DesktopDiagnosticsDegradedBootstrap,
     InitialCollectorState, UnavailableClassification,
 };
+pub use fallback::{
+    parse_fallback_record_line, FallbackReason, FallbackRecordV1, FALLBACK_SCHEMA,
+    FALLBACK_SEGMENTS, FALLBACK_SEGMENT_BYTES, FALLBACK_TOTAL_BYTES,
+};
 pub use producer::status::{
     BoundedLossCounters, ProducerCollectorState, ProducerFailureClassification,
     ProducerStatusSnapshot,

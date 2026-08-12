@@ -18,6 +18,8 @@ use super::{
 use crate::{DiagnosticsComponent, EmitDisposition};
 
 const FRESH_COLLECTOR_BOOT: &str = "collector-boot-0002";
+#[cfg(unix)]
+const STARVATION_FLOOD_RECORDS: usize = 32;
 
 #[cfg(unix)]
 fn fallback_reasons(directory: &tempfile::TempDir) -> Vec<String> {
@@ -148,14 +150,17 @@ async fn admission_flood_cannot_starve_the_transport_deadline() {
         "the stalled request must cross the dispatch boundary"
     );
 
-    // Admissions wake the same notifier the request loop observes. Keep a
-    // permit hot beyond the 500 ms request bound to exercise biased starvation.
+    // Admissions wake the same notifier the request loop observes. Admit a
+    // bounded set, then keep the permit hot beyond the 500 ms request bound to
+    // exercise biased starvation without turning this into a retention test.
     let flood_inner = Arc::clone(&inner);
     let flood = thread::spawn(move || {
         let until = Instant::now() + Duration::from_millis(900);
         let mut admitted = 0_usize;
         while Instant::now() < until {
-            if emit(&flood_inner, ordinary("admission-flood")) == EmitDisposition::Admitted {
+            if admitted < STARVATION_FLOOD_RECORDS
+                && emit(&flood_inner, ordinary("admission-flood")) == EmitDisposition::Admitted
+            {
                 admitted += 1;
             }
             flood_inner.notify.notify_one();
@@ -172,7 +177,10 @@ async fn admission_flood_cannot_starve_the_transport_deadline() {
     })
     .await
     .expect("notification flood cannot extend the transport deadline");
-    assert!(flood.join().expect("admission flood thread") > 0);
+    assert_eq!(
+        flood.join().expect("admission flood thread"),
+        STARVATION_FLOOD_RECORDS
+    );
     tokio::time::timeout(Duration::from_secs(2), async {
         assert!(drained(&inner).await, "timeout must release all capacity");
     })
@@ -185,6 +193,10 @@ async fn admission_flood_cannot_starve_the_transport_deadline() {
     assert!(!timed_out.in_flight);
     assert!(!timed_out.delivery_fence_eligible);
     assert_eq!(old.batch_count(), 1, "the timed-out batch is never retried");
+    assert!(
+        !directory.path().join("anyharness.jsonl.1").exists(),
+        "the bounded starvation fixture must not exercise fallback rotation"
+    );
     assert_eq!(
         fallback_reasons(&directory).first().map(String::as_str),
         Some("delivery_unknown")

@@ -32,7 +32,7 @@ mod launcher;
 pub(crate) mod lifecycle;
 mod observer;
 mod spawn;
-mod state;
+pub(crate) mod state;
 #[cfg(all(
     target_os = "macos",
     any(target_arch = "aarch64", target_arch = "x86_64")

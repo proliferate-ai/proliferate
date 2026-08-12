@@ -61,6 +61,9 @@ impl CollectorIdentity {
                         generation_number,
                     },
                 ) => collector_boot_id == snapshot_boot && self.generation == *generation_number,
+                (CollectorAvailabilityIdentity::Ready { .. }, ProducerCollectorState::Cooldown) => {
+                    true
+                }
                 (
                     CollectorAvailabilityIdentity::Unavailable,
                     ProducerCollectorState::Unavailable,

@@ -24,7 +24,7 @@ use proliferate_diagnostics_protocol::v1::types::ComponentV1;
 
 use super::{
     run_reader, BridgeShared, ChildBridgeConnection, ChildDiagnosticsBridge, ChildProcessPresence,
-    ProducerStatusSnapshot,
+    ChildProducerStatus, ProducerStatusSnapshot,
 };
 
 const PRODUCER_BOOT: &str = "producer-boot-1";
@@ -230,7 +230,7 @@ async fn status_request_round_trips_within_deadline() {
     let expected = snapshot(ComponentV1::Anyharness, PRODUCER_BOOT);
     let responder = answer_status(child, expected.clone());
     let result = bridge.request_status().await;
-    assert_eq!(result, Some(expected));
+    assert_eq!(result, ChildProducerStatus::Available(expected));
     responder.join().expect("responder");
     assert_eq!(bridge.connection(), ChildBridgeConnection::Connected);
 }
@@ -238,13 +238,20 @@ async fn status_request_round_trips_within_deadline() {
 #[tokio::test(flavor = "multi_thread")]
 async fn status_request_before_activation_is_unavailable() {
     let (bridge, _child) = start_bridge(WireComponent::Anyharness);
-    assert_eq!(bridge.request_status().await, None);
+    assert_eq!(
+        bridge.request_status().await,
+        ChildProducerStatus::Unavailable
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn status_timeout_cancels_slot_and_late_reply_fails_closed() {
     let (bridge, mut child) = connect(WireComponent::Anyharness);
-    assert_eq!(bridge.request_status().await, None);
+    assert_eq!(
+        bridge.request_status().await,
+        ChildProducerStatus::Unavailable
+    );
+    assert_eq!(bridge.connection(), ChildBridgeConnection::Connected);
     let received = receive_frame::<ParentFrame>(&mut child).expect("parent frame");
     let ParentFrame::StatusRequest { request_id, .. } = received.frame else {
         panic!("expected status request");
@@ -256,6 +263,26 @@ async fn status_timeout_cancels_slot_and_late_reply_fails_closed() {
     };
     send_frame(&child, &late, &[]).expect("send late response");
     wait_connection(&bridge, ChildBridgeConnection::Lost);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn status_timeout_releases_only_its_slot_for_the_next_request() {
+    let (bridge, mut child) = connect(WireComponent::Anyharness);
+    assert_eq!(
+        bridge.request_status().await,
+        ChildProducerStatus::Unavailable
+    );
+    let first = receive_frame::<ParentFrame>(&mut child).expect("first parent frame");
+    assert!(matches!(first.frame, ParentFrame::StatusRequest { .. }));
+
+    let expected = snapshot(ComponentV1::Anyharness, PRODUCER_BOOT);
+    let responder = answer_status(child, expected.clone());
+    assert_eq!(
+        bridge.request_status().await,
+        ChildProducerStatus::Available(expected)
+    );
+    responder.join().expect("responder");
+    assert_eq!(bridge.connection(), ChildBridgeConnection::Connected);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -273,10 +300,16 @@ async fn second_concurrent_status_request_is_refused_by_the_single_slot() {
             .status_slot
             .is_some()
     });
-    assert_eq!(bridge.request_status().await, None);
+    assert_eq!(
+        bridge.request_status().await,
+        ChildProducerStatus::Unavailable
+    );
     let expected = snapshot(ComponentV1::Anyharness, PRODUCER_BOOT);
     let responder = answer_status(child, expected.clone());
-    assert_eq!(first.await.expect("first request"), Some(expected));
+    assert_eq!(
+        first.await.expect("first request"),
+        ChildProducerStatus::Available(expected)
+    );
     responder.join().expect("responder");
 }
 
@@ -308,7 +341,10 @@ async fn flush_fence_with_stale_generation_rejects_the_whole_frame() {
         .await;
     assert_eq!(result, None);
     let (_child, remaining_deadline_ms) = responder.join().expect("responder");
-    assert_eq!(remaining_deadline_ms, 200);
+    assert!(
+        (1..=200).contains(&remaining_deadline_ms),
+        "the child receives only the caller's remaining absolute budget"
+    );
     wait_connection(&bridge, ChildBridgeConnection::Lost);
 }
 
@@ -411,7 +447,7 @@ async fn diagnostics_state_reports_valid_producer_snapshot() {
         .await;
     assert_eq!(state.process, ChildProcessPresence::Running);
     assert_eq!(state.bridge, ChildBridgeConnection::Connected);
-    assert_eq!(state.producer, Some(expected));
+    assert_eq!(state.producer, ChildProducerStatus::Available(expected));
     responder.join().expect("responder");
 }
 
@@ -423,7 +459,8 @@ async fn diagnostics_state_discards_mismatched_snapshot() {
     let state = bridge
         .diagnostics_state(ChildProcessPresence::Running)
         .await;
-    assert_eq!(state.producer, None);
+    assert_eq!(state.producer, ChildProducerStatus::Invalid);
+    assert_eq!(state.bridge, ChildBridgeConnection::Lost);
     responder.join().expect("responder");
 }
 
@@ -435,7 +472,17 @@ async fn diagnostics_state_skips_status_for_missing_process() {
         .await;
     assert_eq!(state.process, ChildProcessPresence::Missing);
     assert_eq!(state.bridge, ChildBridgeConnection::Connected);
-    assert_eq!(state.producer, None);
+    assert_eq!(state.producer, ChildProducerStatus::Unavailable);
+}
+
+#[test]
+fn process_inspection_error_is_invalid_not_missing() {
+    let observation: std::io::Result<Option<std::process::ExitStatus>> =
+        Err(std::io::Error::other("injected inspection failure"));
+    assert_eq!(
+        ChildProcessPresence::from_observation(observation),
+        ChildProcessPresence::Invalid
+    );
 }
 
 #[test]

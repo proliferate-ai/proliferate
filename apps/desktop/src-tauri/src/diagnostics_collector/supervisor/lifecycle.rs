@@ -100,6 +100,11 @@ impl DiagnosticsCollectorSupervisor {
             self.publish_state(DesktopDiagnosticsSupervisorStateV1::Stopped { orderly: true });
             return Ok(());
         };
+        // Producer-death and shutdown commands share one async writer gate.
+        // The producer-death path holds the same async lifecycle decision and
+        // takes this gate first, so shutdown cannot interleave its control line
+        // with an already-authorized terminal line.
+        let _control_writer = self.terminal_control.lock_writer().await;
         // An ambiguous terminal control write may have partially reached the
         // collector. Never append a shutdown command to that stream: force
         // the identity-stable owned child to a verified reap instead.
