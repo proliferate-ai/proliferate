@@ -178,6 +178,42 @@ describe("ChatInputControlRow", () => {
     expect(mode.querySelector("svg")).toBeNull();
   });
 
+  it("swaps an icon-configured working mode's word for its icon under the compact tier", () => {
+    const controls = createControls();
+    controls[0] = {
+      ...controls[0],
+      key: "mode",
+      options: [
+        { value: "bypassPermissions", label: "Bypass", selected: true },
+        { value: "plan", label: "Plan", selected: false },
+      ],
+    };
+    renderControlRow({ sessionConfigControls: controls });
+
+    const mode = screen.getByRole("button", { name: "Mode: Bypass" });
+    // One button, CSS-swapped: the icon renders only under the compact
+    // container tier, the word hides there, and the pill stops shrinking so
+    // the icon can never be squeezed into its neighbors.
+    const iconWrapper = mode.querySelector("svg")?.parentElement;
+    expect(iconWrapper?.className).toContain("hidden");
+    expect(iconWrapper?.className).toContain("@max-[32rem]:flex");
+    const label = screen.getByText("Bypass");
+    expect(label.closest('[class*="@max-[32rem]:hidden"]')).not.toBeNull();
+    expect(mode.className).toContain("@max-[32rem]:shrink-0");
+  });
+
+  it("hides the reasoning level word under the compact tier, keeping the bars", () => {
+    renderControlRow();
+
+    const label = screen.getByText("Medium");
+    expect(label.closest('[class*="@max-[32rem]:hidden"]')).not.toBeNull();
+    const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
+    expect(
+      reasoning.querySelector("[data-level-bars-icon]")
+        ?.closest('[class*="@max-[32rem]:hidden"]'),
+    ).toBeNull();
+  });
+
   it("orders model, working mode, reasoning bars, and fast mode in the visible row", () => {
     renderControlRow();
 

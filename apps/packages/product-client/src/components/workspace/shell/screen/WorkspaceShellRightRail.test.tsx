@@ -49,7 +49,11 @@ describe("WorkspaceShellRightRail", () => {
 
     const rail = container.querySelector<HTMLElement>("[data-right-panel-rail]");
     const content = container.querySelector<HTMLElement>("[data-right-panel-content]");
-    expect(rail?.style.width).toBe("var(--workspace-right-width)");
+    // The animated width var clamped so the chat pane keeps its minimum: the
+    // rail yields before the composer collapses (MAIN_PANE_MIN_WIDTH).
+    expect(rail?.style.width).toBe(
+      "min(var(--workspace-right-width), calc(100% - 420px))",
+    );
     expect(rail?.className).toContain("bg-sidebar-background");
     expect(content?.className).toContain("absolute inset-y-0 right-0");
     expect(content?.className).toContain("opacity-100");

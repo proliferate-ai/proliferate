@@ -46,6 +46,17 @@ export const RIGHT_PANEL_DEFAULT_WIDTH = 420;
 export const RIGHT_PANEL_MIN_WIDTH = 380;
 export const RIGHT_PANEL_MAX_WIDTH = 700;
 /**
+ * Floor the main (chat) pane keeps against the right rail. The rail's
+ * rendered width is clamped so the pane never drops below this, whatever the
+ * persisted panel width, sidebar width, and window size add up to — without
+ * it, a wide panel on a small window squeezes the pane toward zero and the
+ * composer controls paint over each other. 420 = the composer's compact
+ * control tier (see `chat-layout.ts`) fully laid out at its icon floor, plus
+ * the chat column gutter. The persisted width is deliberately not clamped:
+ * the user's chosen panel width comes back as soon as the window affords it.
+ */
+export const MAIN_PANE_MIN_WIDTH = 420;
+/**
  * Raw drag width below which a resize gesture stops resizing and collapses the
  * panel instead. This cannot live in `clampRightPanelWidth`: clamping's whole
  * job is to refuse widths under the minimum, so a clamped value can never

@@ -257,6 +257,37 @@ Cowork hides the permission/access `mode` because its access policy is
 product-defined, but retains independent working-mode controls such as
 `collaboration_mode` together with model tuning in the combined picker.
 
+### Compact control tier (narrow composers)
+
+Below a 32rem composer-container width (`chat-layout.ts` owns the class-string
+constants; the dock column's `@container` anchors the query in chat, and the
+Home composer wrapper anchors its own), labeled control pills shed their words
+so the row degrades to icons instead of truncating mid-word or painting over
+neighboring controls:
+
+- The working-mode pill swaps its mode name for the mode's configured icon
+  (`SessionControlIcon`) and stops shrinking at that icon footprint. A mode
+  value without a configured icon keeps its text at every width. This is the
+  one sanctioned exception to "no leading mode icon": the icon renders only
+  under the compact tier, never beside the name.
+- The reasoning pill hides the level word; the lit level bars keep reading
+  the level.
+- The integrations pill hides the connected count and keeps the glyph. The
+  urgent re-auth label stays visible (and shrinkable) at every width.
+- The model pill keeps its provider icon and name and remains the flexible
+  item — it truncates with an ellipsis before any icon pill compresses.
+- Each swap is CSS visibility on one button (wrapper-span classes via
+  `ComposerControlButton`), so `data-*` driver attributes, handlers, and
+  `aria-label`s are width-independent. Pending-state indicators stay visible
+  at every width.
+
+The compact tier is sized so the row fits at the main pane's floor:
+`MAIN_PANE_MIN_WIDTH` (`right-panel-model.ts`) clamps the right rail's
+rendered width so the chat pane never drops below 420px, whatever the
+persisted panel width, sidebar width, and window size add up to. The
+persisted panel width is not clamped — the user's chosen width returns when
+the window affords it.
+
 ## 2. Dock Regions
 
 `resolveComposerDockSlots`
