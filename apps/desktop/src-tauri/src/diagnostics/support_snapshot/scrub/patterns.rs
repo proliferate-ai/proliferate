@@ -319,18 +319,59 @@ fn collect_contextual_opaque_matches(
     end: usize,
     matches: &mut Vec<(usize, usize)>,
 ) {
+    let token_start = value[..start]
+        .rfind(opaque_context_boundary)
+        .map_or(0, |boundary| boundary + 1);
+    let query_value = value[token_start..start]
+        .rfind(|character| matches!(character, '?' | '#'))
+        .is_some();
+    let candidate_start = if query_value {
+        value[start..end]
+            .find('=')
+            .map_or(start, |delimiter| start + delimiter + 1)
+    } else {
+        contextual_path_value_start(value, token_start, start, end)
+    };
+    if query_value {
+        collect_opaque_candidate(value, candidate_start, end, matches);
+        return;
+    }
+
     let bytes = value.as_bytes();
-    let mut candidate_start = start;
-    for boundary in start..=end {
-        if boundary < end && !matches!(bytes[boundary], b'/' | b'=') {
+    let mut segment_start = candidate_start;
+    for boundary in candidate_start..=end {
+        if boundary < end && bytes[boundary] != b'/' {
             continue;
         }
-        if boundary - candidate_start >= 48
-            && is_high_confidence_opaque(&value[candidate_start..boundary])
-        {
-            matches.push((candidate_start, boundary));
-        }
-        candidate_start = boundary.saturating_add(1);
+        collect_opaque_candidate(value, segment_start, boundary, matches);
+        segment_start = boundary.saturating_add(1);
+    }
+}
+
+fn contextual_path_value_start(value: &str, token_start: usize, start: usize, end: usize) -> usize {
+    let Some(delimiter) = value[start..end].find('=') else {
+        return start;
+    };
+    let delimiter = start + delimiter;
+    let label = value[token_start..delimiter].to_ascii_lowercase();
+    if matches!(
+        label.as_str(),
+        "path" | "file" | "filename" | "directory" | "repo" | "repository" | "relative"
+    ) {
+        delimiter + 1
+    } else {
+        start
+    }
+}
+
+fn collect_opaque_candidate(
+    value: &str,
+    start: usize,
+    end: usize,
+    matches: &mut Vec<(usize, usize)>,
+) {
+    if end.saturating_sub(start) >= 48 && is_high_confidence_opaque(&value[start..end]) {
+        matches.push((start, end));
     }
 }
 

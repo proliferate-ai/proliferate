@@ -196,4 +196,21 @@ fn long_paths_urls_queries_and_monkey_survive_but_real_opaque_tokens_do_not() {
         retained,
         "path=/tmp/[REDACTED:opaque_credential]/support-report.json"
     );
+
+    let padded = "Aa0Bb1Cc2Dd3Ee4Ff5Gg6Hh7Ii8Jj9Kk0Ll1Mm2Nn3Oo4P==";
+    assert_eq!(padded.len(), 48);
+    assert_eq!(scrub(padded), "[REDACTED:opaque_credential]");
+    let url = format!("https://example.test/download?blob={padded}&view=ordinary");
+    assert_eq!(
+        scrub(&url),
+        "https://example.test/download?blob=[REDACTED:opaque_credential]&view=ordinary"
+    );
+
+    let internal_slash = "Aa0Bb1Cc2Dd3Ee4/Ff5Gg6Hh7Ii8Jj9Kk0Ll1Mm2Nn3Oo4P==";
+    assert!(internal_slash.len() >= 48);
+    let url = format!("https://example.test/download?blob={internal_slash}&view=ordinary");
+    assert_eq!(
+        scrub(&url),
+        "https://example.test/download?blob=[REDACTED:opaque_credential]&view=ordinary"
+    );
 }

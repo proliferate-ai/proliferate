@@ -182,3 +182,27 @@ fn mapped_utf8_tail_reports_exact_original_bytes_without_redaction() {
         Some((input.len() - (16_384 - TRUNCATION_MARKER.len())) as u64)
     );
 }
+
+#[test]
+fn padded_query_credential_crossing_visible_end_is_redacted_without_promotion() {
+    let credential = "Aa0Bb1Cc2Dd3Ee4/Ff5Gg6Hh7Ii8Jj9Kk0Ll1Mm2Nn3Oo4P==";
+    for kind in [SupportTextKind::Generic, SupportTextKind::Content] {
+        let retained_limit = limit(kind) - TRUNCATION_MARKER.len();
+        let url_prefix = " https://example.test/download?blob=";
+        let mut input = "x".repeat(retained_limit - url_prefix.len() - 40);
+        input.push_str(url_prefix);
+        input.push_str(credential);
+        input.push_str("&view=ordinary");
+
+        let output = SupportExportScrubber::default()
+            .scrub_text(input, SupportEvidenceSourceV1::Package, kind)
+            .expect("crossing padded query credential");
+        let retained = output.value.expect("retained bounded text");
+        assert!(retained.contains("blob=[REDACTED:opaque_credential]"));
+        assert!(!retained.contains(credential));
+        assert!(!retained.contains("view=ordinary"));
+        assert!(retained.ends_with(TRUNCATION_MARKER));
+        assert_eq!(output.accounting.scrubbed_by_class.opaque_credential, 1);
+        assert_eq!(output.accounting.truncations[0].omitted_bytes, None);
+    }
+}
