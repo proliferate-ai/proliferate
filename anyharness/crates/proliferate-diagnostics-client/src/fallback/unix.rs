@@ -375,7 +375,7 @@ fn create_new(directory: &File, name: &str, append: bool) -> Result<OpenSegment,
             directory.as_raw_fd(),
             c_name(name).as_ptr(),
             flags,
-            0o600 as libc::mode_t,
+            0o600 as libc::c_int,
         )
     };
     if raw < 0 {

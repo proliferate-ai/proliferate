@@ -162,7 +162,7 @@ impl ProducerInner {
 
     /// Called only after the drain deadline expires. Every resident record is
     /// counted once; detached in-flight work also makes the fence ineligible.
-    fn expire_resident_on_shutdown_timeout(&self) {
+    pub(super) fn expire_resident_on_shutdown_timeout(&self) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         // This is a one-way authority transition. A blocking syscall already
         // in progress may finish later, but its writer/result cannot rejoin

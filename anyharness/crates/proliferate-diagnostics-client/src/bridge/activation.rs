@@ -212,6 +212,7 @@ mod platform {
         mut received: ReceivedFrame<ParentFrame>,
         bootstrap_deadline: Instant,
     ) -> DesktopDiagnosticsActivation {
+        let expected_descriptor_count = parent_frame_fd_count(&received.frame);
         let ParentFrame::Bootstrap {
             protocol_version,
             component: wire_component,
@@ -227,7 +228,7 @@ mod platform {
             );
         };
         if !valid_protocol_version(*protocol_version)
-            || parent_frame_fd_count(&received.frame) != received.descriptors.len()
+            || expected_descriptor_count != received.descriptors.len()
         {
             return degraded(
                 DegradedClassification::FramingInvalid,
@@ -447,7 +448,13 @@ mod platform {
         }
         let mut local: libc::sockaddr_storage = unsafe { zeroed() };
         let mut local_len = size_of::<libc::sockaddr_storage>() as libc::socklen_t;
-        if unsafe { libc::getsockname(fd, (&mut local as *mut _).cast(), &mut local_len) } != 0
+        if unsafe {
+            libc::getsockname(
+                fd,
+                (&mut local as *mut libc::sockaddr_storage).cast::<libc::sockaddr>(),
+                &mut local_len,
+            )
+        } != 0
             || i32::from(local.ss_family) != libc::AF_UNIX
         {
             return false;

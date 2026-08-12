@@ -8,8 +8,7 @@ use tracing::{span, Event, Subscriber};
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 use crate::{
-    DetailedDiagnosticInput, DiagnosticArgument, DiagnosticCorrelation, DiagnosticPrivacy,
-    DiagnosticsProducerHandle,
+    DetailedDiagnosticInput, DiagnosticArgument, DiagnosticPrivacy, DiagnosticsProducerHandle,
 };
 
 mod promotions;
@@ -172,7 +171,8 @@ where
                     inheritance_closed = true;
                     break;
                 };
-                if let Some(fields) = span.extensions().get::<SpanFields>() {
+                let extensions = span.extensions();
+                if let Some(fields) = extensions.get::<SpanFields>() {
                     merged.extend_missing(&fields.0);
                     if merged.is_full() {
                         if scope.next().is_some() {

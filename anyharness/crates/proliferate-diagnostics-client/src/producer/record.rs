@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::BTreeMap, sync::OnceLock};
+use std::{collections::BTreeMap, sync::OnceLock};
 
 use proliferate_diagnostics_protocol::v1::{
     limits::{
