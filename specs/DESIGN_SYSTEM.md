@@ -692,20 +692,23 @@ holds the shared popover frame/surface class constants composed by `Popover`,
 `DropdownMenu`, and `PopoverButton`. Like the infrastructure directories, it is
 not a component: no index row below, no export subpath.
 
-### The four jobs of UI code
+### The five jobs of UI code
 
-Every line of styling anywhere in the frontend does one of four jobs. Each job has one owner and one enforcement level; the whole governance model below is this table applied.
+Every line of styling anywhere in the frontend does one of five jobs. Each job has one owner and one enforcement level; the whole governance model below is this table applied.
 
 | Job | What it is | Owner | Feature code may | Enforcement |
 | --- | --- | --- | --- | --- |
 | **Paint** | Color, type scale, elevation, radii, motion — visual identity | `design` tokens + the library | never introduce it | Mechanical for values (the closed set above); token-composed identity at callsites is caught by review checks 1–2 below, not by a gate |
 | **Anatomy** | The skeleton of a repeating shape: what makes a row a row, a card a card | patterns | fill slots with ReactNodes | UI-conformance review (below) |
-| **Layout** | Arrangement: flex, grid, gap, padding from the scale, width, ordering | feature code | free, always | none |
+| **State** | Interaction-state choreography: which hover/active/disabled/focus-visible/reveal states exist and how they paint | interactive primitives + patterns | compose a primitive's built-in states; never hand-assemble `hover:`/`active:`/`focus-visible:` stacks on raw elements | UI-conformance review (check 7 below) |
+| **Layout** | Arrangement: flex, grid, gap, padding from the scale, width, ordering | feature code | free, always (inter-pattern rhythm belongs to the area scaffold — see below) | none |
 | **Behavior** | Focus traps, dismissal, `role=` semantics, overlay positioning | primitives + patterns | compose, never rebuild | Mechanical (Radix/raw-DOM gates) + review |
 
-The litmus test for any ambiguous line: **if a designer changed how the app looks, would this line need to change without a corresponding token or pattern edit?** Yes means the line is doing paint or anatomy work; no means it is layout. The test classifies the job, never the file — placement is decided by the placement algorithm and the rule of two below, so a first-instance shape is paint-and-anatomy that legitimately lives in feature code until its second appearance, and `text-muted-foreground` at a callsite is fine because a redesign changes it through the token.
+The litmus test for any ambiguous line: **if a designer changed how the app looks, would this line need to change without a corresponding token or pattern edit?** Yes means the line is doing paint, anatomy, or state work; no means it is layout. The test classifies the job, never the file — placement is decided by the placement algorithm and the rule of two below, so a first-instance shape is paint-and-anatomy that legitimately lives in feature code until its second appearance, and `text-muted-foreground` at a callsite is fine because a redesign changes it through the token.
 
 Slots are what keep the strictness livable. A pattern owns its skeleton and exposes `ReactNode` slots (`ListRow`'s `leading`/`title`/`trailing`); feature code filling a slot with a `Badge`, a status glyph, or a shortcut hint is the mechanism working, not a violation. What is banned is redrawing the skeleton around the slot contents — and the same table applies *inside* the slot: a `ReactNode` passed into a slot may compose library components and layout, but may not itself constitute a new repeating skeleton. The conformance checks below apply to slot contents too.
+
+Two corollaries. State stacks have exactly one owner: a hover/active/disabled/focus-visible treatment lives inside the interactive primitive or pattern (`Button`, `ListRow`, `RowActionIconButton`), never hand-assembled per call site — a per-callsite stack is where a missing `active:` state hides until a user feels it. And rhythm is anatomy, not layout: containers own the space between their children, so an area scaffold owns its section gaps the way `SettingsGroup` owns its hairline dividers — two panes built from identical patterns must not drift apart at `space-y-6` versus `space-y-3`.
 
 ### The library model
 
@@ -730,7 +733,7 @@ where it is used:
   job it does (`ListRow`, `PageHeader`), never for the feature that first needed
   it. The admission test is the props: a pattern's props are only `ReactNode`/`string`/`boolean`/callbacks — shapes, not nouns. A component whose props mention a domain type belongs in the domain-aware tier below.
 
-  Inside this tier, an **area kit** is a family of patterns defining the canonical look of one system — the composer kit (`ComposerTextareaFrame`, `ComposerActionButton`, `ComposerControlButton`, `ComposerTextarea`), the toast system (`ToastBody`/`ToastExpansion`/`ToastHost`, patterned around the root `Sonner` positioner), the sidebar rows (`SidebarNavRow`, `SidebarRowSurface`, `SidebarActionButton`). A kit member is sanctioned even with a single consuming surface: the test for a kit is not reuse but "does this define the canonical look of a system" — kits are the one structural exception to the rule of two below. Kit cohesion beats tier purity — a kit lives in one place, at the level its most domain-bound member requires; never split a kit across tiers to satisfy the props test file by file (two existing kits violate this today — see Current Gaps). A kit member may be composed from any surface: matching another system's look by calling its kit is adoption, not duplication.
+  Inside this tier, an **area kit** is a family of patterns defining the canonical look of one system — the composer kit (`ComposerTextareaFrame`, `ComposerActionButton`, `ComposerControlButton`, `ComposerTextarea`), the toast system (`ToastBody`/`ToastExpansion`/`ToastHost`, patterned around the root `Sonner` positioner), the sidebar rows (`SidebarNavRow`, `SidebarRowSurface`, `SidebarActionButton`). A kit member is sanctioned even with a single consuming surface: the test for a kit is not reuse but "does this define the canonical look of a system" — kits are the one structural exception to the rule of two below. Kit cohesion beats tier purity — a kit lives in one place, at the level its most domain-bound member requires; never split a kit across tiers to satisfy the props test file by file (two existing kits violate this today — see Current Gaps). A kit member may be composed from any surface: matching another system's look by calling its kit is adoption, not duplication. The kit set is closed: kits exist only for the named app chrome (composer, toast, sidebar, tabs, panel, settings) or by explicit review sign-off recorded as a new named group in the sanctioned index — a feature area is not a system, and declaring one is not a rule-of-two bypass.
 - **`icons/`** — concrete glyph modules split by general role, specific surface
   (command palette), or brand (Proliferate mark, auth/model provider glyphs).
   There is no aggregate icon barrel. Icon modules are glyph collections, not
@@ -750,7 +753,7 @@ not a different role:
   live here for that reason, not because they belong to a "settings" or
   "secrets" feature folder.
 
-  Admission to this tier is strict: an entry must be a domain **mapping** (the one place that decides how Proliferate renders a PR status) or a domain **assembly** reused across independent surfaces (`SecretManagementPanel`, with consumers in the personal, organization, and repo secrets panes; `ModelTable` currently holds a row here with a single consumer — see Current Gaps). A trivial mapping with no composition should be a presenter function feeding a pure pattern instead — the mapping still gets exactly one home, and the library stays smaller. This tier is a shelf, not a landfill; it should stay near its current size.
+  Admission to this tier is mechanical: the component's public props must reference a `#product/domain/**` or `#product/lib/domain/**` type AND the component must compose two or more library components (`SecretManagementPanel` passes, with consumers in the personal, organization, and repo secrets panes). Anything less is a presenter function feeding a pure pattern instead — the mapping still gets exactly one home, and the library stays smaller. Most current rows predate this test and are grandfathered pending re-audit — see Current Gaps. This tier is a shelf, not a landfill; it should shrink as the settings kit moves down to `primitives/patterns/`.
 
 There is no fourth content tier inside `product-client/src/primitives` (no
 `surfaces/`, no feature-keyed folder): a component's tier is always a root
@@ -786,7 +789,9 @@ Feature code may still define feature-specific components — a component that o
 - **First instance is free.** The first time a feature needs a genuinely novel shape, it may build it in place — token paint only, composed from existing primitives where they apply. It does not enter the library and does not get an index row.
 - **Second appearance promotes.** The PR that would introduce the second implementation of a shape anywhere in the tree must promote the shape into the tier matching its role (with an index row and a registry entry) instead of copying it. Duplicates are never merged as-is; the promotion absorbs both call sites.
 
-Promotion is earned by duplication, never speculative — a component is not moved into the library because it "looks reusable." The inverse also holds: every library component must have at least one non-playground call site, or carry an explicit incubating note in its index row. A sanctioned component with zero consumers while feature code hand-rolls its shape is the failure mode this rule exists to catch.
+Promotion is earned by duplication, never speculative — a component is not moved into the library because it "looks reusable." The inverse also holds: every library component must have at least one non-playground call site, or carry an explicit incubating note in its index row naming the in-flight PR that will consume it; an incubating note expires after one release, and review rejects new ones with no concrete consumer. A sanctioned component with zero consumers while feature code hand-rolls its shape is the failure mode this rule exists to catch.
+
+Promotion is also bounded in both directions. A pattern that needs a third orthogonal variant axis is split or redesigned, decided in review, never extended — variant-prop monoliths that feature code fears touching are the failure this budget prevents. A variant with a single consumer for a full release returns to its call site, the fission mirror of the call-site rule above. Shape identity is operational: same skeleton DOM and same slot contract is the same shape; differing only in token values is the same shape; differing in slot structure is a different shape.
 
 ### Placement algorithm
 
@@ -809,6 +814,8 @@ The judgment half of enforcement. Every PR touching frontend components gets rev
 4. **Geometry escape hatches** — arbitrary values or inline styles without a legitimate cause (virtualization math and grid positioning are legitimate; decorative geometry is not). A legitimate cause is recorded in a comment at the site, so the judgment is visible in the diff.
 5. **Icon source** — glyphs come from `primitives/icons/`, never directly from `lucide-react`. The grandfathered files are a ratchet: no new lucide identifiers, even on an existing import line.
 6. **New-pattern quality** — honest registry demo, correct tier (shapes vs nouns), named for the job not the feature.
+7. **Hand-assembled state stacks** — new `hover:`/`active:`/`focus-visible:`/reveal choreography written on a raw element in feature code instead of composing an interactive primitive's built-in states.
+8. **Rhythm** — inter-pattern spacing comes from the area scaffold (containers own the space between their children), not from per-pane `space-y-*` choices.
 
 ### The sanctioned index
 
@@ -837,7 +844,7 @@ index is the closed set, not a sample of it.
 | `Label` | [Label.tsx](../apps/packages/product-client/src/primitives/Label.tsx) | Form field label. |
 | `PaneIconButton` | [PaneIconButton.tsx](../apps/packages/product-client/src/primitives/PaneIconButton.tsx) | Pane-scoped icon button (24px box), composes `Button`. |
 | `Popover` | [Popover.tsx](../apps/packages/product-client/src/primitives/Popover.tsx) | Raw `@radix-ui/react-popover` wrapper; `PopoverButton` composes it. |
-| `PopoverButton` | [PopoverButton.tsx](../apps/packages/product-client/src/primitives/PopoverButton.tsx) | Popover-backed trigger/content wrapper with `triggerMode` (`click`/`doubleClick`/`contextMenu`); the sanctioned menu/popover trigger. |
+| `PopoverButton` | [PopoverButton.tsx](../apps/packages/product-client/src/primitives/PopoverButton.tsx) | Popover-backed trigger/content wrapper with `triggerMode` (`click`/`doubleClick`/`contextMenu`); the sanctioned trigger for click-only popovers and menus (keyboard-navigable menus stay on `DropdownMenu` until parity — see DropdownMenu status below). |
 | `PopoverMenuItem` | [PopoverMenuItem.tsx](../apps/packages/product-client/src/primitives/PopoverMenuItem.tsx) | Plain-button popover menu row; the sanctioned menu-item companion to `PopoverButton`. |
 | `PopoverSearchField` | [PopoverSearchField.tsx](../apps/packages/product-client/src/primitives/PopoverSearchField.tsx) | Search input for popover pickers, with an in-place list-navigation keyboard hook. |
 | `ProgressBar` | [ProgressBar.tsx](../apps/packages/product-client/src/primitives/ProgressBar.tsx) | Determinate progress bar. |
@@ -874,13 +881,17 @@ tier. Four files still import it directly:
 [WorkspaceActionsMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/topbar/WorkspaceActionsMenu.tsx)
 (all `product-client`), and
 [ProposedPlanCard.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx)
-(`product-client`). Migrating them onto `PopoverButton`/`PopoverMenuItem` is pending:
-Radix's dropdown-menu primitive provides roving-tabindex arrow-key navigation,
-typeahead, and managed focus-return-to-trigger that
-`PopoverButton`/`PopoverMenuItem` do not implement today. `DropdownMenu` is not
-banned outright — it has no CI gate — but new menu call sites should use
-`PopoverButton`/`PopoverMenuItem`; only the four existing consumers above are
-grandfathered.
+(`product-client`). Migrating them onto `PopoverButton`/`PopoverMenuItem` waits
+on parity: Radix's dropdown-menu primitive provides roving-tabindex arrow-key
+navigation, typeahead, and managed focus-return-to-trigger that
+`PopoverButton`/`PopoverMenuItem` do not implement today. Behavior parity is an
+admission requirement for sanctioned replacements — a library component is not
+declared the sanctioned replacement for a vendor-backed primitive until it
+matches that primitive's keyboard and focus behavior. Until
+`PopoverButton`/`PopoverMenuItem` reach parity, `DropdownMenu` remains the
+sanctioned path for menus that need keyboard navigation (the four consumers
+above are not migration debt); click-only popovers use
+`PopoverButton`/`PopoverMenuItem`.
 
 #### Patterns (`product-client/src/primitives/patterns/`)
 
@@ -1133,7 +1144,9 @@ this document states is not mechanically enforced.
   `DropdownMenu` directly.
 - The rule of two, the at-least-one-call-site rule, and the whole UI-conformance review checklist are review-enforced, not CI-enforced: no script detects a second implementation of a shape, a dead library component, or a hand-rolled `role="dialog|menu|listbox|tooltip"` shell. Known existing violations predating the rules: direct `lucide-react` imports in ~43 feature files (33 of them shadowing at least one identically named tuned glyph in `primitives/icons/`), seven hand-rolled overlay shells, several duplicated shapes (roster rows, card shells, status dots, disclosure state machines) pending promotion, dead library vocabulary (`AuthProviderButton` and `ListRow` have no product call sites; `ProductNotice` sits outside every tier with zero call sites while feature code hand-rolls its shape), and `ModelTable` holding a domain-tier row with a single consumer.
 - Arbitrary width/height/padding/margin/inset brackets (`w-[…]`, `p-[…]`, and siblings) have no gate rule — the appearance gate's arbitrary-bracket rules stop at the `rounded`/`z`/`gap`/`size` families plus text and glyph sizing.
-- Area kits are a grouping stated by this document, not a directory structure: the composer and sidebar kit files sit flat in `primitives/patterns/` today, and two kits are split across tiers against the kit-cohesion rule — the toast kit's positioner (`Sonner`) is a root primitive, and the settings kit spans `primitives/patterns/` (`SettingsGroup`, `SettingsMenu`) and `components/patterns/` (the six `Settings*` patterns there, none of which import domain code).
+- Area kits are a grouping stated by this document, not a directory structure: the composer and sidebar kit files sit flat in `primitives/patterns/` today, and two kits are split across tiers against the kit-cohesion rule — the toast kit's positioner (`Sonner`) is a root primitive, and the settings kit spans `primitives/patterns/` (`SettingsGroup`, `SettingsMenu`) and `components/patterns/` (the six `Settings*` patterns there, none of which import domain code; they are slated to move down).
+- The state job is review-enforced only: no gate detects a hand-assembled `hover:`/`active:`/`focus-visible:` stack on a raw element in feature code, and hundreds of such stacks predate the rule.
+- Every current domain-tier row except `SecretManagementPanel` is grandfathered against the mechanical admission test (domain type in the public props plus composing two or more library components): the six shape-only `Settings*` rows await the kit move, `PrStatusBadge` awaits its presenter-function conversion, and `ModelTable`, `ProductPageShell`, and `BillingGateState` await re-audit.
 
 Test coverage for the two mechanical library rules:
 [test_check_frontend_boundaries.py](../scripts/test_check_frontend_boundaries.py).
