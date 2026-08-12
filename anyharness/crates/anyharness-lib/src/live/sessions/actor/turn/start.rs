@@ -52,8 +52,8 @@ impl SessionActor {
         let queued_subagent_wake = queue_seq.filter(|_| payload.has_subagent_wake_provenance());
 
         // Canonical completion wakes are exactly one text block. They render
-        // against no attachments before durable admission; a forged wake with
-        // attachment-bearing blocks therefore fails without opening a turn.
+        // against no attachments only after durable admission has validated
+        // the row.
         let parts = if queued_subagent_wake.is_some() {
             ResolvedParts::default()
         } else {
@@ -88,6 +88,29 @@ impl SessionActor {
             }
         };
 
+        // Completion-wake admission is the first durable turn effect. It stays
+        // after product-context resolution so a context failure has no
+        // TurnStarted or user item, but before render so the existing
+        // canonical gate silently discards forged attachment-bearing rows.
+        let admitted_subagent_turn = if let Some(seq) = queued_subagent_wake {
+            let mut sink = self.event_sink.lock().await;
+            let outcome = sink
+                .persist_subagent_wake_turn(
+                    payload.text_summary.clone(),
+                    prompt_id.clone(),
+                    payload.content_parts(),
+                    payload.public_provenance(),
+                    seq,
+                )
+                .map_err(|error| PromptAcceptError::EnqueueFailed(error.to_string()))?;
+            match outcome {
+                SubagentWakeTurnStartOutcome::Admitted { turn_id } => Some(turn_id),
+                other => return Ok(BeginPromptTurnOutcome::Skipped(other)),
+            }
+        } else {
+            None
+        };
+
         // Render: pure payload + loaded parts + separately resolved system
         // context -> ACP blocks. Authored payload blocks remain untouched.
         let acp_blocks = match render(
@@ -108,28 +131,6 @@ impl SessionActor {
                 );
                 return Err(PromptAcceptError::EnqueueFailed(error.detail));
             }
-        };
-
-        // Completion-wake admission is the first durable turn effect. It must
-        // stay after product-context resolution/render so a fail-closed turn
-        // has no TurnStarted or user transcript item.
-        let admitted_subagent_turn = if let Some(seq) = queued_subagent_wake {
-            let mut sink = self.event_sink.lock().await;
-            let outcome = sink
-                .persist_subagent_wake_turn(
-                    payload.text_summary.clone(),
-                    prompt_id.clone(),
-                    payload.content_parts(),
-                    payload.public_provenance(),
-                    seq,
-                )
-                .map_err(|error| PromptAcceptError::EnqueueFailed(error.to_string()))?;
-            match outcome {
-                SubagentWakeTurnStartOutcome::Admitted { turn_id } => Some(turn_id),
-                other => return Ok(BeginPromptTurnOutcome::Skipped(other)),
-            }
-        } else {
-            None
         };
 
         if let Some(turn_id) = admitted_subagent_turn {
