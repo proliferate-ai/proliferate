@@ -41,6 +41,7 @@ function parent(
   return {
     sessionId,
     title,
+    children,
     groups: AGENTS_PANE_GROUP_ORDER.map((key) => ({
       key,
       label: agentsPaneGroupLabel(key),

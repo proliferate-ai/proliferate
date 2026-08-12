@@ -493,6 +493,6 @@ describe("AgentsPaneDetail", () => {
       workspaceId: "workspace-1",
       text: "Line one",
     });
-    expect(textarea).toHaveValue("");
+    expect((textarea as HTMLTextAreaElement).value).toBe("");
   });
 });
