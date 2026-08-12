@@ -22,8 +22,10 @@ Cross-cutting standards:
 
 - [prompt-and-skill-policy.md](prompt-and-skill-policy.md)
 
-Current definitions:
+Definitions:
 
-- [subagents.md](subagents.md)
+- [workspace.md](workspace.md) — target Workspace contract
+- [subagents.md](subagents.md) — current compatibility truth until the legacy
+  Subagents MCP is removed during Workspace implementation
 - [cowork.md](cowork.md)
 - [reviews.md](reviews.md)
