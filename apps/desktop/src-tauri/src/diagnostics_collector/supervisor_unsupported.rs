@@ -9,6 +9,7 @@ use proliferate_diagnostics_protocol::v1::validation::parse_ingest_batch_value;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
+use super::export_admission::ExportAdmission;
 use super::fallback::FallbackDiagnosticsWriter;
 use super::producer::TauriDiagnosticsProducer;
 
@@ -95,6 +96,7 @@ pub(crate) struct DiagnosticsCollectorSupervisor {
     startup_tx: watch::Sender<StartupBarrierResult>,
     generation_tx: watch::Sender<u64>,
     shutdown_tx: watch::Sender<bool>,
+    export_admission: Arc<ExportAdmission>,
     started: AtomicBool,
     shutdown_armed: AtomicBool,
 }
@@ -116,6 +118,7 @@ impl DiagnosticsCollectorSupervisor {
             startup_tx,
             generation_tx,
             shutdown_tx,
+            export_admission: ExportAdmission::shared_capacity_one(),
             started: AtomicBool::new(false),
             shutdown_armed: AtomicBool::new(false),
         })
@@ -135,6 +138,10 @@ impl DiagnosticsCollectorSupervisor {
 
     pub(crate) fn subscribe_shutdown(&self) -> watch::Receiver<bool> {
         self.shutdown_tx.subscribe()
+    }
+
+    pub(crate) fn export_admission(&self) -> Arc<ExportAdmission> {
+        Arc::clone(&self.export_admission)
     }
 
     pub(crate) fn shutdown_is_armed(&self) -> bool {

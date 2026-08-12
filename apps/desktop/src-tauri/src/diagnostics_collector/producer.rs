@@ -11,11 +11,14 @@ use proliferate_diagnostics_protocol::v1::limits::{
 };
 use proliferate_diagnostics_protocol::v1::types::{
     CanonicalLifecycleV1, ComponentV1, DetailedDiagnosticV1, DetailedKindV1, IngestBatchV1,
-    LifecycleFinalizerV1, LifecyclePhaseV1, PrivacyClassificationV1, ProducerRecordV1,
-    RecordClassV1, RedactionClassificationV1, SeverityV1, SourceV1, TerminalOutcomeV1,
+    PrivacyClassificationV1, ProducerRecordV1, RecordClassV1, RedactionClassificationV1,
+    SeverityV1, SourceV1, TypedArgumentV1,
 };
 use proliferate_diagnostics_protocol::v1::validation::validate_producer_record;
 use tokio::sync::Notify;
+
+#[cfg(test)]
+use proliferate_diagnostics_protocol::v1::types::{LifecyclePhaseV1, TerminalOutcomeV1};
 
 use super::client::CollectorHttpClient;
 use super::fallback::{sanitize_native_diagnostic_text, FallbackDiagnosticsWriter};
@@ -229,43 +232,6 @@ impl TauriDiagnosticsProducer {
         }
     }
 
-    pub(crate) fn begin_lifecycle(&self, name: &'static str) -> LifecycleOperation {
-        self.begin_lifecycle_with_correlation(name, LifecycleCorrelation::default())
-    }
-
-    pub(crate) fn begin_lifecycle_with_correlation(
-        &self,
-        name: &'static str,
-        correlation: LifecycleCorrelation,
-    ) -> LifecycleOperation {
-        debug_assert!(PR3_LIFECYCLE_NAMES.contains(&name));
-        let operation_id = uuid::Uuid::new_v4().to_string();
-        if self.inner.closed.load(Ordering::Acquire) {
-            self.inner.fallback.note_drop(1);
-            return LifecycleOperation::new(self.clone(), name, operation_id, correlation, true);
-        }
-        let record = self.next_record_with_operation(
-            name,
-            &operation_id,
-            SeverityV1::Info,
-            RecordClassV1::Lifecycle,
-            None,
-            None,
-            &correlation,
-            Some(CanonicalLifecycleV1 {
-                phase: LifecyclePhaseV1::Started,
-                outcome: None,
-                finalizer: LifecycleFinalizerV1::Producer,
-                model: None,
-                plugin: None,
-            }),
-        );
-        if let Some(record) = record {
-            self.enqueue(record, true);
-        }
-        LifecycleOperation::new(self.clone(), name, operation_id, correlation, false)
-    }
-
     pub(crate) fn make_writer(&self) -> DiagnosticsMakeWriter {
         DiagnosticsMakeWriter::new(self.clone())
     }
@@ -335,6 +301,7 @@ impl TauriDiagnosticsProducer {
             error_classification,
             detailed,
             &LifecycleCorrelation::default(),
+            Vec::new(),
             lifecycle,
         )
     }
@@ -348,6 +315,7 @@ impl TauriDiagnosticsProducer {
         error_classification: Option<String>,
         detailed: Option<DetailedDiagnosticV1>,
         correlation: &LifecycleCorrelation,
+        arguments: Vec<TypedArgumentV1>,
         lifecycle: Option<CanonicalLifecycleV1>,
     ) -> Option<ProducerRecordV1> {
         let sequence = self.inner.state.lock().ok().map(|mut state| {
@@ -382,7 +350,7 @@ impl TauriDiagnosticsProducer {
             workflow_id: correlation.workflow_id.clone(),
             name: name.to_string(),
             severity,
-            arguments: Vec::new(),
+            arguments,
             error_classification,
             record_class,
             privacy,
@@ -583,10 +551,13 @@ impl TauriDiagnosticsProducer {
 pub(crate) mod lifecycle;
 #[path = "producer/queue.rs"]
 mod queue;
-use lifecycle::{DiagnosticsMakeWriter, LifecycleOperation};
+use lifecycle::DiagnosticsMakeWriter;
 use queue::{
     drop_oldest_detail, finish_in_flight, fits, push_back, requeue_front_bounded, truncate_utf8,
 };
+#[cfg(test)]
+#[path = "producer/support_lifecycle_tests.rs"]
+mod support_lifecycle_tests;
 #[cfg(test)]
 #[path = "producer_tests.rs"]
 mod tests;

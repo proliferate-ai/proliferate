@@ -5,6 +5,8 @@ use std::sync::{Arc, Mutex};
 use proliferate_diagnostics_protocol::v1::types::TerminalOutcomeV1;
 use tokio::sync::{watch, Mutex as AsyncMutex};
 
+use crate::diagnostics_collector::export_admission::ExportAdmission;
+
 use super::{
     classification_for_launch_error, retryable, CollectorLaunchError, CollectorLaunchErrorKind,
     CollectorLaunchKindV1, CollectorProcessLauncher, DesktopDiagnosticsSupervisorStateV1,
@@ -51,6 +53,7 @@ impl DiagnosticsCollectorSupervisor {
             startup_tx,
             generation_tx,
             shutdown_tx,
+            export_admission: ExportAdmission::shared_capacity_one(),
             shutdown_armed: AtomicBool::new(false),
             terminal_control: Default::default(),
         })
@@ -86,6 +89,10 @@ impl DiagnosticsCollectorSupervisor {
 
     pub(crate) fn subscribe_shutdown(&self) -> watch::Receiver<bool> {
         self.shutdown_tx.subscribe()
+    }
+
+    pub(crate) fn export_admission(&self) -> Arc<ExportAdmission> {
+        Arc::clone(&self.export_admission)
     }
 
     pub(crate) fn shutdown_is_armed(&self) -> bool {

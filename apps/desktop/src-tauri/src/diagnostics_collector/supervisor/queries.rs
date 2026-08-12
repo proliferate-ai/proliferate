@@ -5,6 +5,9 @@ use std::sync::atomic::Ordering;
 
 use crate::diagnostics_collector::artifact::DiagnosticsArtifactKind;
 use crate::diagnostics_collector::client::{contextualize_export_frame, contextualize_health};
+use crate::diagnostics_collector::support_export::{
+    ConsumedSupportExportPermit, SupportSupervisorExportLease,
+};
 use proliferate_diagnostics_protocol::v1::limits::CURRENT_SCHEMA_VERSION;
 use proliferate_diagnostics_protocol::v1::types::{
     ConnectionDescriptorV1, ExportRequestV1, ExportStreamFrameV1, HealthStatusV1, IngestBatchV1,
@@ -143,6 +146,31 @@ impl DiagnosticsCollectorSupervisor {
             generation_changed: self.generation_tx.subscribe(),
             shutdown: self.shutdown_tx.subscribe(),
         })
+    }
+
+    pub(in crate::diagnostics_collector) async fn support_export_query(
+        &self,
+        request: &ExportRequestV1,
+        authority: ConsumedSupportExportPermit,
+    ) -> Result<SupportSupervisorExportLease, SupervisorUnavailable> {
+        let ready = self.ready_generation()?;
+        let stream = ready
+            .client
+            .export(request)
+            .await
+            .map_err(map_client_error)?;
+        self.require_generation(ready.generation)?;
+        Ok(SupportSupervisorExportLease::new(
+            SupervisorExportLease {
+                generation: ready.generation,
+                collector_boot_id: ready.collector_boot_id,
+                restart_count: ready.restart_count,
+                stream,
+                generation_changed: self.generation_tx.subscribe(),
+                shutdown: self.shutdown_tx.subscribe(),
+            },
+            authority,
+        ))
     }
 
     pub(crate) fn contextualize_export(
