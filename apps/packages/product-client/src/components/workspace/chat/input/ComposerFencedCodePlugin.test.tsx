@@ -322,6 +322,37 @@ describe("ComposerFencedCodePlugin", () => {
     );
   });
 
+  it("resets inherited text formats when an external value replaces the draft", async () => {
+    mockRangeRect();
+    const onChange = vi.fn();
+    const harness = renderEditor({ value: "seed", onChange });
+    await harness.ready();
+
+    // Rich-paste debris can leave format bits on the live selection; they
+    // survive a root clear, so without the reset every message typed after a
+    // send would inherit the `code` format (PRO-159).
+    act(() => {
+      harness.editor.update(() => {
+        const selection = $getRoot().selectEnd();
+        selection.format = 16;
+        selection.dirty = true;
+      }, { discrete: true });
+    });
+
+    onChange.mockClear();
+    harness.rerender({ value: "", snapshot: undefined });
+    await waitFor(() => expect(harness.root.textContent).toBe(""));
+
+    expect(harness.editor.getEditorState().read(() => {
+      const selection = $getSelection();
+      return $isRangeSelection(selection) ? selection.format : null;
+    })).toBe(0);
+
+    act(() => insertText(harness.editor, "plain again"));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(onChange.mock.calls.at(-1)?.[0]).toBe("plain again");
+  });
+
   it("keeps formatted Markdown paste literal inside a code block", async () => {
     const onChange = vi.fn();
     const harness = renderEditor({
@@ -349,7 +380,7 @@ describe("ComposerFencedCodePlugin", () => {
 
 function renderEditor(overrides: Partial<ComposerRichTextEditorProps> = {}) {
   let editor: LexicalEditor | null = null;
-  const props: ComposerRichTextEditorProps = {
+  let props: ComposerRichTextEditorProps = {
     value: "seed",
     onChange: vi.fn(),
     canSubmit: true,
@@ -359,11 +390,15 @@ function renderEditor(overrides: Partial<ComposerRichTextEditorProps> = {}) {
     editorRef: (next) => { editor = next; },
     ...overrides,
   };
-  const { container } = render(<ComposerRichTextEditor {...props} />);
+  const rendered = render(<ComposerRichTextEditor {...props} />);
   return {
     get editor() { return editor!; },
-    root: container.querySelector<HTMLElement>("[data-chat-composer-editor]")!,
+    root: rendered.container.querySelector<HTMLElement>("[data-chat-composer-editor]")!,
     ready: () => waitFor(() => expect(editor).toBeTruthy()),
+    rerender(next: Partial<ComposerRichTextEditorProps>) {
+      props = { ...props, ...next };
+      rendered.rerender(<ComposerRichTextEditor {...props} />);
+    },
   };
 }
 
