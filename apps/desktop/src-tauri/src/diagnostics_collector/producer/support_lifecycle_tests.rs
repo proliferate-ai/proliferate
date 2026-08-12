@@ -19,6 +19,63 @@ fn producer() -> TauriDiagnosticsProducer {
     )
 }
 
+fn assert_unclassified_terminal_pair(
+    producer: &TauriDiagnosticsProducer,
+    name: &str,
+    operation_id: &str,
+    item_id: &str,
+    parent_operation_id: Option<&str>,
+    attempt: Option<u64>,
+    outcome: TerminalOutcomeV1,
+) {
+    let state = producer.inner.state.lock().expect("producer state");
+    assert_eq!(state.queued.len(), 2, "one start and one terminal");
+    let start = &state.queued[0].record;
+    let terminal = &state.queued[1].record;
+    assert_eq!(start.name, name);
+    assert_eq!(terminal.name, name);
+    assert_eq!(start.operation_id, operation_id);
+    assert_eq!(terminal.operation_id, operation_id);
+    assert_eq!(start.parent_operation_id.as_deref(), parent_operation_id);
+    assert_eq!(terminal.parent_operation_id.as_deref(), parent_operation_id);
+    assert_eq!(start.item_id.as_deref(), Some(item_id));
+    assert_eq!(terminal.item_id.as_deref(), Some(item_id));
+    assert!(start.error_classification.is_none());
+    assert!(terminal.error_classification.is_none());
+    assert_eq!(
+        start.lifecycle.as_ref().map(|lifecycle| lifecycle.phase),
+        Some(LifecyclePhaseV1::Started)
+    );
+    assert_eq!(
+        terminal.lifecycle.as_ref().map(|lifecycle| lifecycle.phase),
+        Some(LifecyclePhaseV1::Terminal)
+    );
+    assert_eq!(
+        terminal
+            .lifecycle
+            .as_ref()
+            .and_then(|lifecycle| lifecycle.outcome),
+        Some(outcome)
+    );
+    for record in [start, terminal] {
+        match attempt {
+            Some(attempt) => {
+                assert_eq!(record.arguments.len(), 1);
+                assert_eq!(record.arguments[0].name, "attempt");
+                assert_eq!(
+                    record.arguments[0].privacy,
+                    PrivacyClassificationV1::Operational
+                );
+                assert_eq!(
+                    record.arguments[0].value,
+                    ArgumentValueV1::Integer(attempt as i64)
+                );
+            }
+            None => assert!(record.arguments.is_empty()),
+        }
+    }
+}
+
 #[test]
 fn stringly_entrypoint_rejects_unknown_and_support_names_without_emission() {
     let producer = producer();
@@ -282,4 +339,117 @@ fn submission_classification_types_cannot_cross_outcome_pairs() {
             Some(TerminalOutcomeV1::Failed)
         );
     }
+}
+
+#[test]
+fn preparation_cancelled_emits_one_unclassified_fixed_terminal() {
+    let producer = producer();
+    let job_id = uuid::Uuid::new_v4().to_string();
+    let operation = producer
+        .begin_support_snapshot_preparation(&job_id)
+        .expect("preparation");
+    let operation_id = operation.operation_id().to_string();
+    operation.cancelled();
+    assert_unclassified_terminal_pair(
+        &producer,
+        "desktop.support_snapshot.prepare",
+        &operation_id,
+        &job_id,
+        None,
+        None,
+        TerminalOutcomeV1::Cancelled,
+    );
+}
+
+#[test]
+fn preparation_explicit_abandonment_emits_one_unclassified_fixed_terminal() {
+    let producer = producer();
+    let job_id = uuid::Uuid::new_v4().to_string();
+    let operation = producer
+        .begin_support_snapshot_preparation(&job_id)
+        .expect("preparation");
+    let operation_id = operation.operation_id().to_string();
+    operation.abandoned();
+    assert_unclassified_terminal_pair(
+        &producer,
+        "desktop.support_snapshot.prepare",
+        &operation_id,
+        &job_id,
+        None,
+        None,
+        TerminalOutcomeV1::Abandoned,
+    );
+}
+
+#[test]
+fn dropping_preparation_typed_handle_abandons_exactly_once() {
+    let producer = producer();
+    let job_id = uuid::Uuid::new_v4().to_string();
+    let operation = producer
+        .begin_support_snapshot_preparation(&job_id)
+        .expect("preparation");
+    let operation_id = operation.operation_id().to_string();
+    drop(operation);
+    assert_unclassified_terminal_pair(
+        &producer,
+        "desktop.support_snapshot.prepare",
+        &operation_id,
+        &job_id,
+        None,
+        None,
+        TerminalOutcomeV1::Abandoned,
+    );
+}
+
+fn exercise_unclassified_submission(
+    finish: impl FnOnce(super::lifecycle::support_lifecycle::SupportSubmissionOperation),
+    outcome: TerminalOutcomeV1,
+) {
+    let producer = producer();
+    let job_id = uuid::Uuid::new_v4().to_string();
+    let parent = uuid::Uuid::new_v4().to_string();
+    let attempt = 47;
+    let operation = producer
+        .begin_support_snapshot_submission(&job_id, &parent, attempt)
+        .expect("submission");
+    let operation_id = operation.operation_id().to_string();
+    finish(operation);
+    assert_unclassified_terminal_pair(
+        &producer,
+        "desktop.support_snapshot.submit",
+        &operation_id,
+        &job_id,
+        Some(&parent),
+        Some(attempt),
+        outcome,
+    );
+}
+
+#[test]
+fn submission_succeeded_repeats_sole_typed_attempt_on_one_terminal() {
+    exercise_unclassified_submission(
+        |operation| operation.succeeded(),
+        TerminalOutcomeV1::Succeeded,
+    );
+}
+
+#[test]
+fn submission_cancelled_repeats_sole_typed_attempt_on_one_terminal() {
+    exercise_unclassified_submission(
+        |operation| operation.cancelled(),
+        TerminalOutcomeV1::Cancelled,
+    );
+}
+
+#[test]
+fn submission_explicit_abandonment_repeats_sole_typed_attempt_on_one_terminal() {
+    exercise_unclassified_submission(
+        |operation| operation.abandoned(),
+        TerminalOutcomeV1::Abandoned,
+    );
+}
+
+#[test]
+fn dropping_submission_typed_handle_abandons_exactly_once() {
+    exercise_unclassified_submission(drop, TerminalOutcomeV1::Abandoned);
 }

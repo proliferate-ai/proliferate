@@ -1,5 +1,14 @@
+use std::sync::Arc;
+
+#[cfg(unix)]
+use std::future::Future;
+#[cfg(unix)]
+use std::pin::Pin;
+
 use chrono::DateTime;
 use proliferate_diagnostics_protocol::v1::limits::{CURRENT_SCHEMA_VERSION, MAX_EXPORT_RECORDS};
+#[cfg(unix)]
+use proliferate_diagnostics_protocol::v1::types::ExportStreamFrameV1;
 use proliferate_diagnostics_protocol::v1::types::{
     CollectorAcceptedRecordV1, ComponentV1, ExportManifestV1, ExportPurposeV1, ExportRequestV1,
     GapV1, HealthResponseV1, RecordClassV1, RecordsFilterV1,
@@ -8,7 +17,12 @@ use proliferate_diagnostics_protocol::v1::validation::validate_export_request;
 use tokio::sync::watch;
 use tokio::time::Instant;
 
-use super::supervisor::{DiagnosticsCollectorSupervisor, SupervisorUnavailable};
+#[cfg(unix)]
+use super::client::{CollectorClientError, CollectorJsonLineStream};
+use super::export_admission::ExportAdmission;
+use super::supervisor::DiagnosticsCollectorSupervisor;
+#[cfg(unix)]
+use super::supervisor::SupervisorUnavailable;
 use validation::SupportExportAccumulator;
 
 const SUPPORT_EXPORT_BYTES: u64 = 16_777_216;
@@ -27,27 +41,57 @@ pub(crate) enum SupportExportError {
     Unsupported,
 }
 
-pub(crate) struct SupportExportRequest {
+struct SupportExportRequest {
     collector: ExportRequestV1,
     preparation_id: String,
     expires_at: Instant,
 }
 
-pub(crate) struct SupportExportPermit {
+struct SupportExportPermit {
     authorization_id: String,
     preparation_id: String,
     expires_at: Instant,
     bound_request: ExportRequestV1,
+    #[cfg(test)]
+    drop_probe: Option<AuthorityDropProbe>,
+}
+
+pub(crate) struct SupportExportInvocation {
+    request: SupportExportRequest,
+    permit: SupportExportPermit,
 }
 
 pub(in crate::diagnostics_collector) struct ConsumedSupportExportPermit {
     _authorization_id: String,
     _preparation_id: String,
     _expires_at: Instant,
+    #[cfg(test)]
+    _drop_probe: Option<AuthorityDropProbe>,
+}
+
+#[cfg(test)]
+struct AuthorityDropProbe(Arc<std::sync::atomic::AtomicUsize>);
+
+#[cfg(test)]
+impl Drop for AuthorityDropProbe {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+pub(crate) fn issue_support_export_for_coordinator(
+    preparation_id: &str,
+    source_time_from: String,
+    source_time_to: String,
+    expires_at: Instant,
+) -> Result<SupportExportInvocation, SupportExportError> {
+    let (request, permit) =
+        SupportExportPermit::issue(preparation_id, source_time_from, source_time_to, expires_at)?;
+    Ok(SupportExportInvocation { request, permit })
 }
 
 impl SupportExportPermit {
-    pub(super) fn issue_for_coordinator(
+    fn issue(
         preparation_id: &str,
         source_time_from: String,
         source_time_to: String,
@@ -72,6 +116,8 @@ impl SupportExportPermit {
             preparation_id: preparation_id.to_owned(),
             expires_at,
             bound_request: collector,
+            #[cfg(test)]
+            drop_probe: None,
         };
         Ok((request, permit))
     }
@@ -95,26 +141,57 @@ impl SupportExportPermit {
             _authorization_id: self.authorization_id,
             _preparation_id: self.preparation_id,
             _expires_at: self.expires_at,
+            #[cfg(test)]
+            _drop_probe: self.drop_probe,
         })
     }
 }
 
 #[cfg(unix)]
-pub(in crate::diagnostics_collector) struct SupportSupervisorExportLease {
-    inner: super::supervisor::SupervisorExportLease,
+pub(in crate::diagnostics_collector) struct SupportExportLease<Stream> {
+    generation: u64,
+    restart_count: u64,
+    stream: Stream,
+    generation_changed: watch::Receiver<u64>,
+    shutdown: watch::Receiver<bool>,
     _authority: ConsumedSupportExportPermit,
 }
 
 #[cfg(unix)]
-impl SupportSupervisorExportLease {
+pub(in crate::diagnostics_collector) type SupportSupervisorExportLease =
+    SupportExportLease<CollectorJsonLineStream<ExportStreamFrameV1>>;
+
+#[cfg(unix)]
+impl SupportExportLease<CollectorJsonLineStream<ExportStreamFrameV1>> {
     pub(in crate::diagnostics_collector) fn new(
         inner: super::supervisor::SupervisorExportLease,
         authority: ConsumedSupportExportPermit,
     ) -> Self {
         Self {
-            inner,
+            generation: inner.generation,
+            restart_count: inner.restart_count,
+            stream: inner.stream,
+            generation_changed: inner.generation_changed,
+            shutdown: inner.shutdown,
             _authority: authority,
         }
+    }
+}
+
+#[cfg(unix)]
+type SupportFrameFuture<'a> = Pin<
+    Box<dyn Future<Output = Result<Option<ExportStreamFrameV1>, CollectorClientError>> + Send + 'a>,
+>;
+
+#[cfg(unix)]
+trait SupportExportFrameStream: Send {
+    fn next_frame(&mut self) -> SupportFrameFuture<'_>;
+}
+
+#[cfg(unix)]
+impl SupportExportFrameStream for CollectorJsonLineStream<ExportStreamFrameV1> {
+    fn next_frame(&mut self) -> SupportFrameFuture<'_> {
+        Box::pin(self.next())
     }
 }
 
@@ -129,92 +206,140 @@ pub(crate) struct ValidatedSupportExport {
 impl DiagnosticsCollectorSupervisor {
     pub(crate) async fn export_support_snapshot(
         &self,
-        request: SupportExportRequest,
-        permit: SupportExportPermit,
-        mut cancellation: watch::Receiver<bool>,
+        invocation: SupportExportInvocation,
+        cancellation: watch::Receiver<bool>,
     ) -> Result<ValidatedSupportExport, SupportExportError> {
-        let authority = permit.consume(&request)?;
-        if *cancellation.borrow() {
+        execute_support_export(
+            self.export_admission(),
+            invocation,
+            cancellation,
+            self.subscribe_shutdown(),
+            self.subscribe_generation(),
+            |request, authority| async move {
+                self.support_export_query(&request, authority).await
+            },
+            |generation, restart_count, frame| {
+                self.contextualize_export(generation, restart_count, frame)
+            },
+        )
+        .await
+    }
+}
+
+#[cfg(unix)]
+async fn execute_support_export<Open, OpenFuture, Stream, Contextualize>(
+    admission: Arc<ExportAdmission>,
+    invocation: SupportExportInvocation,
+    mut cancellation: watch::Receiver<bool>,
+    mut opening_shutdown: watch::Receiver<bool>,
+    mut opening_generation: watch::Receiver<u64>,
+    open: Open,
+    mut contextualize: Contextualize,
+) -> Result<ValidatedSupportExport, SupportExportError>
+where
+    Open: FnOnce(ExportRequestV1, ConsumedSupportExportPermit) -> OpenFuture + Send,
+    OpenFuture: Future<Output = Result<SupportExportLease<Stream>, SupervisorUnavailable>> + Send,
+    Stream: SupportExportFrameStream,
+    Contextualize: FnMut(u64, u64, ExportStreamFrameV1) -> Result<ExportStreamFrameV1, SupervisorUnavailable>
+        + Send,
+{
+    let SupportExportInvocation { request, permit } = invocation;
+    let authority = permit.consume(&request)?;
+    if cancellation_failed_closed(&cancellation) {
+        return Err(SupportExportError::Cancelled);
+    }
+    let _admission = admission
+        .try_acquire_owned()
+        .map_err(|_| SupportExportError::Busy)?;
+    let deadline_at = request.expires_at;
+    let deadline = tokio::time::sleep_until(deadline_at);
+    tokio::pin!(deadline);
+
+    let opening = open(request.collector.clone(), authority);
+    tokio::pin!(opening);
+    let mut lease = loop {
+        if shutdown_failed_closed(&opening_shutdown) {
             return Err(SupportExportError::Cancelled);
         }
-        let _admission = self
-            .export_admission()
-            .try_acquire_owned()
-            .map_err(|_| SupportExportError::Busy)?;
-        let deadline_at = request.expires_at;
-        let deadline = tokio::time::sleep_until(deadline_at);
-        tokio::pin!(deadline);
-        let mut opening_shutdown = self.subscribe_shutdown();
-        let mut opening_generation = self.subscribe_generation();
-        let mut lease = {
-            let opening = self.support_export_query(&request.collector, authority);
-            tokio::pin!(opening);
-            tokio::select! {
-                _ = &mut deadline => return Err(SupportExportError::Deadline),
-                _ = cancellation.changed() => return Err(SupportExportError::Cancelled),
-                _ = opening_shutdown.changed() => return Err(SupportExportError::Cancelled),
-                _ = opening_generation.changed() => return Err(SupportExportError::CollectorReplaced),
-                result = &mut opening => result.map_err(map_supervisor_error)?,
+        if watch_sender_closed(&opening_generation) {
+            return Err(SupportExportError::CollectorReplaced);
+        }
+        tokio::select! {
+            _ = &mut deadline => return Err(SupportExportError::Deadline),
+            changed = cancellation.changed() => {
+                if changed.is_err() || *cancellation.borrow() {
+                    return Err(SupportExportError::Cancelled);
+                }
             }
-        };
-        let mut accumulator = SupportExportAccumulator::new(request.collector)?;
-
-        loop {
-            if Instant::now() >= deadline_at {
-                return Err(SupportExportError::Deadline);
+            changed = opening_shutdown.changed() => {
+                if changed.is_err() || *opening_shutdown.borrow() {
+                    return Err(SupportExportError::Cancelled);
+                }
             }
-            if *cancellation.borrow() || *lease.inner.shutdown.borrow() {
-                return Err(SupportExportError::Cancelled);
-            }
-            if *lease.inner.generation_changed.borrow() != lease.inner.generation {
+            _ = opening_generation.changed() => {
                 return Err(SupportExportError::CollectorReplaced);
             }
-            tokio::select! {
-                _ = &mut deadline => return Err(SupportExportError::Deadline),
-                changed = cancellation.changed() => {
-                    if changed.is_err() || *cancellation.borrow() {
-                        return Err(SupportExportError::Cancelled);
-                    }
+            result = &mut opening => break result.map_err(map_supervisor_error)?,
+        }
+    };
+    let mut accumulator = SupportExportAccumulator::new(request.collector)?;
+
+    loop {
+        if Instant::now() >= deadline_at {
+            return Err(SupportExportError::Deadline);
+        }
+        if cancellation_failed_closed(&cancellation) || shutdown_failed_closed(&lease.shutdown) {
+            return Err(SupportExportError::Cancelled);
+        }
+        if generation_failed_closed_or_replaced(&lease.generation_changed, lease.generation) {
+            return Err(SupportExportError::CollectorReplaced);
+        }
+        tokio::select! {
+            _ = &mut deadline => return Err(SupportExportError::Deadline),
+            changed = cancellation.changed() => {
+                if changed.is_err() || *cancellation.borrow() {
+                    return Err(SupportExportError::Cancelled);
                 }
-                changed = lease.inner.shutdown.changed() => {
-                    if changed.is_err() || *lease.inner.shutdown.borrow() {
-                        return Err(SupportExportError::Cancelled);
-                    }
+            }
+            changed = lease.shutdown.changed() => {
+                if changed.is_err() || *lease.shutdown.borrow() {
+                    return Err(SupportExportError::Cancelled);
                 }
-                changed = lease.inner.generation_changed.changed() => {
-                    if changed.is_err()
-                        || *lease.inner.generation_changed.borrow() != lease.inner.generation
+            }
+            changed = lease.generation_changed.changed() => {
+                if changed.is_err()
+                    || *lease.generation_changed.borrow() != lease.generation
+                {
+                    return Err(SupportExportError::CollectorReplaced);
+                }
+            }
+            frame = lease.stream.next_frame() => match frame {
+                Ok(Some(frame)) => {
+                    let frame = contextualize(
+                        lease.generation,
+                        lease.restart_count,
+                        frame,
+                    ).map_err(map_supervisor_error)?;
+                    accumulator.push(frame)?;
+                }
+                Ok(None) => {
+                    if Instant::now() >= deadline_at {
+                        return Err(SupportExportError::Deadline);
+                    }
+                    if cancellation_failed_closed(&cancellation)
+                        || shutdown_failed_closed(&lease.shutdown)
                     {
+                        return Err(SupportExportError::Cancelled);
+                    }
+                    if generation_failed_closed_or_replaced(
+                        &lease.generation_changed,
+                        lease.generation,
+                    ) {
                         return Err(SupportExportError::CollectorReplaced);
                     }
+                    return accumulator.finish();
                 }
-                frame = lease.inner.stream.next() => match frame {
-                    Ok(Some(frame)) => {
-                        let frame = self.contextualize_export(
-                            lease.inner.generation,
-                            lease.inner.restart_count,
-                            frame,
-                        ).map_err(map_supervisor_error)?;
-                        accumulator.push(frame)?;
-                    }
-                    Ok(None) => {
-                        if Instant::now() >= deadline_at {
-                            return Err(SupportExportError::Deadline);
-                        }
-                        if *lease.inner.shutdown.borrow() || *cancellation.borrow() {
-                            return Err(SupportExportError::Cancelled);
-                        }
-                        if *lease.inner.generation_changed.borrow() != lease.inner.generation {
-                            return Err(SupportExportError::CollectorReplaced);
-                        }
-                        return accumulator.finish();
-                    }
-                    Err(error) => return Err(match error {
-                        super::client::CollectorClientError::Deadline => SupportExportError::Deadline,
-                        super::client::CollectorClientError::Protocol => SupportExportError::InvalidStream,
-                        _ => SupportExportError::CollectorUnavailable,
-                    }),
-                }
+                Err(error) => return Err(map_stream_error(error)),
             }
         }
     }
@@ -224,22 +349,62 @@ impl DiagnosticsCollectorSupervisor {
 impl DiagnosticsCollectorSupervisor {
     pub(crate) async fn export_support_snapshot(
         &self,
-        request: SupportExportRequest,
-        permit: SupportExportPermit,
+        invocation: SupportExportInvocation,
         cancellation: watch::Receiver<bool>,
     ) -> Result<ValidatedSupportExport, SupportExportError> {
-        let _authority = permit.consume(&request)?;
-        if *cancellation.borrow() {
-            return Err(SupportExportError::Cancelled);
-        }
-        let _admission = self
-            .export_admission()
-            .try_acquire_owned()
-            .map_err(|_| SupportExportError::Busy)?;
-        Err(SupportExportError::Unsupported)
+        unsupported_support_export(self.export_admission(), invocation, cancellation).await
     }
 }
 
+async fn unsupported_support_export(
+    admission: Arc<ExportAdmission>,
+    invocation: SupportExportInvocation,
+    cancellation: watch::Receiver<bool>,
+) -> Result<ValidatedSupportExport, SupportExportError> {
+    let SupportExportInvocation { request, permit } = invocation;
+    let _authority = permit.consume(&request)?;
+    if cancellation_failed_closed(&cancellation) {
+        return Err(SupportExportError::Cancelled);
+    }
+    let _admission = admission
+        .try_acquire_owned()
+        .map_err(|_| SupportExportError::Busy)?;
+    Err(SupportExportError::Unsupported)
+}
+
+fn cancellation_failed_closed(receiver: &watch::Receiver<bool>) -> bool {
+    *receiver.borrow() || watch_sender_closed(receiver)
+}
+
+#[cfg(unix)]
+fn shutdown_failed_closed(receiver: &watch::Receiver<bool>) -> bool {
+    *receiver.borrow() || watch_sender_closed(receiver)
+}
+
+#[cfg(unix)]
+fn generation_failed_closed_or_replaced(
+    receiver: &watch::Receiver<u64>,
+    expected_generation: u64,
+) -> bool {
+    *receiver.borrow() != expected_generation || watch_sender_closed(receiver)
+}
+
+fn watch_sender_closed<T>(receiver: &watch::Receiver<T>) -> bool {
+    receiver.has_changed().is_err()
+}
+
+#[cfg(unix)]
+fn map_stream_error(error: CollectorClientError) -> SupportExportError {
+    match error {
+        CollectorClientError::Deadline => SupportExportError::Deadline,
+        CollectorClientError::Protocol => SupportExportError::InvalidStream,
+        CollectorClientError::Authentication
+        | CollectorClientError::Rejected
+        | CollectorClientError::Unavailable => SupportExportError::CollectorUnavailable,
+    }
+}
+
+#[cfg(unix)]
 fn map_supervisor_error(error: SupervisorUnavailable) -> SupportExportError {
     match error {
         SupervisorUnavailable::Replaced => SupportExportError::CollectorReplaced,
@@ -378,3 +543,11 @@ mod validation;
 #[cfg(test)]
 #[path = "support_export_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "support_export_execution_tests.rs"]
+mod execution_tests;
+
+#[cfg(test)]
+#[path = "support_export_unsupported_tests.rs"]
+mod unsupported_tests;

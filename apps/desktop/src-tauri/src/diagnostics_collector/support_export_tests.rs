@@ -9,8 +9,8 @@ use tokio::time::{Duration, Instant};
 use super::validation::SupportExportAccumulator;
 use super::*;
 
-const FROM: &str = "2026-08-10T13:45:00.000Z";
-const TO: &str = "2026-08-10T14:00:00.000Z";
+pub(super) const FROM: &str = "2026-08-10T13:45:00.000Z";
+pub(super) const TO: &str = "2026-08-10T14:00:00.000Z";
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!(
@@ -28,7 +28,7 @@ fn health() -> HealthResponseV1 {
 }
 
 fn issued() -> (SupportExportRequest, SupportExportPermit) {
-    SupportExportPermit::issue_for_coordinator(
+    SupportExportPermit::issue(
         &uuid::Uuid::new_v4().to_string(),
         FROM.to_string(),
         TO.to_string(),
@@ -37,7 +37,7 @@ fn issued() -> (SupportExportRequest, SupportExportPermit) {
     .expect("support authority")
 }
 
-fn frames(
+pub(super) fn frames(
     request: &ExportRequestV1,
 ) -> (
     ExportStreamFrameV1,
@@ -129,28 +129,28 @@ fn permit_is_exact_request_preparation_and_deadline_bound() {
 
 #[test]
 fn issuer_rejects_noncanonical_preparation_and_nonexact_window() {
-    assert!(SupportExportPermit::issue_for_coordinator(
+    assert!(SupportExportPermit::issue(
         "not-a-uuid",
         FROM.to_string(),
         TO.to_string(),
         Instant::now() + Duration::from_secs(25),
     )
     .is_err());
-    assert!(SupportExportPermit::issue_for_coordinator(
+    assert!(SupportExportPermit::issue(
         &uuid::Uuid::new_v4().to_string(),
         "2026-08-10T13:44:59.000Z".to_string(),
         TO.to_string(),
         Instant::now() + Duration::from_secs(25),
     )
     .is_err());
-    assert!(SupportExportPermit::issue_for_coordinator(
+    assert!(SupportExportPermit::issue(
         &uuid::Uuid::new_v4().to_string(),
         "2026-08-10T06:45:00.000-07:00".to_string(),
         "2026-08-10T07:00:00.000-07:00".to_string(),
         Instant::now() + Duration::from_secs(25),
     )
     .is_err());
-    assert!(SupportExportPermit::issue_for_coordinator(
+    assert!(SupportExportPermit::issue(
         &uuid::Uuid::new_v4().to_string(),
         "2026-08-10T13:45:00Z".to_string(),
         "2026-08-10T14:00:00Z".to_string(),

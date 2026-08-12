@@ -17,4 +17,7 @@ pub(crate) mod supervisor;
 pub(crate) mod supervisor;
 pub(crate) mod support_export;
 #[cfg(test)]
+#[path = "support_export_coordinator_tests.rs"]
+mod support_export_coordinator_tests;
+#[cfg(test)]
 mod test_binary;
