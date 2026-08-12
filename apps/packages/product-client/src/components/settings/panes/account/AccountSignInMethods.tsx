@@ -1,4 +1,3 @@
-import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
@@ -85,19 +84,12 @@ function getActionsForProvider(
 // ---------------------------------------------------------------------------
 
 /**
- * Account rows read at the sidebar's scale, not one step above it.
- *
- * These rows used to sit on `text-body`, which put a signed-in account's own
- * details a size larger than every nav row and settings row surrounding them —
- * the pane looked zoomed relative to the app it lives in. `text-ui` for titles
- * and `text-ui-sm` for detail is the same pairing `SettingsRow` uses, so a
- * reader crossing from the sidebar into this pane crosses no type step at all.
- *
- * The hairline is a `border-t` with `first:border-t-0` rather than a trailing
- * `border-b`, so the panel's own border never doubles up with a row's.
+ * In-card row anatomy: the wash group (`SettingsGroup`) owns the divider
+ * between rows, so a row carries no border of its own. Title sits at
+ * `text-ui`/400 and detail at `text-ui-sm`, the same pairing `SettingsRow`
+ * uses, so crossing from the sidebar into this pane crosses no type step.
  */
-export const ACCOUNT_ROW_CLASS =
-  "flex min-h-[3.5rem] flex-col gap-2 border-t border-border-light py-3 first:border-t-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6";
+export const ACCOUNT_ROW_CLASS = "flex items-center gap-3.5 px-3.5 py-[13px]";
 
 export function AccountAction({
   action,
@@ -146,39 +138,37 @@ export function SignInMethodRow({
     ? githubLabel
     : provider.accountLabel;
 
+  const isPrimary = provider.primary && provider.connected;
+  const description = isPrimary
+    ? detail
+      ? `Primary sign-in method · ${detail}`
+      : "Primary sign-in method"
+    : detail || (provider.connected ? "Connected" : "Not connected");
+
   return (
     <div className={ACCOUNT_ROW_CLASS}>
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      <span className="flex w-5 shrink-0 items-center justify-center text-foreground">
         <ProviderBrandIcon
           provider={provider.provider}
           label={provider.brandLabel ?? provider.label}
-          className="icon-control shrink-0 text-muted-foreground"
+          className="icon-control shrink-0"
         />
-        <div className="min-w-0 space-y-0.5">
-          <div className="flex items-center gap-2 text-ui font-medium text-foreground">
-            <span>{provider.label}</span>
-            {provider.primary && provider.connected ? (
-              <Badge tone="neutral" className="shrink-0 whitespace-nowrap">Primary</Badge>
-            ) : null}
-          </div>
-          <div className="truncate text-ui-sm text-muted-foreground">
-            {detail || (provider.connected ? "Connected" : "Not connected")}
-          </div>
+      </span>
+      <div className="min-w-0 flex-1 space-y-px">
+        <div className="text-ui text-foreground">{provider.label}</div>
+        <div className="text-ui-sm text-muted-foreground [text-wrap:pretty]">
+          {description}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Badge tone="neutral" className="shrink-0 whitespace-nowrap">
-          {statusLabel}
-        </Badge>
-        {rowActions.map((action, idx) => (
-          <AccountAction
-            key={idx}
-            action={action}
-            variant={idx === 0 ? "secondary" : "ghost"}
-            size="sm"
-          />
-        ))}
-      </div>
+      <span className="shrink-0 text-ui-sm text-muted-foreground">{statusLabel}</span>
+      {rowActions.map((action, idx) => (
+        <AccountAction
+          key={idx}
+          action={action}
+          variant={idx === 0 ? "secondary" : "ghost"}
+          size="sm"
+        />
+      ))}
     </div>
   );
 }
@@ -190,23 +180,18 @@ export function ConnectedServiceRow({
 }) {
   return (
     <div className={ACCOUNT_ROW_CLASS}>
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex flex-wrap items-center gap-2 text-ui font-medium text-foreground">
-          <span>{service.label}</span>
-          <Badge tone="neutral" className="shrink-0 whitespace-nowrap">
-            {service.statusLabel}
-          </Badge>
+      <span className="flex w-5 shrink-0 items-center justify-center text-foreground">
+        <ProviderBrandIcon provider="github" className="icon-control shrink-0" />
+      </span>
+      <div className="min-w-0 flex-1 space-y-px">
+        <div className="text-ui text-foreground">{service.label}</div>
+        <div className="text-ui-sm text-muted-foreground [text-wrap:pretty]">
+          {service.description}
+          {service.accountLabel ? ` · ${service.accountLabel}` : ""}
         </div>
-        <div className="text-ui-sm text-muted-foreground">{service.description}</div>
-        {service.accountLabel ? (
-          <div className="truncate text-ui-sm text-muted-foreground">{service.accountLabel}</div>
-        ) : null}
       </div>
-      {service.action ? (
-        <div className="shrink-0">
-          <AccountAction action={service.action} variant="secondary" />
-        </div>
-      ) : null}
+      <span className="shrink-0 text-ui-sm text-muted-foreground">{service.statusLabel}</span>
+      {service.action ? <AccountAction action={service.action} variant="secondary" /> : null}
     </div>
   );
 }

@@ -8,7 +8,6 @@ import {
   PopoverButton,
 } from "#product/primitives/PopoverButton";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
-import { SettingsEyebrow } from "#product/components/patterns/SettingsEyebrow";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { Avatar } from "#product/components/settings/panes/organization/OrganizationLogo";
 import { buildProliferateApiUrl } from "#product/lib/infra/proliferate-api";
@@ -48,13 +47,13 @@ export function OrganizationMembersList({
   return (
     <div className="w-full overflow-hidden">
       <div className="w-full">
-        <SettingsEyebrow className={`${PEOPLE_GRID_CLASS} border-b border-border pb-3`}>
+        <div className={`${PEOPLE_GRID_CLASS} border-b border-border-light px-3.5 pb-3 text-ui-sm text-muted-foreground`}>
           <span>Name</span>
           <span>Date joined</span>
           <span>Role</span>
           <span>Authenticated with</span>
           <span aria-label="Actions" />
-        </SettingsEyebrow>
+        </div>
         {rows.map((row) => row.kind === "member" && row.member ? (
           <MemberRow
             key={row.key}
@@ -114,7 +113,7 @@ function MemberRow({
   const showStatusBadge = status.label !== "Active";
 
   return (
-    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border py-5 last:border-b-0`}>
+    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border-light px-3.5 py-5 last:border-b-0`}>
       <div className="flex min-w-0 items-center gap-3">
         <Avatar member={member} />
         <div className="min-w-0">
@@ -202,7 +201,7 @@ function InvitationRow({
   }
 
   return (
-    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border py-5 last:border-b-0`}>
+    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border-light px-3.5 py-5 last:border-b-0`}>
       <div className="flex min-w-0 items-center gap-3">
         {/* ui-foundation-escalation: bg-foreground/10 mapped to bg-muted (closest
             semantic role for a muted icon-badge circle; no exact 10%-alpha
@@ -270,7 +269,7 @@ function MemberMeta({ value }: { value: ReactNode }) {
 
 function EmptyPeopleRow({ label }: { label: string }) {
   return (
-    <div className="border-b border-border py-6 text-center text-ui-sm text-muted-foreground last:border-b-0">
+    <div className="border-b border-border-light px-3.5 py-6 text-center text-ui-sm text-muted-foreground last:border-b-0">
       {label}
     </div>
   );

@@ -29,7 +29,7 @@ describe("AccountSettingsPane", () => {
 
     expect(screen.getByText("Pablo")).toBeTruthy();
     expect(screen.getAllByText("@pablo").length).toBeGreaterThan(0);
-    expect(screen.getByText("Primary")).toBeTruthy();
+    expect(screen.getByText("Primary sign-in method · @pablo")).toBeTruthy();
     expect(screen.getByText("Connected")).toBeTruthy();
   });
 
@@ -131,7 +131,9 @@ describe("AccountSettingsPane", () => {
     expect(screen.getByText("pablo@gmail.com")).toBeTruthy();
     expect(screen.getByText("Apple")).toBeTruthy();
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
-    const providerIcons = container.querySelectorAll("[data-auth-provider-brand]");
+    // Scoped to the sign-in method rows (icon-control) — the identity header
+    // above them carries its own smaller (icon-compact) GitHub glyph.
+    const providerIcons = container.querySelectorAll("[data-auth-provider-brand].icon-control");
     expect(providerIcons.length).toBe(4);
     expect([...providerIcons].every((icon) => icon.classList.contains("icon-control"))).toBe(true);
   });
@@ -187,9 +189,9 @@ describe("AccountSettingsPane", () => {
     );
 
     expect(screen.getByText("Email & password")).toBeTruthy();
-    expect(screen.getByText("Not set")).toBeTruthy();
-    expect(container.querySelector('[data-auth-provider-brand="password"]')?.getAttribute("class"))
-      .toContain("icon-control");
+    expect(screen.getByText("Add a password to sign in with email")).toBeTruthy();
+    // The password row has no brand glyph — the account rows above it do.
+    expect(container.querySelector('[data-auth-provider-brand="password"]')).toBeNull();
     fireEvent.click(screen.getByText("Set password"));
     fireEvent.change(screen.getByLabelText("New password"), {
       target: { value: "correct horse battery" },

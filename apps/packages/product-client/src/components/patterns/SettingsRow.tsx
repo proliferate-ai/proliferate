@@ -14,13 +14,10 @@ export interface SettingsRowProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Flat settings row — the retirement of `SettingsCardRow`.
- *
- * Rows sit directly on the page background (no card layer) and are separated
- * from each other by a `border-border` hairline via `border-t` / `first:border-t-0`,
- * so a group of rows reads as one flat list. Label is 13/medium, description is
- * 12/muted; the control is right-aligned and `shrink-0`. Drop-in prop-compatible
- * with `SettingsCardRow`.
+ * Row inside a `SettingsGroup` wash card — divider-agnostic: the group owns
+ * the hairline between rows, so a row never carries its own border-t/-b.
+ * Label is regular weight, description sits 1px below it; the control is
+ * right-aligned and `shrink-0`.
  */
 export function SettingsRow({
   label,
@@ -32,15 +29,15 @@ export function SettingsRow({
   return (
     <div
       className={twMerge(
-        "flex min-h-[2.875rem] flex-col gap-2 border-t border-border py-3 first:border-t-0 sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col gap-2 px-3.5 py-[13px] sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
       {...props}
     >
-      <div className="min-w-0 space-y-1">
-        <div className="text-ui font-medium leading-5 text-foreground">{label}</div>
+      <div className="min-w-0 space-y-px">
+        <div className="text-ui text-foreground">{label}</div>
         {description ? (
-          <div className="max-w-2xl text-ui-sm text-muted-foreground">{description}</div>
+          <div className="max-w-2xl text-ui-sm text-muted-foreground [text-wrap:pretty]">{description}</div>
         ) : null}
       </div>
       {children ? (

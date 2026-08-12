@@ -86,7 +86,7 @@ describe("library registry parity", () => {
         EXPECTED_PRIMITIVE_SUBPATHS.size
         + EXPECTED_PATTERN_SUBPATHS.size
         + EXPECTED_ICON_SUBPATHS.size,
-    }).toEqual({ primitives: 36, patterns: 23, icons: 10, total: 69 });
+    }).toEqual({ primitives: 36, patterns: 24, icons: 10, total: 70 });
   });
 
   it("covers exactly the physical primitive surface and ProductClient pattern owners", () => {

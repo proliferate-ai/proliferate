@@ -49,7 +49,7 @@ export function RepoCommitInstructionsSection({
 
   return (
     <SettingsSection title="Commit messages">
-      <div className="space-y-2 pt-2">
+      <div className="space-y-2 px-3.5 py-4">
         <Textarea
           aria-label="Commit message instructions"
           rows={3}

@@ -62,38 +62,38 @@ export function OrganizationMembersSection({
   });
 
   return (
-    <SettingsSection
-      title="Members"
-      description="Active members and pending invitations"
-    >
-      <div className="space-y-3">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 icon-paired -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.currentTarget.value)}
-              placeholder="Search by name or email"
-              aria-label="Search members"
-              className="pl-9"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2 lg:w-[22rem]">
-            <OrganizationSelectMenu
-              value={roleFilter}
-              ariaLabel="Filter by role"
-              options={ROLE_FILTER_OPTIONS}
-              onChange={(value) => setRoleFilter(value as RoleFilter)}
-            />
-            <OrganizationSelectMenu
-              value={statusFilter}
-              ariaLabel="Filter by status"
-              options={STATUS_FILTER_OPTIONS}
-              onChange={(value) => setStatusFilter(value as StatusFilter)}
-            />
-          </div>
+    <div className="space-y-3">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 icon-paired -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.currentTarget.value)}
+            placeholder="Search by name or email"
+            aria-label="Search members"
+            className="pl-9"
+          />
         </div>
+        <div className="grid grid-cols-2 gap-2 lg:w-[22rem]">
+          <OrganizationSelectMenu
+            value={roleFilter}
+            ariaLabel="Filter by role"
+            options={ROLE_FILTER_OPTIONS}
+            onChange={(value) => setRoleFilter(value as RoleFilter)}
+          />
+          <OrganizationSelectMenu
+            value={statusFilter}
+            ariaLabel="Filter by status"
+            options={STATUS_FILTER_OPTIONS}
+            onChange={(value) => setStatusFilter(value as StatusFilter)}
+          />
+        </div>
+      </div>
 
+      <SettingsSection
+        title="Members"
+        description="Active members and pending invitations"
+      >
         <OrganizationMembersList
           rows={visibleRows}
           hasRows={rows.length > 0}
@@ -105,7 +105,7 @@ export function OrganizationMembersSection({
           onRemove={onRemove}
           onRevokeInvitation={onRevokeInvitation}
         />
-      </div>
-    </SettingsSection>
+      </SettingsSection>
+    </div>
   );
 }

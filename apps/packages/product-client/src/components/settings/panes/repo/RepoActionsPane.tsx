@@ -109,23 +109,22 @@ function ActionsCloud({
       <SettingsSection
         title="Setup script"
         description="Runs once when a cloud workspace is created."
+        surface="plain"
       >
-        <div>
-          <ScriptBlock
-            ariaLabel="Cloud setup script"
-            fileLabel="setup.sh"
-            value={draft.setupScript}
-            placeholder={SCRIPT_PLACEHOLDER}
-            onChange={draft.setSetupScript}
-            className="w-full"
-          />
-        </div>
+        <ScriptBlock
+          ariaLabel="Cloud setup script"
+          fileLabel="setup.sh"
+          value={draft.setupScript}
+          placeholder={SCRIPT_PLACEHOLDER}
+          onChange={draft.setSetupScript}
+          className="w-full"
+        />
       </SettingsSection>
       <SettingsSection
         title="Run command"
         description="Runs from the workspace Run action."
       >
-        <div>
+        <div className="px-3.5 py-4">
           <Input
             aria-label="Cloud run command"
             value={draft.runCommand}
@@ -187,6 +186,7 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
       <SettingsSection
         title="Setup script"
         description="Runs once when a local worktree is created."
+        surface="plain"
       >
         <div className="space-y-2">
           <ScriptBlock
@@ -234,7 +234,7 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
         ) : null}
       </SettingsSection>
       <SettingsSection title="Run command">
-        <div className="space-y-2">
+        <div className="space-y-2 px-3.5 py-4">
           <Input
             aria-label="Local run command"
             value={runCommandDraft}

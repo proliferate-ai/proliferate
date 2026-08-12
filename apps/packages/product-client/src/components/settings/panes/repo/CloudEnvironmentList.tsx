@@ -57,6 +57,9 @@ export function CloudEnvironmentList({
     </SettingsRow>
   ) : null;
 
+  const showAddButton = hasItems && Boolean(onAddCloudEnvironment) && !cloudUnavailableReason;
+  const usingEmptyState = !hasItems && !unavailableRow && !errorRow;
+
   return (
     <section className="space-y-6">
       <SettingsPageHeader title={title} description={description} />
@@ -64,6 +67,7 @@ export function CloudEnvironmentList({
       <SettingsSection
         title="Repositories"
         description="GitHub repositories configured for Proliferate Cloud."
+        surface={usingEmptyState ? "plain" : "group"}
       >
         {hasItems ? (
           <>
@@ -78,18 +82,6 @@ export function CloudEnvironmentList({
             {errorRow}
             {loadingCloudEnvironments ? (
               <SettingsRow label="Cloud environments" description="Loading…" />
-            ) : null}
-            {onAddCloudEnvironment && !cloudUnavailableReason ? (
-              <Button
-                type="button"
-                variant="unstyled"
-                size="unstyled"
-                onClick={onAddCloudEnvironment}
-                className="mt-1 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-ui-sm font-medium text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active"
-              >
-                <Plus className="icon-paired" />
-                Add cloud environment
-              </Button>
             ) : null}
           </>
         ) : unavailableRow ? (
@@ -113,6 +105,19 @@ export function CloudEnvironmentList({
           />
         )}
       </SettingsSection>
+
+      {showAddButton ? (
+        <Button
+          type="button"
+          variant="unstyled"
+          size="unstyled"
+          onClick={onAddCloudEnvironment}
+          className="mt-2 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-ui-sm font-medium text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active"
+        >
+          <Plus className="icon-paired" />
+          Add cloud environment
+        </Button>
+      ) : null}
     </section>
   );
 }

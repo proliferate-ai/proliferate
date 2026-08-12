@@ -39,7 +39,7 @@ describe("SettingsSection", () => {
     expect(screen.getByRole("button", { name: "Rescan" })).toBeTruthy();
   });
 
-  it("omits the header block when title, description, and action are absent", () => {
+  it("omits the header block when title, description, and action are absent, but still renders the group card", () => {
     const { container } = render(
       <SettingsSection>
         <SettingsRow label="Only row" />
@@ -48,6 +48,56 @@ describe("SettingsSection", () => {
 
     const section = container.querySelector("section");
     expect(section?.children).toHaveLength(1);
+    const card = section?.firstElementChild;
+    expect(card?.className).toContain("rounded-xl");
+    expect(card?.className).toContain("bg-surface-elevated-secondary");
     expect(screen.getByText("Only row")).toBeTruthy();
+  });
+
+  it("wraps children in the wash card by default", () => {
+    const { container } = render(
+      <SettingsSection title="Sounds">
+        <SettingsRow label="Row" />
+      </SettingsSection>,
+    );
+
+    const card = container.querySelector("section > div:last-child");
+    expect(card?.className).toContain("rounded-xl");
+    expect(card?.className).toContain("bg-surface-elevated-secondary");
+  });
+
+  it("does not wrap children in the wash card when surface is plain", () => {
+    const { container } = render(
+      <SettingsSection title="Sounds" surface="plain">
+        <SettingsRow label="Row" />
+      </SettingsSection>,
+    );
+
+    const body = container.querySelector("section > div:last-child");
+    expect(body?.className).not.toContain("rounded-xl");
+    expect(body?.className).not.toContain("bg-surface-elevated-secondary");
+  });
+
+  it("gives the emphasized title variant font-medium weight", () => {
+    render(
+      <SettingsSection title="Archiving" titleWeight="emphasized">
+        <SettingsRow label="Row" />
+      </SettingsSection>,
+    );
+
+    const title = screen.getByText("Archiving");
+    expect(title.className).toContain("font-medium");
+    expect(title.className).toContain("text-foreground");
+  });
+});
+
+describe("SettingsRow", () => {
+  afterEach(cleanup);
+
+  it("no longer renders a self border between rows", () => {
+    const { container } = render(<SettingsRow label="Row" />);
+
+    const row = container.firstElementChild;
+    expect(row?.className).not.toContain("border-t");
   });
 });

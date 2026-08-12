@@ -1,4 +1,3 @@
-import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
@@ -35,36 +34,30 @@ export function GitHubAppInstallationSection({
 
   return (
     <SettingsSection title="GitHub App">
-      <div className="overflow-clip rounded-lg bg-foreground/5">
-        <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <ProviderBrandIcon
-              provider="github"
-              className="icon-large shrink-0 text-muted-foreground"
-            />
-            <div className="min-w-0">
-              <div className="font-medium text-foreground">GitHub App</div>
-              <div className="truncate text-muted-foreground">{detail}</div>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Badge tone="neutral">{statusLabel}</Badge>
-            {canManage ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                loading={installing}
-                disabled={installing}
-                onClick={() => {
-                  void (installed ? onManage() : onInstall());
-                }}
-              >
-                {installed ? "Manage" : "Install"}
-              </Button>
-            ) : null}
-          </div>
+      <div className="flex items-center gap-3.5 px-3.5 py-[13px]">
+        <div className="flex w-5 shrink-0 items-center justify-center">
+          <ProviderBrandIcon provider="github" className="icon-large text-foreground" />
         </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-ui text-foreground">GitHub App</div>
+          <div className="mt-px truncate text-ui-sm text-muted-foreground [text-wrap:pretty]">{detail}</div>
+        </div>
+        <span className="shrink-0 text-ui-sm text-muted-foreground">{statusLabel}</span>
+        {canManage ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            loading={installing}
+            disabled={installing}
+            className="shrink-0"
+            onClick={() => {
+              void (installed ? onManage() : onInstall());
+            }}
+          >
+            {installed ? "Manage" : "Install"}
+          </Button>
+        ) : null}
       </div>
     </SettingsSection>
   );

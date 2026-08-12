@@ -95,7 +95,7 @@ export function OrganizationMembersPane() {
       />
 
       {shouldShowSignInState ? (
-        <SettingsSection title="Members" description="Organization access is tied to your signed-in account.">
+        <SettingsSection title="Members" description="Organization access is tied to your signed-in account." surface="plain">
           <SettingsEmptyState size="compact" title="Sign in to view organization members" />
         </SettingsSection>
       ) : null}
@@ -105,7 +105,7 @@ export function OrganizationMembersPane() {
       ) : null}
 
       {shouldShowErrorState ? (
-        <SettingsSection title="Members">
+        <SettingsSection title="Members" surface="plain">
           <SettingsEmptyState
             size="compact"
             title="Could not load organization members"
@@ -125,7 +125,7 @@ export function OrganizationMembersPane() {
       ) : null}
 
       {shouldShowEmptyState ? (
-        <SettingsSection title="Members">
+        <SettingsSection title="Members" surface="plain">
           <SettingsEmptyState
             size="compact"
             title="No organization yet"

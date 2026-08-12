@@ -9,24 +9,21 @@ export function OrganizationBillingLinkSection() {
 
   return (
     <SettingsSection title="Billing">
-      <div className="overflow-clip rounded-lg bg-foreground/5">
-        <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="font-medium text-foreground">Billing</div>
-            <div className="text-muted-foreground">Plan, seats, and usage</div>
-          </div>
-          <div className="shrink-0">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => navigate(buildSettingsHref({ section: "billing" }))}
-            >
-              Open billing
-              <ChevronRight className="icon-paired" />
-            </Button>
-          </div>
+      <div className="flex items-center gap-3.5 px-3.5 py-[13px]">
+        <div className="min-w-0 flex-1">
+          <div className="text-ui text-foreground">Billing</div>
+          <div className="mt-px text-ui-sm text-muted-foreground [text-wrap:pretty]">Plan, seats, and usage</div>
         </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          onClick={() => navigate(buildSettingsHref({ section: "billing" }))}
+        >
+          Open billing
+          <ChevronRight className="icon-paired" />
+        </Button>
       </div>
     </SettingsSection>
   );
