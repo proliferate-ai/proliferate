@@ -26,6 +26,8 @@ export const motion = {
     disclosureMs: 200,
     /** Panel and rail geometry. */
     panelMs: 240,
+    /** A compact item joining an already-mounted group. */
+    popMs: 280,
     /** Emphasized, spring-led product moments. */
     emphasizedMs: 300,
     /** Slow ambient dissolve of transient overlays (e.g. the todo progress
@@ -42,6 +44,8 @@ export const motion = {
      * read a fast departure *and* a settle rather than one or the other.
      */
     outCubic: "cubic-bezier(0.22, 0.61, 0.36, 1)",
+    /** Compact arrival with a small, deliberate overshoot. */
+    pop: "cubic-bezier(0.2, 0.9, 0.3, 1.3)",
     spring: "cubic-bezier(0.16, 1, 0.3, 1)",
     standard: "cubic-bezier(0.4, 0, 0.2, 1)",
     linear: "linear",

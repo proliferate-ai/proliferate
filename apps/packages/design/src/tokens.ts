@@ -1017,6 +1017,11 @@ export const themeTokens = {
     light: motion.cssMs(motion.duration.panelMs),
     provenance: "[RETUNE:motion/roles]",
   },
+  "--duration-pop": {
+    dark: motion.cssMs(motion.duration.popMs),
+    light: motion.cssMs(motion.duration.popMs),
+    provenance: "[AGENT-OPERATIONS:spawn-receipt-motion]",
+  },
   "--ease-linear": {
     dark: motion.ease.linear,
     light: motion.ease.linear,
@@ -1031,6 +1036,11 @@ export const themeTokens = {
     dark: motion.ease.outQuint,
     light: motion.ease.outQuint,
     provenance: "[RETUNE:motion/roles]",
+  },
+  "--ease-pop": {
+    dark: motion.ease.pop,
+    light: motion.ease.pop,
+    provenance: "[AGENT-OPERATIONS:spawn-receipt-motion]",
   },
   "--ease-spring": {
     dark: motion.ease.spring,
