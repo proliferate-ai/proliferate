@@ -54,6 +54,48 @@ type ResolveResource = typeof import("@tauri-apps/api/path").resolveResource;
 
 const nativeMenuIconAssetCache = new Map<string, Promise<MenuIcon | undefined>>();
 
+// The webview must see the initiating press fully release before a native
+// menu opens: kebab triggers and macOS right-clicks fire on pointer-down, and
+// an already-open menu's tracking loop swallows the matching pointerup. The
+// webview is then convinced a button is still held, which suppresses all
+// hover styling until the user clicks again.
+let pointerButtonsDown = 0;
+if (typeof window !== "undefined") {
+  const trackPointerButtons = (event: PointerEvent) => {
+    pointerButtonsDown = event.buttons;
+  };
+  window.addEventListener("pointerdown", trackPointerButtons, { capture: true, passive: true });
+  window.addEventListener("pointerup", trackPointerButtons, { capture: true, passive: true });
+  window.addEventListener("pointercancel", trackPointerButtons, { capture: true, passive: true });
+}
+
+// A press-and-hold longer than this still gets its menu (opened mid-press,
+// macOS drag-select style) instead of waiting for a release that may not come.
+const POINTER_RELEASE_FALLBACK_MS = 600;
+
+function waitForPointerRelease(): Promise<void> {
+  if (typeof window === "undefined" || pointerButtonsDown === 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let timer: number | undefined;
+    const settle = () => {
+      window.removeEventListener("pointerup", onRelease, { capture: true });
+      window.removeEventListener("pointercancel", onRelease, { capture: true });
+      window.clearTimeout(timer);
+      resolve();
+    };
+    const onRelease = (event: PointerEvent) => {
+      if (event.buttons === 0) {
+        settle();
+      }
+    };
+    window.addEventListener("pointerup", onRelease, { capture: true, passive: true });
+    window.addEventListener("pointercancel", onRelease, { capture: true, passive: true });
+    timer = window.setTimeout(settle, POINTER_RELEASE_FALLBACK_MS);
+  });
+}
+
 function isTauriWindowApiAvailable(): boolean {
   return typeof window !== "undefined"
     && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
@@ -103,6 +145,7 @@ export async function showNativeContextMenu(
     ));
 
     menu = await Menu.new({ items: built });
+    await waitForPointerRelease();
     await menu.popup(position
       ? new LogicalPosition(position.x, position.y)
       : undefined);
@@ -110,11 +153,6 @@ export async function showNativeContextMenu(
   } catch {
     return false;
   } finally {
-    // A dismissed native menu leaves the webview's hover tracking stale until
-    // the next real mouse event, so revealed-on-hover controls stay hidden
-    // until the user clicks. Replay a no-op mouseMoved so hover resumes
-    // immediately.
-    void resyncPointerHoverAfterNativeMenu();
     // `Menu` and each explicitly constructed item are Tauri resources. The
     // popup call resolves after the native menu is dismissed, so release all
     // of them here instead of retaining one resource tree per open.
@@ -122,15 +160,6 @@ export async function showNativeContextMenu(
     await Promise.allSettled(
       builtResources.reverse().map((resource) => resource.close()),
     );
-  }
-}
-
-async function resyncPointerHoverAfterNativeMenu(): Promise<void> {
-  try {
-    const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("resync_pointer_hover");
-  } catch {
-    // A shell without the command keeps the pre-resync behavior.
   }
 }
 
