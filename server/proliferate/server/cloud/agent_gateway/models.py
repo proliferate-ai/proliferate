@@ -173,7 +173,7 @@ class AgentAuthStateResponse(BaseModel):
     user_id: str | None = None
     harnesses: list[AgentAuthStateHarness]
     fingerprint: str | None = None
-    harness_settings: dict[str, dict[str, Any]] | None = None
+    harness_settings: dict[str, dict[str, object]] | None = None
 
 
 class AgentAuthStateAckRequest(BaseModel):
@@ -351,7 +351,7 @@ def agent_auth_state_payload(
     state: dict[str, object],
     *,
     fingerprint: str | None = None,
-    harness_settings: dict[str, dict[str, Any]] | None = None,
+    harness_settings: dict[str, dict[str, object]] | None = None,
 ) -> AgentAuthStateResponse:
     response = AgentAuthStateResponse.model_validate(state)
     response.fingerprint = fingerprint
