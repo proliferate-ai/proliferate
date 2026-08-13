@@ -1,5 +1,5 @@
 import { Button } from "#product/primitives/Button";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 
 interface AdminOnlyPlaceholderProps {
   role?: string | null;

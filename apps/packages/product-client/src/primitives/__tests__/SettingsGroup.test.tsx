@@ -2,7 +2,7 @@
 
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { SettingsGroup } from "#product/primitives/patterns/SettingsGroup";
+import { SettingsGroup } from "#product/primitives/patterns/settings/SettingsGroup";
 
 describe("SettingsGroup", () => {
   it("interleaves one divider between each visible child", () => {

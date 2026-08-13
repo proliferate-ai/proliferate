@@ -1,5 +1,5 @@
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { Button } from "#product/primitives/Button";
 import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import type { BillingUnitBalancePresentation } from "#product/lib/domain/settings/billing-settings-presentation";

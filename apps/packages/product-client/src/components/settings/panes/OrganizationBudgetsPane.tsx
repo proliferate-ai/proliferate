@@ -14,7 +14,7 @@ import {
   SegmentedControl,
 } from "#product/primitives/SegmentedControl";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import { useOrganizationMembers } from "#product/hooks/access/cloud/organizations/use-organization-members";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";

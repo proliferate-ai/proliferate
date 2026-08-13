@@ -13,7 +13,7 @@ type ModuleInventory = Record<string, unknown>;
 /**
  * Derive canonical subpaths from the tier-relative path, not the basename:
  * `patterns/` holds area-kit subdirectories (`composer/`, `toast/`,
- * `sidebar/`), so a nested member's subpath keeps its kit segment.
+ * `sidebar/`, `settings/`), so a nested member's subpath keeps its kit segment.
  */
 function inventorySubpaths(
   modules: ModuleInventory,
@@ -94,7 +94,7 @@ describe("library registry parity", () => {
         EXPECTED_PRIMITIVE_SUBPATHS.size
         + EXPECTED_PATTERN_SUBPATHS.size
         + EXPECTED_ICON_SUBPATHS.size,
-    }).toEqual({ primitives: 36, patterns: 24, icons: 10, total: 70 });
+    }).toEqual({ primitives: 36, patterns: 29, icons: 10, total: 75 });
   });
 
   it("covers exactly the physical primitive surface and ProductClient pattern owners", () => {

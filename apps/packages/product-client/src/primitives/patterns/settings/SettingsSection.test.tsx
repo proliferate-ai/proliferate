@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   SETTINGS_CONTROL_WIDTH_CLASS,
   SettingsRow,
-} from "#product/components/patterns/SettingsRow";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+} from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 
 describe("SETTINGS_CONTROL_WIDTH_CLASS", () => {
   it("is the shared 240px control width", () => {
