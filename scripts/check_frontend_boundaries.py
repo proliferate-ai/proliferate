@@ -244,6 +244,21 @@ ALL_FRONTEND_SRC_ROOTS = [
     PRODUCT_CLIENT_SRC,
 ]
 
+# Icon source (specs/DESIGN_SYSTEM.md, UI-conformance review check 5). Matches
+# the package and every deep entry point (`lucide-react/dynamicIconImports`,
+# `lucide-react/icons/x`), in import, re-export, and dynamic-import position.
+LUCIDE_SPECIFIER_RE = re.compile(r"""["']lucide(?:-react)?(?:/[^"']*)?["']""")
+# The manifest half of the same rule: a declared dependency, in any of the four
+# dependency maps npm honours.
+LUCIDE_MANIFEST_ENTRY_RE = re.compile(r"""^\s*["']lucide(?:-react)?["']\s*:""")
+LUCIDE_SCANNED_MANIFESTS = [
+    REPO_ROOT / "apps" / "packages" / "product-client" / "package.json",
+    REPO_ROOT / "apps" / "packages" / "design" / "package.json",
+    REPO_ROOT / "apps" / "desktop" / "package.json",
+    REPO_ROOT / "apps" / "web" / "package.json",
+    REPO_ROOT / "apps" / "mobile" / "package.json",
+]
+
 
 def iter_files_in_roots(roots: list[Path], *, include_tests: bool = False) -> list[Path]:
     files: list[Path] = []
@@ -2859,6 +2874,69 @@ def find_warning_ink_violations() -> list[Violation]:
     return violations
 
 
+def find_lucide_icon_source_violations(
+    paths: list[Path] | None = None,
+    *,
+    source_cache: dict[Path, str] | None = None,
+) -> list[Violation]:
+    """Rule: glyphs come from `primitives/icons/`, never from `lucide-react`.
+
+    This is UI-conformance review check 5 made mechanical, in the amended
+    wording: "Feature code imports zero lucide identifiers and the product
+    packages no longer declare the dependency; any reintroduction — import line
+    or `package.json` entry — is a finding." Both halves are checked here,
+    because a package that still declares the dependency is one autocomplete
+    away from importing it again; the import ban alone is a ratchet with the
+    door left open behind it.
+    """
+    violations: list[Violation] = []
+    candidates = (
+        paths
+        if paths is not None
+        else iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS, include_tests=True)
+    )
+    for path in candidates:
+        text = read_source_text(path, source_cache)
+        for lineno, raw_line in enumerate(text.splitlines(), start=1):
+            if is_block_comment_line(raw_line):
+                continue
+            line = strip_line_comment(raw_line)
+            if not line.strip():
+                continue
+            if LUCIDE_SPECIFIER_RE.search(line):
+                violations.append(
+                    Violation(
+                        "LUCIDE_ICON_SOURCE",
+                        path,
+                        lineno,
+                        (
+                            "glyphs come from apps/packages/product-client/src/"
+                            "primitives/icons/**, never from lucide-react"
+                        ),
+                    )
+                )
+
+    for manifest in LUCIDE_SCANNED_MANIFESTS:
+        if not manifest.exists():
+            continue
+        for lineno, raw_line in enumerate(
+            manifest.read_text().splitlines(), start=1
+        ):
+            if LUCIDE_MANIFEST_ENTRY_RE.search(raw_line):
+                violations.append(
+                    Violation(
+                        "LUCIDE_PACKAGE_DEPENDENCY",
+                        manifest,
+                        lineno,
+                        (
+                            "product packages no longer declare lucide; remove the "
+                            "dependency entry instead of leaving the door open"
+                        ),
+                    )
+                )
+    return violations
+
+
 def find_primitives_top_level_violations() -> list[Violation]:
     """Rule: ProductClient primitives owns root source files plus the support
     directories named by the component-library taxonomy.
@@ -2954,6 +3032,11 @@ def collect_violations() -> list[Violation]:
     )
     violations.extend(
         find_tailwind_merge_import_violations(
+            all_frontend_paths, source_cache=frontend_source_cache
+        )
+    )
+    violations.extend(
+        find_lucide_icon_source_violations(
             all_frontend_paths, source_cache=frontend_source_cache
         )
     )

@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { MessageCircleQuestion, MessageSquarePlus, MessagesSquare } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { MessageCircleQuestion } from "#product/primitives/icons/core";
+import { MessageSquarePlus, MessagesSquare } from "#product/primitives/icons/product";
 import { CHAT_SELECTED_RESPONSE_ACTIONS } from "#product/copy/chat/chat-copy";
 import type { SelectedResponseSelection } from "#product/domain/chats/transcript/selected-response-context";
 import { useSelectedResponseActions } from "#product/hooks/chat/workflows/use-selected-response-actions";
 import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from "#product/primitives/Popover";
-import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "#product/primitives/DropdownMenu";
 
 export type SelectedResponseAction = "add-to-chat" | "more-details" | "side-chat";
 
@@ -60,46 +61,23 @@ export function SelectedResponseActionMenu({
   onDismiss: () => void;
   onEscape: () => void;
 }) {
-  const selectionRef = useRef(selection);
-  selectionRef.current = selection;
-  const virtualAnchorRef = useRef({
-    getBoundingClientRect: (): DOMRect => {
-      const rect = selectionRef.current.anchorRect;
-      return new DOMRect(rect.x, rect.y, rect.width, rect.height);
-    },
-  });
-  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const [activeItemIndex, setActiveItemIndex] = useState(0);
+  const contentRef = useRef<HTMLDivElement | null>(null);
 
+  // Keyboard invocation (and only keyboard invocation) puts the first item in
+  // hand. A pointer-made selection must leave focus in the document so the live
+  // text selection survives long enough for the action to read it, which is why
+  // `onOpenAutoFocus` below is prevented and this nonce is the discriminator.
   useEffect(() => {
     if (focusRequestNonce <= 0) {
       return;
     }
     const frameId = window.requestAnimationFrame(() => {
-      setActiveItemIndex(0);
-      itemRefs.current[0]?.focus({ preventScroll: true });
+      contentRef.current
+        ?.querySelector<HTMLElement>('[data-slot="dropdown-menu-item"]')
+        ?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frameId);
   }, [focusRequestNonce]);
-
-  const handleItemKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    const currentIndex = itemRefs.current.indexOf(event.currentTarget);
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-      nextIndex = (currentIndex + 1) % itemRefs.current.length;
-    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-      nextIndex = (currentIndex - 1 + itemRefs.current.length) % itemRefs.current.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = itemRefs.current.length - 1;
-    }
-    if (nextIndex !== null) {
-      event.preventDefault();
-      setActiveItemIndex(nextIndex);
-      itemRefs.current[nextIndex]?.focus();
-    }
-  };
 
   const items: Array<{
     action: SelectedResponseAction;
@@ -123,13 +101,60 @@ export function SelectedResponseActionMenu({
     },
   ];
 
+  const anchorRect = selection.anchorRect;
+
   return (
-    <Popover open onOpenChange={(open) => { if (!open) onDismiss(); }}>
-      <PopoverAnchor virtualRef={virtualAnchorRef} />
-      <PopoverContent
-        variant="menu"
-        role="menu"
+    // `modal={false}`: modal mode puts `pointer-events: none` on the body and
+    // traps focus, which would kill transcript scrolling and the live text
+    // selection this menu acts on.
+    <DropdownMenu
+      open
+      modal={false}
+      onOpenChange={(open) => { if (!open) onDismiss(); }}
+    >
+      {/*
+        Radix's dropdown-menu has no `Anchor`, so there is no virtual-ref path
+        for the selection rect the way `Popover` had. The trigger is instead a
+        zero-affordance element parked over the live selection rect and the
+        popper anchors to it. It is inert: no pointer events, out of the tab
+        order, hidden from the accessibility tree.
+      */}
+      <DropdownMenuTrigger
+        aria-hidden="true"
+        tabIndex={-1}
+        // Runtime-calculated position from the live selection rect — the one
+        // sanctioned inline-style case (styling.md § Callsite Styling). It is
+        // recomputed on every render, which is what `updatePositionStrategy`
+        // relied on before.
+        //
+        // Containing-block dependency, unlike the virtual anchor this replaced:
+        // `position: fixed` resolves against the viewport ONLY while no
+        // ancestor of the transcript establishes a containing block. Giving any
+        // ancestor `transform`, `filter`, `backdrop-filter`, `perspective`,
+        // `contain` or `will-change: transform` silently re-bases these
+        // coordinates and detaches the menu from the selection. The chain
+        // (ChatView → SessionTranscriptPane → MessageList → ChatTranscriptView)
+        // carries none of those today.
+        style={{
+          position: "fixed",
+          top: anchorRect.y,
+          left: anchorRect.x,
+          width: anchorRect.width,
+          height: anchorRect.height,
+        }}
+        className="pointer-events-none block"
+      />
+      <DropdownMenuContent
+        ref={contentRef}
         aria-label={CHAT_SELECTED_RESPONSE_ACTIONS.menuLabel}
+        // Radix labels the menu by its trigger. This trigger is the inert
+        // selection-rect stand-in below and carries no text, so the reference
+        // would erase the menu's accessible name; the label above is the name.
+        aria-labelledby={undefined}
+        // Load-bearing, not decorative: chat-transcript-selection.ts classifies
+        // a click as "inside the menu" with `closest(...)` on this attribute and
+        // suppresses dismissal. Drop it and every menu click dismisses the menu
+        // before its action runs.
         data-selected-response-actions
         side="top"
         align="center"
@@ -137,6 +162,9 @@ export function SelectedResponseActionMenu({
         collisionPadding={8}
         sticky="always"
         updatePositionStrategy="always"
+        // Arrow navigation wraps at both ends, matching the roving-tabindex
+        // machine this replaced.
+        loop
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => {
@@ -144,24 +172,23 @@ export function SelectedResponseActionMenu({
           onEscape();
         }}
       >
-        {items.map((item, index) => {
+        {items.map((item) => {
           const Icon = item.icon;
           return (
-            <PopoverMenuItem
+            <DropdownMenuItem
               key={item.action}
-              ref={(node) => { itemRefs.current[index] = node; }}
-              role="menuitem"
-              tabIndex={activeItemIndex === index ? 0 : -1}
-              label={item.label}
-              icon={<Icon aria-hidden="true" className="icon-paired" />}
+              // Keeps the window text selection alive: focus must not move on
+              // pointer-down or the selection collapses before `onAction` can
+              // read it.
               onPointerDown={(event) => event.preventDefault()}
-              onFocus={() => setActiveItemIndex(index)}
-              onKeyDown={handleItemKeyDown}
-              onClick={() => onAction(item.action)}
-            />
+              onSelect={() => onAction(item.action)}
+            >
+              <Icon aria-hidden="true" className="icon-paired" />
+              {item.label}
+            </DropdownMenuItem>
           );
         })}
-      </PopoverContent>
-    </Popover>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

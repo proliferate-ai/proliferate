@@ -1,4 +1,5 @@
-import { Quote, X } from "lucide-react";
+import { X } from "#product/primitives/icons/core";
+import { Quote } from "#product/primitives/icons/product";
 import type { SelectedResponseContext } from "#product/domain/chats/transcript/selected-response-context";
 import { selectedResponseContextPreview } from "#product/domain/chats/transcript/selected-response-context";
 import { Button } from "#product/primitives/Button";
@@ -21,6 +22,12 @@ export function SelectedResponseContextList({
       data-telemetry-mask
     >
       {contexts.map((context) => (
+        // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review,
+        // check 1): `Card`'s surface axis is `tint`
+        // (bg-surface-elevated-secondary, borderless) or `opaque`
+        // (border-border bg-card). Neither is this quote chip's bordered
+        // `bg-muted/40`, and repainting a `Card` from the call site would be the
+        // paint leak the doctrine closes. Needs a ruling on `Card`'s fills.
         <div
           key={context.id}
           className="flex min-w-0 items-start gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-2 text-foreground"

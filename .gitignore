@@ -32,7 +32,14 @@ Thumbs.db
 # Editor / IDE
 .vscode/
 .idea/
+# Claude Code state. A nested `.claude/` anywhere (directory-scoped settings in a
+# sub-package) stays fully ignored; only the repository-root one is opened up, and
+# only for `skills/`, which is shared tooling. Order matters: the anchored rules
+# below must come after the unanchored one to win.
 .claude/
+!/.claude/
+/.claude/*
+!/.claude/skills/
 *.swp
 *.swo
 .cursorindexingignore

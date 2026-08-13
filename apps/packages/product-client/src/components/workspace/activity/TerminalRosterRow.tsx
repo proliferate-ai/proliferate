@@ -1,4 +1,4 @@
-import { SquareTerminal } from "lucide-react";
+import { SquareTerminal } from "#product/primitives/icons/workspace";
 import {
   processElapsedLabel,
   processStatusLabel,
@@ -6,15 +6,30 @@ import {
   type ActivityProcessWire,
   type ProcessTone,
 } from "#product/domain/activity/process";
-import { Button } from "#product/primitives/Button";
+import { statusDotToneTextClass, type StatusDotTone } from "#product/primitives/StatusDot";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 
-const TONE_CLASSNAME: Record<ProcessTone, string> = {
-  default: "text-muted-foreground",
-  positive: "text-success",
-  danger: "text-destructive",
-  muted: "text-faint",
+const PROCESS_STATUS_DOT_TONE: Record<ProcessTone, StatusDotTone> = {
+  default: "muted",
+  positive: "success",
+  danger: "danger",
+  muted: "muted",
 };
+
+/**
+ * Recorded gap, not a hand-rolled tone map: `StatusDot`'s tone axis has no
+ * step below `muted`, but this area distinguishes a live-but-quiet process
+ * (`default` → `text-muted-foreground`) from a finished/ignorable one
+ * (`muted` → `text-faint`). Routing both through
+ * `statusDotToneTextClass("muted")` would collapse two states that read
+ * differently today, so the one tone with no equivalent keeps its ink here
+ * and everything else defers to the shared map. Promotion candidate: a
+ * `faint` step on `StatusDotTone`.
+ */
+function processToneTextClass(tone: ProcessTone): string {
+  return tone === "muted" ? "text-faint" : statusDotToneTextClass(PROCESS_STATUS_DOT_TONE[tone]);
+}
 
 export interface TerminalRosterRowProps {
   process: ActivityProcessWire;
@@ -33,16 +48,15 @@ export interface TerminalRosterRowProps {
  * interactive PTYs — these rows are watch-only).
  */
 export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowProps) {
-  const tone = processStatusTone(process);
-  const content = (
-    <>
-      <SquareTerminal className={twMerge("mt-0.5 icon-paired shrink-0", TONE_CLASSNAME[tone])} aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-mono text-ui text-foreground" data-telemetry-mask title={process.command}>
-          {process.command}
-        </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-ui-sm text-muted-foreground">
-          <span className={TONE_CLASSNAME[tone]}>{processStatusLabel(process)}</span>
+  const toneClass = processToneTextClass(processStatusTone(process));
+
+  return (
+    <RosterRow
+      leading={<SquareTerminal className={twMerge("icon-paired", toneClass)} aria-hidden />}
+      title={<span className="font-mono" data-telemetry-mask title={process.command}>{process.command}</span>}
+      secondary={(
+        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <span className={toneClass}>{processStatusLabel(process)}</span>
           <span aria-hidden>·</span>
           <span>{processElapsedLabel(process, nowMs)}</span>
           {process.pid !== null && (
@@ -57,34 +71,11 @@ export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowP
               <span className="truncate" data-telemetry-mask>{process.cwd}</span>
             </>
           )}
-        </div>
-      </div>
-    </>
-  );
-
-  if (!onOpen) {
-    return (
-      <div
-        className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-ui"
-        data-terminal-roster-row
-        data-process-id={process.id}
-      >
-        {content}
-      </div>
-    );
-  }
-
-  return (
-    <Button
-      variant="unstyled"
-      size="unstyled"
-      type="button"
-      className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-ui hover:bg-hover active:bg-active"
-      onClick={() => onOpen(process.id)}
-      data-terminal-roster-row
+        </span>
+      )}
+      onSelect={onOpen ? () => onOpen(process.id) : undefined}
+      data-terminal-roster-row=""
       data-process-id={process.id}
-    >
-      {content}
-    </Button>
+    />
   );
 }

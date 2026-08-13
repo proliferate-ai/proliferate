@@ -1,6 +1,7 @@
-import { Folder, Laptop } from "lucide-react";
+import { Folder } from "#product/primitives/icons/workspace";
+import { Laptop } from "#product/primitives/icons/platform";
 import { parseGitRepoId } from "#product/domain/repos/repo-id";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { Button } from "#product/primitives/Button";
 import { type RepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
 import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";

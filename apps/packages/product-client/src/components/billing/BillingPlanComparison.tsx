@@ -1,4 +1,5 @@
-import { Check, CheckCircle2 } from "lucide-react";
+import { Check } from "#product/primitives/icons/core";
+import { CircleCheck } from "#product/primitives/icons/status";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 
 import { Badge } from "#product/primitives/Badge";
@@ -146,7 +147,7 @@ export function CheckoutReturnNotice({ state }: { state: "success" | "cancel" })
     return (
       <div className="rounded-lg border border-success/40 bg-success/10 p-4 text-body text-foreground">
         <div className="flex items-start gap-3">
-          <CheckCircle2 className="mt-0.5 icon-paired shrink-0 text-success" />
+          <CircleCheck className="mt-0.5 icon-paired shrink-0 text-success" />
           <div className="min-w-0">
             <div className="text-body-emphasis font-medium">Stripe checkout completed</div>
             <p className="mt-1 text-body text-muted-foreground">

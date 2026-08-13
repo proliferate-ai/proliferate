@@ -13,7 +13,7 @@ import {
 import { ChatComposerControlRowFrame } from "#product/components/workspace/chat/composer/ChatComposerControlRowFrame";
 import { Plus } from "#product/primitives/icons/core";
 import { Target } from "#product/primitives/icons/product";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { deriveGoalBarState } from "#product/domain/activity/goal";
 import { useSessionGoal } from "#product/hooks/activity/derived/use-session-goal";
 import { useGoalBarStore } from "#product/stores/activity/goal-bar-store";
@@ -89,19 +89,17 @@ export function ComposerLeadingControls({
         />
       </div>
 
-      {/* 2. Primary working mode control (bypass/plan/etc) */}
+      {/* 2. Primary working mode control (bypass/plan/etc). The trigger is
+          the flex item itself (no wrapper span): SessionModeControl owns its
+          compact-tier shrink behavior, and a min-w-0 wrapper would let the
+          cluster squeeze the pill below its icon regardless. */}
       {controlGroups.modeControl && (
-        <span
-          className={`inline-flex min-w-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <SessionModeControl
-            agentKind={agentKind}
-            control={controlGroups.modeControl}
-            triggerStyle="value"
-          />
-        </span>
+        <SessionModeControl
+          agentKind={agentKind}
+          control={controlGroups.modeControl}
+          triggerStyle="value"
+          className={runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""}
+        />
       )}
 
       {/* 3. Reasoning/effort bars */}

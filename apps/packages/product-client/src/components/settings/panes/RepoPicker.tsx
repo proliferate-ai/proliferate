@@ -1,5 +1,5 @@
-import { Check, ChevronsUpDown, Cloud, Plus } from "lucide-react";
-import { GitHub } from "#product/primitives/icons/platform";
+import { Check, ChevronUpDown, Plus } from "#product/primitives/icons/core";
+import { CloudIcon, GitHub } from "#product/primitives/icons/platform";
 import { Button } from "#product/primitives/Button";
 import {
   POPOVER_SURFACE_CLASS,
@@ -47,7 +47,7 @@ export function RepoPicker({
           <span className="min-w-0 flex-1 truncate text-left">
             {selected?.name ?? "Select repository"}
           </span>
-          <ChevronsUpDown className="icon-paired shrink-0 text-faint" />
+          <ChevronUpDown className="icon-paired shrink-0 text-faint" />
         </Button>
       }
     >
@@ -87,7 +87,7 @@ export function RepoPicker({
 function RepoChip({ kind }: { kind: RepoPickerItem["kind"] }) {
   // GitHub-backed repos read as a GitHub mark; cloud environments stay a
   // Cloud glyph.
-  const Icon = kind === "cloud" ? Cloud : GitHub;
+  const Icon = kind === "cloud" ? CloudIcon : GitHub;
   return (
     <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground [&>svg]:icon-compact">
       <Icon />

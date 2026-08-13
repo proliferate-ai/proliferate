@@ -80,6 +80,11 @@ function PromptAttachmentViewerSurface({
     >
       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border/60 px-3 text-ui-sm text-muted-foreground">
         {target.attachmentKind === "image" ? (
+          // C4: token-referencing size bracket — `icon-paired` is
+          // font-size-relative, and this header sizes at the file tree's
+          // row token rather than this bar's own `text-ui-sm` so the glyph
+          // matches the tree row it was opened from, not the caption text
+          // beside it.
           <FileIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />
         ) : (
           <FileText className="icon-paired shrink-0" />

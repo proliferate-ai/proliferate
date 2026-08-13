@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus } from "#product/primitives/icons/core";
 
 import { Button } from "#product/primitives/Button";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import type { CloudSecretsPanelModel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import type {
   SecretMaterializationView,

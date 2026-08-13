@@ -5,6 +5,7 @@ import { Check, KeyRound } from "#product/primitives/icons/core";
 import { CloudIcon } from "#product/primitives/icons/platform";
 import { SquareTerminal } from "#product/primitives/icons/workspace";
 import { Button } from "#product/primitives/Button";
+import { IconTile } from "#product/primitives/IconTile";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { gatewaySubtitle } from "#product/copy/settings/agent-auth-copy";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
@@ -13,7 +14,7 @@ import {
   type AuthMethod,
 } from "#product/lib/domain/settings/harness-auth-sources";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
-import { HarnessSection } from "#product/components/settings/panes/agents/harness/HarnessSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import {
   deriveAuthStatus,
   HarnessAuthStatusAction,
@@ -59,11 +60,11 @@ export function HarnessAuthSection({
   // no E2B still gets the route cards to store a key or pick a route.
   if (surface === "local" && !editor.authReady) {
     return (
-      <HarnessSection title={HARNESS_PANE_COPY.signInTitle}>
+      <SettingsSection title={HARNESS_PANE_COPY.signInTitle} titleWeight="emphasized" surface="plain">
         <p className="text-ui-sm text-muted-foreground">
           {HARNESS_PANE_COPY.signInDescription(displayName)}
         </p>
-      </HarnessSection>
+      </SettingsSection>
     );
   }
 
@@ -93,12 +94,14 @@ function HarnessAuthMethods({
 
   if (editor.selectionsQuery.isLoading) {
     return (
-      <HarnessSection
+      <SettingsSection
         title={HARNESS_PANE_COPY.authenticationTitle}
         description={HARNESS_PANE_COPY.authenticationDescription(displayName, surface)}
+        titleWeight="emphasized"
+        surface="plain"
       >
         <p className="text-ui-sm text-muted-foreground">Loading authentication...</p>
-      </HarnessSection>
+      </SettingsSection>
     );
   }
 
@@ -156,9 +159,11 @@ function HarnessAuthMethods({
   const cardCount = gatewayCapable ? 3 : 2;
 
   return (
-    <HarnessSection
+    <SettingsSection
       title={HARNESS_PANE_COPY.authenticationTitle}
       description={HARNESS_PANE_COPY.authenticationDescription(displayName, surface)}
+      titleWeight="emphasized"
+      surface="plain"
       action={(
         <HarnessAuthStatusAction
           status={status}
@@ -224,7 +229,7 @@ function HarnessAuthMethods({
         />
       </div>
       {children ? <div className="mt-4">{children}</div> : null}
-    </HarnessSection>
+    </SettingsSection>
   );
 }
 
@@ -333,13 +338,16 @@ function MethodCard({
         ].join(" ")}
         onClick={onClick}
       >
-        <span
-          aria-hidden
-          className="mb-auto flex size-8 items-center justify-center rounded-md bg-surface-control text-muted-foreground"
-        >
+        <IconTile aria-hidden className="mb-auto">
           {icon}
-        </span>
+        </IconTile>
         {selected ? (
+          // MethodCard→RadioCardGroup is deferred (frozen spec §4.3: the
+          // shipped RadioCardOption has no data-attribute passthrough, which
+          // would drop data-harness-route-option below). 11px centers the
+          // check glyph in the card's px-4 py-3.5 corner inset; not on the
+          // 4px/2px space scale because it tracks the icon's own optical
+          // center, not a layout gap.
           <Check
             aria-hidden
             className="icon-paired absolute right-[11px] top-[11px] text-foreground"

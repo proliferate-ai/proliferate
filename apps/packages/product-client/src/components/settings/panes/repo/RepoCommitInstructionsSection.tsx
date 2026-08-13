@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRepositories, useUpdateRepoConfig } from "@proliferate/cloud-sdk-react";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { Button } from "#product/primitives/Button";
 import { Textarea } from "#product/primitives/Textarea";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";

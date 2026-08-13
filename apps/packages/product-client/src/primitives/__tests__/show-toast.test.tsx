@@ -3,7 +3,7 @@
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAX_VISIBLE_TOASTS, toast } from "#product/primitives/Sonner";
-import { ToastHost } from "#product/primitives/patterns/ToastHost";
+import { ToastHost } from "#product/primitives/patterns/toast/ToastHost";
 import { dismissToast, showToast, toastError } from "#product/primitives/utils/show-toast";
 import type { ToastInput } from "#product/primitives/utils/toast-model";
 

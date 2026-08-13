@@ -1,6 +1,7 @@
 import { Button } from "#product/primitives/Button";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 
 export function GitHubAppInstallationSection({
   loading,
@@ -34,31 +35,32 @@ export function GitHubAppInstallationSection({
 
   return (
     <SettingsSection title="GitHub App">
-      <div className="flex items-center gap-3.5 px-3.5 py-[13px]">
-        <div className="flex w-5 shrink-0 items-center justify-center">
-          <ProviderBrandIcon provider="github" className="icon-large text-foreground" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-ui text-foreground">GitHub App</div>
-          <div className="mt-px truncate text-ui-sm text-muted-foreground [text-wrap:pretty]">{detail}</div>
-        </div>
-        <span className="shrink-0 text-ui-sm text-muted-foreground">{statusLabel}</span>
-        {canManage ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            loading={installing}
-            disabled={installing}
-            className="shrink-0"
-            onClick={() => {
-              void (installed ? onManage() : onInstall());
-            }}
-          >
-            {installed ? "Manage" : "Install"}
-          </Button>
-        ) : null}
-      </div>
+      <RosterRow
+        density="comfortable"
+        leading={<ProviderBrandIcon provider="github" className="icon-large text-foreground" />}
+        title="GitHub App"
+        secondary={detail}
+        trailing={(
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="min-w-0 truncate text-ui-sm text-muted-foreground">{statusLabel}</span>
+            {canManage ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                loading={installing}
+                disabled={installing}
+                className="shrink-0"
+                onClick={() => {
+                  void (installed ? onManage() : onInstall());
+                }}
+              >
+                {installed ? "Manage" : "Install"}
+              </Button>
+            ) : null}
+          </div>
+        )}
+      />
     </SettingsSection>
   );
 }

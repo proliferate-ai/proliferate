@@ -251,7 +251,7 @@ describe("generated design-package semantic text tokens", () => {
     for (const step of generatedIconButtonSteps) {
       // A consumer override must WIN over a component's own box, not coexist
       // with it and lose on generated-CSS source order (which is what
-      // ChromeWorkspaceTab's 20px close button did: Button's `h-7 w-7`
+      // ChromeTab's 20px close button did: Button's `h-7 w-7`
       // survived the merge and kept it at 28px).
       expect(twMerge(`h-7 w-7 rounded-full px-0 size-icon-button-${step}`)).toBe(
         `rounded-full px-0 size-icon-button-${step}`,
@@ -582,15 +582,14 @@ describe("appearance scaling CSS defaults", () => {
     expect(bodyRule).toContain("line-height: var(--text-ui--line-height);");
   });
 
-  it("shares semantic caret and selection colors across text-entry renderers", () => {
+  it("shares semantic caret and selection colors across text-entry renderers while transcripts keep native selection paint", () => {
     expect(themeDeclarations["--color-text-caret"]).toBe("var(--color-foreground)");
     expect(themeDeclarations["--color-text-selection"]).toBe(
       "var(--color-highlight, var(--color-input))",
     );
     expect(productCss).toContain("caret-color: var(--color-text-caret);");
     expect(productCss).toContain("background-color: var(--color-text-selection);");
-    expect(productCss).toContain(".chat-selection-root ::selection");
-    expect(productCss).toContain("background-color: var(--color-text-selection);");
+    expect(productCss).not.toContain(".chat-selection-root ::selection");
   });
 
   it("keeps the spinner inline box stationary while its SVG owns motion", () => {

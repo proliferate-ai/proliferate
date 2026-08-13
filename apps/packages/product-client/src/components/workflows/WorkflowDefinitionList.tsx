@@ -1,8 +1,12 @@
-import { Plus, RotateCcw, Workflow } from "lucide-react";
+import { Plus, RotateCcw } from "#product/primitives/icons/core";
+import { Workflow } from "#product/primitives/icons/product";
 import type { WorkflowDefinition } from "#product/domain/workflows/definition";
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { Button } from "#product/primitives/Button";
-import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
+import { IconTile } from "#product/primitives/IconTile";
+import { Card } from "#product/primitives/patterns/Card";
+import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 
 export interface WorkflowDefinitionListProps {
   definitions: readonly WorkflowDefinition[];
@@ -61,35 +65,32 @@ export function WorkflowDefinitionList({
           )}
         />
       ) : (
-        <div className="overflow-clip rounded-lg border border-border bg-card">
-          {definitions.map((definition, index) => (
-            <Button
+        <Card surface="opaque" className="flex flex-col gap-0.5 p-2">
+          {definitions.map((definition) => (
+            <RosterRow
               key={definition.id}
-              type="button"
-              variant="unstyled"
-              size="unstyled"
-              onClick={() => onSelect(definition.id)}
-              className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-hover ${
-                index > 0 ? "border-t border-border" : ""
-              }`}
-            >
-              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-elevated-secondary text-muted-foreground">
-                <Workflow className="icon-paired" aria-hidden />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-body-emphasis font-medium text-foreground">
-                  {definition.title}
-                </span>
-                <span className="mt-0.5 block line-clamp-2 text-ui-sm leading-4 text-muted-foreground">
+              density="comfortable"
+              leading={(
+                <IconTile tone="elevated">
+                  <Workflow className="icon-paired" aria-hidden />
+                </IconTile>
+              )}
+              title={definition.title}
+              // `RosterRow`'s secondary slot neither truncates nor clamps, and a
+              // workflow description is free text — the pre-adoption row clamped
+              // it at two lines so one verbose definition could not stretch the
+              // list. Clamping in the slot keeps that behaviour without asking
+              // the pattern for a second geometry axis.
+              secondary={(
+                <span className="line-clamp-2">
                   {definition.description || workflowSummary(definition)}
                 </span>
-              </span>
-              <span className="shrink-0 pt-1 text-ui-sm text-muted-foreground">
-                {formatUpdatedAt(definition.updatedAt)}
-              </span>
-            </Button>
+              )}
+              trailing={formatUpdatedAt(definition.updatedAt)}
+              onSelect={() => onSelect(definition.id)}
+            />
           ))}
-        </div>
+        </Card>
       )}
     </ProductPageShell>
   );

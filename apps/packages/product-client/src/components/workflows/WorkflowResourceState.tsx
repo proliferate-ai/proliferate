@@ -1,6 +1,6 @@
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { Button } from "#product/primitives/Button";
-import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
+import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
 
 export function WorkflowResourceState({
   loading = false,

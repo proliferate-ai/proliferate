@@ -143,6 +143,12 @@ export function HomeTargetPicker({
           className={TARGET_PICKER_SURFACE_CLASS}
         >
           {(close) => (
+            // `py-0` only started winning when PickerPopoverContent moved from
+            // concatenating its className to merging it: under the old join the
+            // pattern's own `py-1` sat later in the generated stylesheet, so this
+            // body shipped with the 4px block padding it had asked not to have.
+            // The divider between the runtime and SSH sections is meant to run
+            // flush to the body's edges, which is what the override was for.
             <PickerPopoverContent
               className="max-h-[min(20rem,calc(100vh-1rem))]"
               bodyClassName="py-0"

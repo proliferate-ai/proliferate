@@ -28,7 +28,7 @@ vi.mock("#product/primitives/icons/core", () => ({
   Plus: () => <span data-testid="plus-icon" />,
 }));
 
-vi.mock("#product/primitives/patterns/SidebarActionButton", () => ({
+vi.mock("#product/primitives/patterns/sidebar/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     disabled,

@@ -3,8 +3,10 @@ import {
   gitAheadBehindLabel,
   prNumberLabelFromGitStatus,
   prStatusCompoundLabel,
+  prStatusTone,
   prStatusViewFromGitStatus,
 } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
+import type { PrStatusKind } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 import type {
   WorkspaceGitStatus,
   WorkspacePrStatus,
@@ -180,5 +182,44 @@ describe("gitAheadBehindLabel", () => {
     expect(gitAheadBehindLabel(status({ ahead: 2, behind: 1 }))).toBe("↑2 ↓1");
     expect(gitAheadBehindLabel(status({ ahead: 2, behind: 0 }))).toBe("↑2");
     expect(gitAheadBehindLabel(status({ ahead: 0, behind: 3 }))).toBe("↓3");
+  });
+});
+
+describe("prStatusTone", () => {
+  // The pre-conversion tone map lived as Tailwind classes inside
+  // `PrStatusBadge` (`bg-success`, `border border-warning-foreground
+  // bg-transparent`, …). Pinning the whole table here is what stops the
+  // StatusDot conversion from silently re-colouring a PR state.
+  it("maps every PR kind onto the StatusDot axes it painted before", () => {
+    const expected: Record<PrStatusKind, { tone: string; fill: string }> = {
+      open: { tone: "success", fill: "solid" },
+      checks_failing: { tone: "danger", fill: "solid" },
+      // The only in-flight state, and so the only hollow one.
+      pending: { tone: "warning", fill: "hollow" },
+      changes_requested: { tone: "warning", fill: "solid" },
+      draft: { tone: "muted", fill: "solid" },
+      // GitHub-convention purple, never `info` (the unread colour).
+      merged: { tone: "merged", fill: "solid" },
+      closed: { tone: "danger", fill: "solid" },
+    };
+    for (const [kind, appearance] of Object.entries(expected)) {
+      expect(prStatusTone(kind as PrStatusKind)).toEqual(appearance);
+    }
+  });
+
+  it("never borrows the unread or inherited tones", () => {
+    const kinds: PrStatusKind[] = [
+      "open",
+      "checks_failing",
+      "pending",
+      "changes_requested",
+      "draft",
+      "merged",
+      "closed",
+    ];
+    for (const kind of kinds) {
+      expect(prStatusTone(kind).tone).not.toBe("info");
+      expect(prStatusTone(kind).tone).not.toBe("current");
+    }
   });
 });

@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
-import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
+import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 
 afterEach(cleanup);
 

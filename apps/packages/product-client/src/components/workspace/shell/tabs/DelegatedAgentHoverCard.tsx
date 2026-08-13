@@ -19,6 +19,27 @@ import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
 
+/**
+ * WAVE-2 NOTE (shell slice, DESIGN_SYSTEM.md UI-conformance review): the
+ * doctrine rules this card onto `Tooltip`, and rules the clickable mode
+ * deletable as dead code. Neither landed, for reasons recorded here so the
+ * next slice does not re-derive them.
+ *
+ * 1. `Tooltip`'s `content` prop is `string`, not `ReactNode` — it cannot host
+ *    this card's identicon + name + origin + key/value rows without a second
+ *    edit to a library file this slice does not own, and nesting a Radix
+ *    Tooltip inside the existing `PopoverButton`-based rename/context-menu
+ *    trigger chain needs hand verification of focus neutrality in a running
+ *    app (the frozen spec's Risk 3). Escalated per the spec's §2-C fallback.
+ * 2. The clickable mode is NOT dead. The spec named `ChatTabWithMenu.tsx` as
+ *    the only call site; `SubagentToolActionRow.tsx` is a second one and it
+ *    passes both `cardAriaLabel` and `onCardClick` (opening the subagent's
+ *    session from the transcript). Deleting the branch would have removed a
+ *    live affordance and broken that file's types, so the ruling's premise
+ *    fails and the branch stays. The tooltip-that-is-also-a-button role
+ *    conflict is real and remains open residue for the next slice.
+ */
+
 const VIEWPORT_MARGIN = 12;
 const HOVER_CARD_OFFSET = 6;
 const CARD_WIDTH = 224;

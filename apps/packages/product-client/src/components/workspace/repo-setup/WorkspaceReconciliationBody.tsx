@@ -1,4 +1,4 @@
-import { GitBranch } from "lucide-react";
+import { GitBranch } from "#product/primitives/icons/workspace-git";
 import { Badge } from "#product/primitives/Badge";
 import type { WorkspaceReconciliationBodyView } from "#product/lib/domain/workspaces/cloud/reconciliation-body-view";
 

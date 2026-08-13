@@ -40,7 +40,7 @@ import {
   type ComposerEditorContext,
 } from "#product/components/workspace/chat/input/ComposerEditorDocument";
 import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
-import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "#product/primitives/patterns/ComposerTextareaFrame";
+import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "#product/primitives/patterns/composer/ComposerTextareaFrame";
 
 interface ComposerCommandEditorProps {
   draft: ChatComposerDraft;

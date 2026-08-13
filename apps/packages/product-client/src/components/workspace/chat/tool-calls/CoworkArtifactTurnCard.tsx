@@ -31,12 +31,19 @@ export function CoworkArtifactTurnCard({
   const showOpenButton = !!presentation.summary?.id && !!onOpenArtifact;
 
   return (
-    <div className="space-y-1.5 py-0.5">
+    <div className="space-y-1 py-0.5">
       <div className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md pl-0.5 pr-1.5 text-chat leading-5 text-muted-foreground">
         <FileText className="icon-compact text-faint" />
         <span className="text-inherit">{completedActionLabel}</span>
       </div>
 
+      {/*
+        Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review, check 1):
+        `bg-muted/25` is a quarter-strength wash chosen to sit under the
+        transcript's own tint without stacking into a second visible plane.
+        `Card` offers the borderless `bg-surface-elevated-secondary` tint or the
+        opaque `bg-card`, neither of which is this. Needs a ruling on `Card`.
+      */}
       <div className="rounded-md border border-border/60 bg-muted/25 px-3 py-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">

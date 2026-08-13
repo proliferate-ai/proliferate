@@ -10,8 +10,11 @@ import { Check } from "#product/primitives/icons/core";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
-import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
+import {
+  PendingConfigIndicator,
+  showsPendingConfigIndicator,
+} from "#product/components/workspace/chat/input/PendingConfigIndicator";
 import { SessionModeControl } from "#product/components/workspace/chat/input/SessionModeControl";
 
 interface SessionConfigControlsProps {
@@ -83,7 +86,9 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
           active={!!control.isEnabled}
           icon={<Icon className={`icon-control [font-size:var(--text-body)] ${control.isEnabled ? "" : "opacity-65"}`} />}
           label={triggerLabel}
-          trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
+          trailing={showsPendingConfigIndicator(control.pendingState)
+        ? <PendingConfigIndicator pendingState={control.pendingState} />
+        : null}
           aria-label={tooltip}
           className="max-w-[12rem]"
           data-session-config-control={control.key}
@@ -104,7 +109,9 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
       active={!!control.isEnabled}
       label={control.label}
       detail={control.detail}
-      trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
+      trailing={showsPendingConfigIndicator(control.pendingState)
+        ? <PendingConfigIndicator pendingState={control.pendingState} />
+        : null}
       className="max-w-[12rem]"
       data-session-config-control={control.key}
       data-session-config-selected={selectedOption?.value ?? ""}
@@ -138,7 +145,9 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
         <ComposerControlButton
           label={control.label}
           detail={control.detail}
-          trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
+          trailing={showsPendingConfigIndicator(control.pendingState)
+        ? <PendingConfigIndicator pendingState={control.pendingState} />
+        : null}
           className="max-w-[14rem]"
           data-session-config-control={control.key}
           data-session-config-selected={selectedOption?.value ?? ""}

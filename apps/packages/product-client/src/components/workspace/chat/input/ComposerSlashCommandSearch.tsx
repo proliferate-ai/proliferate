@@ -3,8 +3,8 @@ import {
   ComposerInlineMenuGroupLabel,
   ComposerInlineMenuPanel,
   ComposerInlineMenuRow,
-  ComposerInlineMenuStatusRow,
 } from "#product/components/workspace/chat/input/ComposerInlineMenu";
+import { PickerEmptyRow } from "#product/primitives/patterns/PickerPopoverContent";
 import type {
   SessionSlashCommandGroup,
   SessionSlashCommandViewModel,
@@ -48,7 +48,7 @@ export function ComposerSlashCommandSearch({
           />
         ))
       ) : (
-        <ComposerInlineMenuStatusRow>No matching slash commands.</ComposerInlineMenuStatusRow>
+        <PickerEmptyRow label="No matching slash commands." />
       )}
     </ComposerInlineMenuPanel>
   );

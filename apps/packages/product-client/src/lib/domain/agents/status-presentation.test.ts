@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
-import { getAgentStatusDisplay } from "#product/lib/domain/agents/status-presentation";
+import {
+  getAgentStatusDisplay,
+  getHarnessAttentionDotTone,
+} from "#product/lib/domain/agents/status-presentation";
 
 function buildAgent(overrides: Partial<AgentSummary> = {}): AgentSummary {
   return {
@@ -89,5 +92,44 @@ describe("getAgentStatusDisplay", () => {
       label: "Install required",
       tone: "warning",
     });
+  });
+});
+
+describe("getHarnessAttentionDotTone", () => {
+  it("shows nothing without a record", () => {
+    expect(getHarnessAttentionDotTone(undefined)).toBeNull();
+  });
+
+  it("shows nothing before install", () => {
+    expect(getHarnessAttentionDotTone(
+      buildAgent({ installState: "install_required", readiness: "install_required" }),
+    )).toBeNull();
+  });
+
+  it("shows no dot for a ready harness (the dot means 'needs attention')", () => {
+    expect(getHarnessAttentionDotTone(
+      buildAgent({ credentialState: "ready", installState: "installed", readiness: "ready" }),
+    )).toBeNull();
+  });
+
+  it("still flags a harness whose credentials are genuinely missing", () => {
+    expect(getHarnessAttentionDotTone(
+      buildAgent({ installState: "installed", credentialState: "login_required", readiness: "login_required" }),
+    )).toBe("warning");
+    expect(getHarnessAttentionDotTone(
+      buildAgent({ installState: "installed", credentialState: "missing_env", readiness: "credentials_required" }),
+    )).toBe("warning");
+  });
+
+  it("still flags a failed install as an error, even with ready credentials", () => {
+    expect(getHarnessAttentionDotTone(
+      buildAgent({ credentialState: "ready", installState: "failed", readiness: "error" }),
+    )).toBe("danger");
+  });
+
+  it("falls back to danger for any other unresolved credential state", () => {
+    expect(getHarnessAttentionDotTone(
+      buildAgent({ credentialState: "not_configured", installState: "installed", readiness: "error" }),
+    )).toBe("danger");
   });
 });

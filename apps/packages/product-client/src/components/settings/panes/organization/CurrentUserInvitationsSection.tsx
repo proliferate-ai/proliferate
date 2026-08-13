@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { Button } from "#product/primitives/Button";
 import { Check } from "#product/primitives/icons/core";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import type { OrganizationInvitationRecord } from "#product/lib/domain/organizations/organization-records";
 
 export function CurrentUserInvitationsSection({
