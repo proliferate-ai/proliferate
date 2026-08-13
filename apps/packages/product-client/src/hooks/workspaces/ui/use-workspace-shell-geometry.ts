@@ -1,19 +1,10 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
-  type RefObject,
 } from "react";
-import { motion } from "@proliferate/design/motion";
-import { usePrefersReducedMotion } from "#product/hooks/ui/motion/use-prefers-reduced-motion";
-
-interface WorkspaceShellWidths {
-  left: number;
-  right: number;
-}
 
 interface UseWorkspaceShellGeometryOptions {
   leftWidth: number;
@@ -23,52 +14,32 @@ interface UseWorkspaceShellGeometryOptions {
    * must not retain the open/close easing or the edge trails the cursor.
    */
   snapLeft?: boolean;
-  /**
-   * Held true while the right separator drag is live. A pointer-driven width
-   * must land exactly where the cursor is on every frame — easing it would
-   * rubber-band the panel edge behind the pointer and keep re-laying the
-   * panes out for the full panel duration after each move.
-   */
-  snapRight?: boolean;
   onToggleLeft: () => void;
 }
 
 interface WorkspaceShellGeometry {
-  rootRef: RefObject<HTMLDivElement | null>;
   style: CSSProperties;
   snapLeft: boolean;
   toggleLeft: (options?: { snapGeometry?: boolean }) => void;
-  usesManualInterpolation: boolean;
 }
 
-function needsManualInterpolation(): boolean {
-  if (typeof window === "undefined" || typeof CSS === "undefined") {
-    return false;
-  }
-  return typeof CSS.registerProperty !== "function";
-}
-
-function easeOutCubic(progress: number): number {
-  return 1 - ((1 - progress) ** 3);
-}
-
+/**
+ * Publishes the pane widths as `--workspace-left-width`/`--workspace-right-width`
+ * on the shell root. The vars stay unregistered on purpose: WebKit applies
+ * page zoom to a registered `<length>` custom property once when it computes
+ * and again at the consumer, so a zoomed window renders width·zoom² (PRO-166).
+ * Untyped vars substitute textually; each consumer eases its own concrete
+ * property (width/left/padding) against the shared geometry durations, which
+ * the snap attributes zero during pointer-driven drags.
+ */
 export function useWorkspaceShellGeometry({
   leftWidth,
   rightWidth,
   snapLeft: requestedSnapLeft = false,
-  snapRight = false,
   onToggleLeft,
 }: UseWorkspaceShellGeometryOptions): WorkspaceShellGeometry {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const frameRef = useRef<number | null>(null);
   const snapClearFrameRef = useRef<number | null>(null);
   const [toggleSnapLeft, setToggleSnapLeft] = useState(false);
-  const renderedRef = useRef<WorkspaceShellWidths>({
-    left: leftWidth,
-    right: rightWidth,
-  });
-  const usesManualInterpolation = useRef(needsManualInterpolation()).current;
-  const reducedMotion = usePrefersReducedMotion();
 
   const toggleLeft = useCallback((options?: { snapGeometry?: boolean }) => {
     if (snapClearFrameRef.current !== null) {
@@ -92,88 +63,18 @@ export function useWorkspaceShellGeometry({
     });
   }, [onToggleLeft]);
 
-  const snapLeft = requestedSnapLeft || toggleSnapLeft;
-
-  useLayoutEffect(() => {
-    if (!usesManualInterpolation) {
-      renderedRef.current = { left: leftWidth, right: rightWidth };
-      return;
-    }
-
-    if (frameRef.current !== null) {
-      window.cancelAnimationFrame(frameRef.current);
-      frameRef.current = null;
-    }
-
-    const root = rootRef.current;
-    if (!root) {
-      return;
-    }
-
-    const from = renderedRef.current;
-    const target = { left: leftWidth, right: rightWidth };
-    const setWidths = (widths: WorkspaceShellWidths) => {
-      renderedRef.current = widths;
-      root.style.setProperty("--workspace-left-width", `${widths.left}px`);
-      root.style.setProperty("--workspace-right-width", `${widths.right}px`);
-    };
-
-    const animateLeft = !snapLeft && from.left !== target.left;
-    const animateRight = !snapRight && from.right !== target.right;
-    if (reducedMotion || (!animateLeft && !animateRight)) {
-      setWidths(target);
-      return;
-    }
-
-    if (snapLeft || snapRight) {
-      setWidths({
-        left: snapLeft ? target.left : from.left,
-        right: snapRight ? target.right : from.right,
-      });
-    }
-
-    let startedAt: number | null = null;
-    const tick = (timestamp: number) => {
-      startedAt ??= timestamp;
-      const progress = Math.min(1, (timestamp - startedAt) / motion.duration.panelMs);
-      const eased = easeOutCubic(progress);
-      const widths = {
-        left: animateLeft ? from.left + ((target.left - from.left) * eased) : target.left,
-        right: animateRight ? from.right + ((target.right - from.right) * eased) : target.right,
-      };
-      setWidths(widths);
-
-      if (progress < 1) {
-        frameRef.current = window.requestAnimationFrame(tick);
-      } else {
-        frameRef.current = null;
-      }
-    };
-
-    frameRef.current = window.requestAnimationFrame(tick);
-  }, [leftWidth, reducedMotion, rightWidth, snapLeft, snapRight, usesManualInterpolation]);
-
   useEffect(() => () => {
-    if (frameRef.current !== null) {
-      window.cancelAnimationFrame(frameRef.current);
-    }
     if (snapClearFrameRef.current !== null) {
       window.cancelAnimationFrame(snapClearFrameRef.current);
     }
   }, []);
 
-  const rendered = usesManualInterpolation
-    ? renderedRef.current
-    : { left: leftWidth, right: rightWidth };
-
   return {
-    rootRef,
-    snapLeft,
+    snapLeft: requestedSnapLeft || toggleSnapLeft,
     style: {
-      "--workspace-left-width": `${rendered.left}px`,
-      "--workspace-right-width": `${rendered.right}px`,
+      "--workspace-left-width": `${leftWidth}px`,
+      "--workspace-right-width": `${rightWidth}px`,
     } as CSSProperties,
     toggleLeft,
-    usesManualInterpolation,
   };
 }
