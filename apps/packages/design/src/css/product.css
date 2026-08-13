@@ -1583,12 +1583,6 @@ body {
 /* 4.5s total: trot in (0-30%), pause & celebrate (30-70%), trot out (70-100%) */
 /* Arms down during trot, raise when paused in center, stay up for exit */
 /* Trophy pops in after arms are up, stays for the hold, exits with the trot */
-/* ---- Chat view text selection ---- */
-.chat-selection-root ::selection {
-  background-color: var(--color-text-selection);
-  color: inherit;
-}
-
 .workspace-shell-tab {
   height: var(--workspace-shell-tab-height);
 }
