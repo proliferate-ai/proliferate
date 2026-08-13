@@ -110,6 +110,11 @@ export async function showNativeContextMenu(
   } catch {
     return false;
   } finally {
+    // A dismissed native menu leaves the webview's hover tracking stale until
+    // the next real mouse event, so revealed-on-hover controls stay hidden
+    // until the user clicks. Replay a no-op mouseMoved so hover resumes
+    // immediately.
+    void resyncPointerHoverAfterNativeMenu();
     // `Menu` and each explicitly constructed item are Tauri resources. The
     // popup call resolves after the native menu is dismissed, so release all
     // of them here instead of retaining one resource tree per open.
@@ -117,6 +122,15 @@ export async function showNativeContextMenu(
     await Promise.allSettled(
       builtResources.reverse().map((resource) => resource.close()),
     );
+  }
+}
+
+async function resyncPointerHoverAfterNativeMenu(): Promise<void> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("resync_pointer_hover");
+  } catch {
+    // A shell without the command keeps the pre-resync behavior.
   }
 }
 

@@ -16,6 +16,25 @@ pub fn apply_macos_window_chrome(window: tauri::Window) -> Result<(), String> {
     }
 }
 
+/// After a native context menu is dismissed on macOS, the webview's hover
+/// tracking stays stale until the OS delivers the next real mouse event — so
+/// hover styling (row highlights, revealed row actions) is dead until the
+/// user clicks. Replaying a no-op mouseMoved at the current cursor location
+/// through the window re-arms the webview's tracking areas immediately.
+#[tauri::command]
+pub fn resync_pointer_hover(window: tauri::Window) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        post_mouse_moved_at_cursor(&window)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window;
+        Ok(())
+    }
+}
+
 #[tauri::command]
 pub fn set_webview_zoom(window: tauri::WebviewWindow, scale_factor: f64) -> Result<(), String> {
     if !scale_factor.is_finite() {
@@ -25,6 +44,35 @@ pub fn set_webview_zoom(window: tauri::WebviewWindow, scale_factor: f64) -> Resu
     window
         .set_zoom(scale_factor.clamp(0.8, 1.2))
         .map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn post_mouse_moved_at_cursor(window: &tauri::Window) -> Result<(), String> {
+    use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType, NSWindow};
+    use objc2_foundation::NSProcessInfo;
+
+    let ns_window = window.ns_window().map_err(|error| error.to_string())?;
+
+    unsafe {
+        let ns_window = &*ns_window.cast::<NSWindow>();
+        let location = ns_window.mouseLocationOutsideOfEventStream();
+        let event = NSEvent::mouseEventWithType_location_modifierFlags_timestamp_windowNumber_context_eventNumber_clickCount_pressure(
+            NSEventType::MouseMoved,
+            location,
+            NSEventModifierFlags::empty(),
+            NSProcessInfo::processInfo().systemUptime(),
+            ns_window.windowNumber(),
+            None,
+            0,
+            0,
+            0.0,
+        );
+        if let Some(event) = event {
+            ns_window.sendEvent(&event);
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
