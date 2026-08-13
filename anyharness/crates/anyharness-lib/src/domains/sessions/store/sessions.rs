@@ -275,16 +275,6 @@ impl SessionStore {
         })
     }
 
-    pub fn update_title(&self, id: &str, title: &str, now: &str) -> anyhow::Result<()> {
-        self.db.with_conn(|conn| {
-            conn.execute(
-                "UPDATE sessions SET title = ?1, updated_at = ?2 WHERE id = ?3",
-                params![title, now, id],
-            )?;
-            Ok(())
-        })
-    }
-
     pub fn mark_closed(&self, id: &str, now: &str) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             conn.execute(

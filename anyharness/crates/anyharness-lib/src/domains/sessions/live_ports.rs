@@ -179,8 +179,8 @@ impl SessionStateDurable for SessionStore {
         SessionStore::update_status(self, id, status, now)
     }
 
-    fn update_title(&self, id: &str, title: &str, now: &str) -> anyhow::Result<()> {
-        SessionStore::update_title(self, id, title, now)
+    fn update_title_if_absent(&self, id: &str, title: &str, now: &str) -> anyhow::Result<bool> {
+        SessionStore::update_title_if_absent(self, id, title, now)
     }
 
     fn update_last_prompt_at(&self, id: &str, now: &str) -> anyhow::Result<()> {

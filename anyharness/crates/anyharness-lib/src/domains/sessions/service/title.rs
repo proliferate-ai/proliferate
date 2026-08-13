@@ -31,4 +31,19 @@ impl SessionService {
         updated.updated_at = now;
         Ok(updated)
     }
+
+    /// Applies a fallback title only when the session has none yet; returns
+    /// whether it was applied. Used for prompt-derived titles so an assigned
+    /// title (user rename or generated summary) is never replaced.
+    pub fn update_session_title_if_absent(
+        &self,
+        session_id: &str,
+        title: &str,
+    ) -> anyhow::Result<bool> {
+        self.session_store.update_title_if_absent(
+            session_id,
+            title,
+            &chrono::Utc::now().to_rfc3339(),
+        )
+    }
 }

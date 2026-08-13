@@ -98,6 +98,31 @@ fn update_title_persists_session_title() {
 }
 
 #[test]
+fn update_title_if_absent_never_replaces_an_assigned_title() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let mut record = session_record();
+    record.title = None;
+    store.insert(&record).expect("insert session");
+
+    assert!(store
+        .update_title_if_absent("session-1", "Harness title", "2026-03-25T01:00:00Z")
+        .expect("set title on untitled session"));
+    assert!(!store
+        .update_title_if_absent("session-1", "Later harness title", "2026-03-25T02:00:00Z")
+        .expect("skip titled session"));
+
+    let stored = store
+        .find_by_id("session-1")
+        .expect("find session")
+        .expect("session record");
+    assert_eq!(stored.title.as_deref(), Some("Harness title"));
+    assert_eq!(stored.updated_at, "2026-03-25T01:00:00Z");
+}
+
+#[test]
 fn visible_session_lists_exclude_dismissed_and_closed_sessions() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);

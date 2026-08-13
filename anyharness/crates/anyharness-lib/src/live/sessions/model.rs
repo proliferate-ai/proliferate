@@ -226,7 +226,7 @@ pub trait BackgroundWorkDurable: Send + Sync {
 /// pending-config queue, capabilities, turn repair.
 pub trait SessionStateDurable: Send + Sync {
     fn update_status(&self, id: &str, status: &str, now: &str) -> anyhow::Result<()>;
-    fn update_title(&self, id: &str, title: &str, now: &str) -> anyhow::Result<()>;
+    fn update_title_if_absent(&self, id: &str, title: &str, now: &str) -> anyhow::Result<bool>;
     fn update_last_prompt_at(&self, id: &str, now: &str) -> anyhow::Result<()>;
     fn update_requested_configuration(
         &self,
