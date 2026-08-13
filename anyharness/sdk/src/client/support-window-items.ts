@@ -86,7 +86,7 @@ export function validateSupportRawNotificationItem(
   requireString(value, "timestamp", "raw notification item");
   requireString(value, "notificationKind", "raw notification item");
   requirePositiveSequence(value, "raw notification item");
-  if (!Object.hasOwn(value, "notification")) {
+  if (!Object.prototype.hasOwnProperty.call(value, "notification")) {
     throw invalidItem("raw notification item.notification is missing");
   }
   return value as unknown as SessionRawNotificationEnvelope;

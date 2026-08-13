@@ -28,7 +28,9 @@ export function normalizeOwnQueryParameter(
   if (descriptor === undefined) {
     return { present: false };
   }
-  if (!Object.hasOwn(descriptor, "value")) {
+  // `hasOwnProperty.call`, not `Object.hasOwn`: apps/desktop typechecks these
+  // sources under `lib: ES2021`, where `Object.hasOwn` does not exist.
+  if (!Object.prototype.hasOwnProperty.call(descriptor, "value")) {
     throw invalidQueryProperty(property);
   }
 

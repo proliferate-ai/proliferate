@@ -216,7 +216,7 @@ function ownData(value: object, property: string, label: string): unknown {
   } catch {
     throw invalidRequest(`${label} could not be inspected`);
   }
-  if (!descriptor || !Object.hasOwn(descriptor, "value")) {
+  if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value")) {
     throw invalidRequest(`${label}.${property} must be an own data property`);
   }
   return descriptor.value as unknown;

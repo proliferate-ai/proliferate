@@ -227,7 +227,7 @@ function requiredOwnData(input: unknown, property: string): unknown {
   } catch {
     throw invalidSupportWindowOptions(`${property} must be an own data property`);
   }
-  if (!descriptor || !Object.hasOwn(descriptor, "value")) {
+  if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value")) {
     throw invalidSupportWindowOptions(`${property} must be an own data property`);
   }
   return descriptor.value as unknown;
@@ -492,7 +492,7 @@ function ownDescriptor(
   } catch {
     throw invalidSupportWindowResponse(`${label} could not be inspected`);
   }
-  if (!descriptor || !Object.hasOwn(descriptor, "value")) {
+  if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value")) {
     throw invalidSupportWindowResponse(`${label} must be an own data property`);
   }
   return descriptor as PropertyDescriptor & { value: unknown };
