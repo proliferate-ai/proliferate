@@ -66,8 +66,6 @@ export interface NoticeBannerProps
  * interaction states of its own: the action slot takes an interactive
  * primitive (`Button`, `IconButton`) whose states that primitive already owns,
  * so no hover/active/focus-visible stack is ever hand-assembled here.
- *
- * incubating: workflows/activity/files slices, wave 2
  */
 export function NoticeBanner({
   tone = "neutral",

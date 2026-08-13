@@ -23,7 +23,8 @@ const REVIEW_HEADER_ACTION_CLASS =
  * pattern's own paint with a specificity override — itself a new escape
  * hatch of the kind this doctrine forbids. What this file *does* adopt
  * from the ruling: the previous `role="button"` div plus its hand-rolled
- * Enter/Space `onKeyDown` (C3) is replaced with a real `<button>` — native
+ * Enter/Space `onKeyDown` (C3) is replaced with a real button (the `Button`
+ * primitive, `variant="unstyled"`) — native
  * Enter/Space and tab order for free, same as `Disclosure`'s own trigger —
  * and the previously-separate "Toggle file diff" chevron button (a second,
  * fully redundant trigger for the exact same `onToggleCollapsed`) is
@@ -85,12 +86,14 @@ export function GitReviewFileSectionShell({
             it composites correctly over the sticky header's own near-opaque
             color-mix above without a second color-mix layered on top. */}
         <div className="group/diff-header @container/diff-header flex min-h-8 items-center gap-2 pr-2 text-chat text-sidebar-foreground hover:bg-[var(--color-diff-sidebar-file-header-hover-surface)]">
-          <button
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             aria-expanded={!collapsed}
             data-app-action-review-file-expanded={collapsed ? "false" : "true"}
             onClick={onToggleCollapsed}
-            className="flex min-w-0 flex-1 cursor-pointer select-none items-center gap-2 px-3 py-1 text-left"
+            className="flex min-w-0 flex-1 select-none items-center justify-start gap-2 px-3 py-1 text-left"
           >
             {/* The growing flex item is this container; the name span inside is
                 content-sized so every row's name is left-anchored beside the
@@ -139,7 +142,7 @@ export function GitReviewFileSectionShell({
                 collapsed ? "rotate-0" : "rotate-180"
               }`}
             />
-          </button>
+          </Button>
           <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-hover group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
               <Button
                 type="button"

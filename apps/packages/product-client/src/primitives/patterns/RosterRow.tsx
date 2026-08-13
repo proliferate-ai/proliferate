@@ -26,8 +26,6 @@ import { twMerge } from "#product/primitives/utils/tw-merge";
  * `group-hover:opacity-100` reveal contract taught in
  * `specs/frontend/styling.md`. The `actions` slot therefore only lays out — it
  * does not restate the reveal, because a state contract has exactly one owner.
- *
- * incubating: workflows/activity slices, wave 2
  */
 
 type RosterRowDensity = "compact" | "comfortable";
