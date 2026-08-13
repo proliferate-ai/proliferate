@@ -95,3 +95,24 @@ export function StatusDot({
     />
   );
 }
+
+/**
+ * The ink half of the same seven-tone map, for call sites that tint a glyph
+ * or a text run standing in for the dot rather than rendering the dot
+ * itself (a roster row's leading icon, a status label). One owner for the
+ * `tone -> ink` mapping keeps a glyph-based status reading and a dot-based
+ * one from drifting apart.
+ */
+const TONE_TEXT_CLASS: Record<StatusDotTone, string> = {
+  current: "text-current",
+  success: "text-success",
+  info: "text-info",
+  warning: "text-warning-foreground",
+  danger: "text-destructive",
+  muted: "text-muted-foreground",
+  merged: "text-pr-merged",
+};
+
+export function statusDotToneTextClass(tone: StatusDotTone): string {
+  return TONE_TEXT_CLASS[tone];
+}

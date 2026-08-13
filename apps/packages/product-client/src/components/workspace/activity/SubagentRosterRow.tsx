@@ -7,13 +7,14 @@ import {
   type ActivitySubagentWire,
   type SubagentTone,
 } from "#product/domain/activity/subagent";
-import { Button } from "#product/primitives/Button";
+import { statusDotToneTextClass, type StatusDotTone } from "#product/primitives/StatusDot";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 
-const TONE_CLASSNAME: Record<SubagentTone, string> = {
-  default: "text-muted-foreground",
-  positive: "text-success",
-  danger: "text-destructive",
+const SUBAGENT_STATUS_DOT_TONE: Record<SubagentTone, StatusDotTone> = {
+  default: "muted",
+  positive: "success",
+  danger: "danger",
 };
 
 export interface SubagentRosterRowProps {
@@ -32,69 +33,47 @@ export interface SubagentRosterRowProps {
  * (`features/delegated-work.md`), which own generated identity/color.
  */
 export function SubagentRosterRow({ subagent, nowMs, onOpen }: SubagentRosterRowProps) {
-  const tone = subagentStatusTone(subagent);
+  const tone = SUBAGENT_STATUS_DOT_TONE[subagentStatusTone(subagent)];
   const durationLabel = subagentUsageDurationLabel(subagent.usage, nowMs);
   const displayTitle = subagentDisplayTitle(subagent);
-  const content = (
-    <>
-      <Fork className={twMerge("mt-0.5 icon-paired shrink-0", TONE_CLASSNAME[tone])} aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-ui text-foreground" data-telemetry-mask title={displayTitle}>
-          {displayTitle}
-        </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-ui-sm text-muted-foreground">
-          <span className={TONE_CLASSNAME[tone]}>{subagentStatusLabel(subagent)}</span>
-          {subagent.model && (
-            <>
-              <span aria-hidden>·</span>
-              <span>{subagent.model}</span>
-            </>
-          )}
-          {subagent.background && (
-            <>
-              <span aria-hidden>·</span>
-              <span>background</span>
-            </>
-          )}
-          {durationLabel && (
-            <>
-              <span aria-hidden>·</span>
-              <span>{durationLabel}</span>
-            </>
-          )}
-        </div>
-        {subagent.status.status === "completed" && subagent.status.summary && (
-          <p className="mt-0.5 truncate text-ui-sm text-muted-foreground" data-telemetry-mask>
-            {subagent.status.summary}
-          </p>
-        )}
-      </div>
-    </>
-  );
-
-  if (!onOpen) {
-    return (
-      <div
-        className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-ui"
-        data-subagent-roster-row
-        data-subagent-id={subagent.id}
-      >
-        {content}
-      </div>
-    );
-  }
 
   return (
-    <Button
-      variant="unstyled"
-      size="unstyled"
-      type="button"
-      className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-ui hover:bg-hover active:bg-active"
-      onClick={() => onOpen(subagent.id)}
-      data-subagent-roster-row
+    <RosterRow
+      leading={<Fork className={twMerge("icon-paired", statusDotToneTextClass(tone))} aria-hidden />}
+      title={<span data-telemetry-mask title={displayTitle}>{displayTitle}</span>}
+      secondary={(
+        <>
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <span className={statusDotToneTextClass(tone)}>{subagentStatusLabel(subagent)}</span>
+            {subagent.model && (
+              <>
+                <span aria-hidden>·</span>
+                <span>{subagent.model}</span>
+              </>
+            )}
+            {subagent.background && (
+              <>
+                <span aria-hidden>·</span>
+                <span>background</span>
+              </>
+            )}
+            {durationLabel && (
+              <>
+                <span aria-hidden>·</span>
+                <span>{durationLabel}</span>
+              </>
+            )}
+          </span>
+          {subagent.status.status === "completed" && subagent.status.summary && (
+            <span className="mt-0.5 block truncate" data-telemetry-mask>
+              {subagent.status.summary}
+            </span>
+          )}
+        </>
+      )}
+      onSelect={onOpen ? () => onOpen(subagent.id) : undefined}
+      data-subagent-roster-row=""
       data-subagent-id={subagent.id}
-    >
-      {content}
-    </Button>
+    />
   );
 }

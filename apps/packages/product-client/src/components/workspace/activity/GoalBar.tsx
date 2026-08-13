@@ -10,6 +10,7 @@ import {
 } from "#product/domain/activity/goal";
 import { Button } from "#product/primitives/Button";
 import { PopoverButton } from "#product/primitives/PopoverButton";
+import { statusDotToneTextClass } from "#product/primitives/StatusDot";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 import { ComposerPopoverSurface } from "../chat/composer/ComposerPopoverSurface";
@@ -253,7 +254,14 @@ export function GoalBar({
     <div
       data-session-goal-bar
       aria-label="Session goal"
-      className="relative overflow-clip rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))]"
+      // C4: the fill was a bespoke 2%-foreground-into-background mix; the
+      // nearest existing surface token (`bg-surface-elevated-secondary`,
+      // Card's own `tint` fill) sits at 3% in dark / 4.9% in light — within
+      // rounding error of the original recipe, so the callsite composition
+      // this check forbids is retired rather than merely commented.
+      // `border-x-[0.5px]`/`border-t-[0.5px]` are legitimate sub-pixel
+      // hairline geometry Tailwind has no named step for.
+      className="relative overflow-clip rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-border bg-surface-elevated-secondary"
     >
       <div
         className={twMerge(
@@ -291,16 +299,19 @@ function GoalBarGlyph({
   const className = twMerge("icon-paired shrink-0", raised && "mt-[0.175em]");
   if (state.kind === "result") {
     if (state.outcome === "met") {
-      return <CircleCheck className={twMerge(className, "text-success")} aria-hidden />;
+      return <CircleCheck className={twMerge(className, statusDotToneTextClass("success"))} aria-hidden />;
     }
     return (
       <CircleAlert
-        className={twMerge(className, state.outcome === "blocked" ? "text-warning-foreground" : "text-destructive")}
+        className={twMerge(
+          className,
+          statusDotToneTextClass(state.outcome === "blocked" ? "warning" : "danger"),
+        )}
         aria-hidden
       />
     );
   }
-  return <Target className={twMerge(className, "text-muted-foreground")} aria-hidden />;
+  return <Target className={twMerge(className, statusDotToneTextClass("muted"))} aria-hidden />;
 }
 
 function GoalBarPauseAction({
