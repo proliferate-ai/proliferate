@@ -17,6 +17,7 @@ import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 import { SegmentedControl, type SegmentedControlItem } from "#product/primitives/SegmentedControl";
 import { Textarea } from "#product/primitives/Textarea";
 import { Card } from "#product/primitives/patterns/Card";
+import { RosterPanel } from "#product/primitives/patterns/RosterPanel";
 import { RosterRow } from "#product/primitives/patterns/RosterRow";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 import type { LoopArmInput } from "#product/lib/domain/activity/loop-arm-input";
@@ -54,52 +55,27 @@ export function LoopsPanel({
   const sorted = sortLoopsForDisplay(loops);
 
   return (
-    <div className="flex flex-col gap-1.5" data-loops-panel>
-      {/*
-       * C1 deviation, recorded per the frozen spec's contradiction path:
-       * `PanelHeaderEntry` (as landed) is a tablist tab entry — role="tab",
-       * aria-selected, roving tabIndex, aria-controls — with no static
-       * variant. Forcing it onto this always-one, non-interactive section
-       * label would announce tab semantics with no tablist owner. Left
-       * hand-rolled pending either a static-label variant or a different
-       * sanctioned target; same ruling applies to the three roster-panel
-       * headers in this area.
-       */}
-      <div className="flex items-center justify-between px-1 pt-0.5">
-        <span className="text-ui font-medium text-foreground">Loops</span>
-        {!composing && (
-          <IconButton
-            size="xs"
-            title="Arm a new loop"
-            aria-label="Arm a new loop"
-            disabled={!capabilities.supported || pendingWrite}
-            onClick={() => setComposing(true)}
-          >
-            <Plus className="icon-paired" />
-          </IconButton>
-        )}
-      </div>
-
-      {sorted.length === 0 && !composing && (
-        <p className="px-1 pb-1 text-ui-sm text-muted-foreground">No loops armed.</p>
+    <RosterPanel
+      title="Loops"
+      data-loops-panel
+      headerAction={!composing && (
+        <IconButton
+          size="xs"
+          title="Arm a new loop"
+          aria-label="Arm a new loop"
+          disabled={!capabilities.supported || pendingWrite}
+          onClick={() => setComposing(true)}
+        >
+          <Plus className="icon-paired" />
+        </IconButton>
       )}
-
-      {sorted.length > 0 && (
-        <ul className="flex flex-col gap-0.5">
-          {sorted.map((loop) => (
-            <LoopRow
-              key={loop.loopId}
-              loop={loop}
-              nowMs={nowMs}
-              onDelete={onDelete}
-              pendingWrite={pendingWrite}
-              onOpenFireHistory={onOpenFireHistory}
-            />
-          ))}
-        </ul>
-      )}
-
-      {composing && capabilities.supported && (
+      empty={
+        // The composer replaces the empty line while it is open: an
+        // armed-loop count of zero is not an empty roster when the caller is
+        // already mid-arm.
+        composing ? null : "No loops armed."
+      }
+      footer={composing && capabilities.supported && (
         <LoopComposer
           pendingWrite={pendingWrite}
           onCancel={() => setComposing(false)}
@@ -109,7 +85,18 @@ export function LoopsPanel({
           }}
         />
       )}
-    </div>
+    >
+      {sorted.map((loop) => (
+        <LoopRow
+          key={loop.loopId}
+          loop={loop}
+          nowMs={nowMs}
+          onDelete={onDelete}
+          pendingWrite={pendingWrite}
+          onOpenFireHistory={onOpenFireHistory}
+        />
+      ))}
+    </RosterPanel>
   );
 }
 
