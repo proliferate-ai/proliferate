@@ -239,6 +239,35 @@ async function main() {
   const specText = await readFile(SPEC_PATH, "utf8");
   const purposeByName = parseSanctionedIndex(specText);
 
+  // Resolve every purpose BEFORE the prune below. A purpose-less entry is a
+  // build failure, and failing after the prune would replace a good payload
+  // with a partial one — which make-meta.mjs, run standalone, would happily
+  // hash and ship.
+  const fallbackPurposeNames = [];
+  const purposeByEntry = new Map();
+  {
+    const missing = [];
+    for (const entry of entries) {
+      let purpose = purposeByName.get(entry.name) ?? purposeByName.get(entry.displayName);
+      if (!purpose) {
+        purpose = leadingJsDocSentence(await readFile(entry.srcFile, "utf8"));
+        if (purpose) fallbackPurposeNames.push(entry.name);
+      }
+      if (!purpose) {
+        missing.push(entry.name);
+        continue;
+      }
+      purposeByEntry.set(entry.name, purpose);
+    }
+    if (missing.length > 0) {
+      throw new Error(
+        `emit-cards: ${missing.length} entr${missing.length === 1 ? "y has" : "ies have"} no purpose — ` +
+          `add a row to specs/DESIGN_SYSTEM.md's sanctioned index (or a header JSDoc on the source file) for:\n` +
+          missing.map((n) => `  - ${n}`).join("\n"),
+      );
+    }
+  }
+
   // Emit into a clean tree: entries get retired and kits move between groups
   // (PaneOptionsMenuItem: patterns -> panel), and a stale card directory from
   // a previous build would otherwise ship as a real component.
@@ -256,8 +285,6 @@ async function main() {
   }
 
   const seenDirs = new Set();
-  const fallbackPurposeNames = [];
-  const missingPurposeNames = [];
   let dtsCount = 0;
 
   for (const entry of entries) {
@@ -314,29 +341,9 @@ async function main() {
       dtsCount += 1;
     }
 
-    // 2d. <Name>.prompt.md — purpose comes from the sanctioned index (keyed by
-    // the registry name, or its display name for tier-relative names), and
-    // only falls back to the source's own header JSDoc where the spec has no
-    // row at all. No placeholder: a purpose-less card is a build failure.
-    let purpose = purposeByName.get(name) ?? purposeByName.get(displayName);
-    if (!purpose) {
-      purpose = leadingJsDocSentence(rawSource);
-      if (purpose) fallbackPurposeNames.push(name);
-    }
-    if (!purpose) {
-      missingPurposeNames.push(name);
-      continue;
-    }
-    const promptMd = buildPromptMd({ displayName, purpose, subpath });
+    // 2d. <Name>.prompt.md — purpose resolved in the pre-pass above.
+    const promptMd = buildPromptMd({ displayName, purpose: purposeByEntry.get(name), subpath });
     await writeFile(path.join(dir, `${displayName}.prompt.md`), promptMd, "utf8");
-  }
-
-  if (missingPurposeNames.length > 0) {
-    throw new Error(
-      `emit-cards: ${missingPurposeNames.length} entr${missingPurposeNames.length === 1 ? "y has" : "ies have"} no purpose — ` +
-        `add a row to specs/DESIGN_SYSTEM.md's sanctioned index (or a header JSDoc on the source file) for:\n` +
-        missingPurposeNames.map((n) => `  - ${n}`).join("\n"),
-    );
   }
 
   // Scratch tsc output/tsconfig are not part of the shipped payload — only
