@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Switch } from "#product/primitives/Switch";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsGroup } from "#product/primitives/patterns/settings/SettingsGroup";
 import {
   usePutAuthSelections,
   useAgentAuthState,
@@ -61,7 +62,7 @@ export function HarnessSettingsSection({
   }
 
   return (
-    <section className="border-t border-border pt-4">
+    <SettingsGroup>
       {settings.map((setting) => (
         <HarnessSettingRow
           key={setting.key}
@@ -70,7 +71,7 @@ export function HarnessSettingsSection({
           setting={setting}
         />
       ))}
-    </section>
+    </SettingsGroup>
   );
 }
 
