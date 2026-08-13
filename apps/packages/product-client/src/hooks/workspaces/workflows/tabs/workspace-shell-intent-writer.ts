@@ -37,6 +37,13 @@ export function writeChatShellIntentForSession({
   if (invalidateSessionIntent) {
     invalidateSessionActivationIntent(workspaceId);
   }
+  // The intended active tab must be a visible tab: a recently-hidden entry is
+  // excluded from the tab strip, which would strand activation on the
+  // chat-shell surface while the composer targets this session (PRO-106).
+  useWorkspaceUiStore.getState().clearHiddenChatSessionsForWorkspace(shellStateKey, [sessionId]);
+  if (workspaceId !== shellStateKey) {
+    useWorkspaceUiStore.getState().clearHiddenChatSessionsForWorkspace(workspaceId, [sessionId]);
+  }
   const write = useWorkspaceUiStore.getState().writeShellIntent({
     workspaceId: shellStateKey,
     intent,
