@@ -305,7 +305,7 @@ def build_importers(sources: dict[Path, str]) -> dict[Path, set[Path]]:
     Comments are masked first. A commented-out import is not a call site, and
     this tree records refusals to adopt a component in prose right where the
     adoption would have gone — so a graph built over raw text would read
-    ``// import { ListRow } from "…/ListRow"`` as a consumer and keep dead
+    ``// import { Widget } from "…/Widget"`` as a consumer and keep dead
     vocabulary alive on the strength of one comment line.
     """
     importers: dict[Path, set[Path]] = defaultdict(set)

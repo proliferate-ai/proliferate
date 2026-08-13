@@ -1,10 +1,5 @@
 {
-  "deadLibraryComponents": {
-    "apps/packages/product-client/src/primitives/patterns/ListRow.tsx": {
-      "count": 1,
-      "justification": "FOUNDER: zero product call sites; the two files that mention it do so in recorded review comments explaining why they did NOT adopt it. Retirement needs founder sign-off."
-    }
-  },
+  "deadLibraryComponents": {},
   "handRolledOverlayRoles": {
     "apps/packages/product-client/src/components/content/ui/FileDiffCard.tsx": {
       "count": 1,
@@ -181,10 +176,6 @@
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
     },
     "apps/packages/product-client/src/primitives/patterns/EnvironmentSearchSelect.tsx": {
-      "count": 1,
-      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
-    },
-    "apps/packages/product-client/src/primitives/patterns/ListRow.tsx": {
       "count": 1,
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
     },

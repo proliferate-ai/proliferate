@@ -99,10 +99,11 @@ export function PlanHandoffDialog({
 
                 Recorded exclusion for check 1: neither landed shape can carry
                 this frame. `Card` has no interaction states and only two fills
-                (`bg-surface-elevated-secondary` / `bg-card`), and `ListRow`
-                titles at `text-heading` (17px) against this row's 13px, which
-                would resize a dialog row by a third. Folding it in needs a
-                review ruling on one of those APIs, not a call-site workaround.
+                (`bg-surface-elevated-secondary` / `bg-card`), and a slotted
+                list-row shape fixes its title at `text-heading` (17px) against
+                this row's 13px, which would resize a dialog row by a third.
+                Folding it in needs a review ruling on one of those APIs, not a
+                call-site workaround.
               */}
               <Button
                 type="button"
