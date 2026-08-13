@@ -3389,6 +3389,7 @@ export interface components {
             parentSessionId: string;
             publicId?: string | null;
             relation: string;
+            subagentClosedAt?: string | null;
             workspaceRelation: string;
         };
         MobilitySessionLinkWakeScheduleRecord: {

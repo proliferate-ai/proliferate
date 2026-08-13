@@ -355,7 +355,8 @@ fn fixture(closed_child: bool) -> Fixture {
         created_by_turn_id: None,
         created_by_tool_call_id: None,
         created_at: "2026-08-11T00:00:00Z".into(),
-        closed_at: closed_child.then(|| "2026-08-11T00:01:00Z".into()),
+        subagent_closed_at: closed_child.then(|| "2026-08-11T00:01:00Z".into()),
+        closed_at: None,
     }]));
     let mut workspace_a = test_workspace_record(WorkspaceKind::Local, "/tmp/workspace-a");
     workspace_a.id = "workspace-a".into();
@@ -373,7 +374,10 @@ fn fixture(closed_child: bool) -> Fixture {
         agent_kind: agent_kind.clone(),
         model_id: model_id.clone(),
     });
-    let session_admission = Arc::new(SessionMutationAdmission::new(Arc::new(NoControllerPolicy)));
+    let session_admission = Arc::new(SessionMutationAdmission::new(
+        Arc::new(NoControllerPolicy),
+        Arc::new(crate::domains::sessions::admission::AllSessionsOperable),
+    ));
     let workspace_gate = Arc::new(WorkspaceOperationGate::new());
     let operations = Arc::new(
         AgentOperations::new(

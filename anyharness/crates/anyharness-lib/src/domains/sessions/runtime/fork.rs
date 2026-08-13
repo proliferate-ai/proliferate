@@ -146,6 +146,7 @@ impl SessionRuntime {
             created_by_turn_id: None,
             created_by_tool_call_id: None,
             created_at: now,
+            subagent_closed_at: None,
             closed_at: None,
         };
         let insert_result = if child_actor_forks {

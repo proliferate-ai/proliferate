@@ -287,3 +287,5 @@ subagent graph, the archive must preserve `session_links` and
 linked sessions are included. Export must block with a clear preflight error
 when only one side of a subagent link would be moved, because importing a
 partial graph would break child ownership and parent wake behavior.
+The optional `subagentClosedAt` field preserves reversible Closed state across
+mobility; absence remains backward-compatible and means Open.

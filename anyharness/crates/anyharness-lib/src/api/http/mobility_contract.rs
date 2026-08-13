@@ -210,6 +210,7 @@ fn to_contract_session_link(record: SessionLinkRecord) -> MobilitySessionLinkRec
         created_by_turn_id: record.created_by_turn_id,
         created_by_tool_call_id: record.created_by_tool_call_id,
         created_at: record.created_at,
+        subagent_closed_at: record.subagent_closed_at,
         closed_at: record.closed_at,
     }
 }
@@ -235,6 +236,60 @@ fn to_contract_session_link_wake_schedule(
 ) -> MobilitySessionLinkWakeScheduleRecord {
     MobilitySessionLinkWakeScheduleRecord {
         session_link_id: record.session_link_id,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domains::sessions::links::model::{
+        SessionLinkRelation, SessionLinkWorkspaceRelation,
+    };
+
+    fn link(subagent_closed_at: Option<&str>) -> SessionLinkRecord {
+        SessionLinkRecord {
+            id: "link-1".into(),
+            public_id: Some("subagent-1".into()),
+            relation: SessionLinkRelation::Subagent,
+            parent_session_id: "parent".into(),
+            child_session_id: "child".into(),
+            workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+            label: Some("Worker".into()),
+            created_by_turn_id: None,
+            created_by_tool_call_id: None,
+            created_at: "2026-08-11T00:00:00Z".into(),
+            subagent_closed_at: subagent_closed_at.map(str::to_string),
+            closed_at: None,
+        }
+    }
+
+    #[test]
+    fn mobility_link_contract_round_trips_open_and_reversibly_closed_states() {
+        for expected in [None, Some("2026-08-11T01:00:00Z")] {
+            let encoded = serde_json::to_value(to_contract_session_link(link(expected)))
+                .expect("serialize mobility link");
+            assert_eq!(
+                encoded
+                    .get("subagentClosedAt")
+                    .and_then(|value| value.as_str()),
+                expected
+            );
+            if expected.is_none() {
+                assert!(
+                    encoded.get("subagentClosedAt").is_none(),
+                    "legacy/open archives omit the optional field"
+                );
+            }
+            let contract: MobilitySessionLinkRecord =
+                serde_json::from_value(encoded).expect("deserialize mobility link");
+            let decoded =
+                match super::super::mobility_archive_contract::from_contract_session_link(contract)
+                {
+                    Ok(decoded) => decoded,
+                    Err(_) => panic!("decode mobility link"),
+                };
+            assert_eq!(decoded.subagent_closed_at.as_deref(), expected);
+        }
     }
 }
 

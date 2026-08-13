@@ -2,7 +2,11 @@ use rusqlite::{params, OptionalExtension};
 
 use super::model::{
     SessionLinkParseError, SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
+    SubagentLinkCloseOutcome, SubagentLinkCloseResult, SubagentLinkOpenOutcome,
+    SubagentLinkOpenResult,
 };
+use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::store::sessions::insert_session_row;
 use crate::persistence::Db;
 
 #[derive(Clone)]
@@ -16,6 +20,10 @@ pub enum InsertSubagentLinkOutcome {
     FanoutLimit,
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("subagent fanout limit reached")]
+struct AtomicSubagentFanoutLimit;
+
 impl SessionLinkStore {
     pub fn new(db: Db) -> Self {
         Self { db }
@@ -27,8 +35,8 @@ impl SessionLinkStore {
                 "INSERT INTO session_links (
                     id, public_id, relation, parent_session_id, child_session_id,
                     workspace_relation, label, created_by_turn_id,
-                    created_by_tool_call_id, created_at, closed_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                    created_by_tool_call_id, created_at, subagent_closed_at, closed_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 params![
                     record.id,
                     record.public_id,
@@ -40,6 +48,7 @@ impl SessionLinkStore {
                     record.created_by_turn_id,
                     record.created_by_tool_call_id,
                     record.created_at,
+                    record.subagent_closed_at,
                     record.closed_at,
                 ],
             )?;
@@ -57,15 +66,15 @@ impl SessionLinkStore {
                 "INSERT INTO session_links (
                     id, public_id, relation, parent_session_id, child_session_id,
                     workspace_relation, label, created_by_turn_id,
-                    created_by_tool_call_id, created_at, closed_at
+                    created_by_tool_call_id, created_at, subagent_closed_at, closed_at
                  )
-                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12
                  WHERE (
                     SELECT COUNT(*)
                     FROM session_links
                     WHERE relation = 'subagent' AND parent_session_id = ?4
                       AND closed_at IS NULL
-                 ) < ?12",
+                 ) < ?13",
                 params![
                     record.id,
                     record.public_id,
@@ -77,6 +86,7 @@ impl SessionLinkStore {
                     record.created_by_turn_id,
                     record.created_by_tool_call_id,
                     record.created_at,
+                    record.subagent_closed_at,
                     record.closed_at,
                     max_children as i64,
                 ],
@@ -87,6 +97,60 @@ impl SessionLinkStore {
                 InsertSubagentLinkOutcome::Inserted
             })
         })
+    }
+
+    /// Inserts the new child session and its capped subagent relationship in
+    /// one transaction. No product read can observe the child as an unlinked
+    /// ordinary agent between these two writes.
+    pub fn insert_subagent_session_with_child_limit(
+        &self,
+        session: &SessionRecord,
+        record: &SessionLinkRecord,
+        max_children: usize,
+    ) -> anyhow::Result<InsertSubagentLinkOutcome> {
+        let result = self.db.with_tx_anyhow(|conn| {
+            insert_session_row(conn, session)?;
+            let inserted = conn.execute(
+                "INSERT INTO session_links (
+                    id, public_id, relation, parent_session_id, child_session_id,
+                    workspace_relation, label, created_by_turn_id,
+                    created_by_tool_call_id, created_at, subagent_closed_at, closed_at
+                 )
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12
+                 WHERE (
+                    SELECT COUNT(*)
+                    FROM session_links
+                    WHERE relation = 'subagent' AND parent_session_id = ?4
+                      AND closed_at IS NULL
+                 ) < ?13",
+                params![
+                    record.id,
+                    record.public_id,
+                    record.relation.as_str(),
+                    record.parent_session_id,
+                    record.child_session_id,
+                    record.workspace_relation.as_str(),
+                    record.label,
+                    record.created_by_turn_id,
+                    record.created_by_tool_call_id,
+                    record.created_at,
+                    record.subagent_closed_at,
+                    record.closed_at,
+                    max_children as i64,
+                ],
+            )?;
+            if inserted == 0 {
+                return Err(AtomicSubagentFanoutLimit.into());
+            }
+            Ok(())
+        });
+        match result {
+            Ok(()) => Ok(InsertSubagentLinkOutcome::Inserted),
+            Err(error) if error.downcast_ref::<AtomicSubagentFanoutLimit>().is_some() => {
+                Ok(InsertSubagentLinkOutcome::FanoutLimit)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     pub fn import_link(&self, record: &SessionLinkRecord) -> anyhow::Result<()> {
@@ -140,6 +204,91 @@ impl SessionLinkStore {
                 params![closed_at, id],
             )?;
             Ok(updated > 0)
+        })
+    }
+
+    /// Reversibly closes a current subagent relationship and removes work
+    /// which must not survive that gate. This is deliberately separate from
+    /// terminal relationship closure (`closed_at`).
+    pub fn close_subagent_operability(
+        &self,
+        id: &str,
+        subagent_closed_at: &str,
+    ) -> anyhow::Result<SubagentLinkCloseOutcome> {
+        self.db.with_tx(|conn| {
+            let Some(before) = conn
+                .query_row(
+                    "SELECT * FROM session_links
+                     WHERE id = ?1 AND relation = 'subagent' AND closed_at IS NULL",
+                    [id],
+                    map_session_link,
+                )
+                .optional()?
+            else {
+                return Ok(SubagentLinkCloseOutcome::NotFound);
+            };
+
+            conn.execute(
+                "UPDATE session_links
+                 SET subagent_closed_at = COALESCE(subagent_closed_at, ?2)
+                 WHERE id = ?1 AND relation = 'subagent' AND closed_at IS NULL",
+                params![id, subagent_closed_at],
+            )?;
+            let purged_pending_prompt_count = conn.execute(
+                "DELETE FROM session_pending_prompts WHERE session_id = ?1",
+                [before.child_session_id.as_str()],
+            )?;
+            let removed_wake_schedule = conn.execute(
+                "DELETE FROM session_link_wake_schedules WHERE session_link_id = ?1",
+                [id],
+            )? > 0;
+            let link = conn.query_row(
+                "SELECT * FROM session_links WHERE id = ?1",
+                [id],
+                map_session_link,
+            )?;
+
+            Ok(SubagentLinkCloseOutcome::Closed(SubagentLinkCloseResult {
+                link,
+                was_already_closed: before.subagent_closed_at.is_some(),
+                purged_pending_prompt_count,
+                removed_wake_schedule,
+            }))
+        })
+    }
+
+    /// Clears the reversible subagent operability gate without changing
+    /// terminal relationship history.
+    pub fn open_subagent_operability(&self, id: &str) -> anyhow::Result<SubagentLinkOpenOutcome> {
+        self.db.with_tx(|conn| {
+            let Some(before) = conn
+                .query_row(
+                    "SELECT * FROM session_links
+                     WHERE id = ?1 AND relation = 'subagent' AND closed_at IS NULL",
+                    [id],
+                    map_session_link,
+                )
+                .optional()?
+            else {
+                return Ok(SubagentLinkOpenOutcome::NotFound);
+            };
+
+            conn.execute(
+                "UPDATE session_links
+                 SET subagent_closed_at = NULL
+                 WHERE id = ?1 AND relation = 'subagent' AND closed_at IS NULL",
+                [id],
+            )?;
+            let link = conn.query_row(
+                "SELECT * FROM session_links WHERE id = ?1",
+                [id],
+                map_session_link,
+            )?;
+
+            Ok(SubagentLinkOpenOutcome::Opened(SubagentLinkOpenResult {
+                link,
+                was_already_open: before.subagent_closed_at.is_none(),
+            }))
         })
     }
 
@@ -352,6 +501,7 @@ fn map_session_link(row: &rusqlite::Row) -> rusqlite::Result<SessionLinkRecord> 
         created_by_turn_id: row.get("created_by_turn_id")?,
         created_by_tool_call_id: row.get("created_by_tool_call_id")?,
         created_at: row.get("created_at")?,
+        subagent_closed_at: row.get("subagent_closed_at")?,
         closed_at: row.get("closed_at")?,
     })
 }

@@ -125,6 +125,7 @@ pub(super) fn target_capability(
 
     if target.status == AgentPresentationStatus::Closed {
         return if capability == AgentCapability::OpenSubagent
+            || capability == AgentCapability::CloseSubagent
             || matches!(
                 capability,
                 AgentCapability::GetAgent | AgentCapability::GetTaskOutput
@@ -133,10 +134,6 @@ pub(super) fn target_capability(
         } else {
             denied(capability, CapabilityDenial::SubagentOpenRequired)
         };
-    }
-
-    if capability == AgentCapability::OpenSubagent {
-        return denied(capability, CapabilityDenial::SubagentOpenRequired);
     }
 
     allowed(capability)

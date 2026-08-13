@@ -197,7 +197,7 @@ fn from_contract_session_record(
     }
 }
 
-fn from_contract_session_link(
+pub(super) fn from_contract_session_link(
     record: MobilitySessionLinkRecord,
 ) -> Result<SessionLinkRecord, ApiError> {
     Ok(SessionLinkRecord {
@@ -216,6 +216,7 @@ fn from_contract_session_link(
         created_by_turn_id: record.created_by_turn_id,
         created_by_tool_call_id: record.created_by_tool_call_id,
         created_at: record.created_at,
+        subagent_closed_at: record.subagent_closed_at,
         closed_at: record.closed_at,
     })
 }

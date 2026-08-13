@@ -103,6 +103,9 @@ It stores an advisory relationship between two existing sessions:
 - optional creator turn id
 - optional creator tool-call id
 - created timestamp
+- optional `subagent_closed_at`, the reversible operability gate for subagent
+  relationships
+- optional `closed_at`, the terminal relationship-history marker
 
 The link service validates that parent and child sessions exist, rejects
 self-links, and enforces uniqueness for `(relation, parent_session_id,
@@ -182,6 +185,8 @@ The model is intentionally small:
 - the child is a normal session in the same workspace as the parent
 - the durable ownership boundary is `relation = subagent`
 - `session_links` is the access-control check for every child-id-taking tool
+- the child session and capped relationship are inserted atomically, so an
+  in-progress subagent creation is never observable as an ordinary session
 - PR2 does not cascade-delete child sessions when a parent is deleted; deleting
   either session removes only the link and attached completion/schedule rows
 - nested subagents are blocked; a session that is already a subagent child does
@@ -190,6 +195,34 @@ The model is intentionally small:
 - `subagents_enabled` is a durable create-time session policy. Missing legacy
   rows default enabled in the session store/read model. Resume reads the stored
   policy and does not silently re-enable disabled sessions.
+
+Subagent relationship operability is separate from terminal session state:
+
+- Open means `subagent_closed_at` is unset and parent/user mutations may target
+  the child.
+- Close atomically sets `subagent_closed_at`, purges every durable pending
+  prompt, and removes the one-shot wake schedule. Completion-ledger rows,
+  transcript, config, native session id, session row, and relationship remain.
+- After that transaction commits, the runtime non-terminally unloads the actor.
+  An active turn is cancelled with a bounded grace period; already-streamed
+  output and the Cancelled completion are preserved. Close never writes the
+  session's `closed_at` or `dismissed_at`.
+- Open restarts the same durable/native conversation before clearing the gate.
+  Failure leaves the relationship Closed, and purged prompts are not replayed.
+- Closed relationships remain parent/user-queryable and count toward the
+  eight-child limit, but all mutation paths other than Open or idempotent Close
+  return an Open-required conflict.
+- Promotion is allowed only while Open. It physically deletes the relationship
+  while leaving the session, actor, active turn, native identity, transcript,
+  and config untouched; subsequent authorization and reads treat the session
+  as ordinary.
+
+The relationship mutation gate is shared by the workspace agent-operations
+surface, HTTP session mutations, and the older `subagents` MCP server. This
+keeps Close serialized against prompts, config changes, wake scheduling, and
+terminal lifecycle calls even while both MCP surfaces exist. The older MCP
+server retains its terminal close operation for its Open-only path; a
+reversibly Closed relationship cannot use it.
 
 The subagent domain lives under
 `anyharness/crates/anyharness-lib/src/domains/sessions/subagents/**`.
