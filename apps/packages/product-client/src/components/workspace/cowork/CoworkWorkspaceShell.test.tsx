@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CoworkWorkspaceShell } from "#product/components/workspace/cowork/CoworkWorkspaceShell";
@@ -50,8 +50,15 @@ vi.mock("#product/components/workspace/cowork/CoworkWorkspaceHeader", () => ({
   ),
 }));
 
+const resizeState = vi.hoisted(() => ({
+  options: [] as { reverse?: boolean; onResizeEnd?: () => void }[],
+}));
+
 vi.mock("#product/hooks/ui/layout/use-resize", () => ({
-  useResize: () => vi.fn(),
+  useResize: (options: { reverse?: boolean; onResizeEnd?: () => void }) => {
+    resizeState.options.push(options);
+    return vi.fn();
+  },
 }));
 
 vi.mock("#product/hooks/shortcuts/lifecycle/use-shortcut-handler", () => ({
@@ -83,7 +90,7 @@ vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
 }));
 
 const coworkUiState = vi.hoisted(() => ({
-  artifactPanelOpenByWorkspaceId: {},
+  artifactPanelOpenByWorkspaceId: {} as Record<string, boolean>,
   setArtifactPanelOpen: vi.fn(),
 }));
 
@@ -119,6 +126,8 @@ afterEach(() => {
   vi.clearAllMocks();
   chromeState.transparent = false;
   productHostState.desktop = {};
+  coworkUiState.artifactPanelOpenByWorkspaceId = {};
+  resizeState.options.length = 0;
 });
 
 describe("CoworkWorkspaceShell", () => {
@@ -157,6 +166,30 @@ describe("CoworkWorkspaceShell", () => {
         showWorkspaceStatusPanels: false,
       }),
     );
+  });
+
+  it("drops the artifact pane width easing while the right separator drag is live", () => {
+    coworkUiState.artifactPanelOpenByWorkspaceId = { "workspace-cowork": true };
+    const { container } = render(
+      <CoworkWorkspaceShell
+        workspaceId="workspace-cowork"
+        workspacePath="/tmp/workspace-cowork"
+      />,
+    );
+
+    const pane = () => container.querySelector("[data-cowork-artifact-pane]");
+    expect(pane()?.className).toContain("transition-[width]");
+
+    // The left separator is labelled with aria-controls; the right one is not.
+    const rightSeparator = [...container.querySelectorAll('[role="separator"]')]
+      .find((element) => !element.hasAttribute("aria-controls"));
+    fireEvent.mouseDown(rightSeparator!);
+    expect(pane()?.className).toContain("transition-none");
+    expect(pane()?.className).not.toContain("transition-[width]");
+
+    const rightResizeOptions = resizeState.options.filter((options) => options.reverse).at(-1);
+    act(() => rightResizeOptions?.onResizeEnd?.());
+    expect(pane()?.className).toContain("transition-[width]");
   });
 
   it("never renders an update affordance in the top-left window chrome", () => {
