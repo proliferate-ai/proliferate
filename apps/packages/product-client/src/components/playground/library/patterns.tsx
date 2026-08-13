@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
-import { AuthProviderButton } from "#product/primitives/patterns/AuthProviderButton";
 import { CommandPaletteGroup, CommandPaletteInput, CommandPaletteItem, CommandPaletteList, CommandPaletteRoot } from "#product/primitives/patterns/CommandPalette";
 import { ComposerActionButton } from "#product/primitives/patterns/composer/ComposerActionButton";
 import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
@@ -314,9 +313,6 @@ function ToastHostDemo() {
 }
 
 export const PATTERNS_ENTRIES: LibraryEntry[] = [
-  { name: "AuthProviderButton", subpath: "#product/primitives/patterns/AuthProviderButton", render: () => (
-    <AuthProviderButton onClick={noop}>Continue with GitHub</AuthProviderButton>
-  ) },
   { name: "AutoHideScrollArea", subpath: "#product/primitives/patterns/AutoHideScrollArea", render: AutoHideScrollAreaDemo },
   CARD_ENTRY,
   { name: "CommandPalette", subpath: "#product/primitives/patterns/CommandPalette", render: CommandPaletteDemo },
