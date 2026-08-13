@@ -392,55 +392,38 @@ Only an authorized future outreach step may resolve and snapshot the address.
 
 ## Current gaps
 
-On `main` today, these are the only differences from the target state above:
+These are the differences from the target state above that remain in the tree.
+The consented-capture pipeline itself is built: schema-3 snapshot assembly, the
+manifest, the second scrub, opaque staging, the checksummed v2 queue with its
+verified one-way migration, the shared native export permit with fixed support
+prepare/submit lifecycle operations, and the SQL-bounded AnyHarness support
+windows with their generated SDK reads all exist. What is missing is the
+consent surface in front of that pipeline, and the two exports that sit beside
+it.
 
-- [ ] Both modal flows still use `includeLogs`: feedback initializes it true,
-      prompt reports force it true, and neither surface has the explicit
-      disclosure, unchecked consent epoch, or active/recent scope control
+- [ ] No snapshot-consent surface exists, so nothing reaches the consented
+      capture pipeline from the UI. Neither modal offers the explicit
+      disclosure, the unchecked consent epoch, or the active/recent scope
+      control, so a freshly authored job is unconditionally
+      `supportSnapshot: { kind: "none" }`. The old default-on `includeLogs`
+      control is gone and the flag survives only where legacy jobs are read
       ([SendFeedbackModal.tsx](../../../../../apps/packages/product-client/src/components/support/SendFeedbackModal.tsx),
       [SubmitPromptModal.tsx](../../../../../apps/packages/product-client/src/components/support/SubmitPromptModal.tsx),
       [use-support-modal-state.ts](../../../../../apps/packages/product-client/src/hooks/support/facade/use-support-modal-state.ts)).
-- [ ] The Desktop bridge exposes the legacy schema-1 support bundle collector,
-      while native still assembles bounded log tails through the old generic
-      scrub instead of a consent-bound schema-3 coordinator, manifest, second
-      scrub, opaque staging, or Save-a-copy archive
-      ([desktop-bridge.ts](../../../../../apps/packages/product-client/src/host/desktop-bridge.ts),
+- [ ] **Save a copy…** has no caller. The native command, its Tauri wrapper and
+      the `saveArchive` bridge method all exist and write the user-chosen ZIP,
+      but no UI action invokes them, so a user still cannot read what a send
+      would have transmitted. It arrives with the consent surface above
+      ([commands/support_snapshot/mod.rs](../../../../../apps/desktop/src-tauri/src/commands/support_snapshot/mod.rs),
+      [desktop-bridge-support.ts](../../../../../apps/packages/product-client/src/host/desktop-bridge-support.ts)).
+- [ ] The legacy debug-bundle export is untouched by the snapshot work. It is
+      no longer on the Desktop bridge and the upload path never calls it, but
+      the Tauri command still assembles bounded log tails through the old
+      generic scrub rather than the snapshot scrub, so the weaker rules stay
+      reachable from the Help menu
+      ([commands/diagnostics.rs](../../../../../apps/desktop/src-tauri/src/commands/diagnostics.rs),
       [bundle.rs](../../../../../apps/desktop/src-tauri/src/diagnostics/bundle.rs),
       [scrub.rs](../../../../../apps/desktop/src-tauri/src/diagnostics/scrub.rs)).
-- [ ] AnyHarness exposes only the ordinary history routes and SDK reads; the
-      three SQL-bounded, byte-bounded, cancellable support-window endpoints and
-      generated SDK methods do not exist
-      ([sessions.rs](../../../../../anyharness/crates/anyharness-lib/src/api/http/sessions.rs),
-      [session store](../../../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/sessions.rs),
-      [event store](../../../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/events.rs),
-      [notification store](../../../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/notifications.rs),
-      [SDK sessions client](../../../../../anyharness/sdk/src/client/sessions.ts)).
-- [ ] Native export admission remains broker-local, support has no move-only
-      permit, and the lifecycle producer has no fixed support prepare/submit
-      constructors or release-enforced rejection of unknown operation names
-      ([broker/server.rs](../../../../../apps/desktop/src-tauri/src/diagnostics_collector/broker/server.rs),
-      [producer.rs](../../../../../apps/desktop/src-tauri/src/diagnostics_collector/producer.rs),
-      [producer/lifecycle.rs](../../../../../apps/desktop/src-tauri/src/diagnostics_collector/producer/lifecycle.rs)).
-- [ ] Queue persistence still truncates with `slice(-10)`, has no checksummed
-      journal/readback acknowledgement, and does not reconcile staged artifacts
-      and attachments after settled hydration
-      ([support-report-upload-persistence.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/support-report-upload-persistence.ts),
-      [use-support-report-upload-queue.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/use-support-report-upload-queue.ts),
-      [support-report-job-events.ts](../../../../../apps/packages/product-client/src/lib/access/browser/support-report-job-events.ts)).
-- [ ] Persisted v1 jobs have no bounded, verified one-way migration to the v2
-      queue: false, truthy, and missing `includeLogs` values are not yet mapped
-      safely to no snapshot; over-cap or conflicting legacy state does not fail
-      hydration visibly; and a server report already locked to diagnostics true
-      has no queue-only `consent_required_for_legacy_job` conclusion with
-      resubmit guidance
-      ([support-report-upload-persistence.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/support-report-upload-persistence.ts),
-      [use-support-report-upload-queue.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/use-support-report-upload-queue.ts)).
-- [ ] The upload workflow creates the server report before collecting schema-2
-      diagnostics and recollects on every retry; it does not verify and hold one
-      immutable staged Blob through create, target, PUT, and complete
-      ([support-report-upload-attempt.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/support-report-upload-attempt.ts),
-      [support-report-upload-artifact.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/support-report-upload-artifact.ts),
-      [support-report-upload-payload.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/support-report-upload-payload.ts)).
 
 ## Code map
 
