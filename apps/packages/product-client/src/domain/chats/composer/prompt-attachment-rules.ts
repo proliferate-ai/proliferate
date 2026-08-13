@@ -96,22 +96,32 @@ export interface LocalRefCandidate {
 }
 
 /**
- * True when the recovered drag-pasteboard paths plausibly describe this DOM
- * drop. The drag pasteboard is global state without a session token, so a
- * non-empty FileList sharing no names with the recovered paths means the
- * pasteboard belongs to some other drag; callers then keep the byte-based
- * fallback. Folder-only drops may surface an empty FileList, which cannot be
- * cross-checked and is accepted.
+ * True when the recovered drag-pasteboard paths describe this DOM drop. The
+ * drag pasteboard is global state without a session token, so the shapes must
+ * correspond: every dropped File must consume a distinct candidate (by name
+ * and size for files; by name for directories, whose FileList size is
+ * unreliable), and any candidates left over must be directories, which WebKit
+ * may omit from the FileList. A folder-only drop can surface an empty
+ * FileList, so an empty list accepts only all-directory candidates. Any other
+ * mismatch means the pasteboard belongs to a different drag and callers keep
+ * the byte-based fallback.
  */
 export function droppedPathsMatchFiles(
   candidates: readonly DroppedPathCandidate[],
-  files: readonly PromptAttachmentFileCandidate[],
+  files: readonly (PromptAttachmentFileCandidate & { size: number })[],
 ): boolean {
-  if (files.length === 0) {
-    return true;
+  const remaining = [...candidates];
+  for (const file of files) {
+    const index = remaining.findIndex((candidate) => (
+      candidate.name === file.name
+      && (candidate.isDirectory || candidate.size === file.size)
+    ));
+    if (index === -1) {
+      return false;
+    }
+    remaining.splice(index, 1);
   }
-  const candidateNames = new Set(candidates.map((candidate) => candidate.name));
-  return files.some((file) => candidateNames.has(file.name));
+  return remaining.every((candidate) => candidate.isDirectory);
 }
 
 /**

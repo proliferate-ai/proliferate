@@ -103,12 +103,30 @@ describe("prompt attachment rules", () => {
   });
 
   it("detects when pasteboard paths belong to a different drag", () => {
-    const candidates = [
-      { path: "/tmp/other/a.zip", name: "a.zip", isDirectory: false, size: 5 },
-    ];
-    expect(droppedPathsMatchFiles(candidates, [{ name: "b.png", type: "image/png" }]))
-      .toBe(false);
-    expect(droppedPathsMatchFiles(candidates, [{ name: "a.zip", type: "" }])).toBe(true);
-    expect(droppedPathsMatchFiles(candidates, [])).toBe(true);
+    const fileCandidate = { path: "/tmp/drop/a.zip", name: "a.zip", isDirectory: false, size: 5 };
+    const dirCandidate = { path: "/tmp/drop/logo", name: "logo", isDirectory: true, size: null };
+    const zip = { name: "a.zip", type: "", size: 5 };
+
+    // Every dropped File must consume a matching candidate.
+    expect(droppedPathsMatchFiles([fileCandidate], [zip])).toBe(true);
+    expect(droppedPathsMatchFiles([fileCandidate], [{ ...zip, name: "b.png" }])).toBe(false);
+    expect(droppedPathsMatchFiles([fileCandidate], [{ ...zip, size: 6 }])).toBe(false);
+
+    // Leftover candidates are acceptable only when they are directories,
+    // which WebKit may omit from the FileList.
+    expect(droppedPathsMatchFiles([fileCandidate, dirCandidate], [zip])).toBe(true);
+    expect(droppedPathsMatchFiles(
+      [fileCandidate, { ...fileCandidate, name: "extra.pdf", path: "/tmp/drop/extra.pdf" }],
+      [zip],
+    )).toBe(false);
+
+    // An empty FileList only describes a folder-only drop.
+    expect(droppedPathsMatchFiles([dirCandidate], [])).toBe(true);
+    expect(droppedPathsMatchFiles([fileCandidate], [])).toBe(false);
+
+    // Directory candidates match their FileList entry by name; WebKit's size
+    // for a directory File is unreliable.
+    expect(droppedPathsMatchFiles([dirCandidate], [{ name: "logo", type: "", size: 128 }]))
+      .toBe(true);
   });
 });

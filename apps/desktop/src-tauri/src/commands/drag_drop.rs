@@ -17,6 +17,12 @@ pub struct DroppedPathEntry {
 /// dragged filenames — the same source wry reads for native drag-drop events.
 /// Returns an empty list off macOS or when the drag carried no file paths
 /// (e.g. content dragged out of another app rather than Finder).
+///
+/// The drag pasteboard carries no per-drop session token, so full correlation
+/// with the DOM drop is impossible by construction; `changeCount` guards the
+/// read against a new drag session replacing the pasteboard mid-snapshot, and
+/// the renderer rejects results whose shape does not correspond to the
+/// dropped FileList.
 #[tauri::command]
 pub fn read_drag_drop_paths() -> Vec<DroppedPathEntry> {
     drag_pasteboard_paths()
@@ -50,6 +56,7 @@ fn drag_pasteboard_paths() -> Vec<String> {
     #[allow(deprecated)]
     unsafe {
         let pasteboard = NSPasteboard::pasteboardWithName(NSPasteboardNameDrag);
+        let change_count = pasteboard.changeCount();
         let types = NSArray::arrayWithObject(NSFilenamesPboardType);
         if pasteboard.availableTypeFromArray(&types).is_none() {
             return paths;
@@ -64,6 +71,11 @@ fn drag_pasteboard_paths() -> Vec<String> {
             if let Ok(item) = item.downcast::<NSString>() {
                 paths.push(item.to_string());
             }
+        }
+        // A new drag session replaced the pasteboard while this snapshot was
+        // being read; the paths no longer describe the drop being handled.
+        if pasteboard.changeCount() != change_count {
+            return Vec::new();
         }
     }
     paths
