@@ -10,6 +10,7 @@ import { PageHeader } from "#product/primitives/patterns/PageHeader";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 
 export interface OrganizationSsoConnectionView {
   id: string;
@@ -103,15 +104,10 @@ export function OrganizationSsoSettingsSurface({
       {/* Connection status */}
       <div className="space-y-2">
         <SettingsSection title="Connection">
-          <div className="flex items-center gap-3.5 px-3.5 py-[13px]">
-            <div className="min-w-0 flex-1">
-              <div className="text-ui text-foreground">
-                {connection?.displayName || "OIDC connection"}
-              </div>
-              <div className="mt-px truncate text-ui-sm text-muted-foreground">
-                {connection ? issuerHost(form.oidcIssuerUrl) : "Not configured"}
-              </div>
-            </div>
+          <SettingsRow
+            label={connection?.displayName || "OIDC connection"}
+            description={connection ? issuerHost(form.oidcIssuerUrl) : "Not configured"}
+          >
             <span className="shrink-0 text-ui-sm text-muted-foreground">
               {connection ? statusLabel(connection.status, connection.testedAt) : "Not configured"}
             </span>
@@ -150,7 +146,7 @@ export function OrganizationSsoSettingsSurface({
                 Enable
               </Button>
             ) : null}
-          </div>
+          </SettingsRow>
         </SettingsSection>
         {connection?.lastError ? (
           <NoticeBanner tone="warning">{connection.lastError}</NoticeBanner>
@@ -236,10 +232,13 @@ export function OrganizationSsoSettingsSurface({
 
       {/* Redirect URI */}
       <SettingsSection title="Redirect URI">
-        <div className="flex items-center gap-2 px-3.5 py-[13px]">
-          <span className="min-w-0 flex-1 truncate font-mono text-ui-sm text-muted-foreground">
-            {connection?.oidcRedirectUri ?? "Save a connection to generate the redirect URI."}
-          </span>
+        <SettingsRow
+          label={
+            <span className="block truncate font-mono text-ui-sm text-muted-foreground">
+              {connection?.oidcRedirectUri ?? "Save a connection to generate the redirect URI."}
+            </span>
+          }
+        >
           <Button
             type="button"
             variant="outline"
@@ -250,7 +249,7 @@ export function OrganizationSsoSettingsSurface({
           >
             <Copy className="icon-paired" />
           </Button>
-        </div>
+        </SettingsRow>
       </SettingsSection>
 
       {/* Save + Delete footer */}
