@@ -16,7 +16,7 @@ import {
 } from "#product/primitives/icons/core";
 import { FolderTree } from "#product/primitives/icons/workspace";
 import { PaneIconButton } from "#product/primitives/PaneIconButton";
-import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMenuItem";
+import { PaneOptionsMenuItem } from "#product/primitives/patterns/panel/PaneOptionsMenuItem";
 import {
   POPOVER_FRAME_CLASS,
   POPOVER_SURFACE_CLASS,

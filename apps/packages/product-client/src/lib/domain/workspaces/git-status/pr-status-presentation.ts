@@ -1,4 +1,5 @@
 import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
+import type { StatusDotFill, StatusDotTone } from "#product/primitives/StatusDot";
 import type {
   WorkspaceGitStatus,
   WorkspacePrStatus,
@@ -19,6 +20,42 @@ export interface PrStatusView {
   number?: number | null;
   /** Optional custom tooltip label; defaults to `PR #{n} · {State}`. */
   label?: string | null;
+}
+
+/** The two `StatusDot` axes a PR kind resolves to. */
+export interface PrStatusDotAppearance {
+  tone: StatusDotTone;
+  fill: StatusDotFill;
+}
+
+/**
+ * Maps a PR kind onto the `StatusDot` axes (UX spec §3.3 dot table).
+ *
+ * The presenter lives here, beside `PrStatusKind`, rather than inside the
+ * badge: the mapping is domain knowledge ("checks failing is a red dot"), and
+ * the badge is a pure `StatusDot` call site once it is lifted out.
+ *
+ * Every tone is an opaque ink — no alpha tokens. `pending` is the only
+ * in-flight state, so it is the only hollow one: an outline, not a fill.
+ * `merged` is the GitHub-convention purple, never `info` (the unread colour).
+ */
+export function prStatusTone(kind: PrStatusKind): PrStatusDotAppearance {
+  switch (kind) {
+    case "open":
+      return { tone: "success", fill: "solid" };
+    case "checks_failing":
+      return { tone: "danger", fill: "solid" };
+    case "pending":
+      return { tone: "warning", fill: "hollow" };
+    case "changes_requested":
+      return { tone: "warning", fill: "solid" };
+    case "draft":
+      return { tone: "muted", fill: "solid" };
+    case "merged":
+      return { tone: "merged", fill: "solid" };
+    case "closed":
+      return { tone: "danger", fill: "solid" };
+  }
 }
 
 const PR_STATE_LABEL: Record<Exclude<WorkspacePrStatus["state"], "none">, string> = {

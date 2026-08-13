@@ -251,7 +251,7 @@ describe("generated design-package semantic text tokens", () => {
     for (const step of generatedIconButtonSteps) {
       // A consumer override must WIN over a component's own box, not coexist
       // with it and lose on generated-CSS source order (which is what
-      // ChromeWorkspaceTab's 20px close button did: Button's `h-7 w-7`
+      // ChromeTab's 20px close button did: Button's `h-7 w-7`
       // survived the merge and kept it at 28px).
       expect(twMerge(`h-7 w-7 rounded-full px-0 size-icon-button-${step}`)).toBe(
         `rounded-full px-0 size-icon-button-${step}`,

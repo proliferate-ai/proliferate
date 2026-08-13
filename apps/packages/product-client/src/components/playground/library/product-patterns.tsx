@@ -1,39 +1,13 @@
 import {
   BillingBalanceNotice,
   BillingGateState,
-  billingGateView,
 } from "#product/components/patterns/BillingGateState";
-import { ModelTable } from "#product/components/patterns/ModelTable";
+import { billingGateView } from "#product/lib/domain/billing/billing-gate-presentation";
 import { PrStatusDot } from "#product/components/patterns/PrStatusBadge";
-import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import type { LibraryEntry, LibraryTier } from "./types";
-
-function ModelTableDemo() {
-  return (
-    <ModelTable
-      models={[{
-        id: "claude-sonnet",
-        displayName: "Claude Sonnet",
-        provider: "anthropic",
-        enabled: true,
-      }]}
-      onToggle={noop}
-    />
-  );
-}
-
-function ProductPageShellDemo() {
-  return (
-    <div className="h-32 overflow-hidden rounded-md border border-border">
-      <ProductPageShell title="Page title" description="Page description">
-        <p className="text-ui-sm text-muted-foreground">Shell body.</p>
-      </ProductPageShell>
-    </div>
-  );
-}
 
 function SecretManagementPanelDemo() {
   return (
@@ -79,11 +53,9 @@ function BillingGateStateDemo() {
 
 export const PRODUCT_PATTERNS_ENTRIES: LibraryEntry[] = [
   { name: "BillingGateState", subpath: "#product/components/patterns/BillingGateState", render: BillingGateStateDemo },
-  { name: "ModelTable", subpath: "#product/components/patterns/ModelTable", render: ModelTableDemo },
   { name: "PrStatusBadge", subpath: "#product/components/patterns/PrStatusBadge", render: () => (
     <PrStatusDot status={{ kind: "open", number: 42 }} />
   ) },
-  { name: "ProductPageShell", subpath: "#product/components/patterns/ProductPageShell", render: ProductPageShellDemo },
   { name: "SettingsPageHeader", subpath: "#product/components/patterns/SettingsPageHeader", render: () => (
     <SettingsPageHeader title="Settings" description="Page description" />
   ) },

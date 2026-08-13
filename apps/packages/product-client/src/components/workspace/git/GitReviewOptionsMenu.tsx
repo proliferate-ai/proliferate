@@ -5,7 +5,7 @@ import {
 } from "#product/primitives/icons/workspace";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { WrapText } from "#product/primitives/icons/core";
-import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMenuItem";
+import { PaneOptionsMenuItem } from "#product/primitives/patterns/panel/PaneOptionsMenuItem";
 import { PaneOptionsMenu } from "#product/components/workspace/pane/PaneOptionsMenu";
 
 export function GitReviewOptionsMenu({

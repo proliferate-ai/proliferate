@@ -1,10 +1,10 @@
 import type { BillingReturnSurface } from "@proliferate/cloud-sdk";
 import { BillingSettingsPane } from "#product/components/billing/BillingSettingsPane";
+import { BillingBalanceNotice } from "#product/components/patterns/BillingGateState";
 import {
-  BillingBalanceNotice,
   billingGateView,
   toBillingGateReason,
-} from "#product/components/patterns/BillingGateState";
+} from "#product/lib/domain/billing/billing-gate-presentation";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import {
   BillingAutoTopUpCard,

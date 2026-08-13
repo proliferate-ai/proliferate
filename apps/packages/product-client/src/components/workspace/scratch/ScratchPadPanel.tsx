@@ -11,7 +11,7 @@ import {
   Plus,
   Trash,
 } from "#product/primitives/icons/core";
-import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMenuItem";
+import { PaneOptionsMenuItem } from "#product/primitives/patterns/panel/PaneOptionsMenuItem";
 import {
   ScratchCodeMirrorEditor,
   type ScratchCodeMirrorEditorHandle,
