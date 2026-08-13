@@ -25,15 +25,8 @@ import type {
   WorkspaceAvailabilityCommandKind,
 } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
-import {
-  SidebarGitConflictsAlert,
-  SidebarStatusIndicatorView,
-} from "#product/components/workspace/shell/sidebar/SidebarIndicators";
-import {
-  resolveSidebarWorkspaceGitIdentity,
-  SidebarWorkspaceGitGlyph,
-} from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
 import { WorkspaceDeleteConfirmMenu } from "#product/components/workspace/shell/sidebar/WorkspaceDeleteConfirmMenu";
+import { resolveWorkspaceItemTrailingCells } from "#product/components/workspace/shell/sidebar/WorkspaceItemTrailing";
 import { useWorkspacePeek } from "#product/components/workspace/shell/sidebar/WorkspacePeekCard";
 import { WorkspaceItemMenu } from "#product/components/workspace/shell/sidebar/WorkspaceItemMenu";
 import { WorkspaceRenamePopover } from "#product/components/workspace/shell/sidebar/WorkspaceRenamePopover";
@@ -147,22 +140,15 @@ export function WorkspaceItem({
   const handlePinCommand = () => onPin?.();
   const handleUnpinCommand = () => onUnpin?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
-  // The identity cell exists only when there is an identity to put in it, so
-  // a local row with no PR collapses the cell instead of reserving 20px for
-  // nothing.
-  const trailingIdentity = resolveSidebarWorkspaceGitIdentity(gitStatus, variant)
-    ? <SidebarWorkspaceGitGlyph status={gitStatus} variant={variant} />
-    : null;
-  // Right-slot precedence: live activity first, then merge conflicts (the one
-  // git attention state the identity glyph's dot does not already carry).
-  const trailingStatus = statusIndicator ? (
-    <SidebarStatusIndicatorView
-      indicator={statusIndicator}
-      onAction={onIndicatorAction}
-    />
-  ) : gitStatus?.attention === "conflicts" ? (
-    <SidebarGitConflictsAlert />
-  ) : null;
+  const {
+    identity: trailingIdentity,
+    status: trailingStatus,
+  } = resolveWorkspaceItemTrailingCells({
+    gitStatus,
+    variant,
+    statusIndicator,
+    onIndicatorAction,
+  });
   const pullRequestUrl = gitStatus?.pr?.url ?? null;
   const pullRequestNumber = gitStatus?.pr?.number ?? null;
   const handleOpenPullRequestCommand = pullRequestUrl && onOpenPullRequest

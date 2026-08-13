@@ -6,10 +6,8 @@ import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDia
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
 import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
-import {
-  SidebarPinnedNavigation,
-  SidebarScrollingNavigation,
-} from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
+import { SidebarPinnedNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
+import { SidebarScrollingNavigationSection } from "#product/components/workspace/shell/sidebar/SidebarScrollingNavigationSection";
 import { SidebarPinnedSection } from "#product/components/workspace/shell/sidebar/SidebarPinnedSection";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceContent";
@@ -37,7 +35,6 @@ import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/s
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
-import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "#product/hooks/workspaces/workflows/use-workspace-display-name-actions";
@@ -62,7 +59,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
   useSessionActivityReconciler();
   const { notice, dismissNotice, openChangelog } = useReleaseNotice();
   const actions = useWorkspaceSidebarActions();
-  const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "sidebar" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
   const {
@@ -118,8 +114,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     onLeaveWorkspace: actions.handleGoHome,
   });
 
-  const isOnWorkflows = location.pathname.startsWith(APP_ROUTES.workflows);
-  const isOnWorkspaces = location.pathname === APP_ROUTES.workspaces;
   const isOnHome = location.pathname === APP_ROUTES.home;
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
   const pinWorkspace = useWorkspaceUiStore((s) => s.pinWorkspace);
@@ -239,10 +233,7 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
     [sidebarShortcutTargetIds],
   );
-  const primaryNavShortcutLabels = useMemo(() => ({
-    newChat: getShortcutDisplayLabel(SHORTCUTS.newDefault),
-    support: getShortcutDisplayLabel(SHORTCUTS.openSupport),
-  }), []);
+  const newChatShortcutLabel = getShortcutDisplayLabel(SHORTCUTS.newDefault);
 
   return (
     <DebugProfiler id="workspace-sidebar">
@@ -267,20 +258,14 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
               homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
               onGoHome={actions.handleGoHome}
               shortcutRevealVisible={shortcutRevealVisible}
-              newChatShortcutLabel={primaryNavShortcutLabels.newChat}
+              newChatShortcutLabel={newChatShortcutLabel}
             />
           </DebugProfiler>
 
         <ProductSidebarScrollableContent>
-          <SidebarScrollingNavigation
-            workspacesActive={isOnWorkspaces}
-            workflowsActive={isOnWorkflows}
-            supportActive={false}
+          <SidebarScrollingNavigationSection
             onGoWorkspaces={actions.handleGoWorkspaces}
             onGoWorkflows={actions.handleGoWorkflows}
-            onOpenSupport={handleOpenSupport}
-            shortcutRevealVisible={shortcutRevealVisible}
-            supportShortcutLabel={primaryNavShortcutLabels.support}
           />
 
           <WorkspaceCleanupAttentionSection
