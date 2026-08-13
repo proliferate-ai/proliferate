@@ -11,7 +11,10 @@ import {
   type SidebarGroupState,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { buildSidebarNewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
-import { visibleSidebarGroupItems } from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
+import {
+  sidebarGroupRowItems,
+  visibleSidebarGroupItems,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
 import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
@@ -155,7 +158,7 @@ export function SidebarWorkspaceContent({
   }
 
   return groups.map((group, groupIndex) => {
-    const overLimit = group.items.length > SIDEBAR_REPO_GROUP_ITEM_LIMIT;
+    const overLimit = sidebarGroupRowItems(group).length > SIDEBAR_REPO_GROUP_ITEM_LIMIT;
     const isShownMore = repoGroupsShownMore.has(group.sourceRoot);
     const visibleItems = visibleSidebarGroupItems({
       group,

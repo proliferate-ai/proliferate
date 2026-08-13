@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { collectPinnedSidebarItems } from "#product/lib/domain/workspaces/sidebar/sidebar-pinned";
 import {
+  sidebarGroupRowItems,
+  visibleSidebarGroupItems,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
+import {
   buildGroups,
   makeLocalLogicalWorkspace,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
@@ -59,5 +63,23 @@ describe("collectPinnedSidebarItems", () => {
     const groups = buildGroups({ logicalWorkspaces: makeWorkspaces() });
 
     expect(collectPinnedSidebarItems(groups, [])).toEqual([]);
+  });
+
+  it("moves pinned rows out of the repo group body instead of duplicating them", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: makeWorkspaces(),
+      pinnedIds: ["ws-a"],
+    });
+
+    const repoOne = groups.find((group) =>
+      group.items.some((item) => item.id === "ws-b"));
+    // The group keeps its full visible inventory for lookups...
+    expect(repoOne?.items.map((item) => item.id)).toContain("ws-a");
+    // ...but the rendered rows exclude the pinned workspace.
+    expect(sidebarGroupRowItems(repoOne!).map((item) => item.id)).toEqual(["ws-b"]);
+    expect(
+      visibleSidebarGroupItems({ group: repoOne!, isShownMore: false, itemLimit: 6 })
+        .map((item) => item.id),
+    ).toEqual(["ws-b"]);
   });
 });
