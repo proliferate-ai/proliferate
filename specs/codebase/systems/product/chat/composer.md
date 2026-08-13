@@ -485,9 +485,12 @@ and therefore never shifts the dock when it shows or hides.
   (fade starts at 3.4s, 600ms opacity ease), then unmounts. Hovering pins it
   (cancels the fade, reveals a checklist card above it with one row per
   entry); mouse-leave unpins and restarts a short fade (starts at 1.2s, gone
-  by 1.8s). `todo-progress-pill-state.ts` owns this show → linger → fade →
+  by 1.8s). A step advance while the pointer is on the pill/checklist does
+  not restart that cycle: the pinned checklist stays mounted and its rows
+  update in place, so the in-progress spinner never remounts mid-hover.
+  `todo-progress-pill-state.ts` owns this show → linger → fade →
   hide state machine as a pure reducer (`todoPillReducer`); the connected
-  component only owns the timers.
+  component only owns the timers and the hovered guard.
 - **No dock-slot precedence.** Because it floats independently of
   `activeSlot`/`attachedSlot`, it never competes with `ConnectedApprovalCard`,
   `ConnectedUserInputCard`, or `ConnectedMcpElicitationCard` for the slot —
