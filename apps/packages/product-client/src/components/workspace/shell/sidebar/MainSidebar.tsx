@@ -6,7 +6,10 @@ import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDia
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
 import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
-import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
+import {
+  SidebarPinnedNavigation,
+  SidebarScrollingNavigation,
+} from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
 import { SidebarPinnedSection } from "#product/components/workspace/shell/sidebar/SidebarPinnedSection";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceContent";
@@ -257,22 +260,29 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
         )}>
         <ProductSidebarBody>
           <ProductSidebarBrandRow label="Proliferate" />
+          {/* Only the brand row and New chat stay pinned. Everything below
+              scrolls with the repository list. */}
           <DebugProfiler id="workspace-sidebar-primary-nav">
-            <SidebarPrimaryNavigation
+            <SidebarPinnedNavigation
               homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
-              workspacesActive={isOnWorkspaces}
-              workflowsActive={isOnWorkflows}
-              supportActive={false}
               onGoHome={actions.handleGoHome}
-              onGoWorkspaces={actions.handleGoWorkspaces}
-              onGoWorkflows={actions.handleGoWorkflows}
-              onOpenSupport={handleOpenSupport}
               shortcutRevealVisible={shortcutRevealVisible}
-              shortcutLabels={primaryNavShortcutLabels}
+              newChatShortcutLabel={primaryNavShortcutLabels.newChat}
             />
           </DebugProfiler>
 
         <ProductSidebarScrollableContent>
+          <SidebarScrollingNavigation
+            workspacesActive={isOnWorkspaces}
+            workflowsActive={isOnWorkflows}
+            supportActive={false}
+            onGoWorkspaces={actions.handleGoWorkspaces}
+            onGoWorkflows={actions.handleGoWorkflows}
+            onOpenSupport={handleOpenSupport}
+            shortcutRevealVisible={shortcutRevealVisible}
+            supportShortcutLabel={primaryNavShortcutLabels.support}
+          />
+
           <WorkspaceCleanupAttentionSection
             workspaces={cleanupAttentionWorkspaces}
             onRetryCleanup={actions.handleRetryWorkspaceCleanup}
