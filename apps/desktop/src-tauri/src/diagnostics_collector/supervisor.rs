@@ -239,10 +239,19 @@ fn reset_restart_budget_after_health(inner: &mut SupervisorInner, now: Instant) 
 }
 
 fn validate_renderer_ingest_batch(batch: &IngestBatchV1) -> Result<(), SupervisorUnavailable> {
-    if batch.records.is_empty()
+    // `specs/desktop-native.md` promises *exact* schema-v1.1 for renderer batches, but
+    // `parse_ingest_batch_value` only enforces the compatible producer-minor window, so it
+    // admits 1.0 as well. Until now the exactness check lived solely in the renderer
+    // (`apps/desktop/src/lib/access/tauri/diagnostics.ts`) — the party `require_main_window`
+    // exists to distrust. Pin it here too, against the protocol version this binary was
+    // compiled with, so a protocol bump fails loudly instead of silently widening what the
+    // trust boundary accepts. The renderer twin must be bumped in lockstep.
+    if batch.schema_version != CURRENT_SCHEMA_VERSION
+        || batch.records.is_empty()
         || batch.records.iter().any(|record| {
-            record.component
-                != proliferate_diagnostics_protocol::v1::types::ComponentV1::DesktopRenderer
+            record.schema_version != CURRENT_SCHEMA_VERSION
+                || record.component
+                    != proliferate_diagnostics_protocol::v1::types::ComponentV1::DesktopRenderer
                 || record.source != SourceV1::Renderer
         })
     {
