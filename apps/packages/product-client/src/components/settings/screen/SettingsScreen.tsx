@@ -129,6 +129,10 @@ export function SettingsScreen({
   return (
     <div className="flex h-screen flex-col bg-background text-foreground" data-telemetry-block>
       <header className="shrink-0 border-b border-border">
+        {/* h-[46px]: the shared native-chrome header height used tree-wide
+            wherever a row shares the macOS drag region (see
+            WorkspaceShellSidebar.tsx, MainSidebarPageShell.tsx,
+            MacWindowControlsSafeArea.tsx) — not settings-local drift. */}
         <div
           className={`flex h-[46px] items-center gap-2 pr-3 ${
             macWindowControlsInsetClass || "pl-3"
@@ -137,15 +141,16 @@ export function SettingsScreen({
         >
           <Button
             type="button"
-            variant="unstyled"
+            variant="ghost"
             size="unstyled"
             onClick={onNavigateHome}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-ui text-muted-foreground transition-colors hover:bg-hover active:bg-active hover:text-foreground"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-ui"
           >
             <ArrowLeft className="icon-paired" />
             {SETTINGS_COPY.back}
           </Button>
         </div>
+        {/* h-[46px]: see the cause comment above. */}
         <div className="flex h-[46px] items-center gap-4 px-4">
           <SettingsScopeTabs
             items={visibleScopeOrder.map((scope) => ({
@@ -202,6 +207,10 @@ export function SettingsScreen({
           />
         </div>
 
+        {/* hover:bg-primary/30 active:bg-primary/50: a resize-handle affordance,
+            not a re-implementation of a component's owned state — no target in
+            section 4 names a resize-handle shape, so this stays a first
+            instance. */}
         <div
           role="separator"
           aria-orientation="vertical"
@@ -213,26 +222,25 @@ export function SettingsScreen({
         <div className="relative min-w-0 flex-1 bg-background">
           <AutoHideScrollArea className="h-full" viewportClassName="px-10 pb-12 pt-10">
             <div className="flex justify-center pb-8">
-              {/* The single settings page-width contract: panes never set their
-                  own max-w — they inherit this container's. */}
-              <div className="w-full max-w-[50rem] space-y-6">
-                <SettingsContentBoundary section={effectiveActiveSection}>
-                  {renderSettingsSection(
-                    effectiveActiveSection,
-                    repoSelection,
-                    cloudEnabled,
-                    cloudActive,
-                    cloudSignInChecking,
-                    cloudSignInAvailable,
-                    authenticated,
-                    focus,
-                    onSelectSection,
-                    onSelectRepo,
-                    onSelectRepoContext,
-                    onSelectCloudEnvironment,
-                  )}
-                </SettingsContentBoundary>
-              </div>
+              {/* The page-width contract and section rhythm now live on
+                  SettingsPageBody, inside every pane; this container only
+                  centers it. */}
+              <SettingsContentBoundary section={effectiveActiveSection}>
+                {renderSettingsSection(
+                  effectiveActiveSection,
+                  repoSelection,
+                  cloudEnabled,
+                  cloudActive,
+                  cloudSignInChecking,
+                  cloudSignInAvailable,
+                  authenticated,
+                  focus,
+                  onSelectSection,
+                  onSelectRepo,
+                  onSelectRepoContext,
+                  onSelectCloudEnvironment,
+                )}
+              </SettingsContentBoundary>
             </div>
           </AutoHideScrollArea>
         </div>
