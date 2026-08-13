@@ -34,7 +34,11 @@ class SettingsContentErrorBoundary extends React.Component<
     detailsOpen: false,
   };
 
-  static getDerivedStateFromError(error: Error): SettingsContentBoundaryState {
+  // Partial by design: a caught error must not reset `detailsOpen`, which the
+  // Disclosure below owns.
+  static getDerivedStateFromError(
+    error: Error,
+  ): Pick<SettingsContentBoundaryState, "error"> {
     return { error };
   }
 
