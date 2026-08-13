@@ -55,6 +55,15 @@ export function nextSessionReconnectDelayMs(
   return delay;
 }
 
+/**
+ * Reconnect attempts recorded for this session since the last successful open.
+ * Read-only view for diagnostics; it must be sampled before
+ * resetSessionReconnectBackoff runs if the caller wants the attempt that won.
+ */
+export function currentSessionReconnectAttempt(sessionId: string): number {
+  return sessionReconnectAttempts.get(sessionId) ?? 0;
+}
+
 export function resetSessionReconnectBackoff(sessionId: string): void {
   sessionReconnectAttempts.delete(sessionId);
   offlineSessionReconnects.delete(sessionId);

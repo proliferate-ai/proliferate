@@ -6,7 +6,17 @@ import {
   clearSessionStreamHandle,
   setSessionStreamHandle,
 } from "#product/lib/access/anyharness/session-stream-handles";
-import { resetSessionReconnectBackoff } from "#product/lib/workflows/sessions/session-reconnect-state";
+import {
+  currentSessionReconnectAttempt,
+  resetSessionReconnectBackoff,
+} from "#product/lib/workflows/sessions/session-reconnect-state";
+import {
+  recordSessionStreamClosed,
+  recordSessionStreamError,
+  recordSessionStreamOpened,
+  type SessionStreamCloseReason,
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import { classifyRendererErrorClass } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   finishOrCancelMeasurementOperation,
@@ -199,6 +209,11 @@ export async function openSessionStreamConnection({
       useSessionDirectoryStore.getState().patchEntry(sessionId, {
         streamConnectionState: "open",
       });
+      // Sampled before the reset below so the record names the attempt that won.
+      recordSessionStreamOpened({
+        sessionId,
+        attempt: currentSessionReconnectAttempt(sessionId),
+      });
       resetSessionReconnectBackoff(sessionId);
       useSessionIngestStore.getState().markCurrentIfContiguous(
         sessionId,
@@ -244,9 +259,14 @@ export async function openSessionStreamConnection({
       });
       streamFlushController.enqueue(envelope);
     },
-    onError: () => {
+    onError: (error) => {
       logDevSessionRuntimeEvent(sessionId, "stream_error", {
         currentLastSeq: getSessionRecord(sessionId)?.transcript.lastSeq ?? null,
+      });
+      recordSessionStreamError({
+        sessionId,
+        attempt: currentSessionReconnectAttempt(sessionId),
+        errorClass: classifyRendererErrorClass(error),
       });
       streamFlushController.flushNow();
       streamFlushController.dispose();
@@ -285,6 +305,13 @@ export async function openSessionStreamConnection({
       resolveOpen?.();
       refreshController.clearStartupReadyRefreshTimer();
       refreshController.clearActiveSummaryRefreshTimer();
+      const emitClosed = (closeReason: SessionStreamCloseReason) => {
+        recordSessionStreamClosed({
+          sessionId,
+          attempt: currentSessionReconnectAttempt(sessionId),
+          closeReason,
+        });
+      };
       const materializedSessionId = getMaterializedSessionId(sessionId);
       if (!isStillCurrent() || !handle || !materializedSessionId || !isCurrentStreamHandle(materializedSessionId, handle)) {
         logDevSessionRuntimeEvent(sessionId, "stream_close_ignored_after_flush", {
@@ -292,12 +319,14 @@ export async function openSessionStreamConnection({
           materializedSessionId,
           stillCurrent: isStillCurrent(),
         });
+        emitClosed("stale_handle");
         return;
       }
 
       clearSessionStreamHandle(materializedSessionId, handle);
       if (suppressNextCloseReconnect) {
         suppressNextCloseReconnect = false;
+        emitClosed("suppressed");
         return;
       }
       useSessionDirectoryStore.getState().patchEntry(sessionId, {
@@ -310,6 +339,7 @@ export async function openSessionStreamConnection({
       // still be told the stream ended so they can apply their own policy —
       // otherwise an idle child's stream never comes back without a reload.
       if (shouldReconnectStream(sessionId) || options?.reconnectOwner === "external") {
+        emitClosed("reconnect_scheduled");
         useSessionIngestStore.getState().markStale(sessionId, {
           lastAppliedSeq: getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,
           lastObservedSeq: getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,
@@ -317,6 +347,8 @@ export async function openSessionStreamConnection({
           lastErrorAt: new Date().toISOString(),
         });
         scheduleReconnect();
+      } else {
+        emitClosed("ended");
       }
     },
   });

@@ -7,6 +7,11 @@ import {
 } from "@anyharness/sdk";
 import { terminalStreamKey } from "#product/lib/infra/terminals/terminal-stream-key";
 import { resetTerminalCloseIntentForTests } from "#product/lib/infra/terminals/terminal-close-intent";
+import {
+  recordTerminalStreamClosed,
+  recordTerminalStreamError,
+  recordTerminalStreamOpened,
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 
 const MAX_REPLAY_DATA_BYTES = 256 * 1024;
 const MAX_REPLAY_ENTRIES = 1000;
@@ -88,7 +93,14 @@ export function ensureConnected(options: EnsureConnectedOptions): boolean {
     webSocketAuthTransport: options.webSocketAuthTransport,
     terminalId: options.identity.terminalId,
     afterSeq: entry.lastDataSeq > 0 ? entry.lastDataSeq : undefined,
-    onOpen: options.onOpen,
+    onOpen: () => {
+      recordTerminalStreamOpened({
+        kind: "terminal",
+        workspaceId: options.identity.workspaceId,
+        targetId: options.identity.terminalId,
+      });
+      options.onOpen?.();
+    },
     onData: (data, frame) => {
       if (entry.suppressLifecycleCallbacks) {
         return;
@@ -116,6 +128,11 @@ export function ensureConnected(options: EnsureConnectedOptions): boolean {
       if (entry.suppressLifecycleCallbacks) {
         return;
       }
+      recordTerminalStreamError({
+        kind: "terminal",
+        workspaceId: options.identity.workspaceId,
+        targetId: options.identity.terminalId,
+      });
       forgetHandle(options.identity);
       options.onError?.(event);
     },
@@ -123,6 +140,11 @@ export function ensureConnected(options: EnsureConnectedOptions): boolean {
       if (entry.suppressLifecycleCallbacks) {
         return;
       }
+      recordTerminalStreamClosed({
+        kind: "terminal",
+        workspaceId: options.identity.workspaceId,
+        targetId: options.identity.terminalId,
+      });
       forgetHandle(options.identity);
       options.onClose?.(event);
     },
