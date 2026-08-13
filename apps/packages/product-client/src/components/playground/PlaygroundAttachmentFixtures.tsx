@@ -7,11 +7,16 @@ import { ComposerTextareaFrame } from "#product/primitives/patterns/composer/Com
 import { DraftAttachmentPreviewList } from "#product/components/workspace/chat/content/PromptContentRenderer";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
 import { PromptAttachmentViewer } from "#product/components/workspace/files/PromptAttachmentViewer";
-import { ViewerHeaderButton } from "#product/components/workspace/shell/right-panel/ViewerHeaderButton";
+import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
+import { PanelHeaderEntry } from "#product/primitives/patterns/panel/PanelHeaderEntry";
+import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
+import { AppShellTabCloseIcon } from "#product/primitives/icons/app-shell";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
 import type { PromptAttachmentDescriptor } from "#product/domain/chats/composer/prompt-attachment-rules";
 import {
+  viewerTargetDisplayPath,
   viewerTargetKey,
+  viewerTargetLabel,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import { focusChatInput } from "#product/lib/domain/focus-zone";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
@@ -196,19 +201,33 @@ export function PlaygroundAttachmentPreviewAside() {
       {target?.kind === "promptAttachment" ? (
         <>
           <div className="right-panel-tab-system flex h-10 shrink-0 items-stretch border-b border-border">
-            <ViewerHeaderButton
-              target={target}
-              isActive
-              isDirty={false}
-              isDiff={false}
-              isDragging={false}
-              shouldSuppressClick={() => false}
-              onSelect={() => setActiveTarget(viewerTargetKey(target))}
-              onClose={() => {
-                closeTarget(viewerTargetKey(target));
-                focusChatInput();
-              }}
-            />
+            <div className="right-panel-terminal-tab-shell">
+              <PanelHeaderEntry
+                label={viewerTargetLabel(target)}
+                title={viewerTargetDisplayPath(target) ?? viewerTargetLabel(target)}
+                icon={(
+                  <FileTreeEntryIcon
+                    name={viewerTargetLabel(target)}
+                    path={viewerTargetDisplayPath(target) ?? viewerTargetLabel(target)}
+                    kind="file"
+                    className="icon-control"
+                  />
+                )}
+                active
+                controls="tabpanel-workspace-right-panel-viewer"
+                onSelect={() => setActiveTarget(viewerTargetKey(target))}
+              />
+              <RowActionIconButton
+                label={`Close ${viewerTargetLabel(target)}`}
+                className="size-icon-button-sm rounded-full"
+                onClick={() => {
+                  closeTarget(viewerTargetKey(target));
+                  focusChatInput();
+                }}
+              >
+                <AppShellTabCloseIcon />
+              </RowActionIconButton>
+            </div>
           </div>
           <div className="min-h-0 flex-1">
             <PromptAttachmentViewer target={target} />

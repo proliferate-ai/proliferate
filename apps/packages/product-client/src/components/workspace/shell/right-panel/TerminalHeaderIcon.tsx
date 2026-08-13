@@ -1,23 +1,20 @@
 import { useEffect, useState } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "#product/primitives/Button";
-import { IconButton } from "#product/primitives/IconButton";
 import { Input } from "#product/primitives/Input";
+import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { PanelHeaderEntry } from "#product/primitives/patterns/panel/PanelHeaderEntry";
 import { POPOVER_FRAME_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { useTerminalTabNativeContextMenu } from "#product/hooks/terminals/ui/use-terminal-tab-native-context-menu";
-import {
-  AppShellTabCloseIcon,
-  AppShellTerminalIcon,
-} from "#product/primitives/icons/app-shell";
+import { AppShellTabCloseIcon, AppShellTerminalIcon } from "#product/primitives/icons/app-shell";
 import {
   Check,
   Pencil,
   X,
 } from "#product/primitives/icons/core";
 
-const HEADER_TERMINAL_TAB_CLASS = "ui-tab-system-tab right-panel-terminal-tab";
 const HEADER_TAB_EDIT_CLASS =
   "ui-tab-system-tab right-panel-terminal-tab right-panel-terminal-tab--editing";
 const HEADER_TAB_ACTION_CLASS = "ui-icon-button right-panel-terminal-edit-action";
@@ -29,6 +26,8 @@ interface TerminalHeaderIconProps {
   unread: boolean;
   isRuntimeReady: boolean;
   isDragging: boolean;
+  /** Roving-tabIndex floor passthrough — see PanelHeaderEntry. */
+  tabIndexFloor?: boolean;
   shouldSuppressClick: () => boolean;
   shortcutLabel: string | null;
   shortcutRevealVisible: boolean;
@@ -44,6 +43,7 @@ export function TerminalHeaderIcon({
   unread,
   isRuntimeReady,
   isDragging,
+  tabIndexFloor = false,
   shouldSuppressClick,
   shortcutLabel,
   shortcutRevealVisible,
@@ -140,20 +140,20 @@ export function TerminalHeaderIcon({
   }
 
   const trigger = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      aria-label={displayTitle}
-      role="tab"
-      aria-selected={isActive}
-      aria-controls={`tabpanel-editor-panel-group-terminal-${terminal.id}`}
-      tabIndex={isActive ? 0 : -1}
+    <PanelHeaderEntry
+      label={displayTitle}
+      icon={<AppShellTerminalIcon className="icon-control" />}
+      active={isActive}
+      dirty={unread}
+      tabIndexFloor={tabIndexFloor}
+      controls={`tabpanel-editor-panel-group-terminal-${terminal.id}`}
+      trailing={shortcutRevealVisible && shortcutLabel ? (
+        <ShortcutBadge label={shortcutLabel} className="right-panel-shortcut-badge" />
+      ) : null}
       data-reorderable="true"
       aria-grabbed={isDragging}
-      data-active={isActive ? true : undefined}
       data-dragging={isDragging ? true : undefined}
-      onClick={() => {
+      onSelect={() => {
         if (shouldSuppressClick()) {
           return;
         }
@@ -161,29 +161,7 @@ export function TerminalHeaderIcon({
       }}
       onDoubleClick={() => setIsEditingHeaderTitle(true)}
       onContextMenuCapture={onContextMenuCapture}
-      className={HEADER_TERMINAL_TAB_CLASS}
-    >
-      <span
-        className="ui-tab-system-tab__content"
-        data-shortcut-reveal={shortcutRevealVisible ? true : undefined}
-      >
-        <AppShellTerminalIcon className="ui-tab-system-tab__icon" />
-        <span className="ui-tab-system-tab__label">
-          <span className="ui-tab-system-tab__label-primary">{displayTitle}</span>
-        </span>
-        <span
-          className="ui-tab-system-tab__dirty-indicator"
-          data-dirty={unread ? true : undefined}
-          aria-hidden="true"
-        />
-        {shortcutRevealVisible && shortcutLabel ? (
-          <ShortcutBadge
-            label={shortcutLabel}
-            className="right-panel-shortcut-badge"
-          />
-        ) : null}
-      </span>
-    </Button>
+    />
   );
 
   return (
@@ -218,24 +196,23 @@ export function TerminalHeaderIcon({
           </div>
         )}
       </PopoverButton>
-      <div
-        className="ui-tab-system-tab__close-container"
+      {/* Close affordance composed at the call site, not via PanelHeaderEntry's
+          own onClose: the header strip's drag/reorder system starts a pointer
+          session on ANY pointerdown inside the drop zone unless the target is
+          under a `data-right-panel-tab-no-drag` element (see
+          use-right-panel-header-drag.ts). PanelHeaderEntry doesn't expose a
+          passthrough for its internal close button, so widening it for this
+          one caller would be a second library edit beyond the sanctioned
+          roving-tabIndex fix — flagged in the PR body instead. */}
+      <RowActionIconButton
+        label={`Close ${displayTitle}`}
+        disabled={!isRuntimeReady}
         data-right-panel-tab-no-drag="true"
+        className="size-icon-button-sm rounded-full"
+        onClick={onClose}
       >
-        <IconButton
-          size="xs"
-          tone="sidebar"
-          aria-label={`Close ${displayTitle}`}
-          disabled={!isRuntimeReady}
-          className="ui-icon-button ui-tab-system-tab__close"
-          onClick={(event) => {
-            event.stopPropagation();
-            onClose();
-          }}
-        >
-          <AppShellTabCloseIcon className="ui-icon" />
-        </IconButton>
-      </div>
+        <AppShellTabCloseIcon />
+      </RowActionIconButton>
     </div>
   );
 }
