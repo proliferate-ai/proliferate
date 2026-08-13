@@ -100,15 +100,18 @@ export interface LocalRefCandidate {
  * references. Items that today's upload pipeline accepts (images, small text
  * files) keep uploading their bytes — that stays cloud-safe and shows the
  * model the actual image — while folders and everything else attach as local
- * references the co-located agent opens by path.
+ * references the co-located agent opens by path. Generic because this domain
+ * layer compiles without DOM libs; callers pass browser `File` objects.
  */
-export function partitionDroppedPathCandidates(
+export function partitionDroppedPathCandidates<
+  TFile extends PromptAttachmentFileCandidate & { size: number },
+>(
   candidates: readonly DroppedPathCandidate[],
-  files: readonly File[],
+  files: readonly TFile[],
   capabilities: PromptUploadCapabilities,
-): { uploadFiles: File[]; localRefs: LocalRefCandidate[] } {
+): { uploadFiles: TFile[]; localRefs: LocalRefCandidate[] } {
   const remaining = [...files];
-  const uploadFiles: File[] = [];
+  const uploadFiles: TFile[] = [];
   const localRefs: LocalRefCandidate[] = [];
   for (const candidate of candidates) {
     if (candidate.isDirectory) {
