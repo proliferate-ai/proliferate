@@ -11,7 +11,7 @@
  */
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -72,7 +72,14 @@ function componentsSection(entries) {
     if (!byGroup.has(entry.group)) byGroup.set(entry.group, []);
     byGroup.get(entry.group).push(entry.displayName);
   }
-  const groupOrder = ["primitives", "patterns", "icons", "product-patterns", "composer", "toast", "sidebar", "settings"];
+  const groupOrder = [
+    "primitives", "patterns", "icons", "product-patterns",
+    "composer", "toast", "sidebar", "settings", "tabs", "panel",
+  ];
+  const unknown = [...byGroup.keys()].filter((g) => !groupOrder.includes(g));
+  if (unknown.length > 0) {
+    throw new Error(`make-meta: README component section has no slot for group(s): ${unknown.join(", ")}`);
+  }
   const lines = [];
   for (const group of groupOrder) {
     const names = byGroup.get(group);
@@ -103,6 +110,11 @@ async function buildReadme(entries) {
     .replaceAll("__DS_SHADOW_COUNT__", String(facts.shadow))
     .replaceAll("__DS_COMPONENTS_SECTION__", componentsSection(entries));
   return readme;
+}
+
+async function buildGuidelines() {
+  const template = await readFile(path.join(TEMPLATES_DIR, "guidelines.md.tmpl"), "utf8");
+  return template.replaceAll("__DS_GIT_SHA__", gitShortSha());
 }
 
 async function computeSourceHashes(entries) {
@@ -174,6 +186,16 @@ async function main() {
   const readme = await buildReadme(entries);
   await writeFile(path.join(OUT_DIR, "README.md"), readme, "utf8");
 
+  // The design agent's working agreement (closed vocabulary, deviation
+  // declarations, handoff-manifest format). Covered by scriptsSha via its
+  // template, so auxSha's recipe stays untouched (keyRecipe stability).
+  await mkdir(path.join(OUT_DIR, "guidelines"), { recursive: true });
+  await writeFile(
+    path.join(OUT_DIR, "guidelines", "working-agreement.md"),
+    await buildGuidelines(),
+    "utf8",
+  );
+
   const bundleCssBuf = await tryRead(path.join(OUT_DIR, "_ds_bundle.css"));
   if (bundleCssBuf === null) warnMissing("_ds_bundle.css", path.join(OUT_DIR, "_ds_bundle.css"));
   const styleSha = bundleCssBuf === null ? null : sha256Hex(bundleCssBuf);
@@ -225,7 +247,7 @@ async function main() {
 
   console.log(`make-meta: wrote _ds_sync.json (${Object.keys(renderHashes).length}/${entries.length} renderHashes, ${Object.keys(sourceKeys).length}/${entries.length} sourceKeys, ${Object.keys(sourceHashes).length} sourceHashes)`);
   console.log(`make-meta: styleSha=${styleSha ? "ok" : "MISSING"} bundleSha12=${bundleSha12 ? "ok" : "MISSING"} auxSha=${auxSha}`);
-  console.log("make-meta: wrote .ds-build-meta.json, _ds_needs_recompile, README.md");
+  console.log("make-meta: wrote .ds-build-meta.json, _ds_needs_recompile, README.md, guidelines/working-agreement.md");
 }
 
 main().catch((err) => {
