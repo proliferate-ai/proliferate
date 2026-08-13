@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { StatusDot } from "#product/primitives/StatusDot";
 import { CircleAlert } from "#product/primitives/icons/status";
 import { Clock } from "#product/primitives/icons/core";
 import { MessageSquare } from "#product/primitives/icons/product";
@@ -55,37 +56,51 @@ export function renderChatTabIcon(
   );
 }
 
+// Position (`absolute -right-0.5 -top-0.5`) and the `ring-1 ring-background`
+// halo stay inline at the call site: StatusDot's variant budget is tone x
+// fill only (DESIGN_SYSTEM.md), and layout/position was never a StatusDot
+// axis to begin with.
+const DELEGATED_AGENT_DOT_POSITION_CLASS = "absolute -right-0.5 -top-0.5 ring-1 ring-background";
+
 function renderDelegatedAgentIcon(agent: DelegatedWorkTabIdentity): ReactNode {
-  const badgeClassName = delegatedAgentStatusDotClassName(agent.statusCategory);
+  const dot = delegatedAgentStatusDot(agent.statusCategory);
   return (
     <span
       className={`relative flex size-4 shrink-0 items-center justify-center ${agent.identity.textColorClassName}`}
       title={agent.hoverTitle}
     >
       <DelegatedAgentIdenticon identity={agent.identity} className="size-3.5" />
-      {badgeClassName && (
-        <span
-          aria-hidden="true"
-          className={`absolute -right-0.5 -top-0.5 size-1.5 rounded-full ring-1 ring-background ${badgeClassName}`}
-        />
-      )}
+      {dot}
     </span>
   );
 }
 
-function delegatedAgentStatusDotClassName(
+function delegatedAgentStatusDot(
   category: DelegatedWorkTabIdentity["statusCategory"],
-): string | null {
+): ReactNode | null {
   switch (category) {
     case "needs_attention":
-      return "bg-warning-foreground";
+      return <StatusDot tone="warning" className={DELEGATED_AGENT_DOT_POSITION_CLASS} />;
     case "failed":
-      return "bg-destructive";
+      return <StatusDot tone="danger" className={DELEGATED_AGENT_DOT_POSITION_CLASS} />;
     case "running":
-      return "animate-pulse bg-current";
+      // StatusDot's two axes are tone x fill; there is no pulsing,
+      // currentColor-inheriting tone. Kept as the one hand-rolled site per
+      // the wave-2 ruling (DESIGN_SYSTEM.md's UI-conformance review, shell
+      // slice) rather than widening StatusDot's variant budget for a single
+      // caller. Sized with `icon-status` — the same semantic sizing utility
+      // StatusDot uses internally — so this dot stays the same size as its
+      // three siblings above, which already moved off a fixed size-* utility
+      // when they adopted StatusDot.
+      return (
+        <span
+          aria-hidden="true"
+          className="absolute -right-0.5 -top-0.5 icon-status animate-pulse rounded-full bg-current ring-1 ring-background"
+        />
+      );
     case "queued":
     case "wake_scheduled":
-      return "bg-muted-foreground";
+      return <StatusDot tone="muted" className={DELEGATED_AGENT_DOT_POSITION_CLASS} />;
     case "finished":
     case "closed":
       return null;
