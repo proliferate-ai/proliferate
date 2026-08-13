@@ -42,11 +42,12 @@ import {
   normalizeSessionLiveConfigSnapshot,
 } from "../types/sessions.js";
 import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
-import {
-  listSupportEventWindow,
-  listSupportRawNotificationWindow,
-  listSupportSessionWindow,
-} from "./support-windows.js";
+
+// Loaded on demand, not statically: the support-window validators are ~1.1k
+// lines that only a support-report flow ever reaches, and `SessionsClient` sits
+// in every bundle's entry chunk. A static import puts them on the /login
+// first-load path and blows the runtime budget gate.
+const supportWindows = () => import("./support-windows.js");
 
 export class SessionsClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
@@ -81,6 +82,7 @@ export class SessionsClient {
     workspaceId: string,
     options: ListSupportSessionWindowOptions,
   ): Promise<AnyHarnessSessionSupportWindowV1> {
+    const { listSupportSessionWindow } = await supportWindows();
     return listSupportSessionWindow(this.transport, workspaceId, options);
   }
 
@@ -444,6 +446,7 @@ export class SessionsClient {
     sessionId: string,
     options: ListSupportEvidenceWindowOptions,
   ): Promise<AnyHarnessEventSupportWindowV1> {
+    const { listSupportEventWindow } = await supportWindows();
     return listSupportEventWindow(this.transport, sessionId, options);
   }
 
@@ -465,6 +468,7 @@ export class SessionsClient {
     sessionId: string,
     options: ListSupportEvidenceWindowOptions,
   ): Promise<AnyHarnessRawNotificationSupportWindowV1> {
+    const { listSupportRawNotificationWindow } = await supportWindows();
     return listSupportRawNotificationWindow(this.transport, sessionId, options);
   }
 
