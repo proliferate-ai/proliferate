@@ -161,11 +161,13 @@ export function SidebarWorkspaceContent({
       isShownMore,
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
     });
-    const toggleLabel: "Show more" | "Show less" | null = !overLimit
-      ? null
-      : isShownMore
+    const hiddenItemCount = group.items.length - visibleItems.length;
+    const toggleLabel: "Show less" | `Show ${number} more` | null =
+      overLimit && isShownMore
         ? "Show less"
-        : "Show more";
+        : hiddenItemCount > 0
+          ? `Show ${hiddenItemCount} more`
+          : null;
     const cloudRepoTarget = group.cloudRepoTarget;
     const hasArchivedHiddenItems =
       group.items.length === 0 && group.allLogicalWorkspaceIds.length > 0;

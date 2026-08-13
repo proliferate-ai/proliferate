@@ -79,6 +79,7 @@ export const ChromeTab = forwardRef<HTMLDivElement, ChromeTabProps>(
         data-active={isActive ? true : undefined}
         data-multi-selected={isMultiSelected ? true : undefined}
         data-has-status={showStatus ? true : undefined}
+        data-has-shortcut={showShortcut ? true : undefined}
         className={`workspace-shell-tab group/tab relative h-full min-w-0 shrink-0 app-region-no-drag select-none ${className}`}
         style={{
           width,
@@ -118,19 +119,20 @@ export const ChromeTab = forwardRef<HTMLDivElement, ChromeTabProps>(
             {showStatus ? (
               <span
                 className={`workspace-shell-tab__status flex items-center justify-center group-hover/tab:opacity-0 group-focus-within/tab:opacity-0 ${
-                  shortcutRevealVisible ? "opacity-0" : ""
+                  showShortcut ? "opacity-0" : ""
                 }`}
               >
                 {badge}
               </span>
             ) : null}
+            {showShortcut && shortcutLabel ? (
+              <ShortcutBadge
+                aria-hidden="true"
+                label={shortcutLabel}
+                className="workspace-shell-tab__shortcut pointer-events-none shrink-0 text-muted-foreground group-hover/tab:invisible group-focus-within/tab:invisible"
+              />
+            ) : null}
           </Button>
-          {showShortcut && shortcutLabel ? (
-            <ShortcutBadge
-              label={shortcutLabel}
-              className="workspace-shell-tab__shortcut pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground"
-            />
-          ) : null}
           {canClose && (
             <Button
               type="button"
