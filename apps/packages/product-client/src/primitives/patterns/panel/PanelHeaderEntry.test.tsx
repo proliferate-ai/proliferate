@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PanelHeaderEntry } from "#product/primitives/patterns/panel/PanelHeaderEntry";
 
@@ -67,5 +68,32 @@ describe("PanelHeaderEntry", () => {
     const close = screen.getByRole("button", { name: "Close zsh" }) as HTMLButtonElement;
     expect(entry.disabled).toBe(false);
     expect(close.disabled).toBe(true);
+  });
+
+  it("keeps a roving-tabIndex floor so an all-inactive strip stays keyboard-reachable", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <PanelHeaderEntry label="Scratch" onSelect={vi.fn()} tabIndexFloor />
+        <PanelHeaderEntry label="Changes" onSelect={vi.fn()} />
+      </>,
+    );
+
+    const scratch = screen.getByRole("tab", { name: "Scratch" });
+    const changes = screen.getByRole("tab", { name: "Changes" });
+    expect(scratch.getAttribute("tabindex")).toBe("0");
+    expect(changes.getAttribute("tabindex")).toBe("-1");
+
+    await user.tab();
+    expect(document.activeElement).toBe(scratch);
+  });
+
+  it("does not grant the floor to a disabled entry", () => {
+    render(
+      <PanelHeaderEntry label="Scratch" onSelect={vi.fn()} disabled tabIndexFloor />,
+    );
+
+    const entry = screen.getByRole("tab", { name: "Scratch" });
+    expect(entry.getAttribute("tabindex")).toBe("-1");
   });
 });
