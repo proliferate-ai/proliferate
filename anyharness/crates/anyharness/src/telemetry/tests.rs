@@ -5,7 +5,8 @@ use sentry::protocol::{Breadcrumb, Context as SentryContext, SpanId, TraceId, Us
 use super::{
     default_release, log_path_for_command, runtime_home_from_install, runtime_home_from_serve,
     scrub, sentry_event_filter, sentry_event_filter_for_target, sentry_event_mapper,
-    sentry_scope_tags, sentry_user_from_id, stamped_git_sha, RUNTIME_INCIDENT_FINGERPRINT,
+    sentry_scope_tags, sentry_user_from_id, stamped_git_sha, suppresses_legacy_file_sink,
+    BundledActivation, RUNTIME_INCIDENT_FINGERPRINT,
 };
 use crate::{
     cli::Commands,
@@ -386,6 +387,28 @@ fn install_runtime_home_uses_override_when_present() {
         runtime_home_from_install(&args).to_string_lossy(),
         "/tmp/anyharness-install"
     );
+}
+
+#[test]
+fn a_bundled_run_keeps_its_legacy_log_until_the_producer_actually_installs() {
+    assert!(suppresses_legacy_file_sink(BundledActivation::Ready, true));
+    // A collector-ready bootstrap whose producer failed to install has no
+    // diagnostics layer, so taking `anyharness.log` away would leave the run
+    // with nothing at all.
+    assert!(!suppresses_legacy_file_sink(
+        BundledActivation::Ready,
+        false
+    ));
+    // A degraded bootstrap suppresses either way: the Desktop bridge still
+    // owns diagnostics authority for the run.
+    assert!(suppresses_legacy_file_sink(
+        BundledActivation::Degraded,
+        true
+    ));
+    assert!(suppresses_legacy_file_sink(
+        BundledActivation::Degraded,
+        false
+    ));
 }
 
 #[test]

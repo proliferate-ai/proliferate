@@ -12,6 +12,7 @@ use proliferate_diagnostics_protocol::v1::types::{
 use serde_json::Value;
 use tempfile::TempDir;
 
+use super::unix::{WriteInjection, MAX_CONSECUTIVE_WRITE_FAILURES};
 use super::wire::FallbackRecordV1;
 use super::{
     FallbackError, FallbackReason, FallbackWriter, FALLBACK_SEGMENT_BYTES, FALLBACK_TOTAL_BYTES,
@@ -54,6 +55,49 @@ fn with_rotation_hook<T>(
     });
     let _reset = RotationHookReset;
     run()
+}
+
+type WriteHook = Box<dyn FnMut() -> Option<WriteInjection>>;
+
+std::thread_local! {
+    static WRITE_HOOK: RefCell<Option<WriteHook>> = RefCell::new(None);
+}
+
+pub(super) fn run_write_hook() -> Option<WriteInjection> {
+    WRITE_HOOK.with(|slot| slot.borrow_mut().as_mut().and_then(|hook| hook()))
+}
+
+struct WriteHookReset;
+
+impl Drop for WriteHookReset {
+    fn drop(&mut self) {
+        WRITE_HOOK.with(|slot| {
+            slot.borrow_mut().take();
+        });
+    }
+}
+
+fn with_write_hook<T>(
+    hook: impl FnMut() -> Option<WriteInjection> + 'static,
+    run: impl FnOnce() -> T,
+) -> T {
+    WRITE_HOOK.with(|slot| {
+        assert!(slot.borrow_mut().replace(Box::new(hook)).is_none());
+    });
+    let _reset = WriteHookReset;
+    run()
+}
+
+/// Fails the next `count` writes with `errno`, then lets the kernel through.
+fn fail_next_writes(count: usize, errno: i32) -> impl FnMut() -> Option<WriteInjection> {
+    let mut remaining = count;
+    move || {
+        if remaining == 0 {
+            return None;
+        }
+        remaining -= 1;
+        Some(WriteInjection::Errno(errno))
+    }
 }
 
 #[test]
@@ -317,6 +361,135 @@ fn active_path_swap_is_refused_before_append_and_disables_writer() {
     );
     assert_eq!(
         writer.write(FallbackReason::DeliveryUnknown, &record),
+        Err(FallbackError::WriteFailed)
+    );
+}
+
+#[test]
+fn an_interrupted_write_is_retried_within_the_budget_and_costs_no_record() {
+    let directory = safe_directory();
+    let mut writer = writer(&directory, DiagnosticsComponent::AnyHarness).expect("writer");
+    let record = record(DiagnosticsComponent::AnyHarness);
+
+    let line_bytes = with_write_hook(fail_next_writes(1, libc::EINTR), || {
+        writer.write(FallbackReason::CollectorUnavailable, &record)
+    })
+    .expect("an interrupted write is retried, not lost");
+
+    assert!(writer.current_status().active);
+    assert_eq!(writer.bytes(), line_bytes);
+    let active = directory.path().join(ANYHARNESS_ACTIVE);
+    assert_eq!(
+        decode_segment(&active, DiagnosticsComponent::AnyHarness).len(),
+        1
+    );
+
+    writer
+        .write(FallbackReason::FinalTeardown, &record)
+        .expect("writer survives the interruption");
+    assert_eq!(
+        decode_segment(&active, DiagnosticsComponent::AnyHarness).len(),
+        2
+    );
+}
+
+#[test]
+fn a_transient_write_failure_drops_one_record_without_retiring_the_writer() {
+    let directory = safe_directory();
+    let mut writer = writer(&directory, DiagnosticsComponent::AnyHarness).expect("writer");
+    let record = record(DiagnosticsComponent::AnyHarness);
+
+    // ENOSPC during a collector outage, and an exhausted interrupt budget, are
+    // outages rather than integrity failures: the record is gone, the sink is
+    // not.
+    for errno in [libc::ENOSPC, libc::EINTR] {
+        let attempts = usize::try_from(MAX_CONSECUTIVE_WRITE_FAILURES).expect("budget fits");
+        assert_eq!(
+            with_write_hook(fail_next_writes(attempts, errno), || {
+                writer.write(FallbackReason::CollectorUnavailable, &record)
+            }),
+            Err(FallbackError::WriteFailed)
+        );
+        assert!(writer.current_status().active);
+        assert_eq!(writer.bytes(), 0);
+    }
+
+    writer
+        .write(FallbackReason::CollectorUnavailable, &record)
+        .expect("writer survives a transient filesystem failure");
+    assert_eq!(
+        decode_segment(
+            &directory.path().join(ANYHARNESS_ACTIVE),
+            DiagnosticsComponent::AnyHarness,
+        )
+        .len(),
+        1
+    );
+}
+
+#[test]
+fn a_short_write_rolls_back_its_partial_line_and_keeps_the_writer() {
+    let directory = safe_directory();
+    let mut writer = writer(&directory, DiagnosticsComponent::AnyHarness).expect("writer");
+    let record = record(DiagnosticsComponent::AnyHarness);
+    let active = directory.path().join(ANYHARNESS_ACTIVE);
+
+    let result = with_write_hook(
+        {
+            let mut short = Some(WriteInjection::Short(4));
+            move || short.take()
+        },
+        || writer.write(FallbackReason::CollectorUnavailable, &record),
+    );
+
+    assert_eq!(result, Err(FallbackError::WriteFailed));
+    assert!(writer.current_status().active);
+    assert_eq!(writer.bytes(), 0);
+    assert_eq!(fs::metadata(&active).expect("active metadata").len(), 0);
+
+    writer
+        .write(FallbackReason::CollectorUnavailable, &record)
+        .expect("writer survives a short write");
+    assert_eq!(
+        decode_segment(&active, DiagnosticsComponent::AnyHarness).len(),
+        1
+    );
+}
+
+#[test]
+fn an_unbroken_run_of_write_failures_retires_the_writer_and_a_success_resets_it() {
+    let directory = safe_directory();
+    let mut writer = writer(&directory, DiagnosticsComponent::AnyHarness).expect("writer");
+    let record = record(DiagnosticsComponent::AnyHarness);
+
+    // One short of the cap, then a success, must leave no accumulated debt.
+    for _ in 1..MAX_CONSECUTIVE_WRITE_FAILURES {
+        assert_eq!(
+            with_write_hook(fail_next_writes(usize::MAX, libc::ENOSPC), || {
+                writer.write(FallbackReason::CollectorUnavailable, &record)
+            }),
+            Err(FallbackError::WriteFailed)
+        );
+        assert!(writer.current_status().active);
+    }
+    writer
+        .write(FallbackReason::CollectorUnavailable, &record)
+        .expect("write between failure runs");
+
+    for attempt in 1..=MAX_CONSECUTIVE_WRITE_FAILURES {
+        assert_eq!(
+            with_write_hook(fail_next_writes(usize::MAX, libc::ENOSPC), || {
+                writer.write(FallbackReason::CollectorUnavailable, &record)
+            }),
+            Err(FallbackError::WriteFailed)
+        );
+        assert_eq!(
+            writer.current_status().active,
+            attempt < MAX_CONSECUTIVE_WRITE_FAILURES
+        );
+    }
+    assert_eq!(
+        writer.write(FallbackReason::CollectorUnavailable, &record),
         Err(FallbackError::WriteFailed)
     );
 }

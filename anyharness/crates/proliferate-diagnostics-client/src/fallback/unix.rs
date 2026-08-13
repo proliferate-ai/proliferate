@@ -26,6 +26,14 @@ const WORKER_SEGMENTS: [&str; 4] = [
     "desktop-worker.jsonl.3",
 ];
 
+/// Bounded retries for one `write(2)` the kernel interrupted before it reached
+/// the file. `EINTR` is routine, costs no bytes, and is the caller's to retry.
+const WRITE_INTERRUPT_RETRIES: u32 = 8;
+/// Consecutive transient I/O failures tolerated before the writer retires.
+/// A filesystem that never recovers is indistinguishable from a dead one, and
+/// the producer must not spend a blocking task per record on it forever.
+pub(super) const MAX_CONSECUTIVE_WRITE_FAILURES: u32 = 16;
+
 #[derive(Clone, Copy)]
 struct FamilyNames {
     lock: &'static str,
@@ -60,6 +68,22 @@ pub(super) struct PlatformFallbackWriter {
     active_bytes: u32,
     retained_bytes: u32,
     active: bool,
+    consecutive_write_failures: u32,
+}
+
+/// Outcome of one raw `write(2)`: the bytes it placed, or the errno it set.
+enum WriteAttempt {
+    Wrote(usize),
+    Failed(i32),
+}
+
+/// Test-only substitute for one `write(2)`: the errno the kernel would have
+/// set, or a short write that places only `bytes` of the line.
+#[cfg(test)]
+#[derive(Clone, Copy)]
+pub(super) enum WriteInjection {
+    Errno(i32),
+    Short(usize),
 }
 
 impl PlatformFallbackWriter {
@@ -102,6 +126,7 @@ impl PlatformFallbackWriter {
             active_bytes: active.stat.bytes,
             retained_bytes,
             active: true,
+            consecutive_write_failures: 0,
         })
     }
 
@@ -124,13 +149,24 @@ impl PlatformFallbackWriter {
         }
 
         let result = self.write_line(line, line_bytes);
-        if matches!(
-            result,
-            Err(FallbackError::UnsafeDirectory
-                | FallbackError::UnsafeEntry
-                | FallbackError::WriteFailed)
-        ) {
-            self.active = false;
+        match result {
+            // An unsafe directory or entry means this writer no longer owns
+            // what it validated at construction. That is an integrity failure,
+            // not an outage, and it retires the writer for the process.
+            Err(FallbackError::UnsafeDirectory | FallbackError::UnsafeEntry) => {
+                self.active = false;
+            }
+            // Transient I/O costs the record and nothing else. A full disk, a
+            // filesystem without an atomic exchange, or an interruption the
+            // retry budget could not absorb must not permanently retire the
+            // last-resort sink, so only an unbroken run of them does.
+            Err(_) => {
+                self.consecutive_write_failures = self.consecutive_write_failures.saturating_add(1);
+                if self.consecutive_write_failures >= MAX_CONSECUTIVE_WRITE_FAILURES {
+                    self.active = false;
+                }
+            }
+            Ok(()) => self.consecutive_write_failures = 0,
         }
         result.map(|_| line_bytes)
     }
@@ -159,17 +195,8 @@ impl PlatformFallbackWriter {
         }
 
         let starting_bytes = self.active_bytes;
-        let written = unsafe {
-            libc::write(
-                self.active_file.as_raw_fd(),
-                line.as_ptr().cast(),
-                line.len(),
-            )
-        };
-        if written < 0 {
-            return Err(FallbackError::WriteFailed);
-        }
-        let written = usize::try_from(written).map_err(|_| FallbackError::WriteFailed)?;
+        let written = write_retrying_interrupts(&self.active_file, line)
+            .map_err(|_| FallbackError::WriteFailed)?;
         if written != line.len() {
             self.rollback_partial(starting_bytes, written as u32)?;
             return Err(FallbackError::WriteFailed);
@@ -511,6 +538,48 @@ fn before_rotation_mutation(source: &'static str, destination: &'static str) {
     super::tests::run_rotation_hook(source, destination);
     #[cfg(not(test))]
     let _ = (source, destination);
+}
+
+/// Appends `line`, absorbing the interruptions the kernel expects callers to
+/// absorb, and reporting the errno of anything it could not. An `EINTR` write
+/// placed no bytes, so retrying it is exact rather than a partial-append risk.
+fn write_retrying_interrupts(file: &File, line: &[u8]) -> Result<usize, i32> {
+    let mut attempts = 0_u32;
+    loop {
+        match raw_write(file.as_raw_fd(), line) {
+            WriteAttempt::Wrote(written) => return Ok(written),
+            WriteAttempt::Failed(errno) => {
+                attempts = attempts.saturating_add(1);
+                if errno != libc::EINTR || attempts >= WRITE_INTERRUPT_RETRIES {
+                    return Err(errno);
+                }
+            }
+        }
+    }
+}
+
+fn raw_write(fd: RawFd, line: &[u8]) -> WriteAttempt {
+    #[cfg(test)]
+    {
+        match super::tests::run_write_hook() {
+            Some(WriteInjection::Errno(errno)) => return WriteAttempt::Failed(errno),
+            // A short write has to place real bytes so the caller's partial
+            // rollback runs against the file the kernel would have left.
+            Some(WriteInjection::Short(bytes)) => {
+                return raw_write_uninjected(fd, &line[..bytes.min(line.len())])
+            }
+            None => {}
+        }
+    }
+    raw_write_uninjected(fd, line)
+}
+
+fn raw_write_uninjected(fd: RawFd, line: &[u8]) -> WriteAttempt {
+    let written = unsafe { libc::write(fd, line.as_ptr().cast(), line.len()) };
+    match usize::try_from(written) {
+        Ok(written) => WriteAttempt::Wrote(written),
+        Err(_) => WriteAttempt::Failed(last_errno()),
+    }
 }
 
 fn raw_fstat(fd: RawFd) -> io::Result<libc::stat> {

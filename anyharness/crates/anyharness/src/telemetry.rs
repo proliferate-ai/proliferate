@@ -197,6 +197,30 @@ fn log_path_for_command(command: &Commands) -> Option<PathBuf> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BundledActivation {
+    Ready,
+    Degraded,
+}
+
+/// Pure: whether a bundled `serve` run suppresses the legacy `anyharness.log`
+/// sink.
+///
+/// A degraded bootstrap suppresses unconditionally: the Desktop bridge still
+/// owns this run's diagnostics authority, and the producer refuses to install
+/// at all unless it holds a validated fallback family. A collector-ready
+/// bootstrap suppresses only once its producer is actually installed, because
+/// installation can still fail on the bridge runtime or the record factory.
+/// Suppressing there would leave a packaged run with no diagnostics whatsoever:
+/// no diagnostics layer, no `anyharness.log`, and an inherited stdio the
+/// console layer is discarded into.
+fn suppresses_legacy_file_sink(activation: BundledActivation, installed: bool) -> bool {
+    match activation {
+        BundledActivation::Ready => installed,
+        BundledActivation::Degraded => true,
+    }
+}
+
 pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> TelemetryGuards {
     let dsn = std::env::var("ANYHARNESS_SENTRY_DSN")
         .ok()
@@ -228,14 +252,25 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
     let (bundled, installation) = if serve_mode {
         match activation {
             DesktopDiagnosticsActivation::Disabled => (false, None),
-            DesktopDiagnosticsActivation::Bundled(bootstrap) => (
-                true,
-                install_local(BundledDesktopDiagnosticsBootstrap::Ready(bootstrap)),
-            ),
-            DesktopDiagnosticsActivation::BundledDegraded(bootstrap) => (
-                true,
-                install_local(BundledDesktopDiagnosticsBootstrap::Degraded(bootstrap)),
-            ),
+            DesktopDiagnosticsActivation::Bundled(bootstrap) => {
+                let installation =
+                    install_local(BundledDesktopDiagnosticsBootstrap::Ready(bootstrap));
+                (
+                    suppresses_legacy_file_sink(BundledActivation::Ready, installation.is_some()),
+                    installation,
+                )
+            }
+            DesktopDiagnosticsActivation::BundledDegraded(bootstrap) => {
+                let installation =
+                    install_local(BundledDesktopDiagnosticsBootstrap::Degraded(bootstrap));
+                (
+                    suppresses_legacy_file_sink(
+                        BundledActivation::Degraded,
+                        installation.is_some(),
+                    ),
+                    installation,
+                )
+            }
         }
     } else {
         (false, None)
