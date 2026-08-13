@@ -438,7 +438,8 @@ On `main` today, these are the only differences from the target state above:
 - [ ] The upload workflow creates the server report before collecting schema-2
       diagnostics and recollects on every retry; it does not verify and hold one
       immutable staged Blob through create, target, PUT, and complete
-      ([support-report-upload-workflows.ts](../../../../../apps/packages/product-client/src/lib/workflows/support/support-report-upload-workflows.ts),
+      ([support-report-upload-attempt.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/support-report-upload-attempt.ts),
+      [support-report-upload-artifact.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/support-report-upload-artifact.ts),
       [support-report-upload-payload.ts](../../../../../apps/packages/product-client/src/hooks/support/lifecycle/support-report-upload-payload.ts)).
 
 ## Code map
