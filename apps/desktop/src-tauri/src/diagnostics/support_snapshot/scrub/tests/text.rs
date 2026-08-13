@@ -206,7 +206,8 @@ fn generic_and_content_cutoffs_prescan_crossing_secrets_with_bounded_output() {
         let output = SupportExportScrubber::default()
             .scrub_text(input, SupportEvidenceSourceV1::Package, kind)
             .expect("bounded prescan");
-        let retained = output.value.expect("retained bounded text");
+        // Borrowed, not moved: the canary assertion below renders the whole output.
+        let retained = output.value.as_ref().expect("retained bounded text");
         assert!(retained.len() <= limit);
         assert!(!retained.contains(canary));
         assert!(!format!("{output:?}").contains(canary));

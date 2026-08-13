@@ -251,7 +251,7 @@ pub(super) fn verify_open(
     }
     let mut file = File::from(descriptor);
     let mut bytes = Vec::with_capacity(size as usize);
-    file.by_ref()
+    Read::by_ref(&mut file)
         .take(size.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|_| ArtifactStoreError::Io)?;

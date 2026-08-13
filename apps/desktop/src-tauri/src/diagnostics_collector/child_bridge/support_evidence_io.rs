@@ -11,7 +11,9 @@ use proliferate_diagnostics_protocol::v1::{
     validation::parse_producer_record_value,
 };
 
-use super::{EvidenceParser, EvidenceValue};
+// This file is included as a child of `support_evidence_unix.rs`, so `super` is
+// the platform module rather than `support_evidence` where these enums live.
+use crate::diagnostics_collector::child_bridge::support_evidence::{EvidenceParser, EvidenceValue};
 
 const OPEN_FILE_FLAGS: libc::c_int = libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC;
 

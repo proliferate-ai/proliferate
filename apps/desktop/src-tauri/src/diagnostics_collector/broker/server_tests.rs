@@ -1,4 +1,6 @@
 use super::*;
+// The server itself never leases an export, so this cap is not in its imports.
+use crate::diagnostics_collector::broker::protocol::MAX_BROKER_EXPORTS;
 use crate::diagnostics_collector::test_binary::built_collector_binary;
 use proliferate_diagnostics_protocol::v1::types::{
     ExportPurposeV1, ExportRequestV1, ExportStreamFrameV1, RecordsFilterV1, RecordsQueryV1,

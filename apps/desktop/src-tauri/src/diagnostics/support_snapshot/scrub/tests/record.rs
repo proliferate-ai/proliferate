@@ -69,7 +69,8 @@ fn accepted_record_keeps_identity_privacy_environment_and_customer_detail() {
     let result = SupportExportScrubber::default()
         .scrub_accepted_record(record, SupportEvidenceSourceV1::Collector)
         .expect("scrub accepted record");
-    let output = result.value.expect("accepted record retained");
+    // Borrowed, not moved: the canary assertion below renders the whole result.
+    let output = result.value.as_ref().expect("accepted record retained");
 
     assert_eq!(output.accepted_timestamp, original.accepted_timestamp);
     assert_eq!(output.accepted_order, original.accepted_order);

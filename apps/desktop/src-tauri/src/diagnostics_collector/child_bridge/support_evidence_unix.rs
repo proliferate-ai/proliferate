@@ -43,11 +43,11 @@ struct SourceSpec<'a> {
     family_remaining: &'a mut u64,
 }
 
-pub(super) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvidenceCapture {
+pub(crate) fn collect_finite_evidence(roots: &FiniteEvidenceRoots) -> FiniteEvidenceCapture {
     collect_finite_evidence_with(roots, &mut SystemEvidenceReadHook)
 }
 
-pub(super) fn collect_finite_evidence_guarded(
+pub(crate) fn collect_finite_evidence_guarded(
     roots: &FiniteEvidenceRoots,
     guard: &EvidenceCaptureGuard,
 ) -> Result<FiniteEvidenceCapture, EvidenceCaptureInterrupted> {

@@ -230,8 +230,11 @@ fn partial_reordered_and_post_end_streams_fail_closed() {
     post_end.push(manifest).unwrap();
     post_end.push(health).unwrap();
     post_end.push(end).unwrap();
+    // `health` names the moved frame here, so reach past it to the fixture fn.
     assert!(post_end
-        .push(ExportStreamFrameV1::Health { health: health() })
+        .push(ExportStreamFrameV1::Health {
+            health: self::health()
+        })
         .is_err());
 }
 
