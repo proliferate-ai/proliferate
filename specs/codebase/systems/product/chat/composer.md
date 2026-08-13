@@ -685,7 +685,7 @@ that is exactly the pattern this pill replaced.
 Control-row tone rule — the pills are **monochrome**:
 
 - Every control pill is a `ComposerControlButton`
-  ([ComposerControlButton.tsx](../../../../../apps/packages/product-client/src/primitives/patterns/ComposerControlButton.tsx)). It has no
+  ([ComposerControlButton.tsx](../../../../../apps/packages/product-client/src/primitives/patterns/composer/ComposerControlButton.tsx)). It has no
   `tone` prop; the tone system was deleted 2026-07-02 along with the plan-mode
   tint (`--color-plan-border` is gone). Do **not** reintroduce mode-based
   tinting on the mode pill or any other control.

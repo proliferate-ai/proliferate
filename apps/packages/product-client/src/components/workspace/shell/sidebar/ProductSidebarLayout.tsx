@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { ChevronRight } from "#product/primitives/icons/core";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
-import { SidebarRowSurface } from "#product/primitives/patterns/SidebarRowSurface";
+import { SidebarRowSurface } from "#product/primitives/patterns/sidebar/SidebarRowSurface";
 
 export function ProductSidebarFrame({
   children,

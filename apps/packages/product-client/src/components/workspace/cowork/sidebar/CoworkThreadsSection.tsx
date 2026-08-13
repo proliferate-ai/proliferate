@@ -10,7 +10,7 @@ import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creat
 import { SidebarStatusIndicatorView } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
+import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 import { CoworkThreadItem } from "#product/components/workspace/cowork/sidebar/CoworkThreadItem";
 import { ProductSidebarSectionHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
 import { ProductSidebarThreadRow } from "#product/components/workspace/shell/sidebar/ProductSidebarThreads";

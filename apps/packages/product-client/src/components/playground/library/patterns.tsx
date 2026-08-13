@@ -2,14 +2,14 @@ import { useState } from "react";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
 import { AuthProviderButton } from "#product/primitives/patterns/AuthProviderButton";
 import { CommandPaletteGroup, CommandPaletteInput, CommandPaletteItem, CommandPaletteList, CommandPaletteRoot } from "#product/primitives/patterns/CommandPalette";
-import { ComposerActionButton } from "#product/primitives/patterns/ComposerActionButton";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
-import { ComposerTextarea } from "#product/primitives/patterns/ComposerTextarea";
-import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
+import { ComposerActionButton } from "#product/primitives/patterns/composer/ComposerActionButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
+import { ComposerTextarea } from "#product/primitives/patterns/composer/ComposerTextarea";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/composer/ComposerTextareaFrame";
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { EnvironmentSearchSelect } from "#product/primitives/patterns/EnvironmentSearchSelect";
-import { LevelBarsButton } from "#product/primitives/patterns/LevelBarsButton";
+import { LevelBarsButton } from "#product/primitives/patterns/composer/LevelBarsButton";
 import { ListRow } from "#product/primitives/patterns/ListRow";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { PageContentFrame } from "#product/primitives/patterns/PageContentFrame";
@@ -18,9 +18,9 @@ import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMen
 import { PickerPopoverContent } from "#product/primitives/patterns/PickerPopoverContent";
 import { SettingsGroup } from "#product/primitives/patterns/SettingsGroup";
 import { SettingsMenu } from "#product/primitives/patterns/SettingsMenu";
-import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
-import { SidebarNavRow } from "#product/primitives/patterns/SidebarNavRow";
-import { SidebarRowSurface } from "#product/primitives/patterns/SidebarRowSurface";
+import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
+import { SidebarNavRow } from "#product/primitives/patterns/sidebar/SidebarNavRow";
+import { SidebarRowSurface } from "#product/primitives/patterns/sidebar/SidebarRowSurface";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { showToast } from "#product/primitives/utils/show-toast";
 import { Button } from "#product/primitives/Button";
@@ -257,16 +257,16 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
   ) },
   { name: "AutoHideScrollArea", subpath: "#product/primitives/patterns/AutoHideScrollArea", render: AutoHideScrollAreaDemo },
   { name: "CommandPalette", subpath: "#product/primitives/patterns/CommandPalette", render: CommandPaletteDemo },
-  { name: "ComposerActionButton", subpath: "#product/primitives/patterns/ComposerActionButton", render: () => (
+  { name: "ComposerActionButton", subpath: "#product/primitives/patterns/composer/ComposerActionButton", render: () => (
     <ComposerActionButton onClick={noop}><Home className="icon-paired" /></ComposerActionButton>
   ) },
-  { name: "ComposerControlButton", subpath: "#product/primitives/patterns/ComposerControlButton", render: () => (
+  { name: "ComposerControlButton", subpath: "#product/primitives/patterns/composer/ComposerControlButton", render: () => (
     <ComposerControlButton label="Auto" icon={<Home className="icon-paired" />} onClick={noop} />
   ) },
-  { name: "ComposerTextarea", subpath: "#product/primitives/patterns/ComposerTextarea", render: () => (
+  { name: "ComposerTextarea", subpath: "#product/primitives/patterns/composer/ComposerTextarea", render: () => (
     <ComposerTextarea placeholder="Message" defaultValue="" />
   ) },
-  { name: "ComposerTextareaFrame", subpath: "#product/primitives/patterns/ComposerTextareaFrame", render: () => (
+  { name: "ComposerTextareaFrame", subpath: "#product/primitives/patterns/composer/ComposerTextareaFrame", render: () => (
     <ComposerTextareaFrame topInset="standard">
       <ComposerTextarea placeholder="Message" defaultValue="" />
     </ComposerTextareaFrame>
@@ -276,7 +276,7 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
     <EmptyState title="No results" description="Nothing to show yet." />
   ) },
   { name: "EnvironmentSearchSelect", subpath: "#product/primitives/patterns/EnvironmentSearchSelect", render: EnvironmentSearchSelectDemo },
-  { name: "LevelBarsButton", subpath: "#product/primitives/patterns/LevelBarsButton", render: LevelBarsButtonDemo },
+  { name: "LevelBarsButton", subpath: "#product/primitives/patterns/composer/LevelBarsButton", render: LevelBarsButtonDemo },
   { name: "ListRow", subpath: "#product/primitives/patterns/ListRow", render: () => (
     <ListRow title="Row title" description="Row description" onClick={noop} />
   ) },
@@ -299,11 +299,11 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
   { name: "PickerPopoverContent", subpath: "#product/primitives/patterns/PickerPopoverContent", render: PickerPopoverContentDemo },
   { name: "SettingsGroup", subpath: "#product/primitives/patterns/SettingsGroup", render: SettingsGroupDemo },
   { name: "SettingsMenu", subpath: "#product/primitives/patterns/SettingsMenu", render: SettingsMenuDemo },
-  { name: "SidebarActionButton", subpath: "#product/primitives/patterns/SidebarActionButton", render: SidebarActionButtonDemo },
-  { name: "SidebarNavRow", subpath: "#product/primitives/patterns/SidebarNavRow", render: SidebarNavRowDemo },
-  { name: "SidebarRowSurface", subpath: "#product/primitives/patterns/SidebarRowSurface", render: SidebarRowSurfaceDemo },
+  { name: "SidebarActionButton", subpath: "#product/primitives/patterns/sidebar/SidebarActionButton", render: SidebarActionButtonDemo },
+  { name: "SidebarNavRow", subpath: "#product/primitives/patterns/sidebar/SidebarNavRow", render: SidebarNavRowDemo },
+  { name: "SidebarRowSurface", subpath: "#product/primitives/patterns/sidebar/SidebarRowSurface", render: SidebarRowSurfaceDemo },
   { name: "ThinkingText", subpath: "#product/primitives/patterns/ThinkingText", render: () => <ThinkingText /> },
-  { name: "ToastHost", subpath: "#product/primitives/patterns/ToastHost", render: ToastHostDemo },
+  { name: "ToastHost", subpath: "#product/primitives/patterns/toast/ToastHost", render: ToastHostDemo },
 ];
 
 export const PATTERNS_TIER: LibraryTier = {

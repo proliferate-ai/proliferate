@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
-import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/composer/ComposerTextareaFrame";
 import { ComposerBlockedStatusLine } from "#product/components/workspace/chat/input/ComposerBlockedStatusLine";
 import { ComposerBlockedControlRow } from "#product/components/workspace/chat/input/ComposerBlockedControlRow";
 import {

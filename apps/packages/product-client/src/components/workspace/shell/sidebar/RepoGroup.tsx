@@ -25,7 +25,7 @@ import {
   type RepoGroupMenuHandlers,
 } from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
-import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
+import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 import { ProductSidebarRepoGroupHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarRepositories";
 
 interface RepoGroupProps {

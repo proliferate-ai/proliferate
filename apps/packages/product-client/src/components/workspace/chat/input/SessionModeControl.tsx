@@ -14,7 +14,7 @@ import { SessionControlIcon } from "#product/components/workspace/chat/session-c
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { Check } from "#product/primitives/icons/core";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { AnimatedSwapText } from "#product/primitives/AnimatedSwapText";
 import {
   PendingConfigIndicator,

@@ -6,7 +6,7 @@ import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 import { getSettingsSectionForHarnessKind } from "#product/lib/domain/settings/navigation-presentation";
 import { splitProviderDisplayName } from "#product/lib/domain/chat/models/model-display-name-parts";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import {

@@ -2,8 +2,8 @@ import type { Workspace } from "@anyharness/sdk";
 import { CircleAlert } from "#product/primitives/icons/status";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
-import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
-import { SidebarRowSurface } from "#product/primitives/patterns/SidebarRowSurface";
+import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
+import { SidebarRowSurface } from "#product/primitives/patterns/sidebar/SidebarRowSurface";
 import { ProductSidebarSectionHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
 
 interface WorkspaceCleanupAttentionSectionProps {

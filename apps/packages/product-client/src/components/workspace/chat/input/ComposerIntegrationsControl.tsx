@@ -4,7 +4,7 @@ import {
   COMPOSER_COMPACT_HIDDEN_CLASSNAME,
   COMPOSER_COMPACT_SHRINK_NONE_CLASSNAME,
 } from "#product/config/chat-layout";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { ArrowUpRight, Settings } from "#product/primitives/icons/core";
 import { Globe } from "#product/primitives/icons/platform";

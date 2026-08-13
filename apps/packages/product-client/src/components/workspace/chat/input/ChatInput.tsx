@@ -51,7 +51,7 @@ import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ComposerBlockedStatusLine } from "./ComposerBlockedStatusLine";
 import { ComposerBlockedControlRow } from "./ComposerBlockedControlRow";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
-import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/composer/ComposerTextareaFrame";
 import { Input } from "#product/primitives/Input";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";

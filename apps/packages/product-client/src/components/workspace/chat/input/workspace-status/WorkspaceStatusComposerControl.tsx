@@ -1,5 +1,5 @@
 import { Button } from "#product/primitives/Button";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { AppShellReviewIcon } from "#product/primitives/icons/app-shell";
 import {

@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { LevelBarsButton } from "#product/primitives/patterns/LevelBarsButton";
+import { LevelBarsButton } from "#product/primitives/patterns/composer/LevelBarsButton";
 
 afterEach(cleanup);
 
