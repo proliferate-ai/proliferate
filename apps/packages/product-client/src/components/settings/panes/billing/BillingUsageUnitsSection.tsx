@@ -72,7 +72,10 @@ function BillingUnitPoolRow({
     <SettingsRow
       label={balance.title}
       description={(
-        <span className="flex flex-col gap-1.5">
+        // A <div>, not a <span>: ProgressBar's root is a <div>, and flow
+        // content may not nest inside phrasing content. SettingsRow renders
+        // `description` inside a <div>, so this is legal where it lands.
+        <div className="flex flex-col gap-1.5">
           <span>{balance.available} of {balance.purchased} available</span>
           <ProgressBar
             value={percent}
@@ -80,7 +83,7 @@ function BillingUnitPoolRow({
             indicatorClassName="block h-full rounded-full bg-foreground/40"
             aria-label={`${balance.title} available`}
           />
-        </span>
+        </div>
       )}
     >
       <Button
