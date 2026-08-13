@@ -201,7 +201,9 @@ export function PlaygroundAttachmentPreviewAside() {
       {target?.kind === "promptAttachment" ? (
         <>
           <div className="right-panel-tab-system flex h-10 shrink-0 items-stretch border-b border-border">
-            <div className="right-panel-terminal-tab-shell">
+            {/* `group`: RowActionIconButton's default hover-reveal needs a
+                `group` ancestor — see TerminalHeaderIcon.tsx. */}
+            <div className="group right-panel-terminal-tab-shell">
               <PanelHeaderEntry
                 label={viewerTargetLabel(target)}
                 title={viewerTargetDisplayPath(target) ?? viewerTargetLabel(target)}

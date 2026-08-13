@@ -165,6 +165,12 @@ export function RightPanelHeaderEntryList({
                   dirty={unread}
                   tabIndexFloor={tabIndexFloor}
                   controls={`tabpanel-editor-panel-group-terminal-${entry.terminalId}`}
+                  // `.right-panel-shortcut-badge` is absolutely positioned by
+                  // product.css, so it contributes no width; the retired
+                  // `[data-shortcut-reveal]` rule used to reserve room for it
+                  // with `padding-right: 1.65rem`. Without that the badge
+                  // overlays the label, so the reserve moves here as layout.
+                  className={shortcutRevealVisible && shortcutLabel ? "pe-7" : ""}
                   trailing={shortcutRevealVisible && shortcutLabel ? (
                     <ShortcutBadge label={shortcutLabel} className="right-panel-shortcut-badge" />
                   ) : null}
@@ -205,7 +211,10 @@ export function RightPanelHeaderEntryList({
             onPointerUp={drag.finishHeaderPointerDrag}
             onPointerCancel={drag.cancelHeaderPointerDrag}
           >
-            <div className="right-panel-terminal-tab-shell">
+            {/* `group` is load-bearing — see the note in TerminalHeaderIcon.tsx:
+                RowActionIconButton's default hover-reveal is `opacity-0` +
+                `group-hover:opacity-100` and needs a `group` ancestor. */}
+            <div className="group right-panel-terminal-tab-shell">
               <PanelHeaderEntry
                 label={label}
                 title={title}

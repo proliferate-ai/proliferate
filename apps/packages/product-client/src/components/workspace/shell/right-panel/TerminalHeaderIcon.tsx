@@ -147,6 +147,11 @@ export function TerminalHeaderIcon({
       dirty={unread}
       tabIndexFloor={tabIndexFloor}
       controls={`tabpanel-editor-panel-group-terminal-${terminal.id}`}
+      // `.right-panel-shortcut-badge` is absolutely positioned by product.css,
+      // so it contributes no width; the retired `[data-shortcut-reveal]` rule
+      // reserved room for it with `padding-right: 1.65rem`. Without that the
+      // badge overlays the label, so the reserve moves here as layout.
+      className={shortcutRevealVisible && shortcutLabel ? "pe-7" : ""}
       trailing={shortcutRevealVisible && shortcutLabel ? (
         <ShortcutBadge label={shortcutLabel} className="right-panel-shortcut-badge" />
       ) : null}
@@ -165,7 +170,13 @@ export function TerminalHeaderIcon({
   );
 
   return (
-    <div className="right-panel-terminal-tab-shell">
+    // `group` is load-bearing, not decoration: the close control below is a
+    // `RowActionIconButton` on its default `visibility="hover"` contract,
+    // which is expressed as `opacity-0` + `group-hover:opacity-100`. Without
+    // a `group` ancestor on the shell it would be permanently invisible and
+    // `pointer-events-none`. This also restores the reveal-on-tab-hover
+    // behaviour the retired `.ui-tab-system-tab__close-container` CSS had.
+    <div className="group right-panel-terminal-tab-shell">
       <PopoverButton
         triggerMode="contextMenu"
         side="bottom"
