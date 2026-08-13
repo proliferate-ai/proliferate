@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode, Ref } from "react";
+import type { ReactElement, Ref } from "react";
 import { Copy } from "#product/primitives/icons/core";
 import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
@@ -12,13 +12,20 @@ export function TargetIcon({ target, size = "icon-paired" }: { target: OpenTarge
   return <OpenTargetIcon iconId={target.iconId} className={size} variant="menu" />;
 }
 
-function DropdownItem({
+// The trailing shortcut hint stays hand-rolled rather than adopting
+// `ShortcutBadge`: ShortcutBadge paints a filled pill (bg-current/10,
+// rounded-md, padding), visibly different chrome from this bare, menu-hover
+// reactive text hint. Per the frozen wave-2 shell spec §2-E, a visible paint
+// delta keeps the current spelling rather than forcing the migration — this
+// is the same duplicate as `TabContextMenu.tsx`'s shortcut hint, tracked as
+// residue in the wave-2 vocabulary report, not fixed in this slice.
+function OpenTargetItem({
   icon,
   label,
   shortcut,
   onClick,
 }: {
-  icon: ReactNode;
+  icon: ReactElement;
   label: string;
   shortcut?: string;
   onClick: () => void;
@@ -26,7 +33,6 @@ function DropdownItem({
   return (
     <PopoverMenuItem
       density="compact"
-      role="menuitem"
       onClick={onClick}
       icon={icon}
       iconClassName="icon-paired text-current"
@@ -65,9 +71,9 @@ export function OpenTargetMenu({ targets, onTargetClick, trigger, align = "start
       className={`${POPOVER_FRAME_CLASS} flex max-h-80 w-[200px] select-none flex-col overflow-y-auto p-1`}
     >
       {(close) => (
-        <div role="menu" className="flex flex-col gap-px">
+        <div className="flex flex-col gap-px">
           {targets.map((target) => (
-            <DropdownItem
+            <OpenTargetItem
               key={target.id}
               icon={<TargetIcon target={target} />}
               label={target.label}
