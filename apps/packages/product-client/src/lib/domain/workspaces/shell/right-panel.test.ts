@@ -321,6 +321,19 @@ describe("right panel domain", () => {
     expect(resolveRightPanelDragOutcome(-120)).toEqual({ kind: "collapse" });
   });
 
+  it("does not collapse a widening drag seeded below the threshold", () => {
+    // The floor clamp can render the rail below the collapse threshold. A
+    // gesture seeded at that rendered width and moving outward is a resize
+    // (pinned to the floor) — closing here would take the panel away from a
+    // user who is trying to grow it.
+    expect(resolveRightPanelDragOutcome(250, 1000, 204)).toEqual({
+      kind: "resize",
+      width: RIGHT_PANEL_MIN_WIDTH,
+    });
+    // A shrinking shove from the same seed still closes.
+    expect(resolveRightPanelDragOutcome(180, 1000, 204)).toEqual({ kind: "collapse" });
+  });
+
   it("treats a non-finite drag width as a resize, never a collapse", () => {
     // A broken measurement must not close the panel behind the user's back.
     expect(resolveRightPanelDragOutcome(Number.NaN)).toEqual({ kind: "resize", width: 420 });

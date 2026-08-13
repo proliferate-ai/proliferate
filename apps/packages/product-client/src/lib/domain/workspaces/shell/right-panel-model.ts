@@ -175,13 +175,22 @@ export function clampRightPanelWidth(
  * the decision has to see the width the pointer actually asked for. Above the
  * collapse threshold the width is clamped as usual — including sticking at
  * `RIGHT_PANEL_MIN_WIDTH` and at the caller-measured `maxWidth` ceiling — and
- * below it the panel closes.
+ * below it the panel closes, but only while the gesture is actually shrinking:
+ * the floor clamp can render the rail below the threshold, and a drag seeded
+ * from that rendered width must not close the panel the user is trying to
+ * widen, so a sub-threshold raw width that sits at or above `startWidth` is a
+ * resize.
  */
 export function resolveRightPanelDragOutcome(
   rawWidth: number,
   maxWidth: number = Number.POSITIVE_INFINITY,
+  startWidth: number = Number.POSITIVE_INFINITY,
 ): RightPanelDragOutcome {
-  if (Number.isFinite(rawWidth) && rawWidth < RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD) {
+  if (
+    Number.isFinite(rawWidth)
+    && rawWidth < RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD
+    && rawWidth < startWidth
+  ) {
     return { kind: "collapse" };
   }
   return { kind: "resize", width: clampRightPanelWidth(rawWidth, maxWidth) };

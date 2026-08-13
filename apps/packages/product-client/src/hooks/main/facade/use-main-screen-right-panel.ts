@@ -227,6 +227,10 @@ export function useMainScreenRightPanel({
   // pane's floor. There is no fixed maximum; a wider window affords a wider
   // panel. Falls back to the legacy ceiling only when no rail is rendered.
   const rightPanelDragMaxWidthRef = useRef<number>(RIGHT_PANEL_FALLBACK_MAX_WIDTH);
+  // The gesture's seed width. The floor clamp can render the rail below the
+  // collapse threshold, so the collapse decision needs the start to tell a
+  // widening drag from a closing shove.
+  const rightPanelDragStartWidthRef = useRef<number>(Number.POSITIVE_INFINITY);
   const [rightPanelResizing, setRightPanelResizing] = useState(false);
   const handleRightPanelDrag = useCallback(
     (rawWidth: number) => {
@@ -236,6 +240,7 @@ export function useMainScreenRightPanel({
       const outcome = resolveRightPanelDragOutcome(
         rawWidth,
         rightPanelDragMaxWidthRef.current,
+        rightPanelDragStartWidthRef.current,
       );
       if (outcome.kind === "collapse") {
         rightPanelDragCollapsedRef.current = true;
@@ -293,12 +298,13 @@ export function useMainScreenRightPanel({
       rightPanelDragMaxWidthRef.current = railRow
         ? Math.max(RIGHT_PANEL_MIN_WIDTH, railRow - MAIN_PANE_MIN_WIDTH)
         : RIGHT_PANEL_FALLBACK_MAX_WIDTH;
+      rightPanelDragStartWidthRef.current = resolveRenderedRailWidth();
       rightPanelDragCollapsedRef.current = false;
       rightPanelDragWidthRef.current = null;
       setRightPanelResizing(true);
       beginRightSeparatorDrag(event);
     },
-    [beginRightSeparatorDrag],
+    [beginRightSeparatorDrag, resolveRenderedRailWidth],
   );
 
   const userOpenOverrideActive = Boolean(

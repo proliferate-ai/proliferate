@@ -135,6 +135,38 @@ describe("useMainScreenRightPanel drag wiring", () => {
     }
   });
 
+  it("keeps a sub-threshold rail open while the drag widens it", () => {
+    // The floor clamp has rendered the rail at 204 — below the collapse
+    // threshold. Seeded there, an outward drag must resize (pinned to the
+    // panel's floor), and only an inward shove may close.
+    const row = document.createElement("div");
+    row.getBoundingClientRect = () => ({ width: 1000 } as DOMRect);
+    const rail = document.createElement("div");
+    rail.setAttribute("data-right-panel-rail", "");
+    rail.getBoundingClientRect = () => ({ width: 204 } as DOMRect);
+    row.appendChild(rail);
+    document.body.appendChild(row);
+
+    try {
+      const { result, rerender } = renderRightPanel();
+      act(() => {
+        result.current.setRightPanelOpen(true);
+      });
+      rerender();
+
+      fireDrag(result.current.onRightSeparatorDown, [50]);
+      rerender();
+      expect(result.current.rightPanelOpen).toBe(true);
+      expect(result.current.rightPanelWidth).toBe(RIGHT_PANEL_MIN_WIDTH);
+
+      fireDrag(result.current.onRightSeparatorDown, [-20]);
+      rerender();
+      expect(result.current.rightPanelOpen).toBe(false);
+    } finally {
+      row.remove();
+    }
+  });
+
   it("caps a widening drag at the chat pane's floor", () => {
     const row = document.createElement("div");
     row.getBoundingClientRect = () => ({ width: 1000 } as DOMRect);
