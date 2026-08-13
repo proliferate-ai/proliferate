@@ -1,4 +1,3 @@
-#[cfg(target_os = "macos")]
 use std::cell::RefCell;
 use std::fs::{self, File};
 use std::os::fd::AsRawFd;
@@ -22,15 +21,12 @@ use crate::{bridge::activation::FallbackDirectoryHandle, DiagnosticsComponent};
 const ANYHARNESS_ACTIVE: &str = "anyharness.jsonl";
 const ANYHARNESS_LOCK: &str = "anyharness.lock";
 
-#[cfg(target_os = "macos")]
 type RotationHook = Box<dyn FnMut(&'static str, &'static str)>;
 
-#[cfg(target_os = "macos")]
 std::thread_local! {
     static ROTATION_HOOK: RefCell<Option<RotationHook>> = RefCell::new(None);
 }
 
-#[cfg(target_os = "macos")]
 pub(super) fn run_rotation_hook(source: &'static str, destination: &'static str) {
     ROTATION_HOOK.with(|slot| {
         if let Some(hook) = slot.borrow_mut().as_mut() {
@@ -39,13 +35,8 @@ pub(super) fn run_rotation_hook(source: &'static str, destination: &'static str)
     });
 }
 
-#[cfg(not(target_os = "macos"))]
-pub(super) fn run_rotation_hook(_source: &'static str, _destination: &'static str) {}
-
-#[cfg(target_os = "macos")]
 struct RotationHookReset;
 
-#[cfg(target_os = "macos")]
 impl Drop for RotationHookReset {
     fn drop(&mut self) {
         ROTATION_HOOK.with(|slot| {
@@ -54,7 +45,6 @@ impl Drop for RotationHookReset {
     }
 }
 
-#[cfg(target_os = "macos")]
 fn with_rotation_hook<T>(
     hook: impl FnMut(&'static str, &'static str) + 'static,
     run: impl FnOnce() -> T,
@@ -332,7 +322,6 @@ fn active_path_swap_is_refused_before_append_and_disables_writer() {
 }
 
 #[test]
-#[cfg(target_os = "macos")]
 fn rotation_is_oldest_first_whole_line_and_stays_within_exact_family_cap() {
     let directory = safe_directory();
     let mut writer = writer(&directory, DiagnosticsComponent::AnyHarness).expect("writer");
@@ -374,7 +363,6 @@ fn rotation_is_oldest_first_whole_line_and_stays_within_exact_family_cap() {
 }
 
 #[test]
-#[cfg(target_os = "macos")]
 fn rotation_races_preserve_replacements_disable_writer_and_keep_the_cap() {
     let cases = [
         (

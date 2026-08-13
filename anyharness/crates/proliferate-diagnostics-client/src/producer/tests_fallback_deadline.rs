@@ -120,6 +120,9 @@ async fn stalled_fallback_cannot_block_status_or_extend_the_parent_deadline() {
     assert_eq!(final_status.fallback_routed, 0);
 }
 
+// Stays macOS-only for its wall-clock budget, not for the rotation primitive:
+// this asserts a sub-750ms deadline return, which a loaded shared runner cannot
+// promise. Rotation itself is covered on every unix by `fallback::tests`.
 #[cfg(target_os = "macos")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stalled_rotation_cannot_extend_the_parent_deadline_or_rejoin() {

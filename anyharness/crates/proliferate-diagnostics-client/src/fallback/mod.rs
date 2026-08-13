@@ -1,6 +1,8 @@
 mod wire;
 
 #[cfg(unix)]
+mod swap;
+#[cfg(unix)]
 mod unix;
 #[cfg(not(unix))]
 mod unsupported;

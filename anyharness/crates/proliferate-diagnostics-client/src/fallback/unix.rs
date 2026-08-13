@@ -7,6 +7,7 @@ use proliferate_diagnostics_protocol::v1::types::ProducerRecordV1;
 
 use crate::{bridge::activation::FallbackDirectoryHandle, DiagnosticsComponent};
 
+use super::swap;
 use super::wire::FallbackRecordV1;
 use super::{
     FallbackError, FallbackReason, FallbackStatus, FALLBACK_SEGMENT_BYTES, FALLBACK_TOTAL_BYTES,
@@ -498,22 +499,7 @@ fn swap_verified(
 }
 
 fn atomic_swap(directory: &File, left: &str, right: &str) -> Result<(), FallbackError> {
-    #[cfg(target_os = "macos")]
-    let result = unsafe {
-        libc::renameatx_np(
-            directory.as_raw_fd(),
-            c_name(left).as_ptr(),
-            directory.as_raw_fd(),
-            c_name(right).as_ptr(),
-            libc::RENAME_SWAP,
-        )
-    };
-    #[cfg(not(target_os = "macos"))]
-    let result = {
-        let _ = (directory, left, right);
-        -1
-    };
-    if result == 0 {
+    if swap::exchange(directory.as_raw_fd(), &c_name(left), &c_name(right)) {
         Ok(())
     } else {
         Err(FallbackError::UnsafeEntry)
