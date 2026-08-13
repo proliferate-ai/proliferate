@@ -1,18 +1,16 @@
 import { useMemo, useState } from "react";
 import type { GitBranchRef } from "@anyharness/sdk";
 import { Button } from "#product/primitives/Button";
-import { Input } from "#product/primitives/Input";
-import {
-  Check,
-  ChevronDown,
-  Search,
-} from "#product/primitives/icons/core";
+import { Check, ChevronDown } from "#product/primitives/icons/core";
 import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
 import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
-
-const GIT_REVIEW_TARGET_TRIGGER_CLASS =
-  "h-6 min-w-0 w-fit max-w-[9rem] shrink-0 gap-1 rounded-lg border border-transparent bg-transparent px-1.5 py-0 text-ui text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
+import {
+  GIT_REVIEW_SELECTOR_TRIGGER_CLASS,
+  GitReviewCountChip,
+} from "#product/components/workspace/git/GitReviewSelectorChrome";
 
 export function GitReviewTargetSelector({
   mode,
@@ -54,7 +52,10 @@ export function GitReviewTargetSelector({
         variant="ghost"
         size="sm"
         disabled
-        className={`${GIT_REVIEW_TARGET_TRIGGER_CLASS} cursor-default opacity-100 disabled:opacity-100`}
+        // C4: caps the trigger label at 9rem — narrower than the base
+        // selector's 11rem because this trigger never carries a count chip,
+        // so it can sit tighter against the review header's other chrome.
+        className={`${GIT_REVIEW_SELECTOR_TRIGGER_CLASS} w-fit max-w-[9rem] shrink-0 cursor-default opacity-100 disabled:opacity-100`}
       >
         <span className="min-w-0 truncate text-sidebar-foreground">{localTarget.label}</span>
       </Button>
@@ -69,7 +70,9 @@ export function GitReviewTargetSelector({
           variant="ghost"
           size="sm"
           disabled={!isRuntimeReady}
-          className={GIT_REVIEW_TARGET_TRIGGER_CLASS}
+          // C4: see the disabled `localTarget` trigger above — same cap,
+          // same reasoning.
+          className={`${GIT_REVIEW_SELECTOR_TRIGGER_CLASS} w-fit max-w-[9rem] shrink-0`}
         >
           <span className="min-w-0 truncate text-sidebar-foreground">{activeRef}</span>
           <ChevronDown className="icon-compact shrink-0 text-sidebar-muted-foreground" />
@@ -80,48 +83,38 @@ export function GitReviewTargetSelector({
     >
       {(close) => (
         <div className="flex flex-col gap-1">
-          <div className="flex h-7 items-center gap-1.5 rounded-lg bg-surface-control px-2 text-muted-foreground">
-            <Search className="icon-compact shrink-0" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search branches"
-              className="h-full border-0 bg-transparent px-0 text-ui focus:ring-0"
-            />
-          </div>
+          <PopoverSearchField
+            value={search}
+            onChange={setSearch}
+            placeholder="Search branches"
+            ariaLabel="Search branches"
+            autoFocus
+          />
           <div className="max-h-64 overflow-y-auto">
             {branchOptions.length === 0 ? (
               <p className="px-2 py-2 text-ui text-muted-foreground">No branches</p>
             ) : (
               branchOptions.map((branch) => (
-                <Button
+                <PopoverMenuItem
                   key={branch.name}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
+                  icon={<GitBranchIcon />}
+                  label={branch.name}
+                  labelClassName={
+                    branch.name === activeRef ? "text-foreground" : "text-muted-foreground"
+                  }
+                  trailing={(
+                    <span className="flex shrink-0 items-center gap-2">
+                      {branch.isDefault && <GitReviewCountChip>default</GitReviewCountChip>}
+                      {branch.name === activeRef && (
+                        <Check className="icon-compact shrink-0 text-foreground" />
+                      )}
+                    </span>
+                  )}
                   onClick={() => {
                     onSelect(branch.name);
                     close();
                   }}
-                  className={`h-7 w-full justify-between rounded-lg px-2 py-0 text-ui hover:bg-hover active:bg-active ${
-                    branch.name === activeRef ? "text-foreground" : "text-muted-foreground"
-                  }`}
-                >
-                  <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                    <GitBranchIcon className="icon-compact shrink-0" />
-                    <span className="min-w-0 truncate">{branch.name}</span>
-                  </span>
-                  <span className="ml-2 flex shrink-0 items-center gap-2">
-                    {branch.isDefault && (
-                      <span className="rounded bg-muted px-1.5 py-px text-ui-sm font-medium leading-none text-muted-foreground">
-                        default
-                      </span>
-                    )}
-                    {branch.name === activeRef && (
-                      <Check className="icon-compact shrink-0 text-foreground" />
-                    )}
-                  </span>
-                </Button>
+                />
               ))
             )}
           </div>

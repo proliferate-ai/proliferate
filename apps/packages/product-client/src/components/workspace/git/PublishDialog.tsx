@@ -1,11 +1,12 @@
 import { useId, type KeyboardEvent, type ReactNode } from "react";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
-import { Button } from "#product/primitives/Button";
 import { Checkbox } from "#product/primitives/Checkbox";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
 import { Switch } from "#product/primitives/Switch";
 import { Textarea } from "#product/primitives/Textarea";
 import { ArrowUp } from "#product/primitives/icons/core";
@@ -170,6 +171,10 @@ export function PublishDialog({
           )}
         </div>
       )}
+      // C4: a fixed dialog width tuned for the commit/PR form fields, capped
+      // at 88% of the viewport height so the footer command list never
+      // pushes off-screen, and clamped to the viewport width minus a 2rem
+      // margin on narrow windows.
       sizeClassName="max-h-[88vh] w-[420px] max-w-[calc(100vw-2rem)]"
       headerClassName="shrink-0 px-3"
       bodyClassName="flex min-h-0 flex-col p-0"
@@ -183,7 +188,18 @@ export function PublishDialog({
               {visibleValidationMessage}
             </p>
           )}
-          <div className="flex w-full flex-col gap-1" role="listbox" aria-label="Source control action">
+          {/*
+           * C3: this was previously `role="listbox"` with `role="option"`
+           * children, but the children are focusable buttons with no
+           * `aria-activedescendant` and no arrow-key handling — an ARIA
+           * pattern announced and not implemented. Dropped to a plain
+           * labeled container; tab order and Enter/Space activation come
+           * from the native interactive rows below, and the ⌘⏎ accelerator
+           * (`handleKeyDown` above) is unchanged. This is inline modal
+           * content, not a keyboard-navigable menu, so `DropdownMenu` is
+           * not the target either.
+           */}
+          <div className="flex w-full flex-col gap-1" aria-label="Source control action">
             {PUBLISH_INTENTS.map((item) => {
               const active = item.id === intent;
               return (
@@ -287,6 +303,9 @@ export function PublishDialog({
                   disabled={isSubmitting}
                 />
               </div>
+              {/* C4: legitimate grid math — the base-branch field grows to
+                  fill the row, the draft switch takes exactly its content
+                  width, and both baselines align via items-end. */}
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
                 <div>
                   <Label htmlFor={prBaseBranchId} className="mb-1 text-ui-sm text-muted-foreground">
@@ -319,9 +338,9 @@ export function PublishDialog({
   );
 }
 
-/* Command-row anatomy: rounded-lg row, icon slot + truncating label,
- * hover paint on the selected/primary row, disabled rows dimmed, and
- * the primary row carries the ⌘⏎ hint. */
+/* Command-row anatomy: RosterRow's row skeleton, icon slot + truncating
+ * label, selected paint on the primary row, disabled rows dimmed, and the
+ * primary row carries the ⌘⏎ hint via ShortcutBadge. */
 function PublishActionRow({
   icon,
   label,
@@ -338,31 +357,26 @@ function PublishActionRow({
   onClick: () => void;
 }) {
   return (
-    <Button
-      type="button"
-      variant="unstyled"
-      size="unstyled"
-      role="option"
-      aria-selected={active}
-      disabled={disabled}
-      onClick={onClick}
-      className={`flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-ui text-foreground disabled:opacity-25 ${
-        active ? "bg-hover" : "hover:bg-hover"
-      }`}
-    >
-      <span className="flex w-[18px] shrink-0 items-center justify-start text-muted-foreground">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {active && (
+    <RosterRow
+      density="compact"
+      leading={(
+        // C4: fixed icon column so GitCommit/ArrowUp/GitPullRequest/GitHub
+        // — glyphs of slightly different intrinsic widths — align their
+        // labels on one column across all rows.
+        <span className="flex w-[18px] shrink-0 items-center justify-start">
+          {icon}
+        </span>
+      )}
+      title={label}
+      trailing={active ? (
         loading
           ? <Spinner className="icon-paired shrink-0 text-muted-foreground" />
-          : (
-            <kbd className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-md bg-current/10 px-1.5 font-sans text-ui leading-4 text-current opacity-80">
-              ⌘⏎
-            </kbd>
-          )
-      )}
-    </Button>
+          : <ShortcutBadge label="⌘⏎" className="opacity-80" />
+      ) : undefined}
+      selected={active}
+      disabled={disabled}
+      onSelect={onClick}
+      aria-current={active ? "true" : undefined}
+    />
   );
 }
