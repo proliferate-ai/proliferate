@@ -15,7 +15,7 @@ import {
 import type { RejectionReasonV1 } from "../domain/diagnostics/contract";
 import * as limits from "../domain/diagnostics/limits";
 import { LifecycleSequenceValidatorV1 } from "../domain/diagnostics/sequence";
-import { DiagnosticsContractErrorV1 } from "../domain/diagnostics/validation-support";
+import { DiagnosticsContractErrorV1 } from "../domain/diagnostics/validation-scalars";
 import {
   parseCollectorAcceptedRecordV1,
   parseConnectionDescriptorV1,

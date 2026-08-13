@@ -1,5 +1,5 @@
 import type { ProducerRecordV1, RejectionReasonV1 } from "./contract";
-import { DiagnosticsContractErrorV1 } from "./validation-support";
+import { DiagnosticsContractErrorV1 } from "./validation-scalars";
 import { parseProducerRecordV1 } from "./validation";
 
 export type SequenceDispositionV1 =
