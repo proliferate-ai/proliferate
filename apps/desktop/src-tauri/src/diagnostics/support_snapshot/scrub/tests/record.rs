@@ -184,8 +184,12 @@ fn typed_model_usage_and_plugin_metadata_survive_exactly() {
 
 #[test]
 fn semantic_argument_roles_are_closed_exact_keys_not_suffix_guesses() {
-    let opaque_canary = "Aa0_Bb1_Cc2_Dd3_Ee4_Ff5_Gg6_Hh7_Ii8_Jj9_Kk0_Ll1";
-    let safe_trace = "Zz9_Yy8_Xx7_Ww6_Vv5_Uu4_Tt3_Ss2_Rr1_Qq0_Pp9_Oo8";
+    // Both canaries are over the 48-byte opaque-credential run-length gate, so
+    // what this test proves is the *role* of the key: `format`/`invalid` fall
+    // through to a redactable role and `trace_id` does not. At 47 bytes the
+    // length gate alone kept both, and neither assertion meant anything.
+    let opaque_canary = "Aa0_Bb1_Cc2_Dd3_Ee4_Ff5_Gg6_Hh7_Ii8_Jj9_Kk0_Ll1_Mm2";
+    let safe_trace = "Zz9_Yy8_Xx7_Ww6_Vv5_Uu4_Tt3_Ss2_Rr1_Qq0_Pp9_Oo8_Nn7";
     let mut record = accepted_record().record;
     record.arguments.push(TypedArgumentV1 {
         name: "semantic_roles".to_owned(),

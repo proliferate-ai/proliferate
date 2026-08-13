@@ -71,7 +71,13 @@ mod supported {
         ));
         fs::create_dir(&root).expect("create fixture");
         fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).expect("root mode");
-        root
+        // Canonicalized, as in `fallback_root_tests::temp_base`. `temp_dir()` is
+        // `$TMPDIR` = `/var/folders/...` on macOS and `/var` is a symlink to
+        // `private/var`, so the hardened anchor walk refuses the very first
+        // component (`O_DIRECTORY | O_NOFOLLOW` gives ENOTDIR, which maps to
+        // `UnsafeMetadata`) and every source below reads as rejected rather than
+        // as the state the test is asserting.
+        fs::canonicalize(root).expect("canonical fixture root")
     }
 
     fn source<'a>(

@@ -494,7 +494,6 @@ fn session_item_input(events: usize, raw: usize) -> super::super::SupportAssembl
     *read_bytes = (events + raw) as u64;
     let session = &mut sessions[0];
     session.summary = candidate(None, 0, 0);
-    session.endpoint_states.summary = SupportEndpointStateV1::Omitted;
     session.endpoint_states.events = SupportEndpointStateV1::Included;
     session.endpoint_states.raw_notifications = SupportEndpointStateV1::Included;
     session.normalized_events = (0..events)
@@ -503,6 +502,7 @@ fn session_item_input(events: usize, raw: usize) -> super::super::SupportAssembl
     session.raw_notifications = (0..raw)
         .map(|index| candidate(Some(seq_value(index as i64, "raw")), 1, index as u64))
         .collect();
+    super::set_session_list_state(&mut input, SupportEndpointStateV1::Omitted);
     input
 }
 
@@ -521,7 +521,6 @@ fn session_response_input(kind: u8, included_bytes: u64) -> super::super::Suppor
     session.summary = candidate(None, 0, 0);
     session.normalized_events.clear();
     session.raw_notifications.clear();
-    session.endpoint_states.summary = SupportEndpointStateV1::Omitted;
     session.endpoint_states.events = SupportEndpointStateV1::Omitted;
     session.endpoint_states.raw_notifications = SupportEndpointStateV1::Omitted;
     match kind {
@@ -535,7 +534,6 @@ fn session_response_input(kind: u8, included_bytes: u64) -> super::super::Suppor
                 included_bytes,
                 0,
             );
-            session.endpoint_states.summary = SupportEndpointStateV1::Included;
         }
         1 => {
             session.normalized_events =
@@ -549,6 +547,11 @@ fn session_response_input(kind: u8, included_bytes: u64) -> super::super::Suppor
         }
         _ => unreachable!(),
     }
+    let state = match kind {
+        0 => SupportEndpointStateV1::Included,
+        _ => SupportEndpointStateV1::Omitted,
+    };
+    super::set_session_list_state(&mut input, state);
     input
 }
 
@@ -574,6 +577,12 @@ fn empty_optional_input() -> super::super::SupportAssemblyInputV1 {
     input.collector_records.clear();
     input.fallback.clear();
     input.legacy.clear();
+    // `add_truncation` accumulates per (source, reason), so the fixture's own
+    // session-ledger entries would be read as this assembly's accounting.
+    input
+        .accounting
+        .truncations
+        .retain(|entry| entry.source != SupportEvidenceSourceV1::SessionLedger);
     input
 }
 

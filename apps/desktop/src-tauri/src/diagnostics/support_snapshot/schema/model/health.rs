@@ -97,8 +97,14 @@ impl SupportLossCountsV1 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SupportChildCollectorStateV1 {
-    Unavailable,
-    Cooldown,
+    // Empty struct variants, not unit variants. `deny_unknown_fields` is not
+    // applied to a *unit* variant of an internally-tagged enum, so
+    // `{"kind":"unavailable","extra":0}` would deserialize successfully and the
+    // hostile-input rejection this whole layer depends on would be vacuous here.
+    // `{}` leaves the wire form untouched (`{"kind":"unavailable"}`) and makes
+    // the unknown-field rejection real.
+    Unavailable {},
+    Cooldown {},
     #[serde(rename_all = "camelCase")]
     Ready {
         collector_boot_id: String,

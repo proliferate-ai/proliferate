@@ -225,7 +225,11 @@ fn generic_and_content_prescan_cutoffs_remove_open_credentials_and_userinfo() {
         (SupportTextKind::Content, 16_384_usize),
     ] {
         let token = format!("ghp_{}", "A".repeat(8_300));
-        let token_input = format!("{}{token} tail", "x".repeat(limit - 20));
+        // The padding is separated from the token, as in the sibling test above:
+        // the provider-credential pattern is anchored on a leading `\b`, so a
+        // prefix glued straight onto word-character padding (`xxxxghp_...`) is
+        // deliberately not a credential and would make the assertion vacuous.
+        let token_input = format!("{} {token} tail", "x".repeat(limit - 20));
         let output = SupportExportScrubber::default()
             .scrub_text(token_input, SupportEvidenceSourceV1::Package, kind)
             .expect("provider token crossing prescan");

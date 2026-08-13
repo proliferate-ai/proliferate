@@ -1,8 +1,9 @@
 use proliferate_diagnostics_protocol::v1::types::SeverityV1;
 
 use super::super::super::schema::enums::{
-    SupportEndpointStateV1, SupportOmissionReasonV1, SupportSessionOmissionReasonV1,
-    SupportSessionSelectionV1, SupportSourceManifestSourceV1, SupportTruncationReasonV1,
+    SupportCollectorCompletenessV1, SupportCollectorStatusV1, SupportEndpointStateV1,
+    SupportOmissionReasonV1, SupportSessionOmissionReasonV1, SupportSessionSelectionV1,
+    SupportSourceManifestSourceV1, SupportTruncationReasonV1,
 };
 use super::super::super::schema::limits::{
     COLLECTOR_BYTES, MANIFEST_BYTES, PACKAGE_BYTES, SESSION_EVIDENCE_BYTES,
@@ -13,8 +14,8 @@ use super::super::{
     SupportLegacyCandidateValueV1, SupportSessionAssemblyV1,
 };
 use super::{
-    candidate, input_from_fixture, lifecycle_records, seq_value, with_collector_records,
-    SCHEMA_POPULATED,
+    candidate, input_from_fixture, lifecycle_records, seq_value, set_session_list_state,
+    with_collector_records, SCHEMA_POPULATED,
 };
 
 #[test]
@@ -141,6 +142,13 @@ fn degraded_collector_sibling_keeps_positive_measured_byte_accounting() {
     high.record.operation_id = "high-priority-operation".to_string();
     high.record.severity = SeverityV1::Warn;
     high.record.detailed.as_mut().expect("detail").message = Some("high".to_string());
+    // Dropping the measured byte count below the limit-uncertainty threshold also
+    // retires the uncertainty claim: the fixture inherits `limit_uncertain` from a
+    // near-cap byte count, and `validate_collector_coverage` requires the
+    // status/completeness/flag triple to be justified by the counts themselves.
+    input.mandatory.collector.coverage.status = SupportCollectorStatusV1::Complete;
+    input.mandatory.collector.coverage.completeness = SupportCollectorCompletenessV1::Complete;
+    input.mandatory.collector.coverage.limit_uncertain = false;
     input.mandatory.collector.coverage.returned_record_bytes = 10;
     input
         .mandatory
@@ -192,7 +200,6 @@ fn degraded_session_event_and_raw_siblings_keep_positive_response_bytes() {
         session.summary = candidate(None, 0, 0);
         session.normalized_events.clear();
         session.raw_notifications.clear();
-        session.endpoint_states.summary = SupportEndpointStateV1::Omitted;
         session.endpoint_states.events = SupportEndpointStateV1::Omitted;
         session.endpoint_states.raw_notifications = SupportEndpointStateV1::Omitted;
         let candidates = vec![
@@ -207,6 +214,7 @@ fn degraded_session_event_and_raw_siblings_keep_positive_response_bytes() {
             session.endpoint_states.events = SupportEndpointStateV1::Included;
         }
         *read_bytes = 10;
+        set_session_list_state(&mut input, SupportEndpointStateV1::Omitted);
 
         let mut high_only = input.clone();
         let SupportSessionAssemblyV1::Included { sessions, .. } = &mut high_only.sessions else {
@@ -323,7 +331,6 @@ fn production_cap_input() -> super::super::SupportAssemblyInputV1 {
             session.session_id = format!("recent-session-{selection_index}");
             session.summary = candidate(None, 0, 0);
             session.raw_notifications.clear();
-            session.endpoint_states.summary = SupportEndpointStateV1::Omitted;
             session.endpoint_states.events = SupportEndpointStateV1::Included;
             session.endpoint_states.raw_notifications = SupportEndpointStateV1::Omitted;
             session.normalized_events = (0..200)
@@ -339,6 +346,7 @@ fn production_cap_input() -> super::super::SupportAssemblyInputV1 {
         .collect();
     assert!(event_bytes <= SESSION_EVIDENCE_BYTES);
     *read_bytes = event_bytes;
+    set_session_list_state(&mut input, SupportEndpointStateV1::Omitted);
 
     let legacy_prototypes: Vec<_> = input
         .legacy
@@ -470,7 +478,6 @@ fn session_input(recent: bool, raw_only: bool) -> super::super::SupportAssemblyI
     session.summary = candidate(None, 0, 0);
     session.normalized_events.clear();
     session.raw_notifications.clear();
-    session.endpoint_states.summary = SupportEndpointStateV1::Omitted;
     session.endpoint_states.events = SupportEndpointStateV1::Omitted;
     session.endpoint_states.raw_notifications = SupportEndpointStateV1::Omitted;
     if raw_only {
@@ -486,8 +493,15 @@ fn session_input(recent: bool, raw_only: bool) -> super::super::SupportAssemblyI
             3,
             0,
         );
-        session.endpoint_states.summary = SupportEndpointStateV1::Included;
     }
+    set_session_list_state(
+        &mut input,
+        if raw_only {
+            SupportEndpointStateV1::Omitted
+        } else {
+            SupportEndpointStateV1::Included
+        },
+    );
     input
 }
 

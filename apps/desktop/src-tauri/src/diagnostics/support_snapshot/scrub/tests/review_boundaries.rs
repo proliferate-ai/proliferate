@@ -115,6 +115,10 @@ fn open_pem_home_and_provider_constructs_crossing_cutoffs_never_leave_fragments(
     ] {
         let retained_limit = 4_096 - TRUNCATION_MARKER.len();
         let mut input = "x".repeat(retained_limit - 32);
+        // Separated from the padding: the provider-credential pattern is anchored
+        // on a leading `\b`, so `xxxxgho_...` is deliberately not a credential and
+        // the marker assertion below would be unsatisfiable for that iteration.
+        input.push(' ');
         input.push_str(opener);
         input.push_str(&"A".repeat(20_000));
         let output = scrubber

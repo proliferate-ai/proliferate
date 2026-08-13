@@ -380,7 +380,7 @@ pub(super) fn child_snapshot(component: SupportChildComponentV1) -> SupportChild
         producer_boot_id: "producer-boot-1".to_string(),
         last_assigned_sequence: None,
         next_sequence: Some(1),
-        collector_state: SupportChildCollectorStateV1::Unavailable,
+        collector_state: SupportChildCollectorStateV1::Unavailable {},
         resident_records: 0,
         resident_bytes: 0,
         in_flight: false,

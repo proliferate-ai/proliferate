@@ -29,7 +29,7 @@ fn populated_assembly_is_exact_compact_json_and_stable_sha() {
     assert_eq!(output.compact_json, POPULATED.trim_end().as_bytes());
     assert_eq!(
         output.sha256,
-        "73c91890618d270d15e2780d4f3d980160694cd9589ecaa6ea9e8fada87bbf58"
+        "a1eabed4541560bbeba7eccfd3b5adefeb39d5e744e7b880df7c42b3153dae97"
     );
     assert_eq!(output.snapshot.manifest.degradation.removed_by_tier, [0; 8]);
     assert_eq!(

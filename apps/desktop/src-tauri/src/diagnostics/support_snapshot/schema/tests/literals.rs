@@ -471,8 +471,8 @@ fn every_tagged_union_variant_has_its_exact_wire_tag() {
     );
 
     let collector_states = [
-        SupportChildCollectorStateV1::Unavailable,
-        SupportChildCollectorStateV1::Cooldown,
+        SupportChildCollectorStateV1::Unavailable {},
+        SupportChildCollectorStateV1::Cooldown {},
         SupportChildCollectorStateV1::Ready {
             collector_boot_id: "boot".to_string(),
             generation_number: 1,
@@ -522,5 +522,8 @@ fn every_tagged_union_variant_has_its_exact_wire_tag() {
         },
     ];
     assert_tags(&session_collection, "state", &["included", "omitted"]);
-    assert_eq!(desktop_health.supervisor, supervisor[2]);
+    // The fixture's own supervisor value is tag-checked too, not just the
+    // hand-built variants above: this test is about wire tags, so it asserts the
+    // tag the real snapshot emits, not the field values behind it.
+    assert_tags(&[desktop_health.supervisor], "state", &["ready"]);
 }

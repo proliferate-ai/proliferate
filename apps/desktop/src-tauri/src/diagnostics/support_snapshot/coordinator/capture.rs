@@ -406,8 +406,8 @@ fn map_child_snapshot(
         return None;
     }
     let collector_state = match &snapshot.collector_state {
-        ProducerCollectorState::Unavailable => SupportChildCollectorStateV1::Unavailable,
-        ProducerCollectorState::Cooldown => SupportChildCollectorStateV1::Cooldown,
+        ProducerCollectorState::Unavailable => SupportChildCollectorStateV1::Unavailable {},
+        ProducerCollectorState::Cooldown => SupportChildCollectorStateV1::Cooldown {},
         ProducerCollectorState::Ready {
             collector_boot_id,
             generation_number,

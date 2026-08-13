@@ -128,7 +128,7 @@ pub(super) fn populated_snapshot() -> SupportSnapshotV3 {
     let mut worker = super::protocol_tests::child_snapshot(SupportChildComponentV1::DesktopWorker);
     worker.last_assigned_sequence = Some(1);
     worker.next_sequence = Some(2);
-    worker.collector_state = SupportChildCollectorStateV1::Cooldown;
+    worker.collector_state = SupportChildCollectorStateV1::Cooldown {};
     snapshot.producer_health.desktop_worker = SupportChildProducerStatusV1::Available {
         captured_at: TS.to_string(),
         snapshot: worker,

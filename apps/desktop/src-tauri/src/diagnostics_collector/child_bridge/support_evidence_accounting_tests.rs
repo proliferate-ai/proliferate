@@ -68,7 +68,13 @@ fn fixture_root() -> std::path::PathBuf {
         uuid::Uuid::new_v4()
     ));
     private_dir(&root);
-    root
+    // Canonicalized, as in `fallback_root_tests::temp_base`. `temp_dir()` is
+    // `$TMPDIR` = `/var/folders/...` on macOS and `/var` is a symlink to
+    // `private/var`, so the hardened anchor walk refuses the very first
+    // component (`O_DIRECTORY | O_NOFOLLOW` gives ENOTDIR, which maps to
+    // `UnsafeMetadata`). Every source would then read zero bytes and each
+    // accounting assertion below would be measuring the rejection, not the reads.
+    fs::canonicalize(root).expect("canonical fixture root")
 }
 
 fn private_dir(path: &Path) {

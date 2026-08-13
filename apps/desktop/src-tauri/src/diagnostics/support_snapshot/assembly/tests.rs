@@ -239,6 +239,32 @@ fn session_input(snapshot: &SupportSnapshotV3) -> SupportSessionAssemblyV1 {
     }
 }
 
+/// Sets the ledger-level `session_list_state` and every shell's `summary`
+/// endpoint state together.
+///
+/// These are two representations of one fact — the state of the single active-get
+/// or recent-list response — and real ingest refuses to construct an input where
+/// they disagree (`coordinator/session_input.rs` rejects it as
+/// `SessionInputError::Incoherent`). The assembler counts that response from
+/// `session_list_state` while the schema validator reconstructs the same count
+/// from the shells, so a fixture that moves only one side is not a harder input:
+/// it is an impossible one, and `validate_session_relationships` fails the whole
+/// artifact before the behaviour under test is ever reached.
+fn set_session_list_state(input: &mut SupportAssemblyInputV1, state: SupportEndpointStateV1) {
+    let SupportSessionAssemblyV1::Included {
+        session_list_state,
+        sessions,
+        ..
+    } = &mut input.sessions
+    else {
+        panic!("session fixture")
+    };
+    *session_list_state = state;
+    for session in sessions.iter_mut() {
+        session.endpoint_states.summary = state;
+    }
+}
+
 fn session_candidates(
     ledger: &SupportSessionLedgerV1,
     mut summary_bytes: u64,
