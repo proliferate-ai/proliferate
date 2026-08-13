@@ -17,6 +17,20 @@ const PROCESS_STATUS_DOT_TONE: Record<ProcessTone, StatusDotTone> = {
   muted: "muted",
 };
 
+/**
+ * Recorded gap, not a hand-rolled tone map: `StatusDot`'s tone axis has no
+ * step below `muted`, but this area distinguishes a live-but-quiet process
+ * (`default` → `text-muted-foreground`) from a finished/ignorable one
+ * (`muted` → `text-faint`). Routing both through
+ * `statusDotToneTextClass("muted")` would collapse two states that read
+ * differently today, so the one tone with no equivalent keeps its ink here
+ * and everything else defers to the shared map. Promotion candidate: a
+ * `faint` step on `StatusDotTone`.
+ */
+function processToneTextClass(tone: ProcessTone): string {
+  return tone === "muted" ? "text-faint" : statusDotToneTextClass(PROCESS_STATUS_DOT_TONE[tone]);
+}
+
 export interface TerminalRosterRowProps {
   process: ActivityProcessWire;
   nowMs: number;
@@ -34,15 +48,15 @@ export interface TerminalRosterRowProps {
  * interactive PTYs — these rows are watch-only).
  */
 export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowProps) {
-  const tone = PROCESS_STATUS_DOT_TONE[processStatusTone(process)];
+  const toneClass = processToneTextClass(processStatusTone(process));
 
   return (
     <RosterRow
-      leading={<SquareTerminal className={twMerge("icon-paired", statusDotToneTextClass(tone))} aria-hidden />}
+      leading={<SquareTerminal className={twMerge("icon-paired", toneClass)} aria-hidden />}
       title={<span className="font-mono" data-telemetry-mask title={process.command}>{process.command}</span>}
       secondary={(
         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-          <span className={statusDotToneTextClass(tone)}>{processStatusLabel(process)}</span>
+          <span className={toneClass}>{processStatusLabel(process)}</span>
           <span aria-hidden>·</span>
           <span>{processElapsedLabel(process, nowMs)}</span>
           {process.pid !== null && (

@@ -76,7 +76,16 @@ export function WorkflowDefinitionList({
                 </IconTile>
               )}
               title={definition.title}
-              secondary={definition.description || workflowSummary(definition)}
+              // `RosterRow`'s secondary slot neither truncates nor clamps, and a
+              // workflow description is free text — the pre-adoption row clamped
+              // it at two lines so one verbose definition could not stretch the
+              // list. Clamping in the slot keeps that behaviour without asking
+              // the pattern for a second geometry axis.
+              secondary={(
+                <span className="line-clamp-2">
+                  {definition.description || workflowSummary(definition)}
+                </span>
+              )}
               trailing={formatUpdatedAt(definition.updatedAt)}
               onSelect={() => onSelect(definition.id)}
             />

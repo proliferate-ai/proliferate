@@ -91,6 +91,13 @@ export function GitReviewFileSectionShell({
             variant="unstyled"
             size="unstyled"
             aria-expanded={!collapsed}
+            // Both app-action handles move onto the surviving trigger rather
+            // than retiring with the redundant chevron button: the two sibling
+            // diff surfaces (`chat/transcript/TurnDiffFileRow.tsx`,
+            // `content/ui/FileDiffCard.tsx`) still expose the same pair, and
+            // the review pane should not be the one diff surface an automated
+            // action cannot toggle.
+            data-app-action-review-file-toggle=""
             data-app-action-review-file-expanded={collapsed ? "false" : "true"}
             onClick={onToggleCollapsed}
             className="flex min-w-0 flex-1 select-none items-center justify-start gap-2 px-3 py-1 text-left"

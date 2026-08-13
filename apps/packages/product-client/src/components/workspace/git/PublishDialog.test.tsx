@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import type { CurrentPullRequestResponse, GitChangedFile } from "@anyharness/sdk";
 import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
@@ -165,7 +165,7 @@ describe("PublishDialog", () => {
     // isn't an ARIA listbox option (RosterRow conformance swap), it's a
     // command in an unordered list of commands, so "current" is the
     // accurate relationship, not "selected".
-    expect(screen.getAllByRole("button")[0]?.getAttribute("aria-current")).toBe("true");
+    expect(commandRows()[0]?.getAttribute("aria-current")).toBe("true");
 
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
     expect(screen.getByRole("dialog", { name: "Publish branch" })).toBeTruthy();
@@ -219,11 +219,25 @@ describe("PublishDialog", () => {
       />,
     );
 
-    for (const row of screen.getAllByRole("button")) {
+    const rows = commandRows();
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
       expect(row.getAttribute("aria-disabled")).toBe("true");
     }
   });
 });
+
+/**
+ * The command rows only — scoped through the `role="group"` container that
+ * carries the list's accessible name. `screen.getAllByRole("button")` would
+ * also sweep up every other button the dialog renders, which is how the
+ * pre-scoping version of these assertions could pass without actually
+ * examining the rows.
+ */
+function commandRows(): HTMLElement[] {
+  return within(screen.getByRole("group", { name: "Source control action" }))
+    .getAllByRole("button");
+}
 
 function SwitchingDialogHarness() {
   const [intent, setIntent] = useState<PublishIntent>("commit");

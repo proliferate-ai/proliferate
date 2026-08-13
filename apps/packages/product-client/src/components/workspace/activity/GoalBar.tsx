@@ -254,14 +254,18 @@ export function GoalBar({
     <div
       data-session-goal-bar
       aria-label="Session goal"
-      // C4: the fill was a bespoke 2%-foreground-into-background mix; the
-      // nearest existing surface token (`bg-surface-elevated-secondary`,
-      // Card's own `tint` fill) sits at 3% in dark / 4.9% in light — within
-      // rounding error of the original recipe, so the callsite composition
-      // this check forbids is retired rather than merely commented.
-      // `border-x-[0.5px]`/`border-t-[0.5px]` are legitimate sub-pixel
-      // hairline geometry Tailwind has no named step for.
-      className="relative overflow-clip rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-border bg-surface-elevated-secondary"
+      // C4, recorded token gap (spec §2.6's second branch): this fill is a
+      // 2%-foreground-into-background mix, and the nearest existing surface
+      // token does not match it. `--color-surface-elevated-secondary`
+      // (tokens.ts) is 3% white in dark but 4.9% ink in light — ~2.5× the
+      // original weight — and it is translucent where this recipe composites
+      // opaquely against `--color-background`. That is a visible shift in
+      // light mode, not a rounding error, so the ruling is "record the gap,
+      // keep the bracket" rather than eyeballing a substitute: the goal bar
+      // needs a ~2% wash step that the surface scale does not yet name, which
+      // belongs to `design`. `border-x-[0.5px]`/`border-t-[0.5px]` are
+      // legitimate sub-pixel hairline geometry Tailwind has no named step for.
+      className="relative overflow-clip rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))]"
     >
       <div
         className={twMerge(

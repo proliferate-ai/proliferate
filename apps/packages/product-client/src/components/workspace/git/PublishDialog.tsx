@@ -197,9 +197,17 @@ export function PublishDialog({
            * from the native interactive rows below, and the ⌘⏎ accelerator
            * (`handleKeyDown` above) is unchanged. This is inline modal
            * content, not a keyboard-navigable menu, so `DropdownMenu` is
-           * not the target either.
+           * not the target either. `role="group"` rather than no role at
+           * all: `aria-label` on a generic container is ignored by assistive
+           * tech, and `group` is the one role that makes the label real
+           * without claiming a keyboard contract this container does not
+           * implement.
            */}
-          <div className="flex w-full flex-col gap-1" aria-label="Source control action">
+          <div
+            className="flex w-full flex-col gap-1"
+            role="group"
+            aria-label="Source control action"
+          >
             {PUBLISH_INTENTS.map((item) => {
               const active = item.id === intent;
               return (
@@ -362,8 +370,10 @@ function PublishActionRow({
       leading={(
         // C4: fixed icon column so GitCommit/ArrowUp/GitPullRequest/GitHub
         // — glyphs of slightly different intrinsic widths — align their
-        // labels on one column across all rows.
-        <span className="flex w-[18px] shrink-0 items-center justify-start">
+        // labels on one column across all rows. Muted ink is the row's, not
+        // the pattern's: `RosterRow`'s leading slot inherits row ink, and
+        // these command glyphs sit a step behind their labels.
+        <span className="flex w-[18px] shrink-0 items-center justify-start text-muted-foreground">
           {icon}
         </span>
       )}
