@@ -724,6 +724,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/events/support-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_session_events_support_window"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/fork": {
         parameters: {
             query?: never;
@@ -924,6 +940,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_session_raw_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/raw-notifications/support-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_session_raw_notifications_support_window"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1876,6 +1908,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/sessions/support-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_sessions_support_window"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/setup-rerun": {
         parameters: {
             query?: never;
@@ -2242,6 +2290,35 @@ export interface components {
             nativeRequired: boolean;
             readiness: components["schemas"]["AgentReadinessState"];
             supportsLogin: boolean;
+        };
+        /** @enum {string} */
+        AnyHarnessBoundedWindowCompletenessV1: "complete" | "limit_uncertain";
+        AnyHarnessBoundedWindowMetaV1: {
+            completeness: components["schemas"]["AnyHarnessBoundedWindowCompletenessV1"];
+            itemLimit: number;
+            omittedOversizedItems: number;
+            presentationOrder: components["schemas"]["AnyHarnessBoundedWindowPresentationOrderV1"];
+            responseByteLimit: number;
+            returnedItems: number;
+            /** Format: int32 */
+            schemaVersion: number;
+            selection: components["schemas"]["AnyHarnessBoundedWindowSelectionV1"];
+        };
+        /** @enum {string} */
+        AnyHarnessBoundedWindowPresentationOrderV1: "updated_desc_id_asc" | "seq_asc";
+        /** @enum {string} */
+        AnyHarnessBoundedWindowSelectionV1: "newest_matching";
+        AnyHarnessEventSupportWindowV1: {
+            items: components["schemas"]["SessionEventEnvelope"][];
+            window: components["schemas"]["AnyHarnessBoundedWindowMetaV1"];
+        };
+        AnyHarnessRawNotificationSupportWindowV1: {
+            items: components["schemas"]["SessionRawNotificationEnvelope"][];
+            window: components["schemas"]["AnyHarnessBoundedWindowMetaV1"];
+        };
+        AnyHarnessSessionSupportWindowV1: {
+            items: components["schemas"]["Session"][];
+            window: components["schemas"]["AnyHarnessBoundedWindowMetaV1"];
         };
         /** @description Outcome of pushing an agent-auth state document into the runtime. */
         ApplyAgentAuthStateResponse: {
@@ -7381,6 +7458,56 @@ export interface operations {
             };
         };
     };
+    list_session_events_support_window: {
+        parameters: {
+            query: {
+                /** @description Required UTC RFC3339 inclusive lower timestamp */
+                timestamp_from: string;
+                /** @description Required UTC RFC3339 inclusive upper timestamp, at most 15 minutes after timestamp_from */
+                timestamp_to: string;
+                /** @description Required item limit from 1 through 200 */
+                limit: number;
+                /** @description Required response limit from 16384 through 4194304 bytes */
+                max_response_bytes: number;
+            };
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded newest matching session events in sequence order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnyHarnessEventSupportWindowV1"];
+                };
+            };
+            /** @description Invalid support-window query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     fork_session: {
         parameters: {
             query?: never;
@@ -8144,6 +8271,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionRawNotificationEnvelope"][];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_session_raw_notifications_support_window: {
+        parameters: {
+            query: {
+                /** @description Required UTC RFC3339 inclusive lower timestamp */
+                timestamp_from: string;
+                /** @description Required UTC RFC3339 inclusive upper timestamp, at most 15 minutes after timestamp_from */
+                timestamp_to: string;
+                /** @description Required item limit from 1 through 100 */
+                limit: number;
+                /** @description Required response limit from 16384 through 2097152 bytes */
+                max_response_bytes: number;
+            };
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded newest matching raw notifications in sequence order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnyHarnessRawNotificationSupportWindowV1"];
+                };
+            };
+            /** @description Invalid support-window query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Session not found */
@@ -10748,6 +10925,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": null | components["schemas"]["Session"];
+                };
+            };
+        };
+    };
+    list_sessions_support_window: {
+        parameters: {
+            query: {
+                /** @description Required exact or recent selection mode */
+                mode: string;
+                /** @description Required only for exact mode */
+                session_id?: string;
+                /** @description Required UTC RFC3339 inclusive lower timestamp only for recent mode */
+                updated_at_from?: string;
+                /** @description Required UTC RFC3339 inclusive upper timestamp */
+                updated_at_to: string;
+                /** @description Required limit: 1 for exact mode, 1 through 3 for recent mode */
+                limit: number;
+                /** @description Required response limit from 16384 through 1048576 bytes */
+                max_response_bytes: number;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded newest matching durable sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnyHarnessSessionSupportWindowV1"];
+                };
+            };
+            /** @description Invalid support-window query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
