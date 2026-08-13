@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "#product/primitives/Button";
 import { Settings } from "#product/primitives/icons/core";
+import { Card } from "#product/primitives/patterns/Card";
 
 export interface SystemMessageProps {
   content: string;
@@ -27,11 +28,17 @@ export function SystemMessage({ content }: SystemMessageProps) {
         <span>System message</span>
       </Button>
       {systemExpanded && (
-        <div
-          className="mt-1 rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-chat tracking-[-0.01em] whitespace-pre-wrap text-muted-foreground select-text"
-        >
-          {content}
-        </div>
+        <Card surface="opaque" className="mt-1">
+          {/*
+            tracking-[-0.01em] is a recorded cause (DESIGN_SYSTEM.md
+            § UI-conformance review, check 4): the body is pre-formatted system
+            output, and the slight negative tracking keeps long unwrapped lines
+            inside the transcript column. Optical, not a scale step.
+          */}
+          <div className="px-3.5 py-2.5 font-sans text-chat tracking-[-0.01em] whitespace-pre-wrap text-muted-foreground select-text">
+            {content}
+          </div>
+        </Card>
       )}
     </div>
   );
