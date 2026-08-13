@@ -43,7 +43,8 @@ export function PromptAttachmentCard({
   const isDraft = variant === "draft";
   const isCompact = variant === "compact";
   const isImage = part.type === "image";
-  const canPreview = part.type === "image" || part.type === "file";
+  // Local path references carry no uploaded bytes, so there is nothing to preview.
+  const canPreview = (part.type === "image" || part.type === "file") && !part.pathKind;
   const metadata = [attachmentTypeLabel(part), part.sizeLabel]
     .filter(Boolean)
     .join(" · ");
@@ -138,13 +139,13 @@ function PromptAttachmentPreview({
 
   return (
     <div className={previewFrameClassName(variant)}>
-      {part.type === "link" ? (
+      {part.type === "link" && !part.pathKind ? (
         <Link2 className="icon-paired text-muted-foreground" />
       ) : (
         <FileTreeEntryIcon
           name={part.name}
           path={part.uri ?? part.name}
-          kind="file"
+          kind={part.pathKind ?? "file"}
           className="icon-paired text-muted-foreground [font-size:var(--text-chat)]"
         />
       )}
@@ -212,11 +213,21 @@ function attachmentTypeLabel(part: PromptDisplayAttachmentPart): string {
     case "image":
       return "Image";
     case "file":
+      if (part.pathKind === "directory") {
+        return "Folder";
+      }
       if (part.source === "paste") {
         return "Pasted text";
       }
-      return attachmentExtension(part.name) ?? "Text file";
+      return attachmentExtension(part.name)
+        ?? (part.pathKind === "file" ? "File" : "Text file");
     case "link":
+      if (part.pathKind === "directory") {
+        return "Folder";
+      }
+      if (part.pathKind === "file") {
+        return attachmentExtension(part.name) ?? "File";
+      }
       return "Link";
     case "plan_reference":
       return "Plan";

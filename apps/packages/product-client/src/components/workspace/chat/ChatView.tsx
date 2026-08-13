@@ -45,7 +45,9 @@ import {
   isFileDrag,
   readFileDragInput,
 } from "#product/lib/domain/chat/composer/prompt-attachment-drag";
+import { isCloudWorkspaceId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
 
@@ -176,10 +178,22 @@ export const ChatView = memo(function ChatView({
     supportsAttachments,
   });
   const { closeDraftAttachmentPreviews } = usePromptAttachmentPreviewActions();
+  const host = useProductHost();
+  const desktopFiles = host.desktop?.files ?? null;
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  // Dropped-path recovery only makes sense when the agent shares this
+  // machine's filesystem: local sidecar workspaces on the desktop host.
+  const resolveDroppedPaths = useMemo(() => {
+    if (!desktopFiles || isCloudWorkspaceId(selectedWorkspaceId)) {
+      return null;
+    }
+    return () => desktopFiles.readDroppedPaths();
+  }, [desktopFiles, selectedWorkspaceId]);
   const promptAttachments = useChatPromptAttachments({
     scopeKey: workspaceUiKey,
     promptCapabilities,
     canAttachFiles: canAcceptFileDrop,
+    resolveDroppedPaths,
     onBeforeReleaseAttachments: (attachments) => {
       closeDraftAttachmentPreviews(attachments.map((attachment) => attachment.id));
     },
@@ -238,10 +252,12 @@ export const ChatView = memo(function ChatView({
     event.preventDefault();
     event.stopPropagation();
     setFileDragOver(false);
-    if (canAcceptFileDrop && event.dataTransfer.files.length > 0) {
-      promptAttachments.addFiles(event.dataTransfer.files);
+    // No files.length gate: WebKit can surface folder-only drops with an
+    // empty FileList, and the host path resolver still recovers those items.
+    if (canAcceptFileDrop) {
+      promptAttachments.addDroppedFiles(event.dataTransfer.files);
     }
-  }, [canAcceptFileDrop, promptAttachments.addFiles]);
+  }, [canAcceptFileDrop, promptAttachments.addDroppedFiles]);
 
   const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
     const relatedTarget = event.relatedTarget;

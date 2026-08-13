@@ -1,4 +1,5 @@
 import type { ContentPart } from "@anyharness/sdk";
+import type { PromptAttachmentPathKind } from "./prompt-attachment-rules";
 
 export type PromptAttachmentSource = "upload" | "paste";
 
@@ -7,8 +8,10 @@ export interface PromptAttachmentSnapshotDescriptor {
   name: string;
   mimeType: string;
   size: number;
-  kind: "image" | "text_resource";
+  kind: "image" | "text_resource" | "local_ref";
   source: PromptAttachmentSource;
+  localPath?: string;
+  pathKind?: PromptAttachmentPathKind;
 }
 
 export interface PromptAttachmentSnapshot<TFile = unknown> {
@@ -16,9 +19,12 @@ export interface PromptAttachmentSnapshot<TFile = unknown> {
   name: string;
   mimeType: string;
   size: number;
-  kind: "image" | "text_resource";
+  kind: "image" | "text_resource" | "local_ref";
   source: PromptAttachmentSource;
+  /** Null for local_ref attachments, which carry no bytes. */
   file: TFile;
+  localPath?: string;
+  pathKind?: PromptAttachmentPathKind;
 }
 
 export function createPromptAttachmentSnapshot<TFile>(
@@ -33,6 +39,8 @@ export function createPromptAttachmentSnapshot<TFile>(
     kind: descriptor.kind,
     source: descriptor.source,
     file,
+    ...(descriptor.localPath !== undefined ? { localPath: descriptor.localPath } : {}),
+    ...(descriptor.pathKind !== undefined ? { pathKind: descriptor.pathKind } : {}),
   };
 }
 
@@ -43,6 +51,11 @@ export function clonePromptAttachmentSnapshot<TFile>(
     ...snapshot,
     file: snapshot.file,
   };
+}
+
+/** Encode an absolute POSIX path as a file:// URI. */
+export function localPathToFileUri(path: string): string {
+  return `file://${path.split("/").map(encodeURIComponent).join("/")}`;
 }
 
 export function promptAttachmentSnapshotsToContentParts(
@@ -57,6 +70,15 @@ export function promptAttachmentSnapshotsToContentParts(
         name: snapshot.name,
         size: snapshot.size,
         source: snapshot.source,
+      };
+    }
+    if (snapshot.kind === "local_ref") {
+      return {
+        type: "resource_link",
+        uri: localPathToFileUri(snapshot.localPath ?? snapshot.name),
+        name: snapshot.name,
+        mimeType: snapshot.mimeType || null,
+        size: snapshot.pathKind === "directory" ? null : snapshot.size,
       };
     }
     return {

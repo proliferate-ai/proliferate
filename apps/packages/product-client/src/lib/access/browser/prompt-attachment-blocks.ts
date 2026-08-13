@@ -1,7 +1,10 @@
 import type { PromptInputBlock } from "@anyharness/sdk";
-import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
+import {
+  localPathToFileUri,
+  type PromptAttachmentSnapshot,
+} from "#product/domain/chats/composer/prompt-attachment-snapshot";
 
-export type BrowserPromptAttachmentSnapshot = PromptAttachmentSnapshot<File>;
+export type BrowserPromptAttachmentSnapshot = PromptAttachmentSnapshot<File | null>;
 
 export async function promptAttachmentSnapshotsToBlocks(
   text: string,
@@ -13,6 +16,19 @@ export async function promptAttachmentSnapshotsToBlocks(
   }
 
   for (const snapshot of snapshots) {
+    if (snapshot.kind === "local_ref") {
+      if (!snapshot.localPath) {
+        throw new TypeError("Local reference attachment snapshot is missing its path.");
+      }
+      blocks.push({
+        type: "resource_link",
+        uri: localPathToFileUri(snapshot.localPath),
+        name: snapshot.name,
+        mimeType: snapshot.mimeType || null,
+        size: snapshot.pathKind === "directory" ? null : snapshot.size,
+      });
+      continue;
+    }
     const file = requireBrowserFile(snapshot.file);
     if (snapshot.kind === "image") {
       blocks.push({

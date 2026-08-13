@@ -80,6 +80,15 @@ export type DirectoryPickerUnavailableReason =
   | "native_host_required"
   | "picker_failed";
 
+/** One item of the drag session that just dropped onto the webview, resolved
+ * to an absolute local path. `size` is null for directories. */
+export interface DroppedPathEntry {
+  path: string;
+  name: string;
+  isDirectory: boolean;
+  size: number | null;
+}
+
 /** A directory-picker outcome with cancellation kept distinct from a missing
  * or failed native transport. Product workflows decide how to present the
  * unavailable reason; a normal user cancellation remains silent. */
@@ -96,6 +105,14 @@ export interface DesktopFilesBridge {
   pickDirectory(): Promise<DirectoryPickerResult>;
   getHomeDirectory(): Promise<string>;
   isDirectory(path: string): Promise<boolean>;
+
+  /**
+   * Absolute paths for the files/folders of the drag session that just
+   * dropped onto the webview (HTML5 drops never expose paths). Resolves to an
+   * empty list when the platform cannot recover paths, so callers fall back
+   * to byte-based `File` handling.
+   */
+  readDroppedPaths(): Promise<DroppedPathEntry[]>;
 
   listAvailableEditors(): Promise<EditorInfo[]>;
   listOpenTargets(pathKind?: PathKind): Promise<OpenTarget[]>;
