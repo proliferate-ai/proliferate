@@ -6,6 +6,7 @@ export interface PopoverSearchFieldProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Picker search owns focus when its surface opens unless explicitly disabled. */
   autoFocus?: boolean;
   /** Accessible name when the placeholder alone is not descriptive enough. */
   ariaLabel?: string;
@@ -27,7 +28,7 @@ export function PopoverSearchField({
   value,
   onChange,
   placeholder = "Search",
-  autoFocus,
+  autoFocus = true,
   ariaLabel,
   onKeyDown,
 }: PopoverSearchFieldProps) {
