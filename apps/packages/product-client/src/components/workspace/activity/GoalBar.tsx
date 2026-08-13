@@ -10,6 +10,7 @@ import {
 } from "#product/domain/activity/goal";
 import { Button } from "#product/primitives/Button";
 import { PopoverButton } from "#product/primitives/PopoverButton";
+import { statusDotToneTextClass } from "#product/primitives/StatusDot";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 import { ComposerPopoverSurface } from "../chat/composer/ComposerPopoverSurface";
@@ -253,6 +254,17 @@ export function GoalBar({
     <div
       data-session-goal-bar
       aria-label="Session goal"
+      // C4, recorded token gap (spec §2.6's second branch): this fill is a
+      // 2%-foreground-into-background mix, and the nearest existing surface
+      // token does not match it. `--color-surface-elevated-secondary`
+      // (tokens.ts) is 3% white in dark but 4.9% ink in light — ~2.5× the
+      // original weight — and it is translucent where this recipe composites
+      // opaquely against `--color-background`. That is a visible shift in
+      // light mode, not a rounding error, so the ruling is "record the gap,
+      // keep the bracket" rather than eyeballing a substitute: the goal bar
+      // needs a ~2% wash step that the surface scale does not yet name, which
+      // belongs to `design`. `border-x-[0.5px]`/`border-t-[0.5px]` are
+      // legitimate sub-pixel hairline geometry Tailwind has no named step for.
       className="relative overflow-clip rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))]"
     >
       <div
@@ -291,16 +303,19 @@ function GoalBarGlyph({
   const className = twMerge("icon-paired shrink-0", raised && "mt-[0.175em]");
   if (state.kind === "result") {
     if (state.outcome === "met") {
-      return <CircleCheck className={twMerge(className, "text-success")} aria-hidden />;
+      return <CircleCheck className={twMerge(className, statusDotToneTextClass("success"))} aria-hidden />;
     }
     return (
       <CircleAlert
-        className={twMerge(className, state.outcome === "blocked" ? "text-warning-foreground" : "text-destructive")}
+        className={twMerge(
+          className,
+          statusDotToneTextClass(state.outcome === "blocked" ? "warning" : "danger"),
+        )}
         aria-hidden
       />
     );
   }
-  return <Target className={twMerge(className, "text-muted-foreground")} aria-hidden />;
+  return <Target className={twMerge(className, statusDotToneTextClass("muted"))} aria-hidden />;
 }
 
 function GoalBarPauseAction({

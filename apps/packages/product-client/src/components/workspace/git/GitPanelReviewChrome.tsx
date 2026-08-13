@@ -1,4 +1,5 @@
 import { Button } from "#product/primitives/Button";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { Undo } from "#product/primitives/icons/core";
 import {
@@ -24,26 +25,34 @@ export function GitLastTurnUndoAction({
   onUndo: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-md border border-border/70 bg-surface-elevated-secondary px-2.5 py-2 text-ui-sm leading-5 text-sidebar-muted-foreground">
-      <Undo className="icon-paired shrink-0" />
-      <span className="min-w-0 flex-1 truncate">
-        {fileCount > 0
-          ? `${fileCount} file${fileCount === 1 ? "" : "s"} from the last turn`
-          : "Last turn undo unavailable"}
-      </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        disabled={busy || Boolean(disabledReason)}
-        title={disabledReason ?? "Undo last turn changes"}
-        onClick={onUndo}
-        className="h-7 shrink-0 gap-1 rounded-md px-2 text-ui-sm text-sidebar-muted-foreground hover:bg-hover hover:text-sidebar-foreground active:bg-active disabled:cursor-not-allowed disabled:opacity-45"
-      >
-        <Undo className="icon-paired" />
-        {busy ? "Undoing" : "Undo"}
-      </Button>
-    </div>
+    <NoticeBanner
+      tone="neutral"
+      icon={<Undo />}
+      // The Undo button keeps its own hand-assembled hover/active/disabled
+      // stack (C7, permitted to survive with justification): it is a
+      // secondary-weight text+icon action with a `title` tooltip and a
+      // "Undoing" busy label, a shape `Button`'s own variants don't cover,
+      // and `NoticeBanner`'s action slot takes any interactive primitive as
+      // long as that primitive owns its own states, which this one does.
+      action={(
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={busy || Boolean(disabledReason)}
+          title={disabledReason ?? "Undo last turn changes"}
+          onClick={onUndo}
+          className="h-7 shrink-0 gap-1 rounded-md px-2 text-ui-sm text-sidebar-muted-foreground hover:bg-hover hover:text-sidebar-foreground active:bg-active disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <Undo className="icon-paired" />
+          {busy ? "Undoing" : "Undo"}
+        </Button>
+      )}
+    >
+      {fileCount > 0
+        ? `${fileCount} file${fileCount === 1 ? "" : "s"} from the last turn`
+        : "Last turn undo unavailable"}
+    </NoticeBanner>
   );
 }
 
@@ -53,14 +62,10 @@ export function GitReviewDiffPolicyNotice({ summary }: { summary: DiffDisplayPol
     ? `${summary.tooLargeInline} too large to render inline`
     : null;
   return (
-    <div className="rounded-md border border-border/70 bg-surface-elevated-secondary px-2.5 py-2 text-ui-sm leading-5 text-sidebar-muted-foreground">
-      <span>
-        {hiddenLabel} collapsed to keep review responsive.
-      </span>
-      {tooLargeLabel && (
-        <span> {tooLargeLabel}; open the file to inspect those changes.</span>
-      )}
-    </div>
+    <NoticeBanner tone="neutral">
+      {hiddenLabel} collapsed to keep review responsive.
+      {tooLargeLabel && ` ${tooLargeLabel}; open the file to inspect those changes.`}
+    </NoticeBanner>
   );
 }
 

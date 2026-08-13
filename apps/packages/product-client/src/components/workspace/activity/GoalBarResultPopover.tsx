@@ -29,10 +29,17 @@ export interface GoalBarResultPopoverProps {
 export function GoalBarResultPopover({ state, onDismiss, onSetNewGoal }: GoalBarResultPopoverProps) {
   const stats = goalResultStats(state.goal);
   return (
-    <div className="w-[min(22rem,calc(100vw-1rem))]" data-goal-bar-result-popover>
+    <div
+      // C4: matches ActivityChips.tsx's popover width so the two goal-bar
+      // popovers size alike; `min` keeps it from overflowing a narrow
+      // viewport.
+      className="w-[min(22rem,calc(100vw-1rem))]"
+      data-goal-bar-result-popover
+    >
       <div className="px-3 pb-1.5 pt-2.5 text-ui font-medium text-foreground">
         {state.headline}
       </div>
+      {/* C4: caps the scrollable body at 60% of the viewport height or 22rem, whichever is smaller, so a long result never grows the popover past the visible window. */}
       <div className="max-h-[min(60vh,22rem)] overflow-y-auto px-3 pb-2">
         <GoalBarResultSection label="Goal">
           <p className="whitespace-pre-wrap text-ui text-foreground" data-telemetry-mask>

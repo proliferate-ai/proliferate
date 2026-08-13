@@ -148,6 +148,10 @@ function FileViewerContentContextMenu({
   return (
     <PopoverButton
       triggerMode="contextMenu"
+      // C4: a fixed width tuned for this menu's longest item ("Rich
+      // preview" + trailing "On"/"Off"); narrower than
+      // `POPOVER_SURFACE_CLASS`'s own `min-w-[240px]` deliberately, this is
+      // a compact DOM-fallback context menu, not a popover surface.
       className={`${POPOVER_FRAME_CLASS} flex w-[220px] select-none flex-col overflow-y-auto p-1`}
       trigger={
         <div
@@ -340,6 +344,10 @@ function FileViewerOptionsMenu(actions: FileViewerNativeMenuActions) {
       externalOpen={fallbackOpen}
       onOpenChange={handleOpenChange}
       align="end"
+      // C4: this toolbar menu's own content is narrower than
+      // `POPOVER_SURFACE_CLASS`'s baseline `min-w-[240px]`; the override
+      // matches the same 220px the DOM-fallback context menu above uses for
+      // the identical item list.
       className={twMerge(POPOVER_SURFACE_CLASS, "min-w-[220px]")}
       trigger={(
         <PaneIconButton

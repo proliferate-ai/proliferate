@@ -10,9 +10,11 @@ import {
   type WorkflowValidationIssue,
 } from "#product/domain/workflows/definition";
 import { Button } from "#product/primitives/Button";
+import { Card } from "#product/primitives/patterns/Card";
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { Select } from "#product/primitives/Select";
 import { Textarea } from "#product/primitives/Textarea";
 import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
@@ -97,46 +99,36 @@ export function WorkflowDefinitionEditor({
       >
         <form id="workflow-definition-form" className="space-y-4" onSubmit={submit}>
           {serverError ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-ui text-destructive" role="alert">
-              {serverError}
-              {onReload ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="ml-2"
-                  disabled={busy}
-                  onClick={onReload}
-                >
+            <NoticeBanner
+              tone="destructive"
+              action={onReload ? (
+                <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={onReload}>
                   Reload
                 </Button>
-              ) : null}
-            </div>
+              ) : undefined}
+            >
+              {serverError}
+            </NoticeBanner>
           ) : null}
           {catalogWarning ? (
-            <div className="rounded-lg border border-warning-border bg-warning-subtle px-3 py-2 text-ui text-warning-foreground" role="status">
-              {catalogWarning}
-              {onReload && !serverError ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="ml-2"
-                  disabled={busy}
-                  onClick={onReload}
-                >
+            <NoticeBanner
+              tone="warning"
+              action={onReload && !serverError ? (
+                <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={onReload}>
                   Reload
                 </Button>
-              ) : null}
-            </div>
+              ) : undefined}
+            >
+              {catalogWarning}
+            </NoticeBanner>
           ) : null}
           {issues.length > 0 ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-ui text-destructive" role="alert">
+            <NoticeBanner tone="destructive">
               Fix {issues.length} {issues.length === 1 ? "issue" : "issues"} before saving. {issues[0]?.message}
-            </div>
+            </NoticeBanner>
           ) : null}
 
-          <section className="rounded-lg border border-border bg-card p-4">
+          <Card as="section" surface="opaque" className="p-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="workflow-definition-title">Title</Label>
@@ -189,7 +181,7 @@ export function WorkflowDefinitionEditor({
                 onChange={(event) => onChange({ ...draft, description: event.currentTarget.value })}
               />
             </div>
-          </section>
+          </Card>
 
           <WorkflowInputEditor
             inputs={draft.inputs}
