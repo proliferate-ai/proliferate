@@ -6,8 +6,6 @@ import { Button } from "#product/primitives/Button";
  * of grouped tabs. `tone="filled"` paints the pill in the caller's `color`
  * (the shape a named, colored group takes); `tone="outline"` is the bordered
  * neutral pill.
- *
- * incubating: shell slice adopts, wave 2
  */
 export function TabGroupPill({
   tone,

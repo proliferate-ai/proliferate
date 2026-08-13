@@ -21,9 +21,12 @@
  * A third visual axis — size, pulse, halo ring — is a redesign decision, not
  * an extension: see the variant budget in specs/DESIGN_SYSTEM.md.
  *
- * incubating: shell + workflows slices, wave 2. Today's consumer is
- * `PrStatusBadge` (workspaces command list, sidebar repo rows). The wave-2
- * slices absorb the remaining hand-rolls named above.
+ * Consumed by `PrStatusBadge`, the workspace tab strip, the settings sidebar
+ * and the workflow run/detail lists. `RecentWorkStatusDot` is deliberately
+ * still hand-rolled: it needs a pulsing `live` state and a sidebar-surface
+ * tone, and either would be the third axis this comment rules out. The
+ * remaining inline `icon-status rounded-full bg-*` spans are unmigrated for
+ * the same reason (halo ring, unread tone) or because they are one-offs.
  */
 import { twMerge } from "#product/primitives/utils/tw-merge";
 
