@@ -27,7 +27,6 @@ apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBo
 apps/packages/product-client/src/components/content/ui/diff/ChatDiffViewer.tsx 550 chat diff viewer pending row-renderer split
 apps/packages/product-client/src/components/content/ui/diff/SplitDiffViewer.tsx 465 split diff viewer pending row-renderer split
 apps/packages/product-client/src/components/content/ui/diff/UnifiedDiffViewer.tsx 414 unified diff viewer pending row-renderer split
-apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx 430 connected sidebar host; PR 5 availability-intent begin handler + round-2 Repositories section-collapse wiring threaded alongside existing repo/cloud actions; extraction pending
 apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx 433 shared ordered-readiness continuation host for Cloud registration and retry-stable local clone; split by intent owner on next growth
 apps/packages/product-client/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
 apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the in-memory tombstone model

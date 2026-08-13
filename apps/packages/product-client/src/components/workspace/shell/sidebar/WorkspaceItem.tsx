@@ -3,10 +3,9 @@ import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   Archive,
   Pencil,
-  Pin,
   Trash,
 } from "#product/primitives/icons/core";
-import { Folder } from "#product/primitives/icons/workspace";
+import { Folder, Pin } from "#product/primitives/icons/workspace";
 import {
   GitBranchIcon,
   GitPullRequest,
@@ -30,6 +29,7 @@ import {
   SidebarStatusIndicatorView,
 } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
+import { WorkspaceDeleteConfirmMenu } from "#product/components/workspace/shell/sidebar/WorkspaceDeleteConfirmMenu";
 import { WorkspaceItemMenu } from "#product/components/workspace/shell/sidebar/WorkspaceItemMenu";
 import { WorkspaceRenamePopover } from "#product/components/workspace/shell/sidebar/WorkspaceRenamePopover";
 import { ProductSidebarWorkspaceRow } from "#product/components/workspace/shell/sidebar/ProductSidebarRepositories";
@@ -245,34 +245,17 @@ export function WorkspaceItem({
       {(close) => (
         <>
           {doneConfirmOpen ? (
-            <>
-              <div className="px-2.5 py-2 text-ui text-foreground">
-                <div className="font-medium">Delete workspace?</div>
-                <div className="mt-1 text-ui-sm leading-4 text-muted-foreground">
-                  This removes the local worktree, workspace record, chat history, and local agent
-                  artifacts for this workspace. Commits, branches, and pull requests are not deleted.
-                </div>
-                <div className="mt-1 text-ui-sm leading-4 text-muted-foreground">
-                  This cannot be undone from Proliferate.
-                </div>
-              </div>
-              <PopoverMenuItem
-                icon={<Trash className="icon-paired shrink-0 text-muted-foreground" />}
-                label="Delete workspace"
-                onClick={() => {
-                  close();
-                  setDoneConfirmOpen(false);
-                  onMarkDone?.();
-                }}
-              />
-              <PopoverMenuItem
-                label="Cancel"
-                onClick={() => {
-                  close();
-                  setDoneConfirmOpen(false);
-                }}
-              />
-            </>
+            <WorkspaceDeleteConfirmMenu
+              onConfirm={() => {
+                close();
+                setDoneConfirmOpen(false);
+                onMarkDone?.();
+              }}
+              onCancel={() => {
+                close();
+                setDoneConfirmOpen(false);
+              }}
+            />
           ) : (
             <>
               {onRename && (

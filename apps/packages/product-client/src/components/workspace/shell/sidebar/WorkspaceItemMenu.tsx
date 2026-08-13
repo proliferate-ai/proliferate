@@ -5,12 +5,11 @@ import {
   Link2,
   MoreHorizontal,
   Pencil,
-  Pin,
   RotateCcw,
   Trash,
 } from "#product/primitives/icons/core";
 import { CloudIcon } from "#product/primitives/icons/platform";
-import { Folder } from "#product/primitives/icons/workspace";
+import { Folder, Pin } from "#product/primitives/icons/workspace";
 import {
   GitBranchIcon,
   GitPullRequest,
