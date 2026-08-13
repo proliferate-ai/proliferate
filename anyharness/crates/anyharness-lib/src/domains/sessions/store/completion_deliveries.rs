@@ -47,6 +47,12 @@ pub enum CompletionDeliveryState {
     Pending,
     Enqueued,
     Delivered,
+    /// Terminal: the parent session was closed or deleted before the wake could
+    /// be delivered, so no prompt is inserted and the row is never re-claimed.
+    Abandoned,
+    /// Terminal: delivery exhausted the dead-letter attempt cap and is retired
+    /// instead of being retried forever.
+    Failed,
 }
 
 impl CompletionDeliveryState {
@@ -55,6 +61,8 @@ impl CompletionDeliveryState {
             Self::Pending => "pending",
             Self::Enqueued => "enqueued",
             Self::Delivered => "delivered",
+            Self::Abandoned => "abandoned",
+            Self::Failed => "failed",
         }
     }
 
@@ -63,6 +71,8 @@ impl CompletionDeliveryState {
             "pending" => Ok(Self::Pending),
             "enqueued" => Ok(Self::Enqueued),
             "delivered" => Ok(Self::Delivered),
+            "abandoned" => Ok(Self::Abandoned),
+            "failed" => Ok(Self::Failed),
             other => Err(rusqlite::Error::FromSqlConversionFailure(
                 0,
                 rusqlite::types::Type::Text,
@@ -316,6 +326,7 @@ pub(crate) fn persist_terminal_turn_in_tx(
     let notification_text = notification_text(
         label.as_deref(),
         public_id.as_deref(),
+        &child_id,
         outcome,
         input.assistant_text.as_deref(),
     );
@@ -453,6 +464,7 @@ fn validate_terminal_retry(
     let expected_notification = notification_text(
         delivery.label.as_deref(),
         delivery.subagent_public_id.as_deref(),
+        &delivery.child_session_id,
         outcome,
         input.assistant_text.as_deref(),
     );
@@ -540,6 +552,7 @@ fn parse_outcome(value: &str) -> rusqlite::Result<SessionTurnOutcome> {
 fn notification_text(
     label: Option<&str>,
     public_id: Option<&str>,
+    child_session_id: &str,
     outcome: SessionTurnOutcome,
     assistant_text: Option<&str>,
 ) -> String {
@@ -550,10 +563,13 @@ fn notification_text(
     };
     let output = assistant_text.unwrap_or("No assistant output was recorded.");
     format!(
-        "Subagent update\nAgent: {} ({})\nOutcome: {}\n\n{output_label}:\n{output}",
+        "Subagent update\nAgent: {} ({})\nOutcome: {}\n\n{output_label}:\n{output}\n\n\
+         Before relying on this summary, use the read/transcript tools with subagent id {} \
+         (child session {child_session_id}) to inspect the full result.",
         label.unwrap_or("subagent"),
         public_id.unwrap_or("unknown"),
-        outcome.as_str()
+        outcome.as_str(),
+        public_id.unwrap_or("unknown"),
     )
 }
 

@@ -29,6 +29,16 @@ fn enqueued_backoff_increases_and_caps_at_sixty_seconds() {
     );
 }
 
+// PR review finding 2: the worker retires a delivery only once its attempt
+// count reaches the dead-letter cap, and keeps retrying below it.
+#[test]
+fn dead_letter_threshold_trips_only_at_the_attempt_cap() {
+    assert!(!dead_letter_threshold_reached(0));
+    assert!(!dead_letter_threshold_reached(MAX_DELIVERY_ATTEMPTS - 1));
+    assert!(dead_letter_threshold_reached(MAX_DELIVERY_ATTEMPTS));
+    assert!(dead_letter_threshold_reached(MAX_DELIVERY_ATTEMPTS + 5));
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn restarted_worker_repairs_retired_closed_turn_once_after_store_recovers() {
     let _lock = test_support::lock_env();

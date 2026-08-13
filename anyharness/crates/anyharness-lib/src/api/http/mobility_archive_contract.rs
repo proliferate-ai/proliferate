@@ -274,6 +274,8 @@ fn from_contract_completion_delivery(
             "pending" => CompletionDeliveryState::Pending,
             "enqueued" => CompletionDeliveryState::Enqueued,
             "delivered" => CompletionDeliveryState::Delivered,
+            "abandoned" => CompletionDeliveryState::Abandoned,
+            "failed" => CompletionDeliveryState::Failed,
             other => {
                 return Err(ApiError::bad_request(
                     format!("Invalid completion delivery state: {other}"),

@@ -87,7 +87,7 @@ fn terminal_capture_is_atomic_stable_and_accepts_relationship_closed() {
     assert_eq!(first.state, CompletionDeliveryState::Pending);
     assert_eq!(
         first.notification_text,
-        "Subagent update\nAgent: Researcher (subagent-1)\nOutcome: completed\n\nFinal output:\nUseful answer"
+        "Subagent update\nAgent: Researcher (subagent-1)\nOutcome: completed\n\nFinal output:\nUseful answer\n\nBefore relying on this summary, use the read/transcript tools with subagent id subagent-1 (child session child-1) to inspect the full result."
     );
     db.with_conn(|conn| {
         let completions: i64 =

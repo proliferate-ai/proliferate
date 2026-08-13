@@ -46,6 +46,15 @@ impl CompletionDeliveryStore {
                 return Ok(ClaimedDeliveryEnqueueOutcome::Stale);
             }
 
+            // A terminally closed (or deleted) parent will never consume the
+            // wake. Finalizing the delivery here — instead of inserting a prompt
+            // into the closed parent's queue — keeps claim_next_due from
+            // re-claiming a row that can never reach 'delivered'.
+            if parent_is_terminally_closed(tx, &delivery.parent_session_id)? {
+                finalize_abandoned_in_tx(tx, &delivery.delivery_id, lease_token, now)?;
+                return Ok(ClaimedDeliveryEnqueueOutcome::Stale);
+            }
+
             ensure_completion_projection_in_tx(tx, &delivery)?;
             // Projection adoption may update the outbox completion_id. Re-read
             // the row before every canonical comparison and state transition.
@@ -179,6 +188,43 @@ impl CompletionDeliveryStore {
             })
         })
     }
+}
+
+/// A parent is terminal when its session row has been closed (`closed_at IS NOT
+/// NULL`) or the row is gone entirely (deleted parent). Either way the wake can
+/// never be delivered and the delivery must be finalized rather than retried.
+fn parent_is_terminally_closed(
+    conn: &rusqlite::Connection,
+    parent_session_id: &str,
+) -> rusqlite::Result<bool> {
+    let closed_at: Option<Option<String>> = conn
+        .query_row(
+            "SELECT closed_at FROM sessions WHERE id = ?1",
+            [parent_session_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(match closed_at {
+        Some(value) => value.is_some(),
+        None => true,
+    })
+}
+
+fn finalize_abandoned_in_tx(
+    conn: &rusqlite::Connection,
+    delivery_id: &str,
+    lease_token: &str,
+    now: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE session_link_completion_deliveries
+         SET state = 'abandoned', last_error_code = 'parent_closed', updated_at = ?3,
+             lease_token = NULL, lease_expires_at = NULL
+         WHERE delivery_id = ?1 AND lease_token = ?2
+           AND state NOT IN ('delivered', 'abandoned', 'failed')",
+        params![delivery_id, lease_token, now],
+    )?;
+    Ok(())
 }
 
 fn find_delivery_in_tx(

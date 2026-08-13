@@ -10,6 +10,9 @@ use crate::domains::sessions::store::completion_deliveries::enqueue::ClaimedDeli
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const LEASE_DURATION_SECONDS: i64 = 30;
 const MAX_DELIVERIES_PER_PASS: usize = 64;
+/// Dead-letter cap: after this many attempts a permanently failing delivery is
+/// retired to a terminal `failed` state instead of being retried forever.
+const MAX_DELIVERY_ATTEMPTS: i64 = 20;
 
 pub struct CompletionDeliveryWorker {
     delivery_store: CompletionDeliveryStore,
@@ -77,22 +80,39 @@ impl CompletionDeliveryWorker {
             if let Err(error) = self.process_claimed(&delivery, &lease_token).await {
                 let error_code = "delivery_attempt_failed";
                 let now = chrono::Utc::now();
-                let next_attempt = retry_at(&now, delivery.attempt_count);
-                let _ = self.delivery_store.retry_later(
-                    &delivery.delivery_id,
-                    &lease_token,
-                    error_code,
-                    &now.to_rfc3339(),
-                    &next_attempt,
-                );
-                tracing::warn!(
-                    delivery_id = %delivery.delivery_id,
-                    attempt_count = delivery.attempt_count,
-                    result_class = "retry",
-                    error_code,
-                    error_class = error_chain_class(&error),
-                    "completion delivery attempt deferred"
-                );
+                if dead_letter_threshold_reached(delivery.attempt_count) {
+                    let _ = self.delivery_store.dead_letter(
+                        &delivery.delivery_id,
+                        &lease_token,
+                        error_code,
+                        &now.to_rfc3339(),
+                    );
+                    tracing::warn!(
+                        delivery_id = %delivery.delivery_id,
+                        attempt_count = delivery.attempt_count,
+                        result_class = "dead_letter",
+                        error_code,
+                        error_class = error_chain_class(&error),
+                        "completion delivery retired after exhausting the attempt cap"
+                    );
+                } else {
+                    let next_attempt = retry_at(&now, delivery.attempt_count);
+                    let _ = self.delivery_store.retry_later(
+                        &delivery.delivery_id,
+                        &lease_token,
+                        error_code,
+                        &now.to_rfc3339(),
+                        &next_attempt,
+                    );
+                    tracing::warn!(
+                        delivery_id = %delivery.delivery_id,
+                        attempt_count = delivery.attempt_count,
+                        result_class = "retry",
+                        error_code,
+                        error_class = error_chain_class(&error),
+                        "completion delivery attempt deferred"
+                    );
+                }
             }
         }
     }
@@ -144,6 +164,10 @@ impl CompletionDeliveryWorker {
             .await;
         Ok(())
     }
+}
+
+fn dead_letter_threshold_reached(attempt_count: i64) -> bool {
+    attempt_count >= MAX_DELIVERY_ATTEMPTS
 }
 
 fn retry_at(now: &chrono::DateTime<chrono::Utc>, attempt_count: i64) -> String {

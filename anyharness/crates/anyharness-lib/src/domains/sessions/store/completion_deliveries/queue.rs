@@ -82,7 +82,8 @@ impl CompletionDeliveryStore {
                 .query_row(
                     "SELECT delivery_id
                      FROM session_link_completion_deliveries
-                     WHERE state != 'delivered' AND next_attempt_at <= ?1
+                     WHERE state NOT IN ('delivered', 'abandoned', 'failed')
+                       AND next_attempt_at <= ?1
                        AND (lease_token IS NULL OR lease_expires_at <= ?1)
                      ORDER BY next_attempt_at ASC, created_at ASC, delivery_id ASC
                      LIMIT 1",
@@ -97,7 +98,8 @@ impl CompletionDeliveryStore {
                 "UPDATE session_link_completion_deliveries
                  SET lease_token = ?2, lease_expires_at = ?3,
                      attempt_count = attempt_count + 1, updated_at = ?1
-                 WHERE delivery_id = ?4 AND state != 'delivered'
+                 WHERE delivery_id = ?4
+                   AND state NOT IN ('delivered', 'abandoned', 'failed')
                    AND (lease_token IS NULL OR lease_expires_at <= ?1)",
                 params![now, lease_token, lease_expires_at, delivery_id],
             )?;
@@ -127,8 +129,32 @@ impl CompletionDeliveryStore {
                 "UPDATE session_link_completion_deliveries
                  SET next_attempt_at = ?4, last_error_code = ?3, updated_at = ?5,
                      lease_token = NULL, lease_expires_at = NULL
-                 WHERE delivery_id = ?1 AND lease_token = ?2 AND state != 'delivered'",
+                 WHERE delivery_id = ?1 AND lease_token = ?2
+                   AND state NOT IN ('delivered', 'abandoned', 'failed')",
                 params![delivery_id, lease_token, error_code, next_attempt_at, now],
+            )?;
+            Ok(changed > 0)
+        })
+    }
+
+    /// Retire a delivery to the terminal `failed` state once it exhausts the
+    /// dead-letter attempt cap, so a permanently failing row (e.g. an orphaned
+    /// row whose parent session was deleted) stops churning through retries.
+    pub fn dead_letter(
+        &self,
+        delivery_id: &str,
+        lease_token: &str,
+        error_code: &str,
+        now: &str,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let changed = conn.execute(
+                "UPDATE session_link_completion_deliveries
+                 SET state = 'failed', last_error_code = ?3, updated_at = ?4,
+                     lease_token = NULL, lease_expires_at = NULL
+                 WHERE delivery_id = ?1 AND lease_token = ?2
+                   AND state NOT IN ('delivered', 'abandoned', 'failed')",
+                params![delivery_id, lease_token, error_code, now],
             )?;
             Ok(changed > 0)
         })

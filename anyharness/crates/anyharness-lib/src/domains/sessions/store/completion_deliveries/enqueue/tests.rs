@@ -475,3 +475,90 @@ fn canonical_row_is_protected_while_same_prefix_ordinary_row_and_order_remain_mu
         .expect("canonical")
         .is_some());
 }
+
+// PR review finding 1: a completion captured while its parent is still open,
+// then the parent is closed before the worker enqueues, must finalize the
+// delivery rather than insert a wake into the closed parent's queue and loop
+// forever. Negative control: without the closed-parent guard the row would
+// reach 'enqueued', a wake prompt would appear in the queue, and claim_next_due
+// would keep re-claiming it — every assertion below would fail.
+#[test]
+fn closed_parent_finalizes_delivery_without_enqueueing_or_reclaiming() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_link(&db, false);
+    let delivery = persist_delivery(&db, "turn-1");
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE sessions SET status = 'closed', closed_at = ?2 WHERE id = ?1",
+            rusqlite::params![delivery.parent_session_id, CLAIMED_AT],
+        )?;
+        Ok(())
+    })
+    .expect("close parent before enqueue");
+    let store = CompletionDeliveryStore::new(db.clone());
+    claim(&store, "worker-1");
+
+    let outcome = store
+        .enqueue_claimed_canonical(&delivery.delivery_id, "worker-1", CLAIMED_AT, RETRY_AT)
+        .expect("closed-parent enqueue");
+    assert!(matches!(outcome, ClaimedDeliveryEnqueueOutcome::Stale));
+
+    let finalized = store
+        .find(&delivery.delivery_id)
+        .expect("delivery")
+        .expect("row");
+    assert_eq!(finalized.state, CompletionDeliveryState::Abandoned);
+    assert_eq!(finalized.last_error_code.as_deref(), Some("parent_closed"));
+    assert!(finalized.lease_token.is_none());
+
+    let queue = SessionStore::new(db.clone())
+        .list_pending_prompts(&delivery.parent_session_id)
+        .expect("queue");
+    assert!(queue.is_empty(), "no wake is inserted into a closed parent");
+
+    // The abandoned row is terminal: the worker never re-claims it, even far in
+    // the future.
+    assert!(store
+        .claim_next_due("2999-01-01T00:00:00Z", "2999-01-01T00:00:30Z", "worker-2")
+        .expect("post-finalize claim")
+        .is_none());
+}
+
+// PR review finding 2: a permanently failing delivery must be dead-lettered to
+// a terminal 'failed' state once it exhausts the attempt cap, instead of being
+// retried forever. Negative control: while pending/enqueued the same row is
+// claimable; after dead_letter the terminal state makes claim_next_due skip it.
+#[test]
+fn dead_letter_finalizes_failed_and_is_never_reclaimed() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_link(&db, false);
+    let delivery = persist_delivery(&db, "turn-1");
+    let store = CompletionDeliveryStore::new(db);
+    claim(&store, "worker-1");
+
+    let finalized = store
+        .dead_letter(
+            &delivery.delivery_id,
+            "worker-1",
+            "delivery_attempt_failed",
+            CLAIMED_AT,
+        )
+        .expect("dead-letter");
+    assert!(finalized);
+
+    let row = store
+        .find(&delivery.delivery_id)
+        .expect("delivery")
+        .expect("row");
+    assert_eq!(row.state, CompletionDeliveryState::Failed);
+    assert_eq!(
+        row.last_error_code.as_deref(),
+        Some("delivery_attempt_failed")
+    );
+    assert!(row.lease_token.is_none());
+
+    assert!(store
+        .claim_next_due("2999-01-01T00:00:00Z", "2999-01-01T00:00:30Z", "worker-2")
+        .expect("post-dead-letter claim")
+        .is_none());
+}
