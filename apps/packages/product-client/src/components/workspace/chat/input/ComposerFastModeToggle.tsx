@@ -6,7 +6,10 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 import { Zap } from "#product/primitives/icons/product";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
-import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
+import {
+  PendingConfigIndicator,
+  showsPendingConfigIndicator,
+} from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 interface ComposerFastModeToggleProps {
   control: LiveSessionControlDescriptor;
@@ -48,7 +51,7 @@ export function ComposerFastModeToggle({ control }: ComposerFastModeToggleProps)
     />
   );
 
-  if (control.pendingState) {
+  if (showsPendingConfigIndicator(control.pendingState)) {
     return (
       <Tooltip content={tooltip}>
         <span className="inline-flex items-center gap-1">

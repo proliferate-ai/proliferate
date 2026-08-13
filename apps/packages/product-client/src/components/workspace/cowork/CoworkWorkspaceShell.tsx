@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type MouseEvent } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ChatView } from "#product/components/workspace/chat/ChatView";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
@@ -72,14 +72,20 @@ export function CoworkWorkspaceShell({
   const activeSlot = useSessionDirectoryStore((state) =>
     activeSessionId ? state.entriesById[activeSessionId] ?? null : null
   );
-  const onRightSeparatorDown = useResize({
+  const [rightPanelResizing, setRightPanelResizing] = useState(false);
+  const beginRightSeparatorDrag = useResize({
     direction: "horizontal",
     size: rightPanelWidth,
     onResize: setRightPanelWidth,
+    onResizeEnd: () => setRightPanelResizing(false),
     reverse: true,
     min: 280,
     max: 760,
   });
+  const onRightSeparatorDown = useCallback((event: MouseEvent) => {
+    setRightPanelResizing(true);
+    beginRightSeparatorDrag(event);
+  }, [beginRightSeparatorDrag]);
 
   const headerTitle = useMemo(() => {
     if (workspaceId && activeSessionId && activeSlot?.workspaceId === workspaceId && activeSlot.title?.trim()) {
@@ -203,8 +209,13 @@ export function CoworkWorkspaceShell({
             )}
 
             <div
-              className="shrink-0 overflow-hidden transition-[width] duration-panel ease-in-out"
+              className={`shrink-0 overflow-hidden ${
+                rightPanelResizing
+                  ? "transition-none"
+                  : "transition-[width] duration-panel ease-in-out"
+              }`}
               style={{ width: canShowArtifactPanel && rightPanelOpen ? rightPanelWidth : 0 }}
+              data-cowork-artifact-pane
             >
               <div className="h-full" style={{ minWidth: 320 }}>
                 {workspaceId ? <CoworkArtifactsPanel workspaceId={workspaceId} /> : null}
