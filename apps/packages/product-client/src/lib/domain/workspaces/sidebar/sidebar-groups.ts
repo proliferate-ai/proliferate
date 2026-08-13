@@ -78,6 +78,7 @@ export function buildSidebarGroupStates(args: {
   showArchived: boolean;
   workspaceTypes: ReturnType<typeof resolveSidebarWorkspaceTypes>;
   archivedSet: Set<string>;
+  pinnedSet?: Set<string>;
   hiddenRepoRootIds: Set<string>;
   selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
@@ -161,6 +162,7 @@ export function buildSidebarGroupStates(args: {
         pendingItem,
         pendingOwnedWorkspaceId,
         archivedSet: args.archivedSet,
+        pinnedSet: args.pinnedSet,
         selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId,
         selectedWorkspaceId: args.selectedWorkspaceId,
         workspaceActivities: args.workspaceActivities,
