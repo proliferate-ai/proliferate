@@ -472,7 +472,7 @@ CREATE TABLE session_link_completion_deliveries (
     outcome TEXT NOT NULL CHECK (outcome IN ('completed', 'failed', 'cancelled')),
     assistant_text TEXT,
     notification_text TEXT NOT NULL,
-    state TEXT NOT NULL CHECK (state IN ('pending', 'enqueued', 'delivered')),
+    state TEXT NOT NULL CHECK (state IN ('pending', 'enqueued', 'delivered', 'abandoned', 'failed')),
     parent_prompt_seq INTEGER,
     parent_turn_id TEXT,
     attempt_count INTEGER NOT NULL DEFAULT 0,

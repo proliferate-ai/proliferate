@@ -52,7 +52,7 @@ struct Queue {
 #[async_trait]
 impl AgentMessageQueue for Queue {
     async fn enqueue_agent_message(
-        &self,
+        self: Arc<Self>,
         _target_session_id: &str,
         _message: String,
         _source: AgentSessionPromptSource,
