@@ -13,10 +13,10 @@
  * live in the dot's tooltip (compound label). Session count reuses that same
  * glyph-plus-number vocabulary so the trailing cluster reads as one system.
  *
- * Rows are ~36px, `--accent` fill when selected; the selected row swaps the
- * date for `Go to →` (and hides the ahead/behind label). Group headings carry
- * the item count in `--faint`. An optional dashed "Create" row closes the
- * list with an optional creation-shortcut hint.
+ * Rows are ~36px, `--accent` fill when selected — the fill alone marks the
+ * clickable row; content never swaps on selection. Group headings carry the
+ * item count in `--faint`. An optional dashed "Create" row closes the list
+ * with an optional creation-shortcut hint.
  */
 import { ChevronRight, FolderPlus, GitPullRequest } from "lucide-react";
 import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
@@ -54,7 +54,7 @@ export interface WorkspacesCommandItemView {
   running?: boolean;
   /** Merge conflicts in the worktree — destructive tint on the well glyph. */
   attention?: "conflicts" | null;
-  /** "↑2 ↓1" — present only when ahead or behind > 0; hidden when selected. */
+  /** "↑2 ↓1" — present only when ahead or behind > 0. */
   aheadBehindLabel?: string | null;
   /** "#805" — rendered after the PR dot. */
   prNumberLabel?: string | null;
@@ -245,15 +245,12 @@ function WorkspaceCommandRow({
             </span>
           ) : null}
           {item.aheadBehindLabel ? (
-            <span className="text-ui-sm tabular-nums text-faint group-data-[selected=true]:hidden">
+            <span className="text-ui-sm tabular-nums text-faint">
               {item.aheadBehindLabel}
             </span>
           ) : null}
-          <span className="w-16 text-right text-ui-sm tabular-nums text-faint group-data-[selected=true]:hidden">
+          <span className="w-16 text-right text-ui-sm tabular-nums text-faint">
             {item.updatedLabel ?? ""}
-          </span>
-          <span className="hidden w-16 text-right text-ui-sm text-faint group-data-[selected=true]:inline">
-            Go to →
           </span>
         </div>
       </div>
