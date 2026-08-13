@@ -433,28 +433,26 @@ describe("prepared support report upload attempt", () => {
     expect(legacyConsentRequired(lookalike, job)).toBe(false);
   });
 
-  it("keeps an already-completed truthy legacy job queue-only", async () => {
+  it("keeps an already-completed truthy legacy job on the normal success path", async () => {
     const job = preparedJob(2, "b".repeat(64));
     job.supportSnapshot = { kind: "none" };
     job.includeLogs = true;
+    const reportTelemetry = telemetry();
     cloud.createSupportReport.mockResolvedValueOnce(createResponse("completed"));
 
-    let caught: unknown;
-    try {
-      await uploadSupportReportAttempt({
-        job,
-        attempt: 2,
-        diagnostics: null,
-        supportSnapshot: null,
-        telemetry: telemetry(),
-        retainBytes: vi.fn(),
-        onLifecycleError: vi.fn(),
-      });
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toMatchObject({ code: "consent_required_for_legacy_job" });
-    expect(legacyConsentRequired(caught, job)).toBe(true);
+    await expect(uploadSupportReportAttempt({
+      job,
+      attempt: 2,
+      diagnostics: null,
+      supportSnapshot: null,
+      telemetry: reportTelemetry,
+      retainBytes: vi.fn(),
+      onLifecycleError: vi.fn(),
+    })).resolves.toEqual({ reportId: "report-1" });
+    expect(reportTelemetry.track).toHaveBeenCalledWith(
+      "support_report_submitted",
+      expect.objectContaining({ diagnostics_included: false }),
+    );
     expect(cloud.createSupportReportUploadTargets).not.toHaveBeenCalled();
     expect(trace).not.toContain("native:begin");
   });

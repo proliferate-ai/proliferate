@@ -5,6 +5,10 @@ import type { SupportReportJob } from "#product/lib/domain/support/report-types"
 
 import { PackagedSupportReportQueueController } from "./support-report-queue-controller";
 import { SUPPORT_QUEUE_LEGACY_KEY } from "./support-report-queue-migration";
+import {
+  SUPPORT_QUEUE_PENDING_KEY,
+  SUPPORT_QUEUE_PRIMARY_KEY,
+} from "./support-report-queue-storage";
 import { drainSupportReportQueue } from "./use-support-report-upload-queue";
 
 const LEGACY_JOB_ID = "10000000-0000-4000-8000-000000000001";
@@ -20,16 +24,20 @@ vi.mock("@proliferate/cloud-sdk/client/support", () => cloud);
 
 class MemoryStorage implements ProductStorage {
   readonly values = new Map<string, string>();
+  readonly trace: string[] = [];
 
   async getItem(key: string): Promise<string | null> {
+    this.trace.push(`get:${key}`);
     return this.values.get(key) ?? null;
   }
 
   async setItem(key: string, value: string): Promise<void> {
+    this.trace.push(`set:${key}`);
     this.values.set(key, value);
   }
 
   async removeItem(key: string): Promise<void> {
+    this.trace.push(`remove:${key}`);
     this.values.delete(key);
   }
 }
@@ -76,6 +84,77 @@ describe("support report queue drain legacy consent conclusion", () => {
     const restarted = createController(storage, snapshotBridge());
     await restarted.initialize();
     await expect(restarted.dueEntries(Date.now())).resolves.toEqual([]);
+  });
+
+  it("journal-removes an already-completed migrated legacy job as normal success", async () => {
+    const storage = new MemoryStorage();
+    const legacy = currentJob(LEGACY_JOB_ID);
+    const { supportSnapshot: _supportSnapshot, ...persistedLegacyJob } = legacy;
+    persistedLegacyJob.includeLogs = true;
+    storage.values.set(SUPPORT_QUEUE_LEGACY_KEY, JSON.stringify([{
+      job: persistedLegacyJob,
+      attemptCount: 0,
+    }]));
+    const bridge = snapshotBridge();
+    const queue = createController(storage, bridge);
+    await queue.initialize();
+    const [migrated] = await queue.dueEntries(Date.now());
+    expect(migrated?.job).toMatchObject({
+      jobId: LEGACY_JOB_ID,
+      includeLogs: true,
+      supportSnapshot: { kind: "none" },
+    });
+    expect(storage.values.has(SUPPORT_QUEUE_LEGACY_KEY)).toBe(false);
+
+    cloud.createSupportReport.mockResolvedValueOnce(createResponse("completed"));
+    storage.trace.length = 0;
+    const showToast = vi.fn();
+    const input = drainInput(queue, bridge, showToast);
+    const markFailed = vi.spyOn(queue, "markFailed");
+    await drainSupportReportQueue(input);
+
+    expect(cloud.createSupportReport).toHaveBeenCalledTimes(1);
+    expect(cloud.createSupportReportUploadTargets).not.toHaveBeenCalled();
+    expect(cloud.completeSupportReportUpload).not.toHaveBeenCalled();
+    expect(bridge.beginSubmission).not.toHaveBeenCalled();
+    expect(bridge.finishSubmission).not.toHaveBeenCalled();
+    expect(markFailed).not.toHaveBeenCalled();
+    expect(input.telemetry.track).toHaveBeenCalledWith(
+      "support_report_submitted",
+      expect.objectContaining({ diagnostics_included: false }),
+    );
+    expect(showToast).toHaveBeenCalledWith(
+      "Thanks. Report sent. Support has the details. (report-1)",
+      "info",
+    );
+    expect(showToast).not.toHaveBeenCalledWith(
+      "This older report needs fresh diagnostic consent. Start a new report from Help.",
+    );
+    expect(storage.trace).toEqual([
+      `set:${SUPPORT_QUEUE_PENDING_KEY}`,
+      `set:${SUPPORT_QUEUE_PRIMARY_KEY}`,
+      `get:${SUPPORT_QUEUE_PRIMARY_KEY}`,
+      `remove:${SUPPORT_QUEUE_PENDING_KEY}`,
+    ]);
+    expect(JSON.parse(storage.values.get(SUPPORT_QUEUE_PRIMARY_KEY) ?? "null")).toMatchObject({
+      schemaVersion: 2,
+      revision: 2,
+      jobs: [],
+    });
+    expect(storage.values.has(SUPPORT_QUEUE_PENDING_KEY)).toBe(false);
+    await expect(queue.dueEntries(Date.now())).resolves.toEqual([]);
+
+    queue.dispose();
+    const restartedBridge = snapshotBridge();
+    const restarted = createController(storage, restartedBridge);
+    await restarted.initialize();
+    await expect(restarted.dueEntries(Date.now())).resolves.toEqual([]);
+    expect(restartedBridge.reconcileArtifacts).toHaveBeenCalledWith({
+      artifacts: [],
+      referencedAttachmentPaths: [],
+    });
+    expect(cloud.createSupportReport).toHaveBeenCalledTimes(1);
+    expect(restartedBridge.beginSubmission).not.toHaveBeenCalled();
   });
 
   it("keeps the same stable conflict generic without the persisted legacy marker", async () => {

@@ -48,8 +48,6 @@ interface SupportReportUploadResult {
   reportId: string;
 }
 
-const legacyConsentFailures = new WeakSet<object>();
-
 export async function uploadSupportReportAttempt(input: {
   job: SupportReportJob;
   attempt: number;
@@ -132,9 +130,6 @@ async function uploadAfterCreate(
 ): Promise<SupportReportUploadResult> {
   const serverCorrelation = toLocalServerCorrelation(report);
   if (report.status === "completed") {
-    if (input.job.includeLogs === true && input.job.supportSnapshot.kind === "none") {
-      throw legacyConsentFailure();
-    }
     trackSupportReportSubmitted(
       input.job,
       serverCorrelation,
@@ -286,21 +281,7 @@ function uploadRejected(message: string): Error & { code: string; status: number
 
 export function legacyConsentRequired(error: unknown, job: SupportReportJob): boolean {
   if (job.includeLogs !== true || job.supportSnapshot.kind !== "none") return false;
-  if (isObject(error) && legacyConsentFailures.has(error)) return true;
   return snapshotSupportReportUploadError(error).code === "support_report_upload_conflict";
-}
-
-function legacyConsentFailure(): Error & { code: "consent_required_for_legacy_job" } {
-  const error = Object.assign(
-    new Error("This legacy report requires fresh consent."),
-    { code: "consent_required_for_legacy_job" as const },
-  );
-  legacyConsentFailures.add(error);
-  return error;
-}
-
-function isObject(value: unknown): value is object {
-  return (typeof value === "object" && value !== null) || typeof value === "function";
 }
 
 function reportLifecycleError(observer: () => void): void {
