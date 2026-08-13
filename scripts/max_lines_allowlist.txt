@@ -35,6 +35,7 @@ anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 679 catalog probe wi
 anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1126 custom migration with legacy schema coverage (+0063 partial unique controller index, ordered after the 0062 rebuild)
 anyharness/sdk/src/client/core.ts 603 AnyHarness TS client core (+preserved FastAPI detail body on AnyHarnessError for gateway billing-block classification, C8)
 anyharness/sdk-react/src/hooks/sessions.ts 723 existing SDK React oversized file
+apps/desktop/src-tauri/src/diagnostics_collector/broker/server.rs 672 Desktop diagnostics broker server: the accept loop, per-request admission, and the bounded connection/finite/tail/export permits all share one listener, one shutdown watch, and one BrokerLimits value that the handlers mutate in place, so no handler moves out without duplicating that state. Split into broker/server/{accept,admission,handlers}.rs when the next request type lands.
 cloud/sdk/src/types/generated.ts 795 existing generated cloud SDK type surface (+workspaceKind, git numstat fields, OpenAPI-derived materialization types, app-extra overlay, and PR 5 exact-ref create request fields; -actionBlock fields; + lostAt (C7))
 anyharness/sdk/src/reducer/__tests__/transcript.test.ts 1817 existing SDK oversized test file
 anyharness/sdk/src/reducer/transcript.ts 1528 existing SDK oversized file
