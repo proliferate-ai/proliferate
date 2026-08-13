@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import { hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input";
+import { promptFallbackTitle } from "#product/lib/domain/sessions/title";
 import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import {
   formatSessionCreateCause,
@@ -157,7 +158,8 @@ export function useSessionCreationActions() {
         modelId: options.modelId,
         requestedModelId: options.modelId,
         modeId: resolvedModeId ?? null,
-        title: existingProjectedRecord?.title ?? null,
+        title: existingProjectedRecord?.title
+          ?? (hasPrompt ? promptFallbackTitle(options.text) : null),
         hasAttemptedPrompt: existingProjectedRecord?.hasAttemptedPrompt ?? false,
         optimisticPrompt: null,
         pendingConfigChanges: {},
