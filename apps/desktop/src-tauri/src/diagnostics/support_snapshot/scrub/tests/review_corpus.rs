@@ -228,6 +228,112 @@ fn long_paths_urls_queries_and_monkey_survive_but_real_opaque_tokens_do_not() {
 }
 
 #[test]
+fn bare_lowercase_hex_secrets_are_redacted_under_every_reachable_rule() {
+    // A md5-shaped credential under a key the exact list does not name. The
+    // key is what closes it; the value is too short for the opaque rule.
+    let canary = "1a79a4d60de6718e8e5b326e338ae533";
+    let value = SupportJsonValueV1::Object(vec![(
+        "authToken".to_owned(),
+        SupportJsonValueV1::String(canary.to_owned()),
+    )]);
+    let output = SupportExportScrubber::default()
+        .scrub_value(value, SupportEvidenceSourceV1::SessionLedger)
+        .expect("scrub qualified token key");
+    let serialized = serde_json::to_string(&output).expect("serialize output");
+    assert!(!serialized.contains(canary));
+    assert!(serialized.contains("\"authToken\":\"[REDACTED:opaque_credential]\""));
+    assert_eq!(output.accounting.scrubbed_by_class.opaque_credential, 1);
+
+    // The same field as free text, in both the unseparated and the hyphenated
+    // spelling the environment rule previously required an underscore for.
+    for input in [
+        format!("{{\"authToken\":\"{canary}\"}}"),
+        format!("auth-token={canary}"),
+    ] {
+        let output = SupportExportScrubber::default()
+            .scrub_text(
+                input,
+                SupportEvidenceSourceV1::SessionLedger,
+                SupportTextKind::Content,
+            )
+            .expect("scrub qualified token label");
+        let retained = output.value.expect("retained labelled text");
+        assert!(!retained.contains(canary), "leaked from {retained}");
+        assert!(retained.contains("[REDACTED:environment_secret]"));
+        assert_eq!(output.accounting.scrubbed_by_class.environment_secret, 1);
+    }
+
+    // With no label at all, only the opaque rule is left. A lowercase hex run
+    // carries two character classes, which the three-class floor exempted at
+    // every length.
+    let canary = "a3f9c1e7b5d208461f7c9e3a5b8d0246a3f9c1e7b5d208461f7c9e3a5b8d0246";
+    assert!(canary.len() >= 48);
+    let output = SupportExportScrubber::default()
+        .scrub_text(
+            format!("session resumed with {canary} after restart"),
+            SupportEvidenceSourceV1::SessionLedger,
+            SupportTextKind::Content,
+        )
+        .expect("scrub unlabelled hex");
+    let retained = output.value.expect("retained unlabelled text");
+    assert_eq!(
+        retained,
+        "session resumed with [REDACTED:opaque_credential] after restart"
+    );
+    assert_eq!(output.accounting.scrubbed_by_class.opaque_credential, 1);
+}
+
+#[test]
+fn two_class_opaque_admission_still_refuses_ordinary_long_content() {
+    let ordinary = "thisisaverylonglowercasewordthatcontainsnosecretandmustremainreadable \
+        /Users/alice/Workspace-2026/Project_A1-B2-C3/source/module/file-name.rs \
+        built at 0123456789abcdef0123456789abcdef01234567 \
+        token_count=128 passwordless=true MONKEY=banana monkey";
+    let output = SupportExportScrubber::default()
+        .scrub_text(
+            ordinary.to_owned(),
+            SupportEvidenceSourceV1::SessionLedger,
+            SupportTextKind::Content,
+        )
+        .expect("scrub ordinary long content");
+    assert_eq!(output.value.as_deref(), Some(ordinary));
+    assert_eq!(output.accounting.scrubbed_by_class, Default::default());
+}
+
+#[test]
+fn unlabelled_digest_and_token_schemes_close_without_eating_prose() {
+    for input in [
+        "Digest 0123456789abcdefghijklmnopqrst",
+        "token abcdefghijklmnopqrstuvwxyz0123",
+    ] {
+        let output = SupportExportScrubber::default()
+            .scrub_text(
+                input.to_owned(),
+                SupportEvidenceSourceV1::SessionLedger,
+                SupportTextKind::Content,
+            )
+            .expect("scrub unlabelled scheme");
+        assert_eq!(
+            output.value.as_deref(),
+            Some("[REDACTED:authorization]"),
+            "missed {input}"
+        );
+        assert_eq!(output.accounting.scrubbed_by_class.authorization, 1);
+    }
+
+    let prose = "the digest matched and the token expired unexpectedly";
+    let output = SupportExportScrubber::default()
+        .scrub_text(
+            prose.to_owned(),
+            SupportEvidenceSourceV1::SessionLedger,
+            SupportTextKind::Content,
+        )
+        .expect("scrub scheme-shaped prose");
+    assert_eq!(output.value.as_deref(), Some(prose));
+    assert_eq!(output.accounting.scrubbed_by_class, Default::default());
+}
+
+#[test]
 fn multibyte_whitespace_bounds_contextual_path_and_query_candidates() {
     let padded = "Aa0Bb1Cc2Dd3Ee4Ff5Gg6Hh7Ii8Jj9Kk0Ll1Mm2Nn3Oo4P==";
     let path = format!("prefix\u{2003}path=/tmp/{padded}/support-report.json");

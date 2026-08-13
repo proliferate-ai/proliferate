@@ -115,6 +115,47 @@ fn exact_key_matching_avoids_substring_false_positives() {
 }
 
 #[test]
+fn qualified_secret_key_words_close_without_substring_collisions() {
+    let canary = "qualified-key-canary";
+    let value = object(vec![
+        ("apiToken", string(canary)),
+        ("authToken", string(canary)),
+        ("auth_token_hash", string(canary)),
+        ("deviceToken", string(canary)),
+        ("proxy-cookie", string(canary)),
+        ("userPassword", string(canary)),
+        ("webhookSecret", string(canary)),
+    ]);
+    let output = SupportExportScrubber::default()
+        .scrub_value(value, SupportEvidenceSourceV1::SessionLedger)
+        .expect("scrub qualified secret keys");
+    let serialized = serde_json::to_string(&output).expect("serialize qualified output");
+    assert!(!serialized.contains(canary));
+    let counts = &output.accounting.scrubbed_by_class;
+    assert_eq!(counts.opaque_credential, 5);
+    assert_eq!(counts.password, 1);
+    assert_eq!(counts.cookie, 1);
+
+    // A final word that names nothing is not a secret, however secret-shaped
+    // the rest of the key looks.
+    let ordinary = object(vec![
+        ("input_tokens", SupportJsonValueV1::Integer(128)),
+        ("keyboardShortcut", string("cmd+k")),
+        ("monkey", string("ordinary")),
+        ("passwordless", string("enabled")),
+        ("providerKind", string("openai-compatible")),
+        ("sessionName", string("nightly")),
+        ("sha256", string("0123456789abcdef0123456789abcdef")),
+        ("tokenCount", SupportJsonValueV1::Integer(4)),
+    ]);
+    let output = SupportExportScrubber::default()
+        .scrub_value(ordinary.clone(), SupportEvidenceSourceV1::SessionLedger)
+        .expect("scrub qualified false-positive fixture");
+    assert_eq!(output.value, ordinary);
+    assert_eq!(output.accounting.scrubbed_by_class, Default::default());
+}
+
+#[test]
 fn normalized_secret_keys_are_classified_at_nested_unknown_object_depths() {
     let canary = "nested-normalization-canary";
     let value = object(vec![(

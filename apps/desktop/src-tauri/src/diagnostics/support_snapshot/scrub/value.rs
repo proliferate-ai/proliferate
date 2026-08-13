@@ -121,7 +121,8 @@ impl SupportExportScrubber {
                         continue;
                     }
                     let normalized = normalize_key(&key);
-                    if let Some(class) = secret_key_class(&normalized) {
+                    let key_class = secret_key_class(&key, &normalized);
+                    if let Some(class) = key_class {
                         accounting.record_secret(class, 1)?;
                         scrubbed.push((
                             key,
@@ -163,23 +164,39 @@ pub(super) fn normalize_key(key: &str) -> String {
         .collect()
 }
 
-pub(super) fn secret_key_class(normalized: &str) -> Option<SupportSecretClassV1> {
+/// Words that name metadata derived from a secret rather than a field of its
+/// own. `access_token_hash` is still the access token's field.
+const DERIVED_WORDS: [&str; 9] = [
+    "length",
+    "prefix",
+    "suffix",
+    "sha256",
+    "checksum",
+    "fingerprint",
+    "digest",
+    "hash",
+    "sha",
+];
+
+/// Classify one key as a secret field.
+///
+/// The exact normalized list runs first and keeps its precise classes. A key
+/// the list does not name is then read as words and classified by its final
+/// word, which is what reaches `authToken`, `apiToken`, `webhookSecret`,
+/// `userPassword`, and `deviceToken` without admitting the substring
+/// collisions the exact list exists to avoid: `monkey`, `credentialed`, and
+/// `token_count` all end in a word that names nothing.
+pub(super) fn secret_key_class(key: &str, normalized: &str) -> Option<SupportSecretClassV1> {
+    exact_secret_key_class(normalized).or_else(|| qualified_secret_key_class(key))
+}
+
+fn exact_secret_key_class(normalized: &str) -> Option<SupportSecretClassV1> {
     let mut candidate = normalized;
     'derived: loop {
         if let Some(class) = direct_secret_key_class(candidate) {
             return Some(class);
         }
-        for suffix in [
-            "length",
-            "prefix",
-            "suffix",
-            "sha256",
-            "checksum",
-            "fingerprint",
-            "digest",
-            "hash",
-            "sha",
-        ] {
+        for suffix in DERIVED_WORDS {
             if let Some(base) = candidate.strip_suffix(suffix) {
                 candidate = base;
                 continue 'derived;
@@ -187,6 +204,62 @@ pub(super) fn secret_key_class(normalized: &str) -> Option<SupportSecretClassV1>
         }
         return None;
     }
+}
+
+/// Classify a qualified key by its final word. Only the words that name a
+/// credential unambiguously keep a precise class; the rest land in the
+/// deliberately unnamed opaque bucket rather than claiming a classification
+/// the key does not support.
+fn qualified_secret_key_class(key: &str) -> Option<SupportSecretClassV1> {
+    let words = key_words(key);
+    let mut qualified = words.as_slice();
+    while let Some((last, rest)) = qualified.split_last() {
+        if DERIVED_WORDS.contains(&last.as_str()) {
+            qualified = rest;
+        } else {
+            break;
+        }
+    }
+    let (last, qualifier) = qualified.split_last()?;
+    // A bare secret word is the exact list's territory. Admitting it here
+    // would redact ordinary single-word fields such as `key` or `pass`.
+    if qualifier.is_empty() {
+        return None;
+    }
+    let class = match last.as_str() {
+        "password" | "passphrase" => SupportSecretClassV1::Password,
+        "cookie" => SupportSecretClassV1::Cookie,
+        "authorization" => SupportSecretClassV1::Authorization,
+        "token" | "secret" | "credential" | "key" => SupportSecretClassV1::OpaqueCredential,
+        _ => return None,
+    };
+    Some(class)
+}
+
+/// Split one key into lowercase words on separators and on the lower-to-upper
+/// transition that makes `authToken` two words and `monkey` one.
+fn key_words(key: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut previous_was_lower = false;
+    for character in key.chars() {
+        if !character.is_ascii_alphanumeric() {
+            if !current.is_empty() {
+                words.push(std::mem::take(&mut current));
+            }
+            previous_was_lower = false;
+            continue;
+        }
+        if previous_was_lower && character.is_ascii_uppercase() && !current.is_empty() {
+            words.push(std::mem::take(&mut current));
+        }
+        previous_was_lower = character.is_ascii_lowercase() || character.is_ascii_digit();
+        current.push(character.to_ascii_lowercase());
+    }
+    if !current.is_empty() {
+        words.push(current);
+    }
+    words
 }
 
 fn direct_secret_key_class(normalized: &str) -> Option<SupportSecretClassV1> {

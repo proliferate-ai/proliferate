@@ -32,6 +32,11 @@ fn positive_fixture_retains_approved_customer_and_semantic_detail() {
         "formatter",
         "openai-compatible",
         "123e4567-e89b-12d3-a456-426614174000",
+        // Both hashes are retained by their semantic role, not by any property
+        // of the value: `sha256` and `commit` are hash fields, which are never
+        // opaque-scanned. The same sixty-four-byte hex in a generic or content
+        // position is a credential-shaped run and is redacted -- proven by
+        // `bare_lowercase_hex_secrets_are_redacted_under_every_reachable_rule`.
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "0123456789abcdef0123456789abcdef01234567",
         "accepted-42",

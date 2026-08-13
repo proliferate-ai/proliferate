@@ -233,14 +233,15 @@ impl SupportExportScrubber {
             return Ok(None);
         }
         let normalized = normalize_key(&argument.name);
+        let key_class = secret_key_class(&argument.name, &normalized);
         if argument.privacy == PrivacyClassificationV1::Secret {
             accounting.record_secret(
-                secret_key_class(&normalized).unwrap_or(SupportSecretClassV1::OpaqueCredential),
+                key_class.unwrap_or(SupportSecretClassV1::OpaqueCredential),
                 1,
             )?;
             return Ok(None);
         }
-        if let Some(class) = secret_key_class(&normalized) {
+        if let Some(class) = key_class {
             accounting.record_secret(class, 1)?;
             argument.value = ArgumentValueV1::String(redaction_marker(class).to_owned());
             return Ok(Some(argument));
@@ -334,7 +335,8 @@ impl SupportExportScrubber {
                         continue;
                     }
                     let normalized = normalize_key(&key);
-                    if let Some(class) = secret_key_class(&normalized) {
+                    let key_class = secret_key_class(&key, &normalized);
+                    if let Some(class) = key_class {
                         accounting.record_secret(class, 1)?;
                         if scrubbed
                             .insert(

@@ -401,6 +401,15 @@ fn opaque_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'+' | b'/' | b'=' | b'-')
 }
 
+/// Two character classes, not three.
+///
+/// A single-alphabet secret is still a secret: a bare lowercase hex token
+/// carries only lowercase and digits, so a three-class floor exempted every
+/// hex credential at every length, which the superseded `{48,}` rule redacted.
+/// The distinct-byte floor is what separates a credential from padding: a
+/// random token over any realistic alphabet exceeds ten distinct bytes long
+/// before it reaches forty-eight, while a repeated-character run and a long
+/// single-alphabet word do not clear both floors together.
 fn is_high_confidence_opaque(candidate: &str) -> bool {
     let mut lower = false;
     let mut upper = false;
@@ -421,7 +430,7 @@ fn is_high_confidence_opaque(candidate: &str) -> bool {
         .filter(|present| *present)
         .count();
     let distinct = distinct.into_iter().filter(|present| *present).count();
-    classes >= 3 && distinct >= 10
+    classes >= 2 && distinct >= 10
 }
 
 fn approved_opaque_context(value: &str, start: usize, end: usize) -> bool {
@@ -549,11 +558,18 @@ fn labeled_secret_regexes() -> &'static [(Regex, SupportSecretClassV1)] {
     })
 }
 
+/// A qualifier may be joined to the secret word by `_`, by `-`, or by nothing
+/// at all: `authToken` and `auth-token` name the same secret as
+/// `AUTH_TOKEN`. The unseparated form is matched case-sensitively, because
+/// only a case transition distinguishes `authToken` from `monkey` -- an
+/// unseparated case-insensitive qualifier would redact any word ending in a
+/// secret word. A space is deliberately not a qualifier separator: `pass:` and
+/// `secret:` already reach ordinary prose without one.
 fn environment_assignment_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| {
         Regex::new(
-            r#"(?im)(?P<prefix>(?:^|[\s{\[(,;])["']?(?:[a-z][a-z0-9]*_)*(?:token|key|secret|password|pass|credential)(?:[-_ ]?(?:length|prefix|suffix|hash|sha(?:256)?|checksum|digest|fingerprint))*["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s,;}\]\)&]+)"#,
+            r#"(?im)(?P<prefix>(?:^|[\s{\[(,;])["']?(?:(?:[a-z][a-z0-9]*[-_])*(?:token|key|secret|password|pass|credential)|(?-i:[A-Za-z][a-z0-9]*(?:Token|Key|Secret|Password|Pass|Credential)))(?:[-_ ]?(?:length|prefix|suffix|hash|sha(?:256)?|checksum|digest|fingerprint))*["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s,;}\]\)&]+)"#,
         )
         .expect("fixed environment-secret regex")
     })
@@ -573,16 +589,22 @@ fn provider_credential_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| {
         Regex::new(
-            r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{10,}|(?:AKIA|ASIA)[A-Z0-9]{16})\b",
+            r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9_-]{16,}|(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}|xox[baprs]-[A-Za-z0-9-]{10,}|(?:AKIA|ASIA)[A-Z0-9]{16})\b",
         )
         .expect("fixed provider-credential regex")
     })
 }
 
+/// `Digest` and `token` are ordinary English words as well as HTTP
+/// authentication schemes, so they carry a credential-shaped operand floor
+/// that `bearer` and `basic` do not need. Twenty bytes is longer than the
+/// prose that follows either word and shorter than every scheme credential.
 fn authorization_scheme_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| {
-        Regex::new(r"(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{4,}")
-            .expect("fixed authorization-scheme regex")
+        Regex::new(
+            r"(?i)\b(?:(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{4,}|(?:digest|token)\s+[A-Za-z0-9._~+/=-]{20,})",
+        )
+        .expect("fixed authorization-scheme regex")
     })
 }

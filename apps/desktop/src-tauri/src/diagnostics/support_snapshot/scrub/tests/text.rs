@@ -169,6 +169,12 @@ fn every_known_provider_prefix_is_removed_without_copying_a_fragment() {
         // Assembled with `concat!` so no literal Slack-shaped token sits in the
         // source; a literal one trips GitHub push protection on every push.
         concat!("xox", "b-1234567890-abcdefghijklmnopqrstuvwxyz"),
+        // Stripe separates its live and test prefixes with `_`, so the
+        // hyphenated OpenAI shape above never reached them. Assembled with
+        // `concat!` for the same push-protection reason as the line above.
+        concat!("sk", "_live_", "abcdefghijklmnopqrstuvwxyz012345"),
+        concat!("sk", "_test_", "abcdefghijklmnopqrstuvwxyz012345"),
+        concat!("rk", "_live_", "abcdefghijklmnopqrstuvwxyz012345"),
         "AKIAABCDEFGHIJKLMNOP",
         "ASIAABCDEFGHIJKLMNOP",
     ] {
