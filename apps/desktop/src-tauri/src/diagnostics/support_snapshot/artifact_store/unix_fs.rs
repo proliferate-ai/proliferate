@@ -16,25 +16,63 @@ pub(super) const OPEN_DIR_FLAGS: libc::c_int =
 const OPEN_READ_FLAGS: libc::c_int = libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC;
 
 pub(super) fn ensure_root(path: &Path) -> Result<OwnedFd, ArtifactStoreError> {
-    let created = match fs::symlink_metadata(path) {
-        Ok(_) => false,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => match fs::create_dir(path) {
-            Ok(()) => true,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
-            Err(_) => return Err(ArtifactStoreError::Io),
-        },
-        Err(_) => return Err(ArtifactStoreError::Io),
-    };
-    let descriptor = open_root_descriptor(path)?;
-    if created {
-        // SAFETY: the descriptor was opened without following a symlink and
-        // still refers to the directory this call won the right to create.
-        if unsafe { libc::fchmod(descriptor.as_raw_fd(), 0o700) } != 0 {
-            return Err(ArtifactStoreError::Io);
-        }
+    match create_private_directory(path) {
+        Ok(()) | Err(ArtifactStoreError::AlreadyExists) => {}
+        Err(error) => return Err(error),
     }
+    let descriptor = open_root_descriptor(path)?;
+    restrict_root_mode(&descriptor)?;
     validate_directory(&descriptor, true)?;
     Ok(descriptor)
+}
+
+/// Create the root already private.
+///
+/// The mode belongs in the `mkdir` call, not in a `fchmod` after it. Creating
+/// at `0o777` and tightening afterwards leaves the staging root group- and
+/// world-writable for the whole gap between the two calls, which is long
+/// enough for another local process to open a descriptor it keeps. The umask
+/// only ever clears bits, so `0o700` here is an upper bound and the directory
+/// is never born more permissive than that.
+fn create_private_directory(path: &Path) -> Result<(), ArtifactStoreError> {
+    let path =
+        CString::new(path.as_os_str().as_bytes()).map_err(|_| ArtifactStoreError::InvalidInput)?;
+    // SAFETY: path is NUL-terminated.
+    if unsafe { libc::mkdir(path.as_ptr(), 0o700) } == 0 {
+        return Ok(());
+    }
+    Err(map_create_error(std::io::Error::last_os_error()))
+}
+
+/// Bring a root this user owns to exactly `0o700`.
+///
+/// Two roots reach here needing repair: one an older build left at the umask's
+/// mode, and one whose creation raced a restrictive umask into something
+/// tighter than `0o700`. Both are rejected by the exact-mode check that
+/// follows, and without a repair that rejection is permanent -- the store
+/// would refuse to stage on that machine forever, with no way for a user to
+/// discover why. Tightening is only ever a reduction in exposure, and every
+/// file inside is re-validated on its own metadata when it is read.
+///
+/// A root that is not a directory, or not owned by this user, is left exactly
+/// as it is for `validate_directory` to refuse. Repairing someone else's
+/// directory is not this code's business, and would fail anyway.
+fn restrict_root_mode(descriptor: &OwnedFd) -> Result<(), ArtifactStoreError> {
+    let stat = descriptor_stat(descriptor)?;
+    // SAFETY: geteuid has no preconditions.
+    let euid = unsafe { libc::geteuid() };
+    if stat.st_mode & libc::S_IFMT != libc::S_IFDIR || stat.st_uid != euid {
+        return Ok(());
+    }
+    if u32::from(stat.st_mode) & 0o777 == 0o700 {
+        return Ok(());
+    }
+    // SAFETY: the descriptor is open, owned, and was opened without following
+    // a symlink, so it still refers to the directory that was just stat'd.
+    if unsafe { libc::fchmod(descriptor.as_raw_fd(), 0o700) } != 0 {
+        return Err(ArtifactStoreError::Io);
+    }
+    Ok(())
 }
 
 pub(super) fn open_existing_root(path: &Path) -> Result<Option<OwnedFd>, ArtifactStoreError> {
@@ -492,5 +530,129 @@ impl Drop for PathCleanup {
         if self.armed {
             let _ = fs::remove_file(&self.path);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    fn fixture_root() -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "proliferate-support-artifact-root-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir(&root).expect("create fixture parent");
+        root
+    }
+
+    fn mode_of(path: &Path) -> u32 {
+        fs::symlink_metadata(path)
+            .expect("fixture metadata")
+            .permissions()
+            .mode()
+            & 0o777
+    }
+
+    /// The create step on its own, because that is where the window was.
+    ///
+    /// Tightening after the fact cannot be observed from outside the process,
+    /// so asserting only on `ensure_root`'s finished state would pass just as
+    /// happily over a root that spent its first moments world-writable. This
+    /// asserts the directory is already private the instant it exists.
+    #[test]
+    fn a_created_root_is_private_from_the_moment_it_exists() {
+        let parent = fixture_root();
+        let root = parent.join("artifacts");
+
+        create_private_directory(&root).expect("create the root");
+
+        assert_eq!(
+            mode_of(&root) & 0o077,
+            0,
+            "the creating call itself must grant nothing to group or other",
+        );
+        fs::remove_dir_all(parent).ok();
+    }
+
+    #[test]
+    fn creating_a_root_that_already_exists_is_reported_not_silently_retried() {
+        let parent = fixture_root();
+        let root = parent.join("artifacts");
+        create_private_directory(&root).expect("create the root");
+
+        assert!(matches!(
+            create_private_directory(&root),
+            Err(ArtifactStoreError::AlreadyExists)
+        ));
+        fs::remove_dir_all(parent).ok();
+    }
+
+    /// A loose root is repaired, not condemned.
+    ///
+    /// An older build left this directory at the umask's mode. The exact-mode
+    /// check refuses it, so without the repair the store could never stage
+    /// another artifact on that machine.
+    #[test]
+    fn an_existing_loose_root_is_tightened_rather_than_wedged() {
+        let parent = fixture_root();
+        let root = parent.join("artifacts");
+        fs::create_dir(&root).expect("pre-existing root");
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).expect("loosen the root");
+
+        ensure_root(&root).expect("an owned root must be repaired, not refused");
+
+        assert_eq!(mode_of(&root), 0o700);
+        fs::remove_dir_all(parent).ok();
+    }
+
+    /// A root created under a restrictive umask is the same case from the
+    /// other side: `mkdir` asks for `0o700` and the umask may hand back less.
+    #[test]
+    fn an_existing_over_tight_root_is_normalised_to_exactly_private() {
+        let parent = fixture_root();
+        let root = parent.join("artifacts");
+        fs::create_dir(&root).expect("pre-existing root");
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o500)).expect("tighten the root");
+
+        ensure_root(&root).expect("an owned root must be repaired, not refused");
+
+        assert_eq!(mode_of(&root), 0o700);
+        fs::remove_dir_all(parent).ok();
+    }
+
+    #[test]
+    fn a_root_that_is_a_symlink_is_refused_rather_than_followed() {
+        let parent = fixture_root();
+        let target = parent.join("elsewhere");
+        fs::create_dir(&target).expect("symlink target");
+        let root = parent.join("artifacts");
+        std::os::unix::fs::symlink(&target, &root).expect("symlink the root into place");
+        let target_mode_before = mode_of(&target);
+
+        assert!(matches!(
+            ensure_root(&root),
+            Err(ArtifactStoreError::UnsafeMetadata)
+        ));
+        // The repair must not have reached through the link into a directory
+        // the caller never named.
+        assert_eq!(mode_of(&target), target_mode_before);
+        fs::remove_dir_all(parent).ok();
+    }
+
+    #[test]
+    fn ensure_root_leaves_an_already_private_root_alone() {
+        let parent = fixture_root();
+        let root = parent.join("artifacts");
+
+        let first = ensure_root(&root).expect("create");
+        drop(first);
+        let second = ensure_root(&root).expect("reopen");
+        drop(second);
+
+        assert_eq!(mode_of(&root), 0o700);
+        fs::remove_dir_all(parent).ok();
     }
 }
