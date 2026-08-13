@@ -83,6 +83,59 @@ describe("sdk-react workspace query request options", () => {
     );
   });
 
+  it("keeps the query client's refetch defaults when roster refetch options are omitted", async () => {
+    mocks.listSubagents.mockResolvedValue({
+      workspaceId: "anyharness-workspace-1",
+      parents: [],
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+          refetchOnWindowFocus: false,
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useWorkspaceSubagentsQuery(), {
+      wrapper: createWrapper(queryClient, "http://runtime-workspaces.test"),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const observerOptions = queryClient.getQueryCache().getAll()[0]?.observers[0]?.options;
+    // Passing `refetchOnWindowFocus: undefined` through to useQuery would
+    // override this global default — omitted options must leave it intact.
+    expect(observerOptions?.refetchOnWindowFocus).toBe(false);
+    expect(observerOptions?.refetchInterval).toBeUndefined();
+  });
+
+  it("honors roster refetch options when the caller provides them", async () => {
+    mocks.listSubagents.mockResolvedValue({
+      workspaceId: "anyharness-workspace-1",
+      parents: [],
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+          refetchOnWindowFocus: false,
+        },
+      },
+    });
+
+    const { result } = renderHook(
+      () => useWorkspaceSubagentsQuery({ refetchInterval: 15_000, refetchOnWindowFocus: true }),
+      { wrapper: createWrapper(queryClient, "http://runtime-workspaces.test") },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const observerOptions = queryClient.getQueryCache().getAll()[0]?.observers[0]?.options;
+    expect(observerOptions?.refetchOnWindowFocus).toBe(true);
+    expect(observerOptions?.refetchInterval).toBe(15_000);
+  });
+
   it("composes caller-provided request signals for workspace display queries", async () => {
     mocks.getWorkspace.mockResolvedValue({ id: "anyharness-workspace-1" });
     const callerController = new AbortController();

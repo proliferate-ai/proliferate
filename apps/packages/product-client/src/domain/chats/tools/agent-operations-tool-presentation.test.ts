@@ -11,6 +11,7 @@ import {
 const AGENT_VIEW = {
   identity: { runtimeId: "runtime-1", sessionId: "session-1" },
   workspace: { runtimeId: "runtime-1", workspaceId: "workspace-1" },
+  parent: { runtimeId: "runtime-1", sessionId: "parent-1" },
   role: "subagent",
   title: "Review queue semantics",
   configuration: { agentKind: "codex" },
@@ -88,6 +89,7 @@ describe("deriveAgentOperationsReceiptPresentation", () => {
         runtimeId: "runtime-1",
         sessionId: "session-1",
         workspaceId: "workspace-1",
+        parentSessionId: "parent-1",
         title: "Review queue semantics",
         role: "subagent",
         closed: false,
