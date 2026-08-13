@@ -12,6 +12,7 @@ import {
 import { resolveStatusFromExecutionSummary } from "#product/domain/sessions/activity";
 import type { PendingSessionConfigChanges } from "#product/domain/sessions/pending-config";
 import { activityFromTranscript } from "#product/lib/domain/sessions/directory/directory-activity";
+import { promptFallbackTitle } from "#product/lib/domain/sessions/title";
 import {
   createDirectoryEntry,
   DEFAULT_SESSION_ACTION_CAPABILITIES,
@@ -138,6 +139,46 @@ export function createSessionRecordFromSummary(
       status,
       executionSummary: session.executionSummary ?? null,
     }),
+  };
+}
+
+/**
+ * Optimistic record for a session the user just launched: visible instantly
+ * with the prompt text standing in as the title until the runtime persists the
+ * same fallback and the generated summary replaces it.
+ */
+export function buildOptimisticSessionCreationRecord({
+  agentKind,
+  existingProjectedRecord,
+  modelId,
+  pendingSessionId,
+  promptText,
+  resolvedModeId,
+  workspaceId,
+}: {
+  agentKind: string;
+  existingProjectedRecord: SessionRuntimeRecord | null;
+  modelId: string;
+  pendingSessionId: string;
+  promptText: string | null;
+  resolvedModeId: string | null;
+  workspaceId: string;
+}): SessionRuntimeRecord {
+  return {
+    ...createEmptySessionRecord(pendingSessionId, agentKind, {
+      workspaceId,
+      materializedSessionId: null,
+      modelId,
+      requestedModelId: modelId,
+      modeId: resolvedModeId,
+      title: existingProjectedRecord?.title ?? promptFallbackTitle(promptText),
+      hasAttemptedPrompt: existingProjectedRecord?.hasAttemptedPrompt ?? false,
+      optimisticPrompt: null,
+      pendingConfigChanges: {},
+      sessionRelationship: { kind: "root" },
+    }),
+    status: "starting",
+    transcriptHydrated: true,
   };
 }
 
