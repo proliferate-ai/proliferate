@@ -31,7 +31,7 @@ export function CoworkArtifactTurnCard({
   const showOpenButton = !!presentation.summary?.id && !!onOpenArtifact;
 
   return (
-    <div className="space-y-1.5 py-0.5">
+    <div className="space-y-1 py-0.5">
       <div className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md pl-0.5 pr-1.5 text-chat leading-5 text-muted-foreground">
         <FileText className="icon-compact text-faint" />
         <span className="text-inherit">{completedActionLabel}</span>
