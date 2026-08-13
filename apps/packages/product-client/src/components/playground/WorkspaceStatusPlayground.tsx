@@ -316,13 +316,11 @@ function FullSidebarPane() {
           homeActive
           workspacesActive={false}
           workflowsActive={false}
-          supportActive={false}
           onGoHome={() => {}}
           onGoWorkspaces={() => {}}
           onGoWorkflows={() => {}}
-          onOpenSupport={() => {}}
           shortcutRevealVisible={shortcutReveal}
-          shortcutLabels={{ newChat: "⌘N", support: "⌘?" }}
+          shortcutLabels={{ newChat: "⌘N" }}
         />
         <div className="flex min-h-0 flex-col px-2">
           <SidebarRepositoriesHeader

@@ -1,11 +1,10 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
-import { useSupportModalStore } from "#product/stores/support/support-modal-store";
 
 const releaseNoticeState = vi.hoisted(() => ({
   notice: null as null | {
@@ -188,40 +187,6 @@ vi.mock("#product/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => 
   useSidebarShortcutTargets: () => [],
 }));
 
-vi.mock("#product/hooks/support/derived/use-support-report-snapshot", () => ({
-  useSupportReportSnapshot: () => ({
-    openedAt: "2026-05-30T00:00:00.000Z",
-    source: "sidebar",
-    context: {
-      source: "sidebar",
-      intent: "general",
-      workspaceName: "hedgehog",
-      workspaceLocation: "local",
-    },
-    defaultScope: "app_only",
-    defaultWorkspaceId: null,
-    workspaceOptions: [],
-  }),
-}));
-
-vi.mock("#product/hooks/support/workflows/use-open-support-report-window", () => ({
-  useOpenSupportReportWindow: () => ({
-    openBug: vi.fn(() => {
-      useSupportModalStore.getState().openFeedback();
-    }),
-    openFeature: vi.fn(),
-    canSubmit: true,
-    disabledReason: null,
-  }),
-}));
-
-vi.mock("#product/hooks/support/facade/use-support-availability", () => ({
-  useSupportAvailability: () => ({
-    canSubmit: true,
-    disabledReason: null,
-  }),
-}));
-
 vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: { pendingWorkspaceEntry: null }) => unknown) =>
     selector({ pendingWorkspaceEntry: null }),
@@ -346,16 +311,13 @@ describe("MainSidebar host capabilities", () => {
   });
 });
 
-describe("MainSidebar support modal", () => {
-  it("opens the feedback modal from Support", async () => {
+describe("MainSidebar support entry points", () => {
+  it("does not render a Support row in the primary navigation (PRO-152)", () => {
     renderMainSidebar();
 
-    fireEvent.click(screen.getByRole("button", { name: /Support/ }));
-
-    await waitFor(() => {
-      expect(useSupportModalStore.getState().open).toBe(true);
-      expect(useSupportModalStore.getState().kind).toBe("bug");
-    });
+    expect(screen.queryByRole("button", { name: /Support/ })).toBeNull();
+    // The capability-routed help footer stays the single sidebar entry point.
+    expect(screen.getByTestId("sidebar-account-footer")).not.toBeNull();
   });
 });
 

@@ -33,7 +33,6 @@ import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/s
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
-import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "#product/hooks/workspaces/workflows/use-workspace-display-name-actions";
@@ -66,7 +65,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
   useSessionActivityReconciler();
   const { notice, dismissNotice, openChangelog } = useReleaseNotice();
   const actions = useWorkspaceSidebarActions();
-  const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "sidebar" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
   const {
@@ -319,7 +317,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
   );
   const primaryNavShortcutLabels = useMemo(() => ({
     newChat: getShortcutDisplayLabel(SHORTCUTS.newDefault),
-    support: getShortcutDisplayLabel(SHORTCUTS.openSupport),
   }), []);
 
   return (
@@ -343,11 +340,9 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
               homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
               workspacesActive={isOnWorkspaces}
               workflowsActive={isOnWorkflows}
-              supportActive={false}
               onGoHome={actions.handleGoHome}
               onGoWorkspaces={actions.handleGoWorkspaces}
               onGoWorkflows={actions.handleGoWorkflows}
-              onOpenSupport={handleOpenSupport}
               shortcutRevealVisible={shortcutRevealVisible}
               shortcutLabels={primaryNavShortcutLabels}
             />
