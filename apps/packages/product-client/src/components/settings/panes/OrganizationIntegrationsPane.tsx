@@ -143,6 +143,16 @@ export function OrganizationIntegrationsPane() {
           {filteredDefinitions.map((definition) => {
             const enabledView = adminIntegrationEnabledView(definition);
             return (
+              // Contradiction, recorded rather than re-derived: the settings
+              // slice spec paired this row with `IntegrationRow`'s RosterRow
+              // contract, but this pane never renders `IntegrationRow` — these
+              // are the admin catalog's own rows, a five-column table (name /
+              // source / auth kind / provenance / switch) whose columns must
+              // stay aligned across rows. `RosterRow` has a single trailing
+              // slot and no cross-row column mechanism (the same reason
+              // `OrganizationMembersList`'s table deferred), and `SettingsRow`
+              // is label + control. Neither fits without breaking alignment,
+              // so the grid stays until a table-row pattern exists.
               <div
                 key={definition.definitionId}
                 className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,10rem)_auto] items-center gap-3 px-3.5 py-[13px]"

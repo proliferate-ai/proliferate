@@ -22,11 +22,9 @@ export interface SettingsPageBodyProps
  * off their root.
  *
  * Values transcribed from the surveyed panes, not invented: `max-w-[50rem]` is
- * the settings page-width contract that lives on `SettingsScreen`'s centering
- * container today (the settings slice removes it there once panes carry it),
+ * the settings page-width contract, formerly on `SettingsScreen`'s centering
+ * container and handed off to the panes here,
  * and `space-y-6` is the root rhythm of 22 of the 26 surveyed pane roots.
- *
- * incubating: settings slice, wave 2
  */
 export function SettingsPageBody({ children, ...props }: SettingsPageBodyProps) {
   return (
