@@ -12,6 +12,10 @@ export function TurnDocumentReferenceCard({
   const fileActions = useFileReferenceActions({ rawPath: resource.rawPath });
 
   return (
+    // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review, check 1):
+    // the card shares the diff panel's `--color-diff-panel-surface` fill so a
+    // document reference and a diff read as the same object in the transcript.
+    // `Card`'s two-fill surface axis does not carry that token.
     <div
       data-turn-document-reference
       className="flex max-w-full flex-col overflow-hidden rounded-lg border border-border/60 bg-diff-panel-surface text-foreground"

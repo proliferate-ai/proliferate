@@ -37,6 +37,13 @@ export function CoworkArtifactTurnCard({
         <span className="text-inherit">{completedActionLabel}</span>
       </div>
 
+      {/*
+        Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review, check 1):
+        `bg-muted/25` is a quarter-strength wash chosen to sit under the
+        transcript's own tint without stacking into a second visible plane.
+        `Card` offers the borderless `bg-surface-elevated-secondary` tint or the
+        opaque `bg-card`, neither of which is this. Needs a ruling on `Card`.
+      */}
       <div className="rounded-md border border-border/60 bg-muted/25 px-3 py-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
