@@ -288,6 +288,12 @@ describe("WorkspaceItem", () => {
       expect(card).not.toBeNull();
       expect(card?.textContent).toContain("proliferate");
       expect(card?.textContent).toContain("PR #805 · Open");
+
+      // Closing has its own forwarding chain to survive: the row's
+      // `onPointerLeave` has to clear `ProductSidebarWorkspaceRow`'s Omit list
+      // and both spreads to reach `SidebarRowSurface`.
+      fireEvent.pointerLeave(row!);
+      expect(document.querySelector("[data-workspace-peek-card]")).toBeNull();
     } finally {
       vi.useRealTimers();
     }

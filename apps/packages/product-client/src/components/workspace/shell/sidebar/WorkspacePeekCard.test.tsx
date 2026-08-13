@@ -153,6 +153,31 @@ describe("WorkspacePeekCard", () => {
     expect(card()?.style.top).toBe("8px");
   });
 
+  it("carries the PR state as the glyph's standalone dot", () => {
+    openPeek(content());
+
+    expect(card()?.innerHTML).toContain('cx="15" cy="15" r="3"');
+  });
+
+  it("renders a merged pull request as the whole glyph in the merged ink", () => {
+    openPeek(content({
+      gitStatus: makeGitStatus({
+        pr: {
+          state: "merged",
+          number: 805,
+          url: "https://github.com/acme/repo/pull/805",
+          checks: "none",
+          reviewDecision: "none",
+        },
+      }),
+    }));
+
+    expect(screen.getByText("PR #805 · Merged")).toBeTruthy();
+    expect(card()?.innerHTML).toContain("text-pr-merged");
+    // Merged is settled, so the glyph is the whole signal: no state dot.
+    expect(card()?.innerHTML).not.toContain('cx="15" cy="15" r="3"');
+  });
+
   it("omits the PR row when the branch has no pull request", () => {
     openPeek(content({
       gitStatus: makeGitStatus({

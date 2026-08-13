@@ -167,6 +167,11 @@ describe("SidebarWorkspaceGitGlyph", () => {
           fill === "hollow" ? "none" : "currentColor"
         }" stroke="currentColor"`,
       );
+      // The construction itself, not just the dot: the branch column and the
+      // hook arrow are the glyph's identity, and a redraw that loses them
+      // would still satisfy every dot assertion above.
+      expect(markup).toContain('d="M5.4165 6.66664V13.3333"');
+      expect(markup).toContain('d="M8.55 4.35H11.9C13.03 4.35 13.95 5.27 13.95 6.4V9.2"');
     },
   );
 

@@ -1,4 +1,5 @@
 import { useLocation } from "react-router-dom";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SidebarScrollingNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
 import { APP_ROUTES } from "#product/config/app-routes";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
@@ -29,15 +30,20 @@ export function SidebarScrollingNavigationSection({
   const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "sidebar" });
 
   return (
-    <SidebarScrollingNavigation
-      workspacesActive={location.pathname === APP_ROUTES.workspaces}
-      workflowsActive={location.pathname.startsWith(APP_ROUTES.workflows)}
-      supportActive={false}
-      onGoWorkspaces={onGoWorkspaces}
-      onGoWorkflows={onGoWorkflows}
-      onOpenSupport={handleOpenSupport}
-      shortcutRevealVisible={shortcutRevealVisible}
-      supportShortcutLabel={getShortcutDisplayLabel(SHORTCUTS.openSupport)}
-    />
+    // These rows kept profiler coverage while they rendered inside the pinned
+    // nav's profiler; splitting the navigation must not silently drop them
+    // out of the render-cost picture.
+    <DebugProfiler id="workspace-sidebar-scrolling-nav">
+      <SidebarScrollingNavigation
+        workspacesActive={location.pathname === APP_ROUTES.workspaces}
+        workflowsActive={location.pathname.startsWith(APP_ROUTES.workflows)}
+        supportActive={false}
+        onGoWorkspaces={onGoWorkspaces}
+        onGoWorkflows={onGoWorkflows}
+        onOpenSupport={handleOpenSupport}
+        shortcutRevealVisible={shortcutRevealVisible}
+        supportShortcutLabel={getShortcutDisplayLabel(SHORTCUTS.openSupport)}
+      />
+    </DebugProfiler>
   );
 }

@@ -12,6 +12,10 @@ import { ProductSidebarPrimaryNavigation } from "#product/components/workspace/s
  * Support are destinations rather than the primary action; they scroll away
  * with the repository list, which is what buys that list its vertical room
  * back on short windows.
+ *
+ * The glyphs carry no size class: `SidebarNavRow`'s icon well sizes them with
+ * a `[&>svg]` compound selector that beats anything passed here, so a class
+ * on the glyph would describe a size it does not get.
  */
 
 interface SidebarPinnedNavigationProps {
@@ -31,7 +35,7 @@ export function SidebarPinnedNavigation({
     {
       id: "new-chat",
       active: homeActive,
-      icon: <AppShellNewChatIcon className="icon-indicator" />,
+      icon: <AppShellNewChatIcon />,
       label: "New chat",
       shortcutLabel: newChatShortcutLabel,
     },
@@ -71,13 +75,13 @@ export function SidebarScrollingNavigation({
     {
       id: "workspaces",
       active: workspacesActive,
-      icon: <Grid className="icon-indicator" />,
+      icon: <Grid />,
       label: "Workspaces",
     },
     {
       id: "workflows",
       active: workflowsActive,
-      icon: <Fork className="icon-indicator" />,
+      icon: <Fork />,
       label: "Workflows",
       status: (
         <span className="font-mono text-ui-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
@@ -88,7 +92,7 @@ export function SidebarScrollingNavigation({
     {
       id: "support",
       active: supportActive,
-      icon: <LifeBuoy className="icon-indicator" strokeWidth={1.75} />,
+      icon: <LifeBuoy strokeWidth={1.75} />,
       label: "Support",
       shortcutLabel: supportShortcutLabel,
     },

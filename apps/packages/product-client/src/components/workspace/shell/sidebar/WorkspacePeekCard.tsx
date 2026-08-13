@@ -19,7 +19,12 @@ export const WORKSPACE_PEEK_DELAY_MS = 450;
 /** Keep in step with the card's own `w-75`, which the clamp math cannot read. */
 const CARD_WIDTH = 300;
 const VIEWPORT_MARGIN = 8;
-/** Enough for the tallest card (header + four rows) to stay on screen. */
+/**
+ * Enough for the tallest card to stay on screen. Read off the card's anatomy
+ * rather than guessed: header (~30px incl. its 6px bottom padding) + four
+ * 26px rows + three 2px gaps + 20px of vertical padding ≈ 152, rounded up to
+ * 160. A fifth row means this number moves with it.
+ */
 const ESTIMATED_CARD_HEIGHT = 160;
 /** Indents the card past the row's leading well, under the row's label. */
 const ANCHOR_INSET = 28;
@@ -64,7 +69,7 @@ export function WorkspacePeekCard({
       aria-hidden="true"
       data-workspace-peek-card
       // Non-interactive: the pointer must keep belonging to the row beneath.
-      className={`pointer-events-none fixed z-popover flex w-75 flex-col gap-0.5 px-3 py-2.5 ${POPOVER_FRAME_CLASS}`}
+      className={`pointer-events-none fixed z-tooltip flex w-75 flex-col gap-0.5 px-3 py-2.5 ${POPOVER_FRAME_CLASS}`}
     >
       <div className="flex items-baseline gap-2 px-0.5 pt-0.5 pb-1.5">
         <span className="min-w-0 flex-1 truncate text-ui font-medium">
@@ -85,7 +90,16 @@ export function WorkspacePeekCard({
 
       {prView && prTone && prLabel ? (
         <PeekRow
-          icon={(
+          icon={prView.kind === "merged" ? (
+            // Merged is settled, so the whole glyph carries it and there is no
+            // dot — the row's own convention. The ink is the shared tone map's
+            // `text-pr-merged` rather than the row's `sidebar-status-worktree`
+            // twin of it: this card sits on the popover surface, where the
+            // rest of its inks are the popover's.
+            <GitBranchIcon
+              className={`${PEEK_ICON_BASE_CLASS} ${statusDotToneTextClass(prTone.tone)}`}
+            />
+          ) : (
             <GitBranchStatusIcon
               className={PEEK_ICON_CLASS}
               dotClassName={statusDotToneTextClass(prTone.tone)}
@@ -106,7 +120,9 @@ export function WorkspacePeekCard({
   );
 }
 
-const PEEK_ICON_CLASS = "icon-paired shrink-0 text-muted-foreground";
+/** Geometry only, so a row that owns its own ink can reuse it. */
+const PEEK_ICON_BASE_CLASS = "icon-paired shrink-0";
+const PEEK_ICON_CLASS = `${PEEK_ICON_BASE_CLASS} text-muted-foreground`;
 
 function PeekRow({
   icon,
@@ -146,6 +162,15 @@ function checksLabel(status: WorkspaceGitStatus | null): string {
  * The anchor is measured when the delay elapses rather than when the pointer
  * arrives, so a row that moved under the pointer (a list settling, a group
  * expanding) still anchors its card correctly.
+ *
+ * RECORDED REFUSAL (rule of two): `../tabs/DelegatedAgentHoverCard.tsx` is
+ * the named twin of this shape — a hover-timed card anchored off the
+ * trigger's rect and clamped to the viewport. It is deliberately NOT promoted
+ * into a shared `useAnchoredHoverCard` primitive here, because the two differ
+ * on exactly the axes such a primitive would have to take: that card is
+ * interactive and holds itself open on a leave timer, this one never takes
+ * the pointer and closes the instant the row is left. Choosing those axes is
+ * a founder decision, not a mechanical lift.
  */
 export function useWorkspacePeek(content: WorkspacePeekContent | null): {
   onPointerEnter: (event: { currentTarget: EventTarget & HTMLElement }) => void;
