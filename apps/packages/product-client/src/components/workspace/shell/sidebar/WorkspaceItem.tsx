@@ -3,6 +3,7 @@ import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   Archive,
   Pencil,
+  Pin,
   Trash,
 } from "#product/primitives/icons/core";
 import { Folder } from "#product/primitives/icons/workspace";
@@ -48,6 +49,8 @@ interface WorkspaceItemProps {
   variant?: SidebarWorkspaceVariant;
   active?: boolean;
   archived?: boolean;
+  /** Whether the workspace sits in the sidebar's Pinned section. */
+  pinned?: boolean;
   /**
    * Activity indicator (spinner / waiting / error). Rendered in the row's
    * RIGHT slot; hover affordances (shortcut reveal, menu trigger) still win
@@ -73,6 +76,8 @@ interface WorkspaceItemProps {
   onCopyBranchName?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
+  onPin?: () => void;
+  onUnpin?: () => void;
   onMarkDone?: () => void;
   /** Workspace-copy availability commands (PR 5), rendered in both the DOM and
    * native `…` menus. */
@@ -96,6 +101,7 @@ export function WorkspaceItem({
   variant = "local",
   active = false,
   archived = false,
+  pinned = false,
   statusIndicator = null,
   shortcutLabel = null,
   shortcutRevealVisible = false,
@@ -106,6 +112,8 @@ export function WorkspaceItem({
   onOpenPullRequest,
   onArchive,
   onUnarchive,
+  onPin,
+  onUnpin,
   onMarkDone,
   availabilityCommands = [],
   onAvailabilityCommand,
@@ -124,6 +132,8 @@ export function WorkspaceItem({
   const handleCopyBranchNameCommand = () => onCopyBranchName?.();
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
+  const handlePinCommand = () => onPin?.();
+  const handleUnpinCommand = () => onUnpin?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
   const trailingIdentity = <SidebarWorkspaceGitGlyph status={gitStatus} />;
   const pullRequestUrl = gitStatus?.pr?.url ?? null;
@@ -142,6 +152,9 @@ export function WorkspaceItem({
     archived,
     canArchive: !!onArchive,
     canUnarchive: !!onUnarchive,
+    pinned,
+    canPin: !!onPin,
+    canUnpin: !!onUnpin,
     canMarkDone: !!onMarkDone,
     onRename: handleRenameCommand,
     onCopyWorkspaceLocation: handleCopyWorkspaceLocationCommand,
@@ -149,11 +162,15 @@ export function WorkspaceItem({
     onOpenPullRequest: () => handleOpenPullRequestCommand?.(),
     onArchive: handleArchiveCommand,
     onUnarchive: handleUnarchiveCommand,
+    onPin: handlePinCommand,
+    onUnpin: handleUnpinCommand,
     onMarkDone: handleMarkDoneCommand,
     availabilityCommands,
     onAvailabilityCommand,
   });
   const hasMenuActions = hasArchiveAction
+    || !!onPin
+    || !!onUnpin
     || !!onRename
     || !!onCopyWorkspaceLocation
     || !!onCopyBranchName
@@ -165,6 +182,7 @@ export function WorkspaceItem({
   const workspaceMenu = hasMenuActions ? (
     <WorkspaceItemMenu
       archived={archived}
+      pinned={pinned}
       branchName={branchName}
       workspaceLocationCopyLabel={workspaceLocationCopyLabel}
       pullRequestNumber={pullRequestNumber}
@@ -173,6 +191,8 @@ export function WorkspaceItem({
       onRename={onRename ? handleRenameCommand : undefined}
       onArchive={onArchive ? handleArchiveCommand : undefined}
       onUnarchive={onUnarchive ? handleUnarchiveCommand : undefined}
+      onPin={onPin ? handlePinCommand : undefined}
+      onUnpin={onUnpin ? handleUnpinCommand : undefined}
       onCopyWorkspaceLocation={
         onCopyWorkspaceLocation ? handleCopyWorkspaceLocationCommand : undefined
       }
@@ -263,6 +283,20 @@ export function WorkspaceItem({
                     close();
                     handleRenameCommand();
                   }}
+                />
+              )}
+              {onPin && !pinned && (
+                <PopoverMenuItem
+                  icon={<Pin className="icon-paired shrink-0 text-muted-foreground" />}
+                  label="Pin"
+                  onClick={() => { close(); handlePinCommand(); }}
+                />
+              )}
+              {onUnpin && pinned && (
+                <PopoverMenuItem
+                  icon={<Pin className="icon-paired shrink-0 text-muted-foreground" />}
+                  label="Unpin"
+                  onClick={() => { close(); handleUnpinCommand(); }}
                 />
               )}
               {onCopyWorkspaceLocation && (

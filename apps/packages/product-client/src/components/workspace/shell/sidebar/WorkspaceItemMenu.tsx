@@ -5,6 +5,7 @@ import {
   Link2,
   MoreHorizontal,
   Pencil,
+  Pin,
   RotateCcw,
   Trash,
 } from "#product/primitives/icons/core";
@@ -31,6 +32,7 @@ import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching"
 
 interface WorkspaceItemMenuProps {
   archived: boolean;
+  pinned: boolean;
   /** Current git branch, shown read-only in the git section. */
   branchName: string | null;
   workspaceLocationCopyLabel?: string | null;
@@ -41,6 +43,8 @@ interface WorkspaceItemMenuProps {
   onRename?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
+  onPin?: () => void;
+  onUnpin?: () => void;
   onCopyWorkspaceLocation?: () => void;
   onCopyBranchName?: () => void;
   onMarkDone?: () => void;
@@ -71,6 +75,7 @@ const AVAILABILITY_COMMAND_ICON: Record<WorkspaceAvailabilityCommandKind, typeof
  */
 export function WorkspaceItemMenu({
   archived,
+  pinned,
   branchName,
   workspaceLocationCopyLabel,
   pullRequestNumber = null,
@@ -78,6 +83,8 @@ export function WorkspaceItemMenu({
   onRename,
   onArchive,
   onUnarchive,
+  onPin,
+  onUnpin,
   onCopyWorkspaceLocation,
   onCopyBranchName,
   onMarkDone,
@@ -127,6 +134,18 @@ export function WorkspaceItemMenu({
           <DropdownMenuItem onSelect={onRename}>
             <Pencil className="icon-paired text-muted-foreground" />
             Rename
+          </DropdownMenuItem>
+        )}
+        {onPin && !pinned && (
+          <DropdownMenuItem onSelect={onPin}>
+            <Pin className="icon-paired text-muted-foreground" />
+            Pin
+          </DropdownMenuItem>
+        )}
+        {onUnpin && pinned && (
+          <DropdownMenuItem onSelect={onUnpin}>
+            <Pin className="icon-paired text-muted-foreground" />
+            Unpin
           </DropdownMenuItem>
         )}
         {onArchive && !archived && (

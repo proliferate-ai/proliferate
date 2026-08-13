@@ -12,6 +12,8 @@ type WorkspaceUiSidebarActions = Pick<
   | "archiveWorkspaces"
   | "unarchiveWorkspace"
   | "unarchiveWorkspaces"
+  | "pinWorkspace"
+  | "unpinWorkspace"
   | "hideRepoRoot"
   | "unhideRepoRoot"
   | "toggleRepoGroupCollapsed"
@@ -68,6 +70,23 @@ export function createWorkspaceUiSidebarActions(
         return;
       }
       set({ archivedWorkspaceIds: next });
+    },
+
+    pinWorkspace: (id) => {
+      const current = get().pinnedWorkspaceIds;
+      if (current.includes(id)) {
+        return;
+      }
+      set({ pinnedWorkspaceIds: [...current, id] });
+    },
+
+    unpinWorkspace: (id) => {
+      const current = get().pinnedWorkspaceIds;
+      const next = current.filter((workspaceId) => workspaceId !== id);
+      if (next.length === current.length) {
+        return;
+      }
+      set({ pinnedWorkspaceIds: next });
     },
 
     hideRepoRoot: (repoRootId) => {

@@ -74,6 +74,12 @@ export interface SidebarWorkspaceItemState {
   subtitle: string | null;
   active: boolean;
   archived: boolean;
+  /**
+   * Whether the workspace is pinned to the sidebar's Pinned section, matched
+   * against the persisted pinned ids across the logical workspace's related
+   * ids (mirrors `archived`).
+   */
+  pinned: boolean;
   variant: SidebarWorkspaceVariant;
   statusIndicator: SidebarStatusIndicator | null;
   lastInteracted: string | null;

@@ -38,6 +38,7 @@ export function buildSidebarWorkspaceItems(args: {
   pendingItem: SidebarWorkspaceItemState | null;
   pendingOwnedWorkspaceId: string | null;
   archivedSet: Set<string>;
+  pinnedSet?: Set<string>;
   selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
   workspaceActivities: Record<string, SidebarSessionActivityState>;
@@ -126,6 +127,7 @@ function buildSidebarWorkspaceItem(
     selectedLogicalWorkspaceId: string | null;
     selectedWorkspaceId: string | null;
     archivedSet: Set<string>;
+    pinnedSet?: Set<string>;
     workspaceActivities: Record<string, SidebarSessionActivityState>;
     pendingPromptCounts?: Record<string, number>;
     gitStatus: GitStatusSnapshot | undefined;
@@ -233,6 +235,7 @@ function buildSidebarWorkspaceItem(
       subtitle: active ? args.activeSessionTitle : null,
       active,
       archived,
+      pinned: logicalWorkspaceRelatedIds(entry).some((id) => args.pinnedSet?.has(id)),
       variant,
       statusIndicator: entry.localWorkspace && isWorkspaceDirectoryMissing(entry.localWorkspace)
         ? worktreeMissingStatusIndicator(

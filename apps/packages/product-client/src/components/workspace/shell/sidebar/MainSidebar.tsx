@@ -7,6 +7,7 @@ import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
 import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
 import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
+import { SidebarPinnedSection } from "#product/components/workspace/shell/sidebar/SidebarPinnedSection";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceContent";
 import { WorkspaceCleanupAttentionSection } from "#product/components/workspace/shell/sidebar/WorkspaceCleanupAttentionSection";
@@ -98,6 +99,7 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
   })));
   const {
     groups,
+    pinnedItems,
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,
     cleanupAttentionWorkspaces,
@@ -122,6 +124,8 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
   const unarchiveWorkspace = useWorkspaceUiStore((s) => s.unarchiveWorkspace);
+  const pinWorkspace = useWorkspaceUiStore((s) => s.pinWorkspace);
+  const unpinWorkspace = useWorkspaceUiStore((s) => s.unpinWorkspace);
   const { updateWorkspaceDisplayName } = useWorkspaceDisplayNameActions();
   const handleRenameWorkspace = useCallback(
     (workspaceId: string, displayName: string | null) =>
@@ -359,6 +363,23 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
             onRetryCleanup={actions.handleRetryWorkspaceCleanup}
           />
 
+          <SidebarPinnedSection
+            items={pinnedItems}
+            shortcutLabelByWorkspaceId={sidebarShortcutLabelById}
+            shortcutRevealVisible={shortcutRevealVisible}
+            onSelectWorkspace={actions.handleSelectWorkspace}
+            onIndicatorAction={actions.handleSidebarIndicatorAction}
+            onOpenPullRequest={actions.handleOpenPullRequest}
+            onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
+            onWorkspaceAvailabilityCommand={handleWorkspaceAvailabilityCommand}
+            onWorkspaceHover={handleWorkspaceHover}
+            onArchiveWorkspace={handleArchiveWorkspace}
+            onUnarchiveWorkspace={handleUnarchiveWorkspace}
+            onPinWorkspace={pinWorkspace}
+            onUnpinWorkspace={unpinWorkspace}
+            onRenameWorkspace={handleRenameWorkspace}
+          />
+
           <SidebarRepositoriesHeader
             repositoriesCollapsed={repositoriesCollapsed}
             filtersActive={filtersActive}
@@ -398,6 +419,8 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
                 shortcutRevealVisible={shortcutRevealVisible}
                 onArchiveWorkspace={handleArchiveWorkspace}
                 onUnarchiveWorkspace={handleUnarchiveWorkspace}
+                onPinWorkspace={pinWorkspace}
+                onUnpinWorkspace={unpinWorkspace}
                 onRenameWorkspace={handleRenameWorkspace}
                 onRemoveRepo={handleRemoveRepo}
                 onOpenRepoSettings={handleOpenRepoSettings}

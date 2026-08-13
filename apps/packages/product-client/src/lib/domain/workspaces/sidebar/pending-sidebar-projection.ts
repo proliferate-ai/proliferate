@@ -77,6 +77,7 @@ export function buildPendingSidebarProjection(args: {
       subtitle: active ? args.activeSessionTitle : null,
       active,
       archived: false,
+      pinned: false,
       variant,
       statusIndicator: null,
       lastInteracted: createdAt,

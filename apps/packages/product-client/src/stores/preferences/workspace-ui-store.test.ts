@@ -83,6 +83,25 @@ describe("workspace ui tab persistence", () => {
       .toBe("2026-04-04T00:00:12.000Z");
   });
 
+  it("pins and unpins workspaces in pin order", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.pinWorkspace("ws-1");
+    store.pinWorkspace("ws-2");
+    store.pinWorkspace("ws-1");
+
+    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-1", "ws-2"]);
+
+    useWorkspaceUiStore.getState().unpinWorkspace("ws-1");
+    useWorkspaceUiStore.getState().unpinWorkspace("ws-missing");
+
+    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-2"]);
+  });
+
   it("stores archived workspace visibility", () => {
     useWorkspaceUiStore.setState({
       ...WORKSPACE_UI_DEFAULTS,

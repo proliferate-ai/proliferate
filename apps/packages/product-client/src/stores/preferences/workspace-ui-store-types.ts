@@ -14,6 +14,7 @@ import type {
 export interface WorkspaceUiState {
   _hydrated: boolean;
   archivedWorkspaceIds: string[];
+  pinnedWorkspaceIds: string[];
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
   showArchived: boolean;
@@ -47,6 +48,8 @@ export interface WorkspaceUiState {
   archiveWorkspaces: (ids: string[]) => void;
   unarchiveWorkspace: (id: string) => void;
   unarchiveWorkspaces: (ids: string[]) => void;
+  pinWorkspace: (id: string) => void;
+  unpinWorkspace: (id: string) => void;
   hideRepoRoot: (repoRootId: string) => void;
   unhideRepoRoot: (repoRootId: string) => void;
   toggleRepoGroupCollapsed: (repoKey: string) => void;
