@@ -1,4 +1,5 @@
-use super::super::service::{SubagentError, SubagentService, MAX_SUBAGENTS_PER_PARENT};
+use super::super::error::SubagentError;
+use super::super::service::{SubagentService, MAX_SUBAGENTS_PER_PARENT};
 use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::integrations::mcp::product_server::{ProductMcpContextError, ProductMcpRequestContext};

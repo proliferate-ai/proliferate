@@ -15,11 +15,11 @@ use super::error::ApiError;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::subagents::error::SubagentError;
 use crate::domains::sessions::subagents::model::{
     ChildSubagentContext, ParentSubagentLinkContext, SessionSubagentsContext,
     SubagentCompletionSummary,
 };
-use crate::domains::sessions::subagents::service::SubagentError;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
