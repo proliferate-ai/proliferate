@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AccountSettingsPane,
@@ -14,6 +14,7 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import { ExternalLink } from "#product/primitives/icons/core";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
 import { CurrentUserInvitationsSection } from "#product/components/settings/panes/organization/CurrentUserInvitationsSection";
@@ -242,11 +243,11 @@ export function AccountPane() {
       />
 
       {joinFlow.statusMessage ? (
-        <AccountNotice>{joinFlow.statusMessage}</AccountNotice>
+        <NoticeBanner tone="neutral">{joinFlow.statusMessage}</NoticeBanner>
       ) : null}
 
       {joinFlow.unauthenticatedJoin ? (
-        <AccountNotice>Finish sign-in to accept this organization invitation.</AccountNotice>
+        <NoticeBanner tone="neutral">Finish sign-in to accept this organization invitation.</NoticeBanner>
       ) : null}
 
       {pendingInvitations.length > 0 ? (
@@ -377,14 +378,6 @@ export function AccountPane() {
         context={CONNECT_SERVER_LABELS.inviteContext}
       />
     </SettingsPageBody>
-  );
-}
-
-function AccountNotice({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-ui-sm text-muted-foreground">
-      {children}
-    </div>
   );
 }
 

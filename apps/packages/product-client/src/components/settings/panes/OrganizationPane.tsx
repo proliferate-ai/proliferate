@@ -2,7 +2,6 @@ import {
   useEffect,
   useState,
   type FormEvent,
-  type ReactNode,
 } from "react";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
@@ -20,6 +19,7 @@ import {
 } from "#product/components/settings/panes/organization/GitHubAppInstallationSection";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
@@ -175,7 +175,7 @@ export function OrganizationPane() {
       />
 
       {statusMessage ? (
-        <OrganizationNotice>{statusMessage}</OrganizationNotice>
+        <NoticeBanner tone="neutral">{statusMessage}</NoticeBanner>
       ) : null}
 
       {shouldShowSignInState ? (
@@ -326,10 +326,3 @@ export function OrganizationPane() {
   );
 }
 
-function OrganizationNotice({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-ui-sm text-muted-foreground">
-      {children}
-    </div>
-  );
-}
