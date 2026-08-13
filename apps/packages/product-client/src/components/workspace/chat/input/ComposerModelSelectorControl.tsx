@@ -120,7 +120,7 @@ export function ComposerModelSelectorControl({
         data-composer-selected-model={selectedModelId}
         icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-body)]" /> : undefined}
         label={triggerLabel}
-        className="max-w-[15rem]"
+        className="max-w-[min(15rem,100%)]"
       />
     );
   }
@@ -143,7 +143,7 @@ export function ComposerModelSelectorControl({
             aria-describedby={unsupportedSelectionMessage
               ? MODEL_UNSUPPORTED_MESSAGE_ID
               : undefined}
-            className="max-w-[15rem]"
+            className="max-w-[min(15rem,100%)]"
           />
         )}
         side="top"

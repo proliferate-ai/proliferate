@@ -52,7 +52,7 @@ describe("WorkspaceShellRightRail", () => {
     // The animated width var clamped so the chat pane keeps its minimum: the
     // rail yields before the composer collapses (MAIN_PANE_MIN_WIDTH).
     expect(rail?.style.width).toBe(
-      "min(var(--workspace-right-width), calc(100% - 420px))",
+      "min(var(--workspace-right-width), calc(100% - 440px))",
     );
     expect(rail?.className).toContain("bg-sidebar-background");
     expect(content?.className).toContain("absolute inset-y-0 right-0");

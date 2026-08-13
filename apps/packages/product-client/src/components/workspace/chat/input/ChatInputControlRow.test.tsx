@@ -178,6 +178,18 @@ describe("ChatInputControlRow", () => {
     expect(mode.querySelector("svg")).toBeNull();
   });
 
+  it("caps the model pill by its wrapper so it cannot paint over the mode pill", () => {
+    renderControlRow();
+
+    // Both bounds in one arbitrary value: the 15rem identity budget AND the
+    // wrapper width. A bare rem cap replaces the primitive's max-w-full in
+    // tailwind-merge, and the pill's column-flex wrapper does not otherwise
+    // constrain the button — it overflows onto the mode pill instead of
+    // truncating.
+    const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
+    expect(model.className).toContain("max-w-[min(15rem,100%)]");
+  });
+
   it("mounts no trailing pending slot while a mode change is submitting", () => {
     const controls = createControls();
     controls[0] = { ...controls[0], pendingState: "submitting" };

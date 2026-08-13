@@ -109,7 +109,7 @@ describe("useMainScreenRightPanel drag wiring", () => {
 
   it("lets a drag widen the panel past the legacy ceiling when the window affords it", () => {
     // A wide shell row: the drag's ceiling is the row minus the chat pane's
-    // floor (2000 − 420 = 1580), not the legacy fixed 700.
+    // floor (2000 − 440 = 1560), not the legacy fixed 700.
     const row = document.createElement("div");
     row.getBoundingClientRect = () => ({ width: 2000 } as DOMRect);
     const rail = document.createElement("div");
@@ -151,11 +151,11 @@ describe("useMainScreenRightPanel drag wiring", () => {
       });
       rerender();
 
-      // Asks for 920; the 1000px row only affords 1000 − 420 = 580.
+      // Asks for 920; the 1000px row only affords 1000 − 440 = 560.
       fireDrag(result.current.onRightSeparatorDown, [500]);
       rerender();
 
-      expect(result.current.rightPanelWidth).toBe(580);
+      expect(result.current.rightPanelWidth).toBe(560);
     } finally {
       row.remove();
     }

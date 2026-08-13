@@ -59,13 +59,15 @@ export const RIGHT_PANEL_FALLBACK_MAX_WIDTH = 700;
  * rendered width is clamped so the pane never drops below this, whatever the
  * persisted panel width, sidebar width, and window size add up to — without
  * it, a wide panel on a small window squeezes the pane toward zero and the
- * composer controls paint over each other. 420 = the composer's compact
- * control tier (see `chat-layout.ts`) fully laid out at its icon floor, plus
- * the chat column gutter. The same floor bounds how far a resize drag can
+ * composer controls paint over each other. 440 = the composer's compact
+ * control tier (see `chat-layout.ts`) at its natural width — every pill at
+ * content size, the model name untruncated, the inter-pill rhythm intact —
+ * plus the chat column gutter, so minimizing the pane never compresses the
+ * control row's spacing. The same floor bounds how far a resize drag can
  * widen the panel. The persisted width is deliberately not clamped: the
  * user's chosen panel width comes back as soon as the window affords it.
  */
-export const MAIN_PANE_MIN_WIDTH = 420;
+export const MAIN_PANE_MIN_WIDTH = 440;
 /**
  * Raw drag width below which a resize gesture stops resizing and collapses the
  * panel instead. This cannot live in `clampRightPanelWidth`: clamping's whole

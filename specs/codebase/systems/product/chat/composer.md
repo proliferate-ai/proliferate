@@ -275,18 +275,25 @@ neighboring controls:
 - The integrations pill hides the connected count and keeps the glyph. The
   urgent re-auth label stays visible (and shrinkable) at every width.
 - The model pill keeps its provider icon and name and remains the flexible
-  item — it truncates with an ellipsis before any icon pill compresses.
+  item — it truncates with an ellipsis before any icon pill compresses. Its
+  max-width is `min(15rem, 100%)`: the wrapper bound is load-bearing, because
+  a bare rem cap replaces the primitive's `max-w-full` in tailwind-merge and
+  the pill's column-flex wrapper (`items-start`, for the inline error) does
+  not otherwise constrain the button — an uncapped button paints over the
+  mode pill instead of truncating.
 - Each swap is CSS visibility on one button (wrapper-span classes via
   `ComposerControlButton`), so `data-*` driver attributes, handlers, and
   `aria-label`s are width-independent. Pending-state indicators stay visible
   at every width.
 
-The compact tier is sized so the row fits at the main pane's floor:
+The main pane's floor is sized so the compact row sits at its natural width:
 `MAIN_PANE_MIN_WIDTH` (`right-panel-model.ts`) clamps the right rail's
-rendered width so the chat pane never drops below 420px, whatever the
-persisted panel width, sidebar width, and window size add up to. The
-persisted panel width is not clamped — the user's chosen width returns when
-the window affords it.
+rendered width so the chat pane never drops below 440px, whatever the
+persisted panel width, sidebar width, and window size add up to. At the
+floor, every pill renders at content size with the shared 8px rhythm intact —
+minimizing the pane must not compress the spacing between pills or truncate
+the model name for the canonical control row. The persisted panel width is
+not clamped — the user's chosen width returns when the window affords it.
 
 ## 2. Dock Regions
 
