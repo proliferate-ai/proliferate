@@ -29,11 +29,11 @@ function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
  * Onboarding card (UX spec §10, owner rev 2026-07-01: cards, not rows):
  * side-by-side tile — page-tone surface, 20px radius, hairline frame,
  * icon row on top with trailing accessories + hover dismiss, then
- * title 13/500 and description 12px muted below. The frame is a real
- * border, not a ring: WKWebView clips hairline ring shadows against the
- * pixel-snapped background, so at fractional page zooms whole edges of a
- * 0.5px ring disappear, while non-zero borders always paint at least one
- * device pixel (PRO-117).
+ * title 13/500 and description 12px muted below. The frame is an INSET
+ * ring on purpose: at fractional window zooms WebKit's pixel snapping
+ * rounds outward hairline rings — and even 0.5px/1px borders — to zero
+ * device pixels on individual edges, while an inset ring composites over
+ * the card's own background and survives every zoom factor (PRO-117).
  */
 function OnboardingCard({
   icon,
@@ -55,7 +55,7 @@ function OnboardingCard({
   selectLabel: string;
 }) {
   return (
-    <div className="group relative flex min-h-26 min-w-0 flex-col rounded-composer border-[0.5px] border-border-heavy bg-background px-4 py-3 text-left shadow-subtle transition-colors hover:bg-hover active:bg-active">
+    <div className="group relative flex min-h-26 min-w-0 flex-col rounded-composer bg-background px-4 py-3 text-left shadow-subtle inset-ring-[0.5px] inset-ring-border-heavy transition-colors hover:bg-hover active:bg-active">
       {onSelect ? (
         <Button
           type="button"
