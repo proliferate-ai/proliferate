@@ -279,6 +279,46 @@ describe("usePromptAttachments", () => {
     expect(result.current.attachments[0]).toMatchObject({ kind: "image", name: "image.png" });
   });
 
+  it("discards in-flight dropped paths when the workspace scope changes", async () => {
+    let resolvePaths: (candidates: unknown[]) => void = () => {};
+    const resolveDroppedPaths = vi.fn().mockImplementation(
+      () => new Promise((resolve) => { resolvePaths = resolve; }),
+    );
+    const { result, rerender } = renderHook(
+      ({ scopeKey }) => usePromptAttachments(scopeKey, promptCapabilities, { resolveDroppedPaths }),
+      { initialProps: { scopeKey: "workspace-1" } },
+    );
+
+    act(() => {
+      result.current.addDroppedFiles([]);
+    });
+    rerender({ scopeKey: "workspace-2" });
+    await act(async () => {
+      resolvePaths([{ path: "/drop/logo", name: "logo", isDirectory: true, size: null }]);
+      await Promise.resolve();
+    });
+
+    expect(result.current.attachments).toEqual([]);
+  });
+
+  it("falls back to byte uploads when pasteboard paths mismatch the dropped files", async () => {
+    const image = new File(["image-bytes"], "image.png", { type: "image/png" });
+    const resolveDroppedPaths = vi.fn().mockResolvedValue([
+      { path: "/other/unrelated.zip", name: "unrelated.zip", isDirectory: false, size: 5 },
+    ]);
+    const { result } = renderHook(() =>
+      usePromptAttachments("session-1", promptCapabilities, { resolveDroppedPaths })
+    );
+
+    await act(async () => {
+      result.current.addDroppedFiles([image]);
+      await Promise.resolve();
+    });
+
+    expect(result.current.attachments).toHaveLength(1);
+    expect(result.current.attachments[0]).toMatchObject({ kind: "image", name: "image.png" });
+  });
+
   it("falls back to byte uploads when the path resolver fails", async () => {
     const image = new File(["image-bytes"], "image.png", { type: "image/png" });
     const resolveDroppedPaths = vi.fn().mockRejectedValue(new Error("nope"));

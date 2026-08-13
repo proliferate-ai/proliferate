@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PromptCapabilities } from "@anyharness/sdk";
 import {
+  droppedPathsMatchFiles,
   partitionDroppedPathCandidates,
   pasteAttachmentName,
   PROMPT_FOLDER_MIME_TYPE,
@@ -77,13 +78,20 @@ export function usePromptAttachments(
     }
   }, []);
 
+  // Bumped when the attachment scope ends (workspace switch or unmount) so
+  // in-flight dropped-path resolutions from the old scope discard their
+  // results instead of attaching into the new one.
+  const dropScopeGenerationRef = useRef(0);
+
   useEffect(() => () => {
+    dropScopeGenerationRef.current += 1;
     const outgoing = entriesRef.current;
     entriesRef.current = [];
     releaseEntries(outgoing);
   }, [releaseEntries]);
 
   useEffect(() => {
+    dropScopeGenerationRef.current += 1;
     if (entriesRef.current.length === 0) {
       return;
     }
@@ -184,9 +192,13 @@ export function usePromptAttachments(
       addFiles(fileList);
       return;
     }
+    const dropScopeGeneration = dropScopeGenerationRef.current;
     void resolveDroppedPaths()
       .then((candidates) => {
-        if (candidates.length === 0) {
+        if (dropScopeGeneration !== dropScopeGenerationRef.current) {
+          return;
+        }
+        if (candidates.length === 0 || !droppedPathsMatchFiles(candidates, fileList)) {
           addFiles(fileList);
           return;
         }
@@ -199,7 +211,9 @@ export function usePromptAttachments(
         addLocalRefs(localRefs);
       })
       .catch(() => {
-        addFiles(fileList);
+        if (dropScopeGeneration === dropScopeGenerationRef.current) {
+          addFiles(fileList);
+        }
       });
   }, [addFiles, addLocalRefs, canAttachEmbeddedContext, canAttachImages]);
 

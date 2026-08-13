@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  droppedPathsMatchFiles,
   formatPromptFileSize,
   partitionDroppedPathCandidates,
   PROMPT_IMAGE_MAX_BYTES,
@@ -84,5 +85,30 @@ describe("prompt attachment rules", () => {
     expect(localRefs).toEqual([
       { path: "/tmp/drop/shot.png", name: "shot.png", pathKind: "file", size: image.size },
     ]);
+  });
+
+  it("keeps unmatched files on the byte path and discards directory FileList entries", () => {
+    const promiseDragged = new File(["png"], "elsewhere.png", { type: "image/png" });
+    const folderEntry = new File([], "logo", { type: "" });
+    const { uploadFiles, localRefs } = partitionDroppedPathCandidates(
+      [{ path: "/tmp/drop/logo", name: "logo", isDirectory: true, size: null }],
+      [promiseDragged, folderEntry],
+      allCapabilities,
+    );
+
+    expect(uploadFiles).toEqual([promiseDragged]);
+    expect(localRefs).toEqual([
+      { path: "/tmp/drop/logo", name: "logo", pathKind: "directory", size: null },
+    ]);
+  });
+
+  it("detects when pasteboard paths belong to a different drag", () => {
+    const candidates = [
+      { path: "/tmp/other/a.zip", name: "a.zip", isDirectory: false, size: 5 },
+    ];
+    expect(droppedPathsMatchFiles(candidates, [{ name: "b.png", type: "image/png" }]))
+      .toBe(false);
+    expect(droppedPathsMatchFiles(candidates, [{ name: "a.zip", type: "" }])).toBe(true);
+    expect(droppedPathsMatchFiles(candidates, [])).toBe(true);
   });
 });

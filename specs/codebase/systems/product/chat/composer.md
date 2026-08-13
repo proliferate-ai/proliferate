@@ -613,11 +613,15 @@ HTML5 drops never expose filesystem paths, so `ChatView` recovers them through
 the host seam: `host.desktop.files.readDroppedPaths()` reads the macOS drag
 pasteboard right after the DOM drop (`dragDropEnabled` stays `false`; native
 Tauri drag-drop would swallow DOM drops app-wide). The resolver is only wired
-for local sidecar workspaces — cloud/SSH workspaces (`cloud:` ids) cannot read
-this machine's paths and keep the byte-upload-only behavior, as do the web
-host and any drag whose pasteboard carries no filenames (the flow falls back
-to `addFiles`). Drops still require an active session with prompt
-capabilities; the new-chat attachment flow is separate scope (PRO-186).
+for local-runtime workspaces, mirroring `resolveRuntimeTargetForWorkspace`:
+`cloud:*` sandboxes and `target:*` SSH targets cannot read this machine's
+paths and keep the byte-upload-only behavior, as do the web host and any drag
+whose pasteboard carries no filenames or shares no names with the dropped
+FileList (a stale-pasteboard guard — the flow falls back to `addFiles`).
+In-flight path resolutions are discarded when the workspace scope changes so
+a drop never lands attachments into another workspace's draft. Drops still
+require an active session with prompt capabilities; the new-chat attachment
+flow is separate scope (PRO-186).
 
 These are the calls that get broken most easily.
 

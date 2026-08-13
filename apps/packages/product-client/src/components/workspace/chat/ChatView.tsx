@@ -45,6 +45,7 @@ import {
   isFileDrag,
   readFileDragInput,
 } from "#product/lib/domain/chat/composer/prompt-attachment-drag";
+import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { isCloudWorkspaceId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
@@ -182,9 +183,14 @@ export const ChatView = memo(function ChatView({
   const desktopFiles = host.desktop?.files ?? null;
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   // Dropped-path recovery only makes sense when the agent shares this
-  // machine's filesystem: local sidecar workspaces on the desktop host.
+  // machine's filesystem. Mirrors resolveRuntimeTargetForWorkspace: `cloud:*`
+  // runs in a cloud sandbox and `target:*` on an SSH target — neither can
+  // read this machine's paths — while everything else is the local runtime.
   const resolveDroppedPaths = useMemo(() => {
-    if (!desktopFiles || isCloudWorkspaceId(selectedWorkspaceId)) {
+    const isLocalRuntimeWorkspace = !!selectedWorkspaceId
+      && !isCloudWorkspaceId(selectedWorkspaceId)
+      && parseTargetWorkspaceSyntheticId(selectedWorkspaceId) === null;
+    if (!desktopFiles || !isLocalRuntimeWorkspace) {
       return null;
     }
     return () => desktopFiles.readDroppedPaths();

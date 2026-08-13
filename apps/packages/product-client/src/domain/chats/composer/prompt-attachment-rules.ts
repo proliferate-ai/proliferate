@@ -96,11 +96,32 @@ export interface LocalRefCandidate {
 }
 
 /**
+ * True when the recovered drag-pasteboard paths plausibly describe this DOM
+ * drop. The drag pasteboard is global state without a session token, so a
+ * non-empty FileList sharing no names with the recovered paths means the
+ * pasteboard belongs to some other drag; callers then keep the byte-based
+ * fallback. Folder-only drops may surface an empty FileList, which cannot be
+ * cross-checked and is accepted.
+ */
+export function droppedPathsMatchFiles(
+  candidates: readonly DroppedPathCandidate[],
+  files: readonly PromptAttachmentFileCandidate[],
+): boolean {
+  if (files.length === 0) {
+    return true;
+  }
+  const candidateNames = new Set(candidates.map((candidate) => candidate.name));
+  return files.some((file) => candidateNames.has(file.name));
+}
+
+/**
  * Split a drop with recovered local paths into byte uploads and path
  * references. Items that today's upload pipeline accepts (images, small text
  * files) keep uploading their bytes — that stays cloud-safe and shows the
  * model the actual image — while folders and everything else attach as local
- * references the co-located agent opens by path. Generic because this domain
+ * references the co-located agent opens by path. Files the pasteboard did not
+ * account for are returned as uploads so they keep the legacy byte handling
+ * (the caller's add path re-applies eligibility). Generic because this domain
  * layer compiles without DOM libs; callers pass browser `File` objects.
  */
 export function partitionDroppedPathCandidates<
@@ -115,6 +136,12 @@ export function partitionDroppedPathCandidates<
   const localRefs: LocalRefCandidate[] = [];
   for (const candidate of candidates) {
     if (candidate.isDirectory) {
+      // Discard the FileList entry WebKit surfaces for a directory: its bytes
+      // are unreadable, and the path reference already covers the item.
+      const matchIndex = remaining.findIndex((file) => file.name === candidate.name);
+      if (matchIndex !== -1) {
+        remaining.splice(matchIndex, 1);
+      }
       localRefs.push({
         path: candidate.path,
         name: candidate.name,
@@ -138,6 +165,7 @@ export function partitionDroppedPathCandidates<
       size: candidate.size,
     });
   }
+  uploadFiles.push(...remaining);
   return { uploadFiles, localRefs };
 }
 
