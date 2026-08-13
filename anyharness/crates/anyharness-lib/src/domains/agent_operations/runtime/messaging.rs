@@ -48,8 +48,7 @@ impl AgentOperations {
                 .map(|link| link.id.clone()),
             label: caller_provenance_label(&current_caller.record),
         };
-        let queue_seq = self
-            .message_queue()?
+        let queue_seq = Arc::clone(self.message_queue()?)
             .enqueue_agent_message(&current_target.record.id, input.message, source)
             .await
             .map_err(AgentOperationsError::SendMessage)?;

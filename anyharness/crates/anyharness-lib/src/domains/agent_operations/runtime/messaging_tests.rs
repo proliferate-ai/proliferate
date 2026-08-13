@@ -193,7 +193,7 @@ impl Messages {
 #[async_trait]
 impl AgentMessageQueue for Messages {
     async fn enqueue_agent_message(
-        &self,
+        self: Arc<Self>,
         target_session_id: &str,
         message: String,
         source: AgentSessionPromptSource,

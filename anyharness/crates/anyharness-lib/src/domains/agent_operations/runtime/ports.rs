@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
 use crate::domains::agents::catalog::service::ActiveCatalog;
@@ -179,8 +181,11 @@ impl AgentSessionMutations for SessionRuntime {
 
 #[async_trait]
 pub(crate) trait AgentMessageQueue: Send + Sync {
+    // `Arc<Self>` receiver: `enqueue_agent_message` durably commits the pending
+    // row, then detaches consumer activation onto a spawned task, so it needs a
+    // shared-owned handle that outlives the call.
     async fn enqueue_agent_message(
-        &self,
+        self: Arc<Self>,
         target_session_id: &str,
         message: String,
         source: AgentSessionPromptSource,
@@ -190,7 +195,7 @@ pub(crate) trait AgentMessageQueue: Send + Sync {
 #[async_trait]
 impl AgentMessageQueue for SessionRuntime {
     async fn enqueue_agent_message(
-        &self,
+        self: Arc<Self>,
         target_session_id: &str,
         message: String,
         source: AgentSessionPromptSource,

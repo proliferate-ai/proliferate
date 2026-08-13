@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyharness_contract::v1::PromptInputBlock;
@@ -17,10 +18,10 @@ use super::{
 impl SessionRuntime {
     /// Persist-first cross-agent delivery. The pending-row sequence is the
     /// acceptance linearization point. Actor startup and the bounded queue wake
-    /// happen only after that commit and are best-effort because startup queue
-    /// replay owns eventual processing.
+    /// are detached after that commit (see below) and are best-effort because
+    /// startup queue replay owns eventual processing.
     pub(crate) async fn enqueue_agent_message(
-        &self,
+        self: Arc<Self>,
         session_id: &str,
         message: String,
         source: AgentSessionPromptSource,
@@ -45,10 +46,28 @@ impl SessionRuntime {
             .insert_pending_prompt_payload(session_id, &payload, None)
             .map_err(SendPromptError::Internal)?;
 
-        self.activate_agent_message_consumer(session_id, payload, pending.seq)
-            .await;
+        // Detach activation after the durable commit. The pending row above is
+        // the acceptance linearization point and startup queue replay owns
+        // eventual processing, so activation is strictly best-effort. Awaiting
+        // it inline would block the caller (an MCP `send_message` tool call)
+        // for up to the shared startup-readiness timeout (60s in prod) while a
+        // cold target boots, even though the receipt is already durable.
+        //
+        // Lease invariant: the spawned task runs WITHOUT the caller's
+        // target-workspace shared `SessionPrompt` lease (that lease is dropped
+        // when `send_message` returns, right after this fn). This is deliberate
+        // and mirrors the startup-replay path, which activates consumers
+        // without holding any caller lease: the pending row is already durable,
+        // so no lease is required to guarantee eventual delivery, and
+        // re-acquiring one here would reintroduce the block this detach removes.
+        let queue_seq = pending.seq;
+        let session_id = session_id.to_string();
+        tokio::spawn(async move {
+            self.activate_agent_message_consumer(&session_id, payload, queue_seq)
+                .await;
+        });
 
-        Ok(pending.seq)
+        Ok(queue_seq)
     }
 
     async fn activate_agent_message_consumer(

@@ -160,7 +160,7 @@ fn agent_message_context(payload: &PromptPayload) -> Option<String> {
     let label = serde_json::Value::String(label.as_deref().unwrap_or("Agent").to_string());
     let session_id = serde_json::Value::String(source_session_id.clone());
     Some(format!(
-        "Message context: This message came from another agent. Sender label: {label}. Sender session ID: {session_id}."
+        "Message context: This message came from another agent. Sender label: {label}. Sender session ID: {session_id}. To reply, use send_message with agentId {session_id}."
     ))
 }
 
@@ -266,7 +266,7 @@ mod tests {
             };
             assert_eq!(
                 context.text,
-                "Message context: This message came from another agent. Sender label: \"Build Agent\". Sender session ID: \"session-1\"."
+                "Message context: This message came from another agent. Sender label: \"Build Agent\". Sender session ID: \"session-1\". To reply, use send_message with agentId \"session-1\"."
             );
             assert_eq!(message.text, "check the failing test");
         }

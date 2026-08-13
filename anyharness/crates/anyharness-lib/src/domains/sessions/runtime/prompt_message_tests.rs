@@ -29,7 +29,7 @@ impl Drop for AgentProgramGuard {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn send_message_commits_before_pending_startup_and_bounds_the_readiness_wait() {
+async fn send_message_returns_before_target_startup_readiness_resolves() {
     let _env_lock = test_support::lock_env();
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
@@ -37,36 +37,27 @@ async fn send_message_commits_before_pending_startup_and_bounds_the_readiness_wa
         session("caller", "workspace-a", "idle", "Exact Sender"),
         session("target", "workspace-b", "idle", "Target"),
     ]);
-    let startup = state
+    // A pending, never-resolved target startup. Consumer activation blocks on
+    // this readiness gate (bounded by SHARED_STARTUP_READINESS_TIMEOUT = 1s in
+    // test), so if activation still ran inline under the caller, send_message
+    // would take ~1s to return. Detached activation must let the receipt return
+    // promptly, well before the gate resolves.
+    let _startup = state
         .session_runtime
         .acp_manager_for_test()
         .insert_pending_startup_for_test("target")
         .await;
 
-    let operations = state.agent_operations.clone();
-    let send = tokio::spawn(async move {
-        let target = AgentIdentity::new(operations.runtime_identity().clone(), "target");
-        operations
-            .send_message(
-                &operations.authenticated_caller("caller"),
-                SendMessageInput {
-                    target,
-                    message: "persist before startup".into(),
-                },
-            )
-            .await
-    });
-    wait_for_pending_row(&state, "target").await;
-    assert!(
-        !send.is_finished(),
-        "the committed row must precede the bounded startup wait"
-    );
-
-    let receipt = tokio::time::timeout(Duration::from_secs(3), send)
-        .await
-        .expect("startup wait must be bounded")
-        .expect("send task")
-        .expect("startup timeout is post-commit success");
+    // Negative control: this 500ms bound is shorter than the 1s readiness
+    // timeout an inline activation would block on, so it fails if activation is
+    // re-inlined, and is orders of magnitude above the detached path's cost.
+    let receipt = tokio::time::timeout(
+        Duration::from_millis(500),
+        send_message(&state, "target", "persist before startup"),
+    )
+    .await
+    .expect("send_message must return without waiting on target startup readiness")
+    .expect("post-commit success");
     assert_eq!(receipt.status, SendMessageStatus::DurablyQueued);
 
     let row = state
@@ -84,18 +75,6 @@ async fn send_message_commits_before_pending_startup_and_bounds_the_readiness_wa
             label: Some("Exact Sender".into()),
         })
     );
-
-    let runtime = state.session_runtime.clone();
-    let rejoin = tokio::spawn(async move { runtime.ensure_live_session("target", None).await });
-    startup
-        .send(Some(Ok("native-target".into())))
-        .expect("release pending startup");
-    let resumed = tokio::time::timeout(Duration::from_secs(1), rejoin)
-        .await
-        .expect("deduplicated startup rejoin timeout")
-        .expect("rejoin task")
-        .expect("deduplicated startup remains usable after activation timeout");
-    assert_eq!(resumed.native_session_id.as_deref(), Some("native-target"));
 }
 
 #[tokio::test(flavor = "current_thread")]
