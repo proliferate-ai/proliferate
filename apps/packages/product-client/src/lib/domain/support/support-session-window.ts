@@ -110,7 +110,9 @@ function decodeMeta(
   return {
     schemaVersion,
     selection,
-    presentationOrder,
+    // Proven equal to the decoded value by the guard above, and unlike a
+    // comparison against a union-typed field it carries the literal type.
+    presentationOrder: expected.presentationOrder,
     itemLimit,
     responseByteLimit,
     returnedItems,
@@ -126,7 +128,9 @@ function decodeDenseArray(input: unknown, itemLimit: number): unknown[] | null {
   } catch {
     return null;
   }
-  if (!isArray || input === null) return null;
+  // The `typeof` arm is redundant for a real array but is the only check the
+  // compiler can narrow through; a proxy still reports "object" here.
+  if (!isArray || input === null || typeof input !== "object") return null;
   try {
     if (Object.getPrototypeOf(input) !== Array.prototype) return null;
     if (Object.getOwnPropertySymbols(input).length !== 0) return null;

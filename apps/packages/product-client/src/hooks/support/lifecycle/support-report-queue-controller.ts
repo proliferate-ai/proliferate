@@ -1,16 +1,11 @@
 import type {
   DesktopSupportSnapshotBridge,
-  PersistedSupportArtifactRefV1,
-  ReconciledSupportArtifactV1,
 } from "@proliferate/product-client/host/desktop-bridge";
 import type { ProductStorage } from "#product/host/product-host";
 import type { SupportReportJob } from "#product/lib/domain/support/report-types";
 import type { SupportReportUploadFailure } from "#product/lib/domain/support/report-upload-failure";
 import type { SupportReportEnqueueResult } from "#product/lib/access/browser/support-report-job-events";
 
-import {
-  sha256QueueText,
-} from "./support-report-queue-canonical";
 import {
   assertPackagedSupportReportJob,
   canonicalSupportReportJobBytes,
@@ -28,6 +23,14 @@ import {
   SupportQueueDocumentError,
   type SupportQueueDocumentV2,
 } from "./support-report-queue-document";
+import {
+  boundedFailureMessage,
+  referenceKey,
+  uniqueStrings,
+  validateArtifactBindings,
+  validateReconciliation,
+  validateUniqueJobs,
+} from "./support-report-queue-validation";
 import { hydrateOrMigrateSupportQueue } from "./support-report-queue-migration";
 import { commitSupportQueueMutation } from "./support-report-queue-storage";
 import {
@@ -355,98 +358,5 @@ export class PackagedSupportReportQueueController implements SupportReportQueueR
     const result = this.mutationTail.then(operation);
     this.mutationTail = result.then(() => undefined, () => undefined);
     return result;
-  }
-}
-
-function validateUniqueJobs(entries: readonly PersistedSupportReportJob[]): void {
-  const jobIds = new Set<string>();
-  const artifactIds = new Set<string>();
-  for (const { job } of entries) {
-    if (jobIds.has(job.jobId)) throw new Error("Support queue contains duplicate job IDs.");
-    jobIds.add(job.jobId);
-    const reference = persistedArtifactReference(job);
-    if (reference) {
-      if (artifactIds.has(reference.artifactId)) {
-        throw new Error("Support queue contains a shared snapshot artifact.");
-      }
-      artifactIds.add(reference.artifactId);
-    }
-  }
-}
-
-function validateReconciliation(
-  expected: readonly PersistedSupportArtifactRefV1[],
-  actual: readonly ReconciledSupportArtifactV1[],
-): Map<string, ReconciledSupportArtifactV1["state"]> {
-  if (!Array.isArray(actual) || actual.length !== expected.length) {
-    throw new Error("Native support artifact reconciliation was incomplete.");
-  }
-  const expectedKeys = new Set(expected.map(referenceKey));
-  const states = new Map<string, ReconciledSupportArtifactV1["state"]>();
-  for (const item of actual) {
-    if (!isExactReconciledArtifact(item)) {
-      throw new Error("Native support artifact reconciliation was invalid.");
-    }
-    const key = referenceKey(item);
-    if (!expectedKeys.has(key) || states.has(key)
-      || !["verified", "missing", "mismatch"].includes(item.state)) {
-      throw new Error("Native support artifact reconciliation was invalid.");
-    }
-    states.set(key, item.state);
-  }
-  return states;
-}
-
-function isExactReconciledArtifact(value: unknown): value is ReconciledSupportArtifactV1 {
-  if (value === null || typeof value !== "object" || Array.isArray(value)
-    || Object.getPrototypeOf(value) !== Object.prototype) return false;
-  const item = value as Record<string, unknown>;
-  const keys = [
-    "artifactId",
-    "clientJobId",
-    "sha256",
-    "sizeBytes",
-    "snapshotId",
-    "state",
-  ];
-  return Object.keys(item).length === keys.length
-    && keys.every((key) => Object.prototype.hasOwnProperty.call(item, key))
-    && typeof item.artifactId === "string"
-    && typeof item.clientJobId === "string"
-    && typeof item.snapshotId === "string"
-    && typeof item.sha256 === "string"
-    && Number.isSafeInteger(item.sizeBytes)
-    && ["verified", "missing", "mismatch"].includes(item.state as string);
-}
-
-function referenceKey(reference: PersistedSupportArtifactRefV1): string {
-  return [
-    reference.clientJobId,
-    reference.artifactId,
-    reference.snapshotId,
-    reference.sizeBytes,
-    reference.sha256,
-  ].join("\u0000");
-}
-
-function uniqueStrings(values: readonly string[]): string[] {
-  return Array.from(new Set(values));
-}
-
-function boundedFailureMessage(message: string): string {
-  return new TextEncoder().encode(message).byteLength <= 4_096
-    ? message
-    : "Report upload failed.";
-}
-
-async function validateArtifactBindings(jobs: readonly SupportReportJob[]): Promise<void> {
-  for (const job of jobs) {
-    if (job.supportSnapshot.kind !== "prepared") continue;
-    const expected = `ssv1_${await sha256QueueText(
-      `proliferate-support-snapshot-v1\u0000${job.jobId}`,
-    )}`;
-    if (job.supportSnapshot.artifact.artifactId !== expected) {
-      throw new Error("Support snapshot artifact is not bound to its report job.");
-    }
   }
 }
