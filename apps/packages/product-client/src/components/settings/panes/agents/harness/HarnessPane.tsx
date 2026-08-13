@@ -4,6 +4,7 @@ import { SettingsSection } from "#product/primitives/patterns/settings/SettingsS
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
+import { IconTile } from "#product/primitives/IconTile";
 import { ArrowUpRight } from "#product/primitives/icons/core";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
@@ -84,15 +85,17 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
           justify promoting a tile slot onto the shared pattern). */}
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3.5">
-          <span
+          <IconTile
+            tone="outlined"
+            size="lg"
             aria-hidden
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border-light bg-surface-control text-foreground"
+            className="text-foreground"
           >
             <ProviderIcon
               kind={harnessKind}
               className="icon-large [font-size:var(--text-ui)]"
             />
-          </span>
+          </IconTile>
           <div className="min-w-0">
             <h1 className="text-title font-semibold tracking-[-0.025em] text-foreground">
               {displayName}
