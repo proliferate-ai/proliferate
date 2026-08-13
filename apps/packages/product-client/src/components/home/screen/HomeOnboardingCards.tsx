@@ -31,11 +31,10 @@ function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
  * icon row on top with trailing accessories + hover dismiss, then
  * title 13/500 and description 12px muted below. The ring utilities are
  * the Web rendering of the frame; on desktop the unlayered
- * zoom-stable-hairline-frame rule (desktop.css) repaints it with the
- * stroke divided by the window zoom, because WKWebView page zoom drops
- * sub-device-pixel hairlines to zero on individual edges at fractional
- * zoom factors. Desktop-only by stylesheet: web can hold a non-1 zoom
- * preference without any page zoom applied (PRO-117).
+ * zoom-stable-hairline-frame rule (desktop.css) repaints it at exactly
+ * one physical device pixel (--proliferate-device-px), because WKWebView
+ * drops sub-device-pixel hairlines to zero on individual edges depending
+ * on window zoom, display density, and subpixel position (PRO-117).
  */
 function OnboardingCard({
   icon,

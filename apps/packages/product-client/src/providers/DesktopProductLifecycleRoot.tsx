@@ -5,6 +5,7 @@ import type {
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
 import { useComposerActivationFocus } from "#product/hooks/chat/lifecycle/use-composer-activation-focus";
+import { useDesktopDevicePixelLifecycle } from "#product/hooks/app/lifecycle/use-desktop-device-pixel-lifecycle";
 import { useExportRunningAgentCount } from "#product/hooks/app/lifecycle/use-export-running-agent-count";
 import { useDesktopRuntimeBootstrapLifecycle } from "#product/hooks/app/lifecycle/use-desktop-runtime-bootstrap-lifecycle";
 import { useUpdateRestartWatcher } from "#product/hooks/access/tauri/use-update-restart-watcher";
@@ -62,6 +63,7 @@ function DesktopProductLifecycles({
   useWorkspaceActivityIndicator(nativeUi.setWorkspaceActivity);
   recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_activity_indicator");
   useDesktopZoomPreferenceLifecycle(nativeUi.setZoom);
+  useDesktopDevicePixelLifecycle();
   useComposerActivationFocus();
   return null;
 }
