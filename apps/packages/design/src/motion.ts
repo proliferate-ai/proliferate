@@ -59,16 +59,6 @@ export const motion = {
     streamRevealFadeMs: 320,
     streamRevealHandoffDelayMs: 160,
     /**
-     * One bar's grow/shrink when the reasoning-effort control steps. Not the
-     * `hover` role it used to borrow: at 120ms the climb was over before the
-     * eye caught it, and the ask is explicitly to watch a bar travel from the
-     * bottom to its full height. A single-level step -- the common case -- is
-     * therefore exactly this long; multi-level steps add the per-bar stagger on
-     * top. Paired with `ease.outCubic`, which spends this budget on a quick
-     * departure that then decelerates into the top.
-     */
-    levelBarStepMs: 500,
-    /**
      * Typewriter reveal of a tab label the first time a session is titled.
      * A cadence, not an interaction: it is per-character and must survive the
      * reduced-motion zeroing of the interaction scale as a plain instant

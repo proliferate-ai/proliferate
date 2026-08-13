@@ -255,7 +255,7 @@ separate controls from either opaque parent.
 | `--color-surface-editor` | `#282828` | `#fafafa` | Code/editor chrome. |
 | `--color-diff-code-surface` | `#111111` | `var(--color-surface-editor)` | Diff code gutter/body, deliberately below root in dark. |
 | `--color-surface-control` / `--color-muted` | 96% dark control / `#212121` | 4.9% light ink | Control chrome and low raised fills. |
-| `--color-composer-background` | `#2d2d2d` | `#ffffff` | The fully opaque composer input surface. |
+| `--color-composer-background` | `#2d2d2d` | `#f6f6f6` | The fully opaque composer input surface; light reuses the `#f6f6f6` rail plane. |
 
 The dark ladder steps `#141414 → #181818 → #212121/#222222 → #282828 → #2d2d2d`:
 roughly four to five levels of lightness per step, small enough that no step
@@ -267,7 +267,10 @@ rather than adding opaque intermediate planes.
 
 The composer is opaque in both modes and uses no backdrop filter. That keeps
 transcript paint out of the input surface and avoids re-blurring the transcript
-while typing.
+while typing. Its chrome is borderless, so the fill alone has to separate it
+from the page — in light that means it cannot be the white content plane. It
+takes the existing `#f6f6f6` rail plane rather than a fourth opaque light
+plane: the count above stays at three.
 
 ### Borders
 
@@ -491,7 +494,7 @@ button respond identically to the pointer.
 | `--radius-xl` | `0.75rem` (12px) | Dialogs, popover/menu frames, toasts. |
 | `--radius-2xl` | `1rem` (16px) | Modal shells and the command palette — the largest panels. |
 | `--radius-full` | `9999px` | Pills, avatars, status dots, the composer send button, level bars. |
-| `--radius-composer` | `1.25rem` (20px) | The composer frame, as its own name — deliberately softer than the panel scale. |
+| `--radius-composer` | `1.75rem` (28px) | The composer frame, as its own name — deliberately softer than the panel scale. |
 | `--radius` | `0.5rem` (8px) | The unqualified base, equal to `md`. |
 
 **Radius grows with the element.** The named steps run 6 → 8 → 10 → 12 → 16px
@@ -502,9 +505,9 @@ reads either boxy or over-rounded at its own scale. The sidebar row moved from
 corner reads better against the sidebar's own recessed surface than it did
 against the previous, slightly-raised one.
 
-`--radius-composer` is a named 20px rather than a reference to any shared step
+`--radius-composer` is a named 28px rather than a reference to any shared step
 because the composer's corner is its own anatomy value — softer than the
-dialogs' `xl` — tunable without moving every dialog
+dialogs' `xl`, and past the top of the named scale — tunable without moving every dialog
 (`AgentHarnessConfigComposer` already overrides it locally).
 `--radius` duplicates `md` as the unqualified base for consumers that ask for
 "the" radius.
@@ -735,7 +738,7 @@ where it is used:
   job it does (`RosterRow`, `PageHeader`), never for the feature that first needed
   it. The admission test is the props: a pattern's props are only `ReactNode`/`string`/`boolean`/callbacks — shapes, not nouns. A component whose props mention a domain type belongs in the domain-aware tier below.
 
-  Inside this tier, an **area kit** is a family of patterns defining the canonical look of one system — the composer kit (`ComposerTextareaFrame`, `ComposerActionButton`, `ComposerControlButton`, `ComposerTextarea`, `LevelBarsButton`), the toast system (`ToastBody`/`ToastExpansion`/`ToastHost`, patterned around the root `Sonner` positioner), the sidebar rows (`SidebarNavRow`, `SidebarRowSurface`, `SidebarActionButton`), the settings kit (`SettingsGroup`, `SettingsMenu`, `SettingsSection`, `SettingsRow`, `SettingsScopeTabs`, `SettingsSaveFooter`, `SettingsEmptyState`, `SettingsPageBody`), the tabs kit (`ChromeTab`, `TabGroupPill`), the panel kit (`PanelHeaderEntry`, `PaneOptionsMenuItem`). A kit member is sanctioned even with a single consuming surface: the test for a kit is not reuse but "does this define the canonical look of a system" — kits are the one structural exception to the rule of two below. Kit cohesion beats tier purity — a kit lives in one place, at the level its most domain-bound member requires; never split a kit across tiers to satisfy the props test file by file (two existing kits violate this today — see Current Gaps). A kit whose members sit in the pattern tier owns a directory there: they live under `primitives/patterns/<kit>/` (`composer/`, `toast/`, `sidebar/`, `settings/`, `tabs/`, `panel/` today), and a new member of such a kit lands inside that directory rather than flat beside the shared patterns. A kit member may be composed from any surface: matching another system's look by calling its kit is adoption, not duplication. The kit set is closed: kits exist only for the named app chrome (composer, toast, sidebar, tabs, panel, settings) or by explicit review sign-off recorded as a new named group in the sanctioned index — a feature area is not a system, and declaring one is not a rule-of-two bypass.
+  Inside this tier, an **area kit** is a family of patterns defining the canonical look of one system — the composer kit (`ComposerTextareaFrame`, `ComposerActionButton`, `ComposerControlButton`, `ComposerTextarea`), the toast system (`ToastBody`/`ToastExpansion`/`ToastHost`, patterned around the root `Sonner` positioner), the sidebar rows (`SidebarNavRow`, `SidebarRowSurface`, `SidebarActionButton`), the settings kit (`SettingsGroup`, `SettingsMenu`, `SettingsSection`, `SettingsRow`, `SettingsScopeTabs`, `SettingsSaveFooter`, `SettingsEmptyState`, `SettingsPageBody`), the tabs kit (`ChromeTab`, `TabGroupPill`), the panel kit (`PanelHeaderEntry`, `PaneOptionsMenuItem`). A kit member is sanctioned even with a single consuming surface: the test for a kit is not reuse but "does this define the canonical look of a system" — kits are the one structural exception to the rule of two below. Kit cohesion beats tier purity — a kit lives in one place, at the level its most domain-bound member requires; never split a kit across tiers to satisfy the props test file by file (two existing kits violate this today — see Current Gaps). A kit whose members sit in the pattern tier owns a directory there: they live under `primitives/patterns/<kit>/` (`composer/`, `toast/`, `sidebar/`, `settings/`, `tabs/`, `panel/` today), and a new member of such a kit lands inside that directory rather than flat beside the shared patterns. A kit member may be composed from any surface: matching another system's look by calling its kit is adoption, not duplication. The kit set is closed: kits exist only for the named app chrome (composer, toast, sidebar, tabs, panel, settings) or by explicit review sign-off recorded as a new named group in the sanctioned index — a feature area is not a system, and declaring one is not a rule-of-two bypass.
 - **`icons/`** — concrete glyph modules split by general role, specific surface
   (command palette), or brand (Proliferate mark, auth/model provider glyphs).
   There is no aggregate icon barrel. Icon modules are glyph collections, not
@@ -905,14 +908,13 @@ above are not migration debt); click-only popovers use
 | `ChromeTab` | [tabs/ChromeTab.tsx](../apps/packages/product-client/src/primitives/patterns/tabs/ChromeTab.tsx) | Tabs kit — the workspace-shell chrome tab: fixed-width truncating label, optional badge and shortcut reveal, hover-revealed close. Composes `Button`/`ShortcutBadge`/`TypewriterRevealText`. |
 | `CommandPalette` | [CommandPalette.tsx](../apps/packages/product-client/src/primitives/patterns/CommandPalette.tsx) | Command-palette shell/context, built directly on `cmdk` (not on the `Command` primitive — see `Command` row above). |
 | `ComposerActionButton` | [ComposerActionButton.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerActionButton.tsx) | Composer primary-action button, composes `Button`. |
-| `ComposerControlButton` | [ComposerControlButton.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerControlButton.tsx) | Composer control pill (icon/label/detail/trailing/active), composes `Button`. |
+| `ComposerControlButton` | [ComposerControlButton.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerControlButton.tsx) | Composer control pill (icon/label/detail/trailing/active), composes `Button`. Three axes: `iconOnly` (icon vs. labeled) × `emphasizeLabel` (two-tone value hierarchy) × `size` (`default` 28px pill / `compact` 24px chip). The third axis was decided in review for the composer handoff (PR #1851) under the rule above that a third orthogonal axis is ruled in review rather than extended into the props — the composer row needed a denser chip than every other surface draws, and splitting the kit member in two would have duplicated its whole state stack. |
 | `ComposerTextarea` | [ComposerTextarea.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerTextarea.tsx) | Composer-sized text input, composes `Textarea`. |
 | `ComposerTextareaFrame` | [ComposerTextareaFrame.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerTextareaFrame.tsx) | Composer textarea's outer frame/top-inset shell. |
 | `ConfirmationDialog` | [ConfirmationDialog.tsx](../apps/packages/product-client/src/primitives/patterns/ConfirmationDialog.tsx) | Confirm/cancel dialog, built on `ModalShell` + `Button`. |
 | `Disclosure` | [Disclosure.tsx](../apps/packages/product-client/src/primitives/patterns/Disclosure.tsx) | The chevron expand/collapse shape: a real `<button>` header row (`aria-expanded`/`aria-controls`, native Enter/Space) over an `AnimatedCollapsibleContent` region that is `inert` when closed. Owns the row's whole state stack; `chevronSide` is its one axis, and the `trailing` slot sits outside the toggle so it can hold its own controls. Promoted from 13 hand-rolled disclosures, of which two consume it (`SettingsContentBoundary`, `WorkflowRunDetail`). Four limitations block the rest, recorded in full on the component: the header row's paint is closed to the call site (the chat transcript's 15 quiet rows would get the pressed rectangle PRO-120 removed, and the git review pane's sticky `color-mix` header cannot be painted at all), the title type is fixed at 17px, every child sits inside the collapsible region so there is no always-visible summary slot, and collapsed children stay mounted rather than unmounting. A quiet spelling has to answer all four. |
 | `EmptyState` | [EmptyState.tsx](../apps/packages/product-client/src/primitives/patterns/EmptyState.tsx) | Title/description/action empty-state block. |
 | `EnvironmentSearchSelect` | [EnvironmentSearchSelect.tsx](../apps/packages/product-client/src/primitives/patterns/EnvironmentSearchSelect.tsx) | Searchable environment picker, composes `PopoverButton`/`PopoverMenuItem`/`PickerPopoverContent`. |
-| `LevelBarsButton` | [LevelBarsButton.tsx](../apps/packages/product-client/src/primitives/patterns/composer/LevelBarsButton.tsx) | Stepped-level control button (level-bars affordance), composes `ComposerControlButton`. |
 | `ModalShell` | [ModalShell.tsx](../apps/packages/product-client/src/primitives/patterns/ModalShell.tsx) | Modal composition built on `Dialog`. |
 | `NoticeBanner` | [NoticeBanner.tsx](../apps/packages/product-client/src/primitives/patterns/NoticeBanner.tsx) | The inline-notice frame: tinted bordered block with a leading glyph, a title/body rhythm, and a trailing action slot. One `tone` axis (`neutral`/`info`/`warning`/`destructive`) that also picks the live-region role; it paints no interaction states, because the action slot takes a primitive that already owns them. Promoted from 16 hand-rolled notices across workflows, chat/activity and settings/billing. |
 | `PageContentFrame` | [PageContentFrame.tsx](../apps/packages/product-client/src/primitives/patterns/PageContentFrame.tsx) | Page content frame with header slot and sticky action/title. |

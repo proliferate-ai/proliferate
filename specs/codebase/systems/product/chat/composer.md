@@ -702,11 +702,13 @@ As-built composer surface — `ChatComposerSurface` (ProductClient) tags itself 
 the `chat-composer-surface` class, whose paint lives in
 `apps/packages/design/src/css/product.css`:
 
-- Background: `--color-composer-background`.
-- Outline: a 0.5px stroke-in-shadow (`0 0 0 0.5px var(--color-border)`)
-  stacked with `--color-composer-shadow` (which resolves to
-  `--shadow-subtle`) — there is no CSS `border`.
-- Radius: `rounded-[var(--radius-composer,1rem)]`; `--radius-composer` is 1rem.
+- Background: `--color-composer-background`. Opaque in both modes; light takes
+  the `#f6f6f6` rail plane, because the fill is the only thing separating the
+  composer from the page.
+- Outline: none. The chrome is fill-only — no CSS `border`, no stroke-in-shadow
+  and no elevation stack. The composer's own shadow token was deleted with the
+  elevation it described.
+- Radius: `rounded-composer`; `--radius-composer` is 1.75rem (28px).
   `ChatComposerDock` locally overrides only the top corners to zero while the
   full-width workspace-activity cap is present.
 
