@@ -249,7 +249,13 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
   { name: "AlertDialog", subpath: "#product/primitives/AlertDialog", render: AlertDialogDemo },
   { name: "AnimatedCollapsibleContent", subpath: "#product/primitives/AnimatedCollapsibleContent", render: AnimatedCollapsibleContentDemo },
   { name: "AnimatedSwapText", subpath: "#product/primitives/AnimatedSwapText", render: AnimatedSwapTextDemo },
-  { name: "Badge", subpath: "#product/primitives/Badge", render: () => <Badge tone="info">Badge</Badge> },
+  { name: "Badge", subpath: "#product/primitives/Badge", render: () => (
+    <span className="flex items-center gap-2">
+      <Badge tone="info">Badge</Badge>
+      <Badge size="micro">12</Badge>
+      <Badge size="micro" tone="warning">emulated</Badge>
+    </span>
+  ) },
   { name: "Button", subpath: "#product/primitives/Button", render: () => <Button size="sm">Button</Button> },
   { name: "Checkbox", subpath: "#product/primitives/Checkbox", render: CheckboxDemo },
   { name: "checkbox-primitive", subpath: "#product/primitives/checkbox-primitive", render: () => <CheckboxPrimitive defaultChecked /> },

@@ -20,9 +20,11 @@ export interface PopoverSearchFieldProps {
 /**
  * Inline search row for popovers/pickers: a muted magnifier icon + a
  * borderless, transparent input sitting directly in the popover — NO boxed
- * field — with a hairline divider below. Single source of
- * truth for every picker search; do not hand-roll a boxed `bg-surface-control`
- * field again.
+ * field. It draws no divider below itself; a container that wants one owns it
+ * (`PickerPopoverContent` does not draw one either, and `FileTreeOverlay`
+ * hand-rolls an `h-px` rule for the same reason). Single source of truth for
+ * every picker search; do not hand-roll a boxed `bg-surface-control` field
+ * again.
  */
 export function PopoverSearchField({
   value,

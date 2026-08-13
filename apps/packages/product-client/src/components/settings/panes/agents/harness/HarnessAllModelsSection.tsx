@@ -287,6 +287,15 @@ export function HarnessAllModelsSection({
         ) : null}
       </p>
 
+      {/*
+        Disclosure is deferred here, recorded rather than re-derived: the model
+        count above stays visible while this list collapses, and `Disclosure`
+        puts every child inside its collapsible region — there is no
+        always-visible body slot. The toggle also lives in the section's own
+        `action` slot beside a refresh button, which `Disclosure`'s single
+        header button cannot host. See the limitations block on
+        primitives/patterns/Disclosure.tsx.
+      */}
       <AnimatedCollapsibleContent expanded={listExpanded}>
       <div className="space-y-3 py-3">
         {diagnosticsLines.length > 0 ? (

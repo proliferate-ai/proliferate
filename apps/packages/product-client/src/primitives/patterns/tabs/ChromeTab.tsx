@@ -39,8 +39,6 @@ interface ChromeTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"
  * The tabs kit's chrome-style tab: full-height surface, truncating label,
  * trailing status slot, hover-revealed close, active underline. Slots take
  * ReactNodes (`badge`) and the strip that owns it supplies geometry (`width`).
- *
- * incubating: shell slice adopts, wave 2
  */
 export const ChromeTab = forwardRef<HTMLDivElement, ChromeTabProps>(
   function ChromeTab({

@@ -1,4 +1,5 @@
 import { sortSubagentsForDisplay, type ActivitySubagentWire } from "#product/domain/activity/subagent";
+import { RosterPanel } from "#product/primitives/patterns/RosterPanel";
 import { SubagentRosterRow } from "./SubagentRosterRow";
 
 export interface AgentsRosterPanelProps {
@@ -20,21 +21,16 @@ export function AgentsRosterPanel({ agents, nowMs, onOpen }: AgentsRosterPanelPr
   const runningAgents = agents.filter((agent) => agent.status.status === "running");
   const sorted = sortSubagentsForDisplay(runningAgents);
   return (
-    <div className="flex flex-col gap-1.5" data-agents-roster-panel>
-      <div className="px-1 pt-0.5">
-        <span className="text-ui font-medium text-foreground">Native subagents</span>
-      </div>
-      {sorted.length === 0 ? (
-        <p className="px-1 pb-1 text-ui-sm text-muted-foreground">No active native subagents.</p>
-      ) : (
-        <ul className="flex flex-col gap-0.5">
-          {sorted.map((agent) => (
-            <li key={agent.id}>
-              <SubagentRosterRow subagent={agent} nowMs={nowMs} onOpen={onOpen} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <RosterPanel
+      title="Native subagents"
+      empty="No active native subagents."
+      data-agents-roster-panel
+    >
+      {sorted.map((agent) => (
+        <li key={agent.id}>
+          <SubagentRosterRow subagent={agent} nowMs={nowMs} onOpen={onOpen} />
+        </li>
+      ))}
+    </RosterPanel>
   );
 }

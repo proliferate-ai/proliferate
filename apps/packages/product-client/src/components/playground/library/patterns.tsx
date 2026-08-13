@@ -43,6 +43,7 @@ import { CARD_ENTRY } from "./entries/Card";
 import { DISCLOSURE_LIBRARY_ENTRY } from "./entries/disclosure";
 import { NOTICE_BANNER_ENTRY } from "./entries/NoticeBanner";
 import { PAGE_HEADER_ENTRY } from "./entries/page-header";
+import { ROSTER_PANEL_ENTRY } from "./entries/roster-panel";
 import { ROSTER_ROW_ENTRY } from "./entries/roster-row";
 import { SETTINGS_PAGE_BODY_ENTRY } from "./entries/settings-page-body";
 import type { LibraryEntry, LibraryTier } from "./types";
@@ -361,6 +362,7 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
   ) },
   { name: "PickerPopoverContent", subpath: "#product/primitives/patterns/PickerPopoverContent", render: PickerPopoverContentDemo },
   { name: "ProductPageShell", subpath: "#product/primitives/patterns/ProductPageShell", render: ProductPageShellDemo },
+  ROSTER_PANEL_ENTRY,
   ROSTER_ROW_ENTRY,
   { name: "SettingsEmptyState", subpath: "#product/primitives/patterns/settings/SettingsEmptyState", render: () => (
     <SettingsEmptyState title="No results" description="Nothing to show yet." size="compact" />

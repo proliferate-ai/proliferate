@@ -32,8 +32,6 @@ import { twMerge } from "#product/primitives/utils/tw-merge";
  * otherwise be keyboard-unreachable (every entry at `tabIndex=-1`). The
  * caller opts one entry — conventionally the first — into `tabIndexFloor` so
  * the strip always has exactly one focusable stop even with nothing selected.
- *
- * incubating: shell slice, wave 2
  */
 
 /**

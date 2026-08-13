@@ -1,3 +1,4 @@
+import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { Check, ChevronDown } from "#product/primitives/icons/core";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
@@ -6,10 +7,7 @@ import {
   GIT_PANEL_MODE_OPTIONS,
   type GitPanelMode,
 } from "#product/lib/domain/workspaces/changes/git-panel-diff";
-import {
-  GIT_REVIEW_SELECTOR_TRIGGER_CLASS,
-  GitReviewCountChip,
-} from "#product/components/workspace/git/GitReviewSelectorChrome";
+import { GIT_REVIEW_SELECTOR_TRIGGER_CLASS } from "#product/components/workspace/git/GitReviewSelectorChrome";
 
 /** Selectable review targets: working tree / branch / last turn. */
 type GitReviewTargetMode = "working_tree_composite" | "branch" | "last_turn";
@@ -41,7 +39,7 @@ export function GitReviewBaseSelector({
           <span className="min-w-0 truncate text-sidebar-foreground">{activeOption.label}</span>
           {changedCount > 0 && (
             <span className="shrink-0">
-              <GitReviewCountChip>{changedCount}</GitReviewCountChip>
+              <Badge size="micro" className="tabular-nums">{changedCount}</Badge>
             </span>
           )}
           <ChevronDown className="icon-compact shrink-0 text-sidebar-muted-foreground" />
@@ -64,7 +62,7 @@ export function GitReviewBaseSelector({
                 trailing={(
                   <span className="flex shrink-0 items-center gap-1.5">
                     {selected && changedCount > 0 && (
-                      <GitReviewCountChip>{changedCount}</GitReviewCountChip>
+                      <Badge size="micro" className="tabular-nums">{changedCount}</Badge>
                     )}
                     <Check
                       className={`icon-paired ${selected ? "" : "opacity-0"}`}
