@@ -8,8 +8,12 @@ use crate::domains::sessions::live_config::{
     effective_live_config_snapshot, EffectiveLiveConfigSnapshot,
 };
 use crate::domains::sessions::model::{SessionExecutionState, SessionRecord};
-use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::sessions::runtime::{
+    CreateOrdinaryAgentSessionError, EnsureLiveSessionError, SessionLifecycleError, SessionRuntime,
+    SetSessionConfigOptionError,
+};
 use crate::domains::sessions::service::SessionService;
+use crate::domains::sessions::task_output::{TaskOutputError, TaskOutputPage};
 use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::domains::workspaces::options::{
     CreateWorkspaceFromOptionsInput, CreateWorkspaceFromOptionsResult, WorkspaceCreationOptions,
@@ -74,6 +78,121 @@ impl AgentExecutionReads for SessionRuntime {
         session: &SessionRecord,
     ) -> anyhow::Result<SessionExecutionState> {
         Ok(self.session_execution_state(session).await)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentConfigMutationState {
+    Applied,
+    Queued,
+}
+
+#[async_trait]
+pub trait AgentSessionMutations: Send + Sync {
+    async fn create_ordinary_agent(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        task: Option<String>,
+        source_session_id: &str,
+        source_label: &str,
+    ) -> Result<SessionRecord, CreateOrdinaryAgentSessionError>;
+
+    async fn configure_agent(
+        &self,
+        session_id: &str,
+        config_id: &str,
+        value: &str,
+    ) -> Result<(SessionRecord, AgentConfigMutationState), SetSessionConfigOptionError>;
+
+    async fn resume_agent(&self, session_id: &str)
+        -> Result<SessionRecord, EnsureLiveSessionError>;
+
+    async fn interrupt_agent(
+        &self,
+        session_id: &str,
+    ) -> Result<SessionRecord, SessionLifecycleError>;
+}
+
+#[async_trait]
+impl AgentSessionMutations for SessionRuntime {
+    async fn create_ordinary_agent(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        task: Option<String>,
+        source_session_id: &str,
+        source_label: &str,
+    ) -> Result<SessionRecord, CreateOrdinaryAgentSessionError> {
+        self.create_ordinary_agent_session(
+            workspace_id,
+            agent_kind,
+            model_id,
+            mode_id,
+            task,
+            source_session_id.to_string(),
+            source_label.to_string(),
+        )
+        .await
+    }
+
+    async fn configure_agent(
+        &self,
+        session_id: &str,
+        config_id: &str,
+        value: &str,
+    ) -> Result<(SessionRecord, AgentConfigMutationState), SetSessionConfigOptionError> {
+        let (record, _, state) = self
+            .set_live_session_config_option(session_id, config_id, value)
+            .await?;
+        let state = match crate::domains::sessions::live_config::effective_config_apply_state(state)
+        {
+            crate::domains::sessions::live_config::EffectiveConfigApplyState::Applied => {
+                AgentConfigMutationState::Applied
+            }
+            crate::domains::sessions::live_config::EffectiveConfigApplyState::Queued => {
+                AgentConfigMutationState::Queued
+            }
+        };
+        Ok((record, state))
+    }
+
+    async fn resume_agent(
+        &self,
+        session_id: &str,
+    ) -> Result<SessionRecord, EnsureLiveSessionError> {
+        self.ensure_live_session(session_id, None).await
+    }
+
+    async fn interrupt_agent(
+        &self,
+        session_id: &str,
+    ) -> Result<SessionRecord, SessionLifecycleError> {
+        self.cancel_live_session(session_id).await
+    }
+}
+
+pub trait AgentTaskOutputReads: Send + Sync {
+    fn task_output(
+        &self,
+        session_id: &str,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> Result<TaskOutputPage, TaskOutputError>;
+}
+
+impl AgentTaskOutputReads for SessionService {
+    fn task_output(
+        &self,
+        session_id: &str,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> Result<TaskOutputPage, TaskOutputError> {
+        self.get_task_output(session_id, cursor, limit)
     }
 }
 

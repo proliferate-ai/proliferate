@@ -2,13 +2,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use super::{
-    authorization_policy, status_from_record_only, AgentCatalogReads, AgentLaunchOptionReads,
-    AgentOperations, AgentOperationsError, CallerFacts, ResolvedAgent, TargetFacts,
+    AgentCatalogReads, AgentLaunchOptionReads, AgentOperations, AgentOperationsError, ResolvedAgent,
 };
 use crate::domains::agent_operations::model::{
     AgentCapability, AgentConfigOption, AgentConfigOptionsView, AgentConfigValueOption,
-    AgentIdentity, AgentLaunchModelOption, AgentLaunchOption, AgentLaunchOptionsView, AgentRole,
-    CapabilityDenial, WorkspaceIdentity,
+    AgentIdentity, AgentLaunchModelOption, AgentLaunchOption, AgentLaunchOptionsView,
+    WorkspaceIdentity,
 };
 use crate::domains::agents::catalog::schema::{AgentCatalogAgent, AgentCatalogModel};
 use crate::domains::agents::catalog::service::ActiveCatalog;
@@ -58,11 +57,16 @@ impl AgentOperations {
         caller: &crate::domains::agent_operations::model::AuthenticatedAgentCaller,
         target: &AgentIdentity,
     ) -> Result<AgentConfigOptionsView, AgentOperationsError> {
-        self.assert_same_runtime(target)?;
-        let caller_agent = self.resolve_caller_agent(caller)?;
-        let target_agent = self.resolve_agent(target)?;
-        self.assert_config_target_authorized(&caller_agent, &target_agent)?;
+        let (_, target_agent) =
+            self.authorize_target(caller, target, AgentCapability::ListAgentConfigOptions)?;
+        self.config_options_for_authorized_target(&target_agent)
+            .await
+    }
 
+    pub(super) async fn config_options_for_authorized_target(
+        &self,
+        target_agent: &ResolvedAgent,
+    ) -> Result<AgentConfigOptionsView, AgentOperationsError> {
         let workspace = WorkspaceIdentity {
             runtime_id: self.runtime_id.clone(),
             workspace_id: target_agent.record.workspace_id.clone(),
@@ -100,13 +104,14 @@ impl AgentOperations {
             .map(|model| model.id.clone())
             .collect::<HashSet<_>>();
         Ok(project_config_options(
-            AgentIdentity::new(self.runtime_id.clone(), target_agent.record.id),
+            AgentIdentity::new(self.runtime_id.clone(), target_agent.record.id.clone()),
             workspace,
-            target_agent.record.agent_kind,
+            target_agent.record.agent_kind.clone(),
             target_agent
                 .record
                 .current_model_id
-                .or(target_agent.record.requested_model_id),
+                .clone()
+                .or_else(|| target_agent.record.requested_model_id.clone()),
             catalog.catalog_version().to_string(),
             snapshot,
             &projected_launch.agents,
@@ -128,7 +133,7 @@ impl AgentOperations {
             .ok_or(AgentOperationsError::WorkspaceCatalogsUnavailable)
     }
 
-    fn assert_workspace_same_runtime(
+    pub(super) fn assert_workspace_same_runtime(
         &self,
         workspace: &WorkspaceIdentity,
     ) -> Result<(), AgentOperationsError> {
@@ -136,48 +141,6 @@ impl AgentOperations {
             return Err(AgentOperationsError::RuntimeBoundaryDenied);
         }
         Ok(())
-    }
-
-    fn assert_config_target_authorized(
-        &self,
-        caller: &ResolvedAgent,
-        target: &ResolvedAgent,
-    ) -> Result<(), AgentOperationsError> {
-        let owned_by_caller = target.parent_session_id() == Some(caller.record.id.as_str());
-        if target.role() == AgentRole::Subagent && !owned_by_caller {
-            return Err(AgentOperationsError::AgentNotFound);
-        }
-        if target.role() == AgentRole::Subagent && target.is_relationship_closed() {
-            return Err(AgentOperationsError::SubagentOpenRequired);
-        }
-        if target.is_terminal_session() {
-            return Err(AgentOperationsError::AgentNotFound);
-        }
-
-        let decision = authorization_policy::target_capability(
-            CallerFacts {
-                role: caller.role(),
-                status: status_from_record_only(caller).presentation,
-            },
-            TargetFacts {
-                role: target.role(),
-                status: status_from_record_only(target).presentation,
-                owned_by_caller,
-            },
-            AgentCapability::ListAgentConfigOptions,
-        );
-        match decision.denial {
-            None => Ok(()),
-            Some(CapabilityDenial::SubagentOpenRequired) => {
-                Err(AgentOperationsError::SubagentOpenRequired)
-            }
-            Some(CapabilityDenial::ParentOnly) => Err(AgentOperationsError::AgentNotFound),
-            Some(CapabilityDenial::CallerClosed) => Err(AgentOperationsError::CallerClosed),
-            Some(denial) => Err(AgentOperationsError::CapabilityDenied {
-                capability: AgentCapability::ListAgentConfigOptions,
-                denial,
-            }),
-        }
     }
 }
 

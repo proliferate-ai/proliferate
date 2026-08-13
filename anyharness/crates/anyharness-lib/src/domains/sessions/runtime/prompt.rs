@@ -141,6 +141,30 @@ impl SessionRuntime {
         text: String,
         prompt_id: String,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
+        self.send_text_prompt_with_id_inner(session_id, text, prompt_id, None)
+            .await
+    }
+
+    /// Creation-only variant carrying trusted agent-session provenance without
+    /// activating the general cross-agent message surface.
+    pub(crate) async fn send_text_prompt_with_id_and_provenance(
+        &self,
+        session_id: &str,
+        text: String,
+        prompt_id: String,
+        provenance: PromptProvenance,
+    ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
+        self.send_text_prompt_with_id_inner(session_id, text, prompt_id, Some(provenance))
+            .await
+    }
+
+    async fn send_text_prompt_with_id_inner(
+        &self,
+        session_id: &str,
+        text: String,
+        prompt_id: String,
+        provenance: Option<PromptProvenance>,
+    ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
             .map_err(|error| {
@@ -160,7 +184,10 @@ impl SessionRuntime {
             .ensure_live_session_handle(&record, None)
             .await
             .map_err(|error| TextPromptDispatchError::Dispatch(map_start_error_to_prompt(error)))?;
-        let payload = crate::domains::sessions::prompt::PromptPayload::text(text);
+        let mut payload = crate::domains::sessions::prompt::PromptPayload::text(text);
+        if let Some(provenance) = provenance {
+            payload = payload.with_provenance(provenance);
+        }
         let acceptance = handle
             .send_prompt(payload, Some(prompt_id))
             .await

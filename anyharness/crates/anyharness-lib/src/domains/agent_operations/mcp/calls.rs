@@ -4,11 +4,15 @@ use serde_json::{json, Value};
 
 use super::context::WorkspaceMcpContext;
 use crate::domains::agent_operations::model::{
-    AgentIdentity, AgentPresentationStatus, CreateWorkspaceInput, ListAgentsInput,
-    ListWorkspacesInput, WorkspaceIdentity,
+    AgentCreationKind, AgentIdentity, AgentPresentationStatus, ConfigureAgentInput,
+    CreateAgentInput, CreateWorkspaceInput, ListAgentsInput, ListWorkspacesInput,
+    WorkspaceIdentity,
 };
 use crate::domains::agent_operations::runtime::{AgentOperations, AgentOperationsError};
-use crate::integrations::mcp::tools::McpToolCallError;
+use crate::domains::sessions::task_output::{
+    TaskOutputPage, TaskOutputRole, TaskOutputSender, DEFAULT_TASK_OUTPUT_LIMIT,
+};
+use crate::integrations::mcp::tools::{McpToolCallError, McpToolOutput};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -40,6 +44,33 @@ struct CreateWorkspaceArgs {
     creation_mode: String,
     branch: Option<String>,
     display_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CreateAgentArgs {
+    workspace_id: String,
+    kind: AgentCreationKind,
+    task: Option<String>,
+    agent_kind: Option<String>,
+    model_id: Option<String>,
+    mode_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConfigureAgentArgs {
+    agent_id: String,
+    config_id: String,
+    value: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TaskOutputArgs {
+    agent_id: String,
+    cursor: Option<String>,
+    limit: Option<usize>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -146,6 +177,65 @@ pub async fn call_tool(
                     .await,
             )
         }
+        "create_agent" => {
+            let args = parse::<CreateAgentArgs>(arguments)?;
+            serialize(
+                operations
+                    .create_agent(
+                        &ctx.caller,
+                        CreateAgentInput {
+                            workspace: WorkspaceIdentity {
+                                runtime_id: operations.runtime_identity().clone(),
+                                workspace_id: args.workspace_id,
+                            },
+                            kind: args.kind,
+                            task: args.task,
+                            agent_kind: args.agent_kind,
+                            model_id: args.model_id,
+                            mode_id: args.mode_id,
+                        },
+                    )
+                    .await,
+            )
+        }
+        "configure_agent" => {
+            let args = parse::<ConfigureAgentArgs>(arguments)?;
+            serialize(
+                operations
+                    .configure_agent(
+                        &ctx.caller,
+                        ConfigureAgentInput {
+                            target: AgentIdentity::new(
+                                operations.runtime_identity().clone(),
+                                args.agent_id,
+                            ),
+                            config_id: args.config_id,
+                            value: args.value,
+                        },
+                    )
+                    .await,
+            )
+        }
+        "resume_agent" => {
+            let args = parse::<TargetArgs>(arguments)?;
+            let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
+            serialize(operations.resume_agent(&ctx.caller, &target).await)
+        }
+        "interrupt_agent" => {
+            let args = parse::<TargetArgs>(arguments)?;
+            let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
+            serialize(operations.interrupt_agent(&ctx.caller, &target).await)
+        }
+        "get_task_output" => {
+            let args = parse::<TaskOutputArgs>(arguments)?;
+            let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
+            serialize(operations.get_task_output(
+                &ctx.caller,
+                &target,
+                args.cursor.as_deref(),
+                args.limit.unwrap_or(DEFAULT_TASK_OUTPUT_LIMIT),
+            ))
+        }
         declared if super::tools::TOOL_NAMES.contains(&declared) => {
             Err(anyhow::Error::new(McpToolCallError::new(
                 "WORKSPACE_MCP_OPERATION_NOT_IMPLEMENTED",
@@ -157,6 +247,36 @@ pub async fn call_tool(
             "Unknown Workspace tool.",
         ))),
     }
+}
+
+pub async fn call_tool_output(
+    operations: &AgentOperations,
+    ctx: &WorkspaceMcpContext,
+    name: &str,
+    arguments: Option<Value>,
+) -> anyhow::Result<McpToolOutput> {
+    if name != "get_task_output" {
+        return call_tool(operations, ctx, name, arguments)
+            .await
+            .map(McpToolOutput::Structured);
+    }
+    let args = parse::<TaskOutputArgs>(arguments)?;
+    let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
+    let page = operations
+        .get_task_output(
+            &ctx.caller,
+            &target,
+            args.cursor.as_deref(),
+            args.limit.unwrap_or(DEFAULT_TASK_OUTPUT_LIMIT),
+        )
+        .map_err(tool_error)?;
+    let text = task_output_text(&page);
+    let structured_content = serde_json::to_value(page)?;
+    Ok(McpToolOutput::Represented {
+        structured_content,
+        text,
+        max_response_bytes: 65_536,
+    })
 }
 
 fn parse<T: DeserializeOwned>(arguments: Option<Value>) -> anyhow::Result<T> {
@@ -178,4 +298,48 @@ fn serialize<T: serde::Serialize>(
             error.public_message(),
         ))),
     }
+}
+
+fn tool_error(error: AgentOperationsError) -> anyhow::Error {
+    anyhow::Error::new(McpToolCallError::new(error.code(), error.public_message()))
+}
+
+fn task_output_text(page: &TaskOutputPage) -> String {
+    const MAX_TEXT_BYTES: usize = 1_536;
+    let mut text = String::from("Recent visible task output:\n");
+    for message in &page.messages {
+        let role = match message.role {
+            TaskOutputRole::User => "user",
+            TaskOutputRole::Assistant => "assistant",
+        };
+        let sender = match &message.sender {
+            TaskOutputSender::User { label }
+            | TaskOutputSender::Agent { label, .. }
+            | TaskOutputSender::Review { label } => label,
+        };
+        let visible = message
+            .text
+            .chars()
+            .map(|character| {
+                if character.is_control() {
+                    ' '
+                } else {
+                    character
+                }
+            })
+            .collect::<String>();
+        text.push_str(&format!("- {role} ({sender}): {visible}\n"));
+        if text.len() >= MAX_TEXT_BYTES {
+            break;
+        }
+    }
+    if text.len() > MAX_TEXT_BYTES {
+        let mut boundary = MAX_TEXT_BYTES;
+        while !text.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        text.truncate(boundary);
+        text.push_str("\n[Text view truncated; use structuredContent.]\n");
+    }
+    text
 }

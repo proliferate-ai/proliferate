@@ -235,6 +235,37 @@ pub struct AgentPage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateAgentInput {
+    pub workspace: WorkspaceIdentity,
+    pub kind: AgentCreationKind,
+    pub task: Option<String>,
+    pub agent_kind: Option<String>,
+    pub model_id: Option<String>,
+    pub mode_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigureAgentInput {
+    pub target: AgentIdentity,
+    pub config_id: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentConfigApplyState {
+    Applied,
+    Queued,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigureAgentResult {
+    pub agent: AgentView,
+    pub apply_state: AgentConfigApplyState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListWorkspacesInput {
     pub cursor: Option<String>,
     pub limit: usize,

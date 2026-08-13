@@ -1,3 +1,4 @@
+mod agent_operations;
 mod config;
 mod materialization;
 mod mobility;
@@ -561,19 +562,16 @@ impl AppState {
             .clone()
             .spawn_background_tasks(review_hook_event_rx);
         let runtime_identity = runtime_identity(&auth_manager, &runtime_home);
-        let agent_operations = Arc::new(
-            AgentOperations::new(
+        let agent_operations =
+            agent_operations::wire_agent_operations(agent_operations::AgentOperationsWiringDeps {
                 runtime_identity,
-                session_service.clone(),
-                Arc::new(session_link_service.clone()),
-                session_runtime.clone(),
-            )
-            .with_workspace_catalogs(
-                workspace_option_runtime.clone(),
-                session_runtime.clone(),
-                session_service.clone(),
-            ),
-        );
+                session_service: session_service.clone(),
+                session_link_service: Arc::new(session_link_service.clone()),
+                session_runtime: session_runtime.clone(),
+                workspace_option_runtime: workspace_option_runtime.clone(),
+                session_admission: session_admission.clone(),
+                workspace_operation_gate: workspace_operation_gate.clone(),
+            });
         let workspace_mcp_auth = Arc::new(WorkspaceMcpAuth::new(runtime_home.clone()));
         let product_mcp_endpoint_registry =
             product_mcp::build_product_mcp_endpoint_registry(product_mcp::EndpointRegistryDeps {
