@@ -12,8 +12,10 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import type {
   SupportReportAttachmentPayload,
   SupportReportJob,
+  SupportReportSnapshotIntent,
 } from "#product/lib/domain/support/report-types";
 import { useSupportReportSnapshot } from "#product/hooks/support/derived/use-support-report-snapshot";
+import { useSupportSnapshotConsent } from "#product/hooks/support/workflows/use-support-snapshot-consent";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import type { SupportModalKind } from "#product/stores/support/support-modal-store";
 import { enqueueSupportReportJob } from "#product/lib/access/browser/support-report-job-events";
@@ -55,6 +57,12 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
   const submittingRef = useRef(false);
   const jobIdRef = useRef(crypto.randomUUID());
   const openedAtRef = useRef(new Date().toISOString());
+  // Per-report snapshot consent. It starts unchecked on every open and stages
+  // nothing until an explicit Send or Save a copy… while consent is true.
+  const snapshotConsent = useSupportSnapshotConsent({
+    clientJobId: jobIdRef.current,
+    reportOpenedAt: openedAtRef.current,
+  });
 
   // Record a local marker on mount so diagnostics can be bisected around the
   // report. The store stays pure state.
@@ -145,6 +153,19 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
     submittingRef.current = true;
     setIsSubmitting(true);
 
+    // Consent is read live at Send. A fatal preparation failure keeps the modal
+    // open with the draft intact so the user can retry or clear the box and
+    // send without a snapshot; intent is never downgraded silently.
+    let supportSnapshot: SupportReportSnapshotIntent = { kind: "none" };
+    const prepared = await snapshotConsent.prepare();
+    if (prepared.state === "prepared") {
+      supportSnapshot = prepared.intent;
+    } else if (prepared.state !== "none") {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
     // Determine scope: use active workspace if available, else app_only.
     const defaultWorkspaceId = snapshot.defaultWorkspaceId ?? null;
     const scopeKind = defaultWorkspaceId ? "most_recent_workspace" as const : "app_only" as const;
@@ -165,10 +186,10 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
       // `urgent` is a bug-only signal; prompt submissions never mark urgent.
       urgent: kind === "bug" ? urgent : false,
       notifyMe,
-      // Snapshot preparation/consent is owned by the later modal slice. Until
-      // that flow supplies an exact prepared artifact, new jobs are explicitly
-      // no-snapshot; the legacy includeLogs flag never grants consent.
-      supportSnapshot: { kind: "none" },
+      // Immutable diagnostics intent. Without live consent it is explicitly
+      // no-snapshot; with consent it carries the exact staged artifact the
+      // consent epoch produced. The legacy includeLogs flag never grants it.
+      supportSnapshot,
       snapshot: {
         ...snapshot,
         openedAt: openedAtRef.current,
@@ -194,6 +215,9 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
   }
 
   function handleCancel() {
+    // Supersede the consent epoch so any in-flight preparation is cancelled and
+    // a late result can never enqueue.
+    snapshotConsent.cancel();
     // Clean up staged files.
     for (const attachment of attachments) {
       if (attachment.previewUrl) {
@@ -226,6 +250,7 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
     setNotifyMe,
     setUrgent,
     notifyMe,
+    snapshotConsent,
     urgent,
     stagingError,
   };
