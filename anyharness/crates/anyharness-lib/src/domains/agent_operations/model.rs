@@ -266,6 +266,26 @@ pub struct ConfigureAgentResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SendMessageInput {
+    pub target: AgentIdentity,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SendMessageStatus {
+    DurablyQueued,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendMessageReceipt {
+    pub target: AgentIdentity,
+    pub queue_seq: i64,
+    pub status: SendMessageStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListWorkspacesInput {
     pub cursor: Option<String>,
     pub limit: usize,

@@ -30,13 +30,19 @@ pub(super) fn wire_agent_operations(deps: AgentOperationsWiringDeps) -> Arc<Agen
             deps.session_runtime.clone(),
         )
         .with_workspace_catalogs(
-            deps.workspace_option_runtime,
+            deps.workspace_option_runtime.clone(),
             deps.session_runtime.clone(),
             deps.session_service.clone(),
         )
         .with_ordinary_operations(
-            deps.session_runtime,
+            deps.session_runtime.clone(),
             deps.session_service,
+            deps.session_admission.clone(),
+            deps.workspace_operation_gate.clone(),
+        )
+        .with_messaging(
+            deps.session_runtime,
+            deps.workspace_option_runtime,
             deps.session_admission,
             deps.workspace_operation_gate,
         ),

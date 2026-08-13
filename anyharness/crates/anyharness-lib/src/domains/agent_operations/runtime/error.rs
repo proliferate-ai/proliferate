@@ -53,12 +53,18 @@ pub enum AgentOperationsError {
     Resume(EnsureLiveSessionError),
     #[error("agent interrupt failed")]
     Interrupt(SessionLifecycleError),
+    #[error("agent message enqueue failed")]
+    SendMessage(SendPromptError),
     #[error("the initial task must not be blank")]
     InvalidTask,
+    #[error("the message must not be blank")]
+    InvalidMessage,
     #[error("session execution is controlled by an active workflow")]
     ControlledByWorkflow,
     #[error("ordinary agent operations are not configured")]
     OrdinaryOperationsUnavailable,
+    #[error("agent messaging is not configured")]
+    MessagingUnavailable,
     #[error("subagent creation is declared for a later implementation slice")]
     SubagentCreationNotImplemented,
     #[error(transparent)]
@@ -113,9 +119,12 @@ impl AgentOperationsError {
             Self::Resume(error) => resume_code(error),
             Self::Interrupt(SessionLifecycleError::SessionNotFound(_)) => "AGENT_NOT_FOUND",
             Self::Interrupt(SessionLifecycleError::Internal(_)) => "AGENT_OPERATIONS_INTERNAL",
+            Self::SendMessage(error) => message_code(error),
             Self::InvalidTask => "AGENT_TASK_INVALID",
+            Self::InvalidMessage => "AGENT_MESSAGE_INVALID",
             Self::ControlledByWorkflow => "SESSION_CONTROLLED_BY_WORKFLOW",
             Self::OrdinaryOperationsUnavailable => "AGENT_OPERATIONS_UNAVAILABLE",
+            Self::MessagingUnavailable => "AGENT_OPERATIONS_UNAVAILABLE",
             Self::SubagentCreationNotImplemented => "WORKSPACE_MCP_OPERATION_NOT_IMPLEMENTED",
             Self::TaskOutput(TaskOutputError::InvalidLimit) => "TASK_OUTPUT_LIMIT_INVALID",
             Self::TaskOutput(TaskOutputError::InvalidCursor) => "TASK_OUTPUT_CURSOR_INVALID",
@@ -163,13 +172,16 @@ impl AgentOperationsError {
             Self::Interrupt(SessionLifecycleError::Internal(_)) => {
                 "Agent operations failed.".into()
             }
+            Self::SendMessage(error) => message_public_message(error),
             Self::InvalidTask => "The initial task must not be blank.".into(),
+            Self::InvalidMessage => "The message must not be blank.".into(),
             Self::ControlledByWorkflow => {
                 "Session execution is controlled by an active workflow.".into()
             }
             Self::OrdinaryOperationsUnavailable => {
                 "Ordinary agent operations are unavailable.".into()
             }
+            Self::MessagingUnavailable => "Agent messaging is unavailable.".into(),
             Self::SubagentCreationNotImplemented => {
                 "Subagent creation is not implemented yet.".into()
             }
@@ -218,6 +230,13 @@ fn prompt_code(error: &SendPromptError) -> &'static str {
         SendPromptError::WorkspaceDirectoryMissing { .. } => "WORKSPACE_DIRECTORY_MISSING",
         SendPromptError::InvalidPrompt(error) => error.code,
         SendPromptError::Internal(_) => "AGENT_OPERATIONS_INTERNAL",
+    }
+}
+
+fn message_code(error: &SendPromptError) -> &'static str {
+    match error {
+        SendPromptError::EmptyPrompt | SendPromptError::InvalidPrompt(_) => "AGENT_MESSAGE_INVALID",
+        other => prompt_code(other),
     }
 }
 
@@ -307,6 +326,19 @@ fn prompt_public_message(error: &SendPromptError) -> String {
             "The workspace checkout directory is missing.".into()
         }
         SendPromptError::InvalidPrompt(_) => "The initial task is invalid.".into(),
+        SendPromptError::Internal(_) => "Agent operations failed.".into(),
+    }
+}
+
+fn message_public_message(error: &SendPromptError) -> String {
+    match error {
+        SendPromptError::SessionNotFound(_) => "The requested agent was not found.".into(),
+        SendPromptError::SessionClosed => "The agent session is closed.".into(),
+        SendPromptError::EmptyPrompt => "The message must not be blank.".into(),
+        SendPromptError::WorkspaceDirectoryMissing { .. } => {
+            "The workspace checkout directory is missing.".into()
+        }
+        SendPromptError::InvalidPrompt(_) => "The message is invalid.".into(),
         SendPromptError::Internal(_) => "Agent operations failed.".into(),
     }
 }

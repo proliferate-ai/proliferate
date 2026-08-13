@@ -1,11 +1,14 @@
 mod authorization_policy;
 mod catalogs;
 mod error;
+mod messaging;
 mod ordinary;
 mod ports;
 mod target_access;
 mod workspaces;
 
+#[cfg(test)]
+mod messaging_tests;
 #[cfg(test)]
 mod ordinary_tests;
 #[cfg(test)]
@@ -15,6 +18,7 @@ use std::sync::Arc;
 
 use authorization_policy::{CallerFacts, TargetFacts};
 pub use error::AgentOperationsError;
+pub(crate) use ports::AgentMessageQueue;
 pub use ports::{
     AgentCatalogReads, AgentConfigMutationState, AgentExecutionReads, AgentLaunchOptionReads,
     AgentSessionMutations, AgentSessionReads, AgentTaskOutputReads, AgentWorkspaceOperations,
@@ -43,6 +47,7 @@ pub struct AgentOperations {
     launch_options: Option<Arc<dyn AgentLaunchOptionReads>>,
     catalog: Option<Arc<dyn AgentCatalogReads>>,
     mutations: Option<Arc<dyn AgentSessionMutations>>,
+    message_queue: Option<Arc<dyn AgentMessageQueue>>,
     task_output: Option<Arc<dyn AgentTaskOutputReads>>,
     session_admission: Option<Arc<SessionMutationAdmission>>,
     workspace_operation_gate: Option<Arc<WorkspaceOperationGate>>,
@@ -64,6 +69,7 @@ impl AgentOperations {
             launch_options: None,
             catalog: None,
             mutations: None,
+            message_queue: None,
             task_output: None,
             session_admission: None,
             workspace_operation_gate: None,
@@ -91,6 +97,20 @@ impl AgentOperations {
     ) -> Self {
         self.mutations = Some(mutations);
         self.task_output = Some(task_output);
+        self.session_admission = Some(session_admission);
+        self.workspace_operation_gate = Some(workspace_operation_gate);
+        self
+    }
+
+    pub(crate) fn with_messaging(
+        mut self,
+        message_queue: Arc<dyn AgentMessageQueue>,
+        workspaces: Arc<dyn AgentWorkspaceOperations>,
+        session_admission: Arc<SessionMutationAdmission>,
+        workspace_operation_gate: Arc<WorkspaceOperationGate>,
+    ) -> Self {
+        self.message_queue = Some(message_queue);
+        self.workspaces = Some(workspaces);
         self.session_admission = Some(session_admission);
         self.workspace_operation_gate = Some(workspace_operation_gate);
         self

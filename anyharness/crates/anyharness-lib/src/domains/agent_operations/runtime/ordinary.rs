@@ -222,7 +222,7 @@ impl AgentOperations {
         }
     }
 
-    async fn admit_target(
+    pub(super) async fn admit_target(
         &self,
         session_id: &str,
         kind: SessionMutationKind,
@@ -239,7 +239,7 @@ impl AgentOperations {
             })
     }
 
-    async fn assert_target_workspace_under_lease(
+    pub(super) async fn assert_target_workspace_under_lease(
         &self,
         target: &ResolvedAgent,
         expected_workspace_id: &str,
@@ -301,7 +301,7 @@ impl AgentOperations {
             .ok_or(AgentOperationsError::OrdinaryOperationsUnavailable)
     }
 
-    fn operation_gate(
+    pub(super) fn operation_gate(
         &self,
     ) -> Result<
         &Arc<crate::domains::workspaces::operation_gate::WorkspaceOperationGate>,
