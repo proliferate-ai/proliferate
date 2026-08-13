@@ -4,8 +4,7 @@ import { twMerge } from "#product/primitives/utils/tw-merge";
 /**
  * `framed` is the chrome page header: a bordered, padded band that separates
  * itself from the content below. `flat` is the settings-pane look — no rule,
- * no padding, tighter tracking, smaller description — carried by
- * `SettingsPageHeader` until the settings slice retires it onto this variant.
+ * no padding, tighter tracking, smaller description.
  */
 export type PageHeaderVariant = "framed" | "flat";
 
