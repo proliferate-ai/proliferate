@@ -163,4 +163,28 @@ describe("useResize", () => {
 
     expect(onResizeEnd).toHaveBeenCalledTimes(1);
   });
+
+  it("ends the gesture when the window loses focus mid-drag", () => {
+    const onResize = vi.fn();
+    const onResizeEnd = vi.fn();
+    const { result } = renderHook(() =>
+      useResize({ direction: "horizontal", size: 300, onResize, onResizeEnd }));
+
+    act(() => {
+      result.current(mouseDownEvent(0));
+    });
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+
+    // The blur tears the gesture down exactly like a mouseup: the cursor
+    // overlay is gone, the end callback fired, and later mouse traffic is
+    // ignored.
+    expect(onResizeEnd).toHaveBeenCalledTimes(1);
+    expect(document.querySelectorAll("div[style*='col-resize']").length).toBe(0);
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 50 }));
+    });
+    expect(onResize).not.toHaveBeenCalled();
+  });
 });
