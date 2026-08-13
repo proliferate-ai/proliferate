@@ -409,17 +409,14 @@ describe("dot-cell activity motion", () => {
  * a future edit could quietly restore the opaque composer card or drop the new
  * transcript measure tokens and every existing test would still pass.
  */
-// Composer opaque-surface literals, expressed as RGB channels rather than a
-// hex string in source: the design-token authority (tokens.ts) owns the
-// literal spelling, and this drift lock derives its expectation from the
-// rendered channels instead of restating a second raw-hex literal here.
+// Composer opaque-surface literals as RGB channels, not hex strings: tokens.ts
+// owns the literal spelling, so this lock derives rather than restates it.
 function rgbToHex(channels: readonly [number, number, number]): string {
   return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 const COMPOSER_DARK_HEX = rgbToHex([0x2d, 0x2d, 0x2d]);
-// Off-white, not the page's #ffffff: with the borderless composer chrome the
-// fill alone separates the surface from the page in light mode. It is the
-// sanctioned rail plane, not a fourth opaque light plane.
+// The sanctioned rail plane, not the page's #ffffff: with borderless chrome
+// the fill alone separates the composer from the light page.
 const COMPOSER_LIGHT_HEX = rgbToHex([0xf6, 0xf6, 0xf6]);
 
 describe("chat retune tokens", () => {
