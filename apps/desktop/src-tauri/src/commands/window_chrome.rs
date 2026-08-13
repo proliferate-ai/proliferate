@@ -5,9 +5,9 @@ const MAC_TRAFFIC_LIGHT_X: f64 = 13.0;
 const MAC_HEADER_HEIGHT: f64 = 46.0;
 
 /// Webview page zoom scales the DOM header the traffic lights sit in, but the
-/// native buttons never zoom. The active factor is kept here so the buttons
-/// can be laid out against the zoomed header geometry — including when the
-/// chrome is re-applied on window focus, after AppKit resets it.
+/// native buttons never zoom. The active factor is kept here so every chrome
+/// application — boot, resize, focus, zoom change — lays the buttons out
+/// against the zoomed header geometry.
 pub struct WindowChromeZoom(Mutex<f64>);
 
 impl Default for WindowChromeZoom {
@@ -20,6 +20,25 @@ impl WindowChromeZoom {
     fn factor(&self) -> f64 {
         self.0.lock().map(|guard| *guard).unwrap_or(1.0)
     }
+}
+
+/// Applies the scaled chrome outside a command context. The window config no
+/// longer pins the traffic lights (the runtime would re-pin them unscaled on
+/// every redraw), so lib.rs calls this before first paint and on `Resized`,
+/// where AppKit re-lays the standard buttons out to their defaults.
+pub fn reapply_window_chrome<R: tauri::Runtime>(window: &tauri::Window<R>) {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::Manager;
+
+        let scale = window.state::<WindowChromeZoom>().factor();
+        if let Ok(ns_window) = window.ns_window() {
+            let _ = apply_traffic_light_position(ns_window, scale);
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
 }
 
 #[tauri::command]
@@ -60,9 +79,12 @@ pub fn set_webview_zoom(
 
     #[cfg(target_os = "macos")]
     {
+        // Re-read the stored factor instead of using `clamped`: concurrent
+        // zoom commands then converge on whichever factor was stored last,
+        // rather than on whichever reposition happened to finish last.
         apply_traffic_light_position(
             window.ns_window().map_err(|error| error.to_string())?,
-            clamped,
+            zoom.factor(),
         )?;
     }
 
