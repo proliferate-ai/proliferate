@@ -25,6 +25,8 @@ struct FallbackInner {
     dropped_records: u64,
     #[cfg(test)]
     fail_writes: bool,
+    #[cfg(test)]
+    fail_close: bool,
 }
 
 impl FallbackDiagnosticsWriter {
@@ -86,6 +88,8 @@ impl FallbackDiagnosticsWriter {
                 dropped_records,
                 #[cfg(test)]
                 fail_writes: false,
+                #[cfg(test)]
+                fail_close: false,
             }))),
         })
     }
@@ -165,6 +169,11 @@ impl FallbackDiagnosticsWriter {
             .lock()
             .map_err(|_| "fallback_lock_poisoned".to_string())?;
         inner.active = false;
+        #[cfg(test)]
+        if inner.fail_close {
+            inner.file.take();
+            return Err("fallback_close_failed: injected fallback close failure".to_string());
+        }
         if let Some(mut file) = inner.file.take() {
             file.flush()
                 .and_then(|_| file.sync_data())
@@ -183,6 +192,15 @@ impl FallbackDiagnosticsWriter {
         if let Some(inner) = &self.inner {
             if let Ok(mut inner) = inner.lock() {
                 inner.fail_writes = true;
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inject_close_failure(&self) {
+        if let Some(inner) = &self.inner {
+            if let Ok(mut inner) = inner.lock() {
+                inner.fail_close = true;
             }
         }
     }

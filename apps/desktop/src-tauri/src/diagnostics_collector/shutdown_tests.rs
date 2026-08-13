@@ -281,3 +281,73 @@ async fn ordered_shutdown_surfaces_injected_teardown_fallback_failure() {
     assert!(!supervisor.has_owned_process_for_test());
     fs::remove_dir_all(root).expect("fixture cleanup");
 }
+
+#[tokio::test]
+async fn ordered_shutdown_keeps_diagnostics_teardown_failures_off_the_product_result() {
+    let (root, fallback, producer, supervisor) = running_supervisor("diagnostics-teardown").await;
+    let worker = cloud_worker::create_cloud_worker_state();
+    let anyharness = sidecar::create_sidecar(49_903);
+    sidecar::suppress_shutdown_test_persistence(&anyharness).await;
+    fallback.inject_close_failure();
+    let coordinator = DiagnosticsShutdownCoordinator::new(
+        Arc::clone(&supervisor),
+        producer,
+        fallback.clone(),
+        create_broker_server_state(),
+        worker,
+        anyharness,
+    );
+
+    // The Windows updater gates `install()` on this result. A fallback flush
+    // failure is pure observability and must never be what blocks it.
+    assert_eq!(coordinator.shutdown().await, Ok(()));
+    assert!(coordinator.diagnostics_teardown_failed());
+    assert_eq!(coordinator.phase_trace(), SHUTDOWN_PHASE_ORDER);
+
+    // Diagnostics-only damage still leaves a finished teardown, so the repeat
+    // caller short-circuits rather than tearing everything down twice.
+    assert_eq!(coordinator.shutdown().await, Ok(()));
+    assert_eq!(coordinator.phase_trace(), SHUTDOWN_PHASE_ORDER);
+    fs::remove_dir_all(root).expect("fixture cleanup");
+}
+
+#[tokio::test]
+async fn failed_product_teardown_is_reattempted_rather_than_replayed() {
+    let (root, fallback, producer, supervisor) = running_supervisor("retry-shutdown").await;
+    let worker_lock = root.join("worker.lock");
+    let worker_child = spawn_locking_child(&worker_lock).await;
+    let worker = cloud_worker::create_cloud_worker_state();
+    cloud_worker::lifecycle::install_shutdown_test_child(&worker, worker_child).await;
+    cloud_worker::lifecycle::inject_shutdown_test_stop_error(
+        &worker,
+        "Timed out stopping Proliferate Worker".to_string(),
+    )
+    .await;
+    let anyharness = sidecar::create_sidecar(49_904);
+    sidecar::suppress_shutdown_test_persistence(&anyharness).await;
+    let coordinator = DiagnosticsShutdownCoordinator::new(
+        Arc::clone(&supervisor),
+        producer,
+        fallback.clone(),
+        create_broker_server_state(),
+        worker,
+        anyharness,
+    );
+
+    // First try loses the reap race, so the Worker keeps its database lock.
+    assert!(
+        coordinator.shutdown().await.is_err(),
+        "the injected reap failure must surface to the product caller"
+    );
+    assert_eq!(coordinator.phase_trace(), SHUTDOWN_PHASE_ORDER);
+
+    // The retry must re-enter every phase instead of replaying a cached error
+    // that stops nothing; this time the child is actually reaped.
+    assert_eq!(coordinator.shutdown().await, Ok(()));
+    assert_eq!(
+        coordinator.phase_trace(),
+        [SHUTDOWN_PHASE_ORDER, SHUTDOWN_PHASE_ORDER].concat()
+    );
+    assert_child_reaped(&worker_lock);
+    fs::remove_dir_all(root).expect("fixture cleanup");
+}

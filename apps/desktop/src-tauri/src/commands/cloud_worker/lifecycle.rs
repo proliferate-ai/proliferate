@@ -209,6 +209,14 @@ pub(crate) async fn install_shutdown_test_child(
     });
 }
 
+/// Fails the next stop attempt only. Later attempts run the real reap, which is
+/// how a shutdown retry is exercised.
+#[cfg(test)]
+pub(crate) async fn inject_shutdown_test_stop_error(state: &SharedCloudWorkerState, error: String) {
+    let mut lifecycle = state.lifecycle.lock().await;
+    lifecycle.injected_stop_error = Some(error);
+}
+
 async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, String> {
     if lifecycle.process.is_none() {
         return Ok(false);

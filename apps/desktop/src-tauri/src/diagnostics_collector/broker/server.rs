@@ -6,7 +6,10 @@ use std::time::Duration;
 
 use proliferate_diagnostics_protocol::v1::limits::CURRENT_SCHEMA_VERSION;
 use tokio::io::{AsyncReadExt, AsyncWrite};
-use tokio::net::{unix::OwnedReadHalf, UnixListener, UnixStream};
+use tokio::net::{
+    unix::{OwnedReadHalf, SocketAddr},
+    UnixListener, UnixStream,
+};
 use tokio::sync::{watch, Semaphore};
 use tokio::task::{JoinHandle, JoinSet};
 
@@ -29,6 +32,8 @@ const SERVER_INITIAL_REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 const BROKER_FINITE_COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
 const BROKER_STREAM_FRAME_WRITE_TIMEOUT: Duration = Duration::from_secs(2);
 const BROKER_SESSION_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
+const BROKER_ACCEPT_RETRY_BACKOFF: Duration = Duration::from_millis(50);
+const MAX_CONSECUTIVE_ACCEPT_FAILURES: u32 = 64;
 
 #[derive(Debug)]
 pub(crate) enum BrokerServerError {
@@ -49,6 +54,11 @@ struct BrokerLimits {
     finite: Arc<Semaphore>,
     tails: Arc<Semaphore>,
     exports: Arc<Semaphore>,
+    /// Number of `accept` calls the test harness still wants to fail before the
+    /// listener is touched, so the retry path can be driven without exhausting
+    /// real descriptors.
+    #[cfg(test)]
+    forced_accept_failures: Arc<std::sync::atomic::AtomicU32>,
 }
 
 pub(crate) struct DiagnosticsBrokerServer {
@@ -76,7 +86,7 @@ impl DiagnosticsBrokerServer {
         supervisor: Arc<DiagnosticsCollectorSupervisor>,
     ) -> Result<Arc<Self>, BrokerServerError> {
         let scope = current_server_scope()?;
-        Self::start_in_scope(supervisor, scope, DiagnosticsArtifactKind::current()).await
+        Self::start_in_scope(supervisor, scope, DiagnosticsArtifactKind::current(), 0).await
     }
 
     #[cfg(test)]
@@ -85,13 +95,27 @@ impl DiagnosticsBrokerServer {
         scope: DiagnosticsBrokerScope,
         artifact: DiagnosticsArtifactKind,
     ) -> Result<Arc<Self>, BrokerServerError> {
-        Self::start_in_scope(supervisor, scope, artifact).await
+        Self::start_in_scope(supervisor, scope, artifact, 0).await
+    }
+
+    /// Starts a broker whose first `forced_accept_failures` accepts fail before
+    /// the listener is consulted. Seeded at start so the faults are consumed
+    /// deterministically, ahead of any client connection.
+    #[cfg(test)]
+    pub(crate) async fn start_for_test_with_accept_failures(
+        supervisor: Arc<DiagnosticsCollectorSupervisor>,
+        scope: DiagnosticsBrokerScope,
+        artifact: DiagnosticsArtifactKind,
+        forced_accept_failures: u32,
+    ) -> Result<Arc<Self>, BrokerServerError> {
+        Self::start_in_scope(supervisor, scope, artifact, forced_accept_failures).await
     }
 
     async fn start_in_scope(
         supervisor: Arc<DiagnosticsCollectorSupervisor>,
         scope: DiagnosticsBrokerScope,
         artifact: DiagnosticsArtifactKind,
+        #[cfg_attr(not(test), allow(unused_variables))] forced_accept_failures: u32,
     ) -> Result<Arc<Self>, BrokerServerError> {
         let app_boot_id = uuid::Uuid::new_v4().to_string();
         let mut discovery =
@@ -113,6 +137,10 @@ impl DiagnosticsBrokerServer {
             finite: Arc::new(Semaphore::new(MAX_BROKER_FINITE_REQUESTS)),
             tails: Arc::new(Semaphore::new(MAX_BROKER_TAILS)),
             exports: Arc::new(Semaphore::new(MAX_BROKER_EXPORTS)),
+            #[cfg(test)]
+            forced_accept_failures: Arc::new(std::sync::atomic::AtomicU32::new(
+                forced_accept_failures,
+            )),
         };
         #[cfg(test)]
         let retained_limits = limits.clone();
@@ -186,6 +214,7 @@ async fn accept_loop(
     limits: BrokerLimits,
 ) {
     let mut sessions = JoinSet::new();
+    let mut consecutive_accept_failures: u32 = 0;
     loop {
         tokio::select! {
             changed = shutdown.changed() => {
@@ -193,9 +222,40 @@ async fn accept_loop(
                     break;
                 }
             }
-            accepted = listener.accept() => {
-                let Ok((stream, _)) = accepted else {
-                    break;
+            accepted = accept_next(&listener, &limits) => {
+                let (stream, _) = match accepted {
+                    Ok(accepted) => {
+                        consecutive_accept_failures = 0;
+                        accepted
+                    }
+                    Err(error) => {
+                        // A transient `accept` failure must not retire the broker;
+                        // EMFILE under descriptor pressure and ECONNABORTED from a
+                        // peer that gives up mid-handshake are both recoverable. The
+                        // locator and socket stay published and the supervisor stays
+                        // `Ready`, so retiring here leaves `proliferate-debug`
+                        // reporting `collector_unavailable` for the rest of the
+                        // session with nothing to explain it.
+                        // Back off so a permanent error cannot spin hot, and give up
+                        // only after a bounded run of consecutive failures.
+                        consecutive_accept_failures =
+                            consecutive_accept_failures.saturating_add(1);
+                        if consecutive_accept_failures >= MAX_CONSECUTIVE_ACCEPT_FAILURES {
+                            tracing::warn!(
+                                ?error,
+                                consecutive_accept_failures,
+                                "diagnostics broker stopped accepting after repeated accept failures"
+                            );
+                            break;
+                        }
+                        tracing::debug!(
+                            ?error,
+                            consecutive_accept_failures,
+                            "diagnostics broker accept failed; retrying after backoff"
+                        );
+                        tokio::time::sleep(BROKER_ACCEPT_RETRY_BACKOFF).await;
+                        continue;
+                    }
                 };
                 let Ok(permit) = Arc::clone(&limits.connections).try_acquire_owned() else {
                     drop(stream);
@@ -230,6 +290,30 @@ async fn accept_loop(
         sessions.abort_all();
         while sessions.join_next().await.is_some() {}
     }
+}
+
+/// Accepts the next broker connection.
+///
+/// Under test a seeded fault is consumed before the listener is touched, so the
+/// retry path can be driven deterministically without exhausting descriptors.
+async fn accept_next(
+    listener: &UnixListener,
+    limits: &BrokerLimits,
+) -> io::Result<(UnixStream, SocketAddr)> {
+    #[cfg(test)]
+    if limits
+        .forced_accept_failures
+        .fetch_update(
+            std::sync::atomic::Ordering::AcqRel,
+            std::sync::atomic::Ordering::Acquire,
+            |pending| pending.checked_sub(1),
+        )
+        .is_ok()
+    {
+        return Err(io::Error::other("injected accept failure"));
+    }
+    let _ = limits;
+    listener.accept().await
 }
 
 async fn handle_connection(

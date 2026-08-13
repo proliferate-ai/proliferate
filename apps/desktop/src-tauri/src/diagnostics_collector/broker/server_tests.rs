@@ -483,3 +483,77 @@ async fn unavailable_queries_preserve_the_actual_supervisor_state() {
     fallback.close().expect("fallback close");
     std::fs::remove_dir_all(root).expect("fixture cleanup");
 }
+
+#[tokio::test]
+async fn broker_keeps_accepting_after_transient_accept_failures() {
+    use crate::diagnostics_collector::broker::client::DiagnosticsBrokerClient;
+    use crate::diagnostics_collector::broker::discovery::build_scope;
+    use crate::diagnostics_collector::fallback::FallbackDiagnosticsWriter;
+    use crate::diagnostics_collector::process::{CollectorLaunchError, CollectorLaunchErrorKind};
+    use crate::diagnostics_collector::producer::TauriDiagnosticsProducer;
+    use crate::diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor;
+
+    let root = std::env::temp_dir().join(format!("broker-accept-retry-{}", uuid::Uuid::new_v4()));
+    let app_dir = root.join(".proliferate");
+    std::fs::create_dir_all(&app_dir).expect("app directory");
+    std::fs::set_permissions(&app_dir, std::fs::Permissions::from_mode(0o700))
+        .expect("app directory mode");
+    let fallback =
+        FallbackDiagnosticsWriter::open_for_test(app_dir.join("logs/desktop-native.log"))
+            .expect("fallback");
+    let producer = TauriDiagnosticsProducer::new(fallback.clone(), "test".into(), "test".into());
+    producer.start_pump();
+    // Health answers from supervisor state alone, so no collector child is
+    // needed to tell a live accept loop from a retired one.
+    let supervisor = DiagnosticsCollectorSupervisor::with_fake_launch_error(
+        producer.clone(),
+        fallback.clone(),
+        CollectorLaunchError::new(
+            CollectorLaunchErrorKind::UnsupportedTarget,
+            "accept retry fixture",
+        ),
+    );
+
+    let scope = build_scope(
+        app_dir,
+        "com.proliferate.app.local.accept-retry".to_string(),
+        "development",
+        Some("accept_retry".to_string()),
+    )
+    .expect("broker scope");
+    let broker = DiagnosticsBrokerServer::start_for_test_with_accept_failures(
+        Arc::clone(&supervisor),
+        scope.clone(),
+        DiagnosticsArtifactKind::InternalDogfood,
+        3,
+    )
+    .await
+    .expect("broker");
+
+    let client = DiagnosticsBrokerClient::for_scope(scope.clone());
+    // Three seeded failures are consumed ahead of any connection. A broker that
+    // retires on the first one drops its listener, and every later request
+    // fails at connect instead of returning health.
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if client.health().await.is_ok() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("broker still serves health after transient accept failures");
+
+    // Repeat requests keep working: the retry path did not leave the loop wedged.
+    client.health().await.expect("second health after retries");
+    assert!(scope.locator_path.exists());
+    assert!(scope.socket_path.exists());
+
+    broker.stop_accepting();
+    broker.wait_stopped().await.expect("broker stopped");
+    broker.remove_locator_and_unlock().expect("broker cleanup");
+    producer.close();
+    fallback.close().expect("fallback close");
+    std::fs::remove_dir_all(root).expect("fixture cleanup");
+}

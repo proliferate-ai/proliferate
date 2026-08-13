@@ -57,7 +57,11 @@ pub(crate) fn create_broker_server_state() -> SharedBrokerServerState {
 
 pub(crate) struct DiagnosticsShutdownCoordinator {
     armed: AtomicBool,
-    result: Mutex<Option<Result<(), String>>>,
+    /// Set once the product teardown has actually succeeded. A failed attempt
+    /// is deliberately never recorded: the Windows updater and `RunEvent::Exit`
+    /// both retry through this coordinator and must re-run the phases rather
+    /// than replay a cached error that stopped nothing.
+    torn_down: Mutex<bool>,
     supervisor: Arc<DiagnosticsCollectorSupervisor>,
     producer: TauriDiagnosticsProducer,
     fallback: FallbackDiagnosticsWriter,
@@ -66,6 +70,8 @@ pub(crate) struct DiagnosticsShutdownCoordinator {
     anyharness: SharedSidecar,
     #[cfg(test)]
     phase_trace: std::sync::Mutex<Vec<ShutdownPhase>>,
+    #[cfg(test)]
+    diagnostics_teardown_failed: AtomicBool,
 }
 
 impl std::fmt::Debug for DiagnosticsShutdownCoordinator {
@@ -88,7 +94,7 @@ impl DiagnosticsShutdownCoordinator {
     ) -> Arc<Self> {
         Arc::new(Self {
             armed: AtomicBool::new(false),
-            result: Mutex::new(None),
+            torn_down: Mutex::new(false),
             supervisor,
             producer,
             fallback,
@@ -97,6 +103,8 @@ impl DiagnosticsShutdownCoordinator {
             anyharness,
             #[cfg(test)]
             phase_trace: std::sync::Mutex::new(Vec::new()),
+            #[cfg(test)]
+            diagnostics_teardown_failed: AtomicBool::new(false),
         })
     }
 
@@ -116,15 +124,32 @@ impl DiagnosticsShutdownCoordinator {
             .unwrap_or_default()
     }
 
+    #[cfg(test)]
+    fn diagnostics_teardown_failed(&self) -> bool {
+        self.diagnostics_teardown_failed.load(Ordering::Acquire)
+    }
+
+    /// Runs the ordered teardown and reports only the *product* teardown result.
+    ///
+    /// The diagnostics phases (broker sessions, collector child, locator, and
+    /// fallback) are torn down here too, but their failures are logged and
+    /// dropped: observability never changes a product operation's result, so a
+    /// broker drain or fallback flush error must not block the Windows
+    /// updater's `install()`. Only the Worker and AnyHarness stops decide what a
+    /// caller sees; those are the processes an installer or the next launch
+    /// would collide with.
     pub(crate) async fn shutdown(&self) -> Result<(), String> {
         // Serialize the entire once-only teardown. A concurrent updater/Exit
         // caller must observe the completed result, never a premature success.
-        let mut completed = self.result.lock().await;
-        if let Some(result) = completed.as_ref() {
-            return result.clone();
+        // A failed attempt is not memoized, so the next caller re-attempts the
+        // teardown instead of replaying an error that stopped nothing.
+        let mut torn_down = self.torn_down.lock().await;
+        if *torn_down {
+            return Ok(());
         }
         self.armed.store(true, Ordering::Release);
-        let mut failed = false;
+        let mut product_failed = false;
+        let mut diagnostics_failed = false;
         let mut order = ShutdownOrder::default();
 
         self.enter_phase(&mut order, ShutdownPhase::Arm);
@@ -137,7 +162,7 @@ impl DiagnosticsShutdownCoordinator {
             broker.stop_accepting();
             if let Err(error) = broker.wait_stopped().await {
                 tracing::warn!(?error, "diagnostics broker sessions did not stop cleanly");
-                failed = true;
+                diagnostics_failed = true;
             }
         }
 
@@ -150,7 +175,7 @@ impl DiagnosticsShutdownCoordinator {
             Ok(true) => worker_stop.terminal(TerminalOutcomeV1::Succeeded, None),
             Ok(false) => worker_stop.terminal(TerminalOutcomeV1::Skipped, None),
             Err(error) => {
-                failed = true;
+                product_failed = true;
                 tracing::warn!(%error, "failed to stop Proliferate Worker during app exit");
                 if error.starts_with("Timed out") {
                     worker_stop.terminal(TerminalOutcomeV1::TimedOut, Some("shutdown_timeout"));
@@ -165,13 +190,13 @@ impl DiagnosticsShutdownCoordinator {
 
         self.enter_phase(&mut order, ShutdownPhase::StopAnyharness);
         if let Err(error) = sidecar::stop(&self.anyharness, &self.producer).await {
-            failed = true;
+            product_failed = true;
             tracing::warn!(%error, "failed to stop AnyHarness during app exit");
         }
 
         self.enter_phase(&mut order, ShutdownPhase::StopCollector);
         if let Err(error) = self.supervisor.stop_collector().await {
-            failed = true;
+            diagnostics_failed = true;
             tracing::warn!(
                 ?error,
                 "failed to stop diagnostics collector during app exit"
@@ -182,22 +207,31 @@ impl DiagnosticsShutdownCoordinator {
         self.producer.close();
         if let Some(broker) = broker {
             if let Err(error) = broker.remove_locator_and_unlock() {
-                failed = true;
+                diagnostics_failed = true;
                 tracing::warn!(?error, "failed to remove diagnostics broker locator");
             }
         }
         if let Err(error) = self.fallback.close() {
-            failed = true;
+            diagnostics_failed = true;
             tracing::warn!(%error, "failed to close diagnostics fallback");
         }
         debug_assert!(order.is_complete());
-        let result = if failed {
-            Err("diagnostics_shutdown_failed".to_string())
-        } else {
-            Ok(())
-        };
-        *completed = Some(result.clone());
-        result
+        if diagnostics_failed {
+            // Recorded for the teardown log only. Returning it would let an
+            // observability fault block the updater or an orderly exit.
+            tracing::warn!("diagnostics teardown reported failures during app exit");
+            #[cfg(test)]
+            self.diagnostics_teardown_failed
+                .store(true, Ordering::Release);
+        }
+        if product_failed {
+            // Left un-memoized on purpose: the updater retry and `RunEvent::Exit`
+            // must re-enter the phases so the Worker and AnyHarness children get
+            // another stop attempt.
+            return Err("desktop_shutdown_failed".to_string());
+        }
+        *torn_down = true;
+        Ok(())
     }
 }
 
