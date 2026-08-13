@@ -11,10 +11,13 @@ use crate::live::sessions::actor::notifications::dispatch::{
 use crate::live::sessions::actor::notifications::observations::dispatch_observations;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
 use crate::live::sessions::actor::state::{SessionActor, SessionStartupState};
+use crate::live::sessions::actor::turn::finish::{
+    commit_staged_terminal_with_retry, terminal_persist_error_class,
+};
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
 use crate::live::sessions::driver::inbound;
 use crate::live::sessions::model::ActorCapabilities;
-use crate::live::sessions::sink::{SessionEventSink, SinkObservation};
+use crate::live::sessions::sink::{PromptTerminalEvent, SessionEventSink, SinkObservation};
 
 impl SessionActor {
     /// Routes one inbound ACP notification through raw persistence, the
@@ -108,6 +111,35 @@ pub(in crate::live::sessions::actor) async fn handle_notification_with_resume_re
         return;
     }
 
+    // A failed prompt-terminal commit must leave the actor quiescent for
+    // startup repair: ingesting another normalized event could consume the
+    // frozen batch's sequence number. Engine terminals may retry here because
+    // they require no prompt-finish callback; either way, no new transcript
+    // event is accepted before the exact staged batch is resolved.
+    if let Some(engine_initiated) = event_sink
+        .lock()
+        .await
+        .staged_terminal_is_engine_initiated()
+    {
+        if !engine_initiated {
+            tracing::error!(
+                session_id,
+                failure_code = "prompt_terminal_awaiting_startup_repair",
+                "normalized notification suppressed while prompt terminal remains unresolved"
+            );
+            return;
+        }
+        if let Err(error) = commit_staged_terminal_with_retry(event_sink, session_id).await {
+            tracing::error!(
+                session_id,
+                failure_code = "engine_terminal_persist_exhausted",
+                error_class = terminal_persist_error_class(&error),
+                "normalized notification suppressed while engine terminal remains unresolved"
+            );
+            return;
+        }
+    }
+
     // The sink ingests the notification (meaning-blind transcript emission)
     // and hands back what the actor still owns: registry observation of tool
     // traffic, the durable config/mode/title arms, and observer dispatch.
@@ -149,4 +181,35 @@ pub(in crate::live::sessions::actor) async fn handle_notification_with_resume_re
     // idempotent no-op) the turn is still empty — close it now so it cannot
     // dangle as a phantom in-progress turn.
     event_sink.lock().await.sweep_empty_engine_turn();
+    let (has_staged_terminal, requested_outcome) = {
+        let sink = event_sink.lock().await;
+        (
+            sink.has_staged_terminal(),
+            sink.requested_engine_terminal_outcome(),
+        )
+    };
+    if has_staged_terminal || requested_outcome.is_some() {
+        if !has_staged_terminal {
+            let outcome = requested_outcome.expect("requested engine outcome");
+            if event_sink
+                .lock()
+                .await
+                .stage_prompt_terminal(
+                    outcome,
+                    PromptTerminalEvent::TurnEnded(anyharness_contract::v1::StopReason::EndTurn),
+                )
+                .is_err()
+            {
+                return;
+            }
+        }
+        if let Err(error) = commit_staged_terminal_with_retry(event_sink, session_id).await {
+            tracing::error!(
+                session_id,
+                failure_code = "engine_terminal_persist_exhausted",
+                error_class = terminal_persist_error_class(&error),
+                "engine turn remains open and repairable"
+            );
+        }
+    }
 }

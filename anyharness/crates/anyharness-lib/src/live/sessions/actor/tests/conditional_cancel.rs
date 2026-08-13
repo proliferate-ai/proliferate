@@ -23,10 +23,15 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use crate::app::test_support::{actor_capabilities_for_store, seed_workspace_with_repo_root};
 use crate::app::AppState;
 use crate::domains::agents::installer::seed::AgentSeedStore;
-use crate::domains::sessions::extensions::{SessionExtension, SessionTurnFinishedContext};
+use crate::domains::sessions::extensions::{
+    SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
+};
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::subagents::delivery::{
+    CompletionDeliveryState, CompletionDeliveryStore,
+};
 use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::live::sessions::actor::command::{
     ConditionalCancelOutcome, PromptAcceptance, SessionCommand,
@@ -45,6 +50,9 @@ use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
 use crate::live::sessions::sink::SessionEventSink;
 use crate::persistence::Db;
 
+mod completion_wake;
+mod completion_wake_outcomes;
+mod terminal_fence;
 mod unload;
 
 type DuplexRead = tokio::io::ReadHalf<tokio::io::DuplexStream>;
@@ -117,11 +125,19 @@ async fn spawn_harness() -> Harness {
 }
 
 async fn spawn_harness_with_store(store: SessionStore, hooks: SessionHooks) -> Harness {
+    let caps = actor_capabilities_for_store(&store);
+    spawn_harness_with_capabilities(store, hooks, caps).await
+}
+
+async fn spawn_harness_with_capabilities(
+    store: SessionStore,
+    hooks: SessionHooks,
+    caps: crate::live::sessions::model::ActorCapabilities,
+) -> Harness {
     let session = store
         .find_by_id(SESSION_ID)
         .expect("read session")
         .expect("session exists");
-    let caps = actor_capabilities_for_store(&store);
 
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);
     let (event_tx, _event_rx) = broadcast::channel::<SessionEventEnvelope>(64);

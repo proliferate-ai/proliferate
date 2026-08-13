@@ -5,6 +5,7 @@ use crate::domains::sessions::model::{
     SessionBundlePromptAttachment, SessionEventRecord, SessionLiveConfigSnapshotRecord,
     SessionRawNotificationRecord, SessionRecord,
 };
+use crate::domains::sessions::subagents::delivery::CompletionDeliveryRecord;
 use crate::domains::sessions::subagents::model::{
     SubagentCompletionRecord, SubagentWakeScheduleRecord,
 };
@@ -32,6 +33,7 @@ pub struct WorkspaceMobilityArchiveData {
     pub sessions: Vec<WorkspaceMobilitySessionBundleData>,
     pub session_links: Vec<SessionLinkRecord>,
     pub session_link_completions: Vec<SubagentCompletionRecord>,
+    pub session_link_completion_deliveries: Vec<CompletionDeliveryRecord>,
     pub session_link_wake_schedules: Vec<SubagentWakeScheduleRecord>,
 }
 

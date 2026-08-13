@@ -1,5 +1,180 @@
 use super::*;
 
+#[derive(Clone)]
+pub(super) struct FailingTerminalPersist {
+    pub(super) store: SessionStore,
+    pub(super) attempts: Arc<std::sync::atomic::AtomicUsize>,
+    pub(super) failures_before_success: usize,
+}
+
+impl crate::live::sessions::model::EventPersist for FailingTerminalPersist {
+    fn append_event(
+        &self,
+        event: &crate::domains::sessions::model::SessionEventRecord,
+    ) -> anyhow::Result<()> {
+        self.store.append_event(event)
+    }
+
+    fn append_event_and_touch_session(
+        &self,
+        event: &crate::domains::sessions::model::SessionEventRecord,
+    ) -> anyhow::Result<()> {
+        self.store.append_event_and_touch_session(event)
+    }
+
+    fn append_event_with_next_seq(
+        &self,
+        session_id: &str,
+        event: SessionEvent,
+        touch_session_activity: bool,
+    ) -> anyhow::Result<SessionEventEnvelope> {
+        self.store
+            .append_event_with_next_seq(session_id, event, touch_session_activity)
+    }
+
+    fn next_event_seq(&self, session_id: &str) -> anyhow::Result<i64> {
+        self.store.next_event_seq(session_id)
+    }
+
+    fn last_event_seq(&self, session_id: &str) -> anyhow::Result<i64> {
+        self.store.last_event_seq(session_id)
+    }
+
+    fn has_turn_started_event(&self, session_id: &str) -> anyhow::Result<bool> {
+        self.store.has_turn_started_event(session_id)
+    }
+
+    fn append_raw_notification(
+        &self,
+        session_id: &str,
+        notification_kind: &str,
+        timestamp: &str,
+        payload_json: &str,
+    ) -> anyhow::Result<()> {
+        self.store
+            .append_raw_notification(session_id, notification_kind, timestamp, payload_json)
+    }
+
+    fn persist_subagent_wake_turn(
+        &self,
+        input: &crate::live::sessions::subagent_wake::SubagentWakeTurnPersistenceInput,
+    ) -> anyhow::Result<crate::live::sessions::subagent_wake::SubagentWakeTurnPersistenceOutcome>
+    {
+        crate::live::sessions::model::EventPersist::persist_subagent_wake_turn(&self.store, input)
+    }
+
+    fn persist_terminal_turn(
+        &self,
+        input: &crate::live::sessions::model::TerminalTurnPersistenceInput,
+    ) -> anyhow::Result<()> {
+        let attempt = self
+            .attempts
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
+        if attempt <= self.failures_before_success {
+            anyhow::bail!("injected terminal persistence failure");
+        }
+        crate::live::sessions::model::EventPersist::persist_terminal_turn(&self.store, input)
+    }
+}
+
+#[tokio::test]
+async fn bounded_terminal_retry_runs_status_and_finish_callback_exactly_once() {
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async move {
+            let db = Db::open_in_memory().expect("db");
+            seed_workspace_with_repo_root(&db, WORKSPACE_ID, "local", "/tmp/workspace");
+            let store = SessionStore::new(db);
+            store.insert(&test_session_record()).expect("session");
+            let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let callbacks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let mut caps = actor_capabilities_for_store(&store);
+            caps.events = Arc::new(FailingTerminalPersist {
+                store: store.clone(),
+                attempts: attempts.clone(),
+                failures_before_success: 2,
+            });
+            let callback_count = callbacks.clone();
+            let harness = spawn_harness_with_capabilities(
+                store.clone(),
+                SessionHooks {
+                    on_turn_finish: Some(Arc::new(move |_| {
+                        callback_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    })),
+                    on_exit: None,
+                },
+                caps,
+            )
+            .await;
+            let (_handle, _turn_id, responder, _cancel_rx, actor_task) = start_turn(harness).await;
+            responder
+                .respond(acp::schema::PromptResponse::new(
+                    acp::schema::StopReason::EndTurn,
+                ))
+                .expect("resolve provider turn");
+            assert!(actor_task.await.expect("turn task").is_none());
+            assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 3);
+            assert_eq!(callbacks.load(std::sync::atomic::Ordering::SeqCst), 1);
+            assert_eq!(
+                store
+                    .list_events(SESSION_ID)
+                    .expect("events")
+                    .iter()
+                    .filter(|event| event.event_type == "turn_ended")
+                    .count(),
+                1
+            );
+        })
+        .await;
+}
+
+#[tokio::test]
+async fn terminal_persist_exhaustion_retires_actor_before_idle_work_can_run() {
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async move {
+            let db = Db::open_in_memory().expect("db");
+            seed_workspace_with_repo_root(&db, WORKSPACE_ID, "local", "/tmp/workspace");
+            let store = SessionStore::new(db);
+            store.insert(&test_session_record()).expect("session");
+            let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let mut caps = actor_capabilities_for_store(&store);
+            caps.events = Arc::new(FailingTerminalPersist {
+                store: store.clone(),
+                attempts: attempts.clone(),
+                failures_before_success: usize::MAX,
+            });
+            let harness =
+                spawn_harness_with_capabilities(store.clone(), SessionHooks::default(), caps).await;
+            let (_handle, _turn_id, responder, _cancel_rx, actor_task) = start_turn(harness).await;
+            responder
+                .respond(acp::schema::PromptResponse::new(
+                    acp::schema::StopReason::EndTurn,
+                ))
+                .expect("resolve provider turn");
+
+            let disposition = tokio::time::timeout(Duration::from_secs(2), actor_task)
+                .await
+                .expect("terminal failure retires promptly")
+                .expect("turn task");
+            assert!(matches!(
+                disposition,
+                Some(crate::live::sessions::actor::shutdown::types::ActorExitDisposition::Unload)
+            ));
+            assert!(attempts.load(std::sync::atomic::Ordering::SeqCst) >= 4);
+            let events = store.list_events(SESSION_ID).expect("events");
+            assert_eq!(
+                events
+                    .iter()
+                    .filter(|event| matches!(event.event_type.as_str(), "turn_ended" | "error"))
+                    .count(),
+                0
+            );
+        })
+        .await;
+}
+
 #[tokio::test]
 async fn active_unload_is_bounded_when_the_acp_peer_ignores_cancel() {
     let local = tokio::task::LocalSet::new();
@@ -159,7 +334,14 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
                 })),
                 on_exit: None,
             };
-            let harness = spawn_harness_with_store(store.clone(), hooks).await;
+            let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let mut caps = actor_capabilities_for_store(&store);
+            caps.events = Arc::new(FailingTerminalPersist {
+                store: store.clone(),
+                attempts: attempts.clone(),
+                failures_before_success: usize::MAX,
+            });
+            let harness = spawn_harness_with_capabilities(store.clone(), hooks, caps).await;
             state
                 .acp_manager
                 .register_handle_for_test(harness.handle.clone())
@@ -228,6 +410,7 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
                 .close_subagent(PARENT_ID, SESSION_ID)
                 .await
                 .expect("runtime reversible close");
+            assert!(attempts.load(std::sync::atomic::Ordering::SeqCst) >= 4);
             let cancel = tokio::time::timeout(Duration::from_secs(1), cancel_rx.recv())
                 .await
                 .expect("ACP cancel delivered")
@@ -280,7 +463,7 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
             );
             assert_eq!(completion.child_last_event_seq, last_child_seq);
             assert!(completion.parent_event_seq.is_none());
-            assert!(completion.parent_prompt_seq.is_none());
+            assert!(completion.parent_prompt_seq.is_some());
             let task_output = state
                 .session_service
                 .get_task_output(SESSION_ID, None, 10)
@@ -289,7 +472,24 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
                 .messages
                 .iter()
                 .any(|message| message.text.contains(PARTIAL_TEXT)));
-            assert!(store.list_pending_prompts(PARENT_ID).unwrap().is_empty());
+            let deliveries = CompletionDeliveryStore::new(state.db.clone())
+                .list_all_for_test()
+                .unwrap();
+            assert_eq!(deliveries.len(), 1);
+            assert_eq!(deliveries[0].state, CompletionDeliveryState::Enqueued);
+            assert_eq!(deliveries[0].outcome, SessionTurnOutcome::Cancelled);
+            assert!(deliveries[0]
+                .assistant_text
+                .as_deref()
+                .is_some_and(|text| text.contains(PARTIAL_TEXT)));
+            let pending = store.list_pending_prompts(PARENT_ID).unwrap();
+            assert_eq!(pending.len(), 1);
+            let delivery_prompt_id = deliveries[0].prompt_id();
+            assert_eq!(
+                pending[0].prompt_id.as_deref(),
+                Some(delivery_prompt_id.as_str())
+            );
+            assert!(pending[0].text.contains(PARTIAL_TEXT));
             assert!(!store
                 .list_events(PARENT_ID)
                 .unwrap()

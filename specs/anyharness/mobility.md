@@ -59,6 +59,12 @@ notifications are included only behind their existing environment gate.
 Subagent links carry the optional `subagentClosedAt` operability marker; older
 archives without that field import the relationship as Open.
 
+Pending and enqueued subagent-completion deliveries are archived by parent
+session id, independently of whether the child or relationship still exists.
+Their stable delivery identity and attributed pending-prompt provenance survive
+install, while in-flight worker leases do not. Older archives without delivery
+or prompt-provenance fields import with empty/default values.
+
 Export clears workspace-local MCP binding ciphertext but may retain binding
 summaries. Installation clears both ciphertext and summaries, resets imported
 policy, and inherits the destination workspace's bindings. Imported sessions

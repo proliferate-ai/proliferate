@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
     MobilityPendingConfigChangeRecord, MobilityPendingPromptRecord, MobilityPromptAttachmentRecord,
-    MobilitySessionEventRecord, MobilitySessionLinkCompletionRecord, MobilitySessionLinkRecord,
+    MobilitySessionEventRecord, MobilitySessionLinkCompletionDeliveryRecord,
+    MobilitySessionLinkCompletionRecord, MobilitySessionLinkRecord,
     MobilitySessionLinkWakeScheduleRecord, MobilitySessionLiveConfigSnapshotRecord,
     MobilitySessionRawNotificationRecord, MobilitySessionRecord, WorkspaceMobilityArchive,
     WorkspaceMobilityFileEntry, WorkspaceMobilitySessionBundle,
@@ -24,6 +25,9 @@ use crate::domains::sessions::model::{
     serialize_action_capabilities, PendingConfigChangeRecord, PendingPromptRecord,
     PromptAttachmentKind, PromptAttachmentRecord, PromptAttachmentState, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
+};
+use crate::domains::sessions::subagents::delivery::{
+    CompletionDeliveryRecord, CompletionDeliveryState,
 };
 use crate::domains::sessions::subagents::model::{
     SubagentCompletionRecord, SubagentWakeScheduleRecord,
@@ -60,6 +64,11 @@ pub(super) fn from_contract_archive(
             .session_link_completions
             .into_iter()
             .map(from_contract_session_link_completion)
+            .collect::<Result<Vec<_>, _>>()?,
+        session_link_completion_deliveries: archive
+            .session_link_completion_deliveries
+            .into_iter()
+            .map(from_contract_completion_delivery)
             .collect::<Result<Vec<_>, _>>()?,
         session_link_wake_schedules: archive
             .session_link_wake_schedules
@@ -245,6 +254,49 @@ fn from_contract_session_link_wake_schedule(
     })
 }
 
+fn from_contract_completion_delivery(
+    record: MobilitySessionLinkCompletionDeliveryRecord,
+) -> Result<CompletionDeliveryRecord, ApiError> {
+    Ok(CompletionDeliveryRecord {
+        delivery_id: record.delivery_id,
+        completion_id: record.completion_id,
+        session_link_id: record.session_link_id,
+        parent_session_id: record.parent_session_id,
+        child_session_id: record.child_session_id,
+        subagent_public_id: record.subagent_public_id,
+        label: record.label,
+        child_turn_id: record.child_turn_id,
+        child_last_event_seq: record.child_last_event_seq,
+        outcome: parse_mobility_completion_outcome(&record.outcome)?,
+        assistant_text: record.assistant_text,
+        notification_text: record.notification_text,
+        state: match record.state.as_str() {
+            "pending" => CompletionDeliveryState::Pending,
+            "enqueued" => CompletionDeliveryState::Enqueued,
+            "delivered" => CompletionDeliveryState::Delivered,
+            "abandoned" => CompletionDeliveryState::Abandoned,
+            "failed" => CompletionDeliveryState::Failed,
+            other => {
+                return Err(ApiError::bad_request(
+                    format!("Invalid completion delivery state: {other}"),
+                    "MOBILITY_INVALID_ARCHIVE",
+                ))
+            }
+        },
+        parent_prompt_seq: record.parent_prompt_seq,
+        parent_turn_id: record.parent_turn_id,
+        attempt_count: record.attempt_count,
+        next_attempt_at: record.next_attempt_at,
+        lease_token: None,
+        lease_expires_at: None,
+        last_error_code: record.last_error_code,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+        enqueued_at: record.enqueued_at,
+        delivered_at: record.delivered_at,
+    })
+}
+
 fn parse_mobility_completion_outcome(value: &str) -> Result<SessionTurnOutcome, ApiError> {
     match value {
         "completed" => Ok(SessionTurnOutcome::Completed),
@@ -292,7 +344,7 @@ fn from_contract_pending_prompt(
         prompt_id: record.prompt_id,
         text: record.text,
         blocks_json: record.blocks_json,
-        provenance_json: None,
+        provenance_json: record.provenance_json,
         queued_at: record.queued_at,
     }
 }

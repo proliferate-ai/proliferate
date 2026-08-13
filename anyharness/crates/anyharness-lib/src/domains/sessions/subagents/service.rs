@@ -26,6 +26,7 @@ use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 
 mod authorization;
+mod mobility;
 use std::collections::HashSet;
 
 pub const MAX_SUBAGENTS_PER_PARENT: usize = 8;

@@ -452,7 +452,8 @@ async fn initial_task_persists_exact_caller_provenance_and_projects_task_output(
         observed.prompt_id,
         observed.payload.content_parts(),
         observed.payload.public_provenance(),
-    );
+    )
+    .expect("begin observed prompt turn");
 
     let completed = state
         .session_service

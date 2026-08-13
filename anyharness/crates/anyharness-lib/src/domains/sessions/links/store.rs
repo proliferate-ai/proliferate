@@ -445,6 +445,42 @@ impl SessionLinkStore {
         })
     }
 
+    pub fn list_current_subagent_children_with_unclosed_turns_page(
+        &self,
+        after_link_id: Option<&str>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<(String, String)>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT l.id, l.child_session_id
+                 FROM session_links l
+                 WHERE l.relation = 'subagent'
+                   AND l.closed_at IS NULL
+                   AND (?1 IS NULL OR l.id > ?1)
+                   AND EXISTS (
+                     SELECT 1
+                     FROM session_events e
+                     WHERE e.session_id = l.child_session_id
+                       AND e.event_type = 'turn_started'
+                       AND e.turn_id IS NOT NULL
+                       AND NOT EXISTS (
+                         SELECT 1
+                         FROM session_events e2
+                         WHERE e2.session_id = e.session_id
+                           AND e2.turn_id = e.turn_id
+                           AND e2.event_type IN ('turn_ended', 'error', 'session_ended')
+                       )
+                   )
+                 ORDER BY l.id ASC
+                 LIMIT ?2",
+            )?;
+            let rows = stmt.query_map(rusqlite::params![after_link_id, limit as i64], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?;
+            rows.collect()
+        })
+    }
+
     pub fn list_subagent_children(
         &self,
         parent_session_id: &str,
@@ -464,6 +500,9 @@ pub(crate) fn delete_session_link_rows_for_session_in_tx(
     conn: &rusqlite::Connection,
     session_id: &str,
 ) -> rusqlite::Result<()> {
+    crate::domains::sessions::store::completion_deliveries::queue::delete_parent_deliveries_in_tx(
+        conn, session_id,
+    )?;
     conn.execute(
         "DELETE FROM session_link_wake_schedules
          WHERE session_link_id IN (
@@ -487,7 +526,7 @@ pub(crate) fn delete_session_link_rows_for_session_in_tx(
     Ok(())
 }
 
-fn map_session_link(row: &rusqlite::Row) -> rusqlite::Result<SessionLinkRecord> {
+pub(crate) fn map_session_link(row: &rusqlite::Row) -> rusqlite::Result<SessionLinkRecord> {
     let relation: String = row.get("relation")?;
     let workspace_relation: String = row.get("workspace_relation")?;
     Ok(SessionLinkRecord {

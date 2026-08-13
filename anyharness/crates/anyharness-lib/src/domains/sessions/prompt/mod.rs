@@ -22,6 +22,7 @@ mod tests;
 use provenance::{decode_prompt_provenance, PromptProvenance};
 
 pub const MAX_PROMPT_BLOCKS: usize = 32;
+pub const SUBAGENT_COMPLETION_PROMPT_ID_PREFIX: &str = "subagent_completion:";
 pub const MAX_ATTACHMENTS_PER_PROMPT: usize = 10;
 // Plan references have their own count/byte budget because they resolve to
 // trusted markdown snapshots, not uploaded attachment payloads.
@@ -111,6 +112,13 @@ impl PromptPayload {
         self.provenance
             .as_ref()
             .and_then(PromptProvenance::to_public)
+    }
+
+    pub(crate) fn has_subagent_wake_provenance(&self) -> bool {
+        matches!(
+            self.provenance.as_ref(),
+            Some(PromptProvenance::SubagentWake { .. })
+        )
     }
 
     pub(crate) fn with_provenance(mut self, provenance: PromptProvenance) -> Self {

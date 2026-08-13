@@ -225,11 +225,15 @@ Owns the normalized session event stream:
 This file is the public transcript/event contract and must remain stable and
 well-structured.
 
-`SessionEvent::SubagentTurnCompleted` is a metadata notification, not a
-transcript item. SDK reducers and UI consumers should not render it as assistant
-or user content by default. It tells a parent session that one owned child
-session completed a turn and carries the durable `completionId`, `sessionLinkId`,
-child identifiers, child last event seq, outcome, and optional label.
+`SessionEvent::SubagentTurnCompleted` is retained legacy relationship-completion
+metadata, not a transcript item and not the automatic parent delivery or
+delivery acknowledgement. SDK reducers and UI consumers should not render it as
+assistant or user content by default or infer that a parent notification became
+visible from its presence. Automatic parent delivery is represented by the
+attributed user-message transcript item whose `promptProvenance` is
+`subagentWake`; the legacy event only carries the durable `completionId`,
+`sessionLinkId`, child identifiers, child last event seq, outcome, and optional
+label.
 
 Interaction payloads should expose only typed, UI-safe fields. Adapter-specific
 metadata that becomes stable UI behavior must be promoted into a typed contract
@@ -289,3 +293,14 @@ when only one side of a subagent link would be moved, because importing a
 partial graph would break child ownership and parent wake behavior.
 The optional `subagentClosedAt` field preserves reversible Closed state across
 mobility; absence remains backward-compatible and means Open.
+
+Pending prompts preserve their stable prompt identity, structured content, and
+read-only `provenanceJson`, including canonical `subagentWake` attribution.
+Pending or enqueued automatic completion deliveries travel in
+`sessionLinkCompletionDeliveries` with their stable delivery/completion/link and
+parent/child/turn identities, outcome and notification content, delivery state,
+`parentPromptSeq`, retry count/schedule/error, and enqueue timestamps. Ephemeral
+lease token and lease-expiry fields never travel. Export must read session,
+prompt, event, subagent-graph, and completion-delivery rows from one coherent
+durable snapshot so an archive is entirely before or entirely after atomic
+completion admission, never a mixture of the two states.
