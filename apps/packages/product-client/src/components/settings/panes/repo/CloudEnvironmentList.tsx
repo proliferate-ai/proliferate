@@ -116,10 +116,10 @@ export function CloudEnvironmentList({
       {showAddButton ? (
         <Button
           type="button"
-          variant="unstyled"
+          variant="ghost"
           size="unstyled"
           onClick={onAddCloudEnvironment}
-          className="mt-2 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-ui-sm font-medium text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active"
+          className="mt-2 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-ui-sm font-medium"
         >
           <Plus className="icon-paired" />
           Add cloud environment
