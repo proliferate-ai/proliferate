@@ -86,7 +86,6 @@ describe("useSupportModalState", () => {
     });
     act(() => {
       rendered.result.current.setCreditName("Ada Lovelace");
-      rendered.result.current.setIncludeLogs(false);
     });
     await act(async () => {
       await rendered.result.current.handleSend();
@@ -123,6 +122,32 @@ describe("useSupportModalState", () => {
       creditConsent: false,
       creditName: null,
     });
+  });
+
+  it("authors no includeLogs key and exposes no log-attachment control", async () => {
+    const captured = captureDispatchedJob();
+    const rendered = renderHook(() =>
+      useSupportModalState({ kind: "bug", onClose: vi.fn() })
+    );
+
+    // The hook must not offer the flag at all. A surviving setter is what let a
+    // pre-ticked "Include app logs" box render over a job that never carried
+    // the field, so the box silently did nothing.
+    expect(rendered.result.current).not.toHaveProperty("includeLogs");
+    expect(rendered.result.current).not.toHaveProperty("setIncludeLogs");
+
+    act(() => {
+      rendered.result.current.setMessage("It broke");
+    });
+    await act(async () => {
+      await rendered.result.current.handleSend();
+    });
+
+    // Log attachment is now owned by prepared-snapshot consent, so a freshly
+    // authored job carries the explicit no-snapshot intent and no legacy flag.
+    expect(captured.current).not.toBeNull();
+    expect(Object.hasOwn(captured.current!, "includeLogs")).toBe(false);
+    expect(captured.current).toMatchObject({ supportSnapshot: { kind: "none" } });
   });
 
   it("keeps prompt jobs non-urgent and no-snapshot while carrying notifyMe", async () => {

@@ -25,14 +25,12 @@ export function SendFeedbackModal({ onClose }: { onClose: () => void }) {
     handleAttachmentPaste,
     handleCancel,
     handleSend,
-    includeLogs,
     isSubmitting,
     message,
     notifyMe,
     removeAttachment,
     setCreditConsent,
     setCreditName,
-    setIncludeLogs,
     setMessage,
     setNotifyMe,
     setUrgent,
@@ -97,11 +95,6 @@ export function SendFeedbackModal({ onClose }: { onClose: () => void }) {
             setCreditConsent={setCreditConsent}
             creditName={creditName}
             setCreditName={setCreditName}
-          />
-          <SupportCheckboxRow
-            checked={includeLogs}
-            onCheckedChange={setIncludeLogs}
-            label="Include app logs"
           />
         </div>
 

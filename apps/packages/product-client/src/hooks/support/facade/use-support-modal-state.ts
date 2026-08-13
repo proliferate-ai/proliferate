@@ -42,7 +42,6 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
   const [creditName, setCreditName] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [notifyMe, setNotifyMe] = useState(false);
-  const [includeLogs, setIncludeLogs] = useState(true);
   const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
 
   function setCreditConsent(next: boolean) {
@@ -223,11 +222,9 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
     removeAttachment,
     setCreditConsent,
     setCreditName,
-    setIncludeLogs,
     setMessage,
     setNotifyMe,
     setUrgent,
-    includeLogs,
     notifyMe,
     urgent,
     stagingError,
