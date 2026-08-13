@@ -281,7 +281,7 @@ function SetupHintRows({
           return (
             <Label
               key={hint.id}
-              className="mb-0 flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/50"
+              className="mb-0 flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-hover"
             >
               <Checkbox
                 checked={checked}
