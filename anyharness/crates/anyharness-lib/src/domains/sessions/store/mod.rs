@@ -12,6 +12,7 @@ mod notifications;
 mod pending_prompts;
 pub(crate) mod persisted_payloads;
 pub(crate) mod sessions;
+mod titles;
 
 #[cfg(test)]
 mod tests;

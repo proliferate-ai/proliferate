@@ -99,7 +99,7 @@ vi.mock("#product/hooks/workspaces/ui/use-repo-group-native-context-menu", async
   useRepoGroupNativeContextMenu: () => ({ onContextMenuCapture: vi.fn() }),
 }));
 
-vi.mock("#product/primitives/patterns/SidebarActionButton", () => ({
+vi.mock("#product/primitives/patterns/sidebar/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     onClick,

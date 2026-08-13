@@ -1,12 +1,10 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-// CircleCheck isn't in the curated ProductClient icon set — the goal bar
-// and goal transcript rows source it directly from lucide-react too.
-import { CircleCheck } from "lucide-react";
 import {
   CircleQuestion,
   MessageCircleQuestion,
 } from "#product/primitives/icons/core";
 import { Sparkles } from "#product/primitives/icons/product";
+import { CircleCheck } from "#product/primitives/icons/status";
 import type { PendingInteraction, TurnRecord } from "@anyharness/sdk";
 import { formatWorkedForDuration } from "#product/domain/chats/transcript/transcript-work-duration";
 import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
@@ -62,12 +60,22 @@ export function TurnAssistantActionRow({
   showCopyButton = false,
   reserveSlot = false,
   timestampLabel = null,
+  alwaysVisible = false,
   metMarker = null,
 }: {
   content: string | null;
   showCopyButton?: boolean;
   reserveSlot?: boolean;
   timestampLabel?: string | null;
+  /**
+   * When true the copy button is persistently visible (opacity-100) instead
+   * of hover-gated. Set only for the transcript's final completed AI message:
+   * the permanent button is the "session is done" marker that distinguishes a
+   * finished session from a quiet running one (PRO-119). Every earlier
+   * message keeps hover-to-reveal, and the timestamp stays hover-only on
+   * every message including the final one.
+   */
+  alwaysVisible?: boolean;
   /**
    * Inline "✓ Goal achieved in Xs" marker rendered between the copy button
    * and the timestamp — only on the final completed message when the active
@@ -80,12 +88,10 @@ export function TurnAssistantActionRow({
     return null;
   }
 
-  // Hover-to-reveal on EVERY message, including the final one — the copy
-  // button is never permanent chrome. (The goal-met marker below stays
-  // persistently visible; it reports state rather than offering an action.)
-  const visibilityClassName =
+  const hoverVisibilityClassName =
     "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
-  const timestampVisibilityClassName = visibilityClassName;
+  const visibilityClassName = alwaysVisible ? "opacity-100" : hoverVisibilityClassName;
+  const timestampVisibilityClassName = hoverVisibilityClassName;
 
   return (
     // The footer sits in the same TURN_ITEM_GAP_CLASS flex column as the

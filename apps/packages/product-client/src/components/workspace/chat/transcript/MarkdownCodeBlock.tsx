@@ -32,6 +32,13 @@ export function MarkdownCodeBlockShell({
 
   return (
     <div
+      // Recorded causes (DESIGN_SYSTEM.md § UI-conformance review, check 4):
+      // `my-[14px]` is optical, not scale — the block's own 1px transparent
+      // border plus its cap height put its visual edge half a step inside the
+      // box, so 14px reads as the 16px rhythm the surrounding prose uses.
+      // `bg-[var(--color-code-block-background,var(--color-card))]` is a
+      // two-argument CSS fallback for an optional per-theme override; no token
+      // utility can express a fallback chain.
       className="relative my-[14px] w-full min-w-0 overflow-clip rounded-lg border border-transparent bg-[var(--color-code-block-background,var(--color-card))]"
       data-markdown-code-block="true"
     >

@@ -1,9 +1,10 @@
 import type { AgentSummary } from "@anyharness/sdk";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
+import { IconTile } from "#product/primitives/IconTile";
 import { ArrowUpRight } from "#product/primitives/icons/core";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
@@ -28,6 +29,7 @@ import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-har
 import { getAgentStatusDisplay } from "#product/lib/domain/agents/status-presentation";
 import { HarnessInstallGate } from "#product/components/settings/panes/agents/harness/HarnessInstallGate";
 import { CloudAnyHarnessRuntimeProvider } from "#product/providers/CloudAnyHarnessRuntimeProvider";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 
 interface HarnessPaneProps {
   harnessKind: string;
@@ -75,21 +77,25 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   const { agentsByKind } = useAgentCatalog();
 
   return (
-    <section className="space-y-6">
+    <SettingsPageBody>
       {/* §1 identity header (design-handoff v2): 42px provider glyph tile +
-          name/vendor line + Docs exit. Inline rather than SettingsPageHeader —
-          the shared pattern has no leading-tile slot. */}
+          name/vendor line + Docs exit. Inline rather than PageHeader's
+          settings (flat) variant — that variant has no leading-tile slot, and
+          this is a first-instance carve-out (no second call site exists to
+          justify promoting a tile slot onto the shared pattern). */}
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3.5">
-          <span
+          <IconTile
+            tone="outlined"
+            size="lg"
             aria-hidden
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border-light bg-surface-control text-foreground"
+            className="text-foreground"
           >
             <ProviderIcon
               kind={harnessKind}
               className="icon-large [font-size:var(--text-ui)]"
             />
-          </span>
+          </IconTile>
           <div className="min-w-0">
             <h1 className="text-title font-semibold tracking-[-0.025em] text-foreground">
               {displayName}
@@ -113,7 +119,7 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
       ) : (
         <HarnessRuntimeSurface harnessKind={harnessKind} surface="local" />
       )}
-    </section>
+    </SettingsPageBody>
   );
 }
 
@@ -237,9 +243,13 @@ function HarnessRuntimeStatusRow({
       data-harness-runtime-state={loading ? "loading" : error ? "error" : agent?.readiness ?? "missing"}
       label={(
         <span className="flex min-w-0 items-center gap-2.5">
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-control text-muted-foreground">
+          {/* 28→32px on adoption: IconTile's size axis has no 28px step, and
+              rounding a stray one-off to the nearest step is the tile's stated
+              contract. PlanHandoffDialog took the same 4px growth in this
+              wave; the two should be ruled together. */}
+          <IconTile>
             <ProviderIcon kind={harnessKind} className="icon-control" />
-          </span>
+          </IconTile>
           <span className="truncate">{displayName}</span>
         </span>
       )}

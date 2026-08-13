@@ -1,8 +1,8 @@
 import { useRef } from "react";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { TabGroupPill } from "#product/primitives/patterns/tabs/TabGroupPill";
 import type { ManualChatGroupEditorAnchorRect } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { TabContextMenu } from "#product/components/workspace/shell/tabs/TabContextMenu";
-import { TabGroupPill } from "#product/components/workspace/shell/tabs/TabGroupPill";
 import { useWorkspaceTabNativeContextMenu } from "#product/hooks/workspaces/ui/tabs/use-workspace-tab-native-context-menu";
 import {
   buildGroupPillContextMenuItems,
@@ -77,7 +77,7 @@ export function TabGroupPillWithMenu({
           }}
         >
           <TabGroupPill
-            groupKind={groupKind}
+            tone={groupKind === "manual" ? "filled" : "outline"}
             label={label}
             color={color}
             width={width}

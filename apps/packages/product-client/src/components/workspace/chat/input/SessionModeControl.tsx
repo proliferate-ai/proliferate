@@ -1,5 +1,10 @@
 import { CHAT_MODE_CONTROL_LABELS } from "#product/copy/chat/chat-copy";
 import {
+  COMPOSER_COMPACT_HIDDEN_CLASSNAME,
+  COMPOSER_COMPACT_ONLY_FLEX_CLASSNAME,
+  COMPOSER_COMPACT_SHRINK_NONE_CLASSNAME,
+} from "#product/config/chat-layout";
+import {
   getNextSessionModeValue,
   resolveSessionControlPresentation,
 } from "#product/lib/domain/chat/session-controls/session-mode-control";
@@ -9,9 +14,12 @@ import { SessionControlIcon } from "#product/components/workspace/chat/session-c
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { Check } from "#product/primitives/icons/core";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { AnimatedSwapText } from "#product/primitives/AnimatedSwapText";
-import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
+import {
+  PendingConfigIndicator,
+  showsPendingConfigIndicator,
+} from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 type ModeControlDescriptor = LiveSessionControlDescriptor & {
   key: ConfiguredSessionControlKey;
@@ -21,12 +29,15 @@ interface SessionModeControlProps {
   agentKind: string | null;
   control: ModeControlDescriptor;
   triggerStyle?: "full" | "value";
+  /** Merged onto the trigger button (e.g. the disabled-state opacity). */
+  className?: string;
 }
 
 export function SessionModeControl({
   agentKind,
   control,
   triggerStyle = "full",
+  className = "",
 }: SessionModeControlProps) {
   const currentOption = control.options.find((option) => option.selected) ?? null;
   const currentValue = currentOption?.value ?? null;
@@ -48,12 +59,28 @@ export function SessionModeControl({
   const visibleTriggerDetail = triggerStyle === "value" ? null : animatedValue;
   const compactTrigger = triggerStyle === "value";
   const nextValue = getNextSessionModeValue(control.options, currentValue);
-  const triggerIcon = compactTrigger
+  // The value-style trigger has no leading icon at full width, but below the
+  // composer's compact container tier it swaps the mode name for the mode
+  // icon so the pill keeps a fixed icon footprint instead of truncating
+  // mid-word. Modes without a configured icon keep their text at every width.
+  const swapsToIconWhenCompact = compactTrigger && currentPresentation.icon !== null;
+  const triggerIcon = compactTrigger && !swapsToIconWhenCompact
     ? undefined
     : <SessionControlIcon icon={currentPresentation.icon} className="icon-control [font-size:var(--text-body)]" />;
+  const compactSwapProps = swapsToIconWhenCompact
+    ? {
+      iconWrapperClassName: COMPOSER_COMPACT_ONLY_FLEX_CLASSNAME,
+      labelWrapperClassName: COMPOSER_COMPACT_HIDDEN_CLASSNAME,
+    }
+    : {};
+  const triggerClassName = `max-w-[12rem] ${
+    swapsToIconWhenCompact ? COMPOSER_COMPACT_SHRINK_NONE_CLASSNAME : ""
+  } ${className}`;
   // No disclosure chevron on the compact trigger: the mode name itself steps
-  // immediately to the next runtime-provided value.
-  const triggerTrailing = control.pendingState
+  // immediately to the next runtime-provided value. Gated on the glyph being
+  // visible, not on pendingState existing — a trailing wrapper around a
+  // null-rendering indicator still claims the pill's gap.
+  const triggerTrailing = showsPendingConfigIndicator(control.pendingState)
     ? <PendingConfigIndicator pendingState={control.pendingState} />
     : null;
 
@@ -66,7 +93,8 @@ export function SessionModeControl({
         label={visibleTriggerLabel}
         detail={visibleTriggerDetail}
         trailing={triggerTrailing}
-        className="max-w-[12rem]"
+        className={triggerClassName}
+        {...compactSwapProps}
         data-session-mode-trigger=""
         data-session-mode-selected={currentValue ?? ""}
       />
@@ -82,7 +110,8 @@ export function SessionModeControl({
       trailing={triggerTrailing}
       title={`${CHAT_MODE_CONTROL_LABELS.cycleHint} (${CHAT_MODE_CONTROL_LABELS.shortcut})`}
       aria-label={`${control.label}: ${currentOption?.label ?? currentDetail ?? ""}`}
-      className="max-w-[12rem]"
+      className={triggerClassName}
+      {...compactSwapProps}
       data-session-mode-trigger=""
       data-session-mode-selected={currentValue ?? ""}
       data-session-mode-next={nextValue ?? ""}

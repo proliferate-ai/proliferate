@@ -15,6 +15,8 @@ from scripts.check_appearance_scaling import (
     apply_staged_baseline,
     census_slack,
     check_census_additions,
+    sealed_directory_violations,
+    sealed_prefixes,
     check_design_css_source,
     check_source,
     collect_raw_violations,
@@ -727,6 +729,75 @@ const ORBIT_DELAYS = [
                     or f"|{package})" in hook,
                     f"{relative} is scanned by CI but not matched by the pre-commit hook",
                 )
+
+
+class ArbitraryBracketGeometryTest(unittest.TestCase):
+    """The w/h/p/m/inset bracket families, censused rather than banned."""
+
+    def test_reports_each_bracket_family(self) -> None:
+        source = (
+            'export const A = <div className="w-[200px] h-[38px] p-[3px] m-[2px] '
+            'inset-[1px]" />;\n'
+        )
+        violations = [
+            violation
+            for violation in check_source(Path("A.tsx"), source)
+            if violation.rule_id == "arbitrary-bracket-geometry"
+        ]
+        self.assertEqual(len(violations), 5)
+
+    def test_leaves_scale_utilities_and_prefixed_families_alone(self) -> None:
+        source = (
+            'export const A = <div className="w-full h-4 p-2 mt-3 min-w-[4rem] '
+            'max-h-[12rem]" />;\n'
+        )
+        self.assertEqual(
+            [
+                violation
+                for violation in check_source(Path("A.tsx"), source)
+                if violation.rule_id == "arbitrary-bracket-geometry"
+            ],
+            [],
+        )
+
+    def test_the_family_is_staged_so_the_census_can_burn_it_down(self) -> None:
+        self.assertIn("arbitrary-bracket-geometry", STAGED_RULE_IDS)
+
+
+class SealedDirectoryTest(unittest.TestCase):
+    """A directory a slice finished is pinned at zero, not re-baselined."""
+
+    BASELINE = {
+        "sealedDirectories": [
+            {"path": "apps/x/clean", "justification": "cleaned by the x slice"}
+        ]
+    }
+
+    def test_a_staged_hit_inside_a_sealed_directory_is_reported(self) -> None:
+        violation = Violation(
+            "arbitrary-gap", check_module.REPO_ROOT / "apps/x/clean/A.tsx", 4, "boom"
+        )
+        reported = sealed_directory_violations([violation], self.BASELINE)
+        self.assertEqual([item.rule_id for item in reported], ["sealed-directory-regression"])
+        self.assertIn("cleaned by the x slice", reported[0].message)
+
+    def test_a_hit_outside_the_sealed_prefix_is_left_to_the_census(self) -> None:
+        violation = Violation(
+            "arbitrary-gap", check_module.REPO_ROOT / "apps/x/cleanish/A.tsx", 4, "boom"
+        )
+        self.assertEqual(sealed_directory_violations([violation], self.BASELINE), [])
+
+    def test_a_seal_without_a_written_reason_is_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            sealed_prefixes({"sealedDirectories": [{"path": "apps/x/clean"}]})
+
+    def test_the_shipped_seals_are_all_justified_and_real(self) -> None:
+        seals = sealed_prefixes(load_baselines())
+        self.assertTrue(seals)
+        for prefix, justification in seals:
+            with self.subTest(prefix=prefix):
+                self.assertTrue(justification.strip())
+                self.assertTrue((check_module.REPO_ROOT / prefix).is_dir())
 
 
 if __name__ == "__main__":

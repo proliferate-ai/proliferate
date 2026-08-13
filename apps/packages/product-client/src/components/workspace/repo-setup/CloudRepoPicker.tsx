@@ -1,11 +1,6 @@
 import { type FormEvent } from "react";
-import {
-  Archive,
-  Check,
-  Lock,
-  RotateCw,
-  ShieldAlert,
-} from "lucide-react";
+import { Archive, Check } from "#product/primitives/icons/core";
+import { Lock, RotateCw, ShieldAlert } from "#product/primitives/icons/status";
 import { GitHub } from "#product/primitives/icons/platform";
 
 import {

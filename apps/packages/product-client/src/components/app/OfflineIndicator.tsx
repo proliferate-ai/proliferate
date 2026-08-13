@@ -1,4 +1,4 @@
-import { WifiOff } from "lucide-react";
+import { WifiOff } from "#product/primitives/icons/status";
 import { useConnectivityStore } from "#product/stores/infra/connectivity-store";
 
 /**

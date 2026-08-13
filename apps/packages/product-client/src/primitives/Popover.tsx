@@ -20,8 +20,11 @@ function PopoverContent({
   className,
   align = "center",
   sideOffset = 4,
+  variant = "default",
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+}: React.ComponentProps<typeof PopoverPrimitive.Content> & {
+  variant?: "default" | "menu";
+}) {
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
@@ -29,7 +32,8 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          `z-50 w-72 p-3 outline-none ${POPOVER_FRAME_CLASS}`,
+          `z-50 outline-none ${POPOVER_FRAME_CLASS}`,
+          variant === "menu" ? "w-[220px] p-1" : "w-72 p-3",
           className,
         )}
         {...props}

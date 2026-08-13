@@ -19,6 +19,11 @@ interface UseWorkspaceShellGeometryOptions {
   leftWidth: number;
   rightWidth: number;
   /**
+   * Held true while the left separator drag is live. Pointer-driven geometry
+   * must not retain the open/close easing or the edge trails the cursor.
+   */
+  snapLeft?: boolean;
+  /**
    * Held true while the right separator drag is live. A pointer-driven width
    * must land exactly where the cursor is on every frame — easing it would
    * rubber-band the panel edge behind the pointer and keep re-laying the
@@ -50,13 +55,14 @@ function easeOutCubic(progress: number): number {
 export function useWorkspaceShellGeometry({
   leftWidth,
   rightWidth,
+  snapLeft: requestedSnapLeft = false,
   snapRight = false,
   onToggleLeft,
 }: UseWorkspaceShellGeometryOptions): WorkspaceShellGeometry {
   const rootRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
   const snapClearFrameRef = useRef<number | null>(null);
-  const [snapLeft, setSnapLeft] = useState(false);
+  const [toggleSnapLeft, setToggleSnapLeft] = useState(false);
   const renderedRef = useRef<WorkspaceShellWidths>({
     left: leftWidth,
     right: rightWidth,
@@ -71,20 +77,22 @@ export function useWorkspaceShellGeometry({
     }
 
     if (!options?.snapGeometry) {
-      setSnapLeft(false);
+      setToggleSnapLeft(false);
       onToggleLeft();
       return;
     }
 
-    setSnapLeft(true);
+    setToggleSnapLeft(true);
     onToggleLeft();
     snapClearFrameRef.current = window.requestAnimationFrame(() => {
       snapClearFrameRef.current = window.requestAnimationFrame(() => {
         snapClearFrameRef.current = null;
-        setSnapLeft(false);
+        setToggleSnapLeft(false);
       });
     });
   }, [onToggleLeft]);
+
+  const snapLeft = requestedSnapLeft || toggleSnapLeft;
 
   useLayoutEffect(() => {
     if (!usesManualInterpolation) {

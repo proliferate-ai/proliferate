@@ -8,14 +8,21 @@ export interface TranscriptKeyboardEventLike {
 
 export interface TranscriptTargetFacts {
   insideRoot: boolean;
+  contextualActions: boolean;
+  selectableInteractiveText: boolean;
   textEntry: boolean;
   terminalZone: boolean;
+  browserZone: boolean;
   ignoredChrome: boolean;
   nativeInteractive: boolean;
   ariaInteractive: boolean;
 }
 
-export type TranscriptPointerOwnershipAction = "set-owned" | "clear-owned";
+export type TranscriptPointerOwnershipAction =
+  | "set-owned"
+  | "track-selection"
+  | "clear-owned"
+  | "ignore";
 export type TranscriptPrimaryAAction = "select-root" | "clear-owned" | "ignore";
 export type TranscriptSelectionClampEdge = "start" | "end";
 
@@ -28,8 +35,11 @@ export type TranscriptCopyAction = "copy-semantic" | "clear-owned" | "ignore";
 
 export const EMPTY_TRANSCRIPT_TARGET_FACTS: TranscriptTargetFacts = {
   insideRoot: false,
+  contextualActions: false,
+  selectableInteractiveText: false,
   textEntry: false,
   terminalZone: false,
+  browserZone: false,
   ignoredChrome: false,
   nativeInteractive: false,
   ariaInteractive: false,
@@ -51,6 +61,7 @@ export function isPrimarySelectAllEvent(
 export function isBlockedTranscriptTarget(target: TranscriptTargetFacts): boolean {
   return target.textEntry
     || target.terminalZone
+    || target.browserZone
     || target.ignoredChrome
     || target.nativeInteractive
     || target.ariaInteractive;
@@ -68,6 +79,18 @@ export function isValidTranscriptKeyboardTarget(
 export function resolvePointerOwnership(
   target: TranscriptTargetFacts,
 ): TranscriptPointerOwnershipAction {
+  if (target.contextualActions) {
+    return "ignore";
+  }
+  if (
+    target.insideRoot
+    && target.selectableInteractiveText
+    && !target.textEntry
+    && !target.terminalZone
+    && !target.ignoredChrome
+  ) {
+    return "track-selection";
+  }
   return target.insideRoot && !isBlockedTranscriptTarget(target)
     ? "set-owned"
     : "clear-owned";
@@ -75,12 +98,14 @@ export function resolvePointerOwnership(
 
 export function resolvePrimaryAAction({
   owned,
+  commandOwnerActive = false,
   isSelectAll,
   defaultPrevented,
   eventTarget,
   activeTarget,
 }: {
   owned: boolean;
+  commandOwnerActive?: boolean;
   isSelectAll: boolean;
   defaultPrevented: boolean;
   eventTarget: TranscriptTargetFacts;
@@ -89,10 +114,15 @@ export function resolvePrimaryAAction({
   if (!isSelectAll || defaultPrevented) {
     return "ignore";
   }
-  if (!owned) {
+  if (!owned && !commandOwnerActive) {
     return "ignore";
   }
-  return isValidTranscriptKeyboardTarget(eventTarget, activeTarget)
+  const validOwner = commandOwnerActive
+    || eventTarget.insideRoot
+    || activeTarget.insideRoot;
+  return validOwner
+    && !isBlockedTranscriptTarget(eventTarget)
+    && !isBlockedTranscriptTarget(activeTarget)
     ? "select-root"
     : "clear-owned";
 }

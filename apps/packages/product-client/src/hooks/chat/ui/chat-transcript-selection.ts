@@ -1,218 +1,77 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type RefObject,
 } from "react";
 import {
   EMPTY_TRANSCRIPT_TARGET_FACTS,
-  isPrimarySelectAllEvent,
-  resolveCopyAction,
-  resolvePointerOwnership,
-  resolvePrimaryAAction,
-  resolveSelectionChangeAction,
   type TranscriptSelectionClampEdge,
   type TranscriptTargetFacts,
 } from "#product/domain/chats/transcript/transcript-selection";
+import type {
+  SelectedResponseSelection,
+} from "#product/domain/chats/transcript/selected-response-context";
+import {
+  attachChatTranscriptSelectionListeners,
+  createChatTranscriptSelectionHandlers,
+} from "#product/hooks/chat/ui/chat-transcript-selection-handlers";
+import {
+  getSelectedAssistantResponse,
+  isSelectedResponseInViewport,
+} from "#product/hooks/chat/ui/selected-response-selection";
+import { selectElementContents } from "#product/lib/infra/dom/dom-select-all";
 
 interface UseChatTranscriptSelectionArgs {
   rootRef: RefObject<HTMLElement | null>;
   getCopyText: () => string;
 }
 
-interface TranscriptSelectionListenerTargets {
-  windowTarget: Pick<Window, "addEventListener" | "removeEventListener">;
-  documentTarget: Pick<Document, "addEventListener" | "removeEventListener">;
-}
-
-interface TranscriptSelectionListenerHandlers {
-  pointerdown: (event: PointerEvent) => void;
-  keydown: (event: KeyboardEvent) => void;
-  copy: (event: ClipboardEvent) => void;
-  selectionchange: () => void;
-}
-
-interface MutableBooleanRef {
-  current: boolean;
-}
-
-interface ChatTranscriptSelectionHandlerArgs {
-  rootRef: RefObject<HTMLElement | null>;
-  getCopyText: () => string;
-  transcriptOwnedRef: MutableBooleanRef;
-  allTranscriptSelectedRef: MutableBooleanRef;
-  getActiveElement: () => EventTarget | null;
-  getSelection: () => Selection | null;
-  getTargetFactsForEvent: (
-    target: EventTarget | null,
-    root: HTMLElement | null,
-  ) => TranscriptTargetFacts;
-  focusRoot: (root: HTMLElement) => void;
-  setFullSelectionMarker: (root: HTMLElement) => void;
-  isFullSelectionMarker: (selection: Selection, root: HTMLElement) => boolean;
-  isExactRootSelection: (selection: Selection, root: HTMLElement) => boolean;
-  nodeInsideRoot: (node: Node | null, root: HTMLElement) => boolean;
-  getSelectionDirection: (selection: Selection) => "forward" | "backward";
-  clampSelectionToRoot: (
-    selection: Selection,
-    root: HTMLElement,
-    edge: TranscriptSelectionClampEdge,
-  ) => void;
-}
-
-export function attachChatTranscriptSelectionListeners(
-  targets: TranscriptSelectionListenerTargets,
-  handlers: TranscriptSelectionListenerHandlers,
-): () => void {
-  targets.windowTarget.addEventListener("pointerdown", handlers.pointerdown, { capture: true });
-  targets.windowTarget.addEventListener("keydown", handlers.keydown, { capture: true });
-  targets.windowTarget.addEventListener("copy", handlers.copy, { capture: true });
-  targets.documentTarget.addEventListener("selectionchange", handlers.selectionchange);
-
-  return () => {
-    targets.windowTarget.removeEventListener("pointerdown", handlers.pointerdown, { capture: true });
-    targets.windowTarget.removeEventListener("keydown", handlers.keydown, { capture: true });
-    targets.windowTarget.removeEventListener("copy", handlers.copy, { capture: true });
-    targets.documentTarget.removeEventListener("selectionchange", handlers.selectionchange);
-  };
-}
-
-export function createChatTranscriptSelectionHandlers({
-  rootRef,
-  getCopyText,
-  transcriptOwnedRef,
-  allTranscriptSelectedRef,
-  getActiveElement,
-  getSelection,
-  getTargetFactsForEvent,
-  focusRoot,
-  setFullSelectionMarker,
-  isFullSelectionMarker,
-  isExactRootSelection: isExactRootSelectionForRoot,
-  nodeInsideRoot: nodeInsideRootForRoot,
-  getSelectionDirection: getSelectionDirectionForSelection,
-  clampSelectionToRoot: clampSelectionToRootForSelection,
-}: ChatTranscriptSelectionHandlerArgs): TranscriptSelectionListenerHandlers {
-  const clearSelectionState = () => {
-    transcriptOwnedRef.current = false;
-    allTranscriptSelectedRef.current = false;
-  };
-
-  const pointerdown = (event: PointerEvent) => {
-    const root = rootRef.current;
-    const targetFacts = getTargetFactsForEvent(event.target, root);
-    const action = resolvePointerOwnership(targetFacts);
-    if (action === "set-owned" && root) {
-      transcriptOwnedRef.current = true;
-      allTranscriptSelectedRef.current = false;
-      focusRoot(root);
-      return;
-    }
-    clearSelectionState();
-  };
-
-  const keydown = (event: KeyboardEvent) => {
-    const root = rootRef.current;
-    const action = resolvePrimaryAAction({
-      owned: transcriptOwnedRef.current,
-      isSelectAll: isPrimarySelectAllEvent(event, isApplePlatform()),
-      defaultPrevented: event.defaultPrevented,
-      eventTarget: getTargetFactsForEvent(event.target, root),
-      activeTarget: getTargetFactsForEvent(getActiveElement(), root),
-    });
-
-    if (action === "ignore") {
-      return;
-    }
-    if (action === "clear-owned") {
-      clearSelectionState();
-      return;
-    }
-    if (!root) {
-      clearSelectionState();
-      return;
-    }
-
-    event.preventDefault();
-    setFullSelectionMarker(root);
-    transcriptOwnedRef.current = true;
-    allTranscriptSelectedRef.current = true;
-  };
-
-  const selectionchange = () => {
-    const root = rootRef.current;
-    const selection = getSelection();
-    if (!root || !selection || selection.rangeCount === 0) {
-      allTranscriptSelectedRef.current = false;
-      return;
-    }
-
-    if (
-      allTranscriptSelectedRef.current
-      && isFullSelectionMarker(selection, root)
-    ) {
-      return;
-    }
-
-    const exactRootSelection = isExactRootSelectionForRoot(selection, root);
-    const action = resolveSelectionChangeAction({
-      owned: transcriptOwnedRef.current,
-      anchorInsideRoot: nodeInsideRootForRoot(selection.anchorNode, root),
-      focusInsideRoot: nodeInsideRootForRoot(selection.focusNode, root),
-      exactRootSelection,
-      direction: getSelectionDirectionForSelection(selection),
-    });
-
-    if (action.clearFullSelection) {
-      allTranscriptSelectedRef.current = false;
-    }
-    if (action.clampEdge) {
-      clampSelectionToRootForSelection(selection, root, action.clampEdge);
-    }
-  };
-
-  const copy = (event: ClipboardEvent) => {
-    const root = rootRef.current;
-    const selection = getSelection();
-    const action = resolveCopyAction({
-      fullRootSelected: !!root
-        && !!selection
-        && allTranscriptSelectedRef.current
-        && isFullSelectionMarker(selection, root),
-      eventTarget: getTargetFactsForEvent(event.target, root),
-      activeTarget: getTargetFactsForEvent(getActiveElement(), root),
-    });
-
-    if (action === "ignore") {
-      return;
-    }
-    if (action === "clear-owned") {
-      clearSelectionState();
-      return;
-    }
-    if (!event.clipboardData) {
-      return;
-    }
-
-    event.clipboardData.setData("text/plain", getCopyText());
-    event.preventDefault();
-  };
-
-  return {
-    pointerdown,
-    keydown,
-    copy,
-    selectionchange,
-  };
+export interface ChatTranscriptSelectionState {
+  selectedResponse: SelectedResponseSelection | null;
+  menuFocusRequestNonce: number;
+  dismissSelectedResponse: (options?: {
+    clearNativeSelection?: boolean;
+    restoreTranscriptFocus?: boolean;
+  }) => void;
 }
 
 export function useChatTranscriptSelection({
   rootRef,
   getCopyText,
-}: UseChatTranscriptSelectionArgs): void {
+}: UseChatTranscriptSelectionArgs): ChatTranscriptSelectionState {
   const getCopyTextRef = useRef(getCopyText);
   const transcriptOwnedRef = useRef(false);
   const allTranscriptSelectedRef = useRef(false);
+  const pointerSelectingRef = useRef(false);
+  const [selectedResponse, setSelectedResponse] = useState<SelectedResponseSelection | null>(null);
+  const selectedResponseRef = useRef<SelectedResponseSelection | null>(null);
+  const [menuFocusRequestNonce, setMenuFocusRequestNonce] = useState(0);
+
+  const commitSelectedResponse = useCallback((selection: SelectedResponseSelection | null) => {
+    selectedResponseRef.current = selection;
+    setSelectedResponse(selection);
+    if (!selection) {
+      setMenuFocusRequestNonce(0);
+    }
+  }, []);
+
+  const dismissSelectedResponse = useCallback((options?: {
+    clearNativeSelection?: boolean;
+    restoreTranscriptFocus?: boolean;
+  }) => {
+    commitSelectedResponse(null);
+    if (options?.clearNativeSelection) {
+      document.getSelection()?.removeAllRanges();
+    }
+    if (options?.restoreTranscriptFocus) {
+      window.requestAnimationFrame(() => {
+        rootRef.current?.focus({ preventScroll: true });
+      });
+    }
+  }, [commitSelectedResponse, rootRef]);
 
   useLayoutEffect(() => {
     getCopyTextRef.current = getCopyText;
@@ -224,16 +83,30 @@ export function useChatTranscriptSelection({
       getCopyText: () => getCopyTextRef.current(),
       transcriptOwnedRef,
       allTranscriptSelectedRef,
+      pointerSelectingRef,
       getActiveElement: () => document.activeElement,
       getSelection: () => document.getSelection(),
       getTargetFactsForEvent: getTargetFacts,
+      isSelectAllCommandOwner,
       focusRoot: (root) => root.focus({ preventScroll: true }),
-      setFullSelectionMarker: setCollapsedRootMarker,
-      isFullSelectionMarker: isCollapsedRootMarkerSelection,
+      setFullSelectionMarker: (root) => {
+        selectElementContents(root);
+      },
+      isFullSelectionMarker: isExactRootSelection,
       isExactRootSelection,
       nodeInsideRoot,
       getSelectionDirection,
       clampSelectionToRoot,
+      getSelectedResponse: getSelectedAssistantResponse,
+      isSelectedResponseVisible: isSelectedResponseInViewport,
+      setSelectedResponse: commitSelectedResponse,
+      hasSelectedResponse: () => selectedResponseRef.current !== null,
+      requestSelectedResponseMenuFocus: () => {
+        setMenuFocusRequestNonce((nonce) => nonce + 1);
+      },
+      dismissSelectedResponse: (restoreTranscriptFocus) => {
+        dismissSelectedResponse({ restoreTranscriptFocus });
+      },
     });
 
     const detach = attachChatTranscriptSelectionListeners({
@@ -244,9 +117,16 @@ export function useChatTranscriptSelection({
     return () => {
       transcriptOwnedRef.current = false;
       allTranscriptSelectedRef.current = false;
+      pointerSelectingRef.current = false;
       detach();
     };
-  }, [rootRef]);
+  }, [commitSelectedResponse, dismissSelectedResponse, rootRef]);
+
+  return {
+    selectedResponse,
+    menuFocusRequestNonce,
+    dismissSelectedResponse,
+  };
 }
 
 function getTargetFacts(
@@ -260,12 +140,62 @@ function getTargetFacts(
 
   return {
     insideRoot: root.contains(element),
+    contextualActions: !!element.closest("[data-selected-response-actions]"),
+    selectableInteractiveText: !!element.closest('a, [role="link"]'),
     textEntry: isTextEntryElement(element),
     terminalZone: !!element.closest('[data-focus-zone="terminal"]'),
+    browserZone: !!element.closest('[data-focus-zone="browser"]'),
     ignoredChrome: !!element.closest("[data-chat-transcript-ignore]"),
     nativeInteractive: isNativeInteractiveElement(element),
     ariaInteractive: isAriaInteractiveElement(element),
   };
+}
+
+function isSelectAllCommandOwner(
+  target: EventTarget | null,
+  root: HTMLElement | null,
+): boolean {
+  const element = targetToElement(target);
+  if (!root || !element || !isRenderedTranscriptRoot(root)) {
+    return false;
+  }
+
+  const chatRoot = root.closest<HTMLElement>('[data-focus-zone="chat"]');
+  if (!chatRoot) {
+    return false;
+  }
+
+  if (element === document.body || element === document.documentElement) {
+    const renderedRoots = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-chat-transcript-root="true"]'),
+    ).filter(isRenderedTranscriptRoot);
+    return renderedRoots.length === 1 && renderedRoots[0] === root;
+  }
+
+  return chatRoot.contains(element);
+}
+
+function isRenderedTranscriptRoot(root: HTMLElement): boolean {
+  if (!root.isConnected) {
+    return false;
+  }
+
+  let current: HTMLElement | null = root;
+  while (current) {
+    if (
+      current.hidden
+      || current.hasAttribute("inert")
+      || current.getAttribute("aria-hidden") === "true"
+    ) {
+      return false;
+    }
+    const style = window.getComputedStyle(current);
+    if (style.display === "none" || style.visibility === "hidden") {
+      return false;
+    }
+    current = current.parentElement;
+  }
+  return true;
 }
 
 function targetToElement(target: EventTarget | null): Element | null {
@@ -306,29 +236,6 @@ function isAriaInteractiveElement(element: Element): boolean {
     || role === "menuitem"
     || role === "option"
     || role === "tab";
-}
-
-function setCollapsedRootMarker(root: HTMLElement): void {
-  const selection = document.getSelection();
-  if (!selection) {
-    return;
-  }
-  selection.removeAllRanges();
-  const range = document.createRange();
-  range.selectNodeContents(root);
-  range.collapse(false);
-  selection.addRange(range);
-}
-
-function isCollapsedRootMarkerSelection(
-  selection: Selection,
-  root: HTMLElement,
-): boolean {
-  if (selection.rangeCount !== 1 || !selection.isCollapsed) {
-    return false;
-  }
-  const range = selection.getRangeAt(0);
-  return range.startContainer === root && range.endContainer === root;
 }
 
 function isExactRootSelection(
@@ -379,11 +286,4 @@ function clampSelectionToRoot(
   }
   selection.removeAllRanges();
   selection.addRange(range);
-}
-
-function isApplePlatform(): boolean {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-  return /mac|iphone|ipad|ipod/iu.test(navigator.platform);
 }

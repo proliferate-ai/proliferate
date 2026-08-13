@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { GoalBar } from "#product/components/workspace/activity/GoalBar";
 import { ActivityChips } from "#product/components/workspace/activity/ActivityChips";
 import { LoopsPanel } from "#product/components/workspace/activity/LoopsPanel";
-import { TerminalsRosterPanel } from "#product/components/workspace/activity/TerminalsRosterPanel";
+import { TerminalRosterRow } from "#product/components/workspace/activity/TerminalRosterRow";
 import { AgentsRosterPanel } from "#product/components/workspace/activity/AgentsRosterPanel";
+import { RosterPanel } from "#product/primitives/patterns/RosterPanel";
+import { sortProcessesForDisplay } from "#product/domain/activity/process";
 import { deriveActivityChips } from "#product/domain/activity/chips";
 import type { LoopCapabilities, LoopWire } from "#product/domain/activity/loop";
 import type { ActivityProcessWire } from "#product/domain/activity/process";
@@ -59,7 +61,21 @@ function activityChips({
           />
         ),
         terminals: (
-          <TerminalsRosterPanel processes={processes} nowMs={ACTIVITY_FIXTURE_NOW_MS} />
+          // The live wrapper (`LiveTerminalsRosterPanel`) owns feed streaming
+          // and expansion state, which the playground has no SDK for; the
+          // fixture composes the same `RosterPanel` + `TerminalRosterRow`
+          // shape statically instead of carrying a second panel component.
+          <RosterPanel
+            title="Terminals"
+            empty="No background terminals."
+            data-terminals-roster-panel
+          >
+            {sortProcessesForDisplay(processes).map((process) => (
+              <li key={process.id}>
+                <TerminalRosterRow process={process} nowMs={ACTIVITY_FIXTURE_NOW_MS} />
+              </li>
+            ))}
+          </RosterPanel>
         ),
         agents: (
           <AgentsRosterPanel agents={agents} nowMs={ACTIVITY_FIXTURE_NOW_MS} />

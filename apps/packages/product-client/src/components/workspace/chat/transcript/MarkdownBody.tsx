@@ -1,6 +1,7 @@
 import {
   Children,
   cloneElement,
+  createContext,
   createElement,
   isValidElement,
   memo,
@@ -130,6 +131,8 @@ type MdCodeProps = MdElementProps & {
   renderCodeBlock?: MarkdownCodeBlockRenderer;
 };
 
+const MarkdownCodeBlockContext = createContext(false);
+
 // Message prose reads at --prose-text-size, which the assistant/user message
 // wrappers set to --text-message (the composer size). Every other MarkdownBody
 // context — tool-row detail bodies, plan cards, work history — leaves the var
@@ -210,7 +213,11 @@ const STATIC_MARKDOWN_COMPONENTS = {
     if (dangerouslySetInnerHTML) {
       return <pre {...rest} dangerouslySetInnerHTML={dangerouslySetInnerHTML} />;
     }
-    return <>{children}</>;
+    return (
+      <MarkdownCodeBlockContext.Provider value>
+        {children}
+      </MarkdownCodeBlockContext.Provider>
+    );
   },
 };
 
@@ -443,6 +450,7 @@ function MarkdownCode({
   node: _node,
   ...rest
 }: MdCodeProps) {
+  const isCodeBlock = useContext(MarkdownCodeBlockContext);
   if (dangerouslySetInnerHTML) {
     return (
       <code
@@ -453,9 +461,9 @@ function MarkdownCode({
       />
     );
   }
-  const match = /language-(\w+)/.exec(codeClassName || "");
-  const codeString = String(children).replace(/\n$/, "");
-  if (match || codeString.includes("\n")) {
+  const match = /language-([^\s]+)/.exec(codeClassName || "");
+  const codeString = String(children ?? "").replace(/\n$/, "");
+  if (isCodeBlock || match) {
     const language = match?.[1] ?? null;
     const renderedCodeBlock = renderCodeBlock?.({ code: codeString, language });
     if (renderedCodeBlock !== null && renderedCodeBlock !== undefined) {

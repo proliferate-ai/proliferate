@@ -30,6 +30,8 @@ import {
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
+  getMaterializedSessionId,
+  isPendingSessionId,
   requireMaterializedSessionId,
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -129,7 +131,12 @@ export async function getSessionClientAndWorkspace(
     connection,
     target,
     workspaceId,
-    materializedSessionId: requireMaterializedSessionId(sessionId),
+    // A directory entry only exists for sessions touched this app run. Ids
+    // without one (e.g. closed sessions listed from the runtime) are already
+    // materialized runtime ids; only genuinely pending ids must keep failing.
+    materializedSessionId: isPendingSessionId(sessionId)
+      ? requireMaterializedSessionId(sessionId)
+      : getMaterializedSessionId(sessionId) ?? sessionId,
   };
 }
 

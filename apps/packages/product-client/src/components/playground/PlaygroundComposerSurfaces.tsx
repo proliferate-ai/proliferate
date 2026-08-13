@@ -7,8 +7,8 @@ import { ChatInputControlRow } from "#product/components/workspace/chat/input/Ch
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { ComposerFileMentionSearch } from "#product/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
-import { ComposerTextarea } from "#product/primitives/patterns/ComposerTextarea";
-import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
+import { ComposerTextarea } from "#product/primitives/patterns/composer/ComposerTextarea";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/composer/ComposerTextareaFrame";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,
@@ -208,7 +208,7 @@ function PlaygroundFileMentionComposerSurface({
           results={results}
           highlightedIndex={0}
           listRef={listRef}
-          query="tok"
+          query="a"
           isLoading={false}
           isError={false}
           isPending={false}
@@ -228,7 +228,7 @@ function PlaygroundFileMentionComposerSurface({
             data-telemetry-mask
             className="mb-2 flex min-h-14 flex-grow select-text items-start px-5 text-composer text-foreground"
           >
-            <span>Look at @tok</span>
+            <span>Look at @a</span>
           </div>
           <PlaygroundComposerControlRow />
         </form>

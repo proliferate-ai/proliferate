@@ -233,6 +233,14 @@ function promptAttachmentCardClassName(args: {
   isDraft: boolean;
   isImage: boolean;
 }): string {
+  // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review, check 1) for
+  // the four shells in this function: `Card` clips its children
+  // (`overflow-clip`, load-bearing for its sticky header) and these cards
+  // deliberately overflow — the remove affordance and the drag ghost sit
+  // outside the frame, which is why every string carries `overflow-visible`.
+  // Its two fills also cannot express the /70 and /80 alphas the compact and
+  // default tones use. Folding these in needs a review ruling on `Card`, not a
+  // call-site override of its clipping.
   if (args.isImage) {
     const size = args.isDraft
       ? "prompt-card-image-draft"

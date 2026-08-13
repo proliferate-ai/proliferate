@@ -8,6 +8,7 @@ function arrival(
   return {
     workspaceId: "workspace-1",
     source: "local-created",
+    receiptClientSessionId: null,
     setupScript: null,
     createdAt: 1,
     ...overrides,

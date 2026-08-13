@@ -576,6 +576,12 @@ Code path:
 - Session event sequences are monotonic per session.
 - Durable records remain authoritative even when no live actor exists.
 - Config changes requested while busy must not be lost.
+- Session titles keep a fixed precedence. An explicitly assigned title (user
+  rename or generated summary through `PATCH /v1/sessions/{id}/title`) always
+  wins and is never overwritten by lower layers. The prompt endpoint assigns
+  the first prompt's text as the title only when the session has none, and
+  harness `session_info_update` titles are fallback-only: both persist through
+  `update_title_if_absent` and never replace an assigned title.
 
 ## Extension Points
 

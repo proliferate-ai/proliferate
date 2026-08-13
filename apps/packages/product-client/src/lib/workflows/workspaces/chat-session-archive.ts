@@ -17,7 +17,7 @@ export async function archiveVisibleChatSession(
     dismissSession: (
       sessionId: string,
       options: VisibleChatSessionDismissOptions,
-    ) => Promise<void>;
+    ) => Promise<boolean>;
     getRuntimeBlockReason: () => string | null;
     notifyRuntimeBlocked: (reason: string) => void;
     removeSessionsFromManualGroups: (sessionIds: string[]) => void;
@@ -40,12 +40,15 @@ export async function archiveVisibleChatSession(
   }
 
   try {
-    await deps.dismissSession(sessionId, {
+    const dismissed = await deps.dismissSession(sessionId, {
       replacedActiveSessionIds: reservation.sessionIds,
       resolveNextActiveSessionId: reservation.replacesActiveSession
         ? () => deps.resolveReservedFallback(reservation.fallbackSessionId)
         : undefined,
     });
+    if (!dismissed) {
+      return false;
+    }
     deps.removeSessionsFromManualGroups(reservation.sessionIds);
     return true;
   } finally {

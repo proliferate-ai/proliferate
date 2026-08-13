@@ -1,5 +1,5 @@
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { Button } from "#product/primitives/Button";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";

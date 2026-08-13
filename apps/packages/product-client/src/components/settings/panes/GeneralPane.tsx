@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { Button } from "#product/primitives/Button";
-import { SettingsMenu } from "#product/primitives/patterns/SettingsMenu";
+import { SettingsMenu } from "#product/primitives/patterns/settings/SettingsMenu";
 import { Switch } from "#product/primitives/Switch";
 import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
 import { useAvailableEditors } from "#product/hooks/access/tauri/shell/use-available-editors";
@@ -68,8 +69,8 @@ export function GeneralPane() {
   )?.label ?? "None";
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader title="General" />
+    <SettingsPageBody>
+      <PageHeader variant="flat" title="General" />
 
       <SettingsSection title="Preferences">
           <SettingsRow
@@ -182,6 +183,6 @@ export function GeneralPane() {
             />
           </SettingsRow>
       </SettingsSection>
-    </section>
+    </SettingsPageBody>
   );
 }

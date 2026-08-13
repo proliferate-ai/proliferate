@@ -85,9 +85,13 @@ export function resolveAvailableLaunchSelection(
   agents: readonly DesktopAgentLaunchAgent[],
   preferredSelection: ModelSelectorSelection | null | undefined,
   fallbackSelection: ModelSelectorSelection | null | undefined,
+  options?: { requirePreferredSelection?: boolean },
 ): ModelSelectorSelection | null {
-  return resolveLaunchableModelSelection(agents, preferredSelection)
-    ?? resolveLaunchableModelSelection(agents, fallbackSelection);
+  const preferred = resolveLaunchableModelSelection(agents, preferredSelection);
+  if (preferred || options?.requirePreferredSelection) {
+    return preferred;
+  }
+  return resolveLaunchableModelSelection(agents, fallbackSelection);
 }
 
 export function resolveConfiguredLaunchAgentSelection(

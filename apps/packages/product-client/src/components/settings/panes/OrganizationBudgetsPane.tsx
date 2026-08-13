@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "#product/primitives/icons/core";
 import {
   useCloudBilling,
   useLlmBalance,
@@ -13,8 +13,10 @@ import { Select } from "#product/primitives/Select";
 import {
   SegmentedControl,
 } from "#product/primitives/SegmentedControl";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { Card } from "#product/primitives/patterns/Card";
 import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import { useOrganizationMembers } from "#product/hooks/access/cloud/organizations/use-organization-members";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
@@ -83,8 +85,9 @@ export function OrganizationBudgetsPane() {
   const selectedRow = usageRows.find((row) => row.userId === selectedUserId) ?? null;
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Usage & limits"
         description="Track compute seconds and LLM spend, and set caps for the organization or individual members."
       />
@@ -96,6 +99,7 @@ export function OrganizationBudgetsPane() {
       <SettingsSection
         title="Balances"
         description="Compute units and LLM credits have separate balances — never combined into one figure."
+        surface="plain"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <BudgetBalanceCard {...computeBalance} loading={billingQuery.isLoading} />
@@ -106,6 +110,7 @@ export function OrganizationBudgetsPane() {
       <SettingsSection
         title="Consumption"
         description="Compute seconds and LLM spend never share an axis, so the chart juxtaposes them instead of summing."
+        surface="plain"
         action={
           <div className="flex flex-wrap items-center gap-2">
             <div className="w-36">
@@ -163,7 +168,7 @@ export function OrganizationBudgetsPane() {
         members={members}
         byUserRows={byUserQuery.data?.users}
       />
-    </section>
+    </SettingsPageBody>
   );
 }
 
@@ -177,16 +182,16 @@ function BudgetBalanceCard({
 }: BudgetBalanceView & { loading?: boolean }) {
   if (loading) {
     return (
-      <div className="space-y-3 rounded-lg border border-border-light bg-surface-elevated-secondary p-4">
+      <Card surface="tint" className="space-y-3 p-4">
         <SkeletonBlock className="h-4 w-24" style={shimmerDelay(0)} />
         <SkeletonBlock className="h-6 w-32" style={shimmerDelay(1)} />
         <SkeletonBlock className="h-4 w-full" style={shimmerDelay(2)} />
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-border-light bg-surface-elevated-secondary p-4">
+    <Card surface="tint" className="space-y-3 p-4">
       <div className="space-y-1">
         <div className="text-ui font-medium text-foreground">{label}</div>
         <div className="text-title font-semibold tracking-tight text-foreground">{available}</div>
@@ -194,7 +199,7 @@ function BudgetBalanceCard({
       </div>
       <ProgressBar
         value={percentAvailable}
-        className="h-4 overflow-hidden rounded-full border border-border-light bg-foreground/5 p-0.5"
+        className="h-4 overflow-hidden rounded-full border border-border-light bg-surface-control p-0.5"
         indicatorClassName="h-full rounded-full bg-primary/70"
         aria-label={`${label} available`}
       />
@@ -202,7 +207,7 @@ function BudgetBalanceCard({
         <span>{used}</span>
         <span>{percentAvailable}% remaining</span>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -217,7 +222,7 @@ function UsageBarChart({
 }) {
   if (loading) {
     return (
-      <div className="flex h-48 items-end gap-2 rounded-lg border border-border-light bg-surface-elevated-secondary p-4">
+      <Card surface="tint" className="flex h-48 items-end gap-2 p-4">
         {Array.from({ length: 8 }, (_, index) => (
           <SkeletonBlock
             key={index}
@@ -225,15 +230,15 @@ function UsageBarChart({
             style={{ height: `${30 + (index % 3) * 20}%`, ...shimmerDelay(index) }}
           />
         ))}
-      </div>
+      </Card>
     );
   }
 
   if (points.length === 0) {
     return (
-      <div className="flex h-48 items-center justify-center rounded-lg border border-border-light bg-surface-elevated-secondary text-ui-sm text-muted-foreground">
+      <Card surface="tint" className="flex h-48 items-center justify-center text-ui-sm text-muted-foreground">
         No usage in this range.
-      </div>
+      </Card>
     );
   }
 
@@ -243,7 +248,7 @@ function UsageBarChart({
   const maxLlm = chartMax(points.map((point) => point.llmCostUsd));
 
   return (
-    <div className="rounded-lg border border-border-light bg-surface-elevated-secondary p-4">
+    <Card surface="tint" className="p-4">
       <div className="flex flex-wrap items-center gap-4 pb-3 text-ui-sm text-muted-foreground">
         {showCompute ? (
           <span className="inline-flex items-center gap-1.5">
@@ -286,7 +291,7 @@ function UsageBarChart({
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -302,22 +307,23 @@ function OrgUsageTable({
   return (
     <SettingsSection title="Usage by member" description="Select a member to see their usage over time.">
       {loading ? (
-        <div className="space-y-2 py-3">
+        <div className="space-y-2 px-3.5 py-3">
           {[0, 1, 2].map((row) => (
             <SkeletonBlock key={row} className="h-10 w-full" style={shimmerDelay(row)} />
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="py-6 text-ui-sm text-muted-foreground">No usage recorded in this range.</div>
+        <div className="px-6 py-[30px] text-center text-ui text-muted-foreground">No usage recorded in this range.</div>
       ) : (
         rows.map((row) => (
           <Button
             key={row.userId}
             type="button"
-            variant="unstyled"
+            variant="ghost"
             size="unstyled"
             onClick={() => onSelectUser(row.userId)}
-            className="flex w-full items-center justify-between gap-4 border-t border-border py-3 text-left first:border-t-0 hover:bg-hover active:bg-active"
+            // py-[13px]: whole-row click target, not SettingsRow's shape.
+            className="flex w-full items-center justify-between gap-4 px-3.5 py-[13px] text-left"
           >
             <div className="min-w-0">
               <div className="truncate text-ui font-medium text-foreground">{row.name}</div>
@@ -350,7 +356,7 @@ function UsageMiniStat({
       {percent !== null ? (
         <ProgressBar
           value={percent}
-          className="mt-1 h-1 overflow-hidden rounded-full bg-foreground/10"
+          className="mt-1 h-1 overflow-hidden rounded-full bg-surface-control"
           indicatorClassName="h-full rounded-full bg-primary/70"
           aria-label={`${label} of cap`}
         />
@@ -373,13 +379,13 @@ function UserDrillDown({
   onBack: () => void;
 }) {
   return (
-    <SettingsSection>
+    <SettingsSection surface="plain">
       <Button
         type="button"
-        variant="unstyled"
+        variant="ghost"
         size="unstyled"
         onClick={onBack}
-        className="mb-3 inline-flex h-7 items-center gap-1.5 rounded-md px-0 text-ui text-muted-foreground transition-colors hover:text-foreground"
+        className="mb-3 inline-flex h-7 items-center gap-1.5 rounded-md px-0 text-ui"
       >
         <ArrowLeft className="icon-paired" />
         Back to usage by member

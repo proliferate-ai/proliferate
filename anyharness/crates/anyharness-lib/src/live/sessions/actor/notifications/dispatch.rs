@@ -118,10 +118,16 @@ pub(in crate::live::sessions::actor) async fn apply_actor_update(
             }
         }
         ActorBoundUpdate::SessionInfo { title, updated_at } => {
-            if let Some(ref t) = title {
+            // Harness-provided titles are fallback-only: a title already
+            // assigned (user rename or generated summary) must survive
+            // turn-end harness info updates, so persist and emit the harness
+            // title only when the session has none yet.
+            let title = title.filter(|t| {
                 let now = chrono::Utc::now().to_rfc3339();
-                let _ = session_store.update_title(session_id, t, &now);
-            }
+                session_store
+                    .update_title_if_absent(session_id, t, &now)
+                    .unwrap_or(false)
+            });
 
             let payload = SessionInfoUpdatePayload { title, updated_at };
             let mut sink = event_sink.lock().await;

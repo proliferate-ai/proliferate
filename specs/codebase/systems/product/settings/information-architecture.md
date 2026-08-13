@@ -37,7 +37,7 @@ In scope:
 - Reusable UI primitives every feature spec consumes:
   `CredentialPicker`, `AgentRunConfigSelector`, `RuntimeReadinessPanel`,
   `PublicCapabilityList`, `WhereUsedDrawer`. Existing primitives
-  (`SettingsPageHeader`, `SettingsSection`, `SettingsRow`) are
+  (`PageHeader` with `variant="flat"`, `SettingsSection`, `SettingsRow`) are
   preserved.
 - Shared product vocabulary: workspace type, origin, exposure, access,
   sandbox type. Every spec that mentions these uses the same names.
@@ -89,9 +89,9 @@ Three rules every settings page follows:
    No raw client construction inside settings panes.
    (frontend/guides/access.md)
 
-3. Page chrome uses SettingsPageHeader + SettingsSection + SettingsRow
-   (from #product/components/patterns). New pages do not invent
-   new wrappers.
+3. Page chrome uses `PageHeader` (`variant="flat"`) + SettingsSection +
+   SettingsRow (PageHeader from #product/primitives/patterns, the rest from
+   the settings kit). New pages do not invent new wrappers.
 
 4. The Agents `Local` surface remains useful without a Cloud session. Its
    model list comes directly from the local AnyHarness launch catalog; Cloud
@@ -280,24 +280,31 @@ subfolders:
 > selection/vault contracts owned by
 > [`AGENT_AUTH.md`](../../../../FEATURE_DOCS/AGENT_AUTH.md).
 
-**Existing shared primitives**: page chrome lives in
-`apps/packages/product-client/src/components/patterns/`:
+**Existing shared primitives**: page chrome lives in the settings kit at
+`apps/packages/product-client/src/primitives/patterns/settings/`, plus
+`PageHeader.tsx` (`variant="flat"`) in
+`apps/packages/product-client/src/primitives/patterns/`:
 
 ```text
-SettingsPageHeader.tsx    title + description + action slot
-SettingsSection.tsx       grouped rows with heading
-SettingsRow.tsx           label + control row
-SettingsEyebrow.tsx       group heading style (sidebar + panes)
+PageHeader.tsx            title + description + action slot (variant="flat")
+SettingsSection.tsx       muted label (or emphasized title) over a wash card of rows
+SettingsRow.tsx           in-card label + control row, no self-divider
 SettingsScopeTabs.tsx     horizontal underline scope switcher
 SettingsEmptyState.tsx
 ```
+
+> Shipped correction: `SettingsEyebrow.tsx` (group heading style) was
+> deleted; `SettingsSection` renders its own label now. The wash card itself
+> is `SettingsGroup.tsx`, a separate component one tier down at
+> `apps/packages/product-client/src/primitives/patterns/settings/SettingsGroup.tsx`
+> (it is domain-unaware, so it lives outside this directory).
 
 ProductClient's `src/components/settings/shared/`
 keeps `AdminOnlyPlaceholder`, `AgentHarnessConfigComposer`, and
 `RunCommandHelp`.
 Layout helpers use concrete ProductClient pattern imports
 (`#product/primitives/patterns/AutoHideScrollArea` and
-`#product/primitives/patterns/SidebarNavRow`); general controls use concrete
+`#product/primitives/patterns/sidebar/SidebarNavRow`); general controls use concrete
 root imports such as `#product/primitives/Button`,
 `#product/primitives/Input`, and `#product/primitives/Switch`.
 
@@ -837,12 +844,22 @@ in copy/settings/vocabulary-copy.ts keys.
 Existing (kept; no changes):
 
 ```text
-SettingsPageHeader          apps/packages/product-client/src/components/patterns/SettingsPageHeader.tsx
-SettingsSection             apps/packages/product-client/src/components/patterns/SettingsSection.tsx
-SettingsRow                 apps/packages/product-client/src/components/patterns/SettingsRow.tsx
-SettingsEyebrow / SettingsScopeTabs / SettingsEmptyState
-                            same directory
+PageHeader                  apps/packages/product-client/src/primitives/patterns/PageHeader.tsx
+SettingsSection             apps/packages/product-client/src/primitives/patterns/settings/SettingsSection.tsx
+SettingsRow                 apps/packages/product-client/src/primitives/patterns/settings/SettingsRow.tsx
+SettingsScopeTabs / SettingsEmptyState
+                            same directory as SettingsSection / SettingsRow
 ```
+
+> Shipped correction: `SettingsEyebrow.tsx` was deleted by the settings
+> "wash" restyle. `SettingsSection` now renders its own sentence-case muted
+> label directly (or a `titleWeight="emphasized"` variant) over a new
+> `SettingsGroup` wash card
+> (`apps/packages/product-client/src/primitives/patterns/settings/SettingsGroup.tsx`),
+> which owns the inset hairline divider between rows; `SettingsRow` no
+> longer draws its own border. `SettingsSection` and `SettingsRow` above are
+> restyled by the same change; their contracts (props, ownership) are
+> unchanged.
 
 New (spec 03 introduces; feature specs consume):
 
@@ -1111,7 +1128,7 @@ apps/packages/product-client/src/lib/domain/settings/navigation-presentation.ts
     scope<->section mapping, PARKED_SECTION_SCOPES
   - adminOnly metadata on Org-scope rows
 
-apps/packages/product-client/src/components/patterns/SettingsScopeTabs.tsx
+apps/packages/product-client/src/primitives/patterns/settings/SettingsScopeTabs.tsx
   - horizontal underline scope switcher consumed by SettingsScreen
 
 apps/packages/product-client/src/components/settings/sidebar/SettingsSidebar.tsx

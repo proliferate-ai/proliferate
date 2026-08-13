@@ -13,12 +13,11 @@ import { resolveSessionCreationModeId } from "#product/lib/domain/sessions/creat
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import {
-  createEmptySessionRecord,
+  buildOptimisticSessionCreationRecord,
   getSessionRecord,
   putSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use-workspace-surface-lookup";
@@ -150,22 +149,15 @@ export function useSessionCreationActions() {
       targetSessionId: pendingSessionId,
     });
 
-    const optimisticRecord: SessionRuntimeRecord = {
-      ...createEmptySessionRecord(pendingSessionId, options.agentKind, {
-        workspaceId,
-        materializedSessionId: null,
-        modelId: options.modelId,
-        requestedModelId: options.modelId,
-        modeId: resolvedModeId ?? null,
-        title: existingProjectedRecord?.title ?? null,
-        hasAttemptedPrompt: existingProjectedRecord?.hasAttemptedPrompt ?? false,
-        optimisticPrompt: null,
-        pendingConfigChanges: {},
-        sessionRelationship: { kind: "root" },
-      }),
-      status: "starting",
-      transcriptHydrated: true,
-    };
+    const optimisticRecord = buildOptimisticSessionCreationRecord({
+      agentKind: options.agentKind,
+      existingProjectedRecord,
+      modelId: options.modelId,
+      pendingSessionId,
+      promptText: hasPrompt ? options.text : null,
+      resolvedModeId: resolvedModeId ?? null,
+      workspaceId,
+    });
 
     putSessionRecord(optimisticRecord);
     activateSession(pendingSessionId);

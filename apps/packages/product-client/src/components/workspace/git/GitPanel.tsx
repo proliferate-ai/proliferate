@@ -46,19 +46,42 @@ export function GitPanel() {
   return <GitPanelContent diffReviewMeasurement={diffReviewMeasurement} />;
 }
 
+/**
+ * Reshaped, not converted (spec §2.1 site 16 / §6 acceptance criteria): the
+ * loaded review document is a flat list of sections (`GitPanelReviewSections`
+ * — `flex flex-col gap-0.5`, no section boxes), but this skeleton used to draw
+ * each placeholder as a bordered, rounded, tinted card
+ * (`overflow-clip rounded-lg bg-[var(--color-diff-panel-surface)]`) — a card
+ * look the shipped state doesn't have. Deleting that card wrapper is not a
+ * `Card` conversion (this is a loading placeholder, not a bordered/tinted
+ * container in the C1 sense); it's matching `GitReviewFileSectionShell`'s own
+ * flat, sticky-header-over-body anatomy so the loading and loaded states
+ * agree.
+ */
 function GitPanelLoadingSkeleton() {
   return (
     <div
-      className="flex flex-col gap-1.5 px-2 pt-2"
+      className="flex flex-col gap-0.5 px-2 pt-2"
       role="status"
       aria-label="Loading changes"
     >
       {[0, 1, 2].map((index) => (
         <div
           key={index}
-          className="overflow-clip rounded-lg bg-[var(--color-diff-panel-surface)]"
+          // C4: the review document's base surface — same token
+          // `GitReviewFileSectionShell` paints its section wrapper with, kept
+          // here as a raw var() for the identical reason: the diff body
+          // beneath composites its own token stack against this exact
+          // custom property.
+          className="bg-[var(--color-background)]"
         >
-          <div className="flex min-h-9 items-center gap-2.5 bg-[var(--color-diff-sidebar-file-header-surface)] px-5 py-1.5">
+          <div
+            // C4: the same near-opaque color-mix over the same diff-header
+            // surface token `GitReviewFileSectionShell`'s sticky header uses
+            // — matching it here keeps the loading placeholder from flashing
+            // a different header tint than the row it resolves into.
+            className="flex min-h-9 items-center gap-2.5 bg-[color-mix(in_srgb,var(--color-diff-sidebar-file-header-surface)_97%,transparent)] px-5 py-1.5"
+          >
             <SkeletonBlock
               className="h-3 w-40 bg-surface-control"
               style={shimmerDelay(index)}

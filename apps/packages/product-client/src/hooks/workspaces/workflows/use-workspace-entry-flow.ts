@@ -187,6 +187,7 @@ export function useWorkspaceEntryFlow() {
     setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
       workspaceId,
       source: entry.source,
+      receiptClientSessionId: projectedActiveSessionId,
       setupScript: entry.setupScript,
       baseBranchName: entry.baseBranchName,
     }));

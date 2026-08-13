@@ -7,6 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { StatusDot } from "#product/primitives/StatusDot";
 import { POPOVER_SURFACE_CLASS } from "#product/primitives/PopoverButton";
 import { ChevronRight } from "#product/primitives/icons/core";
 import { recordSubagentChildRelationshipHint } from "#product/hooks/sessions/workflows/session-relationship-hints";
@@ -263,7 +264,7 @@ function renderSubagentTrailing(child: HeaderSubagentChildRow): ReactNode {
     return <span className="text-ui text-foreground">Working</span>;
   }
   if (child.isActive) {
-    return <span className="icon-status rounded-full bg-foreground/70 [font-size:var(--text-sidebar-row)]" />;
+    return <StatusDot tone="muted" />;
   }
   return <span className="text-ui-sm leading-4 text-muted-foreground">{child.statusLabel}</span>;
 }

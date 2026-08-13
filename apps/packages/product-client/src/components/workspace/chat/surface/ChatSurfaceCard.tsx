@@ -26,6 +26,13 @@ export function ChatSurfaceCard({
       style={{ paddingBottom: bottomInsetPx }}
     >
       <div className={`${CHAT_COLUMN_CLASSNAME} flex min-h-full items-center py-10`}>
+        {/*
+          Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review,
+          check 1): `bg-card/95` lets the transcript ground read faintly through
+          this empty-state panel. `Card`'s `opaque` fill is flat `bg-card` and
+          its `tint` fill is borderless, so neither expresses it. Needs a ruling
+          on `Card`'s fills rather than a call-site repaint.
+        */}
         <div className="w-full rounded-lg border border-border/70 bg-card/95 px-8 py-10 text-center">
           {badge && (
             <Badge className="rounded-full px-2.5 py-0.5">

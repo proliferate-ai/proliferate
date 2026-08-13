@@ -353,7 +353,7 @@ function CompletedArtifactCards({
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       {items.map((item) => (
         <CoworkArtifactTurnCard
           key={`turn-artifact-${item.itemId}`}

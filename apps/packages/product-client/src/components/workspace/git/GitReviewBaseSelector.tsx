@@ -1,3 +1,4 @@
+import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { Check, ChevronDown } from "#product/primitives/icons/core";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
@@ -6,12 +7,10 @@ import {
   GIT_PANEL_MODE_OPTIONS,
   type GitPanelMode,
 } from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import { GIT_REVIEW_SELECTOR_TRIGGER_CLASS } from "#product/components/workspace/git/GitReviewSelectorChrome";
 
 /** Selectable review targets: working tree / branch / last turn. */
 type GitReviewTargetMode = "working_tree_composite" | "branch" | "last_turn";
-
-const GIT_REVIEW_SELECTOR_TRIGGER_CLASS =
-  "h-6 min-w-0 gap-1 rounded-lg border border-transparent bg-transparent px-1.5 py-0 text-ui text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
 
 export function GitReviewBaseSelector({
   activeMode,
@@ -33,18 +32,23 @@ export function GitReviewBaseSelector({
           type="button"
           variant="ghost"
           size="sm"
+          // C4: caps the trigger label at 11rem so a long mode label never
+          // crowds the review header's other chrome.
           className={`${GIT_REVIEW_SELECTOR_TRIGGER_CLASS} w-fit max-w-[11rem] shrink-0`}
         >
           <span className="min-w-0 truncate text-sidebar-foreground">{activeOption.label}</span>
           {changedCount > 0 && (
-            <span className="inline-flex shrink-0 items-center rounded-sm bg-muted px-1 py-0.5 text-ui-sm font-medium leading-none text-muted-foreground tabular-nums">
-              {changedCount}
+            <span className="shrink-0">
+              <Badge size="micro" className="tabular-nums">{changedCount}</Badge>
             </span>
           )}
           <ChevronDown className="icon-compact shrink-0 text-sidebar-muted-foreground" />
         </Button>
       }
       align="start"
+      // C4: the option list's minimum width — narrower than the trigger's
+      // own max-width isn't possible here, this is the floor for the
+      // longest mode label to read comfortably.
       className={`min-w-[8.5rem] ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
@@ -58,9 +62,7 @@ export function GitReviewBaseSelector({
                 trailing={(
                   <span className="flex shrink-0 items-center gap-1.5">
                     {selected && changedCount > 0 && (
-                      <span className="inline-flex items-center rounded-sm bg-muted px-1 py-0.5 text-ui-sm font-medium leading-none text-muted-foreground tabular-nums">
-                        {changedCount}
-                      </span>
+                      <Badge size="micro" className="tabular-nums">{changedCount}</Badge>
                     )}
                     <Check
                       className={`icon-paired ${selected ? "" : "opacity-0"}`}

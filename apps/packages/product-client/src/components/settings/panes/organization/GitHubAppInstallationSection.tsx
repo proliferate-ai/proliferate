@@ -1,7 +1,7 @@
-import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 
 export function GitHubAppInstallationSection({
   loading,
@@ -35,20 +35,14 @@ export function GitHubAppInstallationSection({
 
   return (
     <SettingsSection title="GitHub App">
-      <div className="overflow-clip rounded-lg bg-foreground/5">
-        <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <ProviderBrandIcon
-              provider="github"
-              className="icon-large shrink-0 text-muted-foreground"
-            />
-            <div className="min-w-0">
-              <div className="font-medium text-foreground">GitHub App</div>
-              <div className="truncate text-muted-foreground">{detail}</div>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Badge tone="neutral">{statusLabel}</Badge>
+      <RosterRow
+        density="comfortable"
+        leading={<ProviderBrandIcon provider="github" className="icon-large text-foreground" />}
+        title="GitHub App"
+        secondary={detail}
+        trailing={(
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="min-w-0 truncate text-ui-sm text-muted-foreground">{statusLabel}</span>
             {canManage ? (
               <Button
                 type="button"
@@ -56,6 +50,7 @@ export function GitHubAppInstallationSection({
                 size="sm"
                 loading={installing}
                 disabled={installing}
+                className="shrink-0"
                 onClick={() => {
                   void (installed ? onManage() : onInstall());
                 }}
@@ -64,8 +59,8 @@ export function GitHubAppInstallationSection({
               </Button>
             ) : null}
           </div>
-        </div>
-      </div>
+        )}
+      />
     </SettingsSection>
   );
 }

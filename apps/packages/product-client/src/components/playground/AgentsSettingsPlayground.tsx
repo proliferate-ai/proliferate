@@ -5,7 +5,7 @@ import { ProductHostProvider, useProductHost } from "@proliferate/product-client
 import { Button } from "#product/primitives/Button";
 import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Cloud, Laptop } from "lucide-react";
+import { CloudIcon, Laptop } from "#product/primitives/icons/platform";
 import { ApiKeysPane } from "#product/components/settings/panes/agents/api-keys/ApiKeysPane";
 import { HarnessUpdateToastPresenter } from "#product/components/feedback/HarnessUpdateToastPresenter";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
@@ -75,7 +75,7 @@ export function AgentsSettingsPlayground() {
           ariaLabel="Agent authentication surface"
           value={surface}
           items={[
-            { id: "cloud", label: "Cloud", icon: <Cloud /> },
+            { id: "cloud", label: "Cloud", icon: <CloudIcon /> },
             { id: "local", label: "Local", icon: <Laptop /> },
           ]}
           onChange={setSurface}

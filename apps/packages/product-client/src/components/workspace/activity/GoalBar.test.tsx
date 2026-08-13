@@ -108,7 +108,7 @@ describe("GoalBar chips", () => {
     expect(screen.queryByText("2 loops")).toBeNull();
     expect(container.querySelector("[data-session-goal-bar] > div")?.className.split(" "))
       .toContain("gap-1.5");
-    expect(container.querySelector("svg.lucide-target")?.getAttribute("class")?.split(" "))
+    expect(container.querySelector("[data-session-goal-bar] > div > svg")?.getAttribute("class")?.split(" "))
       .toContain("mt-[0.175em]");
   });
 

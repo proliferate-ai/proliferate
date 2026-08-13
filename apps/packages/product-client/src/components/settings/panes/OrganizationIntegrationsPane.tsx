@@ -3,10 +3,11 @@ import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Switch } from "#product/primitives/Switch";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import type { AdminIntegrationDefinition } from "@proliferate/cloud-sdk/client/integrations";
 import { AddCustomIntegrationDialog } from "#product/components/settings/panes/integrations/AddCustomIntegrationDialog";
 import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
@@ -80,8 +81,9 @@ export function OrganizationIntegrationsPane() {
   );
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Integrations"
         description="Control which integrations members of your organization can connect and use."
         action={
@@ -125,23 +127,35 @@ export function OrganizationIntegrationsPane() {
       ) : (
         <SettingsSection title="Available integrations">
           {showSearch ? (
-            <Input
-              aria-label="Search integrations"
-              className="mb-2 h-8 px-2"
-              placeholder="Search integrations"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
+            <div className="px-3.5 pt-3.5 pb-3.5">
+              <Input
+                aria-label="Search integrations"
+                className="h-8 px-2"
+                placeholder="Search integrations"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </div>
           ) : null}
           {filteredDefinitions.length === 0 ? (
-            <p className="px-1 py-3 text-ui-sm text-muted-foreground">No integrations found</p>
+            <p className="px-3.5 py-3 text-ui-sm text-muted-foreground">No integrations found</p>
           ) : null}
           {filteredDefinitions.map((definition) => {
             const enabledView = adminIntegrationEnabledView(definition);
             return (
+              // Contradiction, recorded rather than re-derived: the settings
+              // slice spec paired this row with `IntegrationRow`'s RosterRow
+              // contract, but this pane never renders `IntegrationRow` — these
+              // are the admin catalog's own rows, a five-column table (name /
+              // source / auth kind / provenance / switch) whose columns must
+              // stay aligned across rows. `RosterRow` has a single trailing
+              // slot and no cross-row column mechanism (the same reason
+              // `OrganizationMembersList`'s table deferred), and `SettingsRow`
+              // is label + control. Neither fits without breaking alignment,
+              // so the grid stays until a table-row pattern exists.
               <div
                 key={definition.definitionId}
-                className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,10rem)_auto] items-center gap-3 border-b border-border py-3 last:border-b-0"
+                className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,10rem)_auto] items-center gap-3 px-3.5 py-[13px]"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <IntegrationIcon namespace={definition.namespace} className="icon-display [font-size:var(--text-sidebar-brand)]" />
@@ -187,6 +201,6 @@ export function OrganizationIntegrationsPane() {
         onClose={() => setAddDialogOpen(false)}
         onSubmit={handleCreate}
       />
-    </section>
+    </SettingsPageBody>
   );
 }

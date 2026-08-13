@@ -89,6 +89,12 @@ export function TranscriptPatchTurnDiffPanel({
   );
 
   return (
+    // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review, check 1),
+    // identical to TurnDiffPanel's: the `--color-diff-panel-surface` fill is
+    // outside `Card`'s two-fill surface axis, and the two custom properties are
+    // the panel's row-padding contract (a recorded cause under check 4). The
+    // two files stay separate on purpose — surfaces merge only after pattern
+    // adoption has hollowed them out, which is a later slice's evidence.
     <div className="mb-2 flex max-w-full flex-col overflow-hidden rounded-lg border border-border bg-diff-panel-surface text-chat text-foreground [--turn-diff-row-padding-x:0.75rem] [--turn-diff-row-padding-y:0.25rem]">
       <ChatDiffLineWrapContextMenu trigger={header} />
       {!singleFile && (

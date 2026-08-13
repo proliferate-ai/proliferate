@@ -107,7 +107,9 @@ export function useSessionSummaryActions() {
         modelId: shouldApplyConfigFields ? patch.modelId : existing.modelId,
         requestedModelId: patch.requestedModelId,
         modeId: shouldApplyConfigFields ? patch.modeId : existing.modeId,
-        title: patch.title,
+        // A null summary title means "not titled yet", never "clear": keep
+        // the optimistic prompt-derived title until an assigned title lands.
+        ...(patch.title != null ? { title: patch.title } : {}),
         actionCapabilities: patch.actionCapabilities,
         liveConfig: effectiveLiveConfig,
         executionSummary: patch.executionSummary,

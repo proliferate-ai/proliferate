@@ -18,8 +18,9 @@
  * the item count in `--faint`. An optional dashed "Create" row closes the
  * list with an optional creation-shortcut hint.
  */
-import { ChevronRight, FolderPlus, GitPullRequest } from "lucide-react";
-import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
+import { ChevronRight } from "#product/primitives/icons/core";
+import { FolderPlus } from "#product/primitives/icons/workspace";
+import { GitBranchIcon, GitPullRequest } from "#product/primitives/icons/workspace-git";
 import { MessageSquare } from "#product/primitives/icons/product";
 import type { ReactNode } from "react";
 import { Badge } from "#product/primitives/Badge";
@@ -56,7 +57,7 @@ export interface WorkspacesCommandItemView {
   attention?: "conflicts" | null;
   /** "↑2 ↓1" — present only when ahead or behind > 0; hidden when selected. */
   aheadBehindLabel?: string | null;
-  /** "#805" — rendered after the PR dot; included in the filter value. */
+  /** "#805" — rendered after the PR dot. */
   prNumberLabel?: string | null;
   /**
    * Session count for the workspace. Rendered as glyph + number in the
@@ -94,7 +95,7 @@ export interface WorkspacesCommandListProps {
 
 export function WorkspacesCommandList({
   groups,
-  filterPlaceholder = "Filter workspaces...",
+  filterPlaceholder = "Filter by name or branch...",
   emptyLabel = "No workspaces yet",
   filterRowActions = null,
   onWorkspaceSelect,
@@ -106,6 +107,14 @@ export function WorkspacesCommandList({
     <Command
       className={twMerge("bg-transparent", className)}
       label="Workspaces"
+      // Match only workspace name / branch (item keywords), never the id
+      // value; a binary score keeps the recency ordering intact.
+      filter={(_value, search, keywords) =>
+        keywords?.some((keyword) =>
+          keyword.toLowerCase().includes(search.toLowerCase()),
+        )
+          ? 1
+          : 0}
     >
       <div className="flex shrink-0 items-center gap-2 border-b border-border">
         <CommandInput
@@ -178,7 +187,8 @@ function WorkspaceCommandRow({
 
   return (
     <CommandItem
-      value={`${item.id} ${item.title} ${branch ?? ""} ${meta ?? ""} ${item.prNumberLabel ?? ""} ${placementLabel ?? ""}`.trim()}
+      value={item.id}
+      keywords={branch ? [item.title, branch] : [item.title]}
       onSelect={onSelect ? () => onSelect(item.id) : undefined}
       className="min-h-9"
     >

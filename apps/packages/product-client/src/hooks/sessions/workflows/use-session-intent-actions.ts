@@ -19,6 +19,7 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
+import { promptFallbackTitle } from "#product/lib/domain/sessions/title";
 import { getSessionRecord, patchSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
@@ -104,7 +105,16 @@ export function useSessionIntentActions() {
       });
     };
     enqueuePrompt();
-    patchSessionRecord(sessionId, { hasAttemptedPrompt: true });
+    // First prompt into an untitled session: show the prompt text as the tab
+    // title from this very frame. The runtime persists the same fallback on
+    // acceptance and the generated summary replaces it once available.
+    const optimisticTitle = promptFallbackTitle(text);
+    const shouldTitleFromPrompt =
+      Boolean(optimisticTitle) && !slot?.title?.trim() && !slot?.lastPromptAt;
+    patchSessionRecord(sessionId, {
+      hasAttemptedPrompt: true,
+      ...(shouldTitleFromPrompt ? { title: optimisticTitle } : {}),
+    });
     logLatency("session.intent.prompt.enqueue", {
       clientPromptId,
       clientSessionId: sessionId,

@@ -1,5 +1,5 @@
 import { twMerge } from "#product/primitives/utils/tw-merge";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink } from "#product/primitives/icons/core";
 
 import { Button } from "#product/primitives/Button";
 import type { WorkspaceInventoryItemView } from "#product/domain/workspaces/inventory";

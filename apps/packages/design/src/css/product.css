@@ -115,6 +115,16 @@ body {
   caret-color: var(--color-text-caret);
 }
 
+/* Current macOS WebKit paints native insertion carets at two CSS pixels, while
+   native placeholders otherwise begin at that same origin. Offset only the
+   focused placeholder: entered text and its caret keep their established
+   alignment. The base layer lets a specialized control override this contract. */
+@layer base {
+  :is(input, textarea):focus::placeholder {
+    text-indent: 2px;
+  }
+}
+
 :is(input, textarea, [contenteditable]:not([contenteditable="false"]), [data-ui-thin-caret])::selection {
   background-color: var(--color-text-selection);
   color: inherit;
@@ -1573,12 +1583,6 @@ body {
 /* 4.5s total: trot in (0-30%), pause & celebrate (30-70%), trot out (70-100%) */
 /* Arms down during trot, raise when paused in center, stay up for exit */
 /* Trophy pops in after arms are up, stays for the hold, exits with the trot */
-/* ---- Chat view text selection ---- */
-.chat-selection-root ::selection {
-  background-color: var(--color-text-selection);
-  color: inherit;
-}
-
 .workspace-shell-tab {
   height: var(--workspace-shell-tab-height);
 }

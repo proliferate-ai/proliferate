@@ -1,9 +1,18 @@
+import { useState } from "react";
+
 import type {
   WorkflowRun,
   WorkflowRunPresentation,
+  WorkflowRunTone,
 } from "#product/domain/workflows/run-presentation";
+import { workflowRunStatusDotTone } from "#product/components/workflows/workflow-run-status-dot";
 import { Button } from "#product/primitives/Button";
-import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
+import { StatusDot } from "#product/primitives/StatusDot";
+import { Card } from "#product/primitives/patterns/Card";
+import { Disclosure } from "#product/primitives/patterns/Disclosure";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
+import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 
 export interface WorkflowRunDetailProps {
   run: WorkflowRun;
@@ -33,6 +42,7 @@ export function WorkflowRunDetail({
   onOpenSession,
 }: WorkflowRunDetailProps) {
   const managed = run.managedExecution;
+  const [inputsOpen, setInputsOpen] = useState(false);
   return (
     <ProductPageShell
       title={run.title}
@@ -69,72 +79,84 @@ export function WorkflowRunDetail({
           <StatusCard label="Freshness" value={presentation.freshness.label} tone={presentation.freshness.tone} />
         </section>
 
-        {presentation.notice ? <p className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-ui text-warning-foreground" role="status">{presentation.notice}</p> : null}
+        {presentation.notice ? <NoticeBanner tone="warning">{presentation.notice}</NoticeBanner> : null}
         {presentation.canStartDelivery && !deliveryCapabilityEnabled ? (
-          <p className="rounded-md border border-border bg-surface-raised px-3 py-2 text-ui text-muted-foreground" role="status">
+          <NoticeBanner tone="neutral">
             Managed Workflow delivery is not enabled on this server. This prepared run remains available.
-          </p>
+          </NoticeBanner>
         ) : null}
-        {presentation.failure ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-ui text-destructive" role="alert">{presentation.failure}</p> : null}
+        {presentation.failure ? <NoticeBanner tone="destructive">{presentation.failure}</NoticeBanner> : null}
         {actionError ? <p className="text-ui text-destructive" role="alert">{actionError}</p> : null}
         {openSessionUnavailable ? <p className="text-ui text-muted-foreground" role="status">{openSessionUnavailable}</p> : null}
 
-        <section className="rounded-lg border border-border bg-card p-4">
-          <h2 className="text-heading font-medium text-foreground">Run details</h2>
-          <dl className="mt-3 grid gap-3 text-ui-sm sm:grid-cols-2">
+        <Card
+          as="section"
+          surface="opaque"
+          header={<h2 className="px-4 py-3 text-heading font-medium text-foreground">Run details</h2>}
+        >
+          <dl className="grid gap-3 p-4 text-ui-sm sm:grid-cols-2">
             <Detail label="Created" value={formatDateTime(run.createdAt)} />
             <Detail label="Placement" value={run.placement.kind === "scratch" ? "Scratch workspace" : "Repository worktree"} />
             <Detail label="Run ID" value={run.id} />
             <Detail label="Last observation" value={managed.freshness.latestObservedAt ? formatDateTime(managed.freshness.latestObservedAt) : "No observation yet"} />
           </dl>
-        </section>
+        </Card>
 
-        <details className="rounded-lg border border-border bg-card p-4">
-          <summary className="cursor-pointer text-heading font-medium text-foreground">
-            Inputs ({Object.keys(run.arguments).length})
-          </summary>
-          <dl className="mt-3 space-y-2" data-telemetry-mask>
-            {Object.entries(run.arguments).map(([name, value]) => (
-              <div key={name} className="flex items-start justify-between gap-4 text-ui-sm">
-                <dt className="font-mono text-muted-foreground">{name}</dt>
-                <dd className="max-w-[70%] break-words text-right text-foreground">{String(value)}</dd>
-              </div>
-            ))}
-          </dl>
-        </details>
+        <Card as="section" surface="opaque">
+          <div className="p-4">
+            <Disclosure
+              open={inputsOpen}
+              onOpenChange={setInputsOpen}
+              title={`Inputs (${Object.keys(run.arguments).length})`}
+              chevronSide="trailing"
+            >
+              <dl className="space-y-2 pt-2" data-telemetry-mask>
+                {Object.entries(run.arguments).map(([name, value]) => (
+                  <div key={name} className="flex items-start justify-between gap-4 text-ui-sm">
+                    <dt className="font-mono text-muted-foreground">{name}</dt>
+                    {/* C4: mirrors the two-column key/value layout above it, keeps values from crowding out long keys. */}
+                    <dd className="max-w-[70%] break-words text-right text-foreground">{String(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </Disclosure>
+          </div>
+        </Card>
 
-        <section className="rounded-lg border border-border bg-card p-4">
-          <h2 className="text-heading font-medium text-foreground">Steps</h2>
-          {managed.execution?.steps.length ? managed.execution.steps.map((step) => (
-            <div key={step.index} className="mt-3 flex items-center justify-between rounded-md border border-border px-3 py-2 text-body">
-              <span>Prompt</span>
-              <span className="text-muted-foreground">{step.status}</span>
+        <Card
+          as="section"
+          surface="opaque"
+          header={<h2 className="px-4 py-3 text-heading font-medium text-foreground">Steps</h2>}
+        >
+          {managed.execution?.steps.length ? (
+            <div className="flex flex-col gap-0.5 p-2">
+              {managed.execution.steps.map((step) => (
+                <RosterRow key={step.index} density="comfortable" title="Prompt" trailing={step.status} />
+              ))}
             </div>
-          )) : <p className="mt-2 text-ui-sm text-muted-foreground">Waiting for runtime acceptance.</p>}
-        </section>
+          ) : (
+            <p className="p-4 text-ui-sm text-muted-foreground">Waiting for runtime acceptance.</p>
+          )}
+        </Card>
       </div>
     </ProductPageShell>
   );
 }
 
-function StatusCard({ label, value, tone }: { label: string; value: string; tone: string }) {
+function StatusCard({ label, value, tone }: { label: string; value: string; tone: WorkflowRunTone }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <Card surface="opaque" className="p-3">
       <p className="text-ui-sm uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-body-emphasis font-medium ${toneClass(tone)}`}>{value}</p>
-    </div>
+      <p className="mt-1 flex items-center gap-1.5 text-body-emphasis font-medium text-foreground">
+        <StatusDot tone={workflowRunStatusDotTone(tone)} />
+        {value}
+      </p>
+    </Card>
   );
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
   return <div><dt className="text-muted-foreground">{label}</dt><dd className="mt-0.5 break-all text-foreground">{value}</dd></div>;
-}
-
-function toneClass(tone: string): string {
-  if (tone === "danger") return "text-destructive";
-  if (tone === "warning") return "text-warning-foreground";
-  if (tone === "success") return "text-success";
-  return "text-foreground";
 }
 
 function formatDateTime(value: string): string {

@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { Button } from "#product/primitives/Button";
 import { Check } from "#product/primitives/icons/core";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import type { OrganizationInvitationRecord } from "#product/lib/domain/organizations/organization-records";
 
 export function CurrentUserInvitationsSection({
@@ -42,27 +42,32 @@ export function CurrentUserInvitationsSection({
   }
 
   return (
-    <SettingsSection
-      title="Pending invitations"
-      description="Join an organization that invited your signed-in email address."
-    >
-      {invitations.map((invitation) => (
-        <SettingsRow
-          key={invitation.id}
-          label={invitation.organizationName ?? "Organization invitation"}
-          description={`${invitation.role} access for ${invitation.email}`}
-        >
-          <Button
-            type="button"
-            variant="secondary"
-            loading={accepting}
-            onClick={() => setAcceptTarget(invitation)}
+    <>
+      <SettingsSection
+        title="Pending invitations"
+        description="Join an organization that invited your signed-in email address."
+      >
+        {invitations.map((invitation) => (
+          <SettingsRow
+            key={invitation.id}
+            label={invitation.organizationName ?? "Organization invitation"}
+            description={`${invitation.role} access for ${invitation.email}`}
           >
-            <Check className="icon-paired" />
-            Accept invitation
-          </Button>
-        </SettingsRow>
-      ))}
+            <Button
+              type="button"
+              variant="secondary"
+              loading={accepting}
+              onClick={() => setAcceptTarget(invitation)}
+            >
+              <Check className="icon-paired" />
+              Accept invitation
+            </Button>
+          </SettingsRow>
+        ))}
+      </SettingsSection>
+      {/* Rendered as a sibling, not a SettingsGroup child: it always mounts one
+          element even while closed, which would otherwise count toward the
+          group's divider interleaving and leave a trailing hairline. */}
       <ConfirmationDialog
         open={acceptTarget !== null}
         title={acceptTarget ? `Join ${acceptTarget.organizationName ?? "organization"}?` : "Join organization?"}
@@ -84,6 +89,6 @@ export function CurrentUserInvitationsSection({
           onAccept(invitationId);
         }}
       />
-    </SettingsSection>
+    </>
   );
 }

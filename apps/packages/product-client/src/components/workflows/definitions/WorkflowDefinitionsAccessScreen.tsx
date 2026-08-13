@@ -1,4 +1,4 @@
-import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
+import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { Button } from "#product/primitives/Button";
 import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";
