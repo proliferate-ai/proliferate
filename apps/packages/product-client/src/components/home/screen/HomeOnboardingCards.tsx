@@ -29,14 +29,13 @@ function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
  * Onboarding card (UX spec §10, owner rev 2026-07-01: cards, not rows):
  * side-by-side tile — page-tone surface, 20px radius, hairline frame,
  * icon row on top with trailing accessories + hover dismiss, then
- * title 13/500 and description 12px muted below. On desktop the hairline
- * ring width divides out --proliferate-window-zoom so the frame always
- * rasterizes at one whole device pixel: WKWebView page zoom drops
- * sub-device-pixel hairlines (outward or inset rings, and even 0.5px/1px
- * borders) to zero on individual edges at fractional zoom factors. The
- * compensation is desktop-scoped because only desktop applies the zoom
- * preference to the page — on web the variable can be non-1 while the
- * page is unzoomed (PRO-117).
+ * title 13/500 and description 12px muted below. The ring utilities are
+ * the Web rendering of the frame; on desktop the unlayered
+ * zoom-stable-hairline-frame rule (desktop.css) repaints it with the
+ * stroke divided by the window zoom, because WKWebView page zoom drops
+ * sub-device-pixel hairlines to zero on individual edges at fractional
+ * zoom factors. Desktop-only by stylesheet: web can hold a non-1 zoom
+ * preference without any page zoom applied (PRO-117).
  */
 function OnboardingCard({
   icon,
@@ -58,7 +57,7 @@ function OnboardingCard({
   selectLabel: string;
 }) {
   return (
-    <div className="group relative flex min-h-26 min-w-0 flex-col rounded-composer bg-background px-4 py-3 text-left shadow-subtle ring-[0.5px] ring-border-heavy transition-colors in-data-[proliferate-client=desktop]:ring-[calc(0.5px/var(--proliferate-window-zoom,1))] hover:bg-hover active:bg-active">
+    <div className="group relative flex min-h-26 min-w-0 flex-col rounded-composer bg-background px-4 py-3 text-left shadow-subtle ring-[0.5px] ring-border-heavy zoom-stable-hairline-frame transition-colors hover:bg-hover active:bg-active">
       {onSelect ? (
         <Button
           type="button"
