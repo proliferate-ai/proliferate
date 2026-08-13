@@ -202,6 +202,8 @@ pub enum WorkspaceOptionsError {
     WorktreeConflict(#[source] WorktreeNameConflictError),
     #[error("worktree owner rejected workspace creation")]
     WorktreeCreate(#[source] CreateWorktreeWorkflowError),
+    #[error("a local workspace already exists for this repository checkout: {0}")]
+    LocalWorkspaceConflict(String),
     #[error("workspace operation failed")]
     Create(#[source] anyhow::Error),
 }
@@ -220,6 +222,7 @@ impl WorkspaceOptionsError {
             Self::Access(_) => "WORKSPACE_ACCESS_DENIED",
             Self::WorktreeConflict(_) => "WORKSPACE_WORKTREE_CONFLICT",
             Self::WorktreeCreate(_) => "WORKSPACE_WORKTREE_CREATE_FAILED",
+            Self::LocalWorkspaceConflict(_) => "WORKSPACE_LOCAL_CONFLICT",
             Self::TaskFailed(_) | Self::Create(_) => "WORKSPACE_OPERATION_FAILED",
         }
     }
@@ -250,6 +253,9 @@ impl WorkspaceOptionsError {
             }
             Self::WorktreeCreate(_) => {
                 "Worktree creation could not use the requested branch and path.".into()
+            }
+            Self::LocalWorkspaceConflict(_) => {
+                "A local workspace already exists for this repository checkout.".into()
             }
             Self::TaskFailed(_) | Self::Create(_) => "Workspace operation failed.".into(),
         }
@@ -381,14 +387,25 @@ impl WorkspaceOptionRuntime {
         let origin = input.origin.clone();
         let creator_context = input.creator_context.clone();
         let resolution: WorkspaceResolution = tokio::task::spawn_blocking(move || {
-            workspaces.create_workspace_with_origin_and_creator_context(
-                &path,
-                origin,
-                Some(creator_context),
-            )
+            // Reject a second local workspace at a checkout an active workspace
+            // already owns: a duplicate record would silently share one working
+            // directory across two sessions. Direct runtime creation keeps its
+            // distinct-local semantics; this gate is agent-facing only.
+            if let Some(existing) = workspaces
+                .find_active_local_workspace(&path)
+                .map_err(WorkspaceOptionsError::Create)?
+            {
+                return Err(WorkspaceOptionsError::LocalWorkspaceConflict(existing.id));
+            }
+            workspaces
+                .create_workspace_with_origin_and_creator_context(
+                    &path,
+                    origin,
+                    Some(creator_context),
+                )
+                .map_err(WorkspaceOptionsError::Create)
         })
-        .await?
-        .map_err(WorkspaceOptionsError::Create)?;
+        .await??;
         Ok(resolution.workspace)
     }
 

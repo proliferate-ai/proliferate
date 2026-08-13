@@ -150,7 +150,11 @@ async fn listed_local_and_worktree_modes_delegate_to_the_existing_workspace_owne
         source_workspace_id: Some(caller.workspace.id.clone()),
         label: None,
     };
-    let local = owner
+    // The caller already owns an active local workspace at this repo checkout,
+    // so an agent-facing local creation at the identical path must conflict
+    // instead of silently inserting a duplicate record that would share one
+    // working directory across two sessions.
+    let local_conflict = owner
         .create_workspace(
             &caller.workspace.id,
             CreateWorkspaceFromOptionsInput {
@@ -163,13 +167,12 @@ async fn listed_local_and_worktree_modes_delegate_to_the_existing_workspace_owne
             },
         )
         .await
-        .expect("create local workspace");
-    assert_eq!(local.workspace.kind, WorkspaceKind::Local);
-    assert_eq!(local.workspace.display_name.as_deref(), Some("Agent local"));
-    assert_eq!(
-        local.workspace.creator_context,
-        Some(creator_context.clone())
-    );
+        .expect_err("duplicate local workspace at the same path must conflict");
+    assert!(matches!(
+        &local_conflict,
+        WorkspaceOptionsError::LocalWorkspaceConflict(existing) if *existing == caller.workspace.id
+    ));
+    assert_eq!(local_conflict.code(), "WORKSPACE_LOCAL_CONFLICT");
 
     let worktree = owner
         .create_workspace(

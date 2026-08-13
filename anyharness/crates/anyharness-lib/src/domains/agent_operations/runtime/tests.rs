@@ -530,20 +530,33 @@ async fn pr2_authorization_preserves_closed_relationship_and_terminal_target_dis
 }
 
 #[tokio::test]
-async fn open_subagents_can_create_workspaces_but_closed_callers_cannot_mutate() {
+async fn subagent_callers_cannot_create_workspaces_but_ordinary_callers_pass_the_gate() {
     let input = crate::domains::agent_operations::model::CreateWorkspaceInput {
         repository_id: "repo-1".to_string(),
         creation_mode: "local".to_string(),
         branch: None,
         display_name: None,
     };
+
     let open = fixture(false);
+    // Ordinary caller clears the capability gate and reaches the catalog layer.
     assert!(matches!(
-        open.create_workspace(&caller(&open, "C"), input.clone())
+        open.create_workspace(&caller(&open, "P"), input.clone())
             .await,
         Err(AgentOperationsError::WorkspaceCatalogsUnavailable)
     ));
 
+    // ADR Ruling 3: an unpromoted (open) subagent cannot call any spawn-style
+    // tool, including create_workspace — it is denied at the capability gate.
+    assert!(matches!(
+        open.create_workspace(&caller(&open, "C"), input.clone()).await,
+        Err(AgentOperationsError::CapabilityDenied {
+            capability: AgentCapability::CreateWorkspace,
+            denial: CapabilityDenial::ParentOnly,
+        })
+    ));
+
+    // A closed caller cannot mutate at all.
     let closed = fixture(true);
     assert!(matches!(
         closed.create_workspace(&caller(&closed, "C"), input).await,

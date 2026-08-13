@@ -34,7 +34,8 @@ pub(super) fn caller_capability(
     if facts.role == AgentRole::Subagent
         && matches!(
             capability,
-            AgentCapability::CreateAgent
+            AgentCapability::CreateWorkspace
+                | AgentCapability::CreateAgent
                 | AgentCapability::CloseSubagent
                 | AgentCapability::OpenSubagent
                 | AgentCapability::PromoteSubagent
@@ -189,6 +190,24 @@ mod tests {
                 Some(CapabilityDenial::SubagentCannotCreateAgent)
             );
         }
+    }
+
+    #[test]
+    fn subagent_cannot_create_workspace() {
+        let caller = CallerFacts {
+            role: AgentRole::Subagent,
+            status: AgentPresentationStatus::Available,
+        };
+        let decision = caller_capability(caller, AgentCapability::CreateWorkspace);
+        assert!(!decision.allowed);
+        assert_eq!(decision.denial, Some(CapabilityDenial::ParentOnly));
+
+        // Negative control: an ordinary caller retains the capability.
+        let ordinary = CallerFacts {
+            role: AgentRole::Ordinary,
+            status: AgentPresentationStatus::Available,
+        };
+        assert!(caller_capability(ordinary, AgentCapability::CreateWorkspace).allowed);
     }
 
     #[test]
