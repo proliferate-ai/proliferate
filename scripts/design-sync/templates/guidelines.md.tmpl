@@ -1,0 +1,53 @@
+# Working agreement
+
+This project is a closed vocabulary synced 1:1 from the Proliferate
+production repo (library-registry@__DS_GIT_SHA__). Every card in
+`components/` is real, current product source, so a design produced here
+is a proposal for real product UI. These rules are the contract:
+
+## 1. Use, don't invent
+
+Build every screen from existing library components. Each card's
+`.prompt.md` gives its purpose and repo import line; each `.d.ts` is the
+exact props contract. Compose primitives rather than writing new ones,
+and prefer the sanctioned pattern for a job over rebuilding that job
+from primitives.
+
+## 2. Declare every deviation
+
+If a design genuinely needs a component that does not exist, you may
+build it inline, but you must end your response with a `NEW COMPONENTS`
+section listing: proposed name, one-line purpose, the library primitives
+it composes, and its props. If you restyled or overrode an existing
+component, list it under `MODIFIED` with what changed and why. Never
+silently fork, restyle, or re-implement a library component.
+
+Anything under `NEW COMPONENTS` or `MODIFIED` is a proposal only: it
+becomes real when engineering lands it in the repo's component registry
+and this library re-syncs.
+
+## 3. Tokens only
+
+Dark-first theme. Use the semantic token utilities from the synced CSS
+(`bg-background`, `text-foreground`, `border-border`, `text-ui-sm`, ...;
+the full tables are in `README.md`). The stock Tailwind palette and type
+ramp are erased in this system: never raw hex, never `text-sm` /
+`bg-slate-500`-style classes. Never colored left-border ownership
+treatments.
+
+## 4. Handoff on request
+
+When asked for a handoff, emit a change manifest: one table per screen,
+one row per component the screen uses.
+
+| Component | Status | Repo import | Notes |
+| --- | --- | --- | --- |
+| `SettingsRow` | existing | `#product/patterns/SettingsRow` | props used |
+| `ArchivePanel` | NEW | (none yet) | purpose, composed primitives, props |
+| `SettingsSection` | MODIFIED | `#product/patterns/SettingsSection` | what changed and why |
+
+Status is exactly one of `existing` / `NEW` / `MODIFIED`. Repo imports
+come from each card's `.prompt.md` import line. Every NEW and MODIFIED
+component must appear; NEW rows must carry purpose, composed primitives,
+and props. This manifest is what engineering agents implement from, so
+it must be exact and complete.
