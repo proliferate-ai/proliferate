@@ -65,9 +65,13 @@ export function TurnMetadata({
           <Button
             key={badge.filename}
             type="button"
-            variant="unstyled"
+            // The pill's ink, hover and pressed states are `Button`'s ghost
+            // variant verbatim, so they are composed rather than restated
+            // (DESIGN_SYSTEM.md § UI-conformance review, check 7). Only the
+            // pill's own frame and layout stay here.
+            variant="ghost"
             size="unstyled"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-chat font-medium text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-chat font-medium transition-colors"
           >
             <FileIcon className="icon-compact [font-size:var(--text-chat)]" />
             <span>{badge.filename}</span>
