@@ -9,11 +9,11 @@ use super::limits::{
     MAX_VERSIONS_PRESENT, RETAINED_RECORD_ARENA_LIMIT_BYTES,
 };
 use super::types::{
-    ConnectionDescriptorV1, ExportManifestV1, ExportPurposeV1, ExportRequestV1,
-    ExportStreamFrameV1, HealthResponseV1, IngestBatchV1, IngestReceiptV1, LifecycleFinalizerV1,
-    LifecyclePhaseV1, PrivacyClassificationV1, ProducerRecordV1, RecordClassV1, RecordsPageV1,
-    RecordsQueryV1, RejectionReasonV1, RssMeasurementProfileV1, TailFrameV1, TerminalOutcomeV1,
-    TokenReferenceKindV1,
+    CollectorAcceptedRecordV1, ConnectionDescriptorV1, ExportManifestV1, ExportPurposeV1,
+    ExportRequestV1, ExportStreamFrameV1, HealthResponseV1, IngestBatchV1, IngestReceiptV1,
+    LifecycleFinalizerV1, LifecyclePhaseV1, PrivacyClassificationV1, ProducerRecordV1,
+    RecordClassV1, RecordsPageV1, RecordsQueryV1, RejectionReasonV1, RssMeasurementProfileV1,
+    TailFrameV1, TerminalOutcomeV1, TokenReferenceKindV1,
 };
 use super::validation_support::*;
 
@@ -173,10 +173,7 @@ pub fn parse_ingest_batch_value(value: &Value) -> Result<IngestBatchV1, Rejectio
         return Err(RejectionReasonV1::BatchTooLarge);
     }
     validate_raw_version(value)?;
-    let raw_records = value
-        .get("records")
-        .and_then(Value::as_array)
-        .ok_or(RejectionReasonV1::InvalidShape)?;
+    let raw_records = raw_array(value, "records")?;
     if raw_records.len() > MAX_BATCH_RECORDS {
         return Err(RejectionReasonV1::BatchTooLarge);
     }
@@ -185,6 +182,21 @@ pub fn parse_ingest_batch_value(value: &Value) -> Result<IngestBatchV1, Rejectio
     }
     let batch: IngestBatchV1 = from_value(value)?;
     Ok(batch)
+}
+
+pub fn parse_collector_accepted_record_value(
+    value: &Value,
+) -> Result<CollectorAcceptedRecordV1, RejectionReasonV1> {
+    parse_producer_record_value(raw_field(value, "record")?)?;
+    let record: CollectorAcceptedRecordV1 = from_value(value)?;
+    validate_accepted_record(&record)?;
+    Ok(record)
+}
+
+pub fn parse_records_query_value(value: &Value) -> Result<RecordsQueryV1, RejectionReasonV1> {
+    let query: RecordsQueryV1 = from_value(value)?;
+    validate_records_query(&query)?;
+    Ok(query)
 }
 
 pub fn validate_records_query(query: &RecordsQueryV1) -> Result<(), RejectionReasonV1> {
@@ -196,6 +208,12 @@ pub fn validate_records_query(query: &RecordsQueryV1) -> Result<(), RejectionRea
     validate_filters(&query.filters)
 }
 
+pub fn parse_ingest_receipt_value(value: &Value) -> Result<IngestReceiptV1, RejectionReasonV1> {
+    let receipt: IngestReceiptV1 = from_value(value)?;
+    validate_ingest_receipt(&receipt)?;
+    Ok(receipt)
+}
+
 pub fn validate_ingest_receipt(receipt: &IngestReceiptV1) -> Result<(), RejectionReasonV1> {
     validate_serializable_safe_integers(receipt)?;
     validate_schema_version(receipt.schema_version)?;
@@ -204,6 +222,23 @@ pub fn validate_ingest_receipt(receipt: &IngestReceiptV1) -> Result<(), Rejectio
         return Err(RejectionReasonV1::LimitExceeded);
     }
     Ok(())
+}
+
+pub fn parse_records_page_value(value: &Value) -> Result<RecordsPageV1, RejectionReasonV1> {
+    let raw_records = raw_array(value, "records")?;
+    if raw_records.len() > usize::from(MAX_PAGE_RECORDS)
+        || raw_array(value, "gaps")?.len() > MAX_CARDINALITY_ENTRIES
+        || raw_array(value, "versions_present")?.len() > MAX_VERSIONS_PRESENT
+    {
+        return Err(RejectionReasonV1::LimitExceeded);
+    }
+    validate_raw_version(value)?;
+    for record in raw_records {
+        parse_collector_accepted_record_value(record)?;
+    }
+    let page: RecordsPageV1 = from_value(value)?;
+    validate_records_page(&page)?;
+    Ok(page)
 }
 
 pub fn validate_records_page(page: &RecordsPageV1) -> Result<(), RejectionReasonV1> {
@@ -227,6 +262,21 @@ pub fn validate_records_page(page: &RecordsPageV1) -> Result<(), RejectionReason
     Ok(())
 }
 
+pub fn parse_tail_frame_value(value: &Value) -> Result<TailFrameV1, RejectionReasonV1> {
+    if raw_frame(value) == Some("records") {
+        let raw_records = raw_array(value, "records")?;
+        if raw_records.len() > MAX_TAIL_FRAME_RECORDS {
+            return Err(RejectionReasonV1::LimitExceeded);
+        }
+        for record in raw_records {
+            parse_collector_accepted_record_value(record)?;
+        }
+    }
+    let frame: TailFrameV1 = from_value(value)?;
+    validate_tail_frame(&frame)?;
+    Ok(frame)
+}
+
 pub fn validate_tail_frame(frame: &TailFrameV1) -> Result<(), RejectionReasonV1> {
     validate_serializable_safe_integers(frame)?;
     match frame {
@@ -242,6 +292,12 @@ pub fn validate_tail_frame(frame: &TailFrameV1) -> Result<(), RejectionReasonV1>
         TailFrameV1::Lag { .. } => {}
     }
     Ok(())
+}
+
+pub fn parse_export_request_value(value: &Value) -> Result<ExportRequestV1, RejectionReasonV1> {
+    let request: ExportRequestV1 = from_value(value)?;
+    validate_export_request(&request)?;
+    Ok(request)
 }
 
 pub fn validate_export_request(request: &ExportRequestV1) -> Result<(), RejectionReasonV1> {
@@ -261,6 +317,12 @@ pub fn validate_export_request(request: &ExportRequestV1) -> Result<(), Rejectio
         (ExportPurposeV1::InternalDogfood, Some(_)) => Err(RejectionReasonV1::InvalidShape),
         (ExportPurposeV1::InternalDogfood, None) => Ok(()),
     }
+}
+
+pub fn parse_export_manifest_value(value: &Value) -> Result<ExportManifestV1, RejectionReasonV1> {
+    let manifest: ExportManifestV1 = from_value(value)?;
+    validate_export_manifest(&manifest)?;
+    Ok(manifest)
 }
 
 pub fn validate_export_manifest(manifest: &ExportManifestV1) -> Result<(), RejectionReasonV1> {
@@ -285,6 +347,15 @@ pub fn validate_export_manifest(manifest: &ExportManifestV1) -> Result<(), Rejec
     Ok(())
 }
 
+pub fn parse_export_frame_value(value: &Value) -> Result<ExportStreamFrameV1, RejectionReasonV1> {
+    if raw_frame(value) == Some("record") {
+        parse_collector_accepted_record_value(raw_field(value, "record")?)?;
+    }
+    let frame: ExportStreamFrameV1 = from_value(value)?;
+    validate_export_frame(&frame)?;
+    Ok(frame)
+}
+
 pub fn validate_export_frame(frame: &ExportStreamFrameV1) -> Result<(), RejectionReasonV1> {
     validate_serializable_safe_integers(frame)?;
     match frame {
@@ -294,6 +365,12 @@ pub fn validate_export_frame(frame: &ExportStreamFrameV1) -> Result<(), Rejectio
         ExportStreamFrameV1::End { .. } => Ok(()),
         ExportStreamFrameV1::Health { health } => validate_health(health),
     }
+}
+
+pub fn parse_health_value(value: &Value) -> Result<HealthResponseV1, RejectionReasonV1> {
+    let health: HealthResponseV1 = from_value(value)?;
+    validate_health(&health)?;
+    Ok(health)
 }
 
 pub fn validate_health(health: &HealthResponseV1) -> Result<(), RejectionReasonV1> {
@@ -321,6 +398,14 @@ pub fn validate_health(health: &HealthResponseV1) -> Result<(), RejectionReasonV
         validate_name(classification)?;
     }
     Ok(())
+}
+
+pub fn parse_rss_profile_value(
+    value: &Value,
+) -> Result<RssMeasurementProfileV1, RejectionReasonV1> {
+    let profile: RssMeasurementProfileV1 = from_value(value)?;
+    validate_rss_profile(&profile)?;
+    Ok(profile)
 }
 
 pub fn validate_rss_profile(profile: &RssMeasurementProfileV1) -> Result<(), RejectionReasonV1> {

@@ -225,6 +225,185 @@
           { "version": { "major": 1, "minor": 999 }, "records": 1 }
         ]
       }
+    },
+    {
+      "name": "secret_field_in_retained_record",
+      "kind": "records_page",
+      "reason": "prohibited_secret",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "records": [
+          {
+            "record": {
+              "schema_version": { "major": 1, "minor": 1 },
+              "source_timestamp": "2026-08-10T14:00:00.000Z",
+              "producer_sequence": 1,
+              "producer_boot_id": "boot-tauri-api-01",
+              "component": "desktop_tauri",
+              "source": "tauri",
+              "release": "2026.08.10-rc1",
+              "environment": "dogfood",
+              "operation_id": "op-api-detail-01",
+              "name": "tauri.sidecar.ready",
+              "severity": "info",
+              "arguments": [],
+              "record_class": "detailed",
+              "privacy": "operational",
+              "redaction": "none",
+              "detailed": { "kind": "milestone", "milestone": "ready" },
+              "authorization": "Bearer synthetic-read-back-token"
+            },
+            "accepted_timestamp": "2026-08-10T14:00:00.010Z",
+            "accepted_order": 41,
+            "retention_cursor": 41
+          }
+        ],
+        "gaps": [],
+        "versions_present": []
+      }
+    },
+    {
+      "name": "prohibited_model_metadata_in_retained_record",
+      "kind": "records_page",
+      "reason": "prohibited_metadata",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "records": [
+          {
+            "record": {
+              "schema_version": { "major": 1, "minor": 1 },
+              "source_timestamp": "2026-08-10T12:07:00.000Z",
+              "producer_sequence": 12,
+              "producer_boot_id": "boot-anyharness-01",
+              "component": "anyharness",
+              "source": "anyharness",
+              "release": "2026.08.10-rc1",
+              "environment": "dogfood",
+              "operation_id": "op-model-01",
+              "name": "anyharness.model.request",
+              "severity": "info",
+              "arguments": [],
+              "record_class": "lifecycle",
+              "privacy": "operational",
+              "redaction": "none",
+              "lifecycle": {
+                "phase": "terminal",
+                "outcome": "succeeded",
+                "finalizer": "producer",
+                "model": {
+                  "model_id": "model-safe-01",
+                  "provider_kind": "hosted",
+                  "prompt": "synthetic prompt text"
+                }
+              }
+            },
+            "accepted_timestamp": "2026-08-10T12:07:00.010Z",
+            "accepted_order": 42,
+            "retention_cursor": 42
+          }
+        ],
+        "gaps": [],
+        "versions_present": []
+      }
+    },
+    {
+      "name": "secret_field_in_tailed_record",
+      "kind": "tail_frame",
+      "reason": "prohibited_secret",
+      "input": {
+        "frame": "records",
+        "records": [
+          {
+            "record": {
+              "schema_version": { "major": 1, "minor": 1 },
+              "source_timestamp": "2026-08-10T14:00:00.000Z",
+              "producer_sequence": 1,
+              "producer_boot_id": "boot-tauri-api-01",
+              "component": "desktop_tauri",
+              "source": "tauri",
+              "release": "2026.08.10-rc1",
+              "environment": "dogfood",
+              "operation_id": "op-api-detail-01",
+              "name": "tauri.sidecar.ready",
+              "severity": "info",
+              "arguments": [],
+              "record_class": "detailed",
+              "privacy": "operational",
+              "redaction": "none",
+              "detailed": {
+                "kind": "milestone",
+                "milestone": "ready",
+                "cookie": "session=synthetic"
+              }
+            },
+            "accepted_timestamp": "2026-08-10T14:00:00.010Z",
+            "accepted_order": 41,
+            "retention_cursor": 41
+          }
+        ],
+        "cursor": 41
+      }
+    },
+    {
+      "name": "secret_field_in_exported_record",
+      "kind": "export_frame",
+      "reason": "prohibited_secret",
+      "input": {
+        "frame": "record",
+        "record": {
+          "record": {
+            "schema_version": { "major": 1, "minor": 1 },
+            "source_timestamp": "2026-08-10T14:00:00.000Z",
+            "producer_sequence": 1,
+            "producer_boot_id": "boot-tauri-api-01",
+            "component": "desktop_tauri",
+            "source": "tauri",
+            "release": "2026.08.10-rc1",
+            "environment": "dogfood",
+            "operation_id": "op-api-detail-01",
+            "name": "tauri.sidecar.ready",
+            "severity": "info",
+            "arguments": [],
+            "record_class": "detailed",
+            "privacy": "operational",
+            "redaction": "none",
+            "detailed": { "kind": "milestone", "milestone": "ready" },
+            "environment_values": { "HOME": "/Users/synthetic" }
+          },
+          "accepted_timestamp": "2026-08-10T14:00:00.010Z",
+          "accepted_order": 41,
+          "retention_cursor": 41
+        }
+      }
+    },
+    {
+      "name": "secret_field_in_accepted_record",
+      "kind": "collector_record",
+      "reason": "prohibited_secret",
+      "input": {
+        "record": {
+          "schema_version": { "major": 1, "minor": 1 },
+          "source_timestamp": "2026-08-10T14:00:00.000Z",
+          "producer_sequence": 1,
+          "producer_boot_id": "boot-tauri-api-01",
+          "component": "desktop_tauri",
+          "source": "tauri",
+          "release": "2026.08.10-rc1",
+          "environment": "dogfood",
+          "operation_id": "op-api-detail-01",
+          "name": "tauri.sidecar.ready",
+          "severity": "info",
+          "arguments": [],
+          "record_class": "detailed",
+          "privacy": "operational",
+          "redaction": "none",
+          "detailed": { "kind": "milestone", "milestone": "ready" },
+          "access_token": "synthetic-access-token"
+        },
+        "accepted_timestamp": "2026-08-10T14:00:00.010Z",
+        "accepted_order": 41,
+        "retention_cursor": 41
+      }
     }
   ]
 }

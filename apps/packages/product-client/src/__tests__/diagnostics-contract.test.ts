@@ -125,12 +125,18 @@ describe("rust observability v1 golden contract", () => {
         switch (testCase.kind) {
           case "connection_descriptor":
             return parseConnectionDescriptorV1(testCase.input);
+          case "collector_record":
+            return parseCollectorAcceptedRecordV1(testCase.input);
           case "records_query":
             return parseRecordsQueryV1(testCase.input);
           case "records_page":
             return parseRecordsPageV1(testCase.input);
+          case "tail_frame":
+            return parseTailFrameV1(testCase.input);
           case "export_request":
             return parseExportRequestV1(testCase.input);
+          case "export_frame":
+            return parseExportStreamFrameV1(testCase.input);
           case "health":
             return parseHealthResponseV1(testCase.input);
           default:
@@ -202,8 +208,16 @@ describe("rust observability v1 golden contract", () => {
     padded.future_padding = "x".repeat(limits.MAX_RECORD_BYTES - recordOverhead);
     expect(JSON.stringify(padded)).toHaveLength(limits.MAX_RECORD_BYTES);
     expect(() => parseProducerRecordV1(padded)).not.toThrow();
+    const atLimitRecord = cloneRecord(padded);
     padded.future_padding = `${padded.future_padding as string}x`;
     expect(rejectionReason(() => parseProducerRecordV1(padded))).toBe("record_too_large");
+
+    const page = cloneRecord(apiFixture.records_page);
+    const pageRecords = page.records as Record<string, unknown>[];
+    pageRecords[0].record = atLimitRecord;
+    expect(() => parseRecordsPageV1(page)).not.toThrow();
+    pageRecords[0].record = padded;
+    expect(rejectionReason(() => parseRecordsPageV1(page))).toBe("record_too_large");
 
     const batch: Record<string, unknown> = {
       schema_version: limits.CURRENT_SCHEMA_VERSION,

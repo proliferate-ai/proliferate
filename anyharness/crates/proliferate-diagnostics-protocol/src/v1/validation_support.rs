@@ -327,6 +327,24 @@ pub(super) fn from_value<T: DeserializeOwned>(value: &Value) -> Result<T, Reject
     serde_json::from_value(value.clone()).map_err(|_| RejectionReasonV1::InvalidShape)
 }
 
+pub(super) fn raw_field<'a>(value: &'a Value, key: &str) -> Result<&'a Value, RejectionReasonV1> {
+    value.get(key).ok_or(RejectionReasonV1::InvalidShape)
+}
+
+pub(super) fn raw_array<'a>(
+    value: &'a Value,
+    key: &str,
+) -> Result<&'a Vec<Value>, RejectionReasonV1> {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .ok_or(RejectionReasonV1::InvalidShape)
+}
+
+pub(super) fn raw_frame(value: &Value) -> Option<&str> {
+    value.get("frame").and_then(Value::as_str)
+}
+
 pub(super) fn map_too_large<K: Ord>(map: &BTreeMap<K, u64>) -> bool {
     map.len() > MAX_CARDINALITY_ENTRIES
 }

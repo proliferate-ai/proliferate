@@ -7,8 +7,6 @@ use proliferate_diagnostics_protocol::v1::limits::*;
 use proliferate_diagnostics_protocol::v1::sequence::LifecycleSequenceValidatorV1;
 use proliferate_diagnostics_protocol::v1::types::*;
 use proliferate_diagnostics_protocol::v1::validation::*;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use serde_json::{json, Value};
 
 fn fixture_path(relative: &str) -> PathBuf {
@@ -19,14 +17,6 @@ fn fixture_path(relative: &str) -> PathBuf {
 
 fn fixture(relative: &str) -> Value {
     serde_json::from_str(&fs::read_to_string(fixture_path(relative)).unwrap()).unwrap()
-}
-
-fn roundtrip<T>(value: &Value)
-where
-    T: DeserializeOwned + Serialize,
-{
-    let parsed: T = serde_json::from_value(value.clone()).unwrap();
-    assert_eq!(serde_json::to_value(parsed).unwrap(), *value);
 }
 
 #[test]
@@ -137,52 +127,47 @@ fn all_api_shapes_parse_validate_and_roundtrip() {
         api["connection_descriptor"]
     );
 
-    roundtrip::<CollectorAcceptedRecordV1>(&api["collector_record"]);
+    let collector_record = parse_collector_accepted_record_value(&api["collector_record"]).unwrap();
+    assert_eq!(
+        serde_json::to_value(collector_record).unwrap(),
+        api["collector_record"]
+    );
     let batch = parse_ingest_batch_value(&api["ingest_batch"]).unwrap();
     assert_eq!(serde_json::to_value(batch).unwrap(), api["ingest_batch"]);
-    let receipt: IngestReceiptV1 = serde_json::from_value(api["ingest_receipt"].clone()).unwrap();
-    validate_ingest_receipt(&receipt).unwrap();
+    let receipt = parse_ingest_receipt_value(&api["ingest_receipt"]).unwrap();
     assert_eq!(
         serde_json::to_value(receipt).unwrap(),
         api["ingest_receipt"]
     );
 
-    let query: RecordsQueryV1 = serde_json::from_value(api["records_query"].clone()).unwrap();
-    validate_records_query(&query).unwrap();
+    let query = parse_records_query_value(&api["records_query"]).unwrap();
     assert_eq!(serde_json::to_value(query).unwrap(), api["records_query"]);
 
-    let page: RecordsPageV1 = serde_json::from_value(api["records_page"].clone()).unwrap();
-    validate_records_page(&page).unwrap();
+    let page = parse_records_page_value(&api["records_page"]).unwrap();
     assert_eq!(serde_json::to_value(page).unwrap(), api["records_page"]);
 
     for value in api["tail_frames"].as_array().unwrap() {
-        let frame: TailFrameV1 = serde_json::from_value(value.clone()).unwrap();
-        validate_tail_frame(&frame).unwrap();
+        let frame = parse_tail_frame_value(value).unwrap();
         assert_eq!(serde_json::to_value(frame).unwrap(), *value);
     }
 
-    let request: ExportRequestV1 = serde_json::from_value(api["export_request"].clone()).unwrap();
-    validate_export_request(&request).unwrap();
+    let request = parse_export_request_value(&api["export_request"]).unwrap();
     assert_eq!(
         serde_json::to_value(request).unwrap(),
         api["export_request"]
     );
 
-    let manifest: ExportManifestV1 =
-        serde_json::from_value(api["export_manifest"].clone()).unwrap();
-    validate_export_manifest(&manifest).unwrap();
+    let manifest = parse_export_manifest_value(&api["export_manifest"]).unwrap();
     assert_eq!(
         serde_json::to_value(manifest).unwrap(),
         api["export_manifest"]
     );
 
-    let health: HealthResponseV1 = serde_json::from_value(api["health"].clone()).unwrap();
-    validate_health(&health).unwrap();
+    let health = parse_health_value(&api["health"]).unwrap();
     assert_eq!(serde_json::to_value(health).unwrap(), api["health"]);
 
     for value in api["export_frames"].as_array().unwrap() {
-        let frame: ExportStreamFrameV1 = serde_json::from_value(value.clone()).unwrap();
-        validate_export_frame(&frame).unwrap();
+        let frame = parse_export_frame_value(value).unwrap();
         assert_eq!(serde_json::to_value(frame).unwrap(), *value);
     }
 }
@@ -195,18 +180,13 @@ fn every_invalid_api_shape_rejects_for_the_pinned_reason() {
             "connection_descriptor" => {
                 parse_connection_descriptor_value(&case["input"]).map(|_| ())
             }
-            "records_query" => serde_json::from_value::<RecordsQueryV1>(case["input"].clone())
-                .map_err(|_| RejectionReasonV1::InvalidShape)
-                .and_then(|value| validate_records_query(&value)),
-            "records_page" => serde_json::from_value::<RecordsPageV1>(case["input"].clone())
-                .map_err(|_| RejectionReasonV1::InvalidShape)
-                .and_then(|value| validate_records_page(&value)),
-            "export_request" => serde_json::from_value::<ExportRequestV1>(case["input"].clone())
-                .map_err(|_| RejectionReasonV1::InvalidShape)
-                .and_then(|value| validate_export_request(&value)),
-            "health" => serde_json::from_value::<HealthResponseV1>(case["input"].clone())
-                .map_err(|_| RejectionReasonV1::InvalidShape)
-                .and_then(|value| validate_health(&value)),
+            "collector_record" => parse_collector_accepted_record_value(&case["input"]).map(|_| ()),
+            "records_query" => parse_records_query_value(&case["input"]).map(|_| ()),
+            "records_page" => parse_records_page_value(&case["input"]).map(|_| ()),
+            "tail_frame" => parse_tail_frame_value(&case["input"]).map(|_| ()),
+            "export_request" => parse_export_request_value(&case["input"]).map(|_| ()),
+            "export_frame" => parse_export_frame_value(&case["input"]).map(|_| ()),
+            "health" => parse_health_value(&case["input"]).map(|_| ()),
             other => panic!("unknown invalid API fixture kind: {other}"),
         };
         assert_eq!(
@@ -279,8 +259,7 @@ fn constants_and_release_rss_profile_match_the_golden_boundaries() {
     assert!(RETAINED_RECORD_ARENA_LIMIT_BYTES < COLLECTOR_TOTAL_RSS_LIMIT_BYTES);
 
     let profile_value = fixture("rss-profile.json");
-    let profile: RssMeasurementProfileV1 = serde_json::from_value(profile_value.clone()).unwrap();
-    validate_rss_profile(&profile).unwrap();
+    let profile = parse_rss_profile_value(&profile_value).unwrap();
     assert_eq!(serde_json::to_value(profile).unwrap(), profile_value);
 }
 
@@ -303,6 +282,7 @@ fn representative_at_limit_and_over_limit_inputs_are_enforced() {
     padded["future_padding"] = Value::String("x".repeat(MAX_RECORD_BYTES - overhead));
     assert_eq!(serde_json::to_vec(&padded).unwrap().len(), MAX_RECORD_BYTES);
     parse_producer_record_value(&padded).unwrap();
+    let at_limit_record = padded.clone();
     padded["future_padding"] = Value::String("x".repeat(MAX_RECORD_BYTES - overhead + 1));
     assert_eq!(
         parse_producer_record_value(&padded).unwrap_err(),
@@ -325,6 +305,15 @@ fn representative_at_limit_and_over_limit_inputs_are_enforced() {
     );
 
     let api = fixture("valid/api.json");
+    let mut page = api["records_page"].clone();
+    page["records"][0]["record"] = at_limit_record;
+    parse_records_page_value(&page).unwrap();
+    page["records"][0]["record"] = padded;
+    assert_eq!(
+        parse_records_page_value(&page).unwrap_err(),
+        RejectionReasonV1::RecordTooLarge
+    );
+
     let mut health: HealthResponseV1 = serde_json::from_value(api["health"].clone()).unwrap();
     health.cardinality_counts = (0..MAX_CARDINALITY_ENTRIES)
         .map(|index| (format!("key.{index}"), index as u64))

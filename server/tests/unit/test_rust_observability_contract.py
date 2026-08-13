@@ -137,9 +137,12 @@ def test_all_api_shapes_parse_and_roundtrip() -> None:
 def test_every_invalid_api_shape_rejects_for_the_pinned_reason() -> None:
     parsers = {
         "connection_descriptor": parse_connection_descriptor_v1,
+        "collector_record": parse_collector_accepted_record_v1,
         "records_query": parse_records_query_v1,
         "records_page": parse_records_page_v1,
+        "tail_frame": parse_tail_frame_v1,
         "export_request": parse_export_request_v1,
+        "export_frame": parse_export_stream_frame_v1,
         "health": parse_health_response_v1,
     }
     for case in _fixture("invalid/api.json")["cases"]:
@@ -210,8 +213,15 @@ def test_representative_exact_byte_and_cardinality_boundaries() -> None:
     padded["future_padding"] = "x" * (limits.MAX_RECORD_BYTES - record_overhead)
     assert _compact_bytes(padded) == limits.MAX_RECORD_BYTES
     parse_producer_record_v1(padded)
+    at_limit_record = json.loads(json.dumps(padded))
     padded["future_padding"] += "x"
     assert _reason(lambda: parse_producer_record_v1(padded)) == "record_too_large"
+
+    page = _fixture("valid/api.json")["records_page"]
+    page["records"][0]["record"] = at_limit_record
+    parse_records_page_v1(page)
+    page["records"][0]["record"] = padded
+    assert _reason(lambda: parse_records_page_v1(page)) == "record_too_large"
 
     batch = {
         "schema_version": limits.CURRENT_SCHEMA_VERSION,

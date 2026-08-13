@@ -11,7 +11,10 @@ not a second schema authority.
 - `valid/lifecycle-sequences.json` pins start, retry, terminal, conflict,
   producer-death abandonment, and orphan-terminal handling.
 - `invalid/records.json` pins record rejection reasons.
-- `invalid/api.json` pins authenticated-loopback and bounded API failures.
+- `invalid/api.json` pins authenticated-loopback and bounded API failures, and
+  pins that read-back shapes carrying producer records — accepted records,
+  record pages, tail frames, and export frames — reject secret fields and
+  prohibited model/plugin metadata rather than dropping them.
 - `limits.json` pins every v1 cardinality, byte, page, frame, export, RSS, and
   arena boundary.
 - `rss-profile.json` is the release-build measurement profile PR 2 must execute.
