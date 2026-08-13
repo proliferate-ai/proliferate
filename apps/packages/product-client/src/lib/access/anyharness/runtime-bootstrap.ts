@@ -8,7 +8,6 @@ import {
   recordRendererDiagnostic,
 } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 import { recordRuntimeConnectionState } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
-import type { HarnessConnectionState } from "#product/stores/sessions/session-types";
 // Narrow bootstrap wiring: this module is the canonical boot orchestrator for
 // AnyHarness runtime connection state.
 import {
@@ -16,6 +15,11 @@ import {
   type HarnessRuntimeUrlSource,
 } from "#product/stores/sessions/harness-connection-store";
 import { DEFAULT_RUNTIME_URL } from "#product/config/runtime";
+
+// Read off the store this module already depends on, rather than reaching
+// upward into stores for a second module just to name a type.
+type HarnessConnectionState =
+  ReturnType<typeof useHarnessConnectionStore.getState>["connectionState"];
 
 let runtimeConnectionStateEnteredAt: number | null = null;
 
