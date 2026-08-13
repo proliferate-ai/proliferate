@@ -102,6 +102,12 @@ export function TurnDiffPanel({
   );
 
   return (
+    // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review, check 1):
+    // the diff panel's fill is the dedicated `--color-diff-panel-surface`
+    // token, which `Card`'s two-fill surface axis does not carry. The two
+    // custom properties below are recorded causes under check 4: they are the
+    // panel's row-padding contract, read by every descendant diff row so the
+    // gutter stays aligned across nested components.
     <div
       className="mb-2 flex max-w-full flex-col overflow-hidden rounded-lg border border-border bg-diff-panel-surface text-chat text-foreground [--turn-diff-row-padding-x:0.75rem] [--turn-diff-row-padding-y:0.25rem]"
     >

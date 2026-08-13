@@ -1,4 +1,5 @@
 import { Button } from "#product/primitives/Button";
+import { IconTile } from "#product/primitives/IconTile";
 import { FileText } from "#product/primitives/icons/workspace";
 import type { AssistantMarkdownEndResource } from "#product/lib/domain/chat/assistant-markdown-end-resource";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
@@ -11,9 +12,13 @@ export function TurnDocumentReferenceCard({
   const fileActions = useFileReferenceActions({ rawPath: resource.rawPath });
 
   return (
+    // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review, check 1):
+    // the card shares the diff panel's `--color-diff-panel-surface` fill so a
+    // document reference and a diff read as the same object in the transcript.
+    // `Card`'s two-fill surface axis does not carry that token.
     <div
       data-turn-document-reference
-      className="flex max-w-full flex-col overflow-hidden rounded-lg border border-border/60 bg-[var(--color-diff-panel-surface)] text-foreground"
+      className="flex max-w-full flex-col overflow-hidden rounded-lg border border-border/60 bg-diff-panel-surface text-foreground"
     >
       <Button
         type="button"
@@ -23,9 +28,18 @@ export function TurnDocumentReferenceCard({
         className="turn-document-reference-trigger flex w-full min-w-0 items-center justify-start gap-2.5 rounded-none px-3 py-3 text-left focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
         aria-label={`Open preview for ${resource.displayName}`}
       >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-diff-chat-turn-icon-surface)] text-secondary-foreground">
+        {/*
+          Recorded cause (DESIGN_SYSTEM.md § UI-conformance review, check 4),
+          identical to TurnDiffPanelHeader's: no `IconTile` tone carries
+          `--color-diff-chat-turn-icon-surface`, so the shared fill arrives as a
+          token-utility override rather than a fifth tone.
+        */}
+        <IconTile
+          size="lg"
+          className="bg-diff-chat-turn-icon-surface text-secondary-foreground"
+        >
           <FileText className="icon-display" />
-        </span>
+        </IconTile>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-chat font-medium text-foreground">
             {resource.displayName}

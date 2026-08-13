@@ -34,6 +34,14 @@ export function PromptRecoveryPanel({
             recovery.prompt.text,
           ) || "Message with attachments";
           return (
+            // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review,
+            // check 7): `ListRow` is the shape this maps to, but it renders a
+            // `<button>` whose slots are inside it, and this row hosts its own
+            // Retry button — adopting it would nest interactive elements. The
+            // row is not itself pressable either; the single `hover:bg-hover`
+            // is a shared state token driving the `group/recovery` reveal, not
+            // a hand-assembled three-state stack. Landing this needs a
+            // non-interactive spelling of `ListRow`, which is a review ruling.
             <div
               key={recovery.id}
               className="group/recovery flex min-h-8 items-center gap-2 rounded-lg px-2 py-1 hover:bg-hover"
