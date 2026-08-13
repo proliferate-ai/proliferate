@@ -60,7 +60,13 @@ WEB_SRC = REPO_ROOT / "apps" / "web" / "src"
 DESIGN_SYSTEM_DOC = REPO_ROOT / "specs" / "DESIGN_SYSTEM.md"
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "component_library_allowlist.json"
 
-SCANNED_ROOTS = (PRODUCT_CLIENT_SRC, DESKTOP_SRC, WEB_SRC)
+MOBILE_SRC = REPO_ROOT / "apps" / "mobile" / "src"
+
+# Every frontend surface that can consume the library. Mobile is in the set for
+# the call-site rule specifically: it imports `@proliferate/product-client`, so
+# leaving it out would report a component whose only consumer is mobile as dead
+# and pressure a live shape into retirement.
+SCANNED_ROOTS = (PRODUCT_CLIENT_SRC, DESKTOP_SRC, WEB_SRC, MOBILE_SRC)
 EXTENSIONS = {".ts", ".tsx"}
 
 PRIMITIVES_DIR = PRODUCT_CLIENT_SRC / "primitives"
@@ -94,9 +100,18 @@ OVERLAY_ROLES = ("dialog", "menu", "listbox", "tooltip", "button")
 # Matches the literal attribute and the conditional spelling that carries the
 # same DOM contract: `role="button"` and `role={onSelect ? "button" : undefined}`
 # are the same hand-rolled semantics, and a ratchet that only sees the literal
-# form is a ratchet with a one-character bypass.
+# form is a ratchet with a one-character bypass. Both quote styles count for the
+# same reason — JSX accepts `role='dialog'`, so a double-quote-only pattern is
+# that same one-character bypass in a different position.
+#
+# The leading `(?<!\[)` excludes the CSS attribute selector `[role='button']`,
+# which reads a role rather than writing one: the focus-zone query strings that
+# enumerate interactive elements are consumers of the convention, not
+# re-implementations of an overlay.
 OVERLAY_ROLE_RE = re.compile(
-    r'\brole\s*=\s*(?:\{[^}\n]*?)?"(?P<role>' + "|".join(OVERLAY_ROLES) + r')"'
+    r"(?<!\[)\brole\s*=\s*(?:\{[^}\n]*?)?(?P<quote>[\"'])(?P<role>"
+    + "|".join(OVERLAY_ROLES)
+    + r")(?P=quote)"
 )
 
 # Import statements wrap freely across lines in this tree, so the specifier is
@@ -285,10 +300,17 @@ def resolve_specifier(importer: Path, spec: str) -> Path | None:
 
 
 def build_importers(sources: dict[Path, str]) -> dict[Path, set[Path]]:
-    """target file -> the files that import it."""
+    """target file -> the files that import it.
+
+    Comments are masked first. A commented-out import is not a call site, and
+    this tree records refusals to adopt a component in prose right where the
+    adoption would have gone — so a graph built over raw text would read
+    ``// import { ListRow } from "…/ListRow"`` as a consumer and keep dead
+    vocabulary alive on the strength of one comment line.
+    """
     importers: dict[Path, set[Path]] = defaultdict(set)
     for path, source in sources.items():
-        for match in IMPORT_SPECIFIER_RE.finditer(source):
+        for match in IMPORT_SPECIFIER_RE.finditer(mask_comments(source)):
             spec = match.group("spec") or match.group("dyn") or match.group("req")
             if not spec:
                 continue
@@ -305,6 +327,21 @@ def build_importers(sources: dict[Path, str]) -> dict[Path, set[Path]]:
 
 def is_playground(path: Path) -> bool:
     return PLAYGROUND_DIR in path.parents
+
+
+def is_documentation_block(text: str) -> bool:
+    """``text`` opens with a ``/** … */`` block that actually says something.
+
+    Both halves matter. ``/* … */`` is an aside, not documentation, and
+    ``/** */`` is a block with no contract in it — either one satisfies a
+    "there is a comment here" test while leaving the index row as the only
+    place the component's contract is written down.
+    """
+    match = re.match(r"/\*\*(?P<body>[\s\S]*?)\*/", text)
+    if match is None:
+        return False
+    body = re.sub(r"^\s*\*+", "", match.group("body"), flags=re.MULTILINE)
+    return bool(body.strip())
 
 
 def jsdoc_precedes_export(source: str, name: str) -> bool:
@@ -331,15 +368,20 @@ def jsdoc_precedes_export(source: str, name: str) -> bool:
         )
     if declaration is None:
         return False
-    lines = source[: declaration.start()].splitlines()
+    preamble = source[: declaration.start()]
+    lines = preamble.splitlines()
     index = len(lines) - 1
     while index >= 0 and not lines[index].strip():
         index -= 1
     if index >= 0 and lines[index].strip().endswith("*/"):
-        return True
+        # A block ends here, but only a `/**` block is documentation: a plain
+        # `/* … */` above a declaration is an aside, and accepting it would let
+        # a gate whose whole subject is documentation pass on a non-doc comment.
+        opener = preamble.rfind("/*", 0, preamble.rfind("*/"))
+        if opener != -1 and is_documentation_block(preamble[opener:]):
+            return True
     # File-header block: the module's documentation, before any import.
-    header = re.match(r"\s*/\*\*[\s\S]*?\*/", source)
-    return header is not None
+    return is_documentation_block(source.lstrip())
 
 
 def registry_violations(
@@ -416,6 +458,78 @@ def registry_violations(
     return violations
 
 
+def tier_file_violations(
+    rows: list[RegistryRow], importers: dict[Path, set[Path]]
+) -> list[Violation]:
+    """Every module inside a library tier is either indexed or named as support.
+
+    The index is the closed set, and `registry-row-without-file` only closes it
+    from one side: it catches a row whose file is gone, not a file that never
+    got a row. Without this rule a new component can be dropped into
+    `primitives/` with no index row, and because the JSDoc rule iterates rows,
+    it inherits no documentation requirement either — the two gates that look
+    like they cover the tier both look straight past it.
+
+    Support modules are not components and are named as such:
+    ``NON_COMPONENT_TIER_DIRECTORIES`` for the whole support layers and
+    ``NON_COMPONENT_TIER_FILES`` for the individual modules the design document
+    calls out by name. Glyph modules are excluded on the same grounds as the
+    JSDoc rule: one index row documents the set.
+
+    One structural exemption: inside a component's own folder below a tier root
+    (``components/patterns/secrets/`` and the like), a module that is imported
+    only from within that folder is a private part of the indexed component, not
+    separate vocabulary. It has to be imported by something — a module with no
+    importer at all is exactly the unindexed orphan this rule is for — and the
+    exemption never applies at a tier root itself, where every module is either
+    an index row or a named support file.
+    """
+    indexed = {row.target for row in rows}
+    violations: list[Violation] = []
+    for root in (PRIMITIVES_DIR, PRODUCT_PATTERNS_DIR):
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.suffix not in EXTENSIONS:
+                continue
+            if path.name.endswith(".d.ts") or is_test_path(path):
+                continue
+            if ICONS_DIR in path.parents or path.parent == ICONS_DIR:
+                continue
+            relative_path = relative(path)
+            if relative_path in NON_COMPONENT_TIER_FILES:
+                continue
+            within = path.relative_to(root).as_posix()
+            if any(
+                within.startswith(directory) for directory in NON_COMPONENT_TIER_DIRECTORIES
+            ):
+                continue
+            if path.resolve() in indexed:
+                continue
+            if path.parent not in TIER_ROOTS.values():
+                consumers = {
+                    consumer
+                    for consumer in importers.get(path.resolve(), set())
+                    if consumer != path.resolve() and not is_test_path(consumer)
+                }
+                if consumers and all(
+                    consumer.parent == path.parent for consumer in consumers
+                ):
+                    continue
+            violations.append(
+                Violation(
+                    "tier-file-without-registry-row",
+                    relative_path,
+                    1,
+                    "lives in a library tier with no row in the sanctioned index; the "
+                    "index is the closed set, so add the row (and its JSDoc), move the "
+                    "module to a support directory, or name it in "
+                    "NON_COMPONENT_TIER_FILES with the reason it is not a component",
+                )
+            )
+    return violations
+
+
 # --------------------------------------------------------------------------
 # Gate: kit placement (doctrine D3)
 # --------------------------------------------------------------------------
@@ -451,7 +565,10 @@ def kit_violations(
             continue
         if is_test_path(path):
             continue
-        for match in IMPORT_SPECIFIER_RE.finditer(source):
+        # Masked, not raw: a kit member may name a feature module in prose while
+        # explaining why it does NOT reach for it. `mask_comments` keeps every
+        # newline, so reported line numbers still point at the real import.
+        for match in IMPORT_SPECIFIER_RE.finditer(mask_comments(source)):
             spec = match.group("spec") or match.group("dyn") or match.group("req")
             if not spec:
                 continue
@@ -520,6 +637,7 @@ def collect_violations() -> list[Violation]:
     return [
         *find_hand_rolled_role_violations(sources),
         *registry_violations(rows, sources, importers),
+        *tier_file_violations(rows, importers),
         *kit_violations(rows, sources),
     ]
 

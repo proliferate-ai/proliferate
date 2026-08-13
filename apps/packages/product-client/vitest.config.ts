@@ -10,6 +10,14 @@ const srcDir = fileURLToPath(new URL("./src", import.meta.url));
 // The moved product tree imports the AnyHarness SDK/React packages by their
 // public specifiers. Tests run against those packages' source (as the Desktop
 // vitest config did) so they do not require a prior build.
+//
+// Resolving that source needs `anyharness/sdk-react/node_modules` to exist,
+// which a normal `pnpm install` creates. It is deliberately NOT aliased or
+// stubbed here: when it is missing, the cause is a checkout whose
+// `node_modules` were symlinked in from another clone rather than installed
+// (donor-symlink dev setups, review worktrees), and the fix belongs in that
+// checkout — `pnpm install`, or the same symlink for that directory. Papering
+// it into committed config would hide a real install failure from CI.
 const anyharnessSdk = fileURLToPath(
   new URL("../../../anyharness/sdk/src/index.ts", import.meta.url),
 );

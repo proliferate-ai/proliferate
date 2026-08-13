@@ -93,19 +93,19 @@
   },
   "sealedDirectories": [
     {
-      "justification": "Cleaned by the workflows conformance slice (Card/NoticeBanner/RosterRow adoption); verified zero staged hits across every rule family at PR G. A regression here is a regression, not a new pre-existing site.",
+      "justification": "Cleaned by the workflows conformance slice (Card/NoticeBanner/RosterRow adoption); verified zero staged hits across every rule family at PR G. A regression here is a regression, not a new pre-existing site. Seal scope is the staged rule set as written: the bracket-geometry rule matches the bare `w-`/`h-`/`p-`/`m-`/`inset-` spellings, so the prefixed and axis families (`max-w-[\u2026]`, `max-h-[\u2026]`, `px-[\u2026]`) are outside every rule here and outside this seal. Residual out-of-rule sites in this directory at PR G: 1 (`max-w-[70%]`).",
       "path": "apps/packages/product-client/src/components/workflows"
     },
     {
-      "justification": "Cleaned by the chat conformance slice (tool-call detail panels folded onto the shared panel); verified zero staged hits at PR G.",
+      "justification": "Cleaned by the chat conformance slice (tool-call detail panels folded onto the shared panel); verified zero staged hits at PR G. Seal scope is the staged rule set as written: the bracket-geometry rule matches the bare `w-`/`h-`/`p-`/`m-`/`inset-` spellings, so the prefixed and axis families (`max-w-[\u2026]`, `max-h-[\u2026]`, `px-[\u2026]`) are outside every rule here and outside this seal. Residual out-of-rule sites in this directory at PR G: 7 (`max-h-[224px]` \u00d72, `max-h-[7.5rem]`, `max-w-[180px]` \u00d72, `max-w-[260px]`, `max-w-[280px]`).",
       "path": "apps/packages/product-client/src/components/workspace/chat/tool-calls"
     },
     {
-      "justification": "Cleaned by the shell conformance slice (PanelHeaderEntry adoption retired the .right-panel-tab-system descendant CSS); verified zero staged hits at PR G.",
+      "justification": "Cleaned by the shell conformance slice (PanelHeaderEntry adoption retired the .right-panel-tab-system descendant CSS); verified zero staged hits at PR G. Seal scope is the staged rule set as written: the bracket-geometry rule matches the bare `w-`/`h-`/`p-`/`m-`/`inset-` spellings, so the prefixed and axis families (`max-w-[\u2026]`, `max-h-[\u2026]`, `px-[\u2026]`) are outside every rule here and outside this seal. Residual out-of-rule sites in this directory at PR G: none.",
       "path": "apps/packages/product-client/src/components/workspace/shell/right-panel"
     },
     {
-      "justification": "Cleaned by the shell conformance slice; verified zero staged hits at PR G.",
+      "justification": "Cleaned by the shell conformance slice; verified zero staged hits at PR G. Seal scope is the staged rule set as written: the bracket-geometry rule matches the bare `w-`/`h-`/`p-`/`m-`/`inset-` spellings, so the prefixed and axis families (`max-w-[\u2026]`, `max-h-[\u2026]`, `px-[\u2026]`) are outside every rule here and outside this seal. Residual out-of-rule sites in this directory at PR G: 1 (`max-w-[220px]`).",
       "path": "apps/packages/product-client/src/components/workspace/shell/topbar"
     }
   ],

@@ -10,12 +10,14 @@ from scripts.check_component_library import (
     AllowlistEntry,
     RegistryRow,
     Violation,
+    build_importers,
     find_hand_rolled_role_violations,
     jsdoc_precedes_export,
     kit_violations,
     parse_registry,
     registry_violations,
     resolve_specifier,
+    tier_file_violations,
 )
 
 
@@ -79,6 +81,16 @@ class HandRolledRoleTest(unittest.TestCase):
         self.assertEqual([v.lineno for v in violations], [2, 3])
         self.assertTrue(all(v.rule_id == "hand-rolled-overlay-role" for v in violations))
 
+    def test_a_single_quoted_role_is_the_same_finding(self) -> None:
+        violations = find_hand_rolled_role_violations(
+            {Path("A.tsx"): "export const A = () => <div role='dialog' />;\n"}
+        )
+        self.assertEqual([v.rule_id for v in violations], ["hand-rolled-overlay-role"])
+
+    def test_a_css_attribute_selector_reads_a_role_rather_than_writing_one(self) -> None:
+        source = 'const FOCUSABLE = ["[role=\'button\']", \'[role="menu"]\'].join(",");\n'
+        self.assertEqual(find_hand_rolled_role_violations({Path("A.ts"): source}), [])
+
     def test_ignores_commented_out_roles_and_test_files(self) -> None:
         source = '// role="dialog" is what this used to be\nexport const A = 1;\n'
         self.assertEqual(find_hand_rolled_role_violations({Path("A.tsx"): source}), [])
@@ -105,6 +117,47 @@ class JsdocTest(unittest.TestCase):
             jsdoc_precedes_export("// what it is\nexport function Button() {}\n", "Button")
         )
         self.assertFalse(jsdoc_precedes_export("export function Other() {}\n", "Button"))
+
+    def test_rejects_a_plain_block_comment(self) -> None:
+        self.assertFalse(
+            jsdoc_precedes_export("/* an aside */\nexport function Button() {}\n", "Button")
+        )
+        self.assertFalse(
+            jsdoc_precedes_export(
+                '/* module aside */\nimport x from "y";\n\nexport const Button = 1;\n',
+                "Button",
+            )
+        )
+
+    def test_rejects_an_empty_doc_block(self) -> None:
+        self.assertFalse(
+            jsdoc_precedes_export("/**\n *\n */\nexport function Button() {}\n", "Button")
+        )
+
+
+class ImportGraphTest(unittest.TestCase):
+    def graph(self, tmp: Path, consumer_source: str) -> dict[Path, set[Path]]:
+        component = tmp / "Widget.tsx"
+        component.write_text("export function Widget() {}\n")
+        consumer = tmp / "Surface.tsx"
+        consumer.write_text(consumer_source)
+        return build_importers(
+            {component: component.read_text(), consumer: consumer_source}
+        )
+
+    def test_a_real_import_is_a_call_site(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory).resolve()
+            graph = self.graph(tmp, 'import { Widget } from "./Widget";\n')
+            self.assertEqual(graph[tmp / "Widget.tsx"], {tmp / "Surface.tsx"})
+
+    def test_a_commented_out_import_is_not_a_call_site(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory).resolve()
+            line = self.graph(tmp, '// import { Widget } from "./Widget";\n')
+            self.assertEqual(line, {})
+            block = self.graph(tmp, '/* import { Widget } from "./Widget"; */\n')
+            self.assertEqual(block, {})
 
 
 class RegistryRuleTest(unittest.TestCase):
@@ -185,6 +238,141 @@ class RegistryRuleTest(unittest.TestCase):
             self.assertEqual(
                 [violation.rule_id for violation in violations],
                 ["registry-row-without-file"],
+            )
+
+
+class TierFileTest(unittest.TestCase):
+    def layout(self, root: Path) -> tuple[Path, Path]:
+        primitives = root / "apps/packages/product-client/src/primitives"
+        patterns = primitives / "patterns"
+        (patterns / "secrets").mkdir(parents=True)
+        (primitives / "icons").mkdir()
+        (primitives / "utils").mkdir()
+        (primitives / "Button.tsx").write_text("export function Button() {}\n")
+        return primitives, patterns
+
+    def run_rule(
+        self,
+        root: Path,
+        primitives: Path,
+        patterns: Path,
+        importers: dict[Path, set[Path]] | None = None,
+    ) -> list[Violation]:
+        rows = [
+            RegistryRow(
+                tier="product-client/src/primitives/",
+                name="Button",
+                link="../apps/packages/product-client/src/primitives/Button.tsx",
+                purpose="The button.",
+                lineno=1,
+            )
+        ]
+        with (
+            mock.patch.object(check_module, "REPO_ROOT", root),
+            mock.patch.object(check_module, "PRIMITIVES_DIR", primitives),
+            mock.patch.object(check_module, "PATTERNS_DIR", patterns),
+            mock.patch.object(check_module, "ICONS_DIR", primitives / "icons"),
+            mock.patch.object(
+                check_module,
+                "PRODUCT_PATTERNS_DIR",
+                root / "apps/packages/product-client/src/components/patterns",
+            ),
+            mock.patch.object(
+                check_module,
+                "TIER_ROOTS",
+                {
+                    "product-client/src/primitives/": primitives,
+                    "product-client/src/primitives/patterns/": patterns,
+                },
+            ),
+            mock.patch.object(
+                check_module,
+                "DESIGN_SYSTEM_DOC",
+                root / "specs" / "DESIGN_SYSTEM.md",
+            ),
+        ):
+            (root / "specs").mkdir(exist_ok=True)
+            return tier_file_violations(rows, importers or {})
+
+    def test_an_indexed_tier_file_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            primitives, patterns = self.layout(root)
+            self.assertEqual(self.run_rule(root, primitives, patterns), [])
+
+    def test_an_unindexed_tier_file_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            primitives, patterns = self.layout(root)
+            (primitives / "Orphan.tsx").write_text("export const Orphan = 1;\n")
+            violations = self.run_rule(root, primitives, patterns)
+            self.assertEqual(
+                [violation.rule_id for violation in violations],
+                ["tier-file-without-registry-row"],
+            )
+
+    def test_support_directories_and_named_modules_are_not_components(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            primitives, patterns = self.layout(root)
+            (primitives / "utils" / "show-toast.tsx").write_text("export const a = 1;\n")
+            (primitives / "icons" / "core.tsx").write_text("export const b = 1;\n")
+            (primitives / "Button.test.tsx").write_text("export const c = 1;\n")
+            named = primitives / "surface-helper.ts"
+            named.write_text("export const d = 1;\n")
+            unnamed = self.run_rule(root, primitives, patterns)
+            self.assertEqual(
+                [violation.relative_path for violation in unnamed],
+                [named.relative_to(root).as_posix()],
+            )
+            with mock.patch.object(
+                check_module,
+                "NON_COMPONENT_TIER_FILES",
+                {named.relative_to(root).as_posix()},
+            ):
+                violations = self.run_rule(root, primitives, patterns)
+            self.assertEqual([violation.relative_path for violation in violations], [])
+
+    def test_a_private_part_of_an_indexed_component_is_exempt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            primitives, patterns = self.layout(root)
+            part = patterns / "secrets" / "SecretRow.tsx"
+            part.write_text("export const SecretRow = 1;\n")
+            sibling = patterns / "secrets" / "SecretList.tsx"
+            sibling.write_text('import { SecretRow } from "./SecretRow";\n')
+            violations = self.run_rule(
+                root,
+                primitives,
+                patterns,
+                importers={part: {sibling}, sibling: {part}},
+            )
+            self.assertEqual([v.relative_path for v in violations], [])
+
+    def test_an_unimported_module_in_a_component_folder_is_still_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            primitives, patterns = self.layout(root)
+            (patterns / "secrets" / "Nobody.tsx").write_text("export const N = 1;\n")
+            violations = self.run_rule(root, primitives, patterns)
+            self.assertEqual(
+                [violation.rule_id for violation in violations],
+                ["tier-file-without-registry-row"],
+            )
+
+    def test_a_module_imported_from_outside_its_folder_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            primitives, patterns = self.layout(root)
+            part = patterns / "secrets" / "SecretRow.tsx"
+            part.write_text("export const SecretRow = 1;\n")
+            outsider = primitives / "Button.tsx"
+            violations = self.run_rule(
+                root, primitives, patterns, importers={part: {outsider}}
+            )
+            self.assertEqual(
+                [violation.rule_id for violation in violations],
+                ["tier-file-without-registry-row"],
             )
 
 
