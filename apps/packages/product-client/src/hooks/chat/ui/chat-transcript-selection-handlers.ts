@@ -5,12 +5,14 @@ import {
   resolvePointerOwnership,
   resolvePrimaryAAction,
   resolveSelectionChangeAction,
+  type TranscriptPrimaryAAction,
   type TranscriptSelectionClampEdge,
   type TranscriptTargetFacts,
 } from "#product/domain/chats/transcript/transcript-selection";
 import type {
   SelectedResponseSelection,
 } from "#product/domain/chats/transcript/selected-response-context";
+import { SELECT_ALL_COMMAND_EVENT } from "#product/lib/infra/dom/dom-select-all";
 
 interface TranscriptSelectionListenerTargets {
   windowTarget: Pick<Window, "addEventListener" | "removeEventListener">;
@@ -21,6 +23,7 @@ interface TranscriptSelectionListenerHandlers {
   pointerdown: (event: PointerEvent) => void;
   pointerup: () => void;
   keydown: (event: KeyboardEvent) => void;
+  selectall: (event: Event) => void;
   copy: (event: ClipboardEvent) => void;
   selectionchange: () => void;
   scroll: () => void;
@@ -42,6 +45,10 @@ interface ChatTranscriptSelectionHandlerArgs {
     target: EventTarget | null,
     root: HTMLElement | null,
   ) => TranscriptTargetFacts;
+  isSelectAllCommandOwner: (
+    target: EventTarget | null,
+    root: HTMLElement | null,
+  ) => boolean;
   focusRoot: (root: HTMLElement) => void;
   setFullSelectionMarker: (root: HTMLElement) => void;
   isFullSelectionMarker: (selection: Selection, root: HTMLElement) => boolean;
@@ -75,6 +82,7 @@ export function attachChatTranscriptSelectionListeners(
   targets.windowTarget.addEventListener("pointerup", handlers.pointerup, { capture: true });
   targets.windowTarget.addEventListener("pointercancel", handlers.pointerup, { capture: true });
   targets.windowTarget.addEventListener("keydown", handlers.keydown, { capture: true });
+  targets.windowTarget.addEventListener(SELECT_ALL_COMMAND_EVENT, handlers.selectall);
   targets.windowTarget.addEventListener("copy", handlers.copy, { capture: true });
   targets.windowTarget.addEventListener("scroll", handlers.scroll, { capture: true });
   targets.documentTarget.addEventListener("selectionchange", handlers.selectionchange);
@@ -84,6 +92,7 @@ export function attachChatTranscriptSelectionListeners(
     targets.windowTarget.removeEventListener("pointerup", handlers.pointerup, { capture: true });
     targets.windowTarget.removeEventListener("pointercancel", handlers.pointerup, { capture: true });
     targets.windowTarget.removeEventListener("keydown", handlers.keydown, { capture: true });
+    targets.windowTarget.removeEventListener(SELECT_ALL_COMMAND_EVENT, handlers.selectall);
     targets.windowTarget.removeEventListener("copy", handlers.copy, { capture: true });
     targets.windowTarget.removeEventListener("scroll", handlers.scroll, { capture: true });
     targets.documentTarget.removeEventListener("selectionchange", handlers.selectionchange);
@@ -99,6 +108,7 @@ export function createChatTranscriptSelectionHandlers({
   getActiveElement,
   getSelection,
   getTargetFactsForEvent,
+  isSelectAllCommandOwner,
   focusRoot,
   setFullSelectionMarker,
   isFullSelectionMarker,
@@ -162,6 +172,31 @@ export function createChatTranscriptSelectionHandlers({
     publishSelectedResponse();
   };
 
+  const applyPrimaryAAction = (
+    action: TranscriptPrimaryAAction,
+    event: Pick<Event, "preventDefault">,
+  ) => {
+    if (action === "ignore") {
+      return;
+    }
+    if (action === "clear-owned") {
+      clearSelectionState();
+      return;
+    }
+
+    const root = rootRef.current;
+    if (!root) {
+      clearSelectionState();
+      return;
+    }
+
+    event.preventDefault();
+    focusRoot(root);
+    setFullSelectionMarker(root);
+    transcriptOwnedRef.current = true;
+    allTranscriptSelectedRef.current = true;
+  };
+
   const keydown = (event: KeyboardEvent) => {
     if (hasSelectedResponse() && event.key === "Escape") {
       event.preventDefault();
@@ -177,30 +212,41 @@ export function createChatTranscriptSelectionHandlers({
       return;
     }
     const root = rootRef.current;
+    const activeElement = getActiveElement();
+    const isSelectAll = isPrimarySelectAllEvent(event, isApplePlatform());
+    const commandOwnerActive = isSelectAll
+      && (
+        isSelectAllCommandOwner(event.target, root)
+        || isSelectAllCommandOwner(activeElement, root)
+      );
     const action = resolvePrimaryAAction({
       owned: transcriptOwnedRef.current,
-      isSelectAll: isPrimarySelectAllEvent(event, isApplePlatform()),
+      commandOwnerActive,
+      isSelectAll,
       defaultPrevented: event.defaultPrevented,
       eventTarget: getTargetFactsForEvent(event.target, root),
-      activeTarget: getTargetFactsForEvent(getActiveElement(), root),
+      activeTarget: getTargetFactsForEvent(activeElement, root),
     });
+    applyPrimaryAAction(action, event);
+  };
 
-    if (action === "ignore") {
-      return;
-    }
-    if (action === "clear-owned") {
-      clearSelectionState();
-      return;
-    }
-    if (!root) {
-      clearSelectionState();
-      return;
-    }
-
-    event.preventDefault();
-    setFullSelectionMarker(root);
-    transcriptOwnedRef.current = true;
-    allTranscriptSelectedRef.current = true;
+  const selectall = (event: Event) => {
+    const root = rootRef.current;
+    const activeElement = getActiveElement();
+    const activeTarget = getTargetFactsForEvent(activeElement, root);
+    const commandOwnerActive = isSelectAllCommandOwner(activeElement, root);
+    const action = resolvePrimaryAAction({
+      // Native macOS menu accelerators do not emit a WebView keydown. The
+      // active chat surface is therefore a separate command-ownership signal
+      // from an existing native text selection.
+      owned: transcriptOwnedRef.current,
+      commandOwnerActive,
+      isSelectAll: true,
+      defaultPrevented: event.defaultPrevented,
+      eventTarget: getTargetFactsForEvent(event.target, root),
+      activeTarget,
+    });
+    applyPrimaryAAction(action, event);
   };
 
   const selectionchange = () => {
@@ -287,6 +333,7 @@ export function createChatTranscriptSelectionHandlers({
     pointerdown,
     pointerup,
     keydown,
+    selectall,
     copy,
     selectionchange,
     scroll,
