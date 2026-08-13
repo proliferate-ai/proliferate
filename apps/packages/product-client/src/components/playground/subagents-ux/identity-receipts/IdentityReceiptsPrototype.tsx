@@ -14,6 +14,8 @@ import {
 type GroupingMode = "single" | "grouped";
 type WakeMode = "scheduled" | "none";
 
+const IDENTITY_PROOF_SIZES = [12, 16, 18, 20] as const;
+
 const WAKE_ITEMS = [
   { id: "scheduled", label: "Wake scheduled" },
   { id: "none", label: "No wake" },
@@ -40,13 +42,13 @@ const GROUP_FIXTURES: { idSuffix: string; title: string; wake: boolean; prompt: 
 ];
 
 export function IdentityReceiptsPrototype() {
-  const [seed, setSeed] = useState("subagent_abc123");
+  const [seed, setSeed] = useState("session_abc123");
   const [wakeMode, setWakeMode] = useState<WakeMode>("scheduled");
   const [density, setDensity] = useState<ReceiptDensity>("comfortable");
   const [mode, setMode] = useState<GroupingMode>("single");
   const [lastAction, setLastAction] = useState<string | null>(null);
 
-  const normalizedSeed = seed.trim() || "subagent_abc123";
+  const normalizedSeed = seed.trim() || "session_abc123";
 
   const singleModel: SubagentReceiptModel = useMemo(
     () => ({
@@ -86,11 +88,11 @@ export function IdentityReceiptsPrototype() {
         </h2>
         <div className="flex flex-wrap items-end gap-4">
           <div className="w-56">
-            <Label htmlFor="identity-seed-input">Identity seed (subagent ID)</Label>
+            <Label htmlFor="identity-seed-input">Identity seed (durable session ID)</Label>
             <Input
               id="identity-seed-input"
               value={seed}
-              placeholder="subagent_abc123"
+              placeholder="session_abc123"
               onChange={(event) => setSeed(event.target.value)}
             />
           </div>
@@ -170,6 +172,46 @@ export function IdentityReceiptsPrototype() {
         <p className="text-ui-sm text-faint">
           Same seed always yields the same mark; the short ID stays hover-only.
           The agent-authored task label is the only human-readable name.
+        </p>
+      </section>
+
+      <section
+        aria-label="UI-R01 identity scale and Closed-state proof"
+        className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3"
+        data-ui-r01-identity-proof
+      >
+        <h3 className="text-heading font-semibold text-muted-foreground">
+          UI-R01 · one durable identity
+        </h3>
+        <div className="flex flex-wrap items-end gap-5">
+          {IDENTITY_PROOF_SIZES.map((size) => (
+            <div key={size} className="flex flex-col items-center gap-1.5">
+              <span className="flex size-7 items-center justify-center">
+                <SubagentIdentityGlyph
+                  seed={normalizedSeed}
+                  dimension={size}
+                  label={`${size}px Solid Seal`}
+                />
+              </span>
+              <span className="font-mono text-ui-sm text-faint">{size}px</span>
+            </div>
+          ))}
+          <div className="h-8 w-px bg-border" aria-hidden="true" />
+          <div className="flex flex-col items-center gap-1.5">
+            <span className="flex size-7 items-center justify-center">
+              <SubagentIdentityGlyph
+                seed={normalizedSeed}
+                dimension={20}
+                dimmed
+                label="Closed Solid Seal"
+              />
+            </span>
+            <span className="font-mono text-ui-sm text-faint">Closed</span>
+          </div>
+        </div>
+        <p className="text-ui-sm text-faint">
+          Shape, notch, and color come from the durable session ID. Size and Closed
+          opacity are presentation only.
         </p>
       </section>
     </div>

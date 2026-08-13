@@ -3,6 +3,7 @@ import { Button } from "#product/primitives/Button";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { ArrowUpRight, GripVertical, Pencil, X } from "#product/primitives/icons/core";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
+import { PendingAgentUpdatesRow } from "#product/components/workspace/chat/input/PendingAgentUpdatesRow";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
 import { usePendingPromptQueue } from "#product/hooks/chat/ui/use-pending-prompt-queue";
 import { useVerticalReorder } from "#product/hooks/chat/ui/use-vertical-reorder";
@@ -17,6 +18,9 @@ export interface PendingPromptListProps {
   onDelete: (entry: PendingPromptQueueRow) => void;
   onSteer: (entry: PendingPromptQueueRow) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
+  onOpenAgent?: (sessionId: string) => void;
+  canOpenAgent?: (sessionId: string) => boolean;
+  directoryBackedAgentNavigation?: boolean;
 }
 
 /** Presentational queued-message list with reorder, steer, edit, and remove. */
@@ -29,6 +33,9 @@ export function PendingPromptList({
   onDelete,
   onSteer,
   onReorder,
+  onOpenAgent,
+  canOpenAgent,
+  directoryBackedAgentNavigation = false,
 }: PendingPromptListProps) {
   const { dragIndex, dropIndex, handleDragStart } = useVerticalReorder({
     itemCount: entries.length,
@@ -39,7 +46,9 @@ export function PendingPromptList({
     return null;
   }
 
-  const runtimeEntryIndexes = entries.flatMap((entry, index) => entry.seq > 0 ? [index] : []);
+  const runtimeEntryIndexes = entries.flatMap((entry, index) =>
+    entry.kind === "plain" && entry.seq > 0 ? [index] : []
+  );
 
   return (
     <div
@@ -52,6 +61,17 @@ export function PendingPromptList({
         data-reorder-container
       >
         {entries.map((entry, index) => {
+          if (entry.kind === "agent_updates") {
+            return (
+              <PendingAgentUpdatesRow
+                key={entry.key}
+                entry={entry}
+                onOpenAgent={onOpenAgent}
+                canOpenAgent={canOpenAgent}
+                directoryBackedAgentNavigation={directoryBackedAgentNavigation}
+              />
+            );
+          }
           const runtimeIndex = runtimeEntryIndexes.indexOf(index);
           return (
             <PendingPromptRow
@@ -99,6 +119,7 @@ export function ConnectedPendingPromptList() {
       onDelete={queue.onDelete}
       onSteer={queue.onSteer}
       onReorder={queue.onReorder}
+      directoryBackedAgentNavigation
     />
   );
 }
@@ -148,6 +169,8 @@ function PendingPromptRow({
     && !entry.isSending
     && !entry.isBeingEdited;
   const canDragReorder =
+    entry.kind === "plain"
+    &&
     isRuntimeConfirmed
     && sessionMaterialized
     && runtimeEntryCount > 1

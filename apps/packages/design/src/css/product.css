@@ -1364,6 +1364,31 @@ body {
   }
 }
 
+/* A newly settled subagent identity joins an already-mounted horizontal run.
+   Its receipt-specific registry key makes the pop one-shot; replay and
+   virtualization remounts stay static. Compositor-only: opacity/scale. */
+@keyframes subagent-spawn-chip-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.subagent-spawn-chip-enter {
+  transform-origin: 50% 50%;
+  animation: subagent-spawn-chip-enter var(--duration-pop) var(--ease-pop) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subagent-spawn-chip-enter {
+    animation: none;
+  }
+}
+
 /* ---- Satellite ripple for streaming logo ---- */
 @keyframes ripple-sat {
   0%, 100% {

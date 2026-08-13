@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ContentPart } from "@anyharness/sdk";
 import {
   derivePendingPromptQueueRow,
+  derivePendingPromptQueueRows,
   findNewestEditablePendingPrompt,
   type PendingPromptQueueEntry,
 } from "./pending-prompt-queue";
@@ -164,7 +165,7 @@ describe("derivePendingPromptQueueRow", () => {
     });
   });
 
-  it("hides subagent wake prompt bodies", () => {
+  it("hides subagent wake prompt bodies and exposes no controls", () => {
     const row = derivePendingPromptQueueRow(entry({
       text: [
         'Subagent "runtime-server-sdk-survey" completed a turn.',
@@ -180,10 +181,11 @@ describe("derivePendingPromptQueueRow", () => {
     }));
 
     expect(row).toMatchObject({
-      kind: "wake",
-      label: "runtime-server-sdk-survey finished",
+      kind: "agent_updates",
+      label: "From subagents",
       canEdit: false,
-      canDelete: true,
+      canDelete: false,
+      agentUpdateCount: 1,
     });
     expect(row.label).not.toContain("Child session");
   });
@@ -265,6 +267,171 @@ describe("derivePendingPromptQueueRow", () => {
       kind: "review_feedback",
       label: "Review feedback ready",
     });
+  });
+});
+
+describe("derivePendingPromptQueueRows", () => {
+  it("returns no aggregate for zero agent updates", () => {
+    expect(derivePendingPromptQueueRows([entry({ seq: 1, text: "User message" })]))
+      .toHaveLength(1);
+    expect(derivePendingPromptQueueRows([])).toEqual([]);
+  });
+
+  it("places one agent aggregate after every user row", () => {
+    const rows = derivePendingPromptQueueRows([
+      entry({ seq: 1, text: "First user message" }),
+      entry({
+        seq: 2,
+        text: "Exact hidden agent reply",
+        promptProvenance: {
+          type: "agentSession",
+          sourceSessionId: "agent-session-1",
+          label: "Schema audit",
+        },
+      }),
+      entry({ seq: 3, text: "Second user message" }),
+    ]);
+
+    expect(rows.map((row) => row.kind)).toEqual(["plain", "plain", "agent_updates"]);
+    expect(rows.at(-1)).toMatchObject({
+      key: "agent-updates",
+      label: "From subagents",
+      agentUpdateCount: 1,
+      agentUpdateSeqs: [2],
+      agents: [{
+        sessionId: "agent-session-1",
+        title: "Schema audit",
+        updateCount: 1,
+        provenance: {
+          kind: "agent_session",
+          sessionLinkId: null,
+          relation: null,
+        },
+      }],
+      showEditAction: false,
+      showDeleteAction: false,
+    });
+    expect(rows.at(-1)?.label).not.toContain("Exact hidden");
+  });
+
+  it("deduplicates durable glyph identities while counting every update", () => {
+    const rows = derivePendingPromptQueueRows([
+      entry({
+        seq: 2,
+        promptProvenance: {
+          type: "agentSession",
+          sourceSessionId: "agent-session-1",
+          label: "Schema audit",
+        },
+      }),
+      entry({
+        seq: 4,
+        promptProvenance: {
+          type: "agentSession",
+          sourceSessionId: "agent-session-1",
+          label: "Schema audit",
+        },
+      }),
+      entry({
+        seq: 6,
+        promptProvenance: {
+          type: "subagentWake",
+          sessionLinkId: "link-2",
+          completionId: "completion-2",
+          label: "Tests",
+        },
+      }),
+      entry({
+        seq: 8,
+        promptProvenance: {
+          type: "subagentWake",
+          sessionLinkId: "link-unresolved",
+          completionId: "completion-unresolved",
+          label: "Not projected yet",
+        },
+      }),
+    ], {
+      "completion-2": {
+        relation: "subagent",
+        completionId: "completion-2",
+        sessionLinkId: "link-2",
+        parentSessionId: "parent",
+        childSessionId: "agent-session-2",
+        childTurnId: "turn-2",
+        childLastEventSeq: 12,
+        outcome: "completed",
+        label: "Tests",
+        seq: 13,
+        timestamp: "2026-08-10T00:00:00Z",
+      },
+    });
+    const aggregate = rows[0]!;
+
+    expect(aggregate.agentUpdateCount).toBe(4);
+    expect(aggregate.agentUpdateSeqs).toEqual([2, 4, 6, 8]);
+    expect(aggregate.agents).toEqual([
+      {
+        sessionId: "agent-session-1",
+        title: "Schema audit",
+        updateCount: 2,
+        provenance: {
+          kind: "agent_session",
+          sessionLinkId: null,
+          relation: null,
+        },
+      },
+      {
+        sessionId: "agent-session-2",
+        title: "Tests",
+        updateCount: 1,
+        provenance: {
+          kind: "subagent_wake",
+          sessionLinkId: "link-2",
+          relation: "subagent",
+        },
+      },
+    ]);
+    expect(aggregate.agents).toHaveLength(2);
+  });
+
+  it("preserves linked cowork provenance without inferring navigation location", () => {
+    const rows = derivePendingPromptQueueRows([
+      entry({
+        seq: 9,
+        promptProvenance: {
+          type: "linkWake",
+          relation: "cowork_coding_session",
+          sessionLinkId: "cowork-link-1",
+          completionId: "cowork-completion-1",
+          label: "Coding pass",
+        },
+      }),
+    ], {
+      "cowork-completion-1": {
+        relation: "cowork_coding_session",
+        completionId: "cowork-completion-1",
+        sessionLinkId: "cowork-link-1",
+        parentSessionId: "parent",
+        childSessionId: "cowork-session-1",
+        childTurnId: "turn-cowork",
+        childLastEventSeq: 20,
+        outcome: "completed",
+        label: "Coding pass",
+        seq: 21,
+        timestamp: "2026-08-10T00:00:00Z",
+      },
+    });
+
+    expect(rows[0]?.agents).toEqual([{
+      sessionId: "cowork-session-1",
+      title: "Coding pass",
+      updateCount: 1,
+      provenance: {
+        kind: "link_wake",
+        sessionLinkId: "cowork-link-1",
+        relation: "cowork_coding_session",
+      },
+    }]);
   });
 });
 

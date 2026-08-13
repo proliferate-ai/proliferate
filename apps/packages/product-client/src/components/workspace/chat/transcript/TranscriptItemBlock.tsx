@@ -21,8 +21,6 @@ import {
 import {
   resolveUserMessageActionTime,
 } from "#product/domain/chats/transcript/transcript-action-time";
-import type { TranscriptOpenSessionRole } from "#product/domain/chats/transcript/transcript-open-target";
-import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { AssistantMessage } from "#product/components/workspace/chat/transcript/AssistantMessage";
 import type { AssistantMessageRevealState } from "#product/lib/domain/chat/transcript/assistant-message-reveal";
 import {
@@ -38,18 +36,13 @@ import { ClaudePlanCard } from "#product/components/workspace/chat/transcript/Cl
 import { ModeTransitionDivider } from "#product/components/workspace/chat/transcript/ModeTransitionDivider";
 import { ConnectedProposedPlanItem } from "#product/components/workspace/chat/transcript/ConnectedProposedPlanItem";
 import { SessionErrorItem } from "#product/components/workspace/chat/transcript/SessionErrorItem";
-import { SubagentWakeBadge } from "#product/components/workspace/chat/transcript/SubagentWakeBadge";
+import { AgentOriginPromptReceipt } from "#product/components/workspace/chat/transcript/AgentOriginPromptReceipt";
 import { SystemMessage } from "#product/components/workspace/chat/transcript/SystemMessage";
 import { TranscriptActivityBlock } from "#product/components/workspace/chat/transcript/TranscriptActivityBlock";
 import { TranscriptToolCallItemBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
-import { UserMessageProvenanceChrome } from "#product/components/workspace/chat/transcript/UserMessageProvenanceChrome";
 import { useProposedPlanToolCallIds } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
-import {
-  useTranscriptCanOpenSession,
-  useTranscriptOpenSession,
-  useTranscriptSessionId,
-} from "#product/components/workspace/chat/transcript/TranscriptContexts";
+import { useTranscriptSessionId } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
@@ -76,8 +69,6 @@ export function TranscriptItemBlock({
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const sessionId = useTranscriptSessionId();
-  const openSession = useTranscriptOpenSession();
-  const canOpenSession = useTranscriptCanOpenSession();
   const reportAssistantRevealState = useCallback((state: AssistantMessageRevealState) => {
     recordAssistantRevealProgress(item.itemId, state);
     onAssistantRevealStateChange?.(item.itemId, state);
@@ -85,77 +76,17 @@ export function TranscriptItemBlock({
 
   switch (item.kind) {
     case "user_message": {
-      if (isSubagentWakeProvenance(item.promptProvenance)) {
-        const wakeProvenance = item.promptProvenance;
-        const completion =
-          transcript.linkCompletionsByCompletionId[wakeProvenance.completionId] ?? null;
-        const childRole: TranscriptOpenSessionRole =
-          wakeProvenance.type === "linkWake"
-          && wakeProvenance.relation === "cowork_coding_session"
-            ? "cowork-coding-child"
-            : "linked-child";
-        const childSessionId = completion?.childSessionId ?? null;
-        const canOpenChild = !!openSession
-          && !!childSessionId
-          && (canOpenSession?.(childSessionId, childRole) ?? true);
+      if (
+        isSubagentWakeProvenance(item.promptProvenance)
+        || isAgentSessionProvenance(item.promptProvenance)
+      ) {
         return (
-          <div className="flex justify-end">
-            <SubagentWakeBadge
-              label={wakeProvenance.label ?? completion?.label ?? null}
-              childSessionId={childSessionId}
-              sessionLinkId={wakeProvenance.sessionLinkId}
-              outcome={completion?.outcome ?? null}
-              titleFallback={
-                wakeProvenance.type === "linkWake"
-                && wakeProvenance.relation === "cowork_coding_session"
-                  ? "Coding session"
-                  : "Subagent"
-              }
-              originKind={childRole === "cowork-coding-child" ? "cowork" : "subagent"}
-              parentTitle={transcript.sessionMeta.title}
-              onOpenChild={canOpenChild
-                ? (targetSessionId) => {
-                  useSessionDirectoryStore.getState().recordRelationshipHint(targetSessionId, {
-                    kind: wakeProvenance.type === "subagentWake"
-                      ? "subagent_child"
-                      : childRole === "cowork-coding-child"
-                        ? "cowork_child"
-                        : "linked_child",
-                    parentSessionId: sessionId,
-                    sessionLinkId: wakeProvenance.sessionLinkId,
-                    relation: wakeProvenance.type === "linkWake"
-                      ? wakeProvenance.relation
-                      : "subagent",
-                    workspaceId,
-                  });
-                  openSession(targetSessionId, childRole);
-                }
-                : undefined}
-            />
-          </div>
-        );
-      }
-
-      if (isAgentSessionProvenance(item.promptProvenance)) {
-        const sourceSessionId = item.promptProvenance.sourceSessionId;
-        const canOpenParent = !!openSession
-          && (canOpenSession?.(sourceSessionId, "agent-parent") ?? true);
-        return (
-          <UserMessage
-            sessionId={sessionId}
-            content={item.text}
-            contentParts={item.contentParts}
-            showCopyButton
-            timestampLabel={resolveUserMessageActionTime(item)}
-            footer={(
-              <UserMessageProvenanceChrome
-                sourceSessionId={sourceSessionId}
-                label={item.promptProvenance.label ?? null}
-                onOpenParent={canOpenParent
-                  ? (parentSessionId) => openSession(parentSessionId, "agent-parent")
-                  : undefined}
-              />
-            )}
+          <AgentOriginPromptReceipt
+            provenance={item.promptProvenance}
+            exactMessage={item.text}
+            transcript={transcript}
+            parentSessionId={sessionId}
+            workspaceId={workspaceId}
           />
         );
       }
