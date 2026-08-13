@@ -46,7 +46,7 @@ export interface UiFontScale {
   workspaceTitle: TextTokenScale;
   /** Compact card/dialog titles and level-three headings. */
   heading: TextTokenScale;
-  /** Page/settings titles (SettingsPageHeader pairing). */
+  /** Page/settings titles (PageHeader's flat/settings variant pairing). */
   title: TextTokenScale;
   /** Home hero heading. */
   hero: TextTokenScale;

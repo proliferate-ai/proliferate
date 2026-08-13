@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import {
   SETTINGS_CONTROL_WIDTH_CLASS,
   SettingsRow,
@@ -52,8 +53,9 @@ export function RepoConfigurePane({
     );
   }
   return (
-    <section className="space-y-5">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Configure"
         description="Workspace defaults for this repo."
       />
@@ -81,7 +83,7 @@ export function RepoConfigurePane({
           gitRepoName={repository.gitRepoName}
         />
       )}
-    </section>
+    </SettingsPageBody>
   );
 }
 

@@ -43,12 +43,20 @@ export function OrganizationInvitationsSection({
           title="Invite link"
           description="Share this link with people who already have an invitation for this organization."
         >
+          {/* Not a SettingsRow (spec §4.1 named this row for it): SettingsRow is
+              label-left / control-right, and this is a full-bleed control strip —
+              a flex-1 Input that must span the card's whole width with the copy
+              button after it. px-3.5 py-[13px] is SettingsRow's own in-card
+              geometry, transcribed so this strip lines up with the SettingsRows
+              in sibling cards; it is not a second row shape. */}
           <div className="flex flex-col items-stretch gap-2 px-3.5 py-[13px] sm:flex-row">
-            <div className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-3 text-ui text-foreground">
-              <span className="min-w-0 truncate font-mono text-ui-sm">
-                {inviteLinkUrl || (copyingInviteLink ? "Loading invite link…" : "Invite link unavailable")}
-              </span>
-            </div>
+            <Input
+              readOnly
+              value={inviteLinkUrl ?? ""}
+              placeholder={copyingInviteLink ? "Loading invite link…" : "Invite link unavailable"}
+              aria-label="Invite link"
+              className="min-w-0 flex-1 bg-background font-mono text-ui-sm"
+            />
             <Button
               type="button"
               variant="secondary"
@@ -74,6 +82,10 @@ export function OrganizationInvitationsSection({
             event.preventDefault();
             void onInviteSubmit();
           }}
+          // Same as the invite-link strip above: a full-bleed <form> of three
+          // side-by-side controls, not SettingsRow's label/control split.
+          // px-3.5 py-[13px] transcribes SettingsRow's in-card geometry so the
+          // strip aligns with real SettingsRows in sibling cards.
           className="flex flex-col gap-2 px-3.5 py-[13px] sm:flex-row"
         >
           <Input

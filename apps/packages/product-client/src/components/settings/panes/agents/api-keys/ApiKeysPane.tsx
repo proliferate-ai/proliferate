@@ -11,7 +11,8 @@ import { Badge } from "#product/primitives/Badge";
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { AGENT_API_KEYS_COPY } from "#product/copy/settings/agent-api-keys-copy";
@@ -133,8 +134,9 @@ export function ApiKeysPane() {
       ? AGENT_API_KEYS_COPY.cloudNotConfigured
       : AGENT_API_KEYS_COPY.signInRequired;
     return (
-      <section className="space-y-5" data-api-keys-pane="" data-api-keys-state="gated">
-        <SettingsPageHeader
+      <SettingsPageBody data-api-keys-pane="" data-api-keys-state="gated">
+        <PageHeader
+          variant="flat"
           title={AGENT_API_KEYS_COPY.title}
           description={AGENT_API_KEYS_COPY.description}
         />
@@ -144,7 +146,7 @@ export function ApiKeysPane() {
             description={description}
           />
         </SettingsSection>
-      </section>
+      </SettingsPageBody>
     );
   }
 
@@ -155,8 +157,9 @@ export function ApiKeysPane() {
       : "ready";
 
   return (
-    <section className="space-y-6" data-api-keys-pane="" data-api-keys-state={keysState}>
-      <SettingsPageHeader
+    <SettingsPageBody data-api-keys-pane="" data-api-keys-state={keysState}>
+      <PageHeader
+        variant="flat"
         title={AGENT_API_KEYS_COPY.title}
         description={AGENT_API_KEYS_COPY.description}
       />
@@ -275,6 +278,6 @@ export function ApiKeysPane() {
         onClose={() => setPendingRevoke(null)}
         onConfirm={handleConfirmRevoke}
       />
-    </section>
+    </SettingsPageBody>
   );
 }

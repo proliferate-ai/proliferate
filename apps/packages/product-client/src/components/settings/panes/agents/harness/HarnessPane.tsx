@@ -4,6 +4,7 @@ import { SettingsSection } from "#product/primitives/patterns/settings/SettingsS
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
+import { IconTile } from "#product/primitives/IconTile";
 import { ArrowUpRight } from "#product/primitives/icons/core";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
@@ -28,6 +29,7 @@ import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-har
 import { getAgentStatusDisplay } from "#product/lib/domain/agents/status-presentation";
 import { HarnessInstallGate } from "#product/components/settings/panes/agents/harness/HarnessInstallGate";
 import { CloudAnyHarnessRuntimeProvider } from "#product/providers/CloudAnyHarnessRuntimeProvider";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 
 interface HarnessPaneProps {
   harnessKind: string;
@@ -75,21 +77,25 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   const { agentsByKind } = useAgentCatalog();
 
   return (
-    <section className="space-y-6">
+    <SettingsPageBody>
       {/* §1 identity header (design-handoff v2): 42px provider glyph tile +
-          name/vendor line + Docs exit. Inline rather than SettingsPageHeader —
-          the shared pattern has no leading-tile slot. */}
+          name/vendor line + Docs exit. Inline rather than PageHeader's
+          settings (flat) variant — that variant has no leading-tile slot, and
+          this is a first-instance carve-out (no second call site exists to
+          justify promoting a tile slot onto the shared pattern). */}
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3.5">
-          <span
+          <IconTile
+            tone="outlined"
+            size="lg"
             aria-hidden
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border-light bg-surface-control text-foreground"
+            className="text-foreground"
           >
             <ProviderIcon
               kind={harnessKind}
               className="icon-large [font-size:var(--text-ui)]"
             />
-          </span>
+          </IconTile>
           <div className="min-w-0">
             <h1 className="text-title font-semibold tracking-[-0.025em] text-foreground">
               {displayName}
@@ -113,7 +119,7 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
       ) : (
         <HarnessRuntimeSurface harnessKind={harnessKind} surface="local" />
       )}
-    </section>
+    </SettingsPageBody>
   );
 }
 

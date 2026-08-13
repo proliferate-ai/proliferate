@@ -9,8 +9,8 @@
 # in TYPE_ALLOWLIST below (a raw length is the exception, never the default).
 #
 # Settings-structure rule: pane/screen code expresses structure through
-# SettingsRow/SettingsSection/SettingsPageHeader/SettingsEmptyState instead of
-# hand-typing the scale, and card-era primitives stay retired.
+# SettingsRow/SettingsSection/SettingsEmptyState and PageHeader (variant="flat")
+# instead of hand-typing the scale, and card-era primitives stay retired.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -59,7 +59,7 @@ fi
 check 'text-\[11px\]' "raw 11px (use SettingsSection eyebrow)"
 check 'text-\[12px\]' "raw 12px (use SettingsRow/SettingsSection description)"
 check 'text-\[13px\]' "raw 13px (use SettingsRow label / SettingsEmptyState)"
-check 'text-\[20px\]' "raw 20px (use SettingsPageHeader)"
+check 'text-\[20px\]' "raw 20px (use PageHeader variant=\"flat\")"
 check 'tracking-\[0.06em\]' "raw eyebrow tracking (use SettingsSection)"
 
 # ---------------------------------------------------------------------------
