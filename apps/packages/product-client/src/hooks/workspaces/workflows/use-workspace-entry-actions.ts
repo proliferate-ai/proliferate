@@ -33,6 +33,7 @@ import {
   resolveErrorMessage,
 } from "#product/hooks/workspaces/workflows/workspace-entry-action-helpers";
 import {
+  completePendingWorkspaceCreationInBackground,
   failPendingWorkspaceEntry,
   finalizePendingWorkspaceSelection,
 } from "#product/hooks/workspaces/workflows/workspace-entry-finalization";
@@ -65,34 +66,6 @@ export function useWorkspaceEntryActions() {
   } = useWorkspaceActions();
   const { beginPendingWorkspace, selectWorkspaceWithArrival } = useWorkspaceEntryFlow();
   const entrySelectionDeps = useWorkspaceEntrySelectionDeps();
-
-  const finalizeSelection = useCallback(async (
-    entry: PendingWorkspaceEntry,
-    workspaceId: string,
-    options?: {
-      latencyFlowId?: string | null;
-      repoGroupKeyToExpand?: string | null;
-      knownWorkspace?: Workspace | null;
-    },
-  ): Promise<boolean> => {
-    return finalizePendingWorkspaceSelection({
-      entry,
-      workspaceId,
-      options,
-    }, entrySelectionDeps);
-  }, [entrySelectionDeps]);
-
-  const failPendingEntry = useCallback((
-    entry: PendingWorkspaceEntry,
-    errorMessage: string,
-    overrides?: Partial<Pick<PendingWorkspaceEntry, "workspaceId" | "request" | "setupScript">>,
-  ) => {
-    failPendingWorkspaceEntry({
-      entry,
-      errorMessage,
-      overrides,
-    }, entrySelectionDeps);
-  }, [entrySelectionDeps]);
 
   const createLocalWorkspaceAndEnterInternal = useCallback(async (
     sourceRoot: string,
@@ -135,33 +108,48 @@ export function useWorkspaceEntryActions() {
         workspaceId: workspace.id,
         requestElapsedMs: elapsedMs(startedAt),
       });
-      if (!isAttemptCurrent(entry.attemptId)) {
-        return null;
-      }
       const selectionEntry: PendingWorkspaceEntry = {
         ...entry,
         workspaceId: workspace.id,
       };
-      const selectionFinalized = await finalizeSelection(selectionEntry, workspace.id, {
-        repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
-        knownWorkspace: workspace,
-      });
-      return selectionFinalized ? { workspaceId: workspace.id, projectedSessionId } : null;
+      if (!isAttemptCurrent(entry.attemptId)) {
+        return completePendingWorkspaceCreationInBackground({
+          entry: selectionEntry,
+          workspaceId: workspace.id,
+          projectedSessionId,
+        }, entrySelectionDeps);
+      }
+      const selectionFinalized = await finalizePendingWorkspaceSelection({
+        entry: selectionEntry,
+        workspaceId: workspace.id,
+        options: {
+          repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
+          knownWorkspace: workspace,
+        },
+      }, entrySelectionDeps);
+      if (!selectionFinalized) {
+        return completePendingWorkspaceCreationInBackground({
+          entry: selectionEntry,
+          workspaceId: workspace.id,
+          projectedSessionId,
+        }, entrySelectionDeps);
+      }
+      return { workspaceId: workspace.id, projectedSessionId };
     } catch (error) {
       const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
       const workspaceId = currentPending?.attemptId === entry.attemptId
         ? currentPending.workspaceId
         : null;
-      failPendingEntry(
-        workspaceId
+      failPendingWorkspaceEntry({
+        entry: workspaceId
           ? {
             ...entry,
             workspaceId,
             request: { kind: "select-existing", workspaceId },
           }
           : entry,
-        resolveErrorMessage(error, "Failed to create workspace."),
-      );
+        errorMessage: resolveErrorMessage(error, "Failed to create workspace."),
+      }, entrySelectionDeps);
       if (options?.throwOnFailure) {
         throw error;
       }
@@ -170,8 +158,7 @@ export function useWorkspaceEntryActions() {
   }, [
     beginPendingWorkspace,
     createLocalWorkspace,
-    failPendingEntry,
-    finalizeSelection,
+    entrySelectionDeps,
     repoRoots,
     selectWorkspaceWithArrival,
   ]);
@@ -318,10 +305,6 @@ export function useWorkspaceEntryActions() {
         createElapsedMs: elapsedMs(createStartedAt),
         totalElapsedMs: elapsedMs(startedAt),
       });
-      if (!isAttemptCurrent(entry.attemptId)) {
-        return null;
-      }
-
       const selectionEntry = buildMaterializedWorktreePendingEntry({
         entry,
         resolvedInput,
@@ -330,24 +313,39 @@ export function useWorkspaceEntryActions() {
         fallbackBaseRef: resolved.params.baseRef,
         setupScript: result.setupScript ?? null,
       });
+      if (!isAttemptCurrent(entry.attemptId)) {
+        return completePendingWorkspaceCreationInBackground({
+          entry: selectionEntry,
+          workspaceId: result.workspace.id,
+          projectedSessionId,
+        }, entrySelectionDeps);
+      }
 
-      const selectionFinalized = await finalizeSelection(selectionEntry, result.workspace.id, {
-        latencyFlowId: options?.latencyFlowId,
-        repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(result.workspace, repoRoots),
-        knownWorkspace: result.workspace,
-      });
+      const selectionFinalized = await finalizePendingWorkspaceSelection({
+        entry: selectionEntry,
+        workspaceId: result.workspace.id,
+        options: {
+          latencyFlowId: options?.latencyFlowId,
+          repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(result.workspace, repoRoots),
+          knownWorkspace: result.workspace,
+        },
+      }, entrySelectionDeps);
       if (!selectionFinalized) {
-        return null;
+        return completePendingWorkspaceCreationInBackground({
+          entry: selectionEntry,
+          workspaceId: result.workspace.id,
+          projectedSessionId,
+        }, entrySelectionDeps);
       }
       return { workspaceId: result.workspace.id, projectedSessionId };
     } catch (error) {
       const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
       failLatencyFlow(options?.latencyFlowId, "worktree_enter_failed");
       if (entry && currentPending?.attemptId === attemptId) {
-        failPendingEntry(
-          currentPending,
-          resolveErrorMessage(error, "Failed to create worktree."),
-        );
+        failPendingWorkspaceEntry({
+          entry: currentPending,
+          errorMessage: resolveErrorMessage(error, "Failed to create worktree."),
+        }, entrySelectionDeps);
       }
       if (options?.throwOnFailure) {
         throw error;
@@ -357,8 +355,7 @@ export function useWorkspaceEntryActions() {
   }, [
     beginPendingWorkspace,
     createWorktreeWorkspace,
-    failPendingEntry,
-    finalizeSelection,
+    entrySelectionDeps,
     repoRoots,
     resolveWorktreeCreationInput,
     selectWorkspaceWithArrival,

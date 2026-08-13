@@ -428,6 +428,16 @@ When the real workspace id is known:
    Do not clear as soon as the real workspace appears in cache. That creates a
    visible gap between the pending projection and the real row.
 
+### Background Completion
+
+Selecting another workspace mid-creation clears the pending entry, but it must
+not abandon the attempt. When the create call later succeeds and the attempt is
+no longer current, the entry actions skip selection finalization and complete
+in the background: projected sessions are remapped to the created workspace and
+materialized without moving the active session, so the queued prompt still
+dispatches and the workspace appears once collections refresh. The workspace
+the user switched to keeps selection and focus.
+
 ## 9. UI Projection Rules
 
 Each surface that normally reads real workspace/session data needs a pending
@@ -449,6 +459,9 @@ projection path.
 - Launch intent may supply launch context only before a projected session
   exists.
 - If session-intent or transcript content exists, content wins over launch copy.
+- A launch intent bound to a session owns only that session's surface. A
+  different active session, or another selected workspace, keeps its own
+  surface — including while the intent holds a failure.
 
 ### Header Tabs
 

@@ -16,6 +16,7 @@ import {
   startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
+import type { WorkspaceEntryResult } from "#product/hooks/workspaces/workflows/workspace-entry-types";
 
 export interface WorkspaceEntrySelectionDeps {
   expandRepoGroup: (repoGroupKey: string) => void;
@@ -27,6 +28,7 @@ export interface WorkspaceEntrySelectionDeps {
   materializePendingWorkspaceSessions: (
     entry: PendingWorkspaceEntry,
     workspaceId: string,
+    options?: { eventPrefix?: string; skipSessionActivation?: boolean },
   ) => void;
   selectWorkspace: (
     workspaceId: string,
@@ -120,6 +122,34 @@ export async function finalizePendingWorkspaceSelection(
     totalElapsedMs: elapsedSince(input.entry.createdAt),
   });
   return true;
+}
+
+/**
+ * A creation finished after the user selected another workspace (the switch
+ * cleared the pending entry, so the attempt is no longer current). The created
+ * workspace and its queued prompt survive: projected sessions bind to the real
+ * workspace without stealing the selection the user moved to (PRO-230).
+ */
+export function completePendingWorkspaceCreationInBackground(
+  input: {
+    entry: PendingWorkspaceEntry;
+    workspaceId: string;
+    projectedSessionId: string | null;
+  },
+  deps: Pick<WorkspaceEntrySelectionDeps, "materializePendingWorkspaceSessions">,
+): WorkspaceEntryResult {
+  logLatency("workspace.entry.background_completion", {
+    attemptId: input.entry.attemptId,
+    source: input.entry.source,
+    workspaceId: input.workspaceId,
+    projectedSessionId: input.projectedSessionId,
+    elapsedSincePendingMs: elapsedSince(input.entry.createdAt),
+  });
+  deps.materializePendingWorkspaceSessions(input.entry, input.workspaceId, {
+    eventPrefix: "workspace.entry.background",
+    skipSessionActivation: true,
+  });
+  return { workspaceId: input.workspaceId, projectedSessionId: input.projectedSessionId };
 }
 
 export function failPendingWorkspaceEntry(
