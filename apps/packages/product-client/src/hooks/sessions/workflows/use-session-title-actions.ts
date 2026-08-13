@@ -98,6 +98,18 @@ export function useSessionTitleActions() {
     if (!trimmedPrompt) {
       return;
     }
+
+    try {
+      // Show the prompt itself as the title right away; the generated
+      // summary replaces it once available.
+      await updateSessionTitle(
+        input.sessionId,
+        trimmedPrompt.replace(/\s+/g, " ").slice(0, 160).trim(),
+      );
+    } catch {
+      // Best-effort title assignment should never block chat.
+    }
+
     if (authStatusRef.current !== "authenticated") {
       return;
     }
