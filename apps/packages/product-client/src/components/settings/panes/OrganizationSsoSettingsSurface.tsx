@@ -7,6 +7,7 @@ import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { Select } from "#product/primitives/Select";
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 
@@ -96,9 +97,7 @@ export function OrganizationSsoSettingsSurface({
       />
 
       {error ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-ui-sm text-destructive">
-          {error}
-        </div>
+        <NoticeBanner tone="destructive">{error}</NoticeBanner>
       ) : null}
 
       {/* Connection status */}
@@ -154,9 +153,7 @@ export function OrganizationSsoSettingsSurface({
           </div>
         </SettingsSection>
         {connection?.lastError ? (
-          <div className="rounded-lg border border-warning-border bg-warning-subtle px-4 py-3 text-ui-sm text-warning-foreground">
-            {connection.lastError}
-          </div>
+          <NoticeBanner tone="warning">{connection.lastError}</NoticeBanner>
         ) : null}
       </div>
 
