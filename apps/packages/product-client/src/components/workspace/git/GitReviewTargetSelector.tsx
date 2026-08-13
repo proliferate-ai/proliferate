@@ -6,7 +6,10 @@ import { Check, ChevronDown } from "#product/primitives/icons/core";
 import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
-import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
+import {
+  PickerEmptyRow,
+  PickerPopoverContent,
+} from "#product/primitives/patterns/PickerPopoverContent";
 import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 import { GIT_REVIEW_SELECTOR_TRIGGER_CLASS } from "#product/components/workspace/git/GitReviewSelectorChrome";
 
@@ -80,43 +83,44 @@ export function GitReviewTargetSelector({
       className={`w-56 ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
-        <div className="flex flex-col gap-1">
-          <PopoverSearchField
-            value={search}
-            onChange={setSearch}
-            placeholder="Search branches"
-            ariaLabel="Search branches"
-            autoFocus
-          />
-          <div className="max-h-64 overflow-y-auto">
-            {branchOptions.length === 0 ? (
-              <p className="px-2 py-2 text-ui text-muted-foreground">No branches</p>
-            ) : (
-              branchOptions.map((branch) => (
-                <PopoverMenuItem
-                  key={branch.name}
-                  icon={<GitBranchIcon />}
-                  label={branch.name}
-                  labelClassName={
-                    branch.name === activeRef ? "text-foreground" : "text-muted-foreground"
-                  }
-                  trailing={(
-                    <span className="flex shrink-0 items-center gap-2">
-                      {branch.isDefault && <Badge size="micro">default</Badge>}
-                      {branch.name === activeRef && (
-                        <Check className="icon-compact shrink-0 text-foreground" />
-                      )}
-                    </span>
-                  )}
-                  onClick={() => {
-                    onSelect(branch.name);
-                    close();
-                  }}
-                />
-              ))
-            )}
-          </div>
-        </div>
+        // `max-h-64` keeps this picker's original 16rem cap rather than the
+        // pattern's 20rem default; the cap now bounds the whole picker
+        // (search row included) instead of the scrolling list alone.
+        <PickerPopoverContent
+          className="max-h-64"
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search branches"
+          searchAriaLabel="Search branches"
+          searchAutoFocus
+        >
+          {branchOptions.length === 0 ? (
+            <PickerEmptyRow label="No branches" />
+          ) : (
+            branchOptions.map((branch) => (
+              <PopoverMenuItem
+                key={branch.name}
+                icon={<GitBranchIcon />}
+                label={branch.name}
+                labelClassName={
+                  branch.name === activeRef ? "text-foreground" : "text-muted-foreground"
+                }
+                trailing={(
+                  <span className="flex shrink-0 items-center gap-2">
+                    {branch.isDefault && <Badge size="micro">default</Badge>}
+                    {branch.name === activeRef && (
+                      <Check className="icon-compact shrink-0 text-foreground" />
+                    )}
+                  </span>
+                )}
+                onClick={() => {
+                  onSelect(branch.name);
+                  close();
+                }}
+              />
+            ))
+          )}
+        </PickerPopoverContent>
       )}
     </PopoverButton>
   );

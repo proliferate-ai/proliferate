@@ -6,6 +6,7 @@ import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { SettingsMenu } from "#product/primitives/patterns/settings/SettingsMenu";
 import { Textarea } from "#product/primitives/Textarea";
@@ -373,11 +374,7 @@ export function SecretEditorDialog({
 
         <p className="text-ui-sm text-muted-foreground">{handlingNote}</p>
 
-        {error ? (
-          <div className="rounded-md border border-destructive/25 bg-destructive-subtle px-3 py-2 text-ui text-destructive">
-            {error}
-          </div>
-        ) : null}
+        {error ? <NoticeBanner tone="destructive">{error}</NoticeBanner> : null}
       </form>
     </ModalShell>
   );

@@ -111,6 +111,22 @@ describe("HomeTargetPicker", () => {
     expect(callbacks.onSelectRuntime).toHaveBeenCalledWith("local");
   });
 
+  // `bodyClassName="py-0"` is only an override because PickerPopoverContent
+  // merges rather than concatenates: a plain join left the pattern's own `py-1`
+  // standing, later in the generated stylesheet, and it silently won.
+  it("lets the runtime picker's py-0 body beat the pattern's py-1 default", () => {
+    renderPicker();
+
+    fireEvent.click(screen.getByRole("button", { name: /New worktree/i }));
+    const body = screen
+      .getByRole("button", { name: /Work locally/i })
+      .closest(".overflow-y-auto");
+
+    expect(body).not.toBeNull();
+    expect(body?.className).toContain("py-0");
+    expect(body?.className).not.toContain("py-1");
+  });
+
   it("keeps Web cloud setup actionable while hiding Desktop runtime choices", () => {
     const callbacks = renderPicker({
       desktopTargetsAvailable: false,

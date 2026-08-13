@@ -5,6 +5,7 @@ import { Check, KeyRound } from "#product/primitives/icons/core";
 import { CloudIcon } from "#product/primitives/icons/platform";
 import { SquareTerminal } from "#product/primitives/icons/workspace";
 import { Button } from "#product/primitives/Button";
+import { IconTile } from "#product/primitives/IconTile";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { gatewaySubtitle } from "#product/copy/settings/agent-auth-copy";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
@@ -337,12 +338,9 @@ function MethodCard({
         ].join(" ")}
         onClick={onClick}
       >
-        <span
-          aria-hidden
-          className="mb-auto flex size-8 items-center justify-center rounded-md bg-surface-control text-muted-foreground"
-        >
+        <IconTile aria-hidden className="mb-auto">
           {icon}
-        </span>
+        </IconTile>
         {selected ? (
           // MethodCard→RadioCardGroup is deferred (frozen spec §4.3: the
           // shipped RadioCardOption has no data-attribute passthrough, which

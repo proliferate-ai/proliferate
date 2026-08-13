@@ -243,9 +243,13 @@ function HarnessRuntimeStatusRow({
       data-harness-runtime-state={loading ? "loading" : error ? "error" : agent?.readiness ?? "missing"}
       label={(
         <span className="flex min-w-0 items-center gap-2.5">
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-control text-muted-foreground">
+          {/* 28→32px on adoption: IconTile's size axis has no 28px step, and
+              rounding a stray one-off to the nearest step is the tile's stated
+              contract. PlanHandoffDialog took the same 4px growth in this
+              wave; the two should be ruled together. */}
+          <IconTile>
             <ProviderIcon kind={harnessKind} className="icon-control" />
-          </span>
+          </IconTile>
           <span className="truncate">{displayName}</span>
         </span>
       )}
