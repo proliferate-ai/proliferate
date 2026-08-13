@@ -86,7 +86,6 @@
     "apps/packages/product-client/src/components/workspace/open-target/FilePathContextMenuContent.tsx|z-10": 1,
     "apps/packages/product-client/src/components/workspace/pane/AttachedPaneShell.tsx|z-10": 1,
     "apps/packages/product-client/src/components/workspace/pane/PaneHeader.tsx|z-20": 1,
-    "apps/packages/product-client/src/components/workspace/pane/PaneSideOverlay.tsx|z-30": 1,
     "apps/packages/product-client/src/components/workspace/shell/right-panel/RightPanelHeaderActions.tsx|z-20": 1,
     "apps/packages/product-client/src/components/workspace/shell/screen/MainSidebarPageShell.tsx|z-10": 2,
     "apps/packages/product-client/src/components/workspace/shell/screen/MainSidebarPageShell.tsx|z-20": 1,
