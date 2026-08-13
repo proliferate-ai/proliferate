@@ -2,6 +2,8 @@ mod artifacts;
 mod byte_allocation;
 mod cancellation;
 mod capture;
+#[cfg(test)]
+mod capture_finalizer_fence_tests;
 mod closing;
 #[cfg(test)]
 mod closing_fence_tests;

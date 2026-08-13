@@ -111,81 +111,6 @@ async fn manifest_finalizer_remains_visible_to_every_shutdown_until_exact_termin
 }
 
 #[tokio::test]
-async fn missing_capture_finalizer_remains_visible_to_every_shutdown_until_rejection() {
-    let (root, store) = ready_store("missing-capture-finalizer");
-    let runtime = Arc::new(FakeRuntime::new());
-    runtime.pause_preparation_terminal();
-    let coordinator = test_coordinator(Some(store), Arc::clone(&runtime));
-    let (_, operation, preparation_id) = insert_awaiting_preparation(&coordinator, &runtime).await;
-    let operation_id = operation
-        .lock()
-        .expect("operation")
-        .as_ref()
-        .expect("admitted operation")
-        .operation_id()
-        .to_string();
-
-    let finish = tokio::spawn({
-        let coordinator = Arc::clone(&coordinator);
-        async move {
-            coordinator
-                .finish_preparation(FinishSupportSnapshotInput {
-                    preparation_id,
-                    consent_epoch: "epoch-1".to_string(),
-                    session_evidence_json: None,
-                    session_collection: omitted_session_collection(),
-                })
-                .await
-        }
-    });
-    runtime.wait_preparation_terminal().await;
-    {
-        let state = coordinator.state.lock().await;
-        assert!(state.preparation.is_none());
-        assert!(state.closing_preparation.is_some());
-        assert!(state.artifacts.is_empty());
-        assert!(state.read_proofs.is_empty());
-    }
-    assert!(operation.lock().expect("operation").is_some());
-    assert_only_started(
-        &coordinator,
-        "desktop.support_snapshot.prepare",
-        &operation_id,
-    );
-
-    let first = spawn_shutdown(&coordinator);
-    let second = spawn_shutdown(&coordinator);
-    wait_for_shutdown_arm(&coordinator).await;
-    assert!(!finish.is_finished());
-    assert!(!first.is_finished());
-    assert!(!second.is_finished());
-
-    runtime.release_preparation_terminal();
-    assert_eq!(
-        finish
-            .await
-            .expect("finish task")
-            .expect_err("missing capture is rejected"),
-        "support_snapshot_preparation_rejected"
-    );
-    first.await.expect("first shutdown");
-    second.await.expect("second shutdown");
-
-    assert!(coordinator.state.lock().await.closing_preparation.is_none());
-    assert_lifecycle_operation(
-        &coordinator,
-        "desktop.support_snapshot.prepare",
-        Some(&operation_id),
-        &begin_input().client_job_id,
-        None,
-        TerminalOutcomeV1::Rejected,
-        Some("preparation_rejected"),
-        None,
-    );
-    let _ = std::fs::remove_dir_all(root);
-}
-
-#[tokio::test]
 async fn successful_finalizer_stays_visible_until_shutdown_observes_terminal_and_cleanup() {
     let (root, store) = ready_store("successful-finalizer");
     let runtime = Arc::new(FakeRuntime::new());
@@ -543,7 +468,11 @@ fn omitted_session_collection() -> SupportSessionCollectionManifestV1 {
     }
 }
 
-fn assert_only_started(coordinator: &SupportSnapshotCoordinator, name: &str, operation_id: &str) {
+pub(super) fn assert_only_started(
+    coordinator: &SupportSnapshotCoordinator,
+    name: &str,
+    operation_id: &str,
+) {
     let records = coordinator
         .producer
         .support_lifecycle_snapshot()
@@ -557,14 +486,16 @@ fn assert_only_started(coordinator: &SupportSnapshotCoordinator, name: &str, ope
     );
 }
 
-fn spawn_shutdown(coordinator: &Arc<SupportSnapshotCoordinator>) -> tokio::task::JoinHandle<()> {
+pub(super) fn spawn_shutdown(
+    coordinator: &Arc<SupportSnapshotCoordinator>,
+) -> tokio::task::JoinHandle<()> {
     let coordinator = Arc::clone(coordinator);
     tokio::spawn(async move {
         coordinator.cancel_support().await;
     })
 }
 
-async fn wait_for_shutdown_arm(coordinator: &Arc<SupportSnapshotCoordinator>) {
+pub(super) async fn wait_for_shutdown_arm(coordinator: &Arc<SupportSnapshotCoordinator>) {
     for _ in 0..128 {
         if coordinator.state.lock().await.shutdown_armed {
             return;
@@ -574,7 +505,7 @@ async fn wait_for_shutdown_arm(coordinator: &Arc<SupportSnapshotCoordinator>) {
     panic!("shutdown reached support cancellation");
 }
 
-fn ready_store(prefix: &str) -> (std::path::PathBuf, Arc<SupportArtifactStore>) {
+pub(super) fn ready_store(prefix: &str) -> (std::path::PathBuf, Arc<SupportArtifactStore>) {
     let root = std::env::temp_dir().join(format!("pr6-{prefix}-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir(&root).expect("app root");
     std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).expect("app root mode");

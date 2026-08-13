@@ -9,11 +9,14 @@ use chrono::{DateTime, Utc};
 use tokio::sync::watch;
 use tokio::time::{Duration, Instant};
 
+use super::capture::CaptureError;
 use super::runtime::CoordinatorRuntime;
 
 pub(super) struct FakeRuntime {
     clock: Arc<FakeClock>,
     next_id: Mutex<u64>,
+    invalid_capture: AtomicBool,
+    capture_result: Arc<AsyncGate>,
     finish_publication: Arc<AsyncGate>,
     finish_result: BlockingGate,
     finish_timer: Arc<TestEvent>,
@@ -62,6 +65,8 @@ impl FakeRuntime {
                 advanced: watch::channel(0).0,
             }),
             next_id: Mutex::new(0),
+            invalid_capture: AtomicBool::new(false),
+            capture_result: Arc::new(AsyncGate::default()),
             finish_publication: Arc::new(AsyncGate::default()),
             finish_result: BlockingGate::default(),
             finish_timer: Arc::new(TestEvent::default()),
@@ -80,6 +85,19 @@ impl FakeRuntime {
         self.clock
             .advanced
             .send_modify(|version| *version = version.wrapping_add(1));
+    }
+
+    pub(super) fn pause_invalid_capture_result(&self) {
+        self.invalid_capture.store(true, Ordering::Release);
+        self.capture_result.enabled.store(true, Ordering::Release);
+    }
+
+    pub(super) async fn wait_invalid_capture_result(&self) {
+        self.capture_result.reached.wait().await;
+    }
+
+    pub(super) fn release_invalid_capture_result(&self) {
+        self.capture_result.released.fire();
     }
 
     pub(super) fn pause_finish_publication(&self) {
@@ -173,6 +191,19 @@ impl CoordinatorRuntime for FakeRuntime {
             sleep.await;
             if paused.load(Ordering::Acquire) {
                 release.wait().await;
+            }
+        })
+    }
+
+    fn capture_error_override(&self) -> Pin<Box<dyn Future<Output = Option<CaptureError>> + Send>> {
+        let invalid = self.invalid_capture.load(Ordering::Acquire);
+        let gate = Arc::clone(&self.capture_result);
+        Box::pin(async move {
+            if invalid {
+                wait_at_gate(gate).await;
+                Some(CaptureError::Invalid)
+            } else {
+                None
             }
         })
     }

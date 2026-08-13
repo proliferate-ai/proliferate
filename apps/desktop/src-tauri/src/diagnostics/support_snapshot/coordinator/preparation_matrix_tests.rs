@@ -27,7 +27,7 @@ struct PreparationTerminalCase {
 }
 
 #[tokio::test]
-async fn preparation_rejected_has_exact_correlation_and_one_terminal() {
+async fn defensive_missing_capture_rejection_has_exact_correlation_and_one_terminal() {
     let fixture = PreparationFixture::new("rejected");
     let (operation_id, preparation_id) = fixture.admit().await;
 
@@ -35,7 +35,7 @@ async fn preparation_rejected_has_exact_correlation_and_one_terminal() {
         .coordinator
         .finish_preparation(finish_input(preparation_id))
         .await
-        .expect_err("missing capture is rejected");
+        .expect_err("defensive missing-capture state is rejected");
 
     assert_preparation_terminal(
         &fixture.coordinator,

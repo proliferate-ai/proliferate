@@ -88,18 +88,23 @@ impl SupportSnapshotCoordinator {
 
         spawn_preparation_watchdog(self, preparation_id.clone(), deadline, Arc::clone(&control));
 
-        let capture = capture_native_support_evidence(
-            Arc::clone(&self.supervisor),
-            self.sidecar.clone(),
-            self.worker.clone(),
-            &preparation_id,
-            &source_time_from,
-            &source_time_to,
-            deadline,
-            Arc::clone(&control),
-            Arc::clone(&self.runtime),
-        )
-        .await;
+        let capture = match self.runtime.capture_error_override().await {
+            Some(error) => Err(error),
+            None => {
+                capture_native_support_evidence(
+                    Arc::clone(&self.supervisor),
+                    self.sidecar.clone(),
+                    self.worker.clone(),
+                    &preparation_id,
+                    &source_time_from,
+                    &source_time_to,
+                    deadline,
+                    Arc::clone(&control),
+                    Arc::clone(&self.runtime),
+                )
+                .await
+            }
+        };
 
         let mut state = self.state.lock().await;
         if control.interruption() == PreparationInterruption::Running

@@ -4,6 +4,8 @@ use std::pin::Pin;
 use chrono::{DateTime, Utc};
 use tokio::time::Instant;
 
+use super::capture::CaptureError;
+
 pub(super) trait CoordinatorRuntime: Send + Sync {
     fn utc_now(&self) -> DateTime<Utc>;
     fn instant_now(&self) -> Instant;
@@ -12,6 +14,10 @@ pub(super) trait CoordinatorRuntime: Send + Sync {
 
     fn watchdog_sleep_until(&self, deadline: Instant) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         self.sleep_until(deadline)
+    }
+
+    fn capture_error_override(&self) -> Pin<Box<dyn Future<Output = Option<CaptureError>> + Send>> {
+        Box::pin(async { None })
     }
 
     fn before_finish_publication(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
