@@ -44,7 +44,16 @@ export const RIGHT_PANEL_DEFAULT_WIDTH = 420;
  * panel habitually occupies, so it constrains nothing a real user wants.
  */
 export const RIGHT_PANEL_MIN_WIDTH = 380;
-export const RIGHT_PANEL_MAX_WIDTH = 700;
+/**
+ * Fallback drag ceiling for contexts where the shell geometry cannot be
+ * measured (no rendered rail, tests). It is not the policy maximum: the panel
+ * may take everything the window affords — an arbitrary window width, minus
+ * the sidebar at its current width (zero when folded), minus the chat pane's
+ * `MAIN_PANE_MIN_WIDTH` floor. The drag measures that ceiling from the rail's
+ * row at mousedown, and the rail's rendered width enforces the same bound in
+ * CSS when the window shrinks afterwards.
+ */
+export const RIGHT_PANEL_FALLBACK_MAX_WIDTH = 700;
 /**
  * Floor the main (chat) pane keeps against the right rail. The rail's
  * rendered width is clamped so the pane never drops below this, whatever the
@@ -52,8 +61,9 @@ export const RIGHT_PANEL_MAX_WIDTH = 700;
  * it, a wide panel on a small window squeezes the pane toward zero and the
  * composer controls paint over each other. 420 = the composer's compact
  * control tier (see `chat-layout.ts`) fully laid out at its icon floor, plus
- * the chat column gutter. The persisted width is deliberately not clamped:
- * the user's chosen panel width comes back as soon as the window affords it.
+ * the chat column gutter. The same floor bounds how far a resize drag can
+ * widen the panel. The persisted width is deliberately not clamped: the
+ * user's chosen panel width comes back as soon as the window affords it.
  */
 export const MAIN_PANE_MIN_WIDTH = 420;
 /**
@@ -138,11 +148,22 @@ export function availableRightPanelTools(_isCloudWorkspaceSelected: boolean): Ri
   return DEFAULT_RIGHT_PANEL_TOOL_ORDER;
 }
 
-export function clampRightPanelWidth(width: number): number {
+/**
+ * Clamps to the panel's floor and an optional ceiling. The default ceiling is
+ * unbounded: persistence and restore keep a width chosen on a larger window,
+ * and the rail's rendered width bounds what actually paints per window. Only
+ * a live drag passes its measured ceiling here.
+ */
+export function clampRightPanelWidth(
+  width: number,
+  maxWidth: number = Number.POSITIVE_INFINITY,
+): number {
   if (!Number.isFinite(width)) {
     return RIGHT_PANEL_DEFAULT_WIDTH;
   }
-  return Math.min(RIGHT_PANEL_MAX_WIDTH, Math.max(RIGHT_PANEL_MIN_WIDTH, width));
+  // A ceiling below the floor (a degenerately small window) pins to the floor.
+  const effectiveMax = Math.max(RIGHT_PANEL_MIN_WIDTH, maxWidth);
+  return Math.min(effectiveMax, Math.max(RIGHT_PANEL_MIN_WIDTH, width));
 }
 
 /**
@@ -151,13 +172,17 @@ export function clampRightPanelWidth(width: number): number {
  * Resize and collapse are two different gestures expressed through one drag, so
  * the decision has to see the width the pointer actually asked for. Above the
  * collapse threshold the width is clamped as usual — including sticking at
- * `RIGHT_PANEL_MIN_WIDTH` — and below it the panel closes.
+ * `RIGHT_PANEL_MIN_WIDTH` and at the caller-measured `maxWidth` ceiling — and
+ * below it the panel closes.
  */
-export function resolveRightPanelDragOutcome(rawWidth: number): RightPanelDragOutcome {
+export function resolveRightPanelDragOutcome(
+  rawWidth: number,
+  maxWidth: number = Number.POSITIVE_INFINITY,
+): RightPanelDragOutcome {
   if (Number.isFinite(rawWidth) && rawWidth < RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD) {
     return { kind: "collapse" };
   }
-  return { kind: "resize", width: clampRightPanelWidth(rawWidth) };
+  return { kind: "resize", width: clampRightPanelWidth(rawWidth, maxWidth) };
 }
 
 export function normalizeRightPanelDurableState(

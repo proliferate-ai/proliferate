@@ -107,6 +107,60 @@ describe("useMainScreenRightPanel drag wiring", () => {
     }
   });
 
+  it("lets a drag widen the panel past the legacy ceiling when the window affords it", () => {
+    // A wide shell row: the drag's ceiling is the row minus the chat pane's
+    // floor (2000 − 420 = 1580), not the legacy fixed 700.
+    const row = document.createElement("div");
+    row.getBoundingClientRect = () => ({ width: 2000 } as DOMRect);
+    const rail = document.createElement("div");
+    rail.setAttribute("data-right-panel-rail", "");
+    rail.getBoundingClientRect = () => ({ width: 420 } as DOMRect);
+    row.appendChild(rail);
+    document.body.appendChild(row);
+
+    try {
+      const { result, rerender } = renderRightPanel();
+      act(() => {
+        result.current.setRightPanelOpen(true);
+      });
+      rerender();
+
+      // Widen by 500 from the rendered 420 → 920, beyond the old 700 cap.
+      fireDrag(result.current.onRightSeparatorDown, [500]);
+      rerender();
+
+      expect(result.current.rightPanelWidth).toBe(920);
+    } finally {
+      row.remove();
+    }
+  });
+
+  it("caps a widening drag at the chat pane's floor", () => {
+    const row = document.createElement("div");
+    row.getBoundingClientRect = () => ({ width: 1000 } as DOMRect);
+    const rail = document.createElement("div");
+    rail.setAttribute("data-right-panel-rail", "");
+    rail.getBoundingClientRect = () => ({ width: 420 } as DOMRect);
+    row.appendChild(rail);
+    document.body.appendChild(row);
+
+    try {
+      const { result, rerender } = renderRightPanel();
+      act(() => {
+        result.current.setRightPanelOpen(true);
+      });
+      rerender();
+
+      // Asks for 920; the 1000px row only affords 1000 − 420 = 580.
+      fireDrag(result.current.onRightSeparatorDown, [500]);
+      rerender();
+
+      expect(result.current.rightPanelWidth).toBe(580);
+    } finally {
+      row.remove();
+    }
+  });
+
   it("resizes the panel through a real mousedown/mousemove/mouseup sequence", () => {
     const { result, rerender } = renderRightPanel();
     act(() => {

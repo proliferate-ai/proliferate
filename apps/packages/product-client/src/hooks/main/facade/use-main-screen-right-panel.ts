@@ -12,8 +12,10 @@ import { useResize } from "#product/hooks/ui/layout/use-resize";
 import {
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
+  MAIN_PANE_MIN_WIDTH,
   RIGHT_PANEL_DEFAULT_WIDTH,
-  RIGHT_PANEL_MAX_WIDTH,
+  RIGHT_PANEL_FALLBACK_MAX_WIDTH,
+  RIGHT_PANEL_MIN_WIDTH,
   clampRightPanelWidth,
   normalizeRightPanelDurableState,
   resolveRightPanelDragOutcome,
@@ -220,13 +222,21 @@ export function useMainScreenRightPanel({
   // can drop the geometry easing while the width is pointer-driven.
   const rightPanelDragCollapsedRef = useRef(false);
   const rightPanelDragWidthRef = useRef<number | null>(null);
+  // The drag's ceiling, measured at mousedown: the rail's row (window minus
+  // the sidebar at its current width — zero when folded) minus the chat
+  // pane's floor. There is no fixed maximum; a wider window affords a wider
+  // panel. Falls back to the legacy ceiling only when no rail is rendered.
+  const rightPanelDragMaxWidthRef = useRef<number>(RIGHT_PANEL_FALLBACK_MAX_WIDTH);
   const [rightPanelResizing, setRightPanelResizing] = useState(false);
   const handleRightPanelDrag = useCallback(
     (rawWidth: number) => {
       if (rightPanelDragCollapsedRef.current || !workspaceUiKey) {
         return;
       }
-      const outcome = resolveRightPanelDragOutcome(rawWidth);
+      const outcome = resolveRightPanelDragOutcome(
+        rawWidth,
+        rightPanelDragMaxWidthRef.current,
+      );
       if (outcome.kind === "collapse") {
         rightPanelDragCollapsedRef.current = true;
         // Resizing ends here so the collapse itself animates: the last
@@ -271,11 +281,18 @@ export function useMainScreenRightPanel({
     onResize: handleRightPanelDrag,
     onResizeEnd: handleRightSeparatorDragEnd,
     reverse: true,
+    // No static bounds: the raw pointer width must stay visible for the
+    // collapse decision, and the ceiling is per-gesture, measured below.
     min: 0,
-    max: RIGHT_PANEL_MAX_WIDTH,
   });
   const onRightSeparatorDown = useCallback(
     (event: MouseEvent) => {
+      const railRow = document
+        .querySelector("[data-right-panel-rail]")
+        ?.parentElement?.getBoundingClientRect().width;
+      rightPanelDragMaxWidthRef.current = railRow
+        ? Math.max(RIGHT_PANEL_MIN_WIDTH, railRow - MAIN_PANE_MIN_WIDTH)
+        : RIGHT_PANEL_FALLBACK_MAX_WIDTH;
       rightPanelDragCollapsedRef.current = false;
       rightPanelDragWidthRef.current = null;
       setRightPanelResizing(true);
