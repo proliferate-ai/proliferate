@@ -10,6 +10,9 @@ impl AgentProductContextResolver for DurableAgentProductContextResolver {
     ) -> Result<AgentProductContext, AgentProductContextResolutionError> {
         self.resolve_current_instruction(session_id)
             .map(AgentProductContext::new)
-            .map_err(AgentProductContextResolutionError::new)
+            .map_err(|error| {
+                let class = error.class().as_str();
+                AgentProductContextResolutionError::classified(class, error)
+            })
     }
 }
