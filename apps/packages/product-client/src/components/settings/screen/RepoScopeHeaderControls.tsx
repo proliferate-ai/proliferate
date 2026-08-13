@@ -1,4 +1,4 @@
-import { Cloud, Laptop } from "lucide-react";
+import { CloudIcon, Laptop } from "#product/primitives/icons/platform";
 import { parseGitRepoId } from "#product/domain/repos/repo-id";
 import { RepoPicker } from "#product/components/settings/panes/RepoPicker";
 import { SegmentedControl } from "#product/primitives/SegmentedControl";
@@ -73,7 +73,7 @@ export function RepoScopeHeaderControls({
         className="shrink-0"
         value={context}
         items={[
-          { id: "cloud", label: "Cloud", icon: <Cloud aria-hidden="true" /> },
+          { id: "cloud", label: "Cloud", icon: <CloudIcon aria-hidden="true" /> },
           { id: "local", label: "Local", icon: <Laptop aria-hidden="true" /> },
         ]}
         onChange={onSelectRepoContext}

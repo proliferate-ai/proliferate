@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, RotateCw, Trash2 } from "lucide-react";
+import { Plus, Trash } from "#product/primitives/icons/core";
+import { RotateCw } from "#product/primitives/icons/status";
 import {
   humanizeLoopCadence,
   loopNextFireAtMs,
@@ -172,7 +173,7 @@ function LoopRow({
           disabled={pendingWrite}
           onClick={() => onDelete(loop.loopId)}
         >
-          <Trash2 className="icon-paired" />
+          <Trash className="icon-paired" />
         </IconButton>
       )}
     </li>

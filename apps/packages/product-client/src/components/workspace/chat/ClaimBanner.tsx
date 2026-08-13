@@ -1,4 +1,4 @@
-import { Hand } from "lucide-react";
+import { Hand } from "#product/primitives/icons/product";
 import { Button } from "#product/primitives/Button";
 
 export type ClaimBannerView =

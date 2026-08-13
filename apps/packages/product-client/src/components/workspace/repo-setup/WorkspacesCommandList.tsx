@@ -18,8 +18,9 @@
  * the item count in `--faint`. An optional dashed "Create" row closes the
  * list with an optional creation-shortcut hint.
  */
-import { ChevronRight, FolderPlus, GitPullRequest } from "lucide-react";
-import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
+import { ChevronRight } from "#product/primitives/icons/core";
+import { FolderPlus } from "#product/primitives/icons/workspace";
+import { GitBranchIcon, GitPullRequest } from "#product/primitives/icons/workspace-git";
 import { MessageSquare } from "#product/primitives/icons/product";
 import type { ReactNode } from "react";
 import { Badge } from "#product/primitives/Badge";

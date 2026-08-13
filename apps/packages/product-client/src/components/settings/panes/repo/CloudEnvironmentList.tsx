@@ -1,4 +1,6 @@
-import { Cloud, Folder, Plus } from "lucide-react";
+import { Folder } from "#product/primitives/icons/workspace";
+import { CloudIcon } from "#product/primitives/icons/platform";
+import { Plus } from "#product/primitives/icons/core";
 
 import { Button } from "#product/primitives/Button";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
@@ -137,7 +139,7 @@ function EnvironmentRow({
     <SettingsRow
       label={(
         <span className="flex min-w-0 items-center gap-2">
-          <Cloud className="icon-paired shrink-0 text-muted-foreground" />
+          <CloudIcon className="icon-paired shrink-0 text-muted-foreground" />
           <span className="truncate">{environment.fullName}</span>
         </span>
       )}

@@ -1,4 +1,5 @@
-import { Plus, RotateCcw, Workflow } from "lucide-react";
+import { Plus, RotateCcw } from "#product/primitives/icons/core";
+import { Workflow } from "#product/primitives/icons/product";
 import type { WorkflowDefinition } from "#product/domain/workflows/definition";
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { Button } from "#product/primitives/Button";

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "#product/primitives/icons/core";
 import {
   useCloudBilling,
   useLlmBalance,

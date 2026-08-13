@@ -1,4 +1,5 @@
-import { Check, ShieldAlert } from "lucide-react";
+import { Check } from "#product/primitives/icons/core";
+import { ShieldAlert } from "#product/primitives/icons/status";
 import { Button } from "#product/primitives/Button";
 import type { CloudRepoPickerBlockerView } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 

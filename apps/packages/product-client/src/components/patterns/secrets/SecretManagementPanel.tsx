@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus } from "#product/primitives/icons/core";
 
 import { Button } from "#product/primitives/Button";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";

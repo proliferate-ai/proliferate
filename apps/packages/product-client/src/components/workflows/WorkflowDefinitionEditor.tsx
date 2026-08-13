@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Trash } from "#product/primitives/icons/core";
+import { Save } from "#product/primitives/icons/workspace";
 import {
   workflowAgentOptions,
   workflowDefaultAgentKind,
@@ -240,7 +241,7 @@ export function WorkflowDefinitionEditor({
                 disabled={busy}
                 onClick={() => setDeleteConfirmationOpen(true)}
               >
-                <Trash2 className="icon-paired" aria-hidden />
+                <Trash className="icon-paired" aria-hidden />
                 Delete workflow
               </Button>
             ) : null}
