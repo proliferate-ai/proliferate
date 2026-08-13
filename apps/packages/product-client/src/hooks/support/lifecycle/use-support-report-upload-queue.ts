@@ -15,9 +15,10 @@ import {
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 import { createCapabilityAwareSupportReportQueue } from "./support-report-queue-factory";
-import type {
-  SupportReportQueueCallbacks,
-  SupportReportQueueRuntime,
+import {
+  notifySupportReportQueueObserver,
+  type SupportReportQueueCallbacks,
+  type SupportReportQueueRuntime,
 } from "./support-report-queue-runtime";
 import {
   legacyConsentRequired,
@@ -51,7 +52,13 @@ export function useSupportReportUploadQueue(): void {
     });
     const acquireOwner = ownerTailRef.current;
     ownerTailRef.current = acquireOwner.then(() => ownerDone);
-    const callbacks = queueCallbacks(showToast, productTelemetry.captureException);
+    const notifyToast = (message: string, type?: "error" | "info") => {
+      notifySupportReportQueueObserver(() => showToast(message, type));
+    };
+    const callbacks = queueCallbacks(notifyToast, productTelemetry.captureException);
+    const notifyControllerError = (error: unknown) => {
+      notifySupportReportQueueObserver(() => callbacks.onControllerError(error));
+    };
     const queue: SupportReportQueueRuntime = createCapabilityAwareSupportReportQueue({
       storage: host.storage,
       diagnostics,
@@ -84,9 +91,9 @@ export function useSupportReportUploadQueue(): void {
       try {
         next = await queue.nextAttemptAtMs();
       } catch (error) {
-        callbacks.onControllerError(error);
+        notifyControllerError(error);
         if (!disposed) {
-          showToast("Saved support reports couldn't be updated. Uploads are paused.");
+          notifyToast("Saved support reports couldn't be updated. Uploads are paused.");
         }
         return;
       }
@@ -101,20 +108,22 @@ export function useSupportReportUploadQueue(): void {
         queue,
         diagnostics,
         supportSnapshot,
-        showToast,
+        showToast: notifyToast,
         telemetry,
         isActive: () => !disposed,
         onLifecycleError(error) {
-          productTelemetry.captureException(error, {
-            tags: { domain: "support_queue", action: "native_lifecycle" },
+          notifySupportReportQueueObserver(() => {
+            productTelemetry.captureException(error, {
+              tags: { domain: "support_queue", action: "native_lifecycle" },
+            });
           });
         },
       });
       activeDrain = operation;
       void operation.catch((error) => {
-        callbacks.onControllerError(error);
+        notifyControllerError(error);
         if (!disposed) {
-          showToast("Saved support reports couldn't be updated. Uploads are paused.");
+          notifyToast("Saved support reports couldn't be updated. Uploads are paused.");
         }
       }).finally(() => {
         if (activeDrain === operation) activeDrain = null;
@@ -138,14 +147,16 @@ export function useSupportReportUploadQueue(): void {
         });
         if (disposed) return "failed";
         if (result === "queued") {
-          showToast("Sending report...", "info");
+          notifyToast("Sending report...", "info");
           runDrain();
         } else if (result === "full") {
-          showToast("Support report queue is full. Send this report again after an older one finishes.");
+          notifyToast(
+            "Support report queue is full. Send this report again after an older one finishes.",
+          );
         } else if (result === "conflict") {
-          showToast("This report conflicts with a queued report. Start a new report from Help.");
+          notifyToast("This report conflicts with a queued report. Start a new report from Help.");
         } else if (result === "failed") {
-          showToast("Couldn't save the report for upload. Keep this report open and try again.");
+          notifyToast("Couldn't save the report for upload. Keep this report open and try again.");
         }
         return result;
       });
@@ -158,9 +169,9 @@ export function useSupportReportUploadQueue(): void {
     });
     initialization = initializeOwner;
     void initializeOwner.catch((error) => {
-      callbacks.onControllerError(error);
+      notifyControllerError(error);
       if (!disposed) {
-        showToast("Saved support reports couldn't be loaded. Uploads are paused.");
+        notifyToast("Saved support reports couldn't be loaded. Uploads are paused.");
       }
     }).finally(() => {
       initialization = null;
@@ -177,7 +188,7 @@ export function useSupportReportUploadQueue(): void {
   }, [diagnostics, host.storage, productTelemetry, showToast, supportSnapshot, telemetry]);
 }
 
-async function drainSupportReportQueue(input: {
+export async function drainSupportReportQueue(input: {
   queue: SupportReportQueueRuntime;
   diagnostics: DesktopDiagnosticsBridge | null;
   supportSnapshot: NonNullable<DesktopDiagnosticsBridge["supportSnapshot"]> | null;
@@ -187,7 +198,9 @@ async function drainSupportReportQueue(input: {
   onLifecycleError(error: unknown): void;
 }): Promise<void> {
   const showToast = (message: string, type?: "error" | "info") => {
-    if (input.isActive()) input.showToast(message, type);
+    notifySupportReportQueueObserver(() => {
+      if (input.isActive()) input.showToast(message, type);
+    });
   };
   for (const entry of await input.queue.dueEntries(Date.now())) {
     // Hold every Blob admitted by this attempt until its serialized durable
@@ -284,42 +297,56 @@ function queueCallbacks(
 ): SupportReportQueueCallbacks {
   return {
     onControllerError(error) {
-      captureException(error, { tags: { domain: "support_queue", action: "mutation" } });
+      notifySupportReportQueueObserver(() => {
+        captureException(error, { tags: { domain: "support_queue", action: "mutation" } });
+      });
     },
     onCleanupError(error, resource) {
-      captureException(error, { tags: { domain: "support_queue", action: `cleanup_${resource}` } });
+      notifySupportReportQueueObserver(() => {
+        captureException(error, {
+          tags: { domain: "support_queue", action: `cleanup_${resource}` },
+        });
+      });
     },
     onSnapshotUnavailable(jobId, state) {
-      recordUploadFailure(jobId, `snapshot_${state}`);
-      showToast("A saved diagnostic snapshot is no longer available. Start a new report from Help.");
+      notifySupportReportQueueObserver(() => recordUploadFailure(jobId, `snapshot_${state}`));
+      notifySupportReportQueueObserver(() => {
+        showToast(
+          "A saved diagnostic snapshot is no longer available. Start a new report from Help.",
+        );
+      });
     },
   };
 }
 
 function recordUploadFailure(jobId: string, kind: string): void {
-  recordRendererDiagnostic({
-    name: "renderer.support.upload_failed",
-    severity: "warn",
-    kind: "message",
-    privacy: "operational",
-    fields: {
-      job_id: diagnosticField(jobId, "operational"),
-      failure_kind: diagnosticField(kind, "operational"),
-    },
-    errorClassification: kind,
+  notifySupportReportQueueObserver(() => {
+    recordRendererDiagnostic({
+      name: "renderer.support.upload_failed",
+      severity: "warn",
+      kind: "message",
+      privacy: "operational",
+      fields: {
+        job_id: diagnosticField(jobId, "operational"),
+        failure_kind: diagnosticField(kind, "operational"),
+      },
+      errorClassification: kind,
+    });
   });
 }
 
 function recordUploadDropped(jobId: string): void {
-  recordRendererDiagnostic({
-    name: "renderer.support.upload_dropped",
-    severity: "error",
-    kind: "message",
-    privacy: "operational",
-    fields: {
-      job_id: diagnosticField(jobId, "operational"),
-      failure_kind: diagnosticField("exhausted", "operational"),
-    },
-    errorClassification: "exhausted",
+  notifySupportReportQueueObserver(() => {
+    recordRendererDiagnostic({
+      name: "renderer.support.upload_dropped",
+      severity: "error",
+      kind: "message",
+      privacy: "operational",
+      fields: {
+        job_id: diagnosticField(jobId, "operational"),
+        failure_kind: diagnosticField("exhausted", "operational"),
+      },
+      errorClassification: "exhausted",
+    });
   });
 }

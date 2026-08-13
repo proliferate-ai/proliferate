@@ -24,3 +24,13 @@ export interface SupportReportQueueCallbacks {
   onCleanupError(error: unknown, resource: "attachment" | "snapshot"): void;
   onSnapshotUnavailable(jobId: string, state: "missing" | "mismatch"): void;
 }
+
+/** Queue observers are evidence/UI only and can never change queue state. */
+export function notifySupportReportQueueObserver(observer: () => void): void {
+  try {
+    observer();
+  } catch {
+    // Persistence, reconciliation, cleanup, and lifecycle disposition already
+    // have their own owners; an observer cannot become a second failure path.
+  }
+}

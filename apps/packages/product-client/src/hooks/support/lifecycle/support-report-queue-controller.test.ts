@@ -5,6 +5,7 @@ import type {
 } from "@proliferate/product-client/host/desktop-bridge";
 import type { ProductStorage } from "#product/host/product-host";
 import type { SupportReportJob } from "#product/lib/domain/support/report-types";
+import { describeSupportReportUploadFailure } from "#product/lib/domain/support/report-upload-failure";
 
 import { PackagedSupportReportQueueController } from "./support-report-queue-controller";
 import { sha256QueueText } from "./support-report-queue-canonical";
@@ -16,7 +17,9 @@ import {
 import { SUPPORT_QUEUE_LEGACY_KEY } from "./support-report-queue-migration";
 import {
   SUPPORT_QUEUE_PRIMARY_KEY,
+  SupportQueueStorageError,
 } from "./support-report-queue-storage";
+import type { SupportReportQueueCallbacks } from "./support-report-queue-runtime";
 
 const EXISTING_JOB_ID = "10000000-0000-4000-8000-000000000001";
 const CONFLICT_JOB_ID = "10000000-0000-4000-8000-000000000002";
@@ -215,23 +218,160 @@ describe("packaged native support queue controller", () => {
       rejected.supportSnapshot.artifact.artifactId,
     );
   });
+
+  it("rejects a non-UUID preparation parent before enqueue or persisted reconciliation", async () => {
+    const enqueueStorage = new MemoryStorage();
+    const enqueueBridge = snapshotBridge();
+    const onControllerError = vi.fn(() => {
+      throw new Error("observer failed");
+    });
+    const enqueueController = createController(
+      enqueueStorage,
+      enqueueBridge,
+      undefined,
+      queueCallbacks({ onControllerError }),
+    );
+    await enqueueController.initialize();
+    const malformed = await preparedJob(EXISTING_JOB_ID, "staged-invalid-parent");
+    if (malformed.supportSnapshot.kind !== "prepared") throw new Error("prepared fixture");
+    malformed.supportSnapshot.artifact.preparationOperationId = "not-a-uuid";
+    const writesBefore = enqueueStorage.trace.filter((step) => step.startsWith("set:")).length;
+
+    await expect(enqueueController.enqueue(malformed)).resolves.toBe("failed");
+    expect(onControllerError).toHaveBeenCalledTimes(1);
+    expect(enqueueStorage.trace.filter((step) => step.startsWith("set:"))).toHaveLength(
+      writesBefore,
+    );
+    await expect(enqueueController.dueEntries(Date.now())).resolves.toEqual([]);
+    expect(enqueueBridge.beginSubmission).not.toHaveBeenCalled();
+
+    const hydrateStorage = new MemoryStorage();
+    const hydrateBridge = snapshotBridge();
+    hydrateStorage.values.set(SUPPORT_QUEUE_PRIMARY_KEY, encodeSupportQueueDocument(
+      await createSupportQueueDocument(1, [createPersistedSupportReportJob(malformed)]),
+    ));
+    const hydrateController = createController(hydrateStorage, hydrateBridge);
+    await expect(hydrateController.initialize()).rejects.toMatchObject({
+      name: SupportQueueStorageError.name,
+      failure: "document_invalid",
+    });
+    expect(hydrateBridge.reconcileArtifacts).not.toHaveBeenCalled();
+    expect(hydrateBridge.beginSubmission).not.toHaveBeenCalled();
+  });
+
+  it("keeps committed removal successful when deletion and its observer both fail", async () => {
+    const storage = new MemoryStorage();
+    const deleteAttachment = vi.fn(async () => {
+      throw new Error("delete failed");
+    });
+    const onCleanupError = vi.fn(() => {
+      throw new Error("observer failed");
+    });
+    const controller = createController(
+      storage,
+      snapshotBridge(),
+      deleteAttachment,
+      queueCallbacks({ onCleanupError }),
+    );
+    await controller.initialize();
+    await controller.enqueue(noSnapshotJob("cleanup", ["cleanup-path"]));
+
+    await expect(controller.removeAndCleanup("cleanup")).resolves.toMatchObject({
+      jobId: "cleanup",
+    });
+    expect(onCleanupError).toHaveBeenCalledWith(expect.anything(), "attachment");
+    await expect(controller.dueEntries(Date.now())).resolves.toEqual([]);
+
+    controller.dispose();
+    const rehydrated = createController(storage, snapshotBridge());
+    await rehydrated.initialize();
+    await expect(rehydrated.dueEntries(Date.now())).resolves.toEqual([]);
+  });
+
+  it("finishes missing-artifact reconciliation despite throwing observers and deleters", async () => {
+    const storage = new MemoryStorage();
+    const bridge = snapshotBridge("missing");
+    bridge.deleteArtifact.mockRejectedValue(new Error("snapshot delete failed"));
+    const deleteAttachment = vi.fn(async () => {
+      throw new Error("attachment delete failed");
+    });
+    const onCleanupError = vi.fn(() => {
+      throw new Error("cleanup observer failed");
+    });
+    const onSnapshotUnavailable = vi.fn(() => {
+      throw new Error("snapshot observer failed");
+    });
+    const existing = await preparedJob(MISSING_JOB_ID, "staged-missing-observers");
+    storage.values.set(SUPPORT_QUEUE_PRIMARY_KEY, encodeSupportQueueDocument(
+      await createSupportQueueDocument(1, [createPersistedSupportReportJob(existing)]),
+    ));
+    const controller = createController(
+      storage,
+      bridge,
+      deleteAttachment,
+      queueCallbacks({ onCleanupError, onSnapshotUnavailable }),
+    );
+
+    await expect(controller.initialize()).resolves.toBeUndefined();
+    expect(onSnapshotUnavailable).toHaveBeenCalledWith(MISSING_JOB_ID, "missing");
+    expect(onCleanupError).toHaveBeenCalledTimes(2);
+    await expect(controller.enqueue(noSnapshotJob("ready-after-reconcile"))).resolves.toBe(
+      "queued",
+    );
+  });
+
+  it("persists a hostile unknown failure only as transient backoff", async () => {
+    const storage = new MemoryStorage();
+    const controller = createController(storage, snapshotBridge());
+    await controller.initialize();
+    await controller.enqueue(noSnapshotJob("hostile-disposition"));
+    const revocable = Proxy.revocable({
+      code: "support_report_already_completed",
+      status: 400,
+    }, {});
+    revocable.revoke();
+    const failure = describeSupportReportUploadFailure(revocable.proxy, 1);
+    const failedAt = new Date("2026-08-12T00:00:00.000Z");
+    await controller.markFailed("hostile-disposition", failure, failedAt, false);
+    controller.dispose();
+
+    const rehydrated = createController(storage, snapshotBridge());
+    await rehydrated.initialize();
+    await expect(rehydrated.dueEntries(failedAt.getTime())).resolves.toEqual([]);
+    const durable = await rehydrated.dueEntries(failedAt.getTime() + 30_000);
+    expect(durable).toHaveLength(1);
+    expect(durable[0]).toMatchObject({
+      attemptCount: 1,
+      lastError: "Report upload failed.",
+      lastFailureKind: "transient",
+      nextAttemptAt: "2026-08-12T00:00:30.000Z",
+    });
+  });
 });
 
 function createController(
   storage: MemoryStorage,
   supportSnapshot: ReturnType<typeof snapshotBridge>,
   deleteAttachment = vi.fn(async () => {}),
+  callbacks: SupportReportQueueCallbacks = queueCallbacks(),
 ): PackagedSupportReportQueueController {
   return new PackagedSupportReportQueueController({
     storage,
     supportSnapshot,
     deleteAttachment,
-    callbacks: {
-      onControllerError: vi.fn(),
-      onCleanupError: vi.fn(),
-      onSnapshotUnavailable: vi.fn(),
-    },
+    callbacks,
   });
+}
+
+function queueCallbacks(
+  overrides: Partial<SupportReportQueueCallbacks> = {},
+): SupportReportQueueCallbacks {
+  return {
+    onControllerError: vi.fn(),
+    onCleanupError: vi.fn(),
+    onSnapshotUnavailable: vi.fn(),
+    ...overrides,
+  };
 }
 
 function snapshotBridge(state: ReconciledSupportArtifactV1["state"] = "verified") {
@@ -250,8 +390,17 @@ function snapshotBridge(state: ReconciledSupportArtifactV1["state"] = "verified"
   } satisfies DesktopSupportSnapshotBridge;
 }
 
-function noSnapshotJob(jobId: string): SupportReportJob {
-  return job(jobId, { supportSnapshot: { kind: "none" } });
+function noSnapshotJob(jobId: string, attachmentPaths: readonly string[] = []): SupportReportJob {
+  return job(jobId, {
+    supportSnapshot: { kind: "none" },
+    attachments: attachmentPaths.map((path) => ({
+      clientFileId: `file-${path}`,
+      fileName: "screenshot.png",
+      contentType: "image/png",
+      sizeBytes: 1,
+      stagedPath: path,
+    })),
+  });
 }
 
 async function preparedJob(

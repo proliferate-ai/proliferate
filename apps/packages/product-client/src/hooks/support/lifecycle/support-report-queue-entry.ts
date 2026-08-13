@@ -386,12 +386,10 @@ function parsePreparedArtifact(value: unknown): PreparedSupportSnapshotV1 {
     invalid("artifact identity");
   }
   boundedString(artifact.snapshotId, 1, MAX_ID_BYTES, "artifact.snapshotId");
-  boundedString(
-    artifact.preparationOperationId,
-    1,
-    MAX_ID_BYTES,
-    "artifact.preparationOperationId",
-  );
+  if (typeof artifact.preparationOperationId !== "string"
+    || !UUID.test(artifact.preparationOperationId)) {
+    invalid("artifact.preparationOperationId");
+  }
   timestamp(artifact.generatedAt, "artifact.generatedAt");
   safeInteger(artifact.sizeBytes, "artifact.sizeBytes", MAX_DIAGNOSTICS_BYTES);
   const summary = exactRecord(artifact.summary, [

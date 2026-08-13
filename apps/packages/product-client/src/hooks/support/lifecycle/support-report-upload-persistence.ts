@@ -12,9 +12,10 @@ import {
   type PersistedSupportReportJob,
 } from "./support-report-queue-entry";
 import { SUPPORT_QUEUE_LEGACY_KEY } from "./support-report-queue-migration";
-import type {
-  SupportReportQueueCallbacks,
-  SupportReportQueueRuntime,
+import {
+  notifySupportReportQueueObserver,
+  type SupportReportQueueCallbacks,
+  type SupportReportQueueRuntime,
 } from "./support-report-queue-runtime";
 
 const MAX_JOBS = 10;
@@ -65,7 +66,7 @@ export class BrowserSupportReportQueueController implements SupportReportQueueRu
     try {
       normalized = normalizeSupportReportJobForEnqueue(job, true);
     } catch (error) {
-      this.input.callbacks.onControllerError(error);
+      this.notifyControllerError(error);
       return Promise.resolve("failed");
     }
     return this.serialize(async () => {
@@ -88,7 +89,7 @@ export class BrowserSupportReportQueueController implements SupportReportQueueRu
         await this.write(jobs);
       } catch (error) {
         this.blocked = true;
-        this.input.callbacks.onControllerError(error);
+        this.notifyControllerError(error);
         return "failed";
       }
       return this.disposed ? "failed" : "queued";
@@ -186,9 +187,17 @@ export class BrowserSupportReportQueueController implements SupportReportQueueRu
       try {
         await this.input.deleteAttachment(path);
       } catch (error) {
-        this.input.callbacks.onCleanupError(error, "attachment");
+        notifySupportReportQueueObserver(() => {
+          this.input.callbacks.onCleanupError(error, "attachment");
+        });
       }
     }
+  }
+
+  private notifyControllerError(error: unknown): void {
+    notifySupportReportQueueObserver(() => {
+      this.input.callbacks.onControllerError(error);
+    });
   }
 
   private current(): PersistedSupportReportJob[] {

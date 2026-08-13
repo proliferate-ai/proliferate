@@ -3,6 +3,7 @@ import type { ProductStorage } from "#product/host/product-host";
 import type { SupportReportJob } from "#product/lib/domain/support/report-types";
 
 import { SUPPORT_QUEUE_LEGACY_KEY } from "./support-report-queue-migration";
+import type { SupportReportQueueCallbacks } from "./support-report-queue-runtime";
 import { BrowserSupportReportQueueController } from "./support-report-upload-persistence";
 
 class MemoryStorage implements ProductStorage {
@@ -134,21 +135,55 @@ describe("browser support report V1 fallback queue", () => {
     await expect(controller.enqueue(job("blocked"))).resolves.toBe("failed");
     expect(storage.values.has(SUPPORT_QUEUE_LEGACY_KEY)).toBe(false);
   });
+
+  it("keeps a committed V1 removal successful when deletion reporting throws", async () => {
+    const storage = new MemoryStorage();
+    const deleteAttachment = vi.fn(async () => {
+      throw new Error("delete failed");
+    });
+    const onCleanupError = vi.fn(() => {
+      throw new Error("observer failed");
+    });
+    const controller = createController(
+      storage,
+      deleteAttachment,
+      queueCallbacks({ onCleanupError }),
+    );
+    await controller.initialize();
+    await controller.enqueue(job("cleanup", {
+      attachments: [attachment("cleanup-path")],
+    }));
+
+    await expect(controller.removeAndCleanup("cleanup")).resolves.toMatchObject({
+      jobId: "cleanup",
+    });
+    expect(onCleanupError).toHaveBeenCalledWith(expect.anything(), "attachment");
+    expect(JSON.parse(storage.values.get(SUPPORT_QUEUE_LEGACY_KEY) ?? "[]")).toEqual([]);
+    await expect(controller.enqueue(job("still-ready"))).resolves.toBe("queued");
+  });
 });
 
 function createController(
   storage: MemoryStorage,
   deleteAttachment = vi.fn(async () => {}),
+  callbacks: SupportReportQueueCallbacks = queueCallbacks(),
 ): BrowserSupportReportQueueController {
   return new BrowserSupportReportQueueController({
     storage,
     deleteAttachment,
-    callbacks: {
-      onControllerError: vi.fn(),
-      onCleanupError: vi.fn(),
-      onSnapshotUnavailable: vi.fn(),
-    },
+    callbacks,
   });
+}
+
+function queueCallbacks(
+  overrides: Partial<SupportReportQueueCallbacks> = {},
+): SupportReportQueueCallbacks {
+  return {
+    onControllerError: vi.fn(),
+    onCleanupError: vi.fn(),
+    onSnapshotUnavailable: vi.fn(),
+    ...overrides,
+  };
 }
 
 function job(jobId: string, overrides: Partial<SupportReportJob> = {}): SupportReportJob {

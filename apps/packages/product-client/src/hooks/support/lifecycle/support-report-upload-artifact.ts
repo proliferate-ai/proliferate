@@ -2,7 +2,10 @@ import type {
   DesktopSupportSnapshotBridge,
   PreparedSupportSnapshotV1,
 } from "@proliferate/product-client/host/desktop-bridge";
-import { SupportSnapshotArtifactError } from "#product/lib/domain/support/report-upload-failure";
+import {
+  snapshotSupportReportUploadError,
+  SupportSnapshotArtifactError,
+} from "#product/lib/domain/support/report-upload-failure";
 
 import { DIAGNOSTICS_MAX_BYTES, sha256Hex } from "./support-report-upload-payload";
 
@@ -63,15 +66,10 @@ function decodeBase64Bounded(value: string, maximumBytes: number): Uint8Array {
 function classifyNativeArtifactRead(
   error: unknown,
 ): "snapshot_mismatch" | "snapshot_missing" {
-  const shaped = error as { code?: unknown; message?: unknown } | null;
-  const code = typeof shaped?.code === "string" ? shaped.code.toLowerCase() : "";
-  const message = error instanceof Error
-    ? error.message.toLowerCase()
-    : typeof shaped?.message === "string"
-      ? shaped.message.toLowerCase()
-      : "";
-  return code.includes("missing") || code.includes("not_found")
-    || message.includes("missing") || message.includes("not found")
+  const code = typeof error === "string"
+    ? error
+    : snapshotSupportReportUploadError(error).code;
+  return code === "support_snapshot_artifact_missing"
     ? "snapshot_missing"
     : "snapshot_mismatch";
 }

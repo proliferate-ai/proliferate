@@ -18,6 +18,7 @@ import type { DesktopProductEventMap } from "#product/lib/domain/telemetry/event
 import type { SupportReportJob } from "#product/lib/domain/support/report-types";
 import {
   describeSupportReportUploadFailure,
+  snapshotSupportReportUploadError,
   SupportSnapshotArtifactError,
   type SupportReportUploadFailureKind,
 } from "#product/lib/domain/support/report-upload-failure";
@@ -46,6 +47,8 @@ export interface SupportReportUploadTelemetry {
 interface SupportReportUploadResult {
   reportId: string;
 }
+
+const legacyConsentFailures = new WeakSet<object>();
 
 export async function uploadSupportReportAttempt(input: {
   job: SupportReportJob;
@@ -90,12 +93,13 @@ export async function uploadSupportReportAttempt(input: {
           reportId,
         });
       } catch (lifecycleError) {
-        reportLifecycleError(input.onLifecycleError, lifecycleError);
+        reportLifecycleError(() => input.onLifecycleError(lifecycleError));
       }
     }
     return result;
   } catch (error) {
     if (submission && input.supportSnapshot && !finishAttempted) {
+      finishAttempted = true;
       const terminal = submissionTerminal(
         submission.submissionId,
         error,
@@ -103,10 +107,9 @@ export async function uploadSupportReportAttempt(input: {
         reportId,
       );
       try {
-        finishAttempted = true;
         await input.supportSnapshot.finishSubmission(terminal);
       } catch (lifecycleError) {
-        reportLifecycleError(input.onLifecycleError, lifecycleError);
+        reportLifecycleError(() => input.onLifecycleError(lifecycleError));
       }
     }
     throw error;
@@ -130,17 +133,14 @@ async function uploadAfterCreate(
   const serverCorrelation = toLocalServerCorrelation(report);
   if (report.status === "completed") {
     if (input.job.includeLogs === true && input.job.supportSnapshot.kind === "none") {
-      throw Object.assign(
-        new Error("This legacy report was completed with an earlier diagnostics intent."),
-        { code: "consent_required_for_legacy_job" },
-      );
+      throw legacyConsentFailure();
     }
     trackSupportReportSubmitted(
       input.job,
       serverCorrelation,
       input.job.attachments.length,
       prepared !== null,
-      input.telemetry.track,
+      input.telemetry,
     );
     return { reportId: report.reportId };
   }
@@ -168,7 +168,7 @@ async function uploadAfterCreate(
       serverCorrelation,
       0,
       false,
-      input.telemetry.track,
+      input.telemetry,
     );
     return { reportId: report.reportId };
   }
@@ -224,7 +224,7 @@ async function uploadAfterCreate(
     serverCorrelation,
     completedAttachments.length,
     prepared !== null,
-    input.telemetry.track,
+    input.telemetry,
   );
   return { reportId: upload.reportId };
 }
@@ -235,8 +235,12 @@ function submissionTerminal(
   attempt: number,
   reportId: string | null,
 ): FinishSupportSnapshotSubmissionInputV1 {
-  const kind = describeSupportReportUploadFailure(error, attempt).kind;
-  return submissionTerminalForFailure(submissionId, kind, reportId);
+  try {
+    const kind = describeSupportReportUploadFailure(error, attempt).kind;
+    return submissionTerminalForFailure(submissionId, kind, reportId);
+  } catch {
+    return submissionTerminalForFailure(submissionId, "transient", reportId);
+  }
 }
 
 function submissionTerminalForFailure(
@@ -282,23 +286,26 @@ function uploadRejected(message: string): Error & { code: string; status: number
 
 export function legacyConsentRequired(error: unknown, job: SupportReportJob): boolean {
   if (job.includeLogs !== true || job.supportSnapshot.kind !== "none") return false;
-  const code = (error as { code?: unknown } | null)?.code;
-  if (code === "consent_required_for_legacy_job") return true;
-  const failure = describeSupportReportUploadFailure(error, 1).kind;
-  const message = error instanceof Error
-    ? error.message
-    : (error as { message?: unknown } | null)?.message;
-  return failure === "upload_conflict"
-    && typeof message === "string"
-    && message.toLowerCase().includes("diagnostics intent");
+  if (isObject(error) && legacyConsentFailures.has(error)) return true;
+  return snapshotSupportReportUploadError(error).code === "support_report_upload_conflict";
 }
 
-function reportLifecycleError(
-  onLifecycleError: (error: unknown) => void,
-  error: unknown,
-): void {
+function legacyConsentFailure(): Error & { code: "consent_required_for_legacy_job" } {
+  const error = Object.assign(
+    new Error("This legacy report requires fresh consent."),
+    { code: "consent_required_for_legacy_job" as const },
+  );
+  legacyConsentFailures.add(error);
+  return error;
+}
+
+function isObject(value: unknown): value is object {
+  return (typeof value === "object" && value !== null) || typeof value === "function";
+}
+
+function reportLifecycleError(observer: () => void): void {
   try {
-    onLifecycleError(error);
+    observer();
   } catch {
     // Lifecycle evidence is observational and cannot change report delivery.
   }

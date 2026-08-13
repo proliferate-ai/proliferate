@@ -30,9 +30,10 @@ import {
 } from "./support-report-queue-document";
 import { hydrateOrMigrateSupportQueue } from "./support-report-queue-migration";
 import { commitSupportQueueMutation } from "./support-report-queue-storage";
-import type {
-  SupportReportQueueCallbacks,
-  SupportReportQueueRuntime,
+import {
+  notifySupportReportQueueObserver,
+  type SupportReportQueueCallbacks,
+  type SupportReportQueueRuntime,
 } from "./support-report-queue-runtime";
 
 interface PackagedQueueControllerInput {
@@ -86,7 +87,7 @@ export class PackagedSupportReportQueueController implements SupportReportQueueR
       normalized = normalizeSupportReportJobForEnqueue(job);
       assertPackagedSupportReportJob(normalized);
     } catch (error) {
-      this.input.callbacks.onControllerError(error);
+      this.notifyControllerError(error);
       return Promise.resolve("failed");
     }
     return this.serialize(async () => {
@@ -94,7 +95,7 @@ export class PackagedSupportReportQueueController implements SupportReportQueueR
       try {
         await validateArtifactBindings([normalized]);
       } catch (error) {
-        this.input.callbacks.onControllerError(error);
+        this.notifyControllerError(error);
         return "failed";
       }
       const current = this.current();
@@ -122,7 +123,7 @@ export class PackagedSupportReportQueueController implements SupportReportQueueR
           return "full";
         }
         this.blocked = true;
-        this.input.callbacks.onControllerError(error);
+        this.notifyControllerError(error);
         return "failed";
       }
 
@@ -135,7 +136,7 @@ export class PackagedSupportReportQueueController implements SupportReportQueueR
         );
       } catch (error) {
         this.blocked = true;
-        this.input.callbacks.onControllerError(error);
+        this.notifyControllerError(error);
         return "failed";
       }
       return this.disposed ? "failed" : "queued";
@@ -248,7 +249,9 @@ export class PackagedSupportReportQueueController implements SupportReportQueueR
       const reference = persistedArtifactReference(entry.job);
       const state = reference ? states.get(referenceKey(reference)) : undefined;
       if (state === "missing" || state === "mismatch") {
-        this.input.callbacks.onSnapshotUnavailable(entry.job.jobId, state);
+        notifySupportReportQueueObserver(() => {
+          this.input.callbacks.onSnapshotUnavailable(entry.job.jobId, state);
+        });
       }
       await this.cleanupCommittedRemoval(entry.job);
     }
@@ -307,7 +310,7 @@ export class PackagedSupportReportQueueController implements SupportReportQueueR
     try {
       await this.input.deleteAttachment(path);
     } catch (error) {
-      this.input.callbacks.onCleanupError(error, "attachment");
+      this.notifyCleanupError(error, "attachment");
     }
   }
 
@@ -315,8 +318,20 @@ export class PackagedSupportReportQueueController implements SupportReportQueueR
     try {
       await this.input.supportSnapshot.deleteArtifact(artifactId);
     } catch (error) {
-      this.input.callbacks.onCleanupError(error, "snapshot");
+      this.notifyCleanupError(error, "snapshot");
     }
+  }
+
+  private notifyControllerError(error: unknown): void {
+    notifySupportReportQueueObserver(() => {
+      this.input.callbacks.onControllerError(error);
+    });
+  }
+
+  private notifyCleanupError(error: unknown, resource: "attachment" | "snapshot"): void {
+    notifySupportReportQueueObserver(() => {
+      this.input.callbacks.onCleanupError(error, resource);
+    });
   }
 
   private current(): SupportQueueDocumentV2<PersistedSupportReportJob> {

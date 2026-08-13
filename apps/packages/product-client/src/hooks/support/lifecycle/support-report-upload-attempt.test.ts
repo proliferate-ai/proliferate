@@ -62,13 +62,17 @@ describe("prepared support report upload attempt", () => {
     const bridge = snapshotBridge(bytes);
     const job = preparedJob(bytes.byteLength, sha256);
     const retainedBytes: Blob[] = [];
+    const reportTelemetry = telemetry();
+    reportTelemetry.track.mockImplementation(() => {
+      throw new Error("telemetry unavailable");
+    });
 
     await expect(uploadSupportReportAttempt({
       job,
       attempt: 1,
       diagnostics: null,
       supportSnapshot: bridge,
-      telemetry: telemetry(),
+      telemetry: reportTelemetry,
       retainBytes(blob) {
         retainedBytes.push(blob);
       },
@@ -97,15 +101,42 @@ describe("prepared support report upload attempt", () => {
         },
       }),
     );
+    expect(bridge.finishSubmission).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a precompleted prepared report successful when telemetry throws", async () => {
+    const bytes = new TextEncoder().encode("{}");
+    const sha256 = await sha256Hex(bytes.buffer as ArrayBuffer);
+    const bridge = snapshotBridge(bytes);
+    const reportTelemetry = telemetry();
+    reportTelemetry.track.mockImplementation(() => {
+      throw new Error("telemetry unavailable");
+    });
+    cloud.createSupportReport.mockResolvedValueOnce(createResponse("completed"));
+
+    await expect(uploadSupportReportAttempt({
+      job: preparedJob(bytes.byteLength, sha256),
+      attempt: 2,
+      diagnostics: null,
+      supportSnapshot: bridge,
+      telemetry: reportTelemetry,
+      retainBytes: vi.fn(),
+      onLifecycleError: vi.fn(),
+    })).resolves.toEqual({ reportId: "report-1" });
+    expect(cloud.createSupportReportUploadTargets).not.toHaveBeenCalled();
+    expect(bridge.finishSubmission).toHaveBeenCalledTimes(1);
+    expect(bridge.finishSubmission).toHaveBeenCalledWith({
+      submissionId: "submission-1",
+      outcome: "succeeded",
+      reportId: "report-1",
+    });
   });
 
   it("makes no native lifecycle or server call when the artifact is missing", async () => {
     const bytes = new TextEncoder().encode("{}");
     const sha256 = await sha256Hex(bytes.buffer as ArrayBuffer);
     const bridge = snapshotBridge(bytes);
-    bridge.readArtifact.mockRejectedValueOnce(Object.assign(new Error("not found"), {
-      code: "artifact_missing",
-    }));
+    bridge.readArtifact.mockRejectedValueOnce("support_snapshot_artifact_missing");
 
     await expect(uploadSupportReportAttempt({
       job: preparedJob(bytes.byteLength, sha256),
@@ -126,6 +157,30 @@ describe("prepared support report upload attempt", () => {
 
     await expect(uploadSupportReportAttempt({
       job: preparedJob(bytes.byteLength, "0".repeat(64)),
+      attempt: 1,
+      diagnostics: null,
+      supportSnapshot: bridge,
+      telemetry: telemetry(),
+      retainBytes: vi.fn(),
+      onLifecycleError: vi.fn(),
+    })).rejects.toMatchObject({ code: "snapshot_mismatch" });
+    expect(bridge.beginSubmission).not.toHaveBeenCalled();
+    expect(cloud.createSupportReport).not.toHaveBeenCalled();
+  });
+
+  it("treats a hostile artifact-read failure as mismatch without invoking traps", async () => {
+    const bytes = new TextEncoder().encode("{}");
+    const sha256 = await sha256Hex(bytes.buffer as ArrayBuffer);
+    const bridge = snapshotBridge(bytes);
+    const revoked = Proxy.revocable({
+      code: "support_snapshot_artifact_missing",
+      message: "not found",
+    }, {});
+    revoked.revoke();
+    bridge.readArtifact.mockRejectedValueOnce(revoked.proxy);
+
+    await expect(uploadSupportReportAttempt({
+      job: preparedJob(bytes.byteLength, sha256),
       attempt: 1,
       diagnostics: null,
       supportSnapshot: bridge,
@@ -160,12 +215,87 @@ describe("prepared support report upload attempt", () => {
     });
   });
 
-  it("reports a lifecycle finish failure without changing a completed upload", async () => {
+  it("closes admitted submissions exactly once for hostile thrown values", async () => {
+    const bytes = new TextEncoder().encode("{}");
+    const sha256 = await sha256Hex(bytes.buffer as ArrayBuffer);
+    const trapped = Object.defineProperties({}, {
+      code: { get: () => { throw new Error("code trap"); } },
+      message: { get: () => { throw new Error("message trap"); } },
+      status: { get: () => { throw new Error("status trap"); } },
+    });
+    const revocable = Proxy.revocable({
+      code: "support_report_already_completed",
+      message: "lookalike",
+      status: 400,
+    }, {});
+    revocable.revoke();
+
+    for (const hostile of [trapped, revocable.proxy]) {
+      const bridge = snapshotBridge(bytes);
+      cloud.createSupportReport.mockRejectedValueOnce(hostile);
+      let caught: unknown;
+      try {
+        await uploadSupportReportAttempt({
+          job: preparedJob(bytes.byteLength, sha256),
+          attempt: 1,
+          diagnostics: null,
+          supportSnapshot: bridge,
+          telemetry: telemetry(),
+          retainBytes: vi.fn(),
+          onLifecycleError: vi.fn(),
+        });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBe(hostile);
+      expect(bridge.finishSubmission).toHaveBeenCalledTimes(1);
+      expect(bridge.finishSubmission).toHaveBeenCalledWith({
+        submissionId: "submission-1",
+        outcome: "failed",
+        errorClassification: "transient",
+        reportId: null,
+      });
+    }
+  });
+
+  it("does not turn message-only completion or conflict prose into native semantics", async () => {
+    const bytes = new TextEncoder().encode("{}");
+    const sha256 = await sha256Hex(bytes.buffer as ArrayBuffer);
+    for (const message of [
+      "Support report upload is already completed.",
+      "Support report upload targets changed diagnostics intent.",
+    ]) {
+      const bridge = snapshotBridge(bytes);
+      cloud.createSupportReport.mockRejectedValueOnce(new Error(message));
+
+      await expect(uploadSupportReportAttempt({
+        job: preparedJob(bytes.byteLength, sha256),
+        attempt: 1,
+        diagnostics: null,
+        supportSnapshot: bridge,
+        telemetry: telemetry(),
+        retainBytes: vi.fn(),
+        onLifecycleError: vi.fn(),
+      })).rejects.toThrow(message);
+      expect(bridge.finishSubmission).toHaveBeenCalledTimes(1);
+      expect(bridge.finishSubmission).toHaveBeenCalledWith({
+        submissionId: "submission-1",
+        outcome: "failed",
+        errorClassification: "transient",
+        reportId: null,
+      });
+    }
+  });
+
+  it("keeps completion successful when native finish and its observer both throw", async () => {
     const bytes = new TextEncoder().encode("{}");
     const sha256 = await sha256Hex(bytes.buffer as ArrayBuffer);
     const bridge = snapshotBridge(bytes);
     const lifecycleError = new Error("native lifecycle unavailable");
-    const onLifecycleError = vi.fn();
+    const onLifecycleError = vi.fn(() => {
+      throw new Error("observer unavailable");
+    });
     bridge.finishSubmission.mockRejectedValueOnce(lifecycleError);
 
     await expect(uploadSupportReportAttempt({
@@ -248,6 +378,9 @@ describe("prepared support report upload attempt", () => {
     const job = preparedJob(2, "b".repeat(64));
     job.supportSnapshot = { kind: "none" };
     const reportTelemetry = telemetry();
+    reportTelemetry.track.mockImplementation(() => {
+      throw new Error("telemetry unavailable");
+    });
 
     await expect(uploadSupportReportAttempt({
       job,
@@ -259,18 +392,15 @@ describe("prepared support report upload attempt", () => {
       onLifecycleError: vi.fn(),
     })).resolves.toEqual({ reportId: "report-1" });
     expect(cloud.createSupportReportUploadTargets).not.toHaveBeenCalled();
-    expect(reportTelemetry.track).toHaveBeenCalledWith(
-      "support_report_submitted",
-      expect.objectContaining({ diagnostics_included: false }),
-    );
+    expect(reportTelemetry.track).toHaveBeenCalledTimes(1);
   });
 
-  it("recognizes only the legacy diagnostics-intent conflict as fresh-consent terminal", async () => {
+  it("uses the structured conflict code with the persisted legacy marker", async () => {
     const job = preparedJob(2, "b".repeat(64));
     job.supportSnapshot = { kind: "none" };
     job.includeLogs = true;
     const conflict = Object.assign(
-      new Error("Support report upload targets changed diagnostics intent."),
+      new Error("Server wording is not an input to the conclusion."),
       { code: "support_report_upload_conflict", status: 400 },
     );
     cloud.createSupportReportUploadTargets.mockRejectedValueOnce(conflict);
@@ -292,6 +422,15 @@ describe("prepared support report upload attempt", () => {
     expect(caught).toBe(conflict);
     expect(legacyConsentRequired(caught, job)).toBe(true);
     expect(trace).not.toContain("native:begin");
+  });
+
+  it("keeps an unstructured legacy conflict lookalike generic and retryable", () => {
+    const job = preparedJob(2, "b".repeat(64));
+    job.supportSnapshot = { kind: "none" };
+    job.includeLogs = true;
+    const lookalike = new Error("Support report upload targets changed diagnostics intent.");
+
+    expect(legacyConsentRequired(lookalike, job)).toBe(false);
   });
 
   it("keeps an already-completed truthy legacy job queue-only", async () => {
