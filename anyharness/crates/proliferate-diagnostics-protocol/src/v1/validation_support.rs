@@ -138,8 +138,7 @@ pub(super) fn validate_schema_version(version: SchemaVersionV1) -> Result<(), Re
     if version.major != CURRENT_SCHEMA_VERSION.major {
         return Err(RejectionReasonV1::UnsupportedMajor);
     }
-    if version.minor < MIN_SUPPORTED_PRODUCER_MINOR || version.minor > CURRENT_SCHEMA_VERSION.minor
-    {
+    if !(MIN_SUPPORTED_PRODUCER_MINOR..=CURRENT_SCHEMA_VERSION.minor).contains(&version.minor) {
         return Err(RejectionReasonV1::UnsupportedMinor);
     }
     Ok(())

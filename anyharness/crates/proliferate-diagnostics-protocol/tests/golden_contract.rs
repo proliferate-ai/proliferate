@@ -256,7 +256,9 @@ fn constants_and_release_rss_profile_match_the_golden_boundaries() {
         limits["supported_previous_producer_minor_window"],
         SUPPORTED_PREVIOUS_PRODUCER_MINOR_WINDOW
     );
-    assert!(RETAINED_RECORD_ARENA_LIMIT_BYTES < COLLECTOR_TOTAL_RSS_LIMIT_BYTES);
+    const {
+        assert!(RETAINED_RECORD_ARENA_LIMIT_BYTES < COLLECTOR_TOTAL_RSS_LIMIT_BYTES);
+    }
 
     let profile_value = fixture("rss-profile.json");
     let profile = parse_rss_profile_value(&profile_value).unwrap();
