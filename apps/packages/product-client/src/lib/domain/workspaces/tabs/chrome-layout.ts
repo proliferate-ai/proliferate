@@ -119,7 +119,13 @@ export function computeHeaderStripLayout({
       .filter((row) => row.kind === "tab")
       .map((row) => row.maxWidth ?? maxTabWidth),
     overlapCount: adjacentTabOverlapCount,
-    minWidth: minTabWidth,
+    // The min width yields to the viewport: a tab wider than the strip can
+    // never show its title start and its trailing status badge at once
+    // (PRO-226). Capped at the full strip width — not the pill-adjusted
+    // remainder — because pills scroll away with the strip, so a scrolled-to
+    // tab has the whole viewport. Zero-width containers (pre-measure render)
+    // keep the floor.
+    minWidth: available > 0 ? Math.min(minTabWidth, available) : minTabWidth,
     maxWidth: maxTabWidth,
     overlapWidth,
   });

@@ -85,6 +85,25 @@ describe("computeHeaderStripLayout", () => {
     expect(last).toBeGreaterThan(200);
   });
 
+  it("yields the min tab width to a narrower strip so the status badge stays in view (PRO-226)", () => {
+    expect(computeHeaderStripLayout({
+      containerWidth: 116,
+      rows: [{ kind: "tab" }],
+    }).widths).toEqual([116]);
+
+    expect(computeHeaderStripLayout({
+      containerWidth: 116,
+      rows: [{ kind: "tab" }, { kind: "tab" }],
+    }).widths).toEqual([116, 116]);
+
+    // Pre-measure render (zero container) keeps the floor instead of
+    // collapsing every tab to zero width.
+    expect(computeHeaderStripLayout({
+      containerWidth: 0,
+      rows: [{ kind: "tab" }],
+    }).widths).toEqual([CHROME_TAB_MIN_WIDTH]);
+  });
+
   it("keeps a min-width tab title visible without scroll ping-pong in a narrower viewport (PRO-226)", () => {
     // Viewport narrower than one min-width tab: never scroll the title start
     // out of view, from rest or from a mid-glitch right-aligned position.
