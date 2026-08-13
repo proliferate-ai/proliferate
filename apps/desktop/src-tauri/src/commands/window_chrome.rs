@@ -1,41 +1,85 @@
+use std::sync::Mutex;
+
 const MAC_TRAFFIC_LIGHT_X: f64 = 13.0;
 // Matches the shared workspace header and right-panel tab-system height.
 const MAC_HEADER_HEIGHT: f64 = 46.0;
 
+/// Webview page zoom scales the DOM header the traffic lights sit in, but the
+/// native buttons never zoom. The active factor is kept here so the buttons
+/// can be laid out against the zoomed header geometry — including when the
+/// chrome is re-applied on window focus, after AppKit resets it.
+pub struct WindowChromeZoom(Mutex<f64>);
+
+impl Default for WindowChromeZoom {
+    fn default() -> Self {
+        Self(Mutex::new(1.0))
+    }
+}
+
+impl WindowChromeZoom {
+    fn factor(&self) -> f64 {
+        self.0.lock().map(|guard| *guard).unwrap_or(1.0)
+    }
+}
+
 #[tauri::command]
-pub fn apply_macos_window_chrome(window: tauri::Window) -> Result<(), String> {
+pub fn apply_macos_window_chrome(
+    window: tauri::Window,
+    zoom: tauri::State<'_, WindowChromeZoom>,
+) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        apply_traffic_light_position(&window, MAC_TRAFFIC_LIGHT_X, MAC_HEADER_HEIGHT)
+        apply_traffic_light_position(
+            window.ns_window().map_err(|error| error.to_string())?,
+            zoom.factor(),
+        )
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = window;
+        let _ = (window, zoom);
         Ok(())
     }
 }
 
 #[tauri::command]
-pub fn set_webview_zoom(window: tauri::WebviewWindow, scale_factor: f64) -> Result<(), String> {
+pub fn set_webview_zoom(
+    window: tauri::WebviewWindow,
+    zoom: tauri::State<'_, WindowChromeZoom>,
+    scale_factor: f64,
+) -> Result<(), String> {
     if !scale_factor.is_finite() {
         return Err("webview zoom scale must be finite".to_string());
     }
 
-    window
-        .set_zoom(scale_factor.clamp(0.8, 1.2))
-        .map_err(|error| error.to_string())
+    let clamped = scale_factor.clamp(0.8, 1.2);
+    window.set_zoom(clamped).map_err(|error| error.to_string())?;
+    if let Ok(mut guard) = zoom.0.lock() {
+        *guard = clamped;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        apply_traffic_light_position(
+            window.ns_window().map_err(|error| error.to_string())?,
+            clamped,
+        )?;
+    }
+
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
 fn apply_traffic_light_position(
-    window: &tauri::Window,
-    x: f64,
-    header_height: f64,
+    ns_window: *mut std::ffi::c_void,
+    scale: f64,
 ) -> Result<(), String> {
     use objc2_app_kit::{NSView, NSWindow, NSWindowButton};
+    use std::sync::OnceLock;
 
-    let ns_window = window.ns_window().map_err(|error| error.to_string())?;
+    // AppKit owns the initial layout; capture its pitch before the first
+    // reposition so scaled applications never compound on their own output.
+    static BASE_BUTTON_PITCH: OnceLock<f64> = OnceLock::new();
 
     unsafe {
         let ns_window = &*ns_window.cast::<NSWindow>();
@@ -52,13 +96,15 @@ fn apply_traffic_light_position(
             .ok_or_else(|| "title bar container view not found".to_string())?;
 
         let close_rect = NSView::frame(&close);
-        let title_bar_frame_height = header_height.max(close_rect.size.height);
+        let title_bar_frame_height = (MAC_HEADER_HEIGHT * scale).max(close_rect.size.height);
         let mut title_bar_rect = NSView::frame(&title_bar_container_view);
         title_bar_rect.size.height = title_bar_frame_height;
         title_bar_rect.origin.y = ns_window.frame().size.height - title_bar_frame_height;
         title_bar_container_view.setFrame(title_bar_rect);
 
-        let space_between = NSView::frame(&miniaturize).origin.x - close_rect.origin.x;
+        let space_between = BASE_BUTTON_PITCH
+            .get_or_init(|| NSView::frame(&miniaturize).origin.x - close_rect.origin.x)
+            * scale;
         let button_y = (title_bar_frame_height - close_rect.size.height) / 2.0;
         let mut buttons = vec![close, miniaturize];
         if let Some(zoom) = zoom {
@@ -67,7 +113,7 @@ fn apply_traffic_light_position(
 
         for (index, button) in buttons.into_iter().enumerate() {
             let mut rect = NSView::frame(&button);
-            rect.origin.x = x + (index as f64 * space_between);
+            rect.origin.x = (MAC_TRAFFIC_LIGHT_X * scale) + (index as f64 * space_between);
             rect.origin.y = button_y;
             button.setFrameOrigin(rect.origin);
         }

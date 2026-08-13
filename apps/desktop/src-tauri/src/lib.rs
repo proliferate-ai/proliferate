@@ -217,6 +217,7 @@ pub fn run() {
         .manage(renderer_diagnostic_log)
         .manage(workspace_activity_indicator::WorkspaceActivityIndicatorStore::default())
         .manage(ssh_tunnel::SshTunnelState::default())
+        .manage(window_chrome::WindowChromeZoom::default())
         .invoke_handler(tauri::generate_handler![
             anonymous_telemetry::load_anonymous_telemetry_bootstrap,
             anonymous_telemetry::save_anonymous_telemetry_state,
