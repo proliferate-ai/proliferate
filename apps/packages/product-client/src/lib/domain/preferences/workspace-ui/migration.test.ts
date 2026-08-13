@@ -298,10 +298,13 @@ describe("workspace UI state migration", () => {
     } as never);
 
     expect(didMigrate).toBe(true);
+    // 900 survives migration: there is no fixed panel maximum — a width
+    // chosen on a larger window restores intact, and the rail's rendered
+    // clamp bounds what actually paints on the current window.
     expect(state.rightPanelDurableByWorkspace).toEqual({
       w1: {
         open: false,
-        width: 700,
+        width: 900,
       },
     });
     expect(state.rightPanelMaterializedByWorkspace).toEqual({

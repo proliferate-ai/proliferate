@@ -12,3 +12,9 @@ export const HOME_CHAT_COMPOSER_INPUT = {
   maxRows: 8,
   minHeightRem: 2.75,
 } as const;
+
+/**
+ * Maximum result page supported by workspace file search. The mention menu
+ * keeps the full page and scrolls inside its visual height cap.
+ */
+export const CHAT_FILE_MENTION_SEARCH_LIMIT = 200;
