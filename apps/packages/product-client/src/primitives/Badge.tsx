@@ -10,8 +10,18 @@ export type BadgeTone =
   | "destructive"
   | "sidebar";
 
+/**
+ * Geometry only. `default` is the bordered pill; `micro` is the square
+ * count/label chip that sits inside dense chrome (popover triggers, roster
+ * meta lines) — tighter radius and padding, no visible edge, and a flat
+ * `muted` fill for the neutral tone. Every non-neutral tone keeps its own
+ * tint and ink at either size, so tone and size stay independent axes.
+ */
+export type BadgeSize = "default" | "micro";
+
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: BadgeTone;
+  size?: BadgeSize;
 }
 
 const toneClasses: Record<BadgeTone, string> = {
@@ -24,14 +34,24 @@ const toneClasses: Record<BadgeTone, string> = {
   sidebar: "border-border bg-surface-control text-sidebar-muted-foreground",
 };
 
+const sizeClasses: Record<BadgeSize, string> = {
+  default: "rounded-full px-2 py-0.5",
+  micro: "rounded-sm border-transparent px-1 py-0.5 leading-none",
+};
+
+/** Micro's neutral fill is the flat `muted` step, not the default pill's control chrome. */
+const MICRO_NEUTRAL_FILL = "bg-muted";
+
 export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
-  function Badge({ tone = "neutral", className = "", ...props }, ref) {
+  function Badge({ tone = "neutral", size = "default", className = "", ...props }, ref) {
     return (
       <span
         ref={ref}
         className={twMerge(
-          "inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-ui-sm font-medium",
+          "inline-flex max-w-full items-center border text-ui-sm font-medium",
           toneClasses[tone],
+          sizeClasses[size],
+          size === "micro" && tone === "neutral" ? MICRO_NEUTRAL_FILL : "",
           className,
         )}
         {...props}

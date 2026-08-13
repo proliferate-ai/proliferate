@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { GitBranchRef } from "@anyharness/sdk";
+import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { Check, ChevronDown } from "#product/primitives/icons/core";
 import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
@@ -7,10 +8,7 @@ import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/Popove
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
 import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
-import {
-  GIT_REVIEW_SELECTOR_TRIGGER_CLASS,
-  GitReviewCountChip,
-} from "#product/components/workspace/git/GitReviewSelectorChrome";
+import { GIT_REVIEW_SELECTOR_TRIGGER_CLASS } from "#product/components/workspace/git/GitReviewSelectorChrome";
 
 export function GitReviewTargetSelector({
   mode,
@@ -104,7 +102,7 @@ export function GitReviewTargetSelector({
                   }
                   trailing={(
                     <span className="flex shrink-0 items-center gap-2">
-                      {branch.isDefault && <GitReviewCountChip>default</GitReviewCountChip>}
+                      {branch.isDefault && <Badge size="micro">default</Badge>}
                       {branch.name === activeRef && (
                         <Check className="icon-compact shrink-0 text-foreground" />
                       )}

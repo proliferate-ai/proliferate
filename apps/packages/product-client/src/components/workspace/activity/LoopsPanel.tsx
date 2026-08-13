@@ -10,6 +10,7 @@ import {
   type LoopScheduleKind,
   type LoopWire,
 } from "#product/domain/activity/loop";
+import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { IconButton } from "#product/primitives/IconButton";
 import { Input } from "#product/primitives/Input";
@@ -153,20 +154,13 @@ function LoopRow({
             ) : (
               <span>{fireCountLabel}</span>
             )}
-            {/*
-             * C1/C2 deviation: this native/emulated chip is the same small
-             * square label-chip shape the git area collapses into a local
-             * helper (2.6), but merging across areas is a promotion, banned
-             * in this slice. Recorded as a promotion candidate (section 6).
-             */}
-            <span
-              className={twMerge(
-                "rounded px-1 py-0.5 text-ui font-medium uppercase tracking-wide",
-                loop.native ? "bg-muted text-muted-foreground" : "bg-warning-subtle text-warning-foreground",
-              )}
+            <Badge
+              size="micro"
+              tone={loop.native ? "neutral" : "warning"}
+              className="uppercase tracking-wide"
             >
               {loop.native ? "native" : "emulated"}
-            </span>
+            </Badge>
           </span>
         )}
         actions={!cleared ? (
