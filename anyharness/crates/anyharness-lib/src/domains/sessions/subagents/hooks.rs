@@ -107,6 +107,15 @@ async fn deliver_subagent_completion(
         .await
     {
         Ok(envelope) => {
+            tracing::info!(
+                target: "anyharness.subagent.turn_completed",
+                child_session_id = %link.child_session_id,
+                parent_session_id = %link.parent_session_id,
+                completion_id = %inserted.completion.completion_id,
+                outcome = ctx.outcome.as_str(),
+                parent_event_seq = envelope.seq,
+                "subagent: child turn completion delivered to parent"
+            );
             let _ = service.mark_parent_event_seq(&inserted.completion.completion_id, envelope.seq);
         }
         Err(error) => {

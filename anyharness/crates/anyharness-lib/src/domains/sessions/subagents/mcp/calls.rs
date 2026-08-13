@@ -24,6 +24,12 @@ pub async fn call_tool(
     name: &str,
     arguments: Option<Value>,
 ) -> anyhow::Result<Value> {
+    tracing::info!(
+        target: "anyharness.subagent.spawn_requested",
+        parent_session_id = %ctx.parent_session_id,
+        tool = name,
+        "subagent: parent invoked a subagent tool"
+    );
     match name {
         "get_subagent_launch_options" => get_subagent_launch_options(service, session_runtime, ctx),
         "create_subagent" => {
@@ -490,6 +496,14 @@ async fn close_subagent(
     }
     if !already_closed {
         service.close_link(&link, &now)?;
+        tracing::info!(
+            target: "anyharness.subagent.link_closed",
+            parent_session_id = %link.parent_session_id,
+            child_session_id = %link.child_session_id,
+            relation = link.relation.as_str(),
+            cause = "close_subagent_tool",
+            "subagent: link closed"
+        );
     }
     let refreshed = service.resolve_target_including_closed(
         parent_session_id,

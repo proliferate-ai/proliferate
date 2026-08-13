@@ -62,6 +62,30 @@ pub enum SubagentError {
     Internal(#[from] anyhow::Error),
 }
 
+impl SubagentError {
+    /// Stable low-cardinality reason for observability. The typed rejections
+    /// are otherwise invisible: the caller only ever sees the rendered string.
+    pub fn reason_label(&self) -> &'static str {
+        match self {
+            SubagentError::ParentNotFound(_) => "parent_not_found",
+            SubagentError::ChildNotFound(_) => "child_not_found",
+            SubagentError::WorkspaceNotFound(_) => "workspace_not_found",
+            SubagentError::IneligibleWorkspace => "ineligible_workspace",
+            SubagentError::CrossWorkspace => "cross_workspace",
+            SubagentError::DepthLimit => "depth_limit",
+            SubagentError::Disabled => "disabled",
+            SubagentError::FanoutLimit => "fanout_limit",
+            SubagentError::NotOwned => "not_owned",
+            SubagentError::TargetRequired => "target_required",
+            SubagentError::ConflictingTarget => "conflicting_target",
+            SubagentError::Closed => "closed",
+            SubagentError::MutationBlocked(_) => "mutation_blocked",
+            SubagentError::Link(_) => "link_failed",
+            SubagentError::Internal(_) => "internal",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct SubagentService {
     session_store: SessionStore,
@@ -92,6 +116,22 @@ impl SubagentService {
     }
 
     pub fn validate_parent_can_spawn(
+        &self,
+        parent_session_id: &str,
+    ) -> Result<SessionRecord, SubagentError> {
+        let outcome = self.validated_parent_for_spawn(parent_session_id);
+        if let Err(error) = outcome.as_ref() {
+            tracing::warn!(
+                target: "anyharness.subagent.spawn_rejected",
+                parent_session_id = %parent_session_id,
+                reason = error.reason_label(),
+                "subagent: parent may not spawn a subagent"
+            );
+        }
+        outcome
+    }
+
+    fn validated_parent_for_spawn(
         &self,
         parent_session_id: &str,
     ) -> Result<SessionRecord, SubagentError> {
@@ -168,12 +208,21 @@ impl SubagentService {
             created_by_turn_id,
             created_by_tool_call_id,
         };
-        self.link_service
+        let link = self
+            .link_service
             .create_subagent_link_with_child_limit(input, MAX_SUBAGENTS_PER_PARENT)
             .map_err(|error| match error {
                 CreateSessionLinkError::FanoutLimit => SubagentError::FanoutLimit,
                 other => SubagentError::Link(other),
-            })
+            })?;
+        tracing::info!(
+            target: "anyharness.subagent.spawned",
+            parent_session_id = %link.parent_session_id,
+            child_session_id = %link.child_session_id,
+            session_link_id = %link.id,
+            "subagent: parent linked to child"
+        );
+        Ok(link)
     }
 
     pub fn authorize_child(
