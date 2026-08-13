@@ -42,6 +42,14 @@ export function TurnDiffPanelHeader({
         />
       )}
       <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-2.5 px-[var(--turn-diff-row-padding-x)] py-3 text-left">
+        {/*
+          Recorded cause (DESIGN_SYSTEM.md § UI-conformance review, check 4) for
+          overriding the tile's paint from here: none of `IconTile`'s four tones
+          carries `--color-diff-chat-turn-icon-surface`, the fill that ties this
+          tile to the diff family, and adding a fifth tone for one surface would
+          widen the tone axis into a colour palette. The override is the token
+          utility, not an arbitrary value.
+        */}
         <IconTile
           size="lg"
           className="bg-diff-chat-turn-icon-surface text-secondary-foreground"

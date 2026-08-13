@@ -106,6 +106,10 @@ export function ComposerInlineMenuRow({
       type="button"
       variant="unstyled"
       size="unstyled"
+      // Recorded exemption (DESIGN_SYSTEM.md § UI-conformance review, check 3),
+      // the option half of the ruling written on `role="listbox"` in
+      // `ComposerInlineMenuPanel` above: the roles ride together, and no
+      // sanctioned overlay path owns a layout-anchored listbox.
       role="option"
       data-list-navigation-item
       aria-selected={selected}

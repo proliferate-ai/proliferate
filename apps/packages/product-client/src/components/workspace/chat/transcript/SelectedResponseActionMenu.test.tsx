@@ -134,7 +134,17 @@ describe("SelectedResponseActionMenu", () => {
     domSelection.removeAllRanges();
     domSelection.addRange(range);
 
-    fireEvent.pointerDown(items[1]!, { button: 0, ctrlKey: false });
+    // jsdom never collapses a selection on pointerdown, so asserting the
+    // selection survives cannot fail on its own — the assertion that actually
+    // holds the guard is that the item CANCELS the pointerdown, which is what
+    // stops the browser from moving focus and dropping the range.
+    const pointerDown = new window.PointerEvent("pointerdown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    });
+    fireEvent(items[1]!, pointerDown);
+    expect(pointerDown.defaultPrevented).toBe(true);
     fireEvent.click(items[1]!);
 
     expect(onAction).toHaveBeenCalledWith("more-details");

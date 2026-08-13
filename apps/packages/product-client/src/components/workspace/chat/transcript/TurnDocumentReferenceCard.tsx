@@ -28,6 +28,12 @@ export function TurnDocumentReferenceCard({
         className="turn-document-reference-trigger flex w-full min-w-0 items-center justify-start gap-2.5 rounded-none px-3 py-3 text-left focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
         aria-label={`Open preview for ${resource.displayName}`}
       >
+        {/*
+          Recorded cause (DESIGN_SYSTEM.md § UI-conformance review, check 4),
+          identical to TurnDiffPanelHeader's: no `IconTile` tone carries
+          `--color-diff-chat-turn-icon-surface`, so the shared fill arrives as a
+          token-utility override rather than a fifth tone.
+        */}
         <IconTile
           size="lg"
           className="bg-diff-chat-turn-icon-surface text-secondary-foreground"

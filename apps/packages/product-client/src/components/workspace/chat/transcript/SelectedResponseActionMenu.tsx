@@ -126,6 +126,15 @@ export function SelectedResponseActionMenu({
         // sanctioned inline-style case (styling.md § Callsite Styling). It is
         // recomputed on every render, which is what `updatePositionStrategy`
         // relied on before.
+        //
+        // Containing-block dependency, unlike the virtual anchor this replaced:
+        // `position: fixed` resolves against the viewport ONLY while no
+        // ancestor of the transcript establishes a containing block. Giving any
+        // ancestor `transform`, `filter`, `backdrop-filter`, `perspective`,
+        // `contain` or `will-change: transform` silently re-bases these
+        // coordinates and detaches the menu from the selection. The chain
+        // (ChatView → SessionTranscriptPane → MessageList → ChatTranscriptView)
+        // carries none of those today.
         style={{
           position: "fixed",
           top: anchorRect.y,
