@@ -49,33 +49,12 @@ impl SessionActor {
             }
         }
 
-        // A queued completion wake reaches durable validation before any
-        // attachment lookup. Canonical wakes are exactly one text block, so a
-        // forged internal row with an extra/missing attachment is discarded
-        // rather than becoming an attachment-resolution retry loop.
-        let admitted_subagent_turn =
-            if let Some(seq) = queue_seq.filter(|_| payload.has_subagent_wake_provenance()) {
-                let mut sink = self.event_sink.lock().await;
-                let outcome = sink
-                    .persist_subagent_wake_turn(
-                        payload.text_summary.clone(),
-                        prompt_id.clone(),
-                        payload.content_parts(),
-                        payload.public_provenance(),
-                        seq,
-                    )
-                    .map_err(|error| PromptAcceptError::EnqueueFailed(error.to_string()))?;
-                match outcome {
-                    SubagentWakeTurnStartOutcome::Admitted { turn_id } => Some(turn_id),
-                    other => return Ok(BeginPromptTurnOutcome::Skipped(other)),
-                }
-            } else {
-                None
-            };
+        let queued_subagent_wake = queue_seq.filter(|_| payload.has_subagent_wake_provenance());
 
-        // Admission proves that a completion wake has no attachment-bearing
-        // blocks. Ordinary prompts retain the existing attachment loader.
-        let parts = if admitted_subagent_turn.is_some() {
+        // Canonical completion wakes are exactly one text block. They render
+        // against no attachments only after durable admission has validated
+        // the row.
+        let parts = if queued_subagent_wake.is_some() {
             ResolvedParts::default()
         } else {
             match self.caps.attachments.load(&self.session_id, payload) {
@@ -92,12 +71,53 @@ impl SessionActor {
             }
         };
 
-        // Render: pure payload + loaded parts -> ACP blocks; the first-prompt
-        // append folds in here instead of mutating the blocks afterwards.
+        // Resolve current durable role/relationship truth at the last
+        // effect-free boundary before render. Never log the internal resolver
+        // error: the bounded incident receipt is the only public/debug handle.
+        let product_context = match self.caps.product_context.resolve(&self.session_id) {
+            Ok(context) => context,
+            Err(error) => {
+                let incident_id = uuid::Uuid::new_v4().to_string();
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    incident_id,
+                    failure_code = crate::domains::sessions::prompt::AGENT_PRODUCT_CONTEXT_UNAVAILABLE_CODE,
+                    "agent product context resolution failed"
+                );
+                return Err(PromptAcceptError::ProductContextUnavailable { incident_id, error });
+            }
+        };
+
+        // Completion-wake admission is the first durable turn effect. It stays
+        // after product-context resolution so a context failure has no
+        // TurnStarted or user item, but before render so the existing
+        // canonical gate silently discards forged attachment-bearing rows.
+        let admitted_subagent_turn = if let Some(seq) = queued_subagent_wake {
+            let mut sink = self.event_sink.lock().await;
+            let outcome = sink
+                .persist_subagent_wake_turn(
+                    payload.text_summary.clone(),
+                    prompt_id.clone(),
+                    payload.content_parts(),
+                    payload.public_provenance(),
+                    seq,
+                )
+                .map_err(|error| PromptAcceptError::EnqueueFailed(error.to_string()))?;
+            match outcome {
+                SubagentWakeTurnStartOutcome::Admitted { turn_id } => Some(turn_id),
+                other => return Ok(BeginPromptTurnOutcome::Skipped(other)),
+            }
+        } else {
+            None
+        };
+
+        // Render: pure payload + loaded parts + separately resolved system
+        // context -> ACP blocks. Authored payload blocks remain untouched.
         let acp_blocks = match render(
             payload,
             &parts,
             &TurnPromptExtras {
+                product_context: Some(product_context.instruction().to_string()),
                 first_prompt_system_prompt_append,
             },
         ) {

@@ -176,7 +176,7 @@ async fn app_state_wires_integration_gateway_extension_to_served_runtime_home() 
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_without_launching_it() {
+async fn app_state_launches_and_serves_workspace_mcp_for_an_eligible_session() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
@@ -228,10 +228,10 @@ async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_witho
         .product_mcp_endpoint_registry
         .get_by_route_slug("workspace")
         .expect("Workspace serving endpoint");
-    assert!(!state
-        .session_runtime
-        .product_mcp_launch_ids()
-        .contains(&"workspace"));
+    assert_eq!(
+        state.session_runtime.product_mcp_launch_ids(),
+        ["workspace", "reviews", "cowork"]
+    );
     let auth = WorkspaceMcpAuth::new(runtime_home.clone());
     let token = auth
         .mint_capability_token("workspace-1", "session-1")

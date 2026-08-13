@@ -55,16 +55,41 @@ describe("Agent Operations transcript presentation", () => {
     expect(appended[0]).toMatchObject({ blockId: "subagent1" });
   });
 
+  it("groups a production-shaped Codex subagent creation envelope", () => {
+    const transcript = createTranscriptState("session-1");
+    const wrapped = workspaceCreateAgentItem("subagent1", 1, "subagent");
+    transcript.itemsById = {
+      subagent1: {
+        ...wrapped,
+        nativeToolName: null,
+        rawInput: {
+          server: "workspace",
+          tool: "create_agent",
+          arguments: wrapped.rawInput,
+        },
+        rawOutput: {
+          content: [{ type: "text", text: JSON.stringify(wrapped.rawOutput) }],
+          isError: false,
+          structuredContent: wrapped.rawOutput,
+        },
+      },
+    };
+
+    expect(buildTurnPresentation(turnRecord(["subagent1"]), transcript).displayBlocks).toEqual([
+      { kind: "subagent_creations", blockId: "subagent1", itemIds: ["subagent1"] },
+    ]);
+  });
+
   it("keeps workspace mutations visible while generic reads remain foldable", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       send: {
         ...toolItem("send", "turn-1", 1, "other"),
-        nativeToolName: "mcp__workspace__send_message",
+        nativeToolName: "mcp__proliferate_workspace__send_message",
       },
       read: {
         ...toolItem("read", "turn-1", 2, "other"),
-        nativeToolName: "mcp__workspace__list_agents",
+        nativeToolName: "mcp__proliferate_workspace__list_agents",
       },
       final: assistantItem("final", "turn-1", 3),
     };
@@ -88,7 +113,7 @@ function workspaceCreateAgentItem(
   return {
     ...toolItem(itemId, "turn-1", startedSeq, "other"),
     title: "Create agent",
-    nativeToolName: "mcp__workspace__create_agent",
+    nativeToolName: "mcp__proliferate_workspace__create_agent",
     rawInput: {
       workspaceId: "workspace-1",
       kind,

@@ -419,7 +419,7 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
             actor_task.await.unwrap().unwrap();
             drop(held_responder);
 
-            let completion_store = SubagentStore::new(state.db.clone());
+            let completion_store = LinkCompletionStore::new(state.db.clone());
             let completions = tokio::time::timeout(Duration::from_secs(2), async {
                 loop {
                     let records = completion_store
@@ -490,18 +490,46 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
                 Some(delivery_prompt_id.as_str())
             );
             assert!(pending[0].text.contains(PARTIAL_TEXT));
-            assert!(!store
+            // The delivery worker injects the parent-visible completion
+            // receipt on the same Pending -> Enqueued pass that staged the
+            // wake prompt, but the enqueue transaction commits before the
+            // injection, so the event can trail the state we just observed.
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    if store
+                        .list_events(PARENT_ID)
+                        .unwrap()
+                        .iter()
+                        .any(|event| event.event_type == "subagent_turn_completed")
+                    {
+                        break;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("cancelled completion receipt injected into parent transcript");
+            let parent_completion_events = store
                 .list_events(PARENT_ID)
                 .unwrap()
                 .iter()
-                .any(|event| event.event_type == "subagent_turn_completed"));
+                .filter(|event| event.event_type == "subagent_turn_completed")
+                .map(|event| event.payload_json.clone())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                parent_completion_events.len(),
+                1,
+                "one receipt per delivery transition"
+            );
+            assert!(parent_completion_events[0].contains(&deliveries[0].completion_id));
             assert!(!state.session_runtime.has_live_session(SESSION_ID).await);
             assert_eq!(closed.native_session_id.as_deref(), Some(NATIVE_SESSION_ID));
             assert!(closed.closed_at.is_none());
             assert!(closed.dismissed_at.is_none());
             assert!(state
                 .subagent_service
-                .resolve_target_including_closed(PARENT_ID, None, Some(SESSION_ID))
+                .find_subagent_parent(SESSION_ID)
+                .unwrap()
                 .unwrap()
                 .subagent_closed_at
                 .is_some());

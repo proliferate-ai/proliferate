@@ -318,8 +318,14 @@ async fn v2_scripted_agent_applies_effort_runs_one_turn_and_replays_without_effe
             .iter()
             .find(|request| request["method"] == "session/prompt")
             .expect("prompt request payload");
+        let prompt_blocks = prompt["params"]["prompt"]
+            .as_array()
+            .expect("prompt blocks");
+        assert!(prompt_blocks[0]["text"]
+            .as_str()
+            .is_some_and(|text| text.starts_with("System instruction from AnyHarness")));
         assert_eq!(
-            prompt["params"]["prompt"][0]["text"],
+            prompt_blocks.last().expect("authored prompt")["text"],
             "Return PROL-321 attempt 1"
         );
 

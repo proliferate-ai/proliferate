@@ -30,7 +30,6 @@ export interface SubagentComposerStripRow {
   statusLabel: string;
   statusCategory: DelegatedWorkStatusCategory;
   latestCompletionLabel: string | null;
-  wakeScheduled: boolean;
 }
 
 export interface SubagentComposerStripViewModel {
@@ -214,25 +213,23 @@ function buildSummary(
 ): SubagentComposerStripSummary {
   const workingCount = rows.filter((row) => row.statusLabel === "Working").length;
   const failedCount = rows.filter((row) => row.statusLabel === "Failed").length;
-  const wakeScheduledCount = rows.filter((row) => row.wakeScheduled).length;
   if (parent) {
     return {
       label: "Parent agent",
       detail: parent.label,
-      active: workingCount > 0 || failedCount > 0 || wakeScheduledCount > 0,
+      active: workingCount > 0 || failedCount > 0,
     };
   }
 
   const detailParts = [
     workingCount > 0 ? `${workingCount} working` : null,
-    wakeScheduledCount > 0 ? `${wakeScheduledCount} wake scheduled` : null,
     failedCount > 0 ? `${failedCount} failed` : null,
   ].filter((part): part is string => part !== null);
   const total = rows.length;
   return {
     label: `${total} ${total === 1 ? "subagent" : "subagents"}`,
     detail: detailParts.slice(0, 2).join(" · ") || null,
-    active: workingCount > 0 || failedCount > 0 || wakeScheduledCount > 0,
+    active: workingCount > 0 || failedCount > 0,
   };
 }
 
@@ -263,14 +260,10 @@ function buildSubagentRow(
       sessionLinkId: child.relationship.sessionLinkId,
     }),
     statusLabel,
-    statusCategory: delegatedWorkStatusCategoryFromLabel({
-      statusLabel,
-      wakeScheduled: false,
-    }),
+    statusCategory: delegatedWorkStatusCategoryFromLabel({ statusLabel }),
     latestCompletionLabel: child.latestCompletion
       ? formatCompletionLabel(child.latestCompletion.outcome)
       : null,
-    wakeScheduled: false,
   };
 }
 

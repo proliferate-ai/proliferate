@@ -20,6 +20,8 @@ const CHILD_ID: &str = "child-closed-repair";
 
 #[path = "tests/pagination.rs"]
 mod pagination;
+#[path = "tests/restart_recovery.rs"]
+mod restart_recovery;
 
 #[test]
 fn enqueued_backoff_increases_and_caps_at_sixty_seconds() {
@@ -37,6 +39,41 @@ fn dead_letter_threshold_trips_only_at_the_attempt_cap() {
     assert!(!dead_letter_threshold_reached(MAX_DELIVERY_ATTEMPTS - 1));
     assert!(dead_letter_threshold_reached(MAX_DELIVERY_ATTEMPTS));
     assert!(dead_letter_threshold_reached(MAX_DELIVERY_ATTEMPTS + 5));
+}
+
+#[test]
+fn delivery_timing_uses_enqueue_time_for_queue_age() {
+    let delivery = CompletionDeliveryRecord {
+        delivery_id: "delivery".into(),
+        completion_id: "completion".into(),
+        session_link_id: "link".into(),
+        parent_session_id: PARENT_ID.into(),
+        child_session_id: CHILD_ID.into(),
+        subagent_public_id: None,
+        label: None,
+        child_turn_id: "turn".into(),
+        child_last_event_seq: 1,
+        outcome: SessionTurnOutcome::Completed,
+        assistant_text: None,
+        notification_text: "done".into(),
+        state: CompletionDeliveryState::Enqueued,
+        parent_prompt_seq: Some(1),
+        parent_turn_id: None,
+        attempt_count: 0,
+        next_attempt_at: "2026-08-13T00:00:00Z".into(),
+        lease_token: None,
+        lease_expires_at: None,
+        last_error_code: None,
+        created_at: "2026-08-13T00:00:00Z".into(),
+        updated_at: "2026-08-13T00:00:05Z".into(),
+        enqueued_at: Some("2026-08-13T00:00:05Z".into()),
+        delivered_at: None,
+    };
+
+    assert_eq!(
+        delivery_timing_ms(&delivery, "2026-08-13T00:00:10Z"),
+        (5_000, 10_000)
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -140,43 +177,79 @@ async fn worker_repairs_open_current_link_but_not_promoted_session() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn file_backed_pending_capture_survives_restart_and_enqueues_once() {
+async fn delivered_completion_injects_one_completion_event_into_the_parent_transcript() {
     let _lock = test_support::lock_env();
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
+    let state = subagent_with_captured_completion().await;
+    let worker = worker(&state);
+
+    worker.process_available().await;
+    let injected = parent_completion_events(&state);
+    assert_eq!(injected.len(), 1, "one injected completion event");
+    let payload = &injected[0];
+    assert_eq!(payload["parentSessionId"], PARENT_ID);
+    assert_eq!(payload["childSessionId"], CHILD_ID);
+    assert_eq!(payload["childTurnId"], "turn-complete");
+    assert_eq!(payload["childLastEventSeq"], 2);
+    assert_eq!(payload["outcome"], "completed");
+    assert_eq!(payload["label"], "worker");
+
+    let deliveries = CompletionDeliveryStore::new(state.db.clone())
+        .list_all_for_test()
+        .expect("deliveries");
+    assert_eq!(deliveries.len(), 1);
+    assert_eq!(deliveries[0].state, CompletionDeliveryState::Enqueued);
+    assert_eq!(payload["completionId"], deliveries[0].completion_id);
+    assert_eq!(payload["sessionLinkId"], deliveries[0].session_link_id);
+
+    force_delivery_due(&state, &deliveries[0].delivery_id);
+    worker.process_available().await;
+    assert_eq!(
+        parent_completion_events(&state).len(),
+        1,
+        "a recovered delivery must not inject a second completion event"
+    );
+}
+
+fn worker(state: &AppState) -> CompletionDeliveryWorker {
+    CompletionDeliveryWorker {
+        delivery_store: CompletionDeliveryStore::new(state.db.clone()),
+        session_runtime: Arc::downgrade(&state.session_runtime),
+    }
+}
+
+async fn subagent_with_captured_completion() -> AppState {
     let runtime_home = std::env::temp_dir().join(format!(
-        "completion-delivery-file-restart-{}",
+        "completion-delivery-injection-{}",
         uuid::Uuid::new_v4()
     ));
     let workspace_path = runtime_home.join("workspace");
-    std::fs::create_dir_all(&workspace_path).expect("workspace");
-    let db = Db::open(&runtime_home).expect("file-backed db");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace");
+    let state = AppState::new(
+        runtime_home,
+        "http://127.0.0.1:8457".into(),
+        Db::open_in_memory().expect("db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
     test_support::seed_workspace_with_repo_root(
-        &db,
+        &state.db,
         WORKSPACE_ID,
         "local",
         &workspace_path.to_string_lossy(),
     );
-    let store = SessionStore::new(db.clone());
+    let store = SessionStore::new(state.db.clone());
+    // A parent whose agent cannot start leaves the wake prompt queued, so the
+    // recovery pass re-claims the same enqueued delivery.
     let mut parent = session(PARENT_ID);
     parent.agent_kind = "missing-agent".to_string();
     store.insert(&parent).expect("parent");
     store.insert(&session(CHILD_ID)).expect("child");
-    SessionLinkStore::new(db.clone())
-        .insert(&SessionLinkRecord {
-            id: "link-file-restart".into(),
-            public_id: Some("subagent-file-restart".into()),
-            relation: SessionLinkRelation::Subagent,
-            parent_session_id: PARENT_ID.into(),
-            child_session_id: CHILD_ID.into(),
-            workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
-            label: Some("worker".into()),
-            created_by_turn_id: None,
-            created_by_tool_call_id: None,
-            created_at: "2026-08-11T00:00:00Z".into(),
-            subagent_closed_at: None,
-            closed_at: None,
-        })
+    state
+        .subagent_service
+        .link_child(PARENT_ID, CHILD_ID, Some("worker".into()), None, None)
         .expect("link");
     store
         .append_event(&SessionEventRecord {
@@ -185,16 +258,16 @@ async fn file_backed_pending_capture_survives_restart_and_enqueues_once() {
             seq: 1,
             timestamp: "2026-08-11T00:01:00Z".into(),
             event_type: "turn_started".into(),
-            turn_id: Some("turn-before-crash".into()),
+            turn_id: Some("turn-complete".into()),
             item_id: None,
             payload_json: r#"{"type":"turn_started"}"#.into(),
         })
-        .expect("turn start");
+        .expect("open turn");
     store
         .persist_terminal_turn_record(&DurableTerminalTurn {
-            terminal_id: "terminal-before-crash".into(),
+            terminal_id: "terminal-complete".into(),
             session_id: CHILD_ID.into(),
-            turn_id: "turn-before-crash".into(),
+            turn_id: "turn-complete".into(),
             outcome: SessionTurnOutcome::Completed,
             assistant_text: Some("final output".into()),
             events: vec![SessionEventRecord {
@@ -202,7 +275,7 @@ async fn file_backed_pending_capture_survives_restart_and_enqueues_once() {
                 session_id: CHILD_ID.into(),
                 seq: 2,
                 timestamp: "2026-08-11T00:02:00Z".into(),
-                turn_id: Some("turn-before-crash".into()),
+                turn_id: Some("turn-complete".into()),
                 item_id: None,
                 event_type: "turn_ended".into(),
                 payload_json: r#"{"type":"turn_ended","stopReason":"end_turn"}"#.into(),
@@ -210,138 +283,39 @@ async fn file_backed_pending_capture_survives_restart_and_enqueues_once() {
             completed_at: "2026-08-11T00:02:00Z".into(),
         })
         .expect("atomic terminal capture");
-    let captured = CompletionDeliveryStore::new(db.clone())
-        .list_all_for_test()
-        .expect("captured delivery");
-    assert_eq!(captured.len(), 1);
-    let delivery_id = captured[0].delivery_id.clone();
-    assert_eq!(captured[0].state, CompletionDeliveryState::Pending);
-    drop(store);
-    drop(db);
+    state
+}
 
-    let restarted = AppState::new(
-        runtime_home.clone(),
-        "http://127.0.0.1:8457".into(),
-        Db::open(&runtime_home).expect("reopen db"),
-        false,
-        AgentSeedStore::not_configured_dev(),
-    )
-    .expect("restarted app state");
-    tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let pending = restarted
-                .session_service
-                .store()
-                .list_pending_prompts(PARENT_ID)
-                .expect("parent queue");
-            if pending.len() == 1 {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .expect("restarted worker enqueued capture");
-    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
-    let pending = restarted
+fn parent_completion_events(state: &AppState) -> Vec<serde_json::Value> {
+    state
         .session_service
         .store()
-        .list_pending_prompts(PARENT_ID)
-        .expect("stable parent queue");
-    assert_eq!(pending.len(), 1);
-    let expected_prompt_id = format!("subagent_completion:{delivery_id}");
-    assert_eq!(
-        pending[0].prompt_id.as_deref(),
-        Some(expected_prompt_id.as_str())
-    );
-    let deliveries = CompletionDeliveryStore::new(restarted.db.clone())
-        .list_all_for_test()
-        .expect("restarted deliveries");
-    assert_eq!(deliveries.len(), 1);
-    assert_eq!(deliveries[0].delivery_id, delivery_id);
-    let projection_count: i64 = restarted
+        .list_events(PARENT_ID)
+        .expect("parent events")
+        .into_iter()
+        .filter(|event| event.event_type == "subagent_turn_completed")
+        .map(|event| {
+            serde_json::from_str::<serde_json::Value>(&event.payload_json)
+                .expect("completion event payload")
+        })
+        .collect()
+}
+
+fn force_delivery_due(state: &AppState, delivery_id: &str) {
+    state
         .db
         .with_conn(|conn| {
-            conn.query_row("SELECT COUNT(*) FROM session_link_completions", [], |row| {
-                row.get(0)
-            })
+            let changed = conn.execute(
+                "UPDATE session_link_completion_deliveries
+                 SET next_attempt_at = '1970-01-01T00:00:00Z',
+                     lease_token = NULL, lease_expires_at = NULL
+                 WHERE delivery_id = ?1",
+                [delivery_id],
+            )?;
+            assert_eq!(changed, 1);
+            Ok(())
         })
-        .expect("projection count");
-    assert_eq!(projection_count, 1);
-
-    drop(restarted);
-    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn file_backed_closed_open_turn_is_repaired_by_restarted_worker() {
-    let _lock = test_support::lock_env();
-    let _bearer = test_support::set_bearer_token_env(None);
-    let _data_key = test_support::set_data_key_env(None);
-    let runtime_home = std::env::temp_dir().join(format!(
-        "completion-delivery-closed-restart-{}",
-        uuid::Uuid::new_v4()
-    ));
-    let workspace_path = runtime_home.join("workspace");
-    std::fs::create_dir_all(&workspace_path).expect("workspace");
-    let state_before = AppState::new(
-        runtime_home.clone(),
-        "http://127.0.0.1:8457".into(),
-        Db::open(&runtime_home).expect("file-backed db"),
-        false,
-        AgentSeedStore::not_configured_dev(),
-    )
-    .expect("state before restart");
-    test_support::seed_workspace_with_repo_root(
-        &state_before.db,
-        WORKSPACE_ID,
-        "local",
-        &workspace_path.to_string_lossy(),
-    );
-    seed_subagent_open_turn(&state_before, true, false, true).await;
-    assert!(worker(&state_before)
-        .repair_retired_subagent_turns()
-        .await
-        .is_err());
-    assert_open_turn_without_delivery(&state_before);
-    drop(state_before);
-
-    let reopened_db = Db::open(&runtime_home).expect("reopen db");
-    reopened_db
-        .with_conn(|conn| conn.execute_batch("DROP TRIGGER reject_closed_repair_delivery;"))
-        .expect("remove failure after crash");
-    let restarted = AppState::new(
-        runtime_home.clone(),
-        "http://127.0.0.1:8457".into(),
-        reopened_db,
-        false,
-        AgentSeedStore::not_configured_dev(),
-    )
-    .expect("restarted state");
-    tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            if CompletionDeliveryStore::new(restarted.db.clone())
-                .list_all_for_test()
-                .is_ok_and(|rows| rows.len() == 1)
-            {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .expect("restarted worker repaired Closed child");
-    assert_one_cancelled_terminal_and_delivery(&restarted);
-
-    drop(restarted);
-    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
-}
-
-fn worker(state: &AppState) -> CompletionDeliveryWorker {
-    CompletionDeliveryWorker {
-        delivery_store: CompletionDeliveryStore::new(state.db.clone()),
-        session_runtime: Arc::downgrade(&state.session_runtime),
-    }
+        .expect("force delivery due");
 }
 
 async fn subagent_with_open_turn(

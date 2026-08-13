@@ -7,7 +7,7 @@ use anyharness_contract::v1::{
 };
 
 use super::fixture::{
-    assert_final_delivery, capture_delivery, install_trigger, wait_for_delivered,
+    assert_final_delivery, capture_delivery, install_trigger, wait_for, wait_for_delivered,
     wait_for_enqueued, CHILD_ID, PARENT_ID,
 };
 use crate::app::test_support;
@@ -160,7 +160,32 @@ async fn export_read_transaction_blocks_admission_and_installed_pre_snapshot_del
         )
         .expect("canonical source prompt")
         .expect("canonical source prompt row");
-    let staged_admission = staged_admission(&enqueued_delivery, &pending);
+    // The worker also injects the parent-visible completion event on this
+    // pass, so the staged wake turn has to continue the parent's durable
+    // sequence rather than assume an empty transcript.
+    wait_for("injected parent completion event", || {
+        source
+            .session_service
+            .store()
+            .list_events(PARENT_ID)
+            .is_ok_and(|events| {
+                events
+                    .iter()
+                    .any(|event| event.event_type == "subagent_turn_completed")
+            })
+    })
+    .await;
+    let next_parent_seq = source
+        .session_service
+        .store()
+        .list_events(PARENT_ID)
+        .expect("parent events before admission")
+        .iter()
+        .map(|event| event.seq)
+        .max()
+        .unwrap_or(0)
+        + 1;
+    let staged_admission = staged_admission(&enqueued_delivery, &pending, next_parent_seq);
     install_trigger(
         &source.db,
         "c06_abort_source_admission",
@@ -325,6 +350,7 @@ fn remove_source(source: &crate::app::AppState, source_repo: &Path) {
 fn staged_admission(
     delivery: &CompletionDeliveryRecord,
     pending: &crate::domains::sessions::model::PendingPromptRecord,
+    first_seq: i64,
 ) -> DurableSubagentWakeTurn {
     let turn_id = "mobility-source-parent-turn";
     let item_id = "mobility-source-parent-item";
@@ -376,7 +402,7 @@ fn staged_admission(
     .map(|(offset, (event, turn_id, item_id))| SessionEventRecord {
         id: 0,
         session_id: delivery.parent_session_id.clone(),
-        seq: 1 + offset as i64,
+        seq: first_seq + offset as i64,
         timestamp: format!("2026-08-11T00:06:0{offset}Z"),
         event_type: event.event_type().into(),
         turn_id: turn_id.map(str::to_string),

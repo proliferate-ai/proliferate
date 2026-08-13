@@ -49,6 +49,7 @@ use crate::domains::sessions::model::{
 use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError, ResolvedParts};
 use crate::live::sessions::actor::command::{Resolution, ResolveInteractionCommandError};
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
+use crate::live::sessions::product_context::AgentProductContextResolver;
 use crate::live::sessions::queue_durable::{
     PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
 };
@@ -349,6 +350,9 @@ pub struct ActorCapabilities {
     pub background: Arc<dyn BackgroundWorkDurable>,
     pub state: Arc<dyn SessionStateDurable>,
     pub attachments: Arc<dyn AttachmentSource>,
+    /// Resolved afresh immediately before every prompt render. Absence is not
+    /// representable: product-context failure is a fail-closed turn outcome.
+    pub product_context: Arc<dyn AgentProductContextResolver>,
     /// Product reactors, registration order = dispatch order (plans before
     /// reviews). See the dispatch contract on [`SessionEventObserver`].
     pub observers: Vec<Arc<dyn SessionEventObserver>>,

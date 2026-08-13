@@ -4,6 +4,7 @@ import {
   readAgentOperationsStructuredOutput,
   type AgentOperationsReceiptPresentation,
 } from "#product/domain/chats/tools/agent-operations-tool-presentation";
+import { readAgentOperationsInput } from "#product/domain/chats/tools/agent-operations-tool-wire";
 
 /**
  * Accepts a Workspace MCP mutation only when its completed AgentView is both
@@ -16,16 +17,18 @@ export function deriveAuthoritativeAgentOperation(
   callerWorkspaceId: string | null,
 ): AgentOperationsReceiptPresentation | null {
   const presentation = deriveAgentOperationsReceiptPresentation(item);
+  const input = readAgentOperationsInput(item);
   const output = readAgentOperationsStructuredOutput(item);
   if (
     item.status !== "completed"
     ||
     !presentation
+    || !input
     || !output
     || !isCompleteAgentOperationsAuthorityView(output)
     || !isCorrelatedAgentOperationsAuthority(
       presentation.action,
-      item.rawInput,
+      input,
       output,
       callerSessionId,
       callerWorkspaceId,
@@ -38,7 +41,7 @@ export function deriveAuthoritativeAgentOperation(
 
 function isCorrelatedAgentOperationsAuthority(
   action: AgentOperationsReceiptPresentation["action"],
-  rawInput: unknown,
+  input: Record<string, unknown>,
   output: Record<string, unknown>,
   callerSessionId: string,
   callerWorkspaceId: string | null,
@@ -46,10 +49,9 @@ function isCorrelatedAgentOperationsAuthority(
   if (action !== "create_agent" && action !== "promote_subagent") {
     return false;
   }
-  const input = isRecord(rawInput) ? rawInput : null;
   const identity = isRecord(output.identity) ? output.identity : null;
   const workspace = isRecord(output.workspace) ? output.workspace : null;
-  if (!input || !identity || !workspace) {
+  if (!identity || !workspace) {
     return false;
   }
   const sessionId = authorityString(identity, "sessionId");

@@ -5,6 +5,7 @@ pub mod handle;
 mod manager;
 pub mod model;
 pub mod probe;
+pub mod product_context;
 pub mod queue_durable;
 mod rendezvous;
 mod replay;
