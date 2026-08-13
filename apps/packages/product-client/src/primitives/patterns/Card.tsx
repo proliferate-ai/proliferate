@@ -58,7 +58,6 @@ export interface CardProps {
  * not, so the header keeps sticking to the real scrollport while the corners
  * still clip.
  *
- * incubating: workflows/chat slices, wave 2
  */
 export function Card({
   children,

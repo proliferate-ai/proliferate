@@ -41,10 +41,6 @@ const tileToneClasses: Record<IconTileTone, string> = {
  * The glyph is a slot: pass a `primitives/icons` glyph carrying its own
  * semantic `icon-*` tier. The tile sets `text-*`, so a `currentColor` glyph
  * picks up the tone's ink without restating it.
- *
- * incubating: chat/workflows slices, wave 2 — the harness, repo-setup, billing,
- * and transcript call sites recorded in the promotion evidence adopt it there.
- * No call-site migration lands with this file.
  */
 export const IconTile = forwardRef<HTMLSpanElement, IconTileProps>(
   function IconTile({ tone = "control", size = "md", className = "", ...props }, ref) {
