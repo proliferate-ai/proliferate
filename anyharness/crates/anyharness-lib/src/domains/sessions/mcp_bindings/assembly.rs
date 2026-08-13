@@ -9,7 +9,7 @@ use super::product_catalog::ProductMcpLaunchCatalog;
 use super::product_launch::ProductMcpLaunchError;
 use super::summaries::{serialize_binding_summaries, SessionMcpSummaryError};
 use super::workspace_attachment::{
-    is_retired_subagents_mcp_binding_summary_id, WorkspaceMcpAttachmentError,
+    is_retired_subagents_mcp_binding_summary_id, summary_error_class, WorkspaceMcpAttachmentError,
 };
 use crate::domains::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras,
@@ -61,6 +61,14 @@ pub fn assemble_session_mcp_launch(
             }
             SessionMcpServer::Stdio(_) => false,
         });
+    if workspace_selected {
+        tracing::info!(
+            target: "anyharness.workspace_mcp.attached",
+            session_id = %record.id,
+            workspace_id = %workspace.id,
+            "Workspace MCP attached to session launch"
+        );
+    }
     launch_extras
         .system_prompt_append
         .append(&mut product_extras.system_prompt_append);
@@ -92,6 +100,17 @@ pub fn assemble_session_mcp_launch(
     let mcp_binding_summaries_json =
         merge_extension_binding_summaries(record, &launch_extras.mcp_binding_summaries).map_err(
             |error| {
+                // One serialization failure, two different 500 shapes
+                // depending on `workspace_selected`
+                // (WORKSPACE_MCP_ATTACHMENT_FAILED vs the generic internal
+                // code). This field is the only way to tell them apart.
+                tracing::debug!(
+                    target: "anyharness.workspace_mcp.summary_serialization_failed",
+                    session_id = %record.id,
+                    workspace_selected,
+                    error_class = summary_error_class(&error),
+                    "session MCP binding summary assembly failed"
+                );
                 if workspace_selected {
                     SessionMcpLaunchAssemblyError::WorkspaceAttachment(
                         WorkspaceMcpAttachmentError::summary_assembly(anyhow::Error::new(error)),

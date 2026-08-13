@@ -34,7 +34,18 @@ pub fn select_product_mcps<'a>(
 ) -> Result<Vec<SelectedProductMcp<'a>>, ProductMcpLaunchError> {
     let mut selected = Vec::new();
     for registration in registrations {
-        if registration.should_attach(ProductMcpSelectionContext { workspace, session })? {
+        let attached =
+            registration.should_attach(ProductMcpSelectionContext { workspace, session })?;
+        tracing::debug!(
+            target: "anyharness.workspace_mcp.selection",
+            session_id = %session.id,
+            product_mcp_id = registration.definition().id,
+            attached,
+            workspace_surface = workspace.surface.as_str(),
+            mcp_binding_policy = session.mcp_binding_policy.as_str(),
+            "product MCP launch selection decided"
+        );
+        if attached {
             selected.push(SelectedProductMcp { registration });
         }
     }
