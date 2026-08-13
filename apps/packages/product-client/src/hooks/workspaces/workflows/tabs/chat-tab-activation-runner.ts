@@ -63,6 +63,21 @@ export async function runDeferredChatTabActivation({
     };
   }
 
+  // A close can hide this target between scheduling and this deferred run
+  // without bumping any activation epoch. Committing would bind the shell to a
+  // session with no visible tab (PRO-101), so treat a hidden target as stale.
+  if (isChatTabHiddenForShellKey(shellStateKey, sessionId)) {
+    clearMatchingPending({
+      clearPendingChatActivation,
+      hotOperationId,
+      pending,
+      shellStateKey,
+      step: "workspace.shell.pending_clear",
+    });
+    finishOrCancelMeasurementOperation(hotOperationId, "aborted");
+    return { result: "stale", sessionId, guard, reason: "tab-hidden" };
+  }
+
   const durableStartedAt = performance.now();
   const previousWrite = writeShellIntent({
     workspaceId: shellStateKey,
@@ -145,6 +160,12 @@ export async function runDeferredChatTabActivation({
     finishOrCancelMeasurementOperation(hotOperationId, "error_sanitized");
     throw error;
   }
+}
+
+function isChatTabHiddenForShellKey(shellStateKey: string, sessionId: string): boolean {
+  return (
+    useWorkspaceUiStore.getState().recentlyHiddenChatSessionIdsByWorkspace[shellStateKey] ?? []
+  ).includes(sessionId);
 }
 
 function isPendingChatActivationStillCurrent(

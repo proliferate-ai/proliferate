@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { APPEARANCE_SIZE_IDS, READABLE_CODE_FONT_SCALES } from "#product/lib/domain/preferences/appearance";
 import { TERMINAL_LINE_HEIGHT } from "#product/lib/domain/terminals/terminal-grid";
 import {
+  createSettledResizeReporter,
   resolveXtermSurfaceTypography,
   XTERM_CURSOR_OPTIONS,
+  XTERM_RESIZE_REPORT_SETTLE_MS,
 } from "#product/hooks/terminals/lifecycle/use-xterm-surface";
 
 describe("xterm cursor contract", () => {
@@ -35,5 +37,50 @@ describe("resolveXtermSurfaceTypography", () => {
     const overrideFontSize = READABLE_CODE_FONT_SCALES.xxxlarge.monacoFontSize;
     expect(resolveXtermSurfaceTypography("default", { fontSize: overrideFontSize, lineHeight: 1.25 }))
       .toEqual({ fontSize: overrideFontSize, lineHeight: 1.25 });
+  });
+});
+
+describe("createSettledResizeReporter", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("reports the final size exactly once after a per-column drag storm settles", () => {
+    const report = vi.fn();
+    const reporter = createSettledResizeReporter(report);
+
+    // A separator drag emits one grid size per column change.
+    for (let cols = 120; cols >= 80; cols -= 1) {
+      reporter.observe({ cols, rows: 40 });
+      vi.advanceTimersByTime(30);
+    }
+    expect(report).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(XTERM_RESIZE_REPORT_SETTLE_MS);
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith({ cols: 80, rows: 40 });
+  });
+
+  it("reports a lone resize after the settle delay", () => {
+    const report = vi.fn();
+    const reporter = createSettledResizeReporter(report);
+
+    reporter.observe({ cols: 100, rows: 30 });
+    vi.advanceTimersByTime(XTERM_RESIZE_REPORT_SETTLE_MS);
+    expect(report).toHaveBeenCalledWith({ cols: 100, rows: 30 });
+  });
+
+  it("cancel drops a pending report on dispose", () => {
+    const report = vi.fn();
+    const reporter = createSettledResizeReporter(report);
+
+    reporter.observe({ cols: 100, rows: 30 });
+    reporter.cancel();
+    vi.advanceTimersByTime(XTERM_RESIZE_REPORT_SETTLE_MS * 2);
+    expect(report).not.toHaveBeenCalled();
   });
 });

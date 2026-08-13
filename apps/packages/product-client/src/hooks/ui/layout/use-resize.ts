@@ -5,6 +5,13 @@ interface UseResizeOptions {
   direction: "horizontal" | "vertical";
   /** Current size of the panel in px — captured on mousedown as the starting value */
   size: number;
+  /**
+   * Resolves the starting size at mousedown instead of `size`, for panels
+   * whose rendered size can sit away from the tracked value (e.g. a
+   * CSS-clamped width). Seeding from the rendered size keeps the separator
+   * under the pointer from the first pixel of the gesture.
+   */
+  resolveSize?: () => number;
   /** Called on every mouse move with the proposed new size in px */
   onResize: (size: number) => void;
   /**
@@ -26,6 +33,7 @@ interface UseResizeOptions {
 export function useResize({
   direction,
   size,
+  resolveSize,
   onResize,
   onResizeEnd,
   reverse = false,
@@ -46,7 +54,7 @@ export function useResize({
       e.stopPropagation();
 
       const startPos = direction === "horizontal" ? e.clientX : e.clientY;
-      startRef.current = { pos: startPos, size };
+      startRef.current = { pos: startPos, size: resolveSize?.() ?? size };
 
       const cursor = direction === "horizontal" ? "col-resize" : "row-resize";
       const overlay = document.createElement("div");
@@ -67,15 +75,20 @@ export function useResize({
         overlay.remove();
         document.removeEventListener("mousemove", handleMouseMove);
         document.removeEventListener("mouseup", handleMouseUp);
+        window.removeEventListener("blur", handleMouseUp);
         activeDragCleanupRef.current = null;
         onResizeEnd?.();
       };
 
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
+      // A window that loses focus mid-drag may never see the mouseup; the
+      // gesture ends here too so consumers' "resizing" state (and this
+      // overlay) cannot outlive the drag.
+      window.addEventListener("blur", handleMouseUp);
       activeDragCleanupRef.current = handleMouseUp;
     },
-    [direction, size, onResize, onResizeEnd, reverse, min, max],
+    [direction, size, resolveSize, onResize, onResizeEnd, reverse, min, max],
   );
 
   // Mirrors handleMouseUp's teardown without firing onResize or removing the
