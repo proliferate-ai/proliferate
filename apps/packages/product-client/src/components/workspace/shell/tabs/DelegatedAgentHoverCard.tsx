@@ -13,11 +13,30 @@ import {
   type Ref,
 } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "@proliferate/design/motion";
-import { Button } from "#product/primitives/Button";
 import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
+
+/**
+ * WAVE-2 NOTE (shell slice, DESIGN_SYSTEM.md UI-conformance review): the
+ * doctrine rules this card onto `Tooltip`. `Tooltip`'s `content` prop is
+ * `string`, not `ReactNode` — it cannot host this card's identicon + name +
+ * origin + key/value rows without a second edit to a library file this
+ * slice does not own, and nesting a Radix Tooltip inside the existing
+ * `PopoverButton`-based rename/context-menu trigger chain needs hand
+ * verification in a running app (focus neutrality — see the frozen spec's
+ * Risk 3) that this environment cannot perform. Escalated per the frozen
+ * spec's own §2-C fallback clause rather than forced through.
+ *
+ * What DID land here: the ruled dead-code deletion. `onCardClick` has
+ * exactly one call site (`ChatTabWithMenu.tsx`) and it passes neither
+ * `onCardClick` nor `cardAriaLabel` — the clickable mode was unreachable.
+ * Removed: the `onCardClick` branch, `scheduleHide`'s hide-grace timer,
+ * `isInsideCard`, and the `cardAriaLabel` prop. The read-only tooltip-role
+ * portal (positioning, collision clamp, resize/scroll reposition, the
+ * `measured` flicker guard) stays — it is still the only implementation,
+ * not yet replaced.
+ */
 
 const VIEWPORT_MARGIN = 12;
 const HOVER_CARD_OFFSET = 6;
@@ -26,8 +45,6 @@ const CARD_WIDTH = 224;
 interface DelegatedAgentHoverCardProps extends HTMLAttributes<HTMLDivElement> {
   agent: DelegatedWorkTabIdentity;
   children: ReactElement;
-  cardAriaLabel?: string;
-  onCardClick?: () => void;
 }
 
 export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgentHoverCardProps>(
@@ -39,13 +56,10 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
     onMouseLeave,
     onFocus,
     onBlur,
-    cardAriaLabel,
-    onCardClick,
     ...props
   }, forwardedRef) {
     const anchorRef = useRef<HTMLDivElement>(null);
     const cardRef = useRef<HTMLElement | null>(null);
-    const hideTimerRef = useRef<number | null>(null);
     const [open, setOpen] = useState(false);
     const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
     const [measured, setMeasured] = useState(false);
@@ -70,44 +84,14 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
     }, []);
 
     const hide = useCallback(() => {
-      if (hideTimerRef.current !== null) {
-        window.clearTimeout(hideTimerRef.current);
-        hideTimerRef.current = null;
-      }
       setOpen(false);
       setMeasured(false);
     }, []);
 
     const show = useCallback(() => {
-      if (hideTimerRef.current !== null) {
-        window.clearTimeout(hideTimerRef.current);
-        hideTimerRef.current = null;
-      }
       updatePosition();
       setOpen(true);
     }, [updatePosition]);
-
-    const scheduleHide = useCallback(() => {
-      if (!onCardClick) {
-        hide();
-        return;
-      }
-      if (hideTimerRef.current !== null) {
-        window.clearTimeout(hideTimerRef.current);
-      }
-      hideTimerRef.current = window.setTimeout(() => {
-        hideTimerRef.current = null;
-        hide();
-      }, motion.delay.hoverCardHideMs);
-    }, [hide, onCardClick]);
-
-    const isInsideCard = useCallback((target: EventTarget | null) =>
-      !!target && target instanceof Node && !!cardRef.current?.contains(target),
-    []);
-
-    const isInsideAnchor = useCallback((target: EventTarget | null) =>
-      !!target && target instanceof Node && !!anchorRef.current?.contains(target),
-    []);
 
     const card = (
       <div>
@@ -156,12 +140,6 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
       };
     }, [open, updatePosition]);
 
-    useEffect(() => () => {
-      if (hideTimerRef.current !== null) {
-        window.clearTimeout(hideTimerRef.current);
-      }
-    }, []);
-
     return (
       <>
         <div
@@ -174,10 +152,7 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
           }}
           onMouseLeave={(event: MouseEvent<HTMLDivElement>) => {
             onMouseLeave?.(event);
-            if (onCardClick && isInsideCard(event.relatedTarget)) {
-              return;
-            }
-            scheduleHide();
+            hide();
           }}
           onFocus={(event: FocusEvent<HTMLDivElement>) => {
             onFocus?.(event);
@@ -185,10 +160,7 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
           }}
           onBlur={(event: FocusEvent<HTMLDivElement>) => {
             onBlur?.(event);
-            if (
-              !event.currentTarget.contains(event.relatedTarget as Node | null)
-              && !(onCardClick && isInsideCard(event.relatedTarget))
-            ) {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
               hide();
             }
           }}
@@ -196,51 +168,17 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
           {children}
         </div>
         {open && position && createPortal(
-          onCardClick ? (
-            <Button
-              ref={setCardRef}
-              type="button"
-              variant="unstyled"
-              size="unstyled"
-              data-telemetry-mask
-              data-chat-transcript-ignore
-              style={{ top: position.top, left: position.left, width: CARD_WIDTH }}
-              className={`fixed z-tooltip block whitespace-normal ${POPOVER_FRAME_CLASS} p-2.5 text-left text-ui hover:bg-popover focus-visible:ring-2 focus-visible:ring-ring ${
-                measured ? "opacity-100" : "opacity-0"
-              }`}
-              aria-label={cardAriaLabel ?? `Open ${agent.identity.displayName}`}
-              onMouseEnter={show}
-              onMouseLeave={(event) => {
-                if (isInsideAnchor(event.relatedTarget)) {
-                  return;
-                }
-                scheduleHide();
-              }}
-              onBlur={(event) => {
-                if (!isInsideAnchor(event.relatedTarget)) {
-                  hide();
-                }
-              }}
-              onClick={() => {
-                onCardClick();
-                hide();
-              }}
-            >
-              {card}
-            </Button>
-          ) : (
-            <div
-              ref={setCardRef}
-              role="tooltip"
-              data-telemetry-mask
-              style={{ top: position.top, left: position.left, width: CARD_WIDTH }}
-              className={`pointer-events-none fixed z-tooltip ${POPOVER_FRAME_CLASS} p-2.5 text-ui ${
-                measured ? "opacity-100" : "opacity-0"
-              }`}
-            >
-              {card}
-            </div>
-          ),
+          <div
+            ref={setCardRef}
+            role="tooltip"
+            data-telemetry-mask
+            style={{ top: position.top, left: position.left, width: CARD_WIDTH }}
+            className={`pointer-events-none fixed z-tooltip ${POPOVER_FRAME_CLASS} p-2.5 text-ui ${
+              measured ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            {card}
+          </div>,
           document.body,
         )}
       </>
