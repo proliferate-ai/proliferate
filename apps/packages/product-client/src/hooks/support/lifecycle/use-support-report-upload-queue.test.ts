@@ -75,8 +75,12 @@ describe("support report queue drain legacy consent conclusion", () => {
 
     expect(bridge.beginSubmission).not.toHaveBeenCalled();
     expect(markFailed).not.toHaveBeenCalled();
+    // The drain forwards the optional type positionally, so the default-type
+    // calls arrive as two arguments. Spelling that out keeps the `not.` forms
+    // below meaningful instead of vacuously true on an arity mismatch.
     expect(showToast).toHaveBeenCalledWith(
       "This older report needs fresh diagnostic consent. Start a new report from Help.",
+      undefined,
     );
     await expect(queue.dueEntries(Date.now())).resolves.toEqual([]);
 
@@ -129,6 +133,7 @@ describe("support report queue drain legacy consent conclusion", () => {
     );
     expect(showToast).not.toHaveBeenCalledWith(
       "This older report needs fresh diagnostic consent. Start a new report from Help.",
+      undefined,
     );
     expect(storage.trace).toEqual([
       `set:${SUPPORT_QUEUE_PENDING_KEY}`,
@@ -178,9 +183,11 @@ describe("support report queue drain legacy consent conclusion", () => {
     expect(markFailed).not.toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith(
       "This report can no longer be sent. Start a new report from Help if you still need support.",
+      undefined,
     );
     expect(showToast).not.toHaveBeenCalledWith(
       "This older report needs fresh diagnostic consent. Start a new report from Help.",
+      undefined,
     );
     await expect(queue.dueEntries(Date.now())).resolves.toEqual([]);
   });
