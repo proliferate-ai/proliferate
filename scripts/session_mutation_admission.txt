@@ -1,8 +1,8 @@
 # Session mutation admission classification (spec 2b, founder ruling 2).
 #
 # Format: module::fn class reason
-# Classes: fenced | derived-safe | read-like | cosmetic | creation |
-#          workspace-scoped | workflow-plane
+# Classes: fenced | engine-fenced | derived-safe | read-like | cosmetic |
+#          creation | workspace-scoped | workflow-plane
 #
 # 'fenced' handlers must call an admit_* helper, and the checker enforces
 # that the call appears BEFORE the enumerated effect surfaces (syntactic
@@ -29,7 +29,6 @@ loops::set_session_loop fenced loop set
 loops::edit_session_loop fenced loop edit
 loops::clear_session_loops fenced loop clear (all)
 loops::clear_session_loop fenced loop clear (one)
-subagents::schedule_subagent_wake fenced subagent wake targeting the parent session
 replay::advance_replay_session fenced replay advance (replay sessions cannot be controlled; fenced per inventory)
 plans::approve_plan fenced plan decision mutates the owning session projection
 plans::reject_plan fenced plan decision mutates the owning session projection
@@ -44,6 +43,17 @@ workspaces_purge::purge_workspace fenced fail-closed: holds sorted permits for e
 mobility::export_workspace_mobility_archive fenced fail-closed removal/detach: holds sorted permits for every workspace session
 workspaces_lifecycle::retire_workspace fenced fail-closed (RETIRE-01 ruling B): retirement can dematerialize a controlled session's workspace; holds sorted permits for every workspace session
 mobility::destroy_workspace_mobility_source fenced fail-closed (MOBILITY-DESTROY-01): destroy-source deletes every source session + materialization; holds sorted permits for every workspace session, exclusive-lease under-lease re-check
+
+# ── engine-fenced: admission enforced one seam deeper, at the agent-operations
+#    runtime (admit_target), not the HTTP handler. The HTTP handler must NOT
+#    re-admit — admit_target shares the per-session permit, so a second acquire
+#    on the same stack would deadlock. Each `*_lifecycle` seam is fenced (admit
+#    before the subagent store write) by
+#    scripts/session_mutation_admission_non_http.txt, and the behavioral
+#    guarantee is proven by the subagent admission tests. ──
+subagents::close_subagent engine-fenced close_subagent_lifecycle admits SubagentClose via admit_target before the store write
+subagents::open_subagent engine-fenced open_subagent_lifecycle admits SubagentOpen via admit_target before reviving a closed session
+subagents::promote_subagent engine-fenced promote_subagent_lifecycle admits SubagentPromote via admit_target before promotion
 
 # ── cosmetic (ruling 2: store-only, cannot affect actor execution) ──
 sessions_config::update_session_title cosmetic store-only title column write via service/title.rs

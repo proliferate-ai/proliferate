@@ -6,11 +6,28 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnyHarnessRuntime } from "../context/AnyHarnessRuntime.js";
 import { AnyHarnessWorkspace } from "../context/AnyHarnessWorkspace.js";
-import { useSessionQuery, useSetSessionConfigOptionMutation } from "./sessions.js";
+import {
+  anyHarnessSessionKey,
+  anyHarnessSessionSubagentsKey,
+  anyHarnessSessionsKey,
+  anyHarnessWorkspaceSubagentsKey,
+} from "../lib/query-keys.js";
+import {
+  useSessionQuery,
+  useSetSessionConfigOptionMutation,
+} from "./sessions.js";
+import {
+  useCloseSubagentMutation,
+  useOpenSubagentMutation,
+  usePromoteSubagentMutation,
+} from "./subagents.js";
 
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   setConfigOption: vi.fn(),
+  closeSubagent: vi.fn(),
+  openSubagent: vi.fn(),
+  promoteSubagent: vi.fn(),
 }));
 
 vi.mock("../lib/client-cache.js", () => ({
@@ -18,6 +35,9 @@ vi.mock("../lib/client-cache.js", () => ({
     sessions: {
       get: mocks.getSession,
       setConfigOption: mocks.setConfigOption,
+      closeSubagent: mocks.closeSubagent,
+      openSubagent: mocks.openSubagent,
+      promoteSubagent: mocks.promoteSubagent,
     },
   }),
 }));
@@ -27,6 +47,9 @@ describe("sdk-react session config mutation request options", () => {
     cleanup();
     mocks.getSession.mockReset();
     mocks.setConfigOption.mockReset();
+    mocks.closeSubagent.mockReset();
+    mocks.openSubagent.mockReset();
+    mocks.promoteSubagent.mockReset();
   });
 
   it("passes caller abort signals to SessionsClient.setConfigOption", async () => {
@@ -139,6 +162,81 @@ describe("sdk-react session config mutation request options", () => {
 
     expect(settled).toBe(true);
     await waitFor(() => expect(result.current.mutation.isSuccess).toBe(true));
+  });
+});
+
+describe("sdk-react subagent lifecycle mutations", () => {
+  it.each([
+    ["close", useCloseSubagentMutation, mocks.closeSubagent],
+    ["open", useOpenSubagentMutation, mocks.openSubagent],
+    ["promote", usePromoteSubagentMutation, mocks.promoteSubagent],
+  ] as const)("calls the %s SDK operation with parent and child identity", async (
+    _name,
+    useMutationHook,
+    operation,
+  ) => {
+    operation.mockResolvedValue({
+      agent: { identity: { sessionId: "child-1" } },
+      relationship: null,
+    });
+    const queryClient = createQueryClient();
+    const { result } = renderHook(() => useMutationHook(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        parentSessionId: "parent-1",
+        childSessionId: "child-1",
+      });
+    });
+
+    expect(operation).toHaveBeenCalledWith("parent-1", "child-1");
+  });
+
+  it("invalidates the ordinary workspace session roster after promotion", async () => {
+    mocks.promoteSubagent.mockResolvedValue({
+      agent: { identity: { sessionId: "child-1" } },
+      relationship: null,
+    });
+    const queryClient = createQueryClient();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => usePromoteSubagentMutation(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        parentSessionId: "parent-1",
+        childSessionId: "child-1",
+      });
+    });
+
+    expect(invalidate.mock.calls.map(([filters]) => filters)).toEqual([
+      {
+        queryKey: anyHarnessWorkspaceSubagentsKey("http://runtime.test", "workspace-1"),
+      },
+      {
+        queryKey: anyHarnessSessionSubagentsKey(
+          "http://runtime.test",
+          "workspace-1",
+          "parent-1",
+        ),
+      },
+      {
+        queryKey: anyHarnessSessionSubagentsKey(
+          "http://runtime.test",
+          "workspace-1",
+          "child-1",
+        ),
+      },
+      {
+        queryKey: anyHarnessSessionKey("http://runtime.test", "workspace-1", "child-1"),
+      },
+      {
+        queryKey: anyHarnessSessionsKey("http://runtime.test", "workspace-1"),
+      },
+    ]);
   });
 });
 

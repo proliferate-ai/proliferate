@@ -488,6 +488,26 @@ impl SessionLinkStore {
         self.list_children_by_relation(SessionLinkRelation::Subagent, parent_session_id)
     }
 
+    pub fn list_subagent_links_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT l.*
+                 FROM session_links l
+                 JOIN sessions parent ON parent.id = l.parent_session_id
+                 WHERE l.relation = 'subagent'
+                   AND l.closed_at IS NULL
+                   AND parent.workspace_id = ?1
+                 ORDER BY parent.created_at ASC, parent.id ASC,
+                          l.created_at ASC, l.id ASC",
+            )?;
+            let rows = stmt.query_map([workspace_id], map_session_link)?;
+            rows.collect()
+        })
+    }
+
     pub fn find_subagent_parent(
         &self,
         child_session_id: &str,

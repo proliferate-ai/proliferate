@@ -29,6 +29,7 @@ import {
   anyHarnessWorkspaceDetectSetupKey,
   anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspaceSetupStatusKey,
+  anyHarnessWorkspaceSubagentsKey,
 } from "../lib/query-keys.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 
@@ -72,6 +73,25 @@ export function useWorkspaceQuery(options: WorkspaceQueryOptions) {
       return client.workspaces.get(
         resolved.connection.anyharnessWorkspaceId,
         requestOptionsWithSignal(options.requestOptions, signal),
+      );
+    },
+  });
+}
+
+export function useWorkspaceSubagentsQuery(options?: WorkspaceQueryOptions) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useQuery({
+    queryKey: anyHarnessWorkspaceSubagentsKey(cacheScopeKey, workspaceId),
+    enabled: (options?.enabled ?? true) && !!workspaceId,
+    queryFn: async ({ signal }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.workspaces.listSubagents(
+        resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(options?.requestOptions, signal),
       );
     },
   });

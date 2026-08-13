@@ -55,7 +55,6 @@ fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
         ("reviews.rs", "start_plan_review", ADMIT, SHARED),
         ("reviews.rs", "start_code_review", ADMIT, SHARED),
         ("sessions_fork.rs", "fork_session", ADMIT, FORK_LEASE),
-        ("subagents.rs", "schedule_subagent_wake", ADMIT, SHARED),
         (
             "workspaces_lifecycle.rs",
             "retire_workspace",
@@ -92,39 +91,5 @@ fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
         EXCLUSIVE,
         ".reject_if_workflow_controlled(",
         "exclusive lease must precede the admitted-set re-check",
-    );
-}
-
-#[test]
-fn subagent_wake_hides_child_state_then_reauthorizes_under_both_gates() {
-    let file = "src/api/http/subagents.rs";
-    let handler = "schedule_subagent_wake";
-    assert_source_order(
-        file,
-        handler,
-        "assert_owned_subagent_scope(",
-        "admit_session_mutation(",
-        "anti-enumerating ownership resolution must precede child admission",
-    );
-    assert_source_order(
-        file,
-        handler,
-        "admit_session_mutation(",
-        ".acquire_shared(",
-        "child admission must precede the workspace lease",
-    );
-    assert_source_order(
-        file,
-        handler,
-        ".acquire_shared(",
-        ".authorize_child(",
-        "ownership and operability must be rechecked under both gates",
-    );
-    assert_source_order(
-        file,
-        handler,
-        ".authorize_child(",
-        ".schedule_wake_for_child(",
-        "the final reauthorization must precede the wake insert",
     );
 }

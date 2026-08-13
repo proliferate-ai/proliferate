@@ -558,12 +558,12 @@ impl AppState {
         review_runtime
             .clone()
             .spawn_background_tasks(review_hook_event_rx);
-        let runtime_identity = runtime_identity(&auth_manager, &runtime_home);
         let agent_operations =
             agent_operations::wire_agent_operations(agent_operations::AgentOperationsWiringDeps {
-                runtime_identity,
+                runtime_identity: runtime_identity(&auth_manager, &runtime_home),
                 session_service: session_service.clone(),
                 session_link_service: Arc::new(session_link_service.clone()),
+                subagent_service: subagent_service.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_option_runtime: workspace_option_runtime.clone(),
                 session_admission: session_admission.clone(),

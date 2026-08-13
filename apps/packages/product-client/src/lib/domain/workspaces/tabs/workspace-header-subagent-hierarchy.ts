@@ -1,7 +1,6 @@
 import type {
-  ChildSubagentSummary,
+  AgentOperationsAgent,
   CoworkManagedWorkspacesResponse,
-  ParentSubagentLinkSummary,
   ReviewRunDetail,
   SessionReviewsResponse,
   SessionSubagentsResponse,
@@ -67,29 +66,38 @@ export function buildWorkspaceHeaderSubagentHierarchy({
     }
 
     if (data) {
-      if (data.parent) {
-        const parentSessionId = resolveClientSessionId(data.parent.parentSessionId);
+      if (data.parent.parent) {
+        const parentSessionId = resolveClientSessionId(data.parent.parent.sessionId);
         childToParent.set(sessionId, parentSessionId);
+        if (!parentRowsBySessionId.has(parentSessionId)) {
+          parentRowsBySessionId.set(parentSessionId, {
+            sessionId: parentSessionId,
+            title: "Parent agent",
+            agentKind: data.parent.configuration.agentKind,
+            meta: null,
+          });
+        }
+      }
+
+      if (data.children.length > 0) {
+        const parentSessionId = resolveClientSessionId(data.parent.identity.sessionId);
         parentRowsBySessionId.set(
           parentSessionId,
           buildParentRow(data.parent, parentSessionId),
         );
-      }
-
-      if (data.children.length > 0) {
         childrenByParentSessionId.set(
-          sessionId,
+          parentSessionId,
           data.children.map((child, childIndex) =>
             buildChildRow({
               child,
-              parentSessionId: sessionId,
-              childSessionId: resolveClientSessionId(child.childSessionId),
+              parentSessionId,
+              childSessionId: resolveClientSessionId(child.agent.identity.sessionId),
               ordinal: childIndex + 1,
             })
           ),
         );
         for (const child of data.children) {
-          childToParent.set(resolveClientSessionId(child.childSessionId), sessionId);
+          childToParent.set(resolveClientSessionId(child.agent.identity.sessionId), parentSessionId);
         }
       }
     }
@@ -198,20 +206,22 @@ function subagentResponseSignature(
   return [
     response.parent
       ? [
-        response.parent.parentSessionId,
-        response.parent.parentTitle ?? "",
-        response.parent.label ?? "",
-        response.parent.parentAgentKind,
+        response.parent.identity.sessionId,
+        response.parent.parent?.sessionId ?? "",
+        response.parent.title ?? "",
+        response.parent.configuration.agentKind,
+        response.parent.status.presentation,
+        response.parent.status.execution,
       ].join(":")
       : "",
     response.children.map((child) => [
-      child.sessionLinkId,
-      child.childSessionId,
-      child.title ?? "",
-      child.label ?? "",
-      child.agentKind,
-      child.status,
-      child.wakeScheduled ? "wake" : "",
+      child.relationship.sessionLinkId,
+      child.agent.identity.sessionId,
+      child.agent.title ?? "",
+      child.relationship.label ?? "",
+      child.agent.configuration.agentKind,
+      child.agent.status.presentation,
+      child.agent.status.execution,
     ].join(":")).join("|"),
   ].join("\u001f");
 }
@@ -242,15 +252,13 @@ function reviewResponseSignature(
 }
 
 function buildParentRow(
-  parent: ParentSubagentLinkSummary,
+  parent: AgentOperationsAgent,
   sessionId: string,
 ): HeaderSubagentParentRow {
   return {
     sessionId,
-    title: parent.parentTitle?.trim()
-      || parent.label?.trim()
-      || "Parent agent",
-    agentKind: parent.parentAgentKind,
+    title: parent.title?.trim() || "Parent agent",
+    agentKind: parent.configuration.agentKind,
     meta: null,
   };
 }
@@ -261,22 +269,22 @@ function buildChildRow({
   childSessionId,
   ordinal,
 }: {
-  child: ChildSubagentSummary;
+  child: SessionSubagentsResponse["children"][number];
   parentSessionId: string;
   childSessionId: string;
   ordinal: number;
 }): HeaderSubagentChildRow {
   return {
-    sessionLinkId: child.sessionLinkId,
+    sessionLinkId: child.relationship.sessionLinkId,
     sessionId: childSessionId,
     parentSessionId,
-    title: formatSubagentLabel(child.label ?? child.title, ordinal),
-    agentKind: child.agentKind,
+    title: formatSubagentLabel(child.relationship.label ?? child.agent.title, ordinal),
+    agentKind: child.agent.configuration.agentKind,
     source: "subagent",
     reviewKind: null,
     meta: null,
-    statusLabel: formatSessionStatus(child.status),
-    wakeScheduled: child.wakeScheduled,
+    statusLabel: formatAgentStatus(child.agent),
+    wakeScheduled: false,
     isActive: false,
   };
 }
@@ -311,21 +319,24 @@ function buildReviewChildRows(
   return [...rowsBySessionId.values()];
 }
 
-function formatSessionStatus(status: string): string {
-  switch (status) {
+function formatAgentStatus(agent: AgentOperationsAgent): string {
+  if (agent.status.presentation === "closed") {
+    return "Closed";
+  }
+  switch (agent.status.execution) {
     case "running":
       return "Working";
     case "idle":
       return "Idle";
-    case "completed":
-      return "Done";
     case "errored":
       return "Failed";
     case "starting":
       return "Starting";
+    case "awaiting_interaction":
+      return "Waiting";
     case "closed":
       return "Closed";
     default:
-      return status;
+      return agent.status.execution;
   }
 }

@@ -294,6 +294,13 @@ impl SessionLinkService {
         self.store.list_subagent_children(parent_session_id)
     }
 
+    pub fn list_subagent_links_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.store.list_subagent_links_for_workspace(workspace_id)
+    }
+
     pub fn list_subagent_children_including_closed(
         &self,
         parent_session_id: &str,

@@ -44,6 +44,9 @@ impl AgentOperations {
         match decision.denial {
             None => Ok((caller, target)),
             Some(CapabilityDenial::ParentOnly) => Err(AgentOperationsError::AgentNotFound),
+            Some(CapabilityDenial::TargetMustBeSubagent) => {
+                Err(AgentOperationsError::AgentNotFound)
+            }
             Some(CapabilityDenial::SubagentOpenRequired) => {
                 Err(AgentOperationsError::SubagentOpenRequired)
             }

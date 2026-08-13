@@ -16,6 +16,8 @@ use crate::domains::sessions::runtime::{
     SessionLifecycleError, SessionRuntime, SetSessionConfigOptionError, SubagentLifecycleError,
 };
 use crate::domains::sessions::service::SessionService;
+use crate::domains::sessions::subagents::model::SubagentCompletionRecord;
+use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::task_output::{TaskOutputError, TaskOutputPage};
 use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::domains::workspaces::options::{
@@ -48,6 +50,11 @@ pub trait SubagentRelationshipReads: Send + Sync {
         &self,
         parent_session_id: &str,
     ) -> anyhow::Result<Vec<SessionLinkRecord>>;
+
+    fn list_for_workspace(&self, workspace_id: &str) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        let _ = workspace_id;
+        Err(anyhow::anyhow!("workspace subagent roster is unavailable"))
+    }
 }
 
 impl SubagentRelationshipReads for SessionLinkService {
@@ -66,6 +73,26 @@ impl SubagentRelationshipReads for SessionLinkService {
         parent_session_id: &str,
     ) -> anyhow::Result<Vec<SessionLinkRecord>> {
         self.list_subagent_children(parent_session_id)
+    }
+
+    fn list_for_workspace(&self, workspace_id: &str) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.list_subagent_links_for_workspace(workspace_id)
+    }
+}
+
+pub trait SubagentCompletionReads: Send + Sync {
+    fn latest_completions_for_links(
+        &self,
+        link_ids: &[String],
+    ) -> anyhow::Result<Vec<SubagentCompletionRecord>>;
+}
+
+impl SubagentCompletionReads for SubagentService {
+    fn latest_completions_for_links(
+        &self,
+        link_ids: &[String],
+    ) -> anyhow::Result<Vec<SubagentCompletionRecord>> {
+        SubagentService::latest_completions_for_links(self, link_ids)
     }
 }
 

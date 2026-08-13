@@ -8,6 +8,7 @@ use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
+use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::options::WorkspaceOptionRuntime;
 
@@ -15,6 +16,7 @@ pub(super) struct AgentOperationsWiringDeps {
     pub runtime_identity: RuntimeIdentity,
     pub session_service: Arc<SessionService>,
     pub session_link_service: Arc<SessionLinkService>,
+    pub subagent_service: Arc<SubagentService>,
     pub session_runtime: Arc<SessionRuntime>,
     pub workspace_option_runtime: Arc<WorkspaceOptionRuntime>,
     pub session_admission: Arc<SessionMutationAdmission>,
@@ -34,6 +36,7 @@ pub(super) fn wire_agent_operations(deps: AgentOperationsWiringDeps) -> Arc<Agen
             deps.session_runtime.clone(),
             deps.session_service.clone(),
         )
+        .with_subagent_roster(deps.subagent_service)
         .with_ordinary_operations(
             deps.session_runtime.clone(),
             deps.session_service,
