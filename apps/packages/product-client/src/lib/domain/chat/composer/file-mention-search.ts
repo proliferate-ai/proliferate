@@ -100,10 +100,11 @@ function isInsideMarkdownCode(text: string, position: number): boolean {
 /**
  * Turns raw workspace file-search hits into mention rows.
  *
- * Search results arrive path-ordered from the runtime; the composer wants
- * basename-first relevance because the user is typing a file name, not a path.
- * Paths the mention format cannot represent (absolute, escaped, out-of-tree)
- * are dropped rather than inserted as a broken link.
+ * Search results arrive fuzzy-ranked from the runtime. The composer promotes
+ * the easy-to-explain basename/path substring tiers while preserving the
+ * runtime order for every other fuzzy match. Paths the mention format cannot
+ * represent (absolute, escaped, out-of-tree) are dropped rather than inserted
+ * as a broken link.
  */
 export function rankFileMentionResults(
   candidates: readonly FileMentionCandidate[],
@@ -123,9 +124,6 @@ export function rankFileMentionResults(
 
     const name = candidate.name || workspaceFileBasename(path);
     const rank = matchRank(name.toLowerCase(), path.toLowerCase(), needle);
-    if (rank === null) {
-      continue;
-    }
     ranked.push({
       rank,
       result: { path, name, parent: parentPath(path) },
@@ -139,7 +137,7 @@ export function rankFileMentionResults(
     .map((entry) => entry.result);
 }
 
-function matchRank(name: string, path: string, needle: string): number | null {
+function matchRank(name: string, path: string, needle: string): number {
   if (needle.length === 0) {
     return 3;
   }
@@ -152,7 +150,10 @@ function matchRank(name: string, path: string, needle: string): number | null {
   if (path.includes(needle)) {
     return 2;
   }
-  return null;
+  // The runtime already established that this is a fuzzy match. Keep it in
+  // its runtime-relative order instead of silently applying a stricter second
+  // filter in the composer.
+  return 3;
 }
 
 function parentPath(path: string): string {

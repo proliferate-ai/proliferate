@@ -178,6 +178,75 @@ describe("ChatInputControlRow", () => {
     expect(mode.querySelector("svg")).toBeNull();
   });
 
+  it("caps the model pill by its wrapper so it cannot paint over the mode pill", () => {
+    renderControlRow();
+
+    // Both bounds in one arbitrary value: the 15rem identity budget AND the
+    // wrapper width. A bare rem cap replaces the primitive's max-w-full in
+    // tailwind-merge, and the pill's column-flex wrapper does not otherwise
+    // constrain the button — it overflows onto the mode pill instead of
+    // truncating.
+    const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
+    expect(model.className).toContain("max-w-[min(15rem,100%)]");
+  });
+
+  it("mounts no trailing pending slot while a mode change is submitting", () => {
+    const controls = createControls();
+    controls[0] = { ...controls[0], pendingState: "submitting" };
+    renderControlRow({ sessionConfigControls: controls });
+
+    // Submitting renders no glyph, so the trailing wrapper must not mount:
+    // a zero-width flex item still claims the pill's gap, pushing the compact
+    // icon off-center and snapping the width when the pending state clears.
+    const mode = screen.getByRole("button", { name: "Mode: Default" });
+    expect(mode.querySelector(".ml-auto")).toBeNull();
+  });
+
+  it("keeps the queued clock in the mode pill's trailing slot", () => {
+    const controls = createControls();
+    controls[0] = { ...controls[0], pendingState: "queued" };
+    renderControlRow({ sessionConfigControls: controls });
+
+    const mode = screen.getByRole("button", { name: "Mode: Default" });
+    expect(mode.querySelector(".ml-auto svg")).not.toBeNull();
+  });
+
+  it("swaps an icon-configured working mode's word for its icon under the compact tier", () => {
+    const controls = createControls();
+    controls[0] = {
+      ...controls[0],
+      key: "mode",
+      options: [
+        { value: "bypassPermissions", label: "Bypass", selected: true },
+        { value: "plan", label: "Plan", selected: false },
+      ],
+    };
+    renderControlRow({ sessionConfigControls: controls });
+
+    const mode = screen.getByRole("button", { name: "Mode: Bypass" });
+    // One button, CSS-swapped: the icon renders only under the compact
+    // container tier, the word hides there, and the pill stops shrinking so
+    // the icon can never be squeezed into its neighbors.
+    const iconWrapper = mode.querySelector("svg")?.parentElement;
+    expect(iconWrapper?.className).toContain("hidden");
+    expect(iconWrapper?.className).toContain("@max-[32rem]:flex");
+    const label = screen.getByText("Bypass");
+    expect(label.closest('[class*="@max-[32rem]:hidden"]')).not.toBeNull();
+    expect(mode.className).toContain("@max-[32rem]:shrink-0");
+  });
+
+  it("hides the reasoning level word under the compact tier, keeping the bars", () => {
+    renderControlRow();
+
+    const label = screen.getByText("Medium");
+    expect(label.closest('[class*="@max-[32rem]:hidden"]')).not.toBeNull();
+    const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
+    expect(
+      reasoning.querySelector("[data-level-bars-icon]")
+        ?.closest('[class*="@max-[32rem]:hidden"]'),
+    ).toBeNull();
+  });
+
   it("orders model, working mode, reasoning bars, and fast mode in the visible row", () => {
     renderControlRow();
 
