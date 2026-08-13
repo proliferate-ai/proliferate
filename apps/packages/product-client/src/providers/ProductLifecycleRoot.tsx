@@ -25,6 +25,7 @@ import { useSessionIntentDispatcher } from "#product/hooks/sessions/lifecycle/us
 import { useSessionSelectionLifecycle } from "#product/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
 import { useCrashRecoverySupportAction } from "#product/hooks/support/workflows/use-crash-recovery-support-action"
+import { useSupportReportRetentionLifecycle } from "#product/hooks/support/lifecycle/use-support-report-retention"
 import { useTurnEndSound } from "#product/hooks/sessions/lifecycle/use-turn-end-sound"
 import { useWorkspaceGitStatusPersistence } from "#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence"
 import {
@@ -201,6 +202,13 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_product_storage_persistence_lifecycle")
   useProductStoragePersistenceLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_product_storage_persistence_lifecycle")
+  // Deliberately above the auth gate. The queue owner below drains and needs a
+  // Cloud session; retention does not, and the account that never signs in
+  // again is exactly the one whose queue document and staged report bytes
+  // would otherwise never be reaped.
+  recordBootDiagnosticOnce("app_runtime.render.before.use_support_report_retention_lifecycle")
+  useSupportReportRetentionLifecycle()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_support_report_retention_lifecycle")
 
   useEffect(() => {
     recordAppRendererEvent("app.bootstrap.start")

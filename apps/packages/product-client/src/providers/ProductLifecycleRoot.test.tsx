@@ -76,6 +76,15 @@ vi.mock("#product/providers/SupportReportQueueRoot", () => ({
   SupportReportQueueRoot: () => <div data-testid="support-report-queue-root" />,
 }));
 
+// Counted rather than stubbed away: where this hook runs relative to the auth
+// gate is the behaviour under test, not an implementation detail.
+const retentionSweepCount = vi.hoisted(() => ({ value: 0 }));
+vi.mock("#product/hooks/support/lifecycle/use-support-report-retention", () => ({
+  useSupportReportRetentionLifecycle: () => {
+    retentionSweepCount.value += 1;
+  },
+}));
+
 const desktopLifecycleMountCount = vi.hoisted(() => ({ value: 0 }));
 vi.mock("#product/providers/DesktopProductLifecycleRoot", () => ({
   DesktopProductLifecycleRoot: () => {
@@ -101,6 +110,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   desktopLifecycleMountCount.value = 0;
+  retentionSweepCount.value = 0;
   lifecycleThrow.value = false;
   authStatus.value = "loading";
   resetRendererDiagnosticsSinkForTest();
@@ -210,6 +220,35 @@ describe("ProductLifecycleRoot", () => {
     rerender(tree());
 
     expect(await screen.findByTestId("support-report-queue-root")).toBeTruthy();
+  });
+
+  it("sweeps support-report retention with no session, where the queue owner never mounts", async () => {
+    const host = makeTestProductHost({
+      auth: { restoreSession: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    for (const status of ["loading", "anonymous"] as const) {
+      authStatus.value = status;
+      retentionSweepCount.value = 0;
+
+      render(
+        <ProductHostProvider host={host}>
+          <ProductLifecycleRoot>
+            <div data-testid="app-tree">app</div>
+          </ProductLifecycleRoot>
+        </ProductHostProvider>,
+      );
+      await waitFor(() => expect(screen.getByTestId("desktop-lifecycle-root")).toBeTruthy());
+
+      // The two halves of the same claim. The owner that drains the queue and
+      // reconciles staged bytes needs a Cloud session, so it is absent here --
+      // and the account that signs out and never returns is exactly the one
+      // whose queue document and staged bytes nothing would ever reap. So
+      // retention has to run on the side of the gate the owner cannot reach.
+      expect(screen.queryByTestId("support-report-queue-root")).toBeNull();
+      expect(retentionSweepCount.value).toBeGreaterThan(0);
+      cleanup();
+    }
   });
 
   it("keeps a single Desktop lifecycle mount under StrictMode", () => {
