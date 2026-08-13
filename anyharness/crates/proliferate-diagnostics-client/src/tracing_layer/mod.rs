@@ -128,13 +128,39 @@ impl TargetMappingConfig {
                 stream: mapping.stream,
             };
         }
-        let prefixed = self.passthrough_prefix.is_some_and(|prefix| {
-            target.len() > prefix.len() && target.starts_with(prefix)
-        });
+        let prefixed = self
+            .passthrough_prefix
+            .is_some_and(|prefix| target.len() > prefix.len() && target.starts_with(prefix));
         if prefixed && crate::producer::record::valid_name(target) {
             return ResolvedRecordName::PassThrough(target);
         }
         ResolvedRecordName::Anonymous
+    }
+
+    /// Whether this target names its own record: someone chose to emit it as
+    /// a diagnostic, rather than it arriving as anonymous module-path logging.
+    /// Callers use this to admit deliberate instrumentation into the pipe
+    /// without admitting every event in the process.
+    pub fn names_record(&self, target: &str) -> bool {
+        !matches!(self.resolve(target), ResolvedRecordName::Anonymous)
+    }
+
+    /// Which events the diagnostics pipe accepts, for components that install
+    /// the layer behind a filter.
+    ///
+    /// The layer carries no filter of its own, so unfiltered it takes every
+    /// event in the process — every dependency, down to TRACE. The collector
+    /// then declares back-pressure and the producer sheds by severity alone,
+    /// which cannot tell a named lifecycle record from a dependency's TRACE:
+    /// an anonymous WARN survives while `anyharness.turn.finished` does not.
+    ///
+    /// So admission keys on deliberateness rather than severity. A target that
+    /// names its own record was instrumented on purpose and is admitted at any
+    /// level, DEBUG ACP frames included. Warnings and errors are admitted
+    /// whatever their target, because the failure nobody anticipated is
+    /// exactly the one nobody thought to name.
+    pub fn admits(&self, target: &str, level: &tracing::Level) -> bool {
+        self.names_record(target) || matches!(*level, tracing::Level::WARN | tracing::Level::ERROR)
     }
 }
 

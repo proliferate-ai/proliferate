@@ -8,13 +8,13 @@ use super::{
     sentry_event_mapper, sentry_scope_tags, sentry_user_from_id, stamped_git_sha,
     suppresses_legacy_file_sink, BundledActivation, RUNTIME_INCIDENT_FINGERPRINT,
 };
-use proliferate_diagnostics_client::ResolvedRecordName;
-use proliferate_diagnostics_protocol::v1::types::{DetailedKindV1, StandardStreamV1};
 use crate::{
     cli::Commands,
     commands::{install_agents::InstallAgentsArgs, serve::ServeArgs},
 };
 use anyharness_lib::observability::{AGENT_STDERR_TRACING_TARGET, RUNTIME_INCIDENT_TRACING_TARGET};
+use proliferate_diagnostics_client::ResolvedRecordName;
+use proliferate_diagnostics_protocol::v1::types::{DetailedKindV1, StandardStreamV1};
 
 fn sentry_test_options() -> sentry::ClientOptions {
     sentry::ClientOptions {
@@ -491,6 +491,53 @@ fn anyharness_targets_resolve_to_record_names_by_table_then_pass_through() {
             mappings.resolve(target),
             expected,
             "unexpected record identity for target {target}"
+        );
+    }
+}
+
+#[test]
+fn diagnostics_admission_keys_on_deliberateness_not_severity() {
+    let mappings = anyharness_target_mappings();
+    // (target, level, admitted)
+    let cases = [
+        // Named targets are admitted at any level: the DEBUG ACP frames are
+        // the highest-value records the runtime produces.
+        ("anyharness.turn.finished", tracing::Level::INFO, true),
+        ("anyharness.acp.recv", tracing::Level::DEBUG, true),
+        ("anyharness.session.spawn", tracing::Level::TRACE, true),
+        // Mapped legacy targets keep their place.
+        (AGENT_STDERR_TRACING_TARGET, tracing::Level::DEBUG, true),
+        // Anonymous module-path logging is the flood: dropped below WARN.
+        (
+            "anyharness_lib::live::sessions::actor",
+            tracing::Level::TRACE,
+            false,
+        ),
+        (
+            "anyharness_lib::live::sessions::actor",
+            tracing::Level::DEBUG,
+            false,
+        ),
+        (
+            "anyharness_lib::live::sessions::actor",
+            tracing::Level::INFO,
+            false,
+        ),
+        // ... but a failure nobody thought to name still gets through.
+        (
+            "anyharness_lib::live::sessions::actor",
+            tracing::Level::WARN,
+            true,
+        ),
+        ("hyper::proto::h1::conn", tracing::Level::ERROR, true),
+        ("hyper::proto::h1::conn", tracing::Level::TRACE, false),
+    ];
+
+    for (target, level, expected) in cases {
+        assert_eq!(
+            mappings.admits(target, &level),
+            expected,
+            "unexpected admission for {target} at {level}"
         );
     }
 }

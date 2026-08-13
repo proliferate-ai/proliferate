@@ -300,14 +300,20 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
     let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
 
     let (diagnostics_layer, diagnostics) = match installation {
-        Some(installation) => (
-            Some(
-                installation
-                    .layer
-                    .with_target_mappings(anyharness_target_mappings()),
-            ),
-            Some(installation.guard),
-        ),
+        Some(installation) => {
+            let admission = anyharness_target_mappings();
+            (
+                Some(
+                    installation
+                        .layer
+                        .with_target_mappings(anyharness_target_mappings())
+                        .with_filter(tracing_subscriber::filter::FilterFn::new(move |metadata| {
+                            admission.admits(metadata.target(), metadata.level())
+                        })),
+                ),
+                Some(installation.guard),
+            )
+        }
         None => (None, None),
     };
 

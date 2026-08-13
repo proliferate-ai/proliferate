@@ -388,14 +388,20 @@ pub fn init(activation: DesktopDiagnosticsActivation) -> TelemetryGuards {
         }
     };
     let (diagnostics_layer, diagnostics) = match installation {
-        Some(installation) => (
-            Some(
-                installation
-                    .layer
-                    .with_target_mappings(worker_target_mappings()),
-            ),
-            Some(installation.guard),
-        ),
+        Some(installation) => {
+            let admission = worker_target_mappings();
+            (
+                Some(
+                    installation
+                        .layer
+                        .with_target_mappings(worker_target_mappings())
+                        .with_filter(tracing_subscriber::filter::FilterFn::new(move |metadata| {
+                            admission.admits(metadata.target(), metadata.level())
+                        })),
+                ),
+                Some(installation.guard),
+            )
+        }
         None => (None, None),
     };
     let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
@@ -491,10 +497,7 @@ mod tests {
                 "desktop_worker.anyharness_update.rollback",
                 ResolvedRecordName::PassThrough("desktop_worker.anyharness_update.rollback"),
             ),
-            (
-                "proliferate_worker::runtime",
-                ResolvedRecordName::Anonymous,
-            ),
+            ("proliferate_worker::runtime", ResolvedRecordName::Anonymous),
             ("anyharness.turn.finished", ResolvedRecordName::Anonymous),
             ("desktop_worker.", ResolvedRecordName::Anonymous),
         ];
