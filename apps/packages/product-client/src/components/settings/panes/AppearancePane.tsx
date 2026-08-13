@@ -3,6 +3,7 @@ import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { SettingsMenu } from "#product/primitives/patterns/settings/SettingsMenu";
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
+import { Card } from "#product/primitives/patterns/Card";
 import { Button } from "#product/primitives/Button";
 import { AppearanceCodePreview } from "#product/components/settings/panes/AppearanceCodePreview";
 import { ThemePreviewCards } from "#product/components/settings/panes/ThemePreviewCards";
@@ -26,13 +27,15 @@ import { useColorMode } from "#product/hooks/theme/workflows/use-theme-preferenc
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 /**
- * Preview sections use `surface="plain"` — their content sits on
- * `bg-background`, never inside the wash card. A preview's job is to show
- * what a surface looks like in the app, and the app draws transcripts and
- * diffs on the page background; tinting them card-gray would make the
- * preview lie about the thing it previews.
+ * Preview sections use `surface="plain"` and the preview shells below force
+ * `bg-background` onto `Card`'s `opaque` surface — their content sits on the
+ * real app background, never inside the wash card. A preview's job is to
+ * show what a surface looks like in the app, and the app draws transcripts
+ * and diffs on the page background; tinting them card-gray would make the
+ * preview lie about the thing it previews. This is a deliberate divergence
+ * from `Card`'s default fills (`bg-card` for `opaque`, no plain-background
+ * option), documented rather than force-fit.
  */
-const PREVIEW_PANEL_CLASS = "overflow-hidden rounded-xl border border-border bg-background";
 /** Narrower than the shared settings control width: these are short values. */
 const CONTROL_WIDTH_CLASS = "w-40";
 
@@ -69,16 +72,16 @@ export function AppearancePane() {
       </SettingsSection>
 
       <SettingsSection title="Code preview" surface="plain">
-        <div className={PREVIEW_PANEL_CLASS}>
+        <Card surface="opaque" className="bg-background">
           <AppearanceCodePreview />
-        </div>
+        </Card>
       </SettingsSection>
 
       <SettingsSection title="Chat preview" surface="plain">
-        <div className={`${PREVIEW_PANEL_CLASS} flex flex-col gap-6 px-4 py-4`}>
+        <Card surface="opaque" className="flex flex-col gap-6 bg-background px-4 py-4">
           <UserMessage sessionId={null} content={CHAT_PREVIEW_PROMPT} />
           <AssistantMessage content={CHAT_PREVIEW_RESPONSE} animateReveal={false} />
-        </div>
+        </Card>
       </SettingsSection>
 
       <SettingsSection title="Preferences">
@@ -95,7 +98,7 @@ export function AppearancePane() {
               size="icon"
               aria-label="Zoom out"
               disabled={!canDecreaseZoom}
-              className="h-7 w-7 shrink-0 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
+              className="h-7 w-7 shrink-0 rounded-none"
               onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, -1))}
             >
               <Minus className="icon-paired" />
@@ -109,7 +112,7 @@ export function AppearancePane() {
               size="icon"
               aria-label="Zoom in"
               disabled={!canIncreaseZoom}
-              className="h-7 w-7 shrink-0 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
+              className="h-7 w-7 shrink-0 rounded-none"
               onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, 1))}
             >
               <Plus className="icon-paired" />
