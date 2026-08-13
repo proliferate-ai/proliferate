@@ -13,7 +13,11 @@ use super::model::{
     ReconcileStagedSupportSnapshotsInput, ReconciledSupportArtifactOutput,
     SaveSupportSnapshotArchiveInput,
 };
-use super::state::{ArtifactAuthorization, ReadVerificationProof, ReadinessState};
+use super::state::{
+    ArtifactAuthorization, PreparationCleanup, ReadVerificationProof, ReadinessState,
+    SubmissionTerminal,
+};
+use super::terminal::terminal_for_interruption;
 use super::SupportSnapshotCoordinator;
 use crate::diagnostics::support_snapshot::schema::validate::validate_id;
 
@@ -185,6 +189,10 @@ impl SupportSnapshotCoordinator {
                 .submission
                 .as_ref()
                 .is_some_and(|submission| submission.artifact_id == input.artifact_id)
+                || state
+                    .closing_submission
+                    .as_ref()
+                    .is_some_and(|submission| submission.artifact_id == input.artifact_id)
             {
                 return Err("support_snapshot_submission_busy".to_string());
             }
@@ -257,7 +265,7 @@ impl SupportSnapshotCoordinator {
 
     pub(crate) async fn cancel_support(self: &Arc<Self>) {
         let _shutdown_guard = self.shutdown_gate.lock().await;
-        let (closing, submission, deletes) = {
+        let (closing_preparation, closing_submission, deletes) = {
             let mut state = self.state.lock().await;
             state.shutdown_armed = true;
             let open = state.preparation.as_ref().map(|open| {
@@ -272,14 +280,23 @@ impl SupportSnapshotCoordinator {
                     control.request(super::control::PreparationInterruption::Deadline);
                 }
                 control.request(super::control::PreparationInterruption::Abandoned);
-                state.transfer_preparation_to_closing(&preparation_id)
+                state.transfer_preparation_to_closing(
+                    &preparation_id,
+                    terminal_for_interruption(control.interruption()),
+                    PreparationCleanup::Interrupted,
+                )
             } else {
                 state.closing_preparation.clone()
             };
-            let submission = state
+            let submission_id = state
                 .submission
-                .take()
-                .and_then(|mut open| open.operation.take());
+                .as_ref()
+                .map(|submission| submission.submission_id.clone());
+            let closing_submission = if let Some(submission_id) = submission_id {
+                state.transfer_submission_to_closing(&submission_id, SubmissionTerminal::Abandoned)
+            } else {
+                state.closing_submission.clone()
+            };
             let deletes = state
                 .artifacts
                 .iter()
@@ -290,15 +307,20 @@ impl SupportSnapshotCoordinator {
                 state.artifacts.remove(id);
                 state.read_proofs.remove(id);
             }
-            (closing, submission, deletes)
+            (closing, closing_submission, deletes)
         };
 
-        if let Some(closing) = closing {
-            self.spawn_closing_owner(Arc::clone(&closing));
+        if let Some(closing) = &closing_preparation {
+            self.spawn_closing_owner(Arc::clone(closing));
+        }
+        if let Some(closing) = &closing_submission {
+            self.spawn_closing_submission_owner(Arc::clone(closing));
+        }
+        if let Some(closing) = closing_preparation {
             closing.wait_completed().await;
         }
-        if let Some(submission) = submission {
-            submission.abandoned();
+        if let Some(closing) = closing_submission {
+            closing.wait_completed().await;
         }
         if !deletes.is_empty() {
             let _artifact_guard = self.artifact_gate.lock().await;

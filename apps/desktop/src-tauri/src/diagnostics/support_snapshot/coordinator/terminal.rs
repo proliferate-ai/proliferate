@@ -6,6 +6,7 @@ use crate::diagnostics_collector::producer::lifecycle::support_lifecycle::{
 
 use super::control::PreparationInterruption;
 use super::finish::FinishError;
+use super::state::PreparationTerminal;
 
 fn take_operation(
     operation: &Arc<Mutex<Option<SupportPreparationOperation>>>,
@@ -54,29 +55,41 @@ pub(super) fn interruption_error_code(interruption: PreparationInterruption) -> 
 }
 
 pub(super) fn terminal_for_interruption(
-    operation: &Arc<Mutex<Option<SupportPreparationOperation>>>,
     interruption: PreparationInterruption,
-) {
+) -> PreparationTerminal {
     match interruption {
-        PreparationInterruption::Deadline => failed(operation, Failure::PreparationTimeout),
-        PreparationInterruption::Abandoned | PreparationInterruption::Running => {
-            abandoned(operation)
+        PreparationInterruption::Deadline => {
+            PreparationTerminal::Failed(Failure::PreparationTimeout)
         }
-        PreparationInterruption::Cancelled => cancelled(operation),
+        PreparationInterruption::Abandoned | PreparationInterruption::Running => {
+            PreparationTerminal::Abandoned
+        }
+        PreparationInterruption::Cancelled => PreparationTerminal::Cancelled,
     }
 }
 
-pub(super) fn finish(
-    operation: &Arc<Mutex<Option<SupportPreparationOperation>>>,
-    error: FinishError,
-) {
+pub(super) fn terminal_for_finish_error(error: FinishError) -> PreparationTerminal {
     match error {
-        FinishError::Cancelled => cancelled(operation),
-        FinishError::Deadline => failed(operation, Failure::PreparationTimeout),
-        FinishError::Scrub => failed(operation, Failure::ScrubFailed),
-        FinishError::Manifest => failed(operation, Failure::ManifestInvalid),
-        FinishError::Stage => failed(operation, Failure::StageFailed),
-        FinishError::Verification => failed(operation, Failure::ArtifactVerificationFailed),
+        FinishError::Cancelled => PreparationTerminal::Cancelled,
+        FinishError::Deadline => PreparationTerminal::Failed(Failure::PreparationTimeout),
+        FinishError::Scrub => PreparationTerminal::Failed(Failure::ScrubFailed),
+        FinishError::Manifest => PreparationTerminal::Failed(Failure::ManifestInvalid),
+        FinishError::Stage => PreparationTerminal::Failed(Failure::StageFailed),
+        FinishError::Verification => {
+            PreparationTerminal::Failed(Failure::ArtifactVerificationFailed)
+        }
+    }
+}
+
+pub(super) fn emit(
+    operation: &Arc<Mutex<Option<SupportPreparationOperation>>>,
+    terminal: PreparationTerminal,
+) {
+    match terminal {
+        PreparationTerminal::Succeeded => succeeded(operation),
+        PreparationTerminal::Cancelled => cancelled(operation),
+        PreparationTerminal::Abandoned => abandoned(operation),
+        PreparationTerminal::Failed(classification) => failed(operation, classification),
     }
 }
 

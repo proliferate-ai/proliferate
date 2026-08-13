@@ -6,7 +6,7 @@ use std::sync::{
 };
 
 use chrono::{DateTime, Utc};
-use tokio::sync::Notify;
+use tokio::sync::watch;
 use tokio::time::{Duration, Instant};
 
 use super::runtime::CoordinatorRuntime;
@@ -17,6 +17,8 @@ pub(super) struct FakeRuntime {
     finish_publication: Arc<AsyncGate>,
     finish_result: BlockingGate,
     finish_timer: Arc<TestEvent>,
+    preparation_terminal: Arc<AsyncGate>,
+    submission_terminal: Arc<AsyncGate>,
     pause_watchdog_deadlines: Arc<AtomicBool>,
     watchdog_release: Arc<TestEvent>,
 }
@@ -24,13 +26,11 @@ pub(super) struct FakeRuntime {
 struct FakeClock {
     utc: Mutex<DateTime<Utc>>,
     instant: Mutex<Instant>,
-    advanced: Notify,
+    advanced: watch::Sender<u64>,
 }
 
-#[derive(Default)]
 struct TestEvent {
-    fired: AtomicBool,
-    notify: Notify,
+    fired: watch::Sender<bool>,
 }
 
 #[derive(Default)]
@@ -59,12 +59,14 @@ impl FakeRuntime {
                         .with_timezone(&Utc),
                 ),
                 instant: Mutex::new(Instant::now()),
-                advanced: Notify::new(),
+                advanced: watch::channel(0).0,
             }),
             next_id: Mutex::new(0),
             finish_publication: Arc::new(AsyncGate::default()),
             finish_result: BlockingGate::default(),
             finish_timer: Arc::new(TestEvent::default()),
+            preparation_terminal: Arc::new(AsyncGate::default()),
+            submission_terminal: Arc::new(AsyncGate::default()),
             pause_watchdog_deadlines: Arc::new(AtomicBool::new(false)),
             watchdog_release: Arc::new(TestEvent::default()),
         }
@@ -75,7 +77,9 @@ impl FakeRuntime {
         *instant += duration;
         let mut utc = self.clock.utc.lock().expect("fake utc");
         *utc += chrono::Duration::from_std(duration).expect("fake duration");
-        self.clock.advanced.notify_waiters();
+        self.clock
+            .advanced
+            .send_modify(|version| *version = version.wrapping_add(1));
     }
 
     pub(super) fn pause_finish_publication(&self) {
@@ -111,6 +115,34 @@ impl FakeRuntime {
 
     pub(super) async fn wait_finish_timer(&self) {
         self.finish_timer.wait().await;
+    }
+
+    pub(super) fn pause_preparation_terminal(&self) {
+        self.preparation_terminal
+            .enabled
+            .store(true, Ordering::Release);
+    }
+
+    pub(super) async fn wait_preparation_terminal(&self) {
+        self.preparation_terminal.reached.wait().await;
+    }
+
+    pub(super) fn release_preparation_terminal(&self) {
+        self.preparation_terminal.released.fire();
+    }
+
+    pub(super) fn pause_submission_terminal(&self) {
+        self.submission_terminal
+            .enabled
+            .store(true, Ordering::Release);
+    }
+
+    pub(super) async fn wait_submission_terminal(&self) {
+        self.submission_terminal.reached.wait().await;
+    }
+
+    pub(super) fn release_submission_terminal(&self) {
+        self.submission_terminal.released.fire();
     }
 }
 
@@ -162,6 +194,23 @@ impl CoordinatorRuntime for FakeRuntime {
     fn finish_timer_fired(&self) {
         self.finish_timer.fire();
     }
+
+    fn before_preparation_terminal(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        wait_at_gate(Arc::clone(&self.preparation_terminal))
+    }
+
+    fn before_submission_terminal(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        wait_at_gate(Arc::clone(&self.submission_terminal))
+    }
+}
+
+fn wait_at_gate(gate: Arc<AsyncGate>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    Box::pin(async move {
+        if gate.enabled.load(Ordering::Acquire) {
+            gate.reached.fire();
+            gate.released.wait().await;
+        }
+    })
 }
 
 fn fake_sleep_until(
@@ -169,29 +218,40 @@ fn fake_sleep_until(
     deadline: Instant,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
+        let mut advanced = clock.advanced.subscribe();
         loop {
-            let advanced = clock.advanced.notified();
             if *clock.instant.lock().expect("fake instant") >= deadline {
                 return;
             }
-            advanced.await;
+            if advanced.changed().await.is_err() {
+                return;
+            }
         }
     })
 }
 
+impl Default for TestEvent {
+    fn default() -> Self {
+        Self {
+            fired: watch::channel(false).0,
+        }
+    }
+}
+
 impl TestEvent {
     fn fire(&self) {
-        self.fired.store(true, Ordering::Release);
-        self.notify.notify_waiters();
+        self.fired.send_replace(true);
     }
 
     async fn wait(&self) {
+        let mut fired = self.fired.subscribe();
         loop {
-            let notified = self.notify.notified();
-            if self.fired.load(Ordering::Acquire) {
+            if *fired.borrow() {
                 return;
             }
-            notified.await;
+            if fired.changed().await.is_err() {
+                return;
+            }
         }
     }
 }

@@ -4,7 +4,8 @@ use super::super::schema::validate::validate_id;
 use super::control::PreparationInterruption;
 use super::model::CancelSupportSnapshotInput;
 use super::preparation::canonical_uuid;
-use super::state::ClosingPreparation;
+use super::state::{ClosingPreparation, PreparationCleanup};
+use super::terminal::terminal_for_interruption;
 use super::SupportSnapshotCoordinator;
 
 impl SupportSnapshotCoordinator {
@@ -47,7 +48,11 @@ impl SupportSnapshotCoordinator {
                     control.request(PreparationInterruption::Deadline);
                 }
                 control.request(PreparationInterruption::Cancelled);
-                state.transfer_preparation_to_closing(&preparation_id)
+                state.transfer_preparation_to_closing(
+                    &preparation_id,
+                    terminal_for_interruption(control.interruption()),
+                    PreparationCleanup::Interrupted,
+                )
             } else {
                 state
                     .closing_preparation

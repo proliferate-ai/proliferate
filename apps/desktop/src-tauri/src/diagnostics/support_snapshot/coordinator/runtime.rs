@@ -21,6 +21,14 @@ pub(super) trait CoordinatorRuntime: Send + Sync {
     fn before_finish_result_publish(&self) {}
 
     fn finish_timer_fired(&self) {}
+
+    fn before_preparation_terminal(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async {})
+    }
+
+    fn before_submission_terminal(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async {})
+    }
 }
 
 pub(super) struct SystemCoordinatorRuntime;

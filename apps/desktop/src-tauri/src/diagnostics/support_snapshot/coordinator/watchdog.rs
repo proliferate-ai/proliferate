@@ -3,6 +3,8 @@ use std::sync::Arc;
 use tokio::time::Instant;
 
 use super::control::{PreparationControl, PreparationInterruption};
+use super::state::PreparationCleanup;
+use super::terminal::terminal_for_interruption;
 use super::SupportSnapshotCoordinator;
 
 pub(super) fn spawn_preparation_watchdog(
@@ -48,7 +50,11 @@ pub(super) fn spawn_preparation_watchdog(
                 if control.interruption() == PreparationInterruption::Running {
                     None
                 } else {
-                    state.transfer_preparation_to_closing(&preparation_id)
+                    state.transfer_preparation_to_closing(
+                        &preparation_id,
+                        terminal_for_interruption(control.interruption()),
+                        PreparationCleanup::Interrupted,
+                    )
                 }
             } else {
                 state

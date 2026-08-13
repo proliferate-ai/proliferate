@@ -5,7 +5,7 @@ use super::model::{
     FinishSupportSnapshotSubmissionInput,
 };
 use super::state::{OpenSubmission, ReadinessState};
-use super::submission::{finish_submission, valid_finish_input};
+use super::submission::{terminal_for_input, valid_finish_input};
 use super::SupportSnapshotCoordinator;
 
 impl SupportSnapshotCoordinator {
@@ -24,7 +24,7 @@ impl SupportSnapshotCoordinator {
         if state.shutdown_armed || state.readiness != ReadinessState::Ready {
             return Err("support_snapshot_not_ready".to_string());
         }
-        if state.submission.is_some() {
+        if state.submission.is_some() || state.closing_submission.is_some() {
             return Err("support_snapshot_submission_busy".to_string());
         }
         state.purge_expired_proofs(self.runtime.instant_now());
@@ -73,13 +73,14 @@ impl SupportSnapshotCoordinator {
     }
 
     pub(crate) async fn finish_submission(
-        &self,
+        self: &std::sync::Arc<Self>,
         input: FinishSupportSnapshotSubmissionInput,
     ) -> Result<(), String> {
         if !canonical_uuid(input.submission_id()) || !valid_finish_input(&input) {
             return Err("support_snapshot_submission_invalid_terminal".to_string());
         }
-        let operation = {
+        let terminal = terminal_for_input(&input);
+        let closing = {
             let mut state = self.state.lock().await;
             let matches = state
                 .submission
@@ -89,12 +90,11 @@ impl SupportSnapshotCoordinator {
                 return Err("support_snapshot_submission_stale".to_string());
             }
             state
-                .submission
-                .take()
-                .and_then(|mut open| open.operation.take())
+                .transfer_submission_to_closing(input.submission_id(), terminal)
                 .ok_or_else(|| "support_snapshot_submission_stale".to_string())?
         };
-        finish_submission(operation, &input);
+        self.spawn_closing_submission_owner(std::sync::Arc::clone(&closing));
+        closing.wait_completed().await;
         Ok(())
     }
 }

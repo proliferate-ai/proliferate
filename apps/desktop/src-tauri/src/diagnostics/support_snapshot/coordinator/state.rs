@@ -3,11 +3,13 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex as StdMutex,
 };
-use tokio::sync::Notify;
+use tokio::sync::watch;
 use tokio::time::Instant;
 
 use crate::diagnostics_collector::producer::lifecycle::support_lifecycle::{
-    SupportPreparationOperation, SupportSubmissionOperation,
+    SupportPreparationOperation, SupportSnapshotPreparationFailureClassificationV1,
+    SupportSnapshotSubmissionFailedClassificationV1,
+    SupportSnapshotSubmissionRejectedClassificationV1, SupportSubmissionOperation,
 };
 
 use super::super::artifact_store::{SupportArtifactReference, SupportArtifactStore};
@@ -80,6 +82,7 @@ pub(super) struct CoordinatorState {
     pub closing_preparation: Option<Arc<ClosingPreparation>>,
     pub closed_preparation: Option<ClosedPreparation>,
     pub submission: Option<OpenSubmission>,
+    pub closing_submission: Option<Arc<ClosingSubmission>>,
     pub artifacts: BTreeMap<String, ArtifactAuthorization>,
     pub read_proofs: BTreeMap<String, ReadVerificationProof>,
 }
@@ -93,6 +96,7 @@ impl Default for CoordinatorState {
             closing_preparation: None,
             closed_preparation: None,
             submission: None,
+            closing_submission: None,
             artifacts: BTreeMap::new(),
             read_proofs: BTreeMap::new(),
         }
@@ -107,9 +111,44 @@ pub(super) struct ClosingPreparation {
     pub control: Arc<PreparationControl>,
     pub operation: Arc<StdMutex<Option<SupportPreparationOperation>>>,
     pub artifact_id: String,
+    pub terminal: PreparationTerminal,
+    pub cleanup: PreparationCleanup,
     owner_claimed: AtomicBool,
-    completed: AtomicBool,
-    completion: Notify,
+    completion: watch::Sender<bool>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum PreparationTerminal {
+    Succeeded,
+    Cancelled,
+    Abandoned,
+    Failed(SupportSnapshotPreparationFailureClassificationV1),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum PreparationCleanup {
+    None,
+    Interrupted,
+    StagedArtifact,
+}
+
+pub(super) struct ClosingSubmission {
+    pub submission_id: String,
+    pub artifact_id: String,
+    pub operation: Arc<StdMutex<Option<SupportSubmissionOperation>>>,
+    pub terminal: SubmissionTerminal,
+    owner_claimed: AtomicBool,
+    completion: watch::Sender<bool>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SubmissionTerminal {
+    Succeeded,
+    Cancelled,
+    Abandoned,
+    TimedOut,
+    Rejected(SupportSnapshotSubmissionRejectedClassificationV1),
+    Failed(SupportSnapshotSubmissionFailedClassificationV1),
 }
 
 impl CoordinatorState {
@@ -120,6 +159,8 @@ impl CoordinatorState {
     pub fn transfer_preparation_to_closing(
         &mut self,
         preparation_id: &str,
+        terminal: PreparationTerminal,
+        cleanup: PreparationCleanup,
     ) -> Option<Arc<ClosingPreparation>> {
         if let Some(closing) = self
             .closing_preparation
@@ -137,14 +178,14 @@ impl CoordinatorState {
         }
         let open = self.preparation.take().expect("matching preparation");
         let interruption = open.control.interruption();
-        debug_assert_ne!(interruption, PreparationInterruption::Running);
         let artifact_id = SupportArtifactStore::artifact_id(&open.input.client_job_id)
             .expect("admitted client job id is canonical");
-        self.closed_preparation = Some(ClosedPreparation {
-            preparation_id: open.preparation_id.clone(),
-            consent_epoch: open.input.consent_epoch.clone(),
-            interruption,
-        });
+        self.closed_preparation =
+            (interruption != PreparationInterruption::Running).then(|| ClosedPreparation {
+                preparation_id: open.preparation_id.clone(),
+                consent_epoch: open.input.consent_epoch.clone(),
+                interruption,
+            });
         let closing = Arc::new(ClosingPreparation {
             preparation_id: open.preparation_id,
             consent_epoch: open.input.consent_epoch,
@@ -153,11 +194,48 @@ impl CoordinatorState {
             control: open.control,
             operation: open.operation,
             artifact_id,
+            terminal,
+            cleanup,
             owner_claimed: AtomicBool::new(false),
-            completed: AtomicBool::new(false),
-            completion: Notify::new(),
+            completion: watch::channel(false).0,
         });
         self.closing_preparation = Some(Arc::clone(&closing));
+        Some(closing)
+    }
+
+    pub fn transfer_submission_to_closing(
+        &mut self,
+        submission_id: &str,
+        terminal: SubmissionTerminal,
+    ) -> Option<Arc<ClosingSubmission>> {
+        if let Some(closing) = self
+            .closing_submission
+            .as_ref()
+            .filter(|closing| closing.submission_id == submission_id)
+        {
+            return Some(Arc::clone(closing));
+        }
+        let matches = self
+            .submission
+            .as_ref()
+            .is_some_and(|open| open.submission_id == submission_id);
+        if !matches {
+            return None;
+        }
+        let mut open = self.submission.take().expect("matching submission");
+        let operation = open
+            .operation
+            .take()
+            .expect("admitted submission operation");
+        let closing = Arc::new(ClosingSubmission {
+            submission_id: open.submission_id,
+            artifact_id: open.artifact_id,
+            operation: Arc::new(StdMutex::new(Some(operation))),
+            terminal,
+            owner_claimed: AtomicBool::new(false),
+            completion: watch::channel(false).0,
+        });
+        self.closing_submission = Some(Arc::clone(&closing));
         Some(closing)
     }
 }
@@ -168,18 +246,41 @@ impl ClosingPreparation {
     }
 
     pub async fn wait_completed(&self) {
+        let mut completion = self.completion.subscribe();
         loop {
-            let notified = self.completion.notified();
-            if self.completed.load(Ordering::Acquire) {
+            if *completion.borrow() {
                 return;
             }
-            notified.await;
+            if completion.changed().await.is_err() {
+                return;
+            }
         }
     }
 
     pub fn complete(&self) {
-        self.completed.store(true, Ordering::Release);
-        self.completion.notify_waiters();
+        self.completion.send_replace(true);
+    }
+}
+
+impl ClosingSubmission {
+    pub fn claim_owner(&self) -> bool {
+        !self.owner_claimed.swap(true, Ordering::AcqRel)
+    }
+
+    pub async fn wait_completed(&self) {
+        let mut completion = self.completion.subscribe();
+        loop {
+            if *completion.borrow() {
+                return;
+            }
+            if completion.changed().await.is_err() {
+                return;
+            }
+        }
+    }
+
+    pub fn complete(&self) {
+        self.completion.send_replace(true);
     }
 }
 
@@ -194,6 +295,8 @@ mod tests {
         assert!(!state.shutdown_armed);
         assert!(state.preparation.is_none());
         assert!(state.submission.is_none());
+        assert!(state.closing_preparation.is_none());
+        assert!(state.closing_submission.is_none());
     }
 
     #[test]

@@ -9,20 +9,21 @@ use super::model::{
     SubmissionFailedClassificationInput as FailedInput,
     SubmissionRejectedClassificationInput as RejectedInput, UploadTimeoutClassificationInput,
 };
+use super::state::SubmissionTerminal;
 
-pub(super) fn finish_submission(operation: SupportSubmissionOperation, input: &Input) {
+pub(super) fn terminal_for_input(input: &Input) -> SubmissionTerminal {
     match input {
-        Input::Succeeded { .. } => operation.succeeded(),
-        Input::Cancelled { .. } => operation.cancelled(),
-        Input::Abandoned { .. } => operation.abandoned(),
+        Input::Succeeded { .. } => SubmissionTerminal::Succeeded,
+        Input::Cancelled { .. } => SubmissionTerminal::Cancelled,
+        Input::Abandoned { .. } => SubmissionTerminal::Abandoned,
         Input::TimedOut {
             error_classification: UploadTimeoutClassificationInput::UploadTimeout,
             ..
-        } => operation.timed_out(),
+        } => SubmissionTerminal::TimedOut,
         Input::Rejected {
             error_classification,
             ..
-        } => operation.rejected(match error_classification {
+        } => SubmissionTerminal::Rejected(match error_classification {
             RejectedInput::LocalPayloadInvalid => Rejected::LocalPayloadInvalid,
             RejectedInput::UploadConflict => Rejected::UploadConflict,
             RejectedInput::UploadRejected => Rejected::UploadRejected,
@@ -30,13 +31,34 @@ pub(super) fn finish_submission(operation: SupportSubmissionOperation, input: &I
         Input::Failed {
             error_classification,
             ..
-        } => operation.failed(match error_classification {
+        } => SubmissionTerminal::Failed(match error_classification {
             FailedInput::AuthRequired => Failed::AuthRequired,
             FailedInput::CloudUnconfigured => Failed::CloudUnconfigured,
             FailedInput::DevAuthBypass => Failed::DevAuthBypass,
             FailedInput::StorageUnconfigured => Failed::StorageUnconfigured,
             FailedInput::Transient => Failed::Transient,
         }),
+    }
+}
+
+pub(super) fn emit_submission(
+    operation: &std::sync::Mutex<Option<SupportSubmissionOperation>>,
+    terminal: SubmissionTerminal,
+) {
+    let operation = match operation.lock() {
+        Ok(mut operation) => operation.take(),
+        Err(poisoned) => poisoned.into_inner().take(),
+    };
+    let Some(operation) = operation else {
+        return;
+    };
+    match terminal {
+        SubmissionTerminal::Succeeded => operation.succeeded(),
+        SubmissionTerminal::Cancelled => operation.cancelled(),
+        SubmissionTerminal::Abandoned => operation.abandoned(),
+        SubmissionTerminal::TimedOut => operation.timed_out(),
+        SubmissionTerminal::Rejected(classification) => operation.rejected(classification),
+        SubmissionTerminal::Failed(classification) => operation.failed(classification),
     }
 }
 

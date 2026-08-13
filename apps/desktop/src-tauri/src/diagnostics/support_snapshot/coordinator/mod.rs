@@ -11,6 +11,8 @@ mod deadline_race_tests;
 #[cfg(test)]
 mod fake_runtime;
 mod file_accounting;
+#[cfg(test)]
+mod finalizer_fence_tests;
 mod finish;
 #[cfg(test)]
 mod lifecycle_tests;
