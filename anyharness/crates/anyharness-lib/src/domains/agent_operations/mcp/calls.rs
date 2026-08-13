@@ -4,7 +4,8 @@ use serde_json::{json, Value};
 
 use super::context::WorkspaceMcpContext;
 use crate::domains::agent_operations::model::{
-    AgentIdentity, AgentPresentationStatus, ListAgentsInput,
+    AgentIdentity, AgentPresentationStatus, CreateWorkspaceInput, ListAgentsInput,
+    ListWorkspacesInput, WorkspaceIdentity,
 };
 use crate::domains::agent_operations::runtime::{AgentOperations, AgentOperationsError};
 use crate::integrations::mcp::tools::McpToolCallError;
@@ -17,6 +18,28 @@ struct EmptyArgs {}
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct TargetArgs {
     agent_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WorkspaceArgs {
+    workspace_id: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PaginatedArgs {
+    cursor: Option<String>,
+    limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CreateWorkspaceArgs {
+    repository_id: String,
+    creation_mode: String,
+    branch: Option<String>,
+    display_name: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -38,6 +61,26 @@ pub async fn call_tool(
         "whoami" => {
             parse::<EmptyArgs>(arguments)?;
             serialize(operations.whoami(&ctx.caller).await)
+        }
+        "list_workspaces" => {
+            let args = parse::<PaginatedArgs>(arguments)?;
+            serialize(
+                operations
+                    .list_workspaces(
+                        &ctx.caller,
+                        ListWorkspacesInput {
+                            cursor: args.cursor,
+                            limit: args.limit.unwrap_or(
+                                crate::domains::agent_operations::model::DEFAULT_WORKSPACE_PAGE_SIZE,
+                            ),
+                        },
+                    )
+                    .await,
+            )
+        }
+        "list_workspace_options" => {
+            parse::<EmptyArgs>(arguments)?;
+            serialize(operations.list_workspace_options(&ctx.caller).await)
         }
         "list_agents" => {
             let args = parse::<ListAgentsArgs>(arguments)?;
@@ -65,6 +108,43 @@ pub async fn call_tool(
         "list_subagents" => {
             parse::<EmptyArgs>(arguments)?;
             serialize(operations.list_subagents(&ctx.caller).await)
+        }
+        "list_agent_launch_options" => {
+            let args = parse::<WorkspaceArgs>(arguments)?;
+            let workspace = WorkspaceIdentity {
+                runtime_id: operations.runtime_identity().clone(),
+                workspace_id: args.workspace_id,
+            };
+            serialize(
+                operations
+                    .list_agent_launch_options(&ctx.caller, &workspace)
+                    .await,
+            )
+        }
+        "list_agent_config_options" => {
+            let args = parse::<TargetArgs>(arguments)?;
+            let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
+            serialize(
+                operations
+                    .list_agent_config_options(&ctx.caller, &target)
+                    .await,
+            )
+        }
+        "create_workspace" => {
+            let args = parse::<CreateWorkspaceArgs>(arguments)?;
+            serialize(
+                operations
+                    .create_workspace(
+                        &ctx.caller,
+                        CreateWorkspaceInput {
+                            repository_id: args.repository_id,
+                            creation_mode: args.creation_mode,
+                            branch: args.branch,
+                            display_name: args.display_name,
+                        },
+                    )
+                    .await,
+            )
         }
         declared if super::tools::TOOL_NAMES.contains(&declared) => {
             Err(anyhow::Error::new(McpToolCallError::new(

@@ -403,4 +403,9 @@ impl SessionRuntime {
     pub fn forget_live_session_for_mobility_blocking(&self, session_id: &str) {
         self.acp_manager.remove_session_blocking(session_id);
     }
+
+    #[cfg(test)]
+    pub(crate) fn product_mcp_launch_ids(&self) -> Vec<&'static str> {
+        self.product_mcp_launch_catalog.registered_product_ids()
+    }
 }

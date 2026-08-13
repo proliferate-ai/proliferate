@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
+use crate::domains::agent_operations::mcp::{
+    auth::WorkspaceMcpAuth, tools as workspace_mcp_tools, WorkspaceProductMcpServer,
+};
+use crate::domains::agent_operations::runtime::AgentOperations;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::cowork::mcp::{
     self as cowork_mcp, auth::CoworkMcpAuth, tools as cowork_mcp_tools, CoworkProductMcpServer,
@@ -35,6 +39,8 @@ pub(super) struct LaunchCatalogDeps {
 }
 
 pub(super) struct EndpointRegistryDeps {
+    pub(super) agent_operations: Arc<AgentOperations>,
+    pub(super) workspace_mcp_auth: Arc<WorkspaceMcpAuth>,
     pub(super) review_runtime: Arc<ReviewRuntime>,
     pub(super) review_mcp_auth: Arc<ReviewMcpAuth>,
     pub(super) subagent_service: Arc<SubagentService>,
@@ -117,6 +123,8 @@ pub(super) fn build_product_mcp_endpoint_registry(
     deps: EndpointRegistryDeps,
 ) -> anyhow::Result<Arc<ProductMcpEndpointRegistry>> {
     let EndpointRegistryDeps {
+        agent_operations,
+        workspace_mcp_auth,
         review_runtime,
         review_mcp_auth,
         subagent_service,
@@ -129,6 +137,17 @@ pub(super) fn build_product_mcp_endpoint_registry(
     } = deps;
 
     let product_mcp_endpoint_registrations = vec![
+        ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
+            Arc::new(WorkspaceProductMcpServer::new(
+                agent_operations,
+                workspace_mcp_auth,
+            )),
+            // Workspace creation gates the source and repository through the
+            // workspaces owner; there is no caller-workspace operation lease
+            // whose lifetime correctly represents creation of a new target.
+            None,
+            workspace_mcp_tools::MUTATING_TOOL_NAMES,
+        ))),
         ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
             Arc::new(ReviewProductMcpServer::new(review_runtime, review_mcp_auth)),
             Some(WorkspaceOperationKind::ReviewWrite),
