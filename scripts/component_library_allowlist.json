@@ -1,0 +1,259 @@
+{
+  "deadLibraryComponents": {},
+  "handRolledOverlayRoles": {
+    "apps/packages/product-client/src/components/content/ui/FileDiffCard.tsx": {
+      "count": 1,
+      "justification": "Pre-existing: the diff card header is a whole-row expand affordance wrapping its own interactive children; a Button wrapper would nest interactive elements. Migration is the git-review conformance slice, not this gate."
+    },
+    "apps/packages/product-client/src/components/content/ui/diff/UnifiedDiffViewer.tsx": {
+      "count": 1,
+      "justification": "Pre-existing: collapsed-hunk expander built as a div so the expanded body can replace it in place. Recorded in DESIGN_SYSTEM.md Current Gaps as one of the shells predating the rule."
+    },
+    "apps/packages/product-client/src/components/playground/GitReviewV2Playground.tsx": {
+      "count": 1,
+      "justification": "Playground prototype surface: it exists to try shapes before they are sanctioned, so it is exempt from the call-site rule and carries the same exemption here."
+    },
+    "apps/packages/product-client/src/components/workspace/chat/input/ComposerInlineMenu.tsx": {
+      "count": 1,
+      "justification": "Recorded exemption already written at the site: no sanctioned overlay path owns a listbox anchored by normal document flow (PopoverButton/DropdownMenu/Tooltip are all popper-positioned and portalled)."
+    },
+    "apps/packages/product-client/src/components/workspace/chat/tool-calls/ToolActionRow.tsx": {
+      "count": 1,
+      "justification": "Pre-existing: the PRO-120 tool-call row must not paint Button's pressed rectangle; the quiet-row state trade is recorded on the row and its replacement waits on a suppressible interactive primitive."
+    },
+    "apps/packages/product-client/src/components/workspace/files/tree/FileTreeOverlay.tsx": {
+      "count": 1,
+      "justification": "Pre-existing: an inline, non-modal file browser panel. ModalShell is focus-trapping and portalled, which would break the overlay's click-through-to-editor behaviour; one of the deferred overlay shells named in Current Gaps."
+    },
+    "apps/packages/product-client/src/components/workspace/shell/tabs/DelegatedAgentHoverCard.tsx": {
+      "count": 1,
+      "justification": "Pre-existing: a hover card positioned from measured tab geometry, not from Tooltip's popper. Deferred overlay shell named in Current Gaps."
+    },
+    "apps/packages/product-client/src/primitives/patterns/CommandPalette.tsx": {
+      "count": 1,
+      "justification": "Library-owned: the command palette IS the sanctioned dialog shape for cmdk, built on the vendor primitive rather than on ModalShell by design."
+    },
+    "apps/packages/product-client/src/primitives/patterns/RosterRow.tsx": {
+      "count": 1,
+      "justification": "Library-owned recorded trade: the roster row renders a div with role=button so its trailing action buttons can nest without an invalid button-in-button."
+    },
+    "apps/packages/product-client/src/primitives/patterns/sidebar/SidebarRowSurface.tsx": {
+      "count": 1,
+      "justification": "Library-owned recorded trade: the sidebar row surface hosts nested action buttons, so the row itself carries role=button on a div rather than being a <button>."
+    }
+  },
+  "undocumentedLibraryComponents": {
+    "apps/packages/product-client/src/components/patterns/PrStatusBadge.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/components/patterns/secrets/SecretManagementPanel.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/AlertDialog.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Badge.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Button.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Checkbox.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Command.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Dialog.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/DropdownMenu.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/FixedPositionLayer.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/IconButton.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Input.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Label.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/PaneIconButton.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Popover.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/PopoverButton.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/PopoverMenuItem.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/ProgressBar.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/RadioCardGroup.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/RowActionIconButton.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/SegmentedControl.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Select.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/ShortcutBadge.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Skeleton.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Sonner.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Switch.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Textarea.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/Tooltip.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/checkbox-primitive.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/AutoHideScrollArea.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/CommandPalette.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/ConfirmationDialog.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/EmptyState.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/EnvironmentSearchSelect.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/ModalShell.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/PageContentFrame.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/PageHeader.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/PickerPopoverContent.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/ProductPageShell.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/RosterPanel.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/RosterRow.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/composer/ComposerActionButton.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/composer/ComposerControlButton.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/composer/ComposerTextarea.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/composer/ComposerTextareaFrame.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/composer/LevelBarsButton.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/panel/PaneOptionsMenuItem.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/panel/PanelHeaderEntry.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/sidebar/SidebarNavRow.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/sidebar/SidebarRowSurface.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/toast/ToastBody.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/patterns/toast/ToastExpansion.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    },
+    "apps/packages/product-client/src/primitives/tooltip-primitive.tsx": {
+      "count": 1,
+      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
+    }
+  }
+}

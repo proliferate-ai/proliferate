@@ -1,4 +1,4 @@
-import { Cloud, Laptop } from "lucide-react";
+import { CloudIcon, Laptop } from "#product/primitives/icons/platform";
 import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
 
@@ -16,7 +16,7 @@ export function AgentScopeHeaderControls() {
       ariaLabel="Agent authentication surface"
       value={surface}
       items={[
-        { id: "cloud", label: "Cloud", icon: <Cloud /> },
+        { id: "cloud", label: "Cloud", icon: <CloudIcon /> },
         { id: "local", label: "Local", icon: <Laptop /> },
       ]}
       onChange={setSurface}

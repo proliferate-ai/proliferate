@@ -1,7 +1,7 @@
 import { Button } from "#product/primitives/Button";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
-import { ComposerTextarea } from "#product/primitives/patterns/ComposerTextarea";
-import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
+import { ComposerTextarea } from "#product/primitives/patterns/composer/ComposerTextarea";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/composer/ComposerTextareaFrame";
 import {
   AgentHarnessModelSelector,
   type AgentHarnessModelGroup,

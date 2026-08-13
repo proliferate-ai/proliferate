@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, RotateCw, Trash2 } from "lucide-react";
+import { Plus, Trash } from "#product/primitives/icons/core";
+import { RotateCw } from "#product/primitives/icons/status";
 import {
   humanizeLoopCadence,
   loopNextFireAtMs,
@@ -9,10 +10,16 @@ import {
   type LoopScheduleKind,
   type LoopWire,
 } from "#product/domain/activity/loop";
+import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { IconButton } from "#product/primitives/IconButton";
 import { Input } from "#product/primitives/Input";
+import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
+import { SegmentedControl, type SegmentedControlItem } from "#product/primitives/SegmentedControl";
 import { Textarea } from "#product/primitives/Textarea";
+import { Card } from "#product/primitives/patterns/Card";
+import { RosterPanel } from "#product/primitives/patterns/RosterPanel";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 import type { LoopArmInput } from "#product/lib/domain/activity/loop-arm-input";
 
@@ -49,42 +56,27 @@ export function LoopsPanel({
   const sorted = sortLoopsForDisplay(loops);
 
   return (
-    <div className="flex flex-col gap-1.5" data-loops-panel>
-      <div className="flex items-center justify-between px-1 pt-0.5">
-        <span className="text-ui font-medium text-foreground">Loops</span>
-        {!composing && (
-          <IconButton
-            size="xs"
-            title="Arm a new loop"
-            aria-label="Arm a new loop"
-            disabled={!capabilities.supported || pendingWrite}
-            onClick={() => setComposing(true)}
-          >
-            <Plus className="icon-paired" />
-          </IconButton>
-        )}
-      </div>
-
-      {sorted.length === 0 && !composing && (
-        <p className="px-1 pb-1 text-ui-sm text-muted-foreground">No loops armed.</p>
+    <RosterPanel
+      title="Loops"
+      data-loops-panel
+      headerAction={!composing && (
+        <IconButton
+          size="xs"
+          title="Arm a new loop"
+          aria-label="Arm a new loop"
+          disabled={!capabilities.supported || pendingWrite}
+          onClick={() => setComposing(true)}
+        >
+          <Plus className="icon-paired" />
+        </IconButton>
       )}
-
-      {sorted.length > 0 && (
-        <ul className="flex flex-col gap-0.5">
-          {sorted.map((loop) => (
-            <LoopRow
-              key={loop.loopId}
-              loop={loop}
-              nowMs={nowMs}
-              onDelete={onDelete}
-              pendingWrite={pendingWrite}
-              onOpenFireHistory={onOpenFireHistory}
-            />
-          ))}
-        </ul>
-      )}
-
-      {composing && capabilities.supported && (
+      empty={
+        // The composer replaces the empty line while it is open: an
+        // armed-loop count of zero is not an empty roster when the caller is
+        // already mid-arm.
+        composing ? null : "No loops armed."
+      }
+      footer={composing && capabilities.supported && (
         <LoopComposer
           pendingWrite={pendingWrite}
           onCancel={() => setComposing(false)}
@@ -94,7 +86,18 @@ export function LoopsPanel({
           }}
         />
       )}
-    </div>
+    >
+      {sorted.map((loop) => (
+        <LoopRow
+          key={loop.loopId}
+          loop={loop}
+          nowMs={nowMs}
+          onDelete={onDelete}
+          pendingWrite={pendingWrite}
+          onOpenFireHistory={onOpenFireHistory}
+        />
+      ))}
+    </RosterPanel>
   );
 }
 
@@ -116,65 +119,61 @@ function LoopRow({
   const fireCountLabel = `${loop.fireCount} fire${loop.fireCount === 1 ? "" : "s"}`;
 
   return (
-    <li
-      className={twMerge(
-        "flex items-start gap-2 rounded-md px-1.5 py-1.5 text-ui hover:bg-hover active:bg-active",
-        cleared && "opacity-60",
-      )}
-    >
-      <RotateCw
-        className={twMerge("mt-0.5 icon-paired shrink-0", cleared ? "text-faint" : "text-muted-foreground")}
-        aria-hidden
-      />
-      <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-ui text-foreground" data-telemetry-mask>
-          {loop.prompt}
-        </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-ui-sm text-muted-foreground">
-          <span>{humanizeLoopCadence(loop.schedule)}</span>
-          <span aria-hidden>·</span>
-          <span>
-            {cleared
-              ? "cleared"
-              : nextFireAtMs
-                ? `next ${relativeFutureTimeLabel(nextFireAtMs, nowMs)}`
-                : "no schedule"}
-          </span>
-          <span aria-hidden>·</span>
-          {onOpenFireHistory && loop.fireCount > 0 ? (
-            <Button
-              variant="unstyled"
-              size="unstyled"
-              type="button"
-              className="underline decoration-dotted underline-offset-2 hover:text-foreground"
-              onClick={() => onOpenFireHistory(loop.loopId)}
-            >
-              {fireCountLabel}
-            </Button>
-          ) : (
-            <span>{fireCountLabel}</span>
-          )}
-          <span
-            className={twMerge(
-              "rounded px-1 py-0.5 text-ui font-medium uppercase tracking-wide",
-              loop.native ? "bg-muted text-muted-foreground" : "bg-warning-subtle text-warning-foreground",
+    <li>
+      <RosterRow
+        className={cleared ? "opacity-60" : undefined}
+        leading={(
+          <RotateCw
+            className={twMerge("icon-paired", cleared ? "text-faint" : "text-muted-foreground")}
+            aria-hidden
+          />
+        )}
+        title={<span data-telemetry-mask className="line-clamp-2">{loop.prompt}</span>}
+        secondary={(
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <span>{humanizeLoopCadence(loop.schedule)}</span>
+            <span aria-hidden>·</span>
+            <span>
+              {cleared
+                ? "cleared"
+                : nextFireAtMs
+                  ? `next ${relativeFutureTimeLabel(nextFireAtMs, nowMs)}`
+                  : "no schedule"}
+            </span>
+            <span aria-hidden>·</span>
+            {onOpenFireHistory && loop.fireCount > 0 ? (
+              <Button
+                variant="unstyled"
+                size="unstyled"
+                type="button"
+                className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                onClick={() => onOpenFireHistory(loop.loopId)}
+              >
+                {fireCountLabel}
+              </Button>
+            ) : (
+              <span>{fireCountLabel}</span>
             )}
-          >
-            {loop.native ? "native" : "emulated"}
+            <Badge
+              size="micro"
+              tone={loop.native ? "neutral" : "warning"}
+              className="uppercase tracking-wide"
+            >
+              {loop.native ? "native" : "emulated"}
+            </Badge>
           </span>
-        </div>
-      </div>
-      {!cleared && (
-        <IconButton
-          size="xs"
-          title="Delete loop"
-          aria-label={`Delete loop: ${loop.prompt}`}
-          disabled={pendingWrite}
-          onClick={() => onDelete(loop.loopId)}
-        >
-          <Trash2 className="icon-paired" />
-        </IconButton>
-      )}
+        )}
+        actions={!cleared ? (
+          <RowActionIconButton
+            label={`Delete loop: ${loop.prompt}`}
+            visibility="always"
+            disabled={pendingWrite}
+            onClick={() => onDelete(loop.loopId)}
+          >
+            <Trash className="icon-paired" />
+          </RowActionIconButton>
+        ) : null}
+      />
     </li>
   );
 }
@@ -183,6 +182,10 @@ const SCHEDULE_KIND_OPTIONS: { value: LoopScheduleKind; label: string; placehold
   { value: "interval", label: "Interval", placeholder: "5m" },
   { value: "cron", label: "Cron", placeholder: "*/5 * * * *" },
 ];
+
+const SEGMENTED_SCHEDULE_KIND_ITEMS: SegmentedControlItem<LoopScheduleKind>[] = SCHEDULE_KIND_OPTIONS.map(
+  (option) => ({ id: option.value, label: option.label }),
+);
 
 function LoopComposer({
   pendingWrite,
@@ -201,69 +204,63 @@ function LoopComposer({
   const canArm = prompt.trim().length > 0 && expr.trim().length > 0;
 
   return (
-    <form
-      className="flex flex-col gap-1.5 rounded-md border border-border p-1.5"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!canArm) {
-          return;
-        }
-        onArm({
-          prompt: prompt.trim(),
-          schedule: { kind, expr: expr.trim() },
-          recurring: true,
-        });
-      }}
+    <Card
+      as="section"
+      surface="opaque"
+      className="p-1.5"
     >
-      <Textarea
-        autoFocus
-        rows={2}
-        placeholder="What should this loop do on each fire?"
-        value={prompt}
-        aria-label="Loop prompt"
-        data-telemetry-mask
-        className="text-ui"
-        onChange={(event) => setPrompt(event.target.value)}
-      />
-      <div className="flex items-center gap-1.5">
-        <div className="flex shrink-0 rounded-md border border-input p-0.5">
-          {SCHEDULE_KIND_OPTIONS.map((option) => (
-            <Button
-              key={option.value}
-              variant="unstyled"
-              size="unstyled"
-              type="button"
-              className={twMerge(
-                "rounded px-1.5 py-0.5 text-ui",
-                option.value === kind
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              onClick={() => {
-                setKind(option.value);
-                setExpr(option.placeholder);
-              }}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-        <Input
-          value={expr}
-          aria-label="Loop cadence"
-          placeholder={activeOption.placeholder}
-          className="h-7 min-w-0 flex-1 text-ui"
-          onChange={(event) => setExpr(event.target.value)}
+      <form
+        className="flex flex-col gap-1.5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!canArm) {
+            return;
+          }
+          onArm({
+            prompt: prompt.trim(),
+            schedule: { kind, expr: expr.trim() },
+            recurring: true,
+          });
+        }}
+      >
+        <Textarea
+          autoFocus
+          rows={2}
+          placeholder="What should this loop do on each fire?"
+          value={prompt}
+          aria-label="Loop prompt"
+          data-telemetry-mask
+          className="text-ui"
+          onChange={(event) => setPrompt(event.target.value)}
         />
-      </div>
-      <div className="flex justify-end gap-1.5">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" size="sm" disabled={!canArm || pendingWrite}>
-          Arm loop
-        </Button>
-      </div>
-    </form>
+        <div className="flex items-center gap-1.5">
+          <SegmentedControl
+            items={SEGMENTED_SCHEDULE_KIND_ITEMS}
+            value={kind}
+            ariaLabel="Loop schedule kind"
+            onChange={(nextKind) => {
+              const option = SCHEDULE_KIND_OPTIONS.find((candidate) => candidate.value === nextKind)!;
+              setKind(nextKind);
+              setExpr(option.placeholder);
+            }}
+          />
+          <Input
+            value={expr}
+            aria-label="Loop cadence"
+            placeholder={activeOption.placeholder}
+            className="h-7 min-w-0 flex-1 text-ui"
+            onChange={(event) => setExpr(event.target.value)}
+          />
+        </div>
+        <div className="flex justify-end gap-1.5">
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={!canArm || pendingWrite}>
+            Arm loop
+          </Button>
+        </div>
+      </form>
+    </Card>
   );
 }

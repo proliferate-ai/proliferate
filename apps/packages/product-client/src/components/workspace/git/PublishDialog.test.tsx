@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import type { CurrentPullRequestResponse, GitChangedFile } from "@anyharness/sdk";
 import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
@@ -83,9 +83,13 @@ describe("PublishDialog", () => {
     expect(screen.queryByText("src/app.ts")).toBeNull();
     expect(screen.getByText("Stage changes or include unstaged changes before committing."))
       .toBeTruthy();
-    expect((screen.getByRole("option", {
+    // The command rows adopted RosterRow (conformance slice): they're no
+    // longer `role="option"` buttons with a native `disabled` attribute —
+    // RosterRow renders a `role="button"` div and expresses disabled state
+    // via `aria-disabled`.
+    expect(screen.getByRole("button", {
       name: /Commit, publish, create PR/,
-    }) as HTMLButtonElement).disabled).toBe(true);
+    }).getAttribute("aria-disabled")).toBe("true");
   });
 
   it("keeps an existing pull request viewable when Git updates are blocked", () => {
@@ -115,9 +119,9 @@ describe("PublishDialog", () => {
     );
 
     expect(screen.getByRole("dialog", { name: "Pull request" })).toBeTruthy();
-    expect((screen.getByRole("option", {
+    expect(screen.getByRole("button", {
       name: /View pull request/,
-    }) as HTMLButtonElement).disabled).toBe(false);
+    }).getAttribute("aria-disabled")).toBeNull();
     expect(screen.queryByText("Sync this branch before publishing.")).toBeNull();
   });
 
@@ -147,24 +151,27 @@ describe("PublishDialog", () => {
       />,
     );
 
-    expect((screen.getByRole("option", { name: /^Commit/ }) as HTMLButtonElement).disabled)
-      .toBe(true);
+    expect(screen.getByRole("button", { name: /^Commit/ }).getAttribute("aria-disabled"))
+      .toBe("true");
   });
 
   it("switches source control intent without closing the dialog", () => {
     render(<SwitchingDialogHarness />);
 
     expect(screen.getByRole("dialog", { name: "Commit changes" })).toBeTruthy();
-    // The current intent's row is the selected option (it carries the ⌘⏎
+    // The current intent's row is the active command row (it carries the ⌘⏎
     // hint and shows the workflow's primary label); clicking another row
-    // switches intent.
-    expect(screen.getAllByRole("option")[0]?.getAttribute("aria-selected")).toBe("true");
+    // switches intent. `aria-current` replaces `aria-selected` — the row
+    // isn't an ARIA listbox option (RosterRow conformance swap), it's a
+    // command in an unordered list of commands, so "current" is the
+    // accurate relationship, not "selected".
+    expect(commandRows()[0]?.getAttribute("aria-current")).toBe("true");
 
-    fireEvent.click(screen.getByRole("option", { name: "Publish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
     expect(screen.getByRole("dialog", { name: "Publish branch" })).toBeTruthy();
     expect(mocks.workflow?.clearError).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("option", { name: "Pull request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pull request" }));
     expect(screen.getByRole("dialog", { name: "Create pull request" })).toBeTruthy();
     expect(screen.getByPlaceholderText("Pull request title")).toBeTruthy();
     expect(mocks.workflow?.clearError).toHaveBeenCalledTimes(2);
@@ -212,11 +219,25 @@ describe("PublishDialog", () => {
       />,
     );
 
-    for (const option of screen.getAllByRole("option")) {
-      expect((option as HTMLButtonElement).disabled).toBe(true);
+    const rows = commandRows();
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row.getAttribute("aria-disabled")).toBe("true");
     }
   });
 });
+
+/**
+ * The command rows only — scoped through the `role="group"` container that
+ * carries the list's accessible name. `screen.getAllByRole("button")` would
+ * also sweep up every other button the dialog renders, which is how the
+ * pre-scoping version of these assertions could pass without actually
+ * examining the rows.
+ */
+function commandRows(): HTMLElement[] {
+  return within(screen.getByRole("group", { name: "Source control action" }))
+    .getAllByRole("button");
+}
 
 function SwitchingDialogHarness() {
   const [intent, setIntent] = useState<PublishIntent>("commit");

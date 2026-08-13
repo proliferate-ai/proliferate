@@ -11,7 +11,7 @@ import {
 import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { twMerge } from "#product/primitives/utils/tw-merge";
-import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
+import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 
 afterEach(cleanup);
 

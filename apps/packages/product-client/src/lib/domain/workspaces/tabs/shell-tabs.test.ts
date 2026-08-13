@@ -119,6 +119,55 @@ describe("workspace shell tab ordering", () => {
     })).toEqual(tabs[0]);
   });
 
+  it("does not reactivate the only active shell tab", () => {
+    const chatTab: WorkspaceShellTab = { kind: "chat", sessionId: "only" };
+    const viewerTab: WorkspaceShellTab = {
+      kind: "viewer",
+      target: fileViewerTarget("src/only.ts"),
+    };
+
+    for (const tab of [chatTab, viewerTab]) {
+      expect(resolveRelativeWorkspaceShellTab({
+        tabs: [tab],
+        activeTab: tab,
+        delta: -1,
+      })).toBeNull();
+      expect(resolveRelativeWorkspaceShellTab({
+        tabs: [tab],
+        activeTab: tab,
+        delta: 1,
+      })).toBeNull();
+    }
+  });
+
+  it("enters the only shell tab when there is no valid active anchor", () => {
+    const onlyTab: WorkspaceShellTab = { kind: "chat", sessionId: "only" };
+
+    expect(resolveRelativeWorkspaceShellTab({
+      tabs: [onlyTab],
+      activeTab: null,
+      delta: 1,
+    })).toEqual(onlyTab);
+    expect(resolveRelativeWorkspaceShellTab({
+      tabs: [onlyTab],
+      activeTab: { kind: "chat", sessionId: "stale" },
+      delta: -1,
+    })).toEqual(onlyTab);
+  });
+
+  it("cycles both directions through multiple mixed shell tabs", () => {
+    expect(resolveRelativeWorkspaceShellTab({
+      tabs,
+      activeTab: tabs[0],
+      delta: 1,
+    })).toEqual(tabs[1]);
+    expect(resolveRelativeWorkspaceShellTab({
+      tabs,
+      activeTab: tabs[0],
+      delta: -1,
+    })).toEqual(tabs[2]);
+  });
+
   it("resolves numeric shortcuts against chat tabs only", () => {
     const mixedTabs: WorkspaceShellTab[] = [
       { kind: "viewer", target: fileViewerTarget("src/a.ts") },

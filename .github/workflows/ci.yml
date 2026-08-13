@@ -67,6 +67,11 @@ jobs:
       - name: Check frontend structure drift
         run: python3 scripts/report_frontend_structure.py --strict --summary-only
 
+      - name: Check component library conformance
+        run: |
+          python3 -m unittest scripts/test_check_component_library.py
+          python3 scripts/check_component_library.py
+
       - name: Test server boundary checker
         run: >-
           uv run --python 3.12 --with pytest==9.1.1

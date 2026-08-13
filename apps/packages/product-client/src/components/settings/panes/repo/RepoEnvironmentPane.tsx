@@ -1,7 +1,8 @@
-import { KeyRound } from "lucide-react";
+import { KeyRound } from "#product/primitives/icons/core";
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { Button } from "#product/primitives/Button";
 import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
@@ -42,8 +43,9 @@ export function RepoEnvironmentPane({
     );
   }
   return (
-    <section className="space-y-5">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Environment"
         description="Variables and files synced to this repo's cloud workspaces."
       />
@@ -58,7 +60,7 @@ export function RepoEnvironmentPane({
       ) : (
         <EnvironmentLocal onSelectRepoContext={onSelectRepoContext} />
       )}
-    </section>
+    </SettingsPageBody>
   );
 }
 

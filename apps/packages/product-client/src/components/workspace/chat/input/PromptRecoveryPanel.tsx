@@ -34,6 +34,16 @@ export function PromptRecoveryPanel({
             recovery.prompt.text,
           ) || "Message with attachments";
           return (
+            // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review,
+            // check 7): `RosterRow` is the shape this maps to, but it ties its
+            // hover wash to `onSelect` — a row given none paints no states at
+            // all — and this row is not pressable while still wanting the
+            // wash. Its secondary line is also fixed at `text-muted-foreground`
+            // with no tone axis, and this row's second line *is* the error
+            // (`text-destructive/80`). The single `hover:bg-hover` here is a
+            // shared state token, not a hand-assembled three-state stack.
+            // Landing this needs a non-interactive hover and a secondary-line
+            // tone on `RosterRow`, which is a review ruling.
             <div
               key={recovery.id}
               className="group/recovery flex min-h-8 items-center gap-2 rounded-lg px-2 py-1 hover:bg-hover"

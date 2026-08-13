@@ -32,8 +32,8 @@ judgment → the owner README).
 
 ## Naming
 
-- Name things for the job, not the feature that first needed them (`ListRow`,
-  never `WorkspaceListRow`).
+- Name things for the job, not the feature that first needed them (`RosterRow`,
+  never `WorkspaceRosterRow`).
 
 ## Design
 

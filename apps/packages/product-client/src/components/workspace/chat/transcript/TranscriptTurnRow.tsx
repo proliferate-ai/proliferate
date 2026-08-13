@@ -322,6 +322,11 @@ export function TranscriptTurnRow({
           showCopyButton={assistantFooterMode === "copy"}
           reserveSlot={assistantFooterMode === "reserved"}
           timestampLabel={tailAssistantActionTime}
+          // The permanent copy button is the "session is done" marker
+          // (PRO-119): only the transcript's final completed message carries
+          // it, and it yields back to hover-only the moment a newer turn
+          // takes the frontier.
+          alwaysVisible={isFinalCompletedTurn && isLatestTurn}
           metMarker={metMarker}
         />
       </div>

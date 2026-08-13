@@ -53,7 +53,7 @@ vi.mock("#product/components/app/sidebar/SidebarAccountFooter", () => ({
   SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
 
-vi.mock("#product/primitives/patterns/SidebarRowSurface", () => ({
+vi.mock("#product/primitives/patterns/sidebar/SidebarRowSurface", () => ({
   SidebarRowSurface: ({
     active,
     children,
@@ -69,7 +69,7 @@ vi.mock("#product/primitives/patterns/SidebarRowSurface", () => ({
   ),
 }));
 
-vi.mock("#product/primitives/patterns/SidebarActionButton", () => ({
+vi.mock("#product/primitives/patterns/sidebar/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     onClick,

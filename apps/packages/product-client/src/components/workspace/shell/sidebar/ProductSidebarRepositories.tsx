@@ -2,10 +2,10 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { ChevronRight } from "#product/primitives/icons/core";
 import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
-import { SidebarRowSurface } from "#product/primitives/patterns/SidebarRowSurface";
+import { SidebarRowSurface } from "#product/primitives/patterns/sidebar/SidebarRowSurface";
 import { Tooltip } from "#product/primitives/Tooltip";
 
-import { PrStatusIconOverlay } from "#product/components/patterns/PrStatusBadge";
+import { PrStatusDot } from "#product/components/patterns/PrStatusBadge";
 import type { PrStatusView } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 
 export interface ProductSidebarRepoGroupHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick"> {
@@ -175,11 +175,19 @@ export function ProductSidebarWorkspaceRow({
       ) : null}
       <div className="flex h-full w-full items-center">
         <div className="flex w-4 shrink-0 items-center justify-center">
-          {status ?? (
-            <PrStatusIconOverlay status={prStatus}>
+          {status ?? (prStatus ? (
+            // The dot sits fully off the 14px glyph's strokes as a bare
+            // opaque dot — no ring halo, which reads wrong on hovered/active
+            // alpha-overlay rows.
+            <span className="relative inline-flex items-center justify-center">
               {leadingGlyph}
-            </PrStatusIconOverlay>
-          )}
+              <PrStatusDot
+                status={prStatus}
+                withNativeTitle={false}
+                className="absolute -bottom-px -right-px"
+              />
+            </span>
+          ) : leadingGlyph)}
         </div>
 
         {attentionStatus ? (

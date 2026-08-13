@@ -2,7 +2,11 @@ import {
   workflowHistoryItemPresentation,
   type WorkflowRunHistoryItem,
 } from "#product/domain/workflows/run-presentation";
+import { workflowRunStatusDotTone } from "#product/components/workflows/workflow-run-status-dot";
 import { Button } from "#product/primitives/Button";
+import { StatusDot } from "#product/primitives/StatusDot";
+import { Card } from "#product/primitives/patterns/Card";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 
 export interface WorkflowRunListProps {
   runs: readonly WorkflowRunHistoryItem[];
@@ -26,7 +30,7 @@ export function WorkflowRunList({
   onRetry,
 }: WorkflowRunListProps) {
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
+    <Card as="section" surface="opaque" className="p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-heading font-medium text-foreground">Recent runs</h2>
@@ -41,26 +45,23 @@ export function WorkflowRunList({
       ) : runs.length === 0 ? (
         <p className="py-4 text-ui-sm text-muted-foreground">No managed runs yet.</p>
       ) : (
-        <div className="mt-3 overflow-hidden rounded-md border border-border">
-          {runs.map((run, index) => {
+        <div className="mt-3 flex flex-col gap-0.5">
+          {runs.map((run) => {
             const status = workflowHistoryItemPresentation(run);
             return (
-              <Button
+              <RosterRow
                 key={run.id}
-                type="button"
-                variant="unstyled"
-                size="unstyled"
-                className={`flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-hover ${index > 0 ? "border-t border-border" : ""}`}
-                onClick={() => onSelect(run.id)}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-body text-foreground">Revision {run.definitionRevision}</span>
-                  <span className="mt-0.5 block text-ui-sm text-muted-foreground">
-                    {run.placementKind === "scratch" ? "Scratch workspace" : "Repository worktree"} · {formatDateTime(run.createdAt)}
+                density="comfortable"
+                title={`Revision ${run.definitionRevision}`}
+                secondary={`${run.placementKind === "scratch" ? "Scratch workspace" : "Repository worktree"} · ${formatDateTime(run.createdAt)}`}
+                trailing={(
+                  <span className="flex items-center gap-1.5">
+                    <StatusDot tone={workflowRunStatusDotTone(status.tone)} />
+                    {status.label}
                   </span>
-                </span>
-                <span className={`shrink-0 text-ui-sm ${toneClass(status.tone)}`}>{status.label}</span>
-              </Button>
+                )}
+                onSelect={() => onSelect(run.id)}
+              />
             );
           })}
         </div>
@@ -70,15 +71,8 @@ export function WorkflowRunList({
           Load more
         </Button>
       ) : null}
-    </section>
+    </Card>
   );
-}
-
-function toneClass(tone: string): string {
-  if (tone === "danger") return "text-destructive";
-  if (tone === "warning") return "text-warning-foreground";
-  if (tone === "success") return "text-success";
-  return "text-muted-foreground";
 }
 
 function formatDateTime(value: string): string {

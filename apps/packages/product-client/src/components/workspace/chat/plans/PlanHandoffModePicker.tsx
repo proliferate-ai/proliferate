@@ -3,7 +3,7 @@ import { Button } from "#product/primitives/Button";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { Check, ChevronDown } from "#product/primitives/icons/core";
 import { SessionControlIcon } from "#product/components/workspace/chat/session-controls/SessionControlIcon";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 
 export interface PlanHandoffModePickerProps {

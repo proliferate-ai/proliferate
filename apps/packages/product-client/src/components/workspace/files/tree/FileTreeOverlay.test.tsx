@@ -178,8 +178,13 @@ describe("FileTreeOverlay", () => {
     fireEvent.change(screen.getByPlaceholderText("Filter files…"), {
       target: { value: "read" },
     });
-    expect(screen.getByRole("button", { name: "Clear file filter" })).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Clear file filter" }));
+    expect((screen.getByPlaceholderText("Filter files…") as HTMLInputElement).value).toBe("read");
+    // The field adopted `PopoverSearchField` (conformance slice), which has
+    // no trailing clear button — clearing is a plain input change, same as
+    // typing any other value, not a dedicated click target.
+    fireEvent.change(screen.getByPlaceholderText("Filter files…"), {
+      target: { value: "" },
+    });
     expect((screen.getByPlaceholderText("Filter files…") as HTMLInputElement).value).toBe("");
 
     fireEvent.keyDown(screen.getByRole("separator", { name: "Resize file browser" }), {

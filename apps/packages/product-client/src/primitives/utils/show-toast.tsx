@@ -2,7 +2,7 @@ import { toast } from "#product/primitives/Sonner";
 import {
   AnnouncementToastBody,
   StatusToastBody,
-} from "#product/primitives/patterns/ToastBody";
+} from "#product/primitives/patterns/toast/ToastBody";
 import { collapseToastExpansion } from "./toast-expansion-store";
 import { readToastPayload } from "./toast-payload";
 import {

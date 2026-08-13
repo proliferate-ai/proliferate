@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search } from "#product/primitives/icons/core";
 import { Input } from "#product/primitives/Input";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { OrganizationMembersList } from "#product/components/settings/panes/organization/OrganizationMembersList";
 import { OrganizationSelectMenu } from "#product/components/settings/panes/organization/OrganizationSelectMenu";
 import { buildMemberRows } from "#product/lib/domain/organizations/member-list-rows";
@@ -74,6 +74,9 @@ export function OrganizationMembersSection({
             className="pl-9"
           />
         </div>
+        {/* 22rem fits two OrganizationSelectMenu triggers side by side without
+            either truncating its longest option label ("All statuses"); no
+            semantic width token in the scale lands there. */}
         <div className="grid grid-cols-2 gap-2 lg:w-[22rem]">
           <OrganizationSelectMenu
             value={roleFilter}

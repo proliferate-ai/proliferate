@@ -4,6 +4,7 @@ import {
   type ActivityProcessWire,
 } from "#product/domain/activity/process";
 import { TerminalRosterRow } from "#product/components/workspace/activity/TerminalRosterRow";
+import { RosterPanel } from "#product/primitives/patterns/RosterPanel";
 import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useFeedStream } from "#product/hooks/activity/derived/use-feed-stream";
@@ -33,28 +34,19 @@ export function LiveTerminalsRosterPanel({ processes, nowMs }: LiveTerminalsRost
 
   const sorted = sortProcessesForDisplay(processes);
   return (
-    <div className="flex flex-col gap-1.5" data-terminals-roster-panel>
-      <div className="px-1 pt-0.5">
-        <span className="text-ui font-medium text-foreground">Terminals</span>
-      </div>
-      {sorted.length === 0 ? (
-        <p className="px-1 pb-1 text-ui-sm text-muted-foreground">No background terminals.</p>
-      ) : (
-        <ul className="flex flex-col gap-0.5">
-          {sorted.map((process) => (
-            <li key={process.id}>
-              <LiveTerminalRow
-                process={process}
-                nowMs={nowMs}
-                workspaceId={workspaceId}
-                expanded={expandedId === process.id}
-                onToggle={toggle}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <RosterPanel title="Terminals" empty="No background terminals." data-terminals-roster-panel>
+      {sorted.map((process) => (
+        <li key={process.id}>
+          <LiveTerminalRow
+            process={process}
+            nowMs={nowMs}
+            workspaceId={workspaceId}
+            expanded={expandedId === process.id}
+            onToggle={toggle}
+          />
+        </li>
+      ))}
+    </RosterPanel>
   );
 }
 

@@ -3,6 +3,7 @@ import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { isValidEnvVarName } from "#product/lib/domain/settings/harness-auth-sources";
 
 export interface ApiKeyCreatorSubmit {
@@ -201,11 +202,7 @@ export function ApiKeyCreatorModal({
           </p>
         </div>
 
-        {error ? (
-          <div className="rounded-md border border-destructive/25 bg-destructive-subtle px-3 py-2 text-ui text-destructive">
-            {error}
-          </div>
-        ) : null}
+        {error ? <NoticeBanner tone="destructive">{error}</NoticeBanner> : null}
       </form>
     </ModalShell>
   );

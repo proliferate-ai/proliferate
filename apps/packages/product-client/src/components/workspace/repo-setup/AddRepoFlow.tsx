@@ -3,7 +3,10 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import { ArrowLeft, Cloud, FolderOpen, GitBranch } from "lucide-react";
+import { ArrowLeft } from "#product/primitives/icons/core";
+import { CloudIcon } from "#product/primitives/icons/platform";
+import { FolderOpen } from "#product/primitives/icons/workspace";
+import { GitBranch } from "#product/primitives/icons/workspace-git";
 
 import {
   Dialog,
@@ -75,7 +78,7 @@ const ENTRY_OPTION_DEFS: Record<AddRepoFlowOption, EntryOption> = {
   },
   cloud: {
     option: "cloud",
-    icon: <Cloud aria-hidden className="icon-paired" />,
+    icon: <CloudIcon aria-hidden className="icon-paired" />,
     label: "Set up in Cloud",
     description: "Pick a GitHub repository to run in Proliferate Cloud.",
   },

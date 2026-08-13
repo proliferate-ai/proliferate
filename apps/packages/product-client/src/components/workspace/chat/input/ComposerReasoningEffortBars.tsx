@@ -6,10 +6,11 @@ import {
   type ReasoningEffortTierTone,
 } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
 import { resolveSessionControlTooltip } from "#product/lib/domain/chat/session-controls/session-toggle-control";
+import { COMPOSER_COMPACT_HIDDEN_CLASSNAME } from "#product/config/chat-layout";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { AnimatedSwapText } from "#product/primitives/AnimatedSwapText";
-import { LevelBarsButton } from "#product/primitives/patterns/LevelBarsButton";
+import { LevelBarsButton } from "#product/primitives/patterns/composer/LevelBarsButton";
 
 const TIER_TONE_CLASSES: Readonly<Record<ReasoningEffortTierTone, string>> = {
   muted: "text-composer-control-muted-foreground",
@@ -71,6 +72,8 @@ export function ComposerReasoningEffortBars({
         currentIndex={effectiveIndex}
         onStep={(nextValue: string) => control.onSelect(nextValue)}
         label={labelNode}
+        // Compact tier: the level word yields, the bars keep reading the level.
+        labelWrapperClassName={COMPOSER_COMPACT_HIDDEN_CLASSNAME}
         emphasis="none"
         className={`gap-0.5 ${toneClass} ${chipClass}`}
         disabled={!control.settable}

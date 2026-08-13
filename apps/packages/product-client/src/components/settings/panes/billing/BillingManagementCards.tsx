@@ -1,5 +1,5 @@
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { ExternalLink } from "#product/primitives/icons/core";
 import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
