@@ -1,5 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "#product/primitives/Button";
+import {
+  COMPOSER_COMPACT_HIDDEN_CLASSNAME,
+  COMPOSER_COMPACT_SHRINK_NONE_CLASSNAME,
+} from "#product/config/chat-layout";
 import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { ArrowUpRight, Settings } from "#product/primitives/icons/core";
@@ -53,6 +57,11 @@ export function ComposerIntegrationsControl() {
         <ComposerControlButton
           iconOnly={connectedCount === 0 && !isUrgent}
           label={triggerLabel}
+          // Compact tier: the connected count yields to the glyph alone. The
+          // urgent re-auth label stays visible (and shrinkable) at every
+          // width — a warning reduced to a dot is no warning.
+          labelWrapperClassName={isUrgent ? "" : COMPOSER_COMPACT_HIDDEN_CLASSNAME}
+          className={isUrgent ? "" : COMPOSER_COMPACT_SHRINK_NONE_CLASSNAME}
           aria-label={triggerAriaLabel}
           icon={
             isUrgent ? (
