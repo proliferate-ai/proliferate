@@ -444,6 +444,16 @@ jobs:
             fi
             codesign --verify --verbose "$bin_dir/$binary"
           done
+          # The internal OTLP export path is compiled out of customer builds.
+          # Its destination variable name is a string literal that only exists
+          # inside that path, so finding it here means a customer release was
+          # built with internal-dogfood-export enabled.
+          for binary in anyharness proliferate proliferate-worker proliferate-debug proliferate-diagnostics-collector; do
+            if grep -a -q "PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT" "$bin_dir/$binary"; then
+              echo "::error::Packaged $binary carries the internal OTLP export path"
+              exit 1
+            fi
+          done
 
       - name: Upload native Sentry debug files
         if: steps.filter.outputs.skip != 'true'
