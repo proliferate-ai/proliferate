@@ -72,7 +72,14 @@ function componentsSection(entries) {
     if (!byGroup.has(entry.group)) byGroup.set(entry.group, []);
     byGroup.get(entry.group).push(entry.displayName);
   }
-  const groupOrder = ["primitives", "patterns", "icons", "product-patterns", "composer", "toast", "sidebar", "settings"];
+  const groupOrder = [
+    "primitives", "patterns", "icons", "product-patterns",
+    "composer", "toast", "sidebar", "settings", "tabs", "panel",
+  ];
+  const unknown = [...byGroup.keys()].filter((g) => !groupOrder.includes(g));
+  if (unknown.length > 0) {
+    throw new Error(`make-meta: README component section has no slot for group(s): ${unknown.join(", ")}`);
+  }
   const lines = [];
   for (const group of groupOrder) {
     const names = byGroup.get(group);

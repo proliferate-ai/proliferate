@@ -27,7 +27,7 @@ const SPEC_PATH = path.join(REPO_ROOT, "specs/DESIGN_SYSTEM.md");
 
 const ALLOWED_GROUPS = new Set([
   "primitives", "patterns", "icons", "product-patterns",
-  "composer", "toast", "sidebar", "settings",
+  "composer", "toast", "sidebar", "settings", "tabs", "panel",
 ]);
 
 async function loadVite() {
@@ -39,18 +39,30 @@ async function loadVite() {
   return import(pathToFileURL(viteEntry).href);
 }
 
-/** Extracts {name -> purpose} from every table row in "### The sanctioned
+/** Extracts {name -> purpose} from every table row in the "### The sanctioned
  * index" section of DESIGN_SYSTEM.md whose first cell is a backtick-quoted
  * component name, e.g. "| `SecretManagementPanel` | [..](..) | Purpose. |".
- * Scoped to that section only — other tables in the doc (the type ramp,
+ * The section is now split into four `#### ` sub-tables (primitives, patterns,
+ * icons, domain-aware patterns) with prose between them; every one of those
+ * rows counts, and a row's name is either the bare component name
+ * (`ChromeTab`) or the tier-relative one the registry also uses
+ * (`secrets/SecretManagementPanel`).
+ *
+ * Scoped to the section only — other tables in the doc (the type ramp,
  * color-role tables) also start rows with a backtick-quoted token and would
- * otherwise collide. */
+ * otherwise collide. Purpose is everything from the third cell on, so a
+ * purpose containing a `|` inside a link or code span survives. */
 function parseSanctionedIndex(specText) {
   const startMarker = "### The sanctioned index";
   const endMarker = "### How to add a component";
   const start = specText.indexOf(startMarker);
   const end = specText.indexOf(endMarker);
-  const section = start >= 0 && end > start ? specText.slice(start, end) : specText;
+  if (start < 0 || end <= start) {
+    throw new Error(
+      `emit-cards: could not locate "${startMarker}" .. "${endMarker}" in ${SPEC_PATH} — the sanctioned index moved or was renamed`,
+    );
+  }
+  const section = specText.slice(start, end);
   const purposeByName = new Map();
   for (const line of section.split("\n")) {
     if (!line.startsWith("|")) continue;
@@ -58,9 +70,12 @@ function parseSanctionedIndex(specText) {
     if (cells.length < 3) continue;
     const nameMatch = /^`([^`]+)`$/.exec(cells[0]);
     if (!nameMatch) continue;
-    const purpose = cells[2];
+    const purpose = cells.slice(2).join(" | ").trim();
     if (!purpose || /^-{2,}$/.test(purpose)) continue;
     purposeByName.set(nameMatch[1], purpose);
+  }
+  if (purposeByName.size === 0) {
+    throw new Error(`emit-cards: sanctioned index parsed to zero rows — the table format changed in ${SPEC_PATH}`);
   }
   return purposeByName;
 }
@@ -218,10 +233,18 @@ async function main() {
   const entries = await loadRegistryManifest();
   const vite = await loadVite();
   const cardTemplate = await readFile(path.join(TEMPLATES_DIR, "card.html.tmpl"), "utf8");
-  const specText = existsSync(SPEC_PATH) ? await readFile(SPEC_PATH, "utf8") : "";
+  if (!existsSync(SPEC_PATH)) {
+    throw new Error(`emit-cards: ${SPEC_PATH} is missing — the sanctioned index is the purpose authority`);
+  }
+  const specText = await readFile(SPEC_PATH, "utf8");
   const purposeByName = parseSanctionedIndex(specText);
 
+  // Emit into a clean tree: entries get retired and kits move between groups
+  // (PaneOptionsMenuItem: patterns -> panel), and a stale card directory from
+  // a previous build would otherwise ship as a real component.
   const previewDir = path.join(OUT_DIR, "_preview");
+  await rm(previewDir, { recursive: true, force: true });
+  await rm(path.join(OUT_DIR, "components"), { recursive: true, force: true });
   mkdirSync(previewDir, { recursive: true });
 
   let dtsByEntrySrc;
@@ -233,7 +256,8 @@ async function main() {
   }
 
   const seenDirs = new Set();
-  let fallbackPurposeCount = 0;
+  const fallbackPurposeNames = [];
+  const missingPurposeNames = [];
   let dtsCount = 0;
 
   for (const entry of entries) {
@@ -290,15 +314,29 @@ async function main() {
       dtsCount += 1;
     }
 
-    // 2d. <Name>.prompt.md
-    let purpose = purposeByName.get(name);
+    // 2d. <Name>.prompt.md — purpose comes from the sanctioned index (keyed by
+    // the registry name, or its display name for tier-relative names), and
+    // only falls back to the source's own header JSDoc where the spec has no
+    // row at all. No placeholder: a purpose-less card is a build failure.
+    let purpose = purposeByName.get(name) ?? purposeByName.get(displayName);
     if (!purpose) {
       purpose = leadingJsDocSentence(rawSource);
-      if (purpose) fallbackPurposeCount += 1;
+      if (purpose) fallbackPurposeNames.push(name);
     }
-    if (!purpose) purpose = `Library component ${displayName}.`;
+    if (!purpose) {
+      missingPurposeNames.push(name);
+      continue;
+    }
     const promptMd = buildPromptMd({ displayName, purpose, subpath });
     await writeFile(path.join(dir, `${displayName}.prompt.md`), promptMd, "utf8");
+  }
+
+  if (missingPurposeNames.length > 0) {
+    throw new Error(
+      `emit-cards: ${missingPurposeNames.length} entr${missingPurposeNames.length === 1 ? "y has" : "ies have"} no purpose — ` +
+        `add a row to specs/DESIGN_SYSTEM.md's sanctioned index (or a header JSDoc on the source file) for:\n` +
+        missingPurposeNames.map((n) => `  - ${n}`).join("\n"),
+    );
   }
 
   // Scratch tsc output/tsconfig are not part of the shipped payload — only
@@ -307,7 +345,10 @@ async function main() {
   await rm(path.join(OUT_DIR, ".ds-dts.tsconfig.json"), { force: true });
 
   console.log(`emit-cards: wrote ${entries.length} previews + component dirs -> ${OUT_DIR}`);
-  console.log(`emit-cards: ${entries.length - fallbackPurposeCount} purposes from sanctioned index, ${fallbackPurposeCount} from JSDoc fallback`);
+  console.log(
+    `emit-cards: ${entries.length - fallbackPurposeNames.length} purposes from sanctioned index, ` +
+      `${fallbackPurposeNames.length} from JSDoc fallback${fallbackPurposeNames.length ? ` (${fallbackPurposeNames.join(", ")})` : ""}`,
+  );
   console.log(`emit-cards: ${dtsCount}/${entries.length} entries got a .d.ts`);
 }
 

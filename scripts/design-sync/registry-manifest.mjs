@@ -1,19 +1,25 @@
 #!/usr/bin/env node
 /**
- * Parses the LIVE library registry (apps/packages/product-client/src/components/
- * playground/library/{primitives,patterns,icons,product-patterns}.tsx) into a
- * flat entry list, statically — no TS/vite compilation, just source text.
+ * The pipeline's single view of the LIVE library registry.
  *
- * Every fact here (subpaths, groups, modes) is derived from the registry files
- * or from CONTRACT.md's rules at parse/compute time — nothing is hardcoded
- * per-component, so this survives the in-flight kit-move PRs (composer/toast/
- * sidebar/settings relocating into primitives/patterns/<kit>/ subdirs): only
- * the registry files' `subpath` strings change, and those are read fresh.
+ * The registry is NOT parsed. `dump-registry.mjs` compiles-and-executes
+ * `LIBRARY_TIERS` (entries are spread in from `library/entries/*.tsx` and the
+ * kit demo files, so no regex over the tier files can see the whole set) and
+ * writes `.out/.ds-registry-manifest.json`; this module loads that dump and
+ * decorates each entry with the facts the payload needs (display name, group,
+ * card mode, resolved source file).
+ *
+ * Every fact here is derived from the dump or from CONTRACT.md's rules at
+ * compute time — nothing is hardcoded per-component, so kit moves and new
+ * entries flow through without editing this file (only EXPECTED_TOTAL, the
+ * deliberate drift tripwire, is pinned).
  */
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { dumpRegistry, REGISTRY_JSON_PATH } from "./dump-registry.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(HERE, "..", "..");
@@ -22,33 +28,37 @@ const LIBRARY_DIR = path.join(
   "apps/packages/product-client/src/components/playground/library",
 );
 
-// tierId -> [registry file, expected entry count]. Counts are a hard gate:
-// a registry edit that adds/removes an entry without updating this file (or
-// this file going stale vs. the registry) fails loudly instead of silently
-// shipping a partial payload.
-const TIER_FILES = [
-  { tierId: "primitives", file: "primitives.tsx", expectedCount: 36 },
-  { tierId: "patterns", file: "patterns.tsx", expectedCount: 24 },
-  { tierId: "icons", file: "icons.tsx", expectedCount: 10 },
-  { tierId: "product-patterns", file: "product-patterns.tsx", expectedCount: 11 },
-];
-const EXPECTED_TOTAL = 36 + 24 + 10 + 11;
+// Total entry count across every tier. This is the drift tripwire the old
+// per-tier expectedCounts used to be: a registry edit that adds or retires an
+// entry fails here until someone bumps this number ON PURPOSE (and re-syncs
+// the payload, which is what the number is really gating).
+const EXPECTED_TOTAL = 87;
 
-/** tierId -> absolute path of the registry file that defines that tier's
- * demos (used by make-meta.mjs to hash "the registry tier file containing
- * the entry's demo"). */
+// tierId -> the file that composes that tier. Entry demos themselves may live
+// in `entries/*.tsx` or a kit file; this is the tier's composition point, used
+// by make-meta.mjs for the per-entry render hash.
+const TIER_FILES = {
+  primitives: "primitives.tsx",
+  patterns: "patterns.tsx",
+  icons: "icons.tsx",
+  "product-patterns": "product-patterns.tsx",
+};
+
+/** The closed kit set (specs/DESIGN_SYSTEM.md § The library model). A pattern
+ * subdirectory outside this set is a doctrine violation, not a new group. */
+const KITS = new Set(["composer", "toast", "sidebar", "tabs", "panel", "settings"]);
+
+const ALLOWED_GROUPS = new Set([
+  "primitives", "patterns", "icons", "product-patterns", ...KITS,
+]);
+
+/** tierId -> absolute path of the tier file that composes that tier's entries
+ * (used by make-meta.mjs to hash "the registry file the entry hangs off"). */
 export function tierFilePath(tierId) {
-  const hit = TIER_FILES.find((t) => t.tierId === tierId);
-  if (!hit) throw new Error(`registry-manifest: unknown tierId "${tierId}"`);
-  return path.join(LIBRARY_DIR, hit.file);
+  const file = TIER_FILES[tierId];
+  if (!file) throw new Error(`registry-manifest: unknown tierId "${tierId}"`);
+  return path.join(LIBRARY_DIR, file);
 }
-
-// Matches `name: "...", subpath: "...",` pairs where the two keys sit
-// adjacent in source (true of every real LibraryEntry literal today). This
-// is exactly what excludes the one known false positive: SecretManagement-
-// PanelDemo's envVars fixture has `name: "API_KEY"` immediately followed by
-// `byteSize:`, never by `subpath:`, so it never matches.
-const ENTRY_RE = /name:\s*"((?:[^"\\]|\\.)*)"\s*,\s*subpath:\s*"((?:[^"\\]|\\.)*)"/g;
 
 // Card-mode overrides, verbatim from CONTRACT.md's "Card modes" table,
 // matched against on the sanitized display name (see displayNameOf below) —
@@ -75,7 +85,7 @@ const COLUMN_MODE_NAMES = new Set([
  * secrets/ subfolder). Take the trailing path segment for anything that
  * needs to be a file/dir name or a group-prefix match; keep the raw name
  * for the __demos registry key, since that's what the bundle keys on. */
-function displayNameOf(name) {
+export function displayNameOf(name) {
   return name.includes("/") ? name.slice(name.lastIndexOf("/") + 1) : name;
 }
 
@@ -88,7 +98,25 @@ function resolveSrcFile(subpath) {
   return path.join(REPO_ROOT, "apps/packages/product-client/src", `${rel}.tsx`);
 }
 
-function groupFor(displayName, tierId) {
+/**
+ * Card "group" for an entry — the ONE definition in the pipeline (make-entry
+ * injects the precomputed map into the generated bundle entry; build-bundle
+ * reads the decorated entries). Rule order (CONTRACT.md "Groups"):
+ *   1. an area-kit subdirectory in the subpath (`primitives/patterns/<kit>/`)
+ *   2. else the historical name rules
+ *   3. else the owning tier id
+ */
+export function groupFor(displayName, tierId, subpath) {
+  const kitMatch = /\/primitives\/patterns\/([^/]+)\//.exec(subpath);
+  if (kitMatch) {
+    const kit = kitMatch[1];
+    if (!KITS.has(kit)) {
+      throw new Error(
+        `registry-manifest: "${subpath}" sits in pattern subdirectory "${kit}", which is not in the closed kit set (${[...KITS].join(", ")})`,
+      );
+    }
+    return kit;
+  }
   if (displayName.startsWith("Composer") || displayName === "LevelBarsButton") return "composer";
   if (displayName === "ToastHost" || displayName === "Sonner" || displayName.startsWith("Toast")) return "toast";
   if (displayName.startsWith("Sidebar")) return "sidebar";
@@ -96,64 +124,99 @@ function groupFor(displayName, tierId) {
   return tierId;
 }
 
-function modeFor(displayName) {
+export function modeFor(displayName) {
   if (SINGLE_MODE_NAMES.has(displayName)) return "single";
   if (COLUMN_MODE_NAMES.has(displayName)) return "column";
   return "grid";
 }
 
+/** Reads the evaluated dump, running it first if `.out/` doesn't have one
+ * yet (build.mjs runs dump-registry.mjs as its own stage, so a full build
+ * always evaluates fresh; standalone stages get a lazy dump instead of a
+ * confusing "missing file" failure). */
+async function readRegistryDump() {
+  if (!existsSync(REGISTRY_JSON_PATH)) await dumpRegistry();
+  return JSON.parse(await readFile(REGISTRY_JSON_PATH, "utf8"));
+}
+
 /**
  * @returns {Promise<Array<{
  *   name: string, displayName: string, subpath: string, tierId: string,
- *   group: string, mode: "grid"|"single"|"column", primary: string,
- *   srcFile: string,
+ *   tierTitle: string, group: string, mode: "grid"|"single"|"column",
+ *   primary: string, srcFile: string,
  * }>>}
  */
 export async function loadRegistryManifest() {
+  const dump = await readRegistryDump();
+
   const entries = [];
-  for (const { tierId, file, expectedCount } of TIER_FILES) {
-    const filePath = path.join(LIBRARY_DIR, file);
-    const source = await readFile(filePath, "utf8");
-    const found = [...source.matchAll(ENTRY_RE)].map((m) => ({ name: m[1], subpath: m[2] }));
-    if (found.length !== expectedCount) {
+  const seenNames = new Set();
+  const tierCounts = new Map();
+
+  for (const { tierId, tierTitle, name, subpath } of dump) {
+    if (!TIER_FILES[tierId]) {
+      throw new Error(`registry-manifest: entry "${name}" declares unknown tierId "${tierId}"`);
+    }
+    tierCounts.set(tierId, (tierCounts.get(tierId) ?? 0) + 1);
+
+    // Gate: names key __demos, the preview modules and the card directories,
+    // so a collision would silently overwrite a card.
+    if (seenNames.has(name)) {
+      throw new Error(`registry-manifest: duplicate entry name "${name}" across tiers`);
+    }
+    seenNames.add(name);
+
+    const displayName = displayNameOf(name);
+    if (/[/\s]/.test(displayName)) {
       throw new Error(
-        `registry-manifest: ${file} matched ${found.length} entries, expected ${expectedCount}.\n` +
-          `Matched names: ${found.map((e) => e.name).join(", ") || "(none)"}`,
+        `registry-manifest: "${name}" sanitizes to "${displayName}", which is still unsafe for a path segment`,
       );
     }
-    for (const { name, subpath } of found) {
-      const displayName = displayNameOf(name);
-      if (/[/\s]/.test(displayName)) {
-        throw new Error(
-          `registry-manifest: "${name}" sanitizes to "${displayName}", which is still unsafe for a path segment`,
-        );
-      }
-      const srcFile = resolveSrcFile(subpath);
-      if (!existsSync(srcFile)) {
-        throw new Error(`registry-manifest: srcFile missing for "${name}" (${subpath}) -> ${srcFile}`);
-      }
-      const mode = modeFor(displayName);
-      entries.push({
-        name,
-        displayName,
-        subpath,
-        tierId,
-        group: groupFor(displayName, tierId),
-        mode,
-        primary: mode === "single" ? "Demo" : "",
-        srcFile,
-      });
+    // Gate: every subpath resolves to a real source file.
+    const srcFile = resolveSrcFile(subpath);
+    if (!existsSync(srcFile)) {
+      throw new Error(`registry-manifest: srcFile missing for "${name}" (${subpath}) -> ${srcFile}`);
+    }
+    const mode = modeFor(displayName);
+    entries.push({
+      name,
+      displayName,
+      subpath,
+      tierId,
+      tierTitle,
+      group: groupFor(displayName, tierId, subpath),
+      mode,
+      primary: mode === "single" ? "Demo" : "",
+      srcFile,
+    });
+  }
+
+  // Gate: exactly the four declared tiers, each non-empty.
+  const declaredTiers = Object.keys(TIER_FILES);
+  for (const tierId of declaredTiers) {
+    if (!tierCounts.get(tierId)) {
+      throw new Error(`registry-manifest: tier "${tierId}" contributed no entries`);
     }
   }
-  if (entries.length !== EXPECTED_TOTAL) {
-    throw new Error(`registry-manifest: expected ${EXPECTED_TOTAL} total entries, got ${entries.length}`);
+  if (tierCounts.size !== declaredTiers.length) {
+    throw new Error(
+      `registry-manifest: expected exactly ${declaredTiers.length} tiers, got ${tierCounts.size} (${[...tierCounts.keys()].join(", ")})`,
+    );
   }
-  const allowedGroups = new Set([
-    "primitives", "patterns", "icons", "product-patterns",
-    "composer", "toast", "sidebar", "settings",
-  ]);
+
+  // Gate: total count. Loud on purpose — the payload's component count is a
+  // fact the uploaded README and every consumer's expectations hang off.
+  const perTier = declaredTiers.map((t) => `${t}=${tierCounts.get(t)}`).join(" ");
+  console.log(`registry-manifest: ${entries.length} entries (${perTier})`);
+  if (entries.length !== EXPECTED_TOTAL) {
+    throw new Error(
+      `registry-manifest: registry has ${entries.length} entries, EXPECTED_TOTAL is ${EXPECTED_TOTAL} (${perTier}).\n` +
+        `The library registry changed. If that is intended, bump EXPECTED_TOTAL in scripts/design-sync/registry-manifest.mjs to ${entries.length} and re-sync the payload; if it is not, the registry regressed.`,
+    );
+  }
+
   for (const entry of entries) {
-    if (!allowedGroups.has(entry.group)) {
+    if (!ALLOWED_GROUPS.has(entry.group)) {
       throw new Error(`registry-manifest: entry "${entry.name}" resolved to unexpected group "${entry.group}"`);
     }
   }
