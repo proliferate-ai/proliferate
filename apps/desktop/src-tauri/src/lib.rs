@@ -217,6 +217,7 @@ pub fn run() {
         .manage(renderer_diagnostic_log)
         .manage(workspace_activity_indicator::WorkspaceActivityIndicatorStore::default())
         .manage(ssh_tunnel::SshTunnelState::default())
+        .manage(window_chrome::WindowChromeZoom::default())
         .invoke_handler(tauri::generate_handler![
             anonymous_telemetry::load_anonymous_telemetry_bootstrap,
             anonymous_telemetry::save_anonymous_telemetry_state,
@@ -281,7 +282,14 @@ pub fn run() {
     });
 
     #[cfg(target_os = "macos")]
-    let builder = builder.on_window_event(quit_flow::handle_window_event);
+    let builder = builder.on_window_event(|window, event| {
+        quit_flow::handle_window_event(window, event);
+        // AppKit re-lays the standard window buttons out to their defaults on
+        // resize; keep them on the zoom-scaled chrome geometry.
+        if window.label() == "main" && matches!(event, tauri::WindowEvent::Resized(_)) {
+            window_chrome::reapply_window_chrome(window);
+        }
+    });
 
     builder
         .setup(move |app| {
@@ -299,6 +307,9 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("main") {
                     use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
                     let _ = apply_vibrancy(&window, NSVisualEffectMaterial::Sidebar, None, None);
+                }
+                if let Some(window) = app.get_window("main") {
+                    window_chrome::reapply_window_chrome(&window);
                 }
             }
 

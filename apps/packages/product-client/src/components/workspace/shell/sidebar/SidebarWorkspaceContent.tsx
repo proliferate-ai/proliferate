@@ -158,18 +158,23 @@ export function SidebarWorkspaceContent({
   }
 
   return groups.map((group, groupIndex) => {
-    const overLimit = sidebarGroupRowItems(group).length > SIDEBAR_REPO_GROUP_ITEM_LIMIT;
+    const rowItems = sidebarGroupRowItems(group);
+    const overLimit = rowItems.length > SIDEBAR_REPO_GROUP_ITEM_LIMIT;
     const isShownMore = repoGroupsShownMore.has(group.sourceRoot);
     const visibleItems = visibleSidebarGroupItems({
       group,
       isShownMore,
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
     });
-    const toggleLabel: "Show more" | "Show less" | null = !overLimit
-      ? null
-      : isShownMore
+    // Counted against the group's rendered rows: pinned rows live in the
+    // Pinned section, so they are neither visible here nor "hidden".
+    const hiddenItemCount = rowItems.length - visibleItems.length;
+    const toggleLabel: "Show less" | `Show ${number} more` | null =
+      overLimit && isShownMore
         ? "Show less"
-        : "Show more";
+        : hiddenItemCount > 0
+          ? `Show ${hiddenItemCount} more`
+          : null;
     const cloudRepoTarget = group.cloudRepoTarget;
     const hasArchivedHiddenItems =
       group.items.length === 0 && group.allLogicalWorkspaceIds.length > 0;

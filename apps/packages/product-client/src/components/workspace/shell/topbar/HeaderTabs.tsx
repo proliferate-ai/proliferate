@@ -36,6 +36,7 @@ import {
 } from "#product/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
 import { useWorkspaceTabActions } from "#product/hooks/workspaces/workflows/tabs/use-workspace-tab-actions";
 import { useHeaderTabsUrgentHighlight } from "#product/hooks/workspaces/ui/use-header-tabs-urgent-highlight";
+import { computeActiveTabScrollLeft } from "#product/lib/domain/workspaces/tabs/chrome-layout";
 import type { ManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 import { startMeasurementOperation } from "#product/lib/infra/measurement/measurement-port";
@@ -146,15 +147,14 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     if (!strip || activeTabIndex < 0) {
       return;
     }
-    const tabLeft = layout.positions[activeTabIndex] ?? 0;
-    const tabWidth = layout.widths[activeTabIndex] ?? 0;
-    const tabRight = tabLeft + tabWidth;
-    const viewLeft = strip.scrollLeft;
-    const viewRight = viewLeft + strip.clientWidth;
-    if (tabLeft < viewLeft) {
-      strip.scrollTo({ left: tabLeft, behavior: "smooth" });
-    } else if (tabRight > viewRight) {
-      strip.scrollTo({ left: tabRight - strip.clientWidth, behavior: "smooth" });
+    const scrollLeft = computeActiveTabScrollLeft({
+      tabLeft: layout.positions[activeTabIndex] ?? 0,
+      tabWidth: layout.widths[activeTabIndex] ?? 0,
+      scrollLeft: strip.scrollLeft,
+      clientWidth: strip.clientWidth,
+    });
+    if (scrollLeft !== null) {
+      strip.scrollTo({ left: scrollLeft, behavior: "smooth" });
     }
   }, [activeTabIndex, layout.positions, layout.widths]);
 
