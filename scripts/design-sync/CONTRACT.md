@@ -6,9 +6,11 @@ Output directory: `scripts/design-sync/.out/` (gitignored). All scripts are Node
 
 ## Payload contract (must match the reference payload exactly unless noted)
 
-Top level: `_ds_bundle.js`, `_ds_bundle.css`, `_ds_needs_recompile` (exact 24 bytes: `{"by":"design-sync-cli"}`), `_ds_sync.json`, `.ds-build-meta.json`, `README.md`, `styles.css` (exactly: `@import "./fonts/fonts.css";` newline `@import "./_ds_bundle.css";`), `_vendor/react.js` + `_vendor/react-dom.js` (stub, exact content `/* merged into react.js */`), `fonts/` (woff2 + fonts.css with flat `url(./file.woff2)` paths), `_preview/<Name>.js` per entry, `components/<group>/<Name>/` per entry holding `<Name>.html`, `<Name>.jsx`, `<Name>.prompt.md` (and `<Name>.d.ts` if step 5's tsc pass works out). QA artifacts (not uploaded-critical, but built): `.render-check.json`, `.review.html`, `_screenshots/`.
+Top level: `_ds_bundle.js`, `_ds_bundle.css`, `_ds_needs_recompile` (exact 24 bytes: `{"by":"design-sync-cli"}`), `_ds_sync.json`, `.ds-build-meta.json`, `README.md`, `styles.css` (exactly: `@import "./fonts/fonts.css";` newline `@import "./_ds_bundle.css";`), `_vendor/react.js` + `_vendor/react-dom.js` (stub, exact content `/* merged into react.js */`), `fonts/` (woff2 + fonts.css with flat `url(./file.woff2)` paths), `guidelines/working-agreement.md` (the design agent's working agreement — closed vocabulary, deviation declarations, handoff-manifest format; generated from `templates/guidelines.md.tmpl`, its authoring twin lives at `~/agent-engineering/nodes/implement-design-handoff/`), `_preview/<Name>.js` per entry, `components/<group>/<Name>/` per entry holding `<Name>.html`, `<Name>.light.html`, `<Name>.jsx`, `<Name>.prompt.md` (and `<Name>.d.ts` if step 5's tsc pass works out). QA artifacts (not uploaded-critical, but built): `.render-check.json`, `.review.html`, `_screenshots/`.
 
 ### Card HTML
+Every entry emits TWO cards from the same template, the same `_preview/<Name>.js` and the same `MODE`/`PRIMARY`: `<Name>.html` (dark, the default) and `<Name>.light.html`, which differs only by `data-mode="light"` on `<html>` — where the token authority scopes its light palette (`:root[data-mode="light"]`) — and by a ` (light)` suffix on its `@dsCard group`, so the picker keeps the two modes as sibling sections instead of interleaving them. Render-check therefore gates `2 × entries` cards (174 today), and every light screenshot must differ from its dark twin (identical bytes = the mode attribute stopped taking effect).
+
 First line: `<!-- @dsCard group="<group>" -->` for grid cards, `<!-- @dsCard group="<group>" viewport="900x700" -->` for single/column cards. Then the exact boilerplate of the reference card (copy from e.g. `components/primitives/Button/Button.html`), substituting only: the two `<script src>` lines for `_preview/<Name>.js`, and the inline `var MODE="grid|single|column"; var PRIMARY="<story-or-empty>";`. Load order: styles.css + _ds_bundle.css stylesheets → _vendor/react.js → _vendor/react-dom.js → _ds_bundle.js → _preview/<Name>.js → inline bootstrap (copy verbatim from reference). The bootstrap collects PascalCase function props of `window.__dsPreview` and mounts them with `ReactDOM.createRoot`.
 
 ### Preview modules — SIMPLIFIED vs the old build
@@ -35,15 +37,27 @@ Vite lib-mode IIFE, global name `ProliferateUI`, entry = generated `.ds-entry.ts
 ```
 
 ## Registry facts (the manifest)
-`apps/packages/product-client/src/components/playground/library/index.tsx` exports `LIBRARY_TIERS: LibraryTier[]` — 4 tiers, 81 entries total (36 primitives, 24 patterns, 10 icon modules, 11 product-patterns), each `{name, subpath, render}`. Demos are self-contained (useState fine, no providers/stores). Names are unique and include lowercase ones (`checkbox-primitive`, `tooltip-primitive`, icon module names like `core`, `app-shell`).
+`apps/packages/product-client/src/components/playground/library/index.tsx` exports `LIBRARY_TIERS: LibraryTier[]` — 4 tiers, **87 entries** total (37 primitives, 37 patterns, 10 icon modules, 3 product-patterns), each `{name, subpath, render}`. Demos are self-contained (useState fine, no providers/stores). Names are unique and include lowercase ones (`checkbox-primitive`, `tooltip-primitive`, icon module names like `core`, `app-shell`) and one tier-relative one (`secrets/SecretManagementPanel`).
+
+The tier arrays are **composed**, not literal: entries are spread in from `library/entries/*.tsx` (one demo per file) and the kit demo files (`tabs.tsx`, `panel.tsx`) as well as declared inline in `primitives.tsx` / `patterns.tsx` / `icons.tsx` / `product-patterns.tsx`. `library-registry.test.ts` is the registry's own parity gate (every physical primitive/pattern/icon/domain-pattern owner has exactly one row).
+
+### The registry is EVALUATED, never parsed
+`dump-registry.mjs` compiles `LIBRARY_TIERS` with the same Vite machinery `build-bundle.mjs` uses (`#product/` → `product-client/src`, react deduped) as a node-format SSR build into a scratch dir under `product-client/node_modules/`, imports it in-process, and writes `.out/.ds-registry-manifest.json` = `[{tierId, tierTitle, name, subpath}]` in tier order. Renders are never executed (only names/subpaths/tier metadata are read), and the scratch dir is deleted after the import.
+
+`registry-manifest.mjs` loads that JSON (dumping lazily if it's absent) and decorates each entry with `displayName`, `group`, `mode`, `primary` and `srcFile`; it is the ONE place `groupFor`/`modeFor`/`displayNameOf` live. `make-entry.mjs`, `build-bundle.mjs`, `emit-cards.mjs` and `make-meta.mjs` all consume that decorated list — no script re-derives the registry from source text.
+
+**Gates** (all hard failures): exactly the 4 declared tiers, each non-empty; every entry name unique across tiers; every subpath resolves to an existing `src/**.tsx`; every group in the allowed set; and `EXPECTED_TOTAL` in `registry-manifest.mjs` (87 today) matched exactly — the deliberate drift tripwire that replaced the old per-tier counts. Bump it on purpose when the registry changes, and re-sync.
 
 ### Groups (kit-aware, ruled)
-Group per entry, derived from `entry.name` first, else tier:
-- name starts with `Composer` or is `LevelBarsButton` → `composer`
-- name is `ToastHost` or `Sonner` or starts with `Toast` → `toast`
-- name starts with `Sidebar` → `sidebar`
-- name starts with `Settings` → `settings`
-- else tier id: primitives → `primitives`, patterns → `patterns`, icons → `icons`, product-patterns → `product-patterns`
+Group per entry, rule order:
+1. subpath matches `#product/primitives/patterns/<kit>/…` → `<kit>`, asserted against the closed kit set `{composer, toast, sidebar, tabs, panel, settings}` (an unknown pattern subdirectory is a hard failure, not a new group)
+2. else by name: starts with `Composer` or is `LevelBarsButton` → `composer`; is `ToastHost`/`Sonner` or starts with `Toast` → `toast`; starts with `Sidebar` → `sidebar`; starts with `Settings` → `settings`
+3. else tier id: primitives → `primitives`, patterns → `patterns`, icons → `icons`, product-patterns → `product-patterns`
+
+Display name (card dir, file names, group matching) is `name.split("/").pop()`; the raw name stays the `__demos` key. Kit membership follows the file, so `secrets/SecretManagementPanel` (under `components/patterns/`, not `primitives/patterns/`) stays in `product-patterns` and lands at `components/product-patterns/SecretManagementPanel/`.
+
+### Purposes
+`<Name>.prompt.md` purpose comes from `specs/DESIGN_SYSTEM.md` § "The sanctioned index" (four `####` sub-tables, matched on the registry name or its display name). A name with no row falls back to the source file's leading JSDoc sentence; an entry with neither is a HARD build failure listing the offenders — there is no placeholder purpose.
 
 ### Card modes
 Defaults: `grid`. Overrides (intersect with actual registry names; `single` implies `PRIMARY="Demo"` and viewport 900x700; `column` implies viewport 900x700):
@@ -62,8 +76,8 @@ Defaults: `grid`. Overrides (intersect with actual registry names; `single` impl
 - esbuild: transitively via vite (`import esbuild from "esbuild"` may not resolve — prefer `vite.build` or `(await import("vite")).transformWithEsbuild` for the .jsx transforms).
 - React 19.2.8 at `apps/packages/product-client/node_modules/react`.
 
-## Doctrine source of truth (updated 2026-08-12, post PR #1779 merge)
-The worktree branch is fast-forwarded to main @ 9cfa80c73, which contains the merged component-hierarchy doctrine. All README/prompt.md/guideline text derives from THIS tree's `specs/DESIGN_SYSTEM.md` § Component Library — never from memory or an earlier snapshot. Notable current facts: the jobs table is FIVE jobs (paint/anatomy/state/layout/behavior); the kit set is closed (composer/toast/sidebar/tabs/panel/settings); noun-tier admission is mechanical; `DropdownMenu` is the sanctioned keyboard-menu path (the `PopoverButton` pair is click-only); the sanctioned index includes ToastBody/ToastExpansion/ToastHost/BillingGateState. Kit-move PRs (composer/toast/sidebar, later settings, into `primitives/patterns/<kit>/` subdirs) are in flight on main: derive card groups from entry NAME (never file paths) and read subpaths from LIBRARY_TIERS/registry files at build time (never hardcode), so the payload builder survives those moves; keep keyRecipe stable so post-move re-syncs are cheap deltas.
+## Doctrine source of truth (updated 2026-08-12, post wave-2 restructure)
+The branch carries the merged component-hierarchy doctrine (#1779), the wave-2 vocabulary work (#1806 retirements) and the kit moves. All README/prompt.md/guideline text derives from THIS tree's `specs/DESIGN_SYSTEM.md` § Component Library — never from memory or an earlier snapshot. Notable current facts: the jobs table is FIVE jobs (paint/anatomy/state/layout/behavior); the kit set is closed (composer/toast/sidebar/tabs/panel/settings) and kit members live under `primitives/patterns/<kit>/`; noun-tier admission is mechanical; `DropdownMenu` is the sanctioned keyboard-menu path (the `PopoverButton` pair is click-only); the sanctioned index includes ToastBody/ToastExpansion/ToastHost/BillingGateState (ToastBody/ToastExpansion are sanctioned but deliberately out of the registry). The kit moves have LANDED: card groups now come from the subpath's kit directory first and the entry name second, and the entry list is evaluated from `LIBRARY_TIERS` (never hardcoded, never regex-parsed), so further moves flow through untouched. Keep keyRecipe stable so re-syncs are cheap deltas.
 
 ## Machine rules for every agent
 NO cargo/rustc builds. NO Docker. NO `pnpm install` (the orchestrator runs the single install). At most one headless browser. Do not touch files owned by another stream (ownership in each agent brief). Do not spawn subagents.
