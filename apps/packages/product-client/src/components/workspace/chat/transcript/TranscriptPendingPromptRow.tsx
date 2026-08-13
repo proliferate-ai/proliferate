@@ -21,6 +21,8 @@ import {
 import {
   resolvePendingPromptTrailingStatus,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import { isReceiptPendingEntry } from "#product/lib/domain/workspaces/creation/creation-receipt";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 
 const OUTBOX_ACCEPTED_RUNNING_ECHO_GRACE_MS = 15_000;
@@ -48,14 +50,23 @@ export function TranscriptPendingPromptRow({
   /**
    * The workspace-creation receipt, when this row hosts it (no turn exists
    * yet to host it inline — see `hostsWorkspaceReceipt` on the row model).
-   * Takes precedence over both `optimisticTrailingStatus` and the outbox
-   * trailing status: while the workspace is still being created, "Thinking"/
-   * "Sending…" are false claims (no session exists yet to think or send),
-   * so the receipt — with its own spinner and failure states — replaces
-   * them in the frontier slot instead of rendering alongside/below them.
+   * While the workspace is still being created, "Thinking"/"Sending…" are
+   * false claims (no session exists yet to think or send), so the receipt —
+   * with its own spinner and failure states — owns the frontier slot alone.
+   * Once creation settles, the working status renders below the receipt: a
+   * session now exists and the prompt is genuinely in flight.
    */
   workspaceReceipt?: ReactNode;
 }) {
+  // While the creation itself is in flight the receipt (with its own spinner)
+  // is the only honest frontier content. Once the workspace materializes the
+  // receipt settles into a static "Worktree created" line, yet it keeps this
+  // frontier slot until the first turn lands — through worktree setup, agent
+  // boot, and prompt dispatch. Without the working status below it, that
+  // whole window reads as a dead session (PRO-119).
+  const creationInFlight = useSessionSelectionStore(
+    (state) => isReceiptPendingEntry(state.pendingWorkspaceEntry),
+  );
   if (outboxEntry?.deliveryState === "failed_before_dispatch") {
     return (
       <TurnShell isFirst={rowIndex === 0}>
@@ -67,9 +78,17 @@ export function TranscriptPendingPromptRow({
     );
   }
 
-  const trailingStatus = workspaceReceipt ?? (outboxEntry
+  const workingStatus = outboxEntry
     ? <OutboxPromptTrailingStatus entry={outboxEntry} />
-    : optimisticTrailingStatus);
+    : optimisticTrailingStatus;
+  const trailingStatus = workspaceReceipt
+    ? (
+      <>
+        {workspaceReceipt}
+        {!creationInFlight && workingStatus}
+      </>
+    )
+    : workingStatus;
   const outboxControls = outboxEntry
     ? renderOutboxPromptControls(outboxEntry, outboxActions)
     : null;

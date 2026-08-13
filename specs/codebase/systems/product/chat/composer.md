@@ -111,6 +111,18 @@ edits — submits on plain Enter or Cmd/Ctrl-Enter, including from a list item o
 code block, and Shift-Enter inserts a newline without submitting. Queued edits
 use the workspace editor's minimum height, row cap, and overflow scrolling.
 
+Rich clipboard code is normalized on entry. A pasted rendered code block
+(`text/html` `<pre><code>`) imports as one editable code block — Lexical's
+double `<pre>`/`<code>` conversion is dissolved — and a code block that ends
+the draft always keeps a continuation paragraph after it, so the caret can
+always leave the block (the same continuation the typed-fence path creates).
+The inline-code text format is not part of the composer's document model:
+there is no way to author it (typed backticks stay literal), so rich pastes
+that carry it keep their characters and drop the format. An external draft
+replacement resets inherited selection formats along with the content;
+without that reset the format bits survive the clear and re-apply to
+everything typed after a send (PRO-159).
+
 Lexical's high-priority Enter and Tab commands own this decision before native
 editor mutation. The surface applies the shared submit contract exactly once;
 Shift-Enter and list indentation stay Lexical-owned. The
@@ -149,6 +161,12 @@ privacy masking, and surface behavior remain shared with the prior input.
 Discovery follows the current caret rather than the end of the document, and a
 selection replaces only the active slash-token range while preserving text and
 formatting around it.
+
+File-mention discovery keeps the runtime's full supported result page instead
+of applying a smaller presentation limit or discarding fuzzy matches with a
+stricter client-side filter. The shared inline-menu viewport stays visually
+capped at about ten rows and scrolls the remaining matches; Arrow-key navigation
+keeps the highlighted row in view while focus remains in the composer editor.
 
 Composer focus follows the app lifecycle. The workspace composer takes focus
 after mount and workspace switches (`ChatInput.tsx`), and the Home composer
@@ -244,6 +262,44 @@ when the runtime reports it as non-settable, but its choices are disabled.
 Cowork hides the permission/access `mode` because its access policy is
 product-defined, but retains independent working-mode controls such as
 `collaboration_mode` together with model tuning in the combined picker.
+
+### Compact control tier (narrow composers)
+
+Below a 32rem composer-container width (`chat-layout.ts` owns the class-string
+constants; the dock column's `@container` anchors the query in chat, and the
+Home composer wrapper anchors its own), labeled control pills shed their words
+so the row degrades to icons instead of truncating mid-word or painting over
+neighboring controls:
+
+- The working-mode pill swaps its mode name for the mode's configured icon
+  (`SessionControlIcon`) and stops shrinking at that icon footprint. A mode
+  value without a configured icon keeps its text at every width. This is the
+  one sanctioned exception to "no leading mode icon": the icon renders only
+  under the compact tier, never beside the name.
+- The reasoning pill hides the level word; the lit level bars keep reading
+  the level.
+- The integrations pill hides the connected count and keeps the glyph. The
+  urgent re-auth label stays visible (and shrinkable) at every width.
+- The model pill keeps its provider icon and name and remains the flexible
+  item — it truncates with an ellipsis before any icon pill compresses. Its
+  max-width is `min(15rem, 100%)`: the wrapper bound is load-bearing, because
+  a bare rem cap replaces the primitive's `max-w-full` in tailwind-merge and
+  the pill's column-flex wrapper (`items-start`, for the inline error) does
+  not otherwise constrain the button — an uncapped button paints over the
+  mode pill instead of truncating.
+- Each swap is CSS visibility on one button (wrapper-span classes via
+  `ComposerControlButton`), so `data-*` driver attributes, handlers, and
+  `aria-label`s are width-independent. Pending-state indicators stay visible
+  at every width.
+
+The main pane's floor is sized so the compact row sits at its natural width:
+`MAIN_PANE_MIN_WIDTH` (`right-panel-model.ts`) clamps the right rail's
+rendered width so the chat pane never drops below 440px, whatever the
+persisted panel width, sidebar width, and window size add up to. At the
+floor, every pill renders at content size with the shared 8px rhythm intact —
+minimizing the pane must not compress the spacing between pills or truncate
+the model name for the canonical control row. The persisted panel width is
+not clamped — the user's chosen width returns when the window affords it.
 
 ## 2. Dock Regions
 

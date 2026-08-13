@@ -46,6 +46,7 @@ export function resolveHotReopenCandidate(input: {
   lastViewedSessionByWorkspace: Record<string, string>;
   sessionSlots: Record<string, HotReopenSessionSlotSnapshot>;
   isPendingSessionId: (sessionId: string) => boolean;
+  hiddenSessionIds?: ReadonlySet<string>;
 }): HotReopenCandidate | null {
   const slotFor = (sessionId: string | null | undefined) =>
     sessionId ? input.sessionSlots[sessionId] ?? null : null;
@@ -53,6 +54,16 @@ export function resolveHotReopenCandidate(input: {
     sessionId: string | null | undefined,
     source: HotReopenCandidate["source"],
   ): HotReopenCandidate | null => {
+    // Implicit sources must not resurrect a session whose tab the user closed:
+    // a hidden session gets no tab, so activating it strands the shell on the
+    // chat-shell surface with the composer armed at an invisible session.
+    if (
+      source !== "initial_active"
+      && sessionId
+      && input.hiddenSessionIds?.has(sessionId)
+    ) {
+      return null;
+    }
     const slot = slotFor(sessionId);
     return isHotReopenEligibleSessionSlot(
       slot,
@@ -82,16 +93,9 @@ export function resolveHotReopenCandidate(input: {
   }
 
   for (const slot of Object.values(input.sessionSlots)) {
-    if (isHotReopenEligibleSessionSlot(
-      slot,
-      input.resolvedWorkspaceId,
-      input.isPendingSessionId,
-    )) {
-      return {
-        sessionId: slot.sessionId,
-        workspaceId: slot.workspaceId,
-        source: "cached_slot",
-      };
+    const candidate = toCandidate(slot.sessionId, "cached_slot");
+    if (candidate) {
+      return candidate;
     }
   }
 

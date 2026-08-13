@@ -582,15 +582,14 @@ describe("appearance scaling CSS defaults", () => {
     expect(bodyRule).toContain("line-height: var(--text-ui--line-height);");
   });
 
-  it("shares semantic caret and selection colors across text-entry renderers", () => {
+  it("shares semantic caret and selection colors across text-entry renderers while transcripts keep native selection paint", () => {
     expect(themeDeclarations["--color-text-caret"]).toBe("var(--color-foreground)");
     expect(themeDeclarations["--color-text-selection"]).toBe(
       "var(--color-highlight, var(--color-input))",
     );
     expect(productCss).toContain("caret-color: var(--color-text-caret);");
     expect(productCss).toContain("background-color: var(--color-text-selection);");
-    expect(productCss).toContain(".chat-selection-root ::selection");
-    expect(productCss).toContain("background-color: var(--color-text-selection);");
+    expect(productCss).not.toContain(".chat-selection-root ::selection");
   });
 
   it("keeps the spinner inline box stationary while its SVG owns motion", () => {

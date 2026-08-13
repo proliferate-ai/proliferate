@@ -75,7 +75,7 @@ describe("rankFileMentionResults", () => {
     { path: "src/unrelated.ts", name: "unrelated.ts" },
   ];
 
-  it("ranks basename prefix matches above basename and path substrings", () => {
+  it("ranks substring tiers ahead of the remaining runtime matches", () => {
     const results = rankFileMentionResults(candidates, "read", 10);
 
     expect(results.map((result) => result.path)).toEqual([
@@ -83,11 +83,13 @@ describe("rankFileMentionResults", () => {
       "readme.md",
       "src/reader.ts",
       "src/thread-reader.ts",
+      "src/unrelated.ts",
     ]);
   });
 
-  it("drops candidates that match nothing", () => {
-    expect(rankFileMentionResults(candidates, "zzz", 10)).toEqual([]);
+  it("preserves runtime fuzzy matches outside the substring tiers", () => {
+    expect(rankFileMentionResults(candidates, "rdr", 10).map((result) => result.path))
+      .toEqual(candidates.map((candidate) => candidate.path));
   });
 
   it("keeps every candidate when the query is empty", () => {
@@ -102,7 +104,7 @@ describe("rankFileMentionResults", () => {
   it("exposes the parent directory as the row's disambiguator", () => {
     const results = rankFileMentionResults(candidates, "readme", 10);
 
-    expect(results).toEqual([
+    expect(results.slice(0, 2)).toEqual([
       { path: "docs/setup/readme.md", name: "readme.md", parent: "docs/setup" },
       { path: "readme.md", name: "readme.md", parent: "" },
     ]);
