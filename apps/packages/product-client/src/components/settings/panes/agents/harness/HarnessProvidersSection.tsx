@@ -163,6 +163,13 @@ export function HarnessProvidersSection({
               {configured.map(({ row, provider }, index) => {
                 const logoSrc = provider ? logoUrls?.[provider.id] : undefined;
                 return (
+                  // Enumerated pixel delta: this stack was `size-7` (28px).
+                  // `IconTile`'s size axis is the 24/32/40 step set evidenced
+                  // across the tree, and 28px rounds up to `md` (32px) rather
+                  // than adding a fourth step that would turn a variant set
+                  // into a scale (see IconTile's own note). The `-ml-1.5`
+                  // overlap is unchanged, so the fan reads the same, 4px wider
+                  // per tile.
                   <IconTile
                     key={row.uid}
                     tone="outlined"

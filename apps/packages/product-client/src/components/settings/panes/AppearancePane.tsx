@@ -35,6 +35,12 @@ import { useUserPreferencesStore } from "#product/stores/preferences/user-prefer
  * preview lie about the thing it previews. This is a deliberate divergence
  * from `Card`'s default fills (`bg-card` for `opaque`, no plain-background
  * option), documented rather than force-fit.
+ *
+ * One enumerated pixel delta from the adoption: the retired
+ * `PREVIEW_PANEL_CLASS` drew `rounded-xl` (12px); `Card` owns its radius and
+ * paints `rounded-lg` (8px). The corner is not restated at the call site —
+ * radius belongs to the card, and a per-site override would reopen the axis
+ * `Card`'s doc closes.
  */
 /** Narrower than the shared settings control width: these are short values. */
 const CONTROL_WIDTH_CLASS = "w-40";
