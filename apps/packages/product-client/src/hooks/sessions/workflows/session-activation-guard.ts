@@ -11,7 +11,8 @@ export type SessionActivationStaleReason =
   | "slot-missing"
   | "slot-workspace-mismatch"
   | "selection-replaced"
-  | "model-remediation";
+  | "model-remediation"
+  | "tab-hidden";
 
 export interface SessionActivationGuard {
   workspaceId: string;

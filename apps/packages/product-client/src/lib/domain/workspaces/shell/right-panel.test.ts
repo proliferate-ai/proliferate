@@ -7,7 +7,7 @@ import {
   resolveRightPanelDragOutcome,
   rightPanelViewerHeaderKey,
   RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD,
-  RIGHT_PANEL_MAX_WIDTH,
+  RIGHT_PANEL_FALLBACK_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
 } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
@@ -265,10 +265,16 @@ describe("right panel domain", () => {
 
   it("clamps persisted right panel widths to the legible minimum", () => {
     expect(clampRightPanelWidth(100)).toBe(380);
-    expect(clampRightPanelWidth(900)).toBe(700);
+    // No fixed maximum: a width chosen on a larger window persists and
+    // restores intact; per-window bounding is the rail's rendered clamp and
+    // the drag's measured ceiling.
+    expect(clampRightPanelWidth(900)).toBe(900);
+    expect(clampRightPanelWidth(900, 700)).toBe(700);
+    // A ceiling below the floor (degenerately small window) pins to the floor.
+    expect(clampRightPanelWidth(900, 100)).toBe(380);
     expect(clampRightPanelWidth(Number.NaN)).toBe(420);
     expect(RIGHT_PANEL_MIN_WIDTH).toBe(380);
-    expect(RIGHT_PANEL_MAX_WIDTH).toBe(700);
+    expect(RIGHT_PANEL_FALLBACK_MAX_WIDTH).toBe(700);
   });
 
   it("re-clamps widths persisted below the raised minimum", () => {
@@ -296,9 +302,14 @@ describe("right panel domain", () => {
       kind: "resize",
       width: RIGHT_PANEL_MIN_WIDTH,
     });
+    // The ceiling is the caller's per-gesture measurement, not a constant.
+    expect(resolveRightPanelDragOutcome(2000, 1580)).toEqual({
+      kind: "resize",
+      width: 1580,
+    });
     expect(resolveRightPanelDragOutcome(2000)).toEqual({
       kind: "resize",
-      width: RIGHT_PANEL_MAX_WIDTH,
+      width: 2000,
     });
   });
 
@@ -308,6 +319,19 @@ describe("right panel domain", () => {
     });
     expect(resolveRightPanelDragOutcome(0)).toEqual({ kind: "collapse" });
     expect(resolveRightPanelDragOutcome(-120)).toEqual({ kind: "collapse" });
+  });
+
+  it("does not collapse a widening drag seeded below the threshold", () => {
+    // The floor clamp can render the rail below the collapse threshold. A
+    // gesture seeded at that rendered width and moving outward is a resize
+    // (pinned to the floor) — closing here would take the panel away from a
+    // user who is trying to grow it.
+    expect(resolveRightPanelDragOutcome(250, 1000, 204)).toEqual({
+      kind: "resize",
+      width: RIGHT_PANEL_MIN_WIDTH,
+    });
+    // A shrinking shove from the same seed still closes.
+    expect(resolveRightPanelDragOutcome(180, 1000, 204)).toEqual({ kind: "collapse" });
   });
 
   it("treats a non-finite drag width as a resize, never a collapse", () => {

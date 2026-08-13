@@ -6,6 +6,7 @@ import { CircleAlert, CircleCheck } from "#product/primitives/icons/status";
 import { truncateGoalObjective } from "#product/domain/activity/goal";
 import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
 import { Button } from "#product/primitives/Button";
+import { Card } from "#product/primitives/patterns/Card";
 
 // Compact row preview cap — the row also CSS-truncates to one line, but this
 // keeps the label text itself short for the disclosure toggle's threshold.
@@ -57,7 +58,17 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
     );
   }
 
-  // System outcome events: left-aligned quiet row
+  // System outcome events: left-aligned quiet row.
+  //
+  // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review, check 1) for
+  // the whole quiet-disclosure family in the transcript, of which this is one:
+  // the landed `Disclosure` always paints `hover:bg-hover active:bg-active` on
+  // its header row and exposes no way to suppress it — `className` lands on the
+  // outer wrapper, not the row. Adopting it here would put a pressed background
+  // back on exactly the rows PRO-120 (#1747) removed one from. It also renders a
+  // rotating chevron where these rows use a status glyph, and a 17px
+  // `text-heading` title where the transcript runs at 13-14px. Landing this
+  // family needs a quiet spelling of `Disclosure`, which is a review ruling.
   return (
     <div data-goal-transcript-event={event.kind} className="py-1">
       <Button
@@ -86,9 +97,18 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
         )}
       </Button>
       {expanded && presentation.fullDetail && (
-        <div className="mt-1 whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 text-ui-sm leading-relaxed tracking-[-0.01em] text-muted-foreground select-text">
-          {presentation.fullDetail}
-        </div>
+        <Card surface="opaque" className="mt-1">
+          {/*
+            tracking-[-0.01em] is a recorded cause (DESIGN_SYSTEM.md
+            § UI-conformance review, check 4): raw agent output is wrapped
+            pre-formatted text, and the slight negative tracking is what keeps a
+            long single line inside the transcript column at this size. It is
+            optical, not a scale step.
+          */}
+          <div className="whitespace-pre-wrap px-3.5 py-2.5 text-ui-sm leading-relaxed tracking-[-0.01em] text-muted-foreground select-text">
+            {presentation.fullDetail}
+          </div>
+        </Card>
       )}
     </div>
   );

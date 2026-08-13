@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "#product/primitives/Button";
+import { IconTile } from "#product/primitives/IconTile";
 import { ArrowRight, ExternalLink } from "#product/primitives/icons/core";
 import { FileText } from "#product/primitives/icons/workspace";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
@@ -90,17 +91,30 @@ export function PlanHandoffDialog({
               <div className="mb-1.5 text-ui-sm font-medium text-muted-foreground">
                 Attached plan
               </div>
+              {/*
+                The row's hover and pressed states come from `Button`'s ghost
+                variant rather than being written out here (DESIGN_SYSTEM.md
+                § UI-conformance review, check 7); only the frame and layout stay
+                at the call site.
+
+                Recorded exclusion for check 1: neither landed shape can carry
+                this frame. `Card` has no interaction states and only two fills
+                (`bg-surface-elevated-secondary` / `bg-card`), and `ListRow`
+                titles at `text-heading` (17px) against this row's 13px, which
+                would resize a dialog row by a third. Folding it in needs a
+                review ruling on one of those APIs, not a call-site workaround.
+              */}
               <Button
                 type="button"
-                variant="unstyled"
+                variant="ghost"
                 size="unstyled"
-                className="flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-border/70 bg-foreground/5 px-3 py-2.5 text-left text-foreground transition-colors hover:border-border hover:bg-hover active:bg-active"
+                className="flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-border/70 bg-foreground/5 px-3 py-2.5 text-left text-foreground transition-colors"
                 onClick={() => setPreviewOpen(true)}
                 aria-label={`Preview attached plan: ${plan.title}`}
               >
-                <span className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-control text-muted-foreground">
+                <IconTile>
                   <FileText className="icon-paired" />
-                </span>
+                </IconTile>
                 <span className="min-w-0 flex-1 truncate text-ui font-medium leading-5">
                   {plan.title}
                 </span>

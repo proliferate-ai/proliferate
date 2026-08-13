@@ -127,6 +127,75 @@ describe("resolveHotReopenCandidate", () => {
     });
   });
 
+  it("skips recently-hidden sessions for last-viewed and cached-slot sources", () => {
+    const sessionSlots = {
+      "session-hidden": slot({
+        sessionId: "session-hidden",
+        workspaceId: "workspace-1",
+        hydrated: true,
+      }),
+      "session-open": slot({
+        sessionId: "session-open",
+        workspaceId: "workspace-1",
+        hydrated: true,
+      }),
+    };
+
+    const candidate = resolveHotReopenCandidate({
+      resolvedWorkspaceId: "workspace-1",
+      logicalWorkspace: null,
+      initialActiveSessionId: null,
+      lastViewedSessionByWorkspace: {
+        "workspace-1": "session-hidden",
+      },
+      sessionSlots,
+      isPendingSessionId: () => false,
+      hiddenSessionIds: new Set(["session-hidden"]),
+    });
+
+    expect(candidate).toEqual({
+      sessionId: "session-open",
+      workspaceId: "workspace-1",
+      source: "cached_slot",
+    });
+
+    expect(resolveHotReopenCandidate({
+      resolvedWorkspaceId: "workspace-1",
+      logicalWorkspace: null,
+      initialActiveSessionId: null,
+      lastViewedSessionByWorkspace: {},
+      sessionSlots: {
+        "session-hidden": sessionSlots["session-hidden"],
+      },
+      isPendingSessionId: () => false,
+      hiddenSessionIds: new Set(["session-hidden"]),
+    })).toBeNull();
+  });
+
+  it("honors an explicit initial session even when its tab is hidden", () => {
+    const candidate = resolveHotReopenCandidate({
+      resolvedWorkspaceId: "workspace-1",
+      logicalWorkspace: null,
+      initialActiveSessionId: "session-hidden",
+      lastViewedSessionByWorkspace: {},
+      sessionSlots: {
+        "session-hidden": slot({
+          sessionId: "session-hidden",
+          workspaceId: "workspace-1",
+          hydrated: true,
+        }),
+      },
+      isPendingSessionId: () => false,
+      hiddenSessionIds: new Set(["session-hidden"]),
+    });
+
+    expect(candidate).toEqual({
+      sessionId: "session-hidden",
+      workspaceId: "workspace-1",
+      source: "initial_active",
+    });
+  });
+
   it("falls back to any eligible cached slot", () => {
     const candidate = resolveHotReopenCandidate({
       resolvedWorkspaceId: "workspace-1",

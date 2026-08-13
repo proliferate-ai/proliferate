@@ -1,4 +1,5 @@
 import { Button } from "#product/primitives/Button";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import type { AccountProviderView } from "#product/lib/domain/auth/account-profile-presentation";
@@ -84,12 +85,11 @@ function getActionsForProvider(
 // ---------------------------------------------------------------------------
 
 /**
- * In-card row anatomy: the wash group (`SettingsGroup`) owns the divider
- * between rows, so a row carries no border of its own. Title sits at
- * `text-ui`/400 and detail at `text-ui-sm`, the same pairing `SettingsRow`
- * uses, so crossing from the sidebar into this pane crosses no type step.
+ * Fixed-width leading column so the provider mark's box stays the same size
+ * across rows even though brand marks differ in natural proportions — title
+ * text keeps one left edge across the whole roster.
  */
-export const ACCOUNT_ROW_CLASS = "flex items-center gap-3.5 px-3.5 py-[13px]";
+const ROW_LEADING_COLUMN_CLASS = "flex w-5 items-center justify-center text-foreground";
 
 export function AccountAction({
   action,
@@ -146,30 +146,33 @@ export function SignInMethodRow({
     : detail || (provider.connected ? "Connected" : "Not connected");
 
   return (
-    <div className={ACCOUNT_ROW_CLASS}>
-      <span className="flex w-5 shrink-0 items-center justify-center text-foreground">
-        <ProviderBrandIcon
-          provider={provider.provider}
-          label={provider.brandLabel ?? provider.label}
-          className="icon-control shrink-0"
-        />
-      </span>
-      <div className="min-w-0 flex-1 space-y-px">
-        <div className="text-ui text-foreground">{provider.label}</div>
-        <div className="text-ui-sm text-muted-foreground [text-wrap:pretty]">
-          {description}
+    <RosterRow
+      density="comfortable"
+      leading={(
+        <span className={ROW_LEADING_COLUMN_CLASS}>
+          <ProviderBrandIcon
+            provider={provider.provider}
+            label={provider.brandLabel ?? provider.label}
+            className="icon-control shrink-0"
+          />
+        </span>
+      )}
+      title={provider.label}
+      secondary={description}
+      trailing={(
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="min-w-0 truncate text-ui-sm text-muted-foreground">{statusLabel}</span>
+          {rowActions.map((action, idx) => (
+            <AccountAction
+              key={idx}
+              action={action}
+              variant={idx === 0 ? "secondary" : "ghost"}
+              size="sm"
+            />
+          ))}
         </div>
-      </div>
-      <span className="shrink-0 text-ui-sm text-muted-foreground">{statusLabel}</span>
-      {rowActions.map((action, idx) => (
-        <AccountAction
-          key={idx}
-          action={action}
-          variant={idx === 0 ? "secondary" : "ghost"}
-          size="sm"
-        />
-      ))}
-    </div>
+      )}
+    />
   );
 }
 
@@ -179,19 +182,26 @@ export function ConnectedServiceRow({
   service: AccountConnectedServiceView;
 }) {
   return (
-    <div className={ACCOUNT_ROW_CLASS}>
-      <span className="flex w-5 shrink-0 items-center justify-center text-foreground">
-        <ProviderBrandIcon provider="github" className="icon-control shrink-0" />
-      </span>
-      <div className="min-w-0 flex-1 space-y-px">
-        <div className="text-ui text-foreground">{service.label}</div>
-        <div className="text-ui-sm text-muted-foreground [text-wrap:pretty]">
+    <RosterRow
+      density="comfortable"
+      leading={(
+        <span className={ROW_LEADING_COLUMN_CLASS}>
+          <ProviderBrandIcon provider="github" className="icon-control shrink-0" />
+        </span>
+      )}
+      title={service.label}
+      secondary={(
+        <>
           {service.description}
           {service.accountLabel ? ` · ${service.accountLabel}` : ""}
+        </>
+      )}
+      trailing={(
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="min-w-0 truncate text-ui-sm text-muted-foreground">{service.statusLabel}</span>
+          {service.action ? <AccountAction action={service.action} variant="secondary" /> : null}
         </div>
-      </div>
-      <span className="shrink-0 text-ui-sm text-muted-foreground">{service.statusLabel}</span>
-      {service.action ? <AccountAction action={service.action} variant="secondary" /> : null}
-    </div>
+      )}
+    />
   );
 }

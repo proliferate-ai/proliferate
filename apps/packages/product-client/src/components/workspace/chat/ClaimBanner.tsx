@@ -1,5 +1,6 @@
 import { Hand } from "#product/primitives/icons/product";
 import { Button } from "#product/primitives/Button";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 
 export type ClaimBannerView =
   | { kind: "hidden" }
@@ -20,6 +21,10 @@ interface ClaimBannerProps {
   view: ClaimBannerView;
 }
 
+// The banner sits in the transcript column, which runs on the 14px chat scale
+// rather than the 13px UI scale NoticeBanner defaults to.
+const CHAT_SCALE = "text-chat";
+
 export function ClaimBanner({ view }: ClaimBannerProps) {
   if (view.kind === "hidden") {
     return null;
@@ -27,27 +32,28 @@ export function ClaimBanner({ view }: ClaimBannerProps) {
 
   if (view.kind === "claimed_by_other") {
     return (
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
-        <div className="min-w-0">
-          <div className="text-chat font-medium">Claimed by {view.claimantName}</div>
-          <p className="mt-1 text-chat text-muted-foreground">{view.description}</p>
-        </div>
-      </div>
+      <NoticeBanner
+        className={CHAT_SCALE}
+        title={`Claimed by ${view.claimantName}`}
+      >
+        {view.description}
+      </NoticeBanner>
     );
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-info/40 bg-info/10 p-3">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 text-chat font-medium">
-          <Hand className="icon-paired" />
-          {view.title}
-        </div>
-        <p className="mt-1 text-chat text-muted-foreground">{view.description}</p>
-      </div>
-      <Button variant="secondary" size="sm" onClick={view.onClaim}>
-        {view.actionLabel}
-      </Button>
-    </div>
+    <NoticeBanner
+      tone="info"
+      className={CHAT_SCALE}
+      icon={<Hand />}
+      title={view.title}
+      action={(
+        <Button variant="secondary" size="sm" onClick={view.onClaim}>
+          {view.actionLabel}
+        </Button>
+      )}
+    >
+      {view.description}
+    </NoticeBanner>
   );
 }

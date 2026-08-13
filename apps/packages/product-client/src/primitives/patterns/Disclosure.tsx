@@ -48,9 +48,11 @@ interface DisclosureProps {
  * — grouped lists lead with the chevron, card and section headers trail it —
  * and the rotation is identical either way so the two never drift.
  *
- * incubating: chat/workflows slices, wave 2 — the transcript, tool-call,
- * file-tree, git-review, and harness disclosures recorded in the promotion
- * evidence adopt it there. No call-site migration lands with this file.
+ * incubating: workflows slices, wave 2. The chat transcript's disclosures
+ * cannot adopt this as written — it paints hover and pressed backgrounds on
+ * its header with no suppression, which reinstates the PRO-120 complaint, and
+ * it forces a chevron and a 17px title onto 14px quiet rows. A quiet spelling
+ * is required first.
  */
 export function Disclosure({
   open,

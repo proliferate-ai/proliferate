@@ -4,7 +4,8 @@ import { Button } from "#product/primitives/Button";
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { Input } from "#product/primitives/Input";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { IntegrationConnectDialog, type IntegrationConnectSubmit } from "#product/components/settings/panes/integrations/IntegrationConnectDialog";
@@ -188,8 +189,9 @@ export function UserIntegrationsPane({ focus = {} }: UserIntegrationsPaneProps) 
   }
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Integrations"
         description="Connect third-party tools your cloud agents can use, and manage their connection health."
       />
@@ -272,6 +274,6 @@ export function UserIntegrationsPane({ focus = {} }: UserIntegrationsPaneProps) 
           void handleDisconnect();
         }}
       />
-    </section>
+    </SettingsPageBody>
   );
 }

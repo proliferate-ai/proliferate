@@ -66,6 +66,7 @@ export function useWorkspaceFileSearch({
     searchEnabled,
     isLoading: searchEnabled && queryResult.isLoading,
     isError: searchEnabled && queryResult.isError,
+    isPlaceholderData: searchEnabled && Boolean(queryResult.isPlaceholderData),
     results,
   };
 }

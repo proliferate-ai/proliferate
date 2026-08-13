@@ -10,6 +10,7 @@ import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/too
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { ActionRowIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
 import { GenericActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedGenericActionRow";
+import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { resolveDiffDisplayPolicy } from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { useFileReferenceNativeContextMenu } from "#product/hooks/workspaces/ui/files/use-file-reference-native-context-menu";
@@ -168,9 +169,9 @@ function EditActionRow({
         )}
       </PopoverButton>
       {expanded && patch && (
-        <div
+        <ToolActionDetailsPanel
           data-diff-surface="chat"
-          className="thread-diff-virtualized mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-surface-elevated-secondary"
+          className="thread-diff-virtualized mt-1.5"
         >
           {displayPolicy && !displayPolicy.canRenderInline ? (
             <div className="px-3 py-4 text-chat text-muted-foreground">
@@ -187,7 +188,7 @@ function EditActionRow({
               variant="chat"
             />
           )}
-        </div>
+        </ToolActionDetailsPanel>
       )}
     </div>
   );

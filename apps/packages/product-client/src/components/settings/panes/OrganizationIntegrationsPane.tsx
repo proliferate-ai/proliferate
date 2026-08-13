@@ -4,7 +4,8 @@ import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Switch } from "#product/primitives/Switch";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import type { AdminIntegrationDefinition } from "@proliferate/cloud-sdk/client/integrations";
@@ -80,8 +81,9 @@ export function OrganizationIntegrationsPane() {
   );
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Integrations"
         description="Control which integrations members of your organization can connect and use."
         action={
@@ -141,6 +143,16 @@ export function OrganizationIntegrationsPane() {
           {filteredDefinitions.map((definition) => {
             const enabledView = adminIntegrationEnabledView(definition);
             return (
+              // Contradiction, recorded rather than re-derived: the settings
+              // slice spec paired this row with `IntegrationRow`'s RosterRow
+              // contract, but this pane never renders `IntegrationRow` — these
+              // are the admin catalog's own rows, a five-column table (name /
+              // source / auth kind / provenance / switch) whose columns must
+              // stay aligned across rows. `RosterRow` has a single trailing
+              // slot and no cross-row column mechanism (the same reason
+              // `OrganizationMembersList`'s table deferred), and `SettingsRow`
+              // is label + control. Neither fits without breaking alignment,
+              // so the grid stays until a table-row pattern exists.
               <div
                 key={definition.definitionId}
                 className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,10rem)_auto] items-center gap-3 px-3.5 py-[13px]"
@@ -189,6 +201,6 @@ export function OrganizationIntegrationsPane() {
         onClose={() => setAddDialogOpen(false)}
         onSubmit={handleCreate}
       />
-    </section>
+    </SettingsPageBody>
   );
 }

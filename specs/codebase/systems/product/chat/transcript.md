@@ -152,6 +152,17 @@ block opens the selected-response action menu. The transcript selection hook
 owns detection and dismissal; the menu owns only presentation and keyboard
 navigation.
 
+Transcript-wide selection uses the same native selection surface. When the
+active chat surface owns the command, primary Select All (`Cmd+A` on macOS,
+`Ctrl+A` elsewhere) must create a visible, non-collapsed range across every
+rendered transcript row whether the command arrives from a WebView keydown or
+the Desktop native Edit menu. It must not require an earlier pointer selection.
+Transcript prose keeps the WebView's native selection paint; the chat surface
+must not replace it with the text-entry/editor selection token.
+Composer text entries, terminal zones, and browser zones keep command ownership.
+Copying an exact transcript-root selection serializes the complete loaded
+semantic transcript so DOM virtualization cannot truncate the clipboard text.
+
 Rules:
 
 - Preserve native selection and copy behavior. Assistant prose may be selected

@@ -37,6 +37,26 @@ export function ActionRowIcon({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The transcript's quiet disclosure row: a `Button variant="ghost"` with its
+ * box suppressed down to a plain text affordance, which is the transcript's
+ * whole interaction language.
+ *
+ * The suppression is deliberate and load-bearing, not a check-7 violation
+ * (DESIGN_SYSTEM.md § UI-conformance review): `rounded-none bg-transparent p-0
+ * hover:bg-transparent focus-visible:ring-0` is what stops a sharp-cornered
+ * rectangle appearing around a transcript line on hover. Do not normalize it
+ * back onto `Button`'s defaults.
+ *
+ * Recorded exclusion for check 1: the landed `Disclosure` is not a landing site
+ * for this row. It always paints `hover:bg-hover active:bg-active` on its header
+ * and exposes no suppression — `className` lands on its outer wrapper, not the
+ * row — so adopting it would put back the pressed rectangle PRO-120 (#1747)
+ * removes. It also renders a rotating chevron where these rows carry a status
+ * glyph, and a 17px `text-heading` title where the transcript runs at 14px.
+ * Landing this family needs a quiet spelling of `Disclosure`, which is a review
+ * ruling, not a call-site workaround.
+ */
 export function ActionDisclosureRow({
   label,
   icon,

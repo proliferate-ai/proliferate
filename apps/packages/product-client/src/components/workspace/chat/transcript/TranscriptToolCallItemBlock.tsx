@@ -245,7 +245,7 @@ export function TranscriptToolCallItemBlock({
     && fileReads.length === 0
     && terminalParts.length === 0;
   return (
-    <div className={hasOnlyFileChangeRows ? "flex flex-col" : "space-y-1.5"}>
+    <div className={hasOnlyFileChangeRows ? "flex flex-col" : "space-y-1"}>
       {rows}
     </div>
   );

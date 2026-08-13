@@ -90,6 +90,11 @@ export function ComposerRichTextEditor({
     theme: {
       paragraph: "m-0 min-h-[1lh]",
       text: { bold: "font-semibold", italic: "italic" },
+      // Recorded cause (DESIGN_SYSTEM.md § UI-conformance review, check 4): a
+      // two-argument CSS fallback for the optional per-theme code-block
+      // override. No token utility can express a fallback chain, and this
+      // string must stay a plain class list because Lexical's theme map takes
+      // one.
       code: "box-border my-2 block w-full min-w-0 max-w-full overflow-x-auto whitespace-pre rounded-lg border border-transparent bg-[var(--color-code-block-background,var(--color-card))] p-3 font-mono text-chat font-normal text-foreground",
       list: {
         ul: "list-disc pl-5",
@@ -257,7 +262,15 @@ function ComposerEditorBridge({
     editor.update(() => {
       $getRoot().clear();
       if (value) $convertFromMarkdownString(value, INPUT_TRANSFORMERS);
-      $getRoot().selectEnd();
+      // Reset inherited text formats along with the content: the selection's
+      // format bits survive a root clear, so a code-formatted draft would
+      // otherwise re-apply `code` to everything typed after a send (PRO-159).
+      const selection = $getRoot().selectEnd();
+      if (selection.format !== 0 || selection.style !== "") {
+        selection.format = 0;
+        selection.style = "";
+        selection.dirty = true;
+      }
     }, { tag: EXTERNAL_VALUE_TAG });
   }, [editor, snapshot, value]);
 

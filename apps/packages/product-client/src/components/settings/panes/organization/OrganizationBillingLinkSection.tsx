@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "#product/primitives/Button";
 import { ChevronRight } from "#product/primitives/icons/core";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 
 export function OrganizationBillingLinkSection() {
@@ -9,11 +10,7 @@ export function OrganizationBillingLinkSection() {
 
   return (
     <SettingsSection title="Billing">
-      <div className="flex items-center gap-3.5 px-3.5 py-[13px]">
-        <div className="min-w-0 flex-1">
-          <div className="text-ui text-foreground">Billing</div>
-          <div className="mt-px text-ui-sm text-muted-foreground [text-wrap:pretty]">Plan, seats, and usage</div>
-        </div>
+      <SettingsRow label="Billing" description="Plan, seats, and usage">
         <Button
           type="button"
           variant="secondary"
@@ -24,7 +21,7 @@ export function OrganizationBillingLinkSection() {
           Open billing
           <ChevronRight className="icon-paired" />
         </Button>
-      </div>
+      </SettingsRow>
     </SettingsSection>
   );
 }
