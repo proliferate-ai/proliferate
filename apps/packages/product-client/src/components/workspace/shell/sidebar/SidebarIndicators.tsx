@@ -28,7 +28,10 @@ export function SidebarStatusGlyph({
       return <CircleAlert className="icon-compact text-sidebar-status-error [font-size:var(--text-sidebar-row)]" />;
     case "waiting_input":
     case "waiting_plan":
-      return <Clock className="icon-compact text-sidebar-status-waiting [font-size:var(--text-sidebar-row)]" />;
+      // Quiet ink: waiting is a resting state, not an alert. The row still
+      // says why through the indicator's tooltip, and the status inks stay
+      // reserved for the states that genuinely need eyes (error, conflicts).
+      return <Clock className="icon-compact text-sidebar-muted-foreground [font-size:var(--text-sidebar-row)]" />;
     case "iterating":
     case "queued_prompt":
       return (
@@ -40,6 +43,35 @@ export function SidebarStatusGlyph({
         />
       );
   }
+}
+
+export const SIDEBAR_GIT_CONFLICTS_LABEL = "Merge conflicts in worktree";
+
+/**
+ * Merge conflicts, rendered in the row's STATUS cell rather than beside the
+ * git identity glyph. Conflicts are a "this needs you" alert like the error
+ * and waiting indicators around it, not part of the row's PR identity; the
+ * other two attention states (failing checks, changes requested) are already
+ * the identity glyph's state dot and are deliberately not repeated here.
+ *
+ * It occupies the same fixed 20px cell as `SidebarStatusIndicatorView`, so a
+ * row swapping between conflicts and live activity does not shift.
+ */
+export function SidebarGitConflictsAlert() {
+  return (
+    <Tooltip
+      content={SIDEBAR_GIT_CONFLICTS_LABEL}
+      className="flex h-5 min-w-5 shrink-0 items-center justify-center"
+    >
+      <span
+        role="img"
+        aria-label={SIDEBAR_GIT_CONFLICTS_LABEL}
+        className="flex h-5 min-w-5 items-center justify-center"
+      >
+        <CircleAlert className="icon-compact text-sidebar-status-waiting [font-size:var(--text-sidebar-row)]" />
+      </span>
+    </Tooltip>
+  );
 }
 
 export function SidebarStatusIndicatorView({

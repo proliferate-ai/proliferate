@@ -117,7 +117,7 @@ describe("WorkspaceItem", () => {
     expect(onCopyBranchName).toHaveBeenCalledTimes(1);
   });
 
-  it("renders PR status as the left identity glyph", () => {
+  it("renders PR status as the trailing identity glyph", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -147,7 +147,7 @@ describe("WorkspaceItem", () => {
     expect(cells?.children).toHaveLength(2);
   });
 
-  it("keeps a dim PR identity for an authoritative no-PR branch", () => {
+  it("falls back to the worktree identity for a branch with no PR", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -164,10 +164,10 @@ describe("WorkspaceItem", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "No pull request" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Worktree · no pull request" })).toBeTruthy();
   });
 
-  it("keeps a dim PR identity when PR data is unknown", () => {
+  it("falls back to the worktree identity when PR data is unknown", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -176,18 +176,26 @@ describe("WorkspaceItem", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "Pull request status unavailable" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Worktree · no pull request" })).toBeTruthy();
   });
 
-  it("keeps the PR identity in place for cloud workspaces", () => {
+  it("shows the cloud identity for a cloud workspace without a PR", () => {
     renderWithProductHost(
       <WorkspaceItem name="Cloud workspace" variant="cloud" />,
     );
 
-    expect(screen.getByRole("img", { name: "Pull request status unavailable" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Cloud workspace · no pull request" })).toBeTruthy();
   });
 
-  it("shows git attention beside the PR identity", () => {
+  it("leaves the identity cell out entirely for a local row without a PR", () => {
+    const { container } = renderWithProductHost(
+      <WorkspaceItem name="Local workspace" variant="local" />,
+    );
+
+    expect(container.querySelector("[data-sidebar-trailing-identity]")).toBeNull();
+  });
+
+  it("does not repeat check attention that the state dot already carries", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -197,8 +205,36 @@ describe("WorkspaceItem", () => {
     );
 
     expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
-    expect(screen.getByRole("img", { name: "Pull request changes requested" }))
-      .toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Pull request changes requested" }))
+      .toBeNull();
+  });
+
+  it("puts merge conflicts in the status cell, not beside the identity glyph", () => {
+    renderWithProductHost(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        gitStatus={makeGitStatus({ conflicted: true, attention: "conflicts" })}
+      />,
+    );
+
+    const alert = screen.getByRole("img", { name: "Merge conflicts in worktree" });
+    expect(alert.closest("[data-sidebar-trailing-status]")).not.toBeNull();
+    expect(alert.closest("[data-sidebar-trailing-identity]")).toBeNull();
+  });
+
+  it("lets live activity beat the conflicts alert in the status cell", () => {
+    renderWithProductHost(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        statusIndicator={{ kind: "iterating", tooltip: "Iterating" }}
+        gitStatus={makeGitStatus({ conflicted: true, attention: "conflicts" })}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Merge conflicts in worktree" })).toBeNull();
   });
 
   it("shows the unread dot in the right slot when the row needs review", () => {

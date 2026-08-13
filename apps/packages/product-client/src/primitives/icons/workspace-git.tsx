@@ -64,6 +64,54 @@ export function GitBranchIcon({ className, ...props }: IconProps) {
   );
 }
 
+export type GitBranchStatusDotFill = "solid" | "hollow";
+
+export interface GitBranchStatusIconProps extends IconProps {
+  /**
+   * Ink for the state dot only, as a `text-*` class — pass the PR kind's
+   * tone through `statusDotToneTextClass` so the glyph and the dot-based
+   * readings of the same state cannot drift apart. The dot resolves it via
+   * its own `currentColor`, leaving the branch strokes on the consumer's ink.
+   */
+  dotClassName?: string;
+  /** `hollow` is the outline used for states still in flight. */
+  dotFill?: GitBranchStatusDotFill;
+}
+
+/**
+ * PR-status identity glyph: `GitBranchIcon`'s branch column plus a hook
+ * arrow, with a STANDALONE bottom-right state dot carrying the PR state.
+ *
+ * One SVG serves every state — never a per-state fork. Only two things vary:
+ * whether the dot is filled or an outline (`dotFill`), and its ink
+ * (`dotClassName`). Everything else is the consumer's `currentColor`.
+ */
+export function GitBranchStatusIcon({
+  className,
+  dotClassName,
+  dotFill = "solid",
+  ...props
+}: GitBranchStatusIconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <circle cx="5.4165" cy="5" r="1.875" stroke="currentColor" strokeWidth="1.33" />
+      <circle cx="5.4165" cy="15" r="1.875" stroke="currentColor" strokeWidth="1.33" />
+      <path d="M5.4165 6.66664V13.3333" stroke="currentColor" strokeWidth="1.33" strokeLinejoin="round" />
+      <path d="M9.4 2.9L7.95 4.35L9.4 5.8" stroke="currentColor" strokeWidth="1.33" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8.55 4.35H11.9C13.03 4.35 13.95 5.27 13.95 6.4V9.2" stroke="currentColor" strokeWidth="1.33" strokeLinecap="round" />
+      <circle
+        className={dotClassName}
+        cx="15"
+        cy="15"
+        r="3"
+        fill={dotFill === "hollow" ? "none" : "currentColor"}
+        stroke="currentColor"
+        strokeWidth="1.33"
+      />
+    </svg>
+  );
+}
+
 /** Thread-row PR glyph: muted branch pipe + inbound arrow; the
  * status dot is part of the SVG and colored via --pr-status-dot-color
  * (rendered only when `dot` is set). */

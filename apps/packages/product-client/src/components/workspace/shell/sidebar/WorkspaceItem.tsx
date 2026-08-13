@@ -26,9 +26,13 @@ import type {
 } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import {
+  SidebarGitConflictsAlert,
   SidebarStatusIndicatorView,
 } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
-import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
+import {
+  resolveSidebarWorkspaceGitIdentity,
+  SidebarWorkspaceGitGlyph,
+} from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
 import { WorkspaceDeleteConfirmMenu } from "#product/components/workspace/shell/sidebar/WorkspaceDeleteConfirmMenu";
 import { WorkspaceItemMenu } from "#product/components/workspace/shell/sidebar/WorkspaceItemMenu";
 import { WorkspaceRenamePopover } from "#product/components/workspace/shell/sidebar/WorkspaceRenamePopover";
@@ -62,8 +66,9 @@ interface WorkspaceItemProps {
   /** Current git branch, shown read-only in the three-dot menu git section. */
   branchName?: string | null;
   /**
-   * Composed git/PR status. Drives the persistent PR glyph tone, its tooltip,
-   * the separate attention alert, and the "Open pull request" menu item.
+   * Composed git/PR status. Together with `variant` it decides the trailing
+   * identity glyph and its tooltip; it also drives the conflicts alert in the
+   * status cell and the "Open pull request" menu item.
    */
   gitStatus?: WorkspaceGitStatus | null;
   /** Renders the trailing unseen-activity dot. */
@@ -135,7 +140,22 @@ export function WorkspaceItem({
   const handlePinCommand = () => onPin?.();
   const handleUnpinCommand = () => onUnpin?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
-  const trailingIdentity = <SidebarWorkspaceGitGlyph status={gitStatus} />;
+  // The identity cell exists only when there is an identity to put in it, so
+  // a local row with no PR collapses the cell instead of reserving 20px for
+  // nothing.
+  const trailingIdentity = resolveSidebarWorkspaceGitIdentity(gitStatus, variant)
+    ? <SidebarWorkspaceGitGlyph status={gitStatus} variant={variant} />
+    : null;
+  // Right-slot precedence: live activity first, then merge conflicts (the one
+  // git attention state the identity glyph's dot does not already carry).
+  const trailingStatus = statusIndicator ? (
+    <SidebarStatusIndicatorView
+      indicator={statusIndicator}
+      onAction={onIndicatorAction}
+    />
+  ) : gitStatus?.attention === "conflicts" ? (
+    <SidebarGitConflictsAlert />
+  ) : null;
   const pullRequestUrl = gitStatus?.pr?.url ?? null;
   const pullRequestNumber = gitStatus?.pr?.number ?? null;
   const handleOpenPullRequestCommand = pullRequestUrl && onOpenPullRequest
@@ -207,12 +227,7 @@ export function WorkspaceItem({
     <ProductSidebarWorkspaceRow
       active={active}
       archived={archived}
-      trailingStatus={statusIndicator ? (
-        <SidebarStatusIndicatorView
-          indicator={statusIndicator}
-          onAction={onIndicatorAction}
-        />
-      ) : null}
+      trailingStatus={trailingStatus}
       trailingIdentity={trailingIdentity}
       label={name}
       unreadDot={needsReview}
