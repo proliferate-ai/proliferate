@@ -171,6 +171,15 @@ impl AgentOperations {
                 continue;
             }
             let status = self.status_for(&resolved).await?;
+            // NOTE: the advertised `status: "closed"` filter is effectively
+            // unreachable here. Ordinary terminal agents are excluded twice
+            // (the store's `list_visible_all` filters `closed_at IS NULL`, and
+            // the `is_terminal_session()` guard above drops `status == "closed"`
+            // rows), and relationship-closed subagents are dropped by the
+            // `role() == Subagent` guard before this filter runs. Only a
+            // transient execution-state race can yield a Closed presentation.
+            // The schema value is frozen; see the PR review notes for the
+            // contract-level decision this raises.
             if input
                 .status
                 .is_some_and(|filter| status.presentation != filter)
@@ -184,13 +193,26 @@ impl AgentOperations {
             ));
         }
 
+        // Impose a stable total order for pagination: most-recently-updated
+        // first, with the immutable session id as a deterministic tiebreak so
+        // rows sharing an `updated_at` never reorder between paginated calls.
+        agents.sort_by(|left, right| list_order_key(left).cmp(&list_order_key(right)));
+
         let start = match input.cursor.as_deref() {
             None => 0,
-            Some(cursor) => agents
-                .iter()
-                .position(|agent| agent.identity.session_id == cursor)
-                .map(|index| index + 1)
-                .ok_or(AgentOperationsError::InvalidCursor)?,
+            Some(cursor) => {
+                // Resume from the cursor row's position in the stable order
+                // rather than a found-by-scan index, so the boundary stays
+                // correct even if the cursor row itself moved since the last
+                // call. Keys are unique (id tiebreak), so `<= cursor_key`
+                // covers exactly the cursor row and everything before it.
+                let cursor_key = agents
+                    .iter()
+                    .find(|agent| agent.identity.session_id == cursor)
+                    .map(list_order_key)
+                    .ok_or(AgentOperationsError::InvalidCursor)?;
+                agents.partition_point(|agent| list_order_key(agent) <= cursor_key)
+            }
         };
         let end = (start + input.limit).min(agents.len());
         let next_cursor = (end < agents.len()).then(|| agents[end - 1].identity.session_id.clone());
@@ -283,7 +305,11 @@ impl AgentOperations {
         caller: &AuthenticatedAgentCaller,
     ) -> Result<ResolvedAgent, AgentOperationsError> {
         let resolved = self.resolve_record(self.resolve_caller_record(caller)?)?;
-        if resolved.is_terminal_session() && !resolved.is_relationship_closed() {
+        // A terminal caller is closed regardless of relationship state; a
+        // relationship-closed-but-live caller (e.g. a promoted subagent whose
+        // session is still running) stays admitted because its session is not
+        // terminal.
+        if resolved.is_terminal_session() {
             return Err(AgentOperationsError::CallerClosed);
         }
         Ok(resolved)
@@ -435,6 +461,15 @@ impl ResolvedAgent {
     fn is_terminal_session(&self) -> bool {
         self.record.closed_at.is_some() || self.record.status == "closed"
     }
+}
+
+/// Deterministic total-order key for agent listing pagination: `updated_at`
+/// descending, then the immutable session id ascending as a stable tiebreak.
+fn list_order_key(agent: &AgentView) -> (std::cmp::Reverse<&str>, &str) {
+    (
+        std::cmp::Reverse(agent.updated_at.as_str()),
+        agent.identity.session_id.as_str(),
+    )
 }
 
 fn project_status(state: SessionExecutionState) -> EffectiveAgentStatus {

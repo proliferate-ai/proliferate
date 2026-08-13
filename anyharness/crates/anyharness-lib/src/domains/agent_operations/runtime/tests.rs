@@ -241,6 +241,69 @@ async fn list_reads_exclude_all_subagents_and_scope_children_to_the_parent() {
 }
 
 #[tokio::test]
+async fn list_pagination_is_stable_regardless_of_session_row_order() {
+    fn stamped(id: &str, updated_at: &str) -> SessionRecord {
+        let mut record = session(id, "workspace-a", "idle");
+        record.updated_at = updated_at.to_string();
+        record
+    }
+
+    // Distinct `updated_at` values so the stable order (updated_at DESC, id) is
+    // total and observably different from insertion order.
+    let ascending = vec![
+        stamped("A", "2026-08-10T00:00:01Z"),
+        stamped("B", "2026-08-10T00:00:02Z"),
+        stamped("C", "2026-08-10T00:00:03Z"),
+    ];
+    // Same rows, reversed insertion order — simulates the store returning rows
+    // in a different sequence (e.g. `updated_at` churn reordering the DESC
+    // scan) between paginated calls.
+    let mut descending = ascending.clone();
+    descending.reverse();
+
+    // Stable order is `updated_at` DESC regardless of the underlying row order.
+    let expected = vec!["C".to_string(), "B".to_string(), "A".to_string()];
+
+    for records in [ascending, descending] {
+        let operations = AgentOperations::new(
+            RuntimeIdentity::new("runtime-1"),
+            Arc::new(FakeSessions { records }),
+            Arc::new(FakeRelationships::default()),
+            Arc::new(FakeExecution::default()),
+        );
+        let caller = caller(&operations, "A");
+
+        // Walk the whole listing one row per page; a stable order plus
+        // sort-key cursor resumption must visit every agent exactly once.
+        let mut seen = Vec::new();
+        let mut cursor = None;
+        loop {
+            let page = operations
+                .list_agents(
+                    &caller,
+                    ListAgentsInput {
+                        limit: 1,
+                        cursor: cursor.clone(),
+                        ..ListAgentsInput::default()
+                    },
+                )
+                .await
+                .expect("page");
+            seen.extend(
+                page.agents
+                    .iter()
+                    .map(|agent| agent.identity.session_id.clone()),
+            );
+            match page.next_cursor {
+                Some(next) => cursor = Some(next),
+                None => break,
+            }
+        }
+        assert_eq!(seen, expected);
+    }
+}
+
+#[tokio::test]
 async fn whoami_returns_exact_role_parent_scope_and_effective_capabilities() {
     let operations = fixture(false);
     let ordinary = operations
