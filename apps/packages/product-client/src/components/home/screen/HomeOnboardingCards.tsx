@@ -29,11 +29,14 @@ function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
  * Onboarding card (UX spec §10, owner rev 2026-07-01: cards, not rows):
  * side-by-side tile — page-tone surface, 20px radius, hairline frame,
  * icon row on top with trailing accessories + hover dismiss, then
- * title 13/500 and description 12px muted below. The frame is an INSET
- * ring on purpose: at fractional window zooms WebKit's pixel snapping
- * rounds outward hairline rings — and even 0.5px/1px borders — to zero
- * device pixels on individual edges, while an inset ring composites over
- * the card's own background and survives every zoom factor (PRO-117).
+ * title 13/500 and description 12px muted below. On desktop the hairline
+ * ring width divides out --proliferate-window-zoom so the frame always
+ * rasterizes at one whole device pixel: WKWebView page zoom drops
+ * sub-device-pixel hairlines (outward or inset rings, and even 0.5px/1px
+ * borders) to zero on individual edges at fractional zoom factors. The
+ * compensation is desktop-scoped because only desktop applies the zoom
+ * preference to the page — on web the variable can be non-1 while the
+ * page is unzoomed (PRO-117).
  */
 function OnboardingCard({
   icon,
@@ -55,7 +58,7 @@ function OnboardingCard({
   selectLabel: string;
 }) {
   return (
-    <div className="group relative flex min-h-26 min-w-0 flex-col rounded-composer bg-background px-4 py-3 text-left shadow-subtle inset-ring-[0.5px] inset-ring-border-heavy transition-colors hover:bg-hover active:bg-active">
+    <div className="group relative flex min-h-26 min-w-0 flex-col rounded-composer bg-background px-4 py-3 text-left shadow-subtle ring-[0.5px] ring-border-heavy transition-colors in-data-[proliferate-client=desktop]:ring-[calc(0.5px/var(--proliferate-window-zoom,1))] hover:bg-hover active:bg-active">
       {onSelect ? (
         <Button
           type="button"
