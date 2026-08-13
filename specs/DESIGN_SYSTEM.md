@@ -848,7 +848,6 @@ index is the closed set, not a sample of it. Closure is mechanical in both direc
 | `PopoverSearchField` | [PopoverSearchField.tsx](../apps/packages/product-client/src/primitives/PopoverSearchField.tsx) | Search input for popover pickers, with an in-place list-navigation keyboard hook. |
 | `ProgressBar` | [ProgressBar.tsx](../apps/packages/product-client/src/primitives/ProgressBar.tsx) | Determinate progress bar. |
 | `RadioCardGroup` | [RadioCardGroup.tsx](../apps/packages/product-client/src/primitives/RadioCardGroup.tsx) | Radio-selectable card group with label/description/icon per option. |
-| `RangeSlider` | [RangeSlider.tsx](../apps/packages/product-client/src/primitives/RangeSlider.tsx) | Native range input styled to tokens. |
 | `RowActionIconButton` | [RowActionIconButton.tsx](../apps/packages/product-client/src/primitives/RowActionIconButton.tsx) | Sanctioned hover-revealed row-action icon button (sidebar kebab, archive, tab close, file-row actions) — 28px hit target, 16px glyph. |
 | `SegmentedControl` | [SegmentedControl.tsx](../apps/packages/product-client/src/primitives/SegmentedControl.tsx) | Segmented tab-like control. |
 | `Select` | [Select.tsx](../apps/packages/product-client/src/primitives/Select.tsx) | Native select styled to tokens. |

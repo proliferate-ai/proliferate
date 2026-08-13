@@ -20,7 +20,6 @@ import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
 import { ProgressBar } from "#product/primitives/ProgressBar";
 import { RadioCardGroup } from "#product/primitives/RadioCardGroup";
-import { RangeSlider } from "#product/primitives/RangeSlider";
 import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { Select } from "#product/primitives/Select";
@@ -69,10 +68,6 @@ function SelectDemo() {
       <option value="b">Option B</option>
     </Select>
   );
-}
-
-function RangeSliderDemo() {
-  return <RangeSlider defaultValue={40} min={0} max={100} onChange={noop} />;
 }
 
 function RadioCardGroupDemo() {
@@ -295,7 +290,6 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
     <ProgressBar value={60} className="h-2 w-40 overflow-hidden rounded-full bg-input" indicatorClassName="h-full bg-primary" />
   ) },
   { name: "RadioCardGroup", subpath: "#product/primitives/RadioCardGroup", render: RadioCardGroupDemo },
-  { name: "RangeSlider", subpath: "#product/primitives/RangeSlider", render: RangeSliderDemo },
   { name: "RowActionIconButton", subpath: "#product/primitives/RowActionIconButton", render: () => (
     <RowActionIconButton label="Delete" visibility="always" onClick={noop}><Trash /></RowActionIconButton>
   ) },
