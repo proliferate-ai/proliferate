@@ -297,6 +297,13 @@ async fn ordered_shutdown_keeps_diagnostics_teardown_failures_off_the_product_re
     let anyharness = sidecar::create_sidecar(49_903);
     sidecar::suppress_shutdown_test_persistence(&anyharness).await;
     fallback.inject_close_failure();
+    let support =
+        crate::diagnostics::support_snapshot::coordinator::SupportSnapshotCoordinator::new(
+            Arc::clone(&supervisor),
+            producer.clone(),
+            worker.clone(),
+            anyharness.clone(),
+        );
     let coordinator = DiagnosticsShutdownCoordinator::new(
         Arc::clone(&supervisor),
         producer,
@@ -304,6 +311,7 @@ async fn ordered_shutdown_keeps_diagnostics_teardown_failures_off_the_product_re
         create_broker_server_state(),
         worker,
         anyharness,
+        support,
     );
 
     // The Windows updater gates `install()` on this result. A fallback flush
@@ -333,6 +341,13 @@ async fn failed_product_teardown_is_reattempted_rather_than_replayed() {
     .await;
     let anyharness = sidecar::create_sidecar(49_904);
     sidecar::suppress_shutdown_test_persistence(&anyharness).await;
+    let support =
+        crate::diagnostics::support_snapshot::coordinator::SupportSnapshotCoordinator::new(
+            Arc::clone(&supervisor),
+            producer.clone(),
+            worker.clone(),
+            anyharness.clone(),
+        );
     let coordinator = DiagnosticsShutdownCoordinator::new(
         Arc::clone(&supervisor),
         producer,
@@ -340,6 +355,7 @@ async fn failed_product_teardown_is_reattempted_rather_than_replayed() {
         create_broker_server_state(),
         worker,
         anyharness,
+        support,
     );
 
     // First try loses the reap race, so the Worker keeps its database lock.
