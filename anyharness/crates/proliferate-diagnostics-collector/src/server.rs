@@ -76,7 +76,7 @@ impl CollectorServer {
             task: Some(task),
         };
         if config.auto_ready {
-            server.mark_ready()?;
+            server.mark_ready();
         }
         Ok(server)
     }
@@ -89,8 +89,8 @@ impl CollectorServer {
         Arc::clone(&self.core)
     }
 
-    pub fn mark_ready(&self) -> Result<(), ServerError> {
-        self.core.mark_ready().map_err(ServerError::Core)
+    pub fn mark_ready(&self) {
+        self.core.mark_ready();
     }
 
     pub fn connection_descriptor(
@@ -115,28 +115,32 @@ impl CollectorServer {
     }
 
     pub async fn shutdown(mut self) -> Result<(), ServerError> {
-        self.core.begin_shutdown()?;
+        self.core.begin_shutdown();
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(true);
         }
         let Some(mut task) = self.task.take() else {
-            self.core.finish_shutdown(TerminalOutcomeV1::Succeeded)?;
+            self.core.finish_shutdown(TerminalOutcomeV1::Succeeded);
             return Ok(());
         };
-        let outcome =
+        // A failed serve task still owes the guaranteed terminal, so the
+        // failure classifies the outcome instead of returning ahead of it.
+        let (outcome, failure) =
             match tokio::time::timeout(self.core.limits.shutdown_deadline, &mut task).await {
-                Ok(result) => {
-                    result??;
-                    TerminalOutcomeV1::Succeeded
-                }
+                Ok(Ok(Ok(()))) => (TerminalOutcomeV1::Succeeded, None),
+                Ok(Ok(Err(error))) => (TerminalOutcomeV1::Failed, Some(ServerError::Io(error))),
+                Ok(Err(error)) => (TerminalOutcomeV1::Failed, Some(ServerError::Join(error))),
                 Err(_) => {
                     task.abort();
                     let _ = task.await;
-                    TerminalOutcomeV1::TimedOut
+                    (TerminalOutcomeV1::TimedOut, None)
                 }
             };
-        self.core.finish_shutdown(outcome)?;
-        Ok(())
+        self.core.finish_shutdown(outcome);
+        match failure {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 }
 

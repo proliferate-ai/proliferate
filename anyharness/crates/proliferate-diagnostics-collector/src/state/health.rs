@@ -36,6 +36,17 @@ impl CollectorCore {
             "tail_readers".to_owned(),
             (self.limits.tail_readers - self.tail_slots.available_permits()) as u64,
         );
+        // A saturated lifecycle table is observable here rather than as a
+        // request failure: displacements count open producer operations the
+        // collector's own bookkeeping had to take over.
+        cardinality_counts.insert(
+            "lifecycle_displacements".to_owned(),
+            inner.counters.lifecycle_displacements,
+        );
+        cardinality_counts.insert(
+            "dropped_collector_records".to_owned(),
+            inner.counters.dropped_collector_records,
+        );
         let health = HealthResponseV1 {
             schema_version: CURRENT_SCHEMA_VERSION,
             status,

@@ -19,6 +19,17 @@ pub use ingest::IngestResult;
 pub(crate) use ingest::{IngestCandidate, PreparedRecord};
 pub(crate) use query::ExportSnapshot;
 
+/// Who authored a record reaching the accept path. Producer records carry
+/// stable per-record rejection reasons back to their submitter, while the
+/// collector's own bookkeeping has no submitter to reject: it must always find
+/// room so a saturated lifecycle table costs a counted gap instead of a
+/// fabricated request failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RecordOrigin {
+    Producer,
+    Collector,
+}
+
 #[derive(Debug)]
 pub enum CoreError {
     InvalidConfig(&'static str),
@@ -73,6 +84,8 @@ pub(crate) struct Counters {
     pub(crate) duplicate_terminals: u64,
     pub(crate) conflicting_terminals: u64,
     pub(crate) tail_reader_drops: u64,
+    pub(crate) lifecycle_displacements: u64,
+    pub(crate) dropped_collector_records: u64,
 }
 
 pub(crate) struct Inner {
@@ -157,8 +170,7 @@ impl CollectorCore {
                 None,
                 None,
             );
-            core.accept_record_locked(&mut inner, record, false)
-                .map_err(|_| CoreError::Serialization)?;
+            core.emit_collector_record_locked(&mut inner, record);
         }
         Ok(core)
     }
@@ -167,10 +179,10 @@ impl CollectorCore {
         &self.boot_id
     }
 
-    pub fn mark_ready(&self) -> Result<(), CoreError> {
+    pub fn mark_ready(&self) {
         let mut inner = self.lock();
         if inner.status != HealthStatusV1::Starting {
-            return Ok(());
+            return;
         }
         let operation_id = inner.boot_operation_id.clone();
         let record = self.collector_lifecycle_record(
@@ -180,10 +192,8 @@ impl CollectorCore {
             Some(proliferate_diagnostics_protocol::v1::types::TerminalOutcomeV1::Succeeded),
             None,
         );
-        self.accept_record_locked(&mut inner, record, false)
-            .map_err(|_| CoreError::Serialization)?;
+        self.emit_collector_record_locked(&mut inner, record);
         inner.status = HealthStatusV1::Ready;
-        Ok(())
     }
 
     pub fn pressure(&self) -> PressureV1 {

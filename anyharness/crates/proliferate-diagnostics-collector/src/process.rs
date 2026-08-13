@@ -21,8 +21,6 @@ pub enum ProcessChannelError {
     InvalidCapability,
     #[error("control command was malformed or over limit")]
     InvalidControlCommand,
-    #[error("collector core rejected control command: {0}")]
-    Core(#[from] crate::CoreError),
 }
 
 pub fn read_capability_from_fd(fd: i32) -> Result<Vec<u8>, ProcessChannelError> {
@@ -103,7 +101,7 @@ impl ControlChannel {
         match command {
             ControlCommand::Shutdown => Ok(true),
             ControlCommand::ProducerDead { producer_boot_id } => {
-                core.mark_producer_dead(&producer_boot_id)?;
+                core.mark_producer_dead(&producer_boot_id);
                 Ok(false)
             }
             ControlCommand::ResetProfileCounters => {

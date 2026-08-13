@@ -37,7 +37,12 @@ async fn main() -> anyhow::Result<()> {
     println!("{}", serde_json::to_string(&descriptor)?);
     std::io::stdout().flush()?;
     capability.fill(0);
-    wait_for_process_shutdown(core, args.control_fd).await?;
-    server.shutdown().await?;
+    // A malformed control line or a signal error still owes the guaranteed
+    // `collector.shutdown` terminal, so the wait result is held until after the
+    // server has been shut down.
+    let waited = wait_for_process_shutdown(core, args.control_fd).await;
+    let stopped = server.shutdown().await;
+    waited?;
+    stopped?;
     Ok(())
 }

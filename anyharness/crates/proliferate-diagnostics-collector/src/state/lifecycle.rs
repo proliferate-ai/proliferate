@@ -4,7 +4,7 @@ use proliferate_diagnostics_protocol::v1::types::{
     RedactionClassificationV1, SeverityV1, SourceV1, TerminalOutcomeV1,
 };
 
-use super::{CollectorCore, CoreError};
+use super::{CollectorCore, RecordOrigin};
 
 impl CollectorCore {
     pub(crate) fn collector_lifecycle_record(
@@ -64,11 +64,29 @@ impl CollectorCore {
         }
     }
 
+    /// Accept a record the collector authored itself. Bookkeeping has no
+    /// submitter to hand a rejection to, so a record that still cannot be
+    /// accepted is counted and dropped rather than surfaced as a caller-visible
+    /// failure. The lifecycle table always yields a slot for this origin, so the
+    /// counter stays at zero outside genuine corruption.
+    pub(crate) fn emit_collector_record_locked(
+        &self,
+        inner: &mut super::Inner,
+        record: ProducerRecordV1,
+    ) {
+        if self
+            .accept_record_locked(inner, record, RecordOrigin::Collector)
+            .is_err()
+        {
+            inner.counters.dropped_collector_records += 1;
+        }
+    }
+
     pub(crate) fn record_producer_attach_locked(
         &self,
         inner: &mut super::Inner,
         terminal: TerminalOutcomeV1,
-    ) -> Result<(), CoreError> {
+    ) {
         let operation_id = format!("collector-attach-{}", uuid::Uuid::new_v4());
         let started = self.collector_lifecycle_record(
             inner,
@@ -77,8 +95,7 @@ impl CollectorCore {
             None,
             None,
         );
-        self.accept_record_locked(inner, started, false)
-            .map_err(|_| CoreError::Serialization)?;
+        self.emit_collector_record_locked(inner, started);
         let terminal = self.collector_lifecycle_record(
             inner,
             "collector.producer.attach",
@@ -86,12 +103,10 @@ impl CollectorCore {
             Some(terminal),
             None,
         );
-        self.accept_record_locked(inner, terminal, false)
-            .map_err(|_| CoreError::Serialization)?;
-        Ok(())
+        self.emit_collector_record_locked(inner, terminal);
     }
 
-    pub fn begin_export(&self) -> Result<String, CoreError> {
+    pub fn begin_export(&self) -> String {
         let mut inner = self.lock();
         let operation_id = format!("collector-export-{}", uuid::Uuid::new_v4());
         let started = self.collector_lifecycle_record(
@@ -101,9 +116,8 @@ impl CollectorCore {
             None,
             None,
         );
-        self.accept_record_locked(&mut inner, started, false)
-            .map_err(|_| CoreError::Serialization)?;
-        Ok(operation_id)
+        self.emit_collector_record_locked(&mut inner, started);
+        operation_id
     }
 
     pub fn finish_export(
@@ -111,7 +125,7 @@ impl CollectorCore {
         operation_id: &str,
         outcome: TerminalOutcomeV1,
         error_classification: Option<&str>,
-    ) -> Result<(), CoreError> {
+    ) {
         let mut inner = self.lock();
         let terminal = self.collector_lifecycle_record(
             &mut inner,
@@ -120,15 +134,13 @@ impl CollectorCore {
             Some(outcome),
             error_classification.map(str::to_owned),
         );
-        self.accept_record_locked(&mut inner, terminal, false)
-            .map_err(|_| CoreError::Serialization)?;
-        Ok(())
+        self.emit_collector_record_locked(&mut inner, terminal);
     }
 
-    pub fn begin_shutdown(&self) -> Result<(), CoreError> {
+    pub fn begin_shutdown(&self) {
         let mut inner = self.lock();
         if inner.shutdown_operation_id.is_some() {
-            return Ok(());
+            return;
         }
         inner.status = proliferate_diagnostics_protocol::v1::types::HealthStatusV1::Stopping;
         let operation_id = format!("collector-shutdown-{}", uuid::Uuid::new_v4());
@@ -139,19 +151,17 @@ impl CollectorCore {
             None,
             None,
         );
-        self.accept_record_locked(&mut inner, started, false)
-            .map_err(|_| CoreError::Serialization)?;
+        self.emit_collector_record_locked(&mut inner, started);
         inner.shutdown_operation_id = Some(operation_id);
-        Ok(())
     }
 
-    pub fn finish_shutdown(&self, outcome: TerminalOutcomeV1) -> Result<(), CoreError> {
+    pub fn finish_shutdown(&self, outcome: TerminalOutcomeV1) {
         let mut inner = self.lock();
         if inner.shutdown_finished {
-            return Ok(());
+            return;
         }
         let Some(operation_id) = inner.shutdown_operation_id.clone() else {
-            return Ok(());
+            return;
         };
         let error =
             (outcome == TerminalOutcomeV1::Failed).then(|| "collector_shutdown_failed".to_owned());
@@ -162,13 +172,11 @@ impl CollectorCore {
             Some(outcome),
             error,
         );
-        self.accept_record_locked(&mut inner, terminal, false)
-            .map_err(|_| CoreError::Serialization)?;
+        self.emit_collector_record_locked(&mut inner, terminal);
         inner.shutdown_finished = true;
-        Ok(())
     }
 
-    pub fn mark_producer_dead(&self, producer_boot_id: &str) -> Result<usize, CoreError> {
+    pub fn mark_producer_dead(&self, producer_boot_id: &str) -> usize {
         let mut inner = self.lock();
         for producer in inner.producers.values_mut() {
             if producer.health.producer_boot_id == producer_boot_id {
@@ -200,11 +208,10 @@ impl CollectorCore {
                     .as_ref()
                     .and_then(|value| value.plugin.clone()),
             });
-            self.accept_record_locked(&mut inner, terminal, false)
-                .map_err(|_| CoreError::Serialization)?;
+            self.emit_collector_record_locked(&mut inner, terminal);
             abandoned += 1;
         }
-        Ok(abandoned)
+        abandoned
     }
 }
 
@@ -222,12 +229,10 @@ mod tests {
     fn timeout_shutdown_terminal_is_idempotent_and_collector_names_are_closed() {
         let core = CollectorCore::new(&CollectorConfig::standalone("lifecycle-test-capability"))
             .expect("collector core");
-        core.mark_ready().expect("boot terminal");
-        core.begin_shutdown().expect("shutdown start");
-        core.finish_shutdown(TerminalOutcomeV1::TimedOut)
-            .expect("shutdown timeout");
-        core.finish_shutdown(TerminalOutcomeV1::TimedOut)
-            .expect("shutdown retry");
+        core.mark_ready();
+        core.begin_shutdown();
+        core.finish_shutdown(TerminalOutcomeV1::TimedOut);
+        core.finish_shutdown(TerminalOutcomeV1::TimedOut);
 
         let inner = core.lock();
         let records = inner

@@ -17,6 +17,7 @@ pub struct RuntimeLimits {
     pub concurrent_exports: usize,
     pub lifecycle_operations: usize,
     pub recorded_gaps: usize,
+    pub body_read_deadline: Duration,
     pub shutdown_deadline: Duration,
 }
 
@@ -38,6 +39,10 @@ impl Default for RuntimeLimits {
             concurrent_exports: 2,
             lifecycle_operations: 64,
             recorded_gaps: 256,
+            // A peer that stalls mid-body holds a body-parse permit and a
+            // handler permit for as long as it stays connected, so both are
+            // reclaimed on this deadline instead of only on disconnect.
+            body_read_deadline: Duration::from_secs(10),
             shutdown_deadline: Duration::from_secs(5),
         }
     }
@@ -63,6 +68,7 @@ impl RuntimeLimits {
             || self.concurrent_exports > self.concurrent_handlers
             || self.lifecycle_operations == 0
             || self.recorded_gaps == 0
+            || self.body_read_deadline.is_zero()
         {
             return Err("invalid diagnostics collector runtime limits");
         }

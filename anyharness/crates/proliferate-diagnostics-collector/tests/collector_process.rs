@@ -253,7 +253,7 @@ async fn authenticated_loopback_distinguishes_liveness_from_readiness() {
         starting.status,
         proliferate_diagnostics_protocol::v1::types::HealthStatusV1::Starting
     );
-    server.mark_ready().expect("mark ready");
+    server.mark_ready();
     let ready = get_health(&server).await;
     assert_eq!(
         ready.status,
@@ -506,7 +506,7 @@ async fn concurrent_maximum_and_degenerate_ingest_stays_under_the_process_rss_ce
 async fn graceful_shutdown_stops_admission_and_records_one_terminal() {
     let server = start().await;
     let core = server.core();
-    core.begin_shutdown().expect("shutdown start");
+    core.begin_shutdown();
 
     let unavailable = post_ingest(&server, &batch(vec![fixture_records()[0].clone()])).await;
     assert_eq!(
@@ -519,8 +519,7 @@ async fn graceful_shutdown_stops_admission_and_records_one_terminal() {
         proliferate_diagnostics_protocol::v1::types::HealthStatusV1::Stopping
     );
 
-    core.finish_shutdown(TerminalOutcomeV1::Succeeded)
-        .expect("shutdown terminal");
+    core.finish_shutdown(TerminalOutcomeV1::Succeeded);
     let shutdown = query(&server, "&name=collector.shutdown").await;
     assert_eq!(shutdown.records.len(), 2);
     assert_eq!(
@@ -870,13 +869,7 @@ async fn lifecycle_retry_orphan_late_start_and_known_death_are_exact() {
         .await
         .expect("open lifecycle receipt");
     assert_eq!(receipt.accepted_count, 1);
-    assert_eq!(
-        server
-            .core()
-            .mark_producer_dead(&boot_id)
-            .expect("mark dead"),
-        1
-    );
+    assert_eq!(server.core().mark_producer_dead(&boot_id), 1);
     let abandoned = query(&server, &format!("&operation_id={operation_id}")).await;
     assert_eq!(abandoned.records.len(), 2);
     let terminal = abandoned.records[1]
@@ -974,6 +967,7 @@ async fn runtime_slots_lifecycle_and_gap_maps_stop_at_their_finite_caps() {
         concurrent_exports: 1,
         lifecycle_operations: 4,
         recorded_gaps: 2,
+        body_read_deadline: Duration::from_secs(10),
         shutdown_deadline: Duration::from_secs(1),
     };
     let server = CollectorServer::start(config)
@@ -1002,13 +996,7 @@ async fn runtime_slots_lifecycle_and_gap_maps_stop_at_their_finite_caps() {
         receipt.rejections[0].reason,
         RejectionReasonV1::LimitExceeded
     );
-    assert_eq!(
-        server
-            .core()
-            .mark_producer_dead(producer_boot_id)
-            .expect("close bounded operations"),
-        4
-    );
+    assert_eq!(server.core().mark_producer_dead(producer_boot_id), 4);
 
     let mut detail = fixture_records()[0].clone();
     detail["component"] = template["component"].clone();
@@ -1085,6 +1073,226 @@ async fn runtime_slots_lifecycle_and_gap_maps_stop_at_their_finite_caps() {
     drop(tail);
     tokio::time::sleep(Duration::from_millis(50)).await;
     server.shutdown().await.expect("bounded shutdown");
+}
+
+fn open_lifecycle_records(
+    producer_boot_id: &str,
+    tag: &str,
+    first_sequence: u64,
+    count: u64,
+) -> Vec<serde_json::Value> {
+    let template = fixture_records()[4].clone();
+    (0..count)
+        .map(|index| {
+            let mut record = template.clone();
+            record["producer_boot_id"] = serde_json::json!(producer_boot_id);
+            record["producer_sequence"] = serde_json::json!(first_sequence + index);
+            record["operation_id"] = serde_json::json!(format!("{tag}-{index}"));
+            record
+        })
+        .collect()
+}
+
+async fn saturate_lifecycle_table(
+    server: &CollectorServer,
+    producer_boot_id: &str,
+    tag: &str,
+    first_sequence: u64,
+    count: u64,
+) -> IngestReceiptV1 {
+    let records = open_lifecycle_records(producer_boot_id, tag, first_sequence, count);
+    post_ingest(server, &batch(records))
+        .await
+        .json()
+        .await
+        .expect("saturating receipt")
+}
+
+#[tokio::test]
+async fn a_saturated_lifecycle_table_costs_counters_and_gaps_not_caller_failures() {
+    let mut config = CollectorConfig::standalone(CAPABILITY);
+    config.runtime_limits = RuntimeLimits {
+        lifecycle_operations: 4,
+        ..RuntimeLimits::default()
+    };
+    let server = CollectorServer::start(config)
+        .await
+        .expect("collector starts");
+
+    // Every lifecycle slot now holds an operation that never terminates, which
+    // is the state the collector's own bookkeeping has to survive.
+    let saturating = "saturating-producer";
+    let receipt = saturate_lifecycle_table(&server, saturating, "saturating", 1, 4).await;
+    assert_eq!(receipt.accepted_count, 4);
+    assert!(receipt.rejections.is_empty());
+    let saturated = get_health(&server).await;
+    assert_eq!(saturated.cardinality_counts["lifecycle_operations"], 4);
+    assert_eq!(saturated.cardinality_counts["lifecycle_displacements"], 0);
+
+    // A first batch from a new producer forces the collector to emit its own
+    // attach pair. That emission must not turn a valid batch into a 500.
+    let mut detail = fixture_records()[0].clone();
+    detail["producer_boot_id"] = serde_json::json!("second-producer");
+    let response = post_ingest(&server, &batch(vec![detail])).await;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let receipt: IngestReceiptV1 = response.json().await.expect("receipt under saturation");
+    assert_eq!(receipt.accepted_count, 1);
+    assert!(receipt.rejections.is_empty());
+
+    let displaced = get_health(&server).await;
+    assert_eq!(displaced.cardinality_counts["lifecycle_operations"], 4);
+    assert!(displaced.cardinality_counts["lifecycle_displacements"] >= 1);
+    assert_eq!(displaced.cardinality_counts["dropped_collector_records"], 0);
+
+    // Both attach pairs are retained, and the displaced operation is reported
+    // as a gap rather than as a lost request.
+    let attached = query(
+        &server,
+        "&name=collector.producer.attach&outcome=succeeded&limit=500",
+    )
+    .await;
+    assert_eq!(attached.records.len(), 2);
+    assert!(attached.gaps.iter().any(|gap| {
+        gap.reason == proliferate_diagnostics_protocol::v1::types::GapReasonV1::Evicted
+            && gap.producer_boot_id.as_deref() == Some(saturating)
+    }));
+
+    // Refill the slot the attach terminal closed, then prove an export start
+    // survives the same saturation instead of failing every export.
+    let refill = saturate_lifecycle_table(&server, saturating, "refill", 10, 1).await;
+    assert_eq!(refill.accepted_count, 1);
+    let export_request = serde_json::json!({
+        "schema_version": CURRENT_SCHEMA_VERSION,
+        "purpose": "internal_dogfood",
+        "filters": {"components": [], "record_classes": [], "severities": [], "names": [], "outcomes": []},
+        "record_limit": 100,
+        "byte_limit": 1024 * 1024,
+        "include_health": false
+    });
+    let export = client()
+        .post(format!("{}/v1/export", server.endpoint()))
+        .bearer_auth(CAPABILITY)
+        .json(&export_request)
+        .send()
+        .await
+        .expect("export under saturation");
+    assert_eq!(export.status(), reqwest::StatusCode::OK);
+    drop(export);
+
+    let final_health = get_health(&server).await;
+    assert_eq!(
+        final_health.cardinality_counts["dropped_collector_records"],
+        0
+    );
+    server.shutdown().await.expect("shutdown");
+}
+
+#[tokio::test]
+async fn a_saturated_lifecycle_table_still_pairs_the_shutdown_terminal() {
+    let mut config = CollectorConfig::standalone(CAPABILITY);
+    config.runtime_limits = RuntimeLimits {
+        lifecycle_operations: 4,
+        ..RuntimeLimits::default()
+    };
+    let server = CollectorServer::start(config)
+        .await
+        .expect("collector starts");
+    let core = server.core();
+
+    let receipt = saturate_lifecycle_table(&server, "shutdown-producer", "shutdown", 1, 4).await;
+    assert_eq!(receipt.accepted_count, 4);
+    let saturated = get_health(&server).await;
+    assert_eq!(saturated.cardinality_counts["lifecycle_operations"], 4);
+
+    core.begin_shutdown();
+    core.finish_shutdown(TerminalOutcomeV1::Succeeded);
+
+    let shutdown = query(&server, "&name=collector.shutdown").await;
+    assert_eq!(shutdown.records.len(), 2);
+    assert_eq!(
+        shutdown.records[1]
+            .record
+            .lifecycle
+            .as_ref()
+            .and_then(|lifecycle| lifecycle.outcome),
+        Some(TerminalOutcomeV1::Succeeded)
+    );
+    let health = get_health(&server).await;
+    assert_eq!(health.cardinality_counts["dropped_collector_records"], 0);
+    server.shutdown().await.expect("shutdown");
+}
+
+#[tokio::test]
+async fn stalled_request_bodies_release_their_permits_on_the_read_deadline() {
+    let handlers = RuntimeLimits::default().concurrent_handlers;
+    let mut config = CollectorConfig::standalone(CAPABILITY);
+    config.runtime_limits = RuntimeLimits {
+        body_read_deadline: Duration::from_millis(100),
+        ..RuntimeLimits::default()
+    };
+    let server = CollectorServer::start(config)
+        .await
+        .expect("collector starts");
+    let before = get_health(&server).await;
+
+    // Enough peers to own every handler permit, each opening a body and then
+    // stalling without disconnecting.
+    let stalled = (0..handlers)
+        .map(|_| {
+            let endpoint = server.endpoint().to_owned();
+            tokio::spawn(async move {
+                let body = reqwest::Body::wrap_stream(
+                    futures::stream::once(async {
+                        Ok::<Vec<u8>, std::io::Error>(br#"{"schema_version""#.to_vec())
+                    })
+                    .chain(futures::stream::pending()),
+                );
+                client()
+                    .post(format!("{endpoint}/v1/ingest"))
+                    .bearer_auth(CAPABILITY)
+                    .body(body)
+                    .send()
+                    .await
+                    .map(|response| response.status())
+            })
+        })
+        .collect::<Vec<_>>();
+    // Only one request owns a body parser at a time, so the stalled peers clear
+    // one deadline apart. Waiting past the whole queue proves the wedge is
+    // bounded rather than permanent.
+    tokio::time::sleep(Duration::from_millis(100 * (handlers as u64 + 12))).await;
+
+    // Past the deadline every permit is back, so health answers and ingest is
+    // not wedged collector-wide.
+    let health = get_health(&server).await;
+    assert_eq!(
+        health.status,
+        proliferate_diagnostics_protocol::v1::types::HealthStatusV1::Ready
+    );
+    assert!(
+        health
+            .rejections_by_reason
+            .get(&RejectionReasonV1::InvalidShape)
+            .copied()
+            .unwrap_or(0)
+            >= before
+                .rejections_by_reason
+                .get(&RejectionReasonV1::InvalidShape)
+                .copied()
+                .unwrap_or(0)
+                + handlers as u64
+    );
+    let receipt: IngestReceiptV1 = post_ingest(&server, &batch(vec![fixture_records()[0].clone()]))
+        .await
+        .json()
+        .await
+        .expect("receipt after stalled bodies");
+    assert_eq!(receipt.accepted_count, 1);
+
+    for task in stalled {
+        task.abort();
+    }
+    server.shutdown().await.expect("shutdown");
 }
 
 #[tokio::test]
@@ -1250,15 +1458,12 @@ async fn eviction_tail_lag_and_export_are_bounded_and_contract_valid() {
     }
     assert_eq!(cancelled_page.records.len(), 1);
 
-    let failed_operation = server.core().begin_export().expect("failed export start");
-    server
-        .core()
-        .finish_export(
-            &failed_operation,
-            TerminalOutcomeV1::Failed,
-            Some("synthetic_export_failure"),
-        )
-        .expect("failed export terminal");
+    let failed_operation = server.core().begin_export();
+    server.core().finish_export(
+        &failed_operation,
+        TerminalOutcomeV1::Failed,
+        Some("synthetic_export_failure"),
+    );
     let failed = query(
         &server,
         &format!("&operation_id={failed_operation}&outcome=failed"),

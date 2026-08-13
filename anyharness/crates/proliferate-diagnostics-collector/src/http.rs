@@ -270,15 +270,12 @@ async fn export(State(state): State<HttpState>, request: Request) -> Result<Resp
             status: StatusCode::TOO_MANY_REQUESTS,
             reason: RejectionReasonV1::LimitExceeded,
         })?;
-    let operation_id = state
-        .core
-        .begin_export()
-        .map_err(|_| ApiError::internal())?;
+    let operation_id = state.core.begin_export();
     let snapshot = match state.core.export_snapshot(&request) {
         Ok(snapshot) => snapshot,
         Err(error) => {
             let reason = error.contract_reason();
-            let _ = state.core.finish_export(
+            state.core.finish_export(
                 &operation_id,
                 TerminalOutcomeV1::Failed,
                 Some("snapshot_selection_failed"),
@@ -307,20 +304,32 @@ async fn export(State(state): State<HttpState>, request: Request) -> Result<Resp
 enum BodyReadError {
     TooLarge,
     Invalid,
+    TimedOut,
 }
 
 async fn bounded_request_body(state: &HttpState, request: Request) -> Result<Bytes, ApiError> {
-    read_bounded_body(request, MAX_BATCH_BYTES)
+    // A peer that opens a body and then stalls would otherwise hold the
+    // body-parse permit, and through it the handler permit, until it
+    // disconnects. Bounding the read keeps a stalled peer from wedging ingest
+    // and every other route collector-wide.
+    let deadline = state.core.limits.body_read_deadline;
+    let read = tokio::time::timeout(deadline, read_bounded_body(request, MAX_BATCH_BYTES))
         .await
-        .map_err(|error| {
-            let reason = if error == BodyReadError::TooLarge {
-                RejectionReasonV1::BatchTooLarge
-            } else {
-                RejectionReasonV1::InvalidShape
+        .unwrap_or(Err(BodyReadError::TimedOut));
+    read.map_err(|error| {
+        let reason = match error {
+            BodyReadError::TooLarge => RejectionReasonV1::BatchTooLarge,
+            BodyReadError::Invalid | BodyReadError::TimedOut => RejectionReasonV1::InvalidShape,
+        };
+        state.core.note_request_rejection(reason);
+        if error == BodyReadError::TimedOut {
+            return ApiError {
+                status: StatusCode::REQUEST_TIMEOUT,
+                reason,
             };
-            state.core.note_request_rejection(reason);
-            ApiError::from_reason(reason)
-        })
+        }
+        ApiError::from_reason(reason)
+    })
 }
 
 async fn read_bounded_body(request: Request, limit: usize) -> Result<Bytes, BodyReadError> {
@@ -339,9 +348,16 @@ async fn read_bounded_body(request: Request, limit: usize) -> Result<Bytes, Body
         return Err(BodyReadError::TooLarge);
     }
 
-    // The one body-parse permit makes this exact fixed allocation the total
-    // request-body heap bound across ingest and export.
-    let mut buffered = Vec::with_capacity(limit);
+    // `concurrent_body_parsers` requests may each own a body at once, so the
+    // request-body heap bound across ingest and export is that many times
+    // `limit`, not a single `limit`. Reserving the declared length keeps an
+    // undeclared body growing on demand instead of taking the whole cap up
+    // front.
+    let mut buffered = Vec::with_capacity(
+        declared_length
+            .map_or(0, |length| length as usize)
+            .min(limit),
+    );
     let mut stream = request.into_body().into_data_stream();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|_| BodyReadError::Invalid)?;
@@ -398,7 +414,7 @@ impl ExportStream {
             let record = match stored.decode() {
                 Ok(record) => record,
                 Err(_) => {
-                    let _ = self.core.finish_export(
+                    self.core.finish_export(
                         &self.operation_id,
                         TerminalOutcomeV1::Failed,
                         Some("snapshot_decode_failed"),
@@ -417,8 +433,7 @@ impl ExportStream {
         }
         if !self.ended {
             self.ended = true;
-            let _ = self
-                .core
+            self.core
                 .finish_export(&self.operation_id, TerminalOutcomeV1::Succeeded, None);
             self.completed = true;
             return Some(ExportStreamFrameV1::End {
@@ -433,8 +448,7 @@ impl ExportStream {
 impl Drop for ExportStream {
     fn drop(&mut self) {
         if !self.completed {
-            let _ = self
-                .core
+            self.core
                 .finish_export(&self.operation_id, TerminalOutcomeV1::Cancelled, None);
         }
     }

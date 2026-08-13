@@ -13,7 +13,9 @@ use proliferate_diagnostics_protocol::v1::validation::{
     validate_ingest_receipt, validate_producer_record,
 };
 
-use super::{CollectorCore, CoreError, LifecycleTracker, ProducerState, StoredRecord};
+use super::{
+    CollectorCore, CoreError, LifecycleTracker, ProducerState, RecordOrigin, StoredRecord,
+};
 
 pub(crate) struct IngestCandidate {
     pub(crate) index: u16,
@@ -64,7 +66,7 @@ impl CollectorCore {
         let mut refused_producers = BTreeSet::new();
         for (key, schema_version) in new_producers {
             if inner.producers.len() == MAX_HEALTH_PRODUCERS {
-                self.record_producer_attach_locked(&mut inner, TerminalOutcomeV1::Rejected)?;
+                self.record_producer_attach_locked(&mut inner, TerminalOutcomeV1::Rejected);
                 refused_producers.insert(key);
                 continue;
             }
@@ -81,7 +83,7 @@ impl CollectorCore {
                     },
                 },
             );
-            self.record_producer_attach_locked(&mut inner, TerminalOutcomeV1::Succeeded)?;
+            self.record_producer_attach_locked(&mut inner, TerminalOutcomeV1::Succeeded);
             if let Some(producer) = inner.producers.get_mut(&key) {
                 producer.health.liveness = ProducerLivenessV1::Alive;
             }
@@ -113,7 +115,7 @@ impl CollectorCore {
             }
             let record = prepared.decode()?;
             self.track_producer_sequence_locked(&mut inner, &record);
-            match self.accept_record_locked(&mut inner, record, false) {
+            match self.accept_record_locked(&mut inner, record, RecordOrigin::Producer) {
                 Ok(AcceptDisposition::Accepted(order)) => accepted_orders.push(order),
                 Ok(AcceptDisposition::Duplicate) => {
                     duplicate_count = duplicate_count.saturating_add(1);
@@ -226,22 +228,14 @@ impl CollectorCore {
         &self,
         inner: &mut super::Inner,
         record: ProducerRecordV1,
-        _producer_update: bool,
+        origin: RecordOrigin,
     ) -> Result<AcceptDisposition, RejectionReasonV1> {
         validate_producer_record(&record)?;
         if record.lifecycle.is_some() {
             let operation_id = record.operation_id.clone();
             if !inner.lifecycle.contains_key(&operation_id) {
                 if inner.lifecycle.len() == self.limits.lifecycle_operations {
-                    let removable = inner.lifecycle_order.iter().position(|candidate| {
-                        inner
-                            .lifecycle
-                            .get(candidate)
-                            .is_some_and(|tracker| !tracker.open)
-                    });
-                    let Some(position) = removable else {
-                        return Err(RejectionReasonV1::LimitExceeded);
-                    };
+                    let position = self.reclaim_lifecycle_slot_locked(inner, origin)?;
                     if let Some(expired) = inner.lifecycle_order.remove(position) {
                         inner.lifecycle.remove(&expired);
                     }
@@ -320,6 +314,57 @@ impl CollectorCore {
         inner.newest_accepted_cursor = Some(order);
         let _ = self.tail_tx.send(encoded);
         Ok(AcceptDisposition::Accepted(order))
+    }
+
+    /// Pick the lifecycle slot a new operation may take over. Closed trackers
+    /// are always preferred. When every tracker is still open a producer record
+    /// keeps its stable `LimitExceeded` rejection, but the collector's own
+    /// bookkeeping displaces the oldest tracker instead: the ADR represents that
+    /// loss with a counter and a gap, never with a failed caller request.
+    fn reclaim_lifecycle_slot_locked(
+        &self,
+        inner: &mut super::Inner,
+        origin: RecordOrigin,
+    ) -> Result<usize, RejectionReasonV1> {
+        let removable = inner.lifecycle_order.iter().position(|candidate| {
+            inner
+                .lifecycle
+                .get(candidate)
+                .is_some_and(|tracker| !tracker.open)
+        });
+        if let Some(position) = removable {
+            return Ok(position);
+        }
+        if origin == RecordOrigin::Producer {
+            return Err(RejectionReasonV1::LimitExceeded);
+        }
+        let displaced = inner
+            .lifecycle_order
+            .front()
+            .and_then(|operation_id| inner.lifecycle.get(operation_id))
+            .and_then(|tracker| tracker.start_record.clone());
+        inner.counters.lifecycle_displacements += 1;
+        *inner
+            .counters
+            .evictions_by_reason
+            .entry(GapReasonV1::Evicted)
+            .or_default() += 1;
+        if let Some(start) = displaced {
+            self.push_gap_locked(
+                inner,
+                GapV1 {
+                    reason: GapReasonV1::Evicted,
+                    from_cursor: None,
+                    to_cursor: None,
+                    component: Some(start.component),
+                    producer_boot_id: Some(start.producer_boot_id),
+                    missing_sequence_from: None,
+                    missing_sequence_to: None,
+                    dropped_records: 0,
+                },
+            );
+        }
+        Ok(0)
     }
 
     fn note_orphan_locked(&self, inner: &mut super::Inner, record: &ProducerRecordV1) {
