@@ -166,16 +166,17 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
       // `urgent` is a bug-only signal; prompt submissions never mark urgent.
       urgent: kind === "bug" ? urgent : false,
       notifyMe,
-      // App-log inclusion is a bug-modal toggle; prompt submissions always
-      // include diagnostics (there is no toggle on that surface).
-      includeLogs: kind === "bug" ? includeLogs : true,
+      // Snapshot preparation/consent is owned by the later modal slice. Until
+      // that flow supplies an exact prepared artifact, new jobs are explicitly
+      // no-snapshot; the legacy includeLogs flag never grants consent.
+      supportSnapshot: { kind: "none" },
       snapshot: {
         ...snapshot,
         openedAt: openedAtRef.current,
       },
       attachments: attachments.map(({ id: _id, previewUrl: _preview, ...attachment }) => attachment),
-      activeWorkspaceId: defaultWorkspaceId ?? undefined,
-      activeSessionId: activeSessionId ?? undefined,
+      ...(defaultWorkspaceId ? { activeWorkspaceId: defaultWorkspaceId } : {}),
+      ...(activeSessionId ? { activeSessionId } : {}),
       reportOpenedAt: openedAtRef.current,
     };
 
@@ -184,7 +185,7 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
       // listener is the single owner of persistence + draining. Persisting
       // here too would make the listener's persist dedupe and silently skip
       // draining, so the report would never upload until the next app launch.
-      enqueueSupportReportJob(job);
+      void enqueueSupportReportJob(job);
       onClose();
     } catch (error) {
       submittingRef.current = false;
@@ -263,8 +264,7 @@ async function stageAttachment(
     fileName: scopeFallbackFileName(file),
     contentType: file.type || "application/octet-stream",
     sizeBytes: file.size,
-    dataBase64: stagedPath ? undefined : dataBase64,
-    stagedPath,
+    ...(stagedPath ? { stagedPath } : { dataBase64, stagedPath: null }),
     previewUrl,
   };
 }

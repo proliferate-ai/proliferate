@@ -38,8 +38,10 @@ vi.mock("#product/stores/sessions/session-selection-store", () => ({
 
 function captureDispatchedJob(): { current: SupportReportJob | null } {
   const captured: { current: SupportReportJob | null } = { current: null };
-  window.addEventListener(SUPPORT_REPORT_JOB_EVENT, ((event: CustomEvent<SupportReportJob>) => {
-    captured.current = event.detail;
+  window.addEventListener(SUPPORT_REPORT_JOB_EVENT, ((event: CustomEvent<{
+    job: SupportReportJob;
+  }>) => {
+    captured.current = event.detail.job;
   }) as EventListener);
   return captured;
 }
@@ -70,7 +72,7 @@ describe("useSupportModalState", () => {
     });
   });
 
-  it("carries urgent, notifyMe, includeLogs, and credit fields on the bug job", async () => {
+  it("carries bug fields with an explicit no-snapshot intent", async () => {
     const captured = captureDispatchedJob();
     const rendered = renderHook(() =>
       useSupportModalState({ kind: "bug", onClose: vi.fn() })
@@ -95,13 +97,13 @@ describe("useSupportModalState", () => {
       kind: "bug",
       urgent: true,
       notifyMe: true,
-      includeLogs: false,
+      supportSnapshot: { kind: "none" },
       creditConsent: true,
       creditName: "Ada Lovelace",
     });
   });
 
-  it("defaults the bug job to logs-on, not urgent, no notify", async () => {
+  it("defaults the bug job to no snapshot, not urgent, and no notify", async () => {
     const captured = captureDispatchedJob();
     const rendered = renderHook(() =>
       useSupportModalState({ kind: "bug", onClose: vi.fn() })
@@ -117,13 +119,13 @@ describe("useSupportModalState", () => {
     expect(captured.current).toMatchObject({
       urgent: false,
       notifyMe: false,
-      includeLogs: true,
+      supportSnapshot: { kind: "none" },
       creditConsent: false,
       creditName: null,
     });
   });
 
-  it("keeps prompt jobs non-urgent with logs included while carrying notifyMe", async () => {
+  it("keeps prompt jobs non-urgent and no-snapshot while carrying notifyMe", async () => {
     const captured = captureDispatchedJob();
     const rendered = renderHook(() =>
       useSupportModalState({ kind: "feature", onClose: vi.fn() })
@@ -142,7 +144,7 @@ describe("useSupportModalState", () => {
       kind: "feature",
       urgent: false,
       notifyMe: true,
-      includeLogs: true,
+      supportSnapshot: { kind: "none" },
     });
   });
 });

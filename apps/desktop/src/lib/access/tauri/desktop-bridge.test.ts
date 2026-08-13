@@ -31,7 +31,6 @@ const mocks = vi.hoisted(() => ({
   readWorkspaceScratchPad: vi.fn(),
   writeWorkspaceScratchPad: vi.fn(),
   reportReactRenderError: vi.fn(),
-  collectSupportDiagnostics: vi.fn(),
   saveDiagnosticJson: vi.fn(),
   stageSupportReportAttachment: vi.fn(),
   readStagedSupportReportAttachment: vi.fn(),
@@ -106,7 +105,6 @@ vi.mock("@/lib/access/tauri/workspace-scratch", () => ({
   writeWorkspaceScratchPad: mocks.writeWorkspaceScratchPad,
 }));
 vi.mock("@/lib/access/tauri/diagnostics", () => ({
-  collectSupportDiagnostics: mocks.collectSupportDiagnostics,
   saveDiagnosticJson: mocks.saveDiagnosticJson,
 }));
 vi.mock("@/lib/infra/diagnostics/renderer-error-diagnostics", () => ({
@@ -526,12 +524,6 @@ describe("scratch", () => {
 });
 
 describe("diagnostics", () => {
-  it("delegates collectSupportBundle", async () => {
-    mocks.collectSupportDiagnostics.mockResolvedValue(null);
-
-    await expect(desktopBridge.diagnostics.collectSupportBundle()).resolves.toBeNull();
-  });
-
   it("passes render errors through without string coercion", async () => {
     const error = Object.create(null, {
       toString: { value: () => { throw new Error("must not run"); } },

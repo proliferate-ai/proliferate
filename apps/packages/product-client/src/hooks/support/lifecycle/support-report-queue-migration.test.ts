@@ -211,6 +211,10 @@ function migratedEntry(jobId: string, includeLogs: boolean): Entry {
     },
     attemptCount: 0,
     nextAttemptAt: null,
+    lastError: null,
+    lastFailureKind: null,
+    lastFailureToastAt: null,
+    lastFailureToastKind: null,
   };
 }
 

@@ -74,6 +74,14 @@ describe("describeSupportReportUploadFailure", () => {
     });
   });
 
+  it.each(["snapshot_missing", "snapshot_mismatch"] as const)(
+    "keeps %s pre-submit and terminal",
+    (code) => {
+      const failure = describeSupportReportUploadFailure({ code, message: code }, 1);
+      expect(failure).toMatchObject({ kind: code, retryable: false, retryDelayMs: null });
+    },
+  );
+
   it("keeps generic transient upload failures retryable", () => {
     const failure = describeSupportReportUploadFailure(new Error("Upload failed with 503."), 2);
 

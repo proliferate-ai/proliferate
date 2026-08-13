@@ -61,10 +61,7 @@ import {
   readWorkspaceScratchPad,
   writeWorkspaceScratchPad,
 } from "./workspace-scratch";
-import {
-  collectSupportDiagnostics,
-  saveDiagnosticJson,
-} from "./diagnostics";
+import { saveDiagnosticJson } from "./diagnostics";
 import {
   beginSupportSnapshotPreparation,
   beginSupportSnapshotSubmission,
@@ -258,7 +255,6 @@ export const desktopBridge: DesktopBridge = {
       // Dedup/fingerprint/suppression stays host-owned in reportReactRenderError.
       return reportReactRenderError(report.error, report.componentStack ?? null);
     },
-    collectSupportBundle: collectSupportDiagnostics,
     saveJson(input) {
       return saveDiagnosticJson(input.suggestedFileName, input.contents);
     },

@@ -41,7 +41,7 @@ export function buildCreateReportRequest(
     workspaceRefs: workspaceRefsForJob(job),
     telemetryRefs: supportContext.telemetryRefs,
     expectedClientUploads: {
-      diagnostics: job.includeLogs !== false,
+      diagnostics: job.supportSnapshot.kind === "prepared",
       attachmentCount,
     },
     publicContentConsent: false,
@@ -91,6 +91,7 @@ export function trackSupportReportSubmitted(
   job: SupportReportJob,
   correlation: SupportReportServerCorrelation,
   attachmentCount: number,
+  diagnosticsIncluded: boolean,
   track: TrackSupportReportSubmitted,
 ): void {
   const workspaceIds = workspaceIdsForJob(job);
@@ -98,7 +99,7 @@ export function trackSupportReportSubmitted(
     source_surface: "desktop",
     scope_kind: job.scope.kind,
     public_content_consent: job.publicContentConsent !== false,
-    diagnostics_included: job.includeLogs !== false,
+    diagnostics_included: diagnosticsIncluded,
     attachment_count: attachmentCount,
     workspace_count: workspaceIds.length,
     cloud_workspace_count: correlation.cloudWorkspaceIds.length,
@@ -126,9 +127,13 @@ export async function putPresignedObject(
 }
 
 export function validateAttachmentSizes(job: SupportReportJob): void {
+  if (job.attachments.length > 20) {
+    throw new Error("Attachments are too large.");
+  }
   let total = 0;
   for (const attachment of job.attachments) {
-    if (attachment.sizeBytes > ATTACHMENT_MAX_BYTES) {
+    if (!Number.isSafeInteger(attachment.sizeBytes) || attachment.sizeBytes < 0
+      || attachment.sizeBytes > ATTACHMENT_MAX_BYTES) {
       throw new Error(`Attachment is too large: ${attachment.fileName}`);
     }
     total += attachment.sizeBytes;
@@ -136,10 +141,6 @@ export function validateAttachmentSizes(job: SupportReportJob): void {
   if (total > TOTAL_ATTACHMENT_MAX_BYTES) {
     throw new Error("Attachments are too large.");
   }
-}
-
-export function jsonBlob(value: unknown): Blob {
-  return new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
 }
 
 export async function loadAttachmentBlob(
@@ -155,7 +156,11 @@ export async function loadAttachmentBlob(
   if (!dataBase64) {
     throw new Error(`Attachment data is missing: ${attachment.fileName}`);
   }
-  return base64Blob(dataBase64, attachment.contentType);
+  try {
+    return base64Blob(dataBase64, attachment.contentType);
+  } catch {
+    throw new Error(`Attachment data is invalid: ${attachment.fileName}`);
+  }
 }
 
 export async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
@@ -169,8 +174,8 @@ export function completeRequestForUpload(input: {
   job: SupportReportJob;
   reportId: string;
   /**
-   * Diagnostics object metadata. Omitted (undefined) when the submitter turned
-   * off "Include app logs" so no diagnostics.json was uploaded for this report.
+   * Diagnostics object metadata. Omitted when this job has no exact prepared
+   * snapshot, so no diagnostics.json was uploaded for the report.
    */
   diagnostics?: {
     objectKey: string;

@@ -24,9 +24,15 @@ export const SUPPORT_QUEUE_LEGACY_KEY = "proliferate.supportReportJobs.v1";
 export interface MigratedSupportQueueEntryIdentity {
   job: {
     jobId: string;
-    includeLogs: boolean;
-    supportSnapshot: { kind: "none" };
+    includeLogs?: boolean;
+    supportSnapshot: { kind: string };
   };
+  attemptCount: number;
+  nextAttemptAt: string | null;
+  lastError: string | null;
+  lastFailureKind: string | null;
+  lastFailureToastAt: string | null;
+  lastFailureToastKind: string | null;
 }
 
 export type SupportQueueMigrationFailure =
@@ -128,6 +134,20 @@ function migrateEntry<TEntry extends MigratedSupportQueueEntryIdentity>(
   parseEntry: SupportQueueJobParser<TEntry>,
 ): { legacyBytes: string; entry: TEntry } {
   const wrapper = plainRecord(value);
+  const wrapperKeys = new Set([
+    "attemptCount",
+    "job",
+    "lastError",
+    "lastFailureKind",
+    "lastFailureToastAt",
+    "lastFailureToastKind",
+    "nextAttemptAt",
+  ]);
+  if (!Object.keys(wrapper).every((key) => wrapperKeys.has(key))
+    || !Object.prototype.hasOwnProperty.call(wrapper, "job")
+    || !Object.prototype.hasOwnProperty.call(wrapper, "attemptCount")) {
+    throw new SupportQueueMigrationError("legacy_invalid");
+  }
   const job = plainRecord(wrapper.job);
   if (Object.prototype.hasOwnProperty.call(job, "supportSnapshot")) {
     throw new SupportQueueMigrationError("legacy_invalid");
@@ -150,12 +170,17 @@ function migrateEntry<TEntry extends MigratedSupportQueueEntryIdentity>(
     throw new SupportQueueMigrationError("legacy_invalid");
   }
   const candidate = {
-    ...wrapper,
     job: {
       ...job,
       includeLogs: job.includeLogs === false ? false : true,
       supportSnapshot: { kind: "none" as const },
     },
+    attemptCount: wrapper.attemptCount,
+    nextAttemptAt: wrapper.nextAttemptAt ?? null,
+    lastError: wrapper.lastError ?? null,
+    lastFailureKind: wrapper.lastFailureKind ?? null,
+    lastFailureToastAt: wrapper.lastFailureToastAt ?? null,
+    lastFailureToastKind: wrapper.lastFailureToastKind ?? null,
   };
   let entry: TEntry;
   try {
@@ -168,7 +193,8 @@ function migrateEntry<TEntry extends MigratedSupportQueueEntryIdentity>(
   }
   if (entry.job.jobId !== job.jobId
     || entry.job.includeLogs !== candidate.job.includeLogs
-    || entry.job.supportSnapshot.kind !== "none") {
+    || entry.job.supportSnapshot.kind !== "none"
+    || entry.attemptCount !== candidate.attemptCount) {
     throw new SupportQueueMigrationError("legacy_invalid");
   }
   return { legacyBytes, entry };

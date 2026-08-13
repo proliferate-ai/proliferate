@@ -288,34 +288,6 @@ export interface DesktopScratchBridge {
 
 // --- Diagnostics and support ------------------------------------------------
 
-export interface SupportBundleLog {
-  source: string;
-  path: string;
-  bytesRead: number;
-  truncated: boolean;
-  text: string;
-}
-
-/** A support diagnostics bundle. Mirrors Desktop's collected bundle shape. */
-export interface SupportBundle {
-  schemaVersion: number;
-  manifest: {
-    appVersion: string;
-    runtimeVersion?: string | null;
-    runtimeStatus?: string | null;
-    runtimeHome?: string | null;
-    platform: string;
-    timestamp: string;
-  };
-  health?: {
-    runtimeHome: string;
-    status: string;
-    version: string;
-  } | null;
-  logs: SupportBundleLog[];
-  collectionErrors: string[];
-}
-
 export interface SaveJsonInput {
   suggestedFileName: string;
   contents: string;
@@ -533,10 +505,9 @@ export interface DesktopSupportSnapshotBridge {
 }
 
 /**
- * Support UI can use native logs and attachments without importing Tauri.
- * Collection and staging return `null` outside a working native host, matching
- * Desktop's current nullability. `collectSupportBundle` and `SupportBundle`
- * remain only until the upload queue migrates to `supportSnapshot`.
+ * Support UI can save manual debug exports and stage attachments without
+ * importing Tauri. The upload path uses only the consented supportSnapshot
+ * subgroup and never calls the retired schema-1 collector.
  */
 export interface DesktopDiagnosticsBridge {
   /**
@@ -551,7 +522,6 @@ export interface DesktopDiagnosticsBridge {
    * boundary still guards both throws and rejections.
    */
   reportRenderError(report: RenderErrorReport): Promise<boolean>;
-  collectSupportBundle(): Promise<SupportBundle | null>;
   saveJson(input: SaveJsonInput): Promise<string | null>;
 
   /** Returns the staged attachment path, or null outside the desktop host. */

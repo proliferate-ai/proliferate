@@ -4,6 +4,8 @@ export type SupportReportUploadFailureKind =
   | "cloud_unconfigured"
   | "dev_auth_bypass"
   | "local_payload_invalid"
+  | "snapshot_mismatch"
+  | "snapshot_missing"
   | "storage_unconfigured"
   | "upload_conflict"
   | "upload_rejected"
@@ -22,6 +24,18 @@ interface ErrorShape {
   message?: unknown;
   status?: unknown;
   code?: unknown;
+}
+
+export class SupportSnapshotArtifactError extends Error {
+  readonly code: "snapshot_mismatch" | "snapshot_missing";
+
+  constructor(code: "snapshot_mismatch" | "snapshot_missing") {
+    super(code === "snapshot_missing"
+      ? "The prepared diagnostic snapshot is missing."
+      : "The prepared diagnostic snapshot no longer matches its receipt.");
+    this.name = "SupportSnapshotArtifactError";
+    this.code = code;
+  }
 }
 
 const SHORT_RETRY_DELAY_MS = 30_000;
@@ -73,6 +87,18 @@ export function describeSupportReportUploadFailure(
       retryDelayMs: CONFIG_RETRY_DELAY_MS,
       toastMessage: "Support uploads need Proliferate Cloud configuration. Report is queued.",
       toastCooldownMs: BLOCKED_TOAST_COOLDOWN_MS,
+    };
+  }
+
+  if (code === "snapshot_missing" || code === "snapshot_mismatch") {
+    return {
+      kind: code,
+      message,
+      retryable: false,
+      retryDelayMs: null,
+      toastMessage:
+        "The diagnostic snapshot is no longer available. Start a new report from Help.",
+      toastCooldownMs: 0,
     };
   }
 
@@ -159,7 +185,7 @@ export function describeSupportReportUploadFailure(
 
 export function shouldShowSupportReportUploadFailureToast(input: {
   failure: SupportReportUploadFailure;
-  lastToastKind?: SupportReportUploadFailureKind | null;
+  lastToastKind?: string | null;
   lastToastAt?: string | null;
   nowMs: number;
 }): boolean {
@@ -204,6 +230,7 @@ function isLocalPayloadError(message: string): boolean {
   return message.startsWith("Diagnostics are too large")
     || message.startsWith("Attachments are too large")
     || message.startsWith("Attachment is too large:")
+    || message.startsWith("Attachment data is invalid:")
     || message.startsWith("Attachment data is missing:");
 }
 
