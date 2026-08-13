@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import { CHAT_FILE_MENTION_SEARCH_LIMIT } from "#product/config/chat";
 import { useComposerMenuNavigation } from "#product/hooks/chat/ui/use-composer-menu-navigation";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useWorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
@@ -8,19 +9,6 @@ import {
   rankFileMentionResults,
   type FileMentionResult,
 } from "#product/lib/domain/chat/composer/file-mention-search";
-
-/**
- * How many mention rows the menu offers. The menu is a pick-one-fast surface,
- * not a file browser: a short list keeps the panel inside the composer's own
- * overlay height instead of covering the transcript.
- */
-const MENTION_RESULT_LIMIT = 8;
-/**
- * Raw hits requested from the runtime before basename-first ranking narrows
- * them down. Over-fetching is what lets ranking promote a deep-but-exact
- * basename match above a shallow path-substring hit.
- */
-const MENTION_SEARCH_LIMIT = 40;
 
 interface UseChatFileMentionMenuArgs {
   open: boolean;
@@ -53,14 +41,20 @@ export function useChatFileMentionMenu({
     workspaceId: materializedWorkspaceId,
     runtimeReady,
     query,
-    limit: MENTION_SEARCH_LIMIT,
+    limit: CHAT_FILE_MENTION_SEARCH_LIMIT,
   });
+  const resultsAreCurrent = search.debouncedQuery === search.query
+    && !search.isPlaceholderData;
 
   const results = useMemo(() => (
-    open
-      ? rankFileMentionResults(search.results, search.debouncedQuery, MENTION_RESULT_LIMIT)
+    open && resultsAreCurrent
+      ? rankFileMentionResults(
+          search.results,
+          search.debouncedQuery,
+          CHAT_FILE_MENTION_SEARCH_LIMIT,
+        )
       : []
-  ), [open, search.debouncedQuery, search.results]);
+  ), [open, resultsAreCurrent, search.debouncedQuery, search.results]);
 
   const navigation = useComposerMenuNavigation({
     open,
@@ -79,8 +73,8 @@ export function useChatFileMentionMenu({
     results,
     isLoading: search.isLoading,
     isError: search.isError,
-    /** True once a query has been typed but no search has been issued yet. */
-    isPending: open && query.trim().length > 0 && !search.searchEnabled,
+    /** True while the current token is waiting for its own result page. */
+    isPending: open && search.query.length > 0 && (!search.searchEnabled || !resultsAreCurrent),
     runtimeReady,
     highlightedIndex: navigation.highlightedIndex,
     listRef: navigation.listRef,

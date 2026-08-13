@@ -162,6 +162,12 @@ Discovery follows the current caret rather than the end of the document, and a
 selection replaces only the active slash-token range while preserving text and
 formatting around it.
 
+File-mention discovery keeps the runtime's full supported result page instead
+of applying a smaller presentation limit or discarding fuzzy matches with a
+stricter client-side filter. The shared inline-menu viewport stays visually
+capped at about ten rows and scrolls the remaining matches; Arrow-key navigation
+keeps the highlighted row in view while focus remains in the composer editor.
+
 Composer focus follows the app lifecycle. The workspace composer takes focus
 after mount and workspace switches (`ChatInput.tsx`), and the Home composer
 takes focus after mount (`HomeComposerForm.tsx`); both surfaces mark their
