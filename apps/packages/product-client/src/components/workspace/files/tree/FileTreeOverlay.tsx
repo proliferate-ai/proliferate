@@ -4,9 +4,8 @@ import {
   useState,
 } from "react";
 import { twMerge } from "#product/primitives/utils/tw-merge";
-import { Input } from "#product/primitives/Input";
 import { Button } from "#product/primitives/Button";
-import { Search, X } from "#product/primitives/icons/core";
+import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
 import { FileSearchResultsTree } from "#product/components/workspace/files/tree/FileSearchResultsTree";
 import { FileTreeDirectory } from "#product/components/workspace/files/tree/FileTreeDirectory";
 import { useTreePanelResize } from "#product/hooks/ui/layout/use-tree-panel-resize";
@@ -28,6 +27,14 @@ interface FileTreeOverlayProps {
  * Floating file browser anchored top-right within the files pane, layered over
  * the code viewer. Escape and outside click dismiss it; the left edge supports
  * pointer and keyboard resizing.
+ *
+ * Integrator ruling (conformance slice): `components/workspace/pane/
+ * PaneSideOverlay.tsx` had zero consumers and was deleted by the shell
+ * slice rather than promoted, so the two-implementations-of-one-shape
+ * finding this file used to share with it is now moot on that side. This
+ * component keeps and cleans its own shell instead of adopting a library
+ * pattern; promotion is deferred until a second live consumer of this shape
+ * exists (see the design-system doctrine's promotion trigger).
  */
 export function FileTreeOverlay({
   open,
@@ -83,8 +90,25 @@ export function FileTreeOverlay({
         role="dialog"
         aria-label="Browse files"
         className="pointer-events-auto absolute bottom-2 right-2 top-2 flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-sidebar-background shadow-popover"
+        // C4: clamps the panel to the stored width or the available pane
+        // width minus a 1rem margin, whichever is smaller — legitimate
+        // resize math with no fixed-token equivalent.
         style={{ width: `min(${width}px, calc(100% - 1rem))` }}
       >
+        {/*
+         * C7, partial: the acceptance criteria call for removing "the two
+         * FileTreeOverlay focus-visible stacks" (this handle's, and the
+         * filter-clear button's). The filter-clear button's stack is gone
+         * because that whole hand-rolled field is replaced by
+         * `PopoverSearchField` below. This resize handle's focus-visible
+         * ring has no sanctioned target — there is no library "resizable
+         * pane edge" primitive to absorb it into, and inventing one is a
+         * new component, out of scope for this slice. It is not a
+         * duplicate of any sanctioned pattern's state contract (it is a
+         * single-state focus indicator, not a hover/active/selected trio),
+         * so it stays, recorded alongside the deferred shell promotion
+         * above.
+         */}
         <div
           role="separator"
           aria-orientation="vertical"
@@ -142,30 +166,25 @@ function FileTreeBody({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 px-2 pt-2 pb-1">
-        <div className="flex h-7 items-center gap-2 rounded-md bg-surface-control px-2 text-sidebar-muted-foreground focus-within:ring-1 focus-within:ring-sidebar-ring">
-          <Search className="icon-paired shrink-0" />
-          <Input
-            value={filter}
-            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setFilter(event.target.value)}
-            placeholder="Filter files…"
-            autoFocus
-            className="h-full border-0 bg-transparent px-0 text-ui text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
-          />
-          {filter.length > 0 && (
-            <Button
-              type="button"
-              variant="unstyled"
-              size="unstyled"
-              aria-label="Clear file filter"
-              className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-muted-foreground hover:bg-sidebar-background hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-sidebar-ring"
-              onClick={() => setFilter("")}
-            >
-              <X className="icon-paired" />
-            </Button>
-          )}
-        </div>
-      </div>
+      {/*
+       * Adopts `PopoverSearchField` (same composition as
+       * `GitPanelHeader.tsx`'s file jump-to search, its sibling instance of
+       * this shape) in place of the hand-rolled boxed `bg-surface-control`
+       * field. This drops the field's own inline "clear" (×) button —
+       * `PopoverSearchField` has no trailing-action slot for one — which
+       * also removes its hand-assembled `focus-visible` stack for free per
+       * the acceptance criteria. Clearing the filter still works via
+       * selecting and deleting the text; flagged as a minor, spec-directed
+       * affordance loss rather than reintroducing the hand-roll.
+       */}
+      <PopoverSearchField
+        value={filter}
+        onChange={setFilter}
+        placeholder="Filter files…"
+        ariaLabel="Filter files"
+        autoFocus
+      />
+      <div className="h-px shrink-0 bg-border" />
       {isSearching ? (
         <FileSearchResultsTree
           workspaceId={workspaceId}
