@@ -1,6 +1,14 @@
 import { Button } from "#product/primitives/Button";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGlyph";
+import {
+  historicalSubagentProvenanceRemainsAuthoritative,
+  isDurableSubagentRelationship,
+  resolveCurrentSessionRelationship,
+  useAgentsPaneNavigationActions,
+} from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
+import { recordSubagentChildRelationshipHint } from "#product/hooks/sessions/workflows/session-relationship-hints";
 import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import type {
@@ -56,14 +64,73 @@ function ConnectedPendingAgentIdentityGlyph({
 }: {
   agent: PendingPromptQueueAgent;
 }) {
+  const activeSessionId = useActiveSessionId();
+  const activeParentSessionId = useSessionDirectoryStore((state) =>
+    activeSessionId
+      ? state.entriesById[activeSessionId]?.materializedSessionId ?? null
+      : null
+  );
+  const activeWorkspaceId = useSessionDirectoryStore((state) =>
+    activeSessionId
+      ? state.entriesById[activeSessionId]?.workspaceId ?? null
+      : null
+  );
   const navigationSessionId = useSessionDirectoryStore((state) =>
     state.clientSessionIdByMaterializedSessionId[agent.sessionId] ?? agent.sessionId
   );
   const navigationWorkspaceId = useSessionDirectoryStore(
-    (state) => state.entriesById[navigationSessionId]?.workspaceId ?? null,
+    (state) => resolveCurrentSessionRelationship(state, agent.sessionId).workspaceId,
   );
+  const navigationRelationship = useSessionDirectoryStore(
+    (state) => resolveCurrentSessionRelationship(state, agent.sessionId).relationship,
+  );
+  const { classifyAgentsPaneTarget, openAgentsPaneTarget } =
+    useAgentsPaneNavigationActions();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
-  const canOpen = navigationWorkspaceId !== null;
+  // Promotion leaves historical wake provenance in the transcript. The live
+  // directory relationship is authoritative once that durable child is root.
+  const historicalProvenanceIsSubagent = agent.provenance.kind === "subagent_wake"
+    || (
+      agent.provenance.kind === "link_wake"
+      && agent.provenance.relation === "subagent"
+    );
+  const directoryIsDurableSubagent = isDurableSubagentRelationship(navigationRelationship);
+  const hasMatchingPendingSubagentAuthority = historicalProvenanceIsSubagent
+    && navigationRelationship?.kind === "pending"
+    && historicalSubagentProvenanceRemainsAuthoritative(
+      navigationRelationship,
+      navigationWorkspaceId !== null,
+    )
+    && navigationWorkspaceId === activeWorkspaceId;
+  const hasCurrentWorkspaceSubagentProvenance = Boolean(
+    activeWorkspaceId
+    && (
+      hasMatchingPendingSubagentAuthority
+      || (
+        directoryIsDurableSubagent
+        && (
+          navigationWorkspaceId === activeWorkspaceId
+          || navigationRelationship.workspaceId === activeWorkspaceId
+        )
+      )
+    ),
+  );
+  const canOpenInAgentsPane = Boolean(
+    hasCurrentWorkspaceSubagentProvenance
+    && activeParentSessionId
+    && activeWorkspaceId
+  );
+  const currentRelationshipKeepsOrdinaryNavigation = Boolean(
+    navigationRelationship
+    && navigationRelationship.kind !== "pending"
+    && !directoryIsDurableSubagent,
+  );
+  const durableSubagentIsCrossWorkspace = directoryIsDurableSubagent
+    && navigationWorkspaceId !== null
+    && navigationWorkspaceId !== activeWorkspaceId;
+  const canOpenOrdinarySession = navigationWorkspaceId !== null
+    && (currentRelationshipKeepsOrdinaryNavigation || durableSubagentIsCrossWorkspace);
+  const canOpen = canOpenInAgentsPane || canOpenOrdinarySession;
 
   return (
     <PendingAgentIdentityGlyph
@@ -71,10 +138,41 @@ function ConnectedPendingAgentIdentityGlyph({
       canOpen={canOpen}
       onOpen={canOpen
         ? () => {
-          void openWorkspaceSession({
-            workspaceId: navigationWorkspaceId,
-            sessionId: navigationSessionId,
-          });
+          if (canOpenInAgentsPane && activeParentSessionId && activeWorkspaceId) {
+            const target = {
+              workspaceId: activeWorkspaceId,
+              parentSessionId: activeParentSessionId,
+              childSessionId: agent.sessionId,
+              historicalSubagentProvenance: historicalProvenanceIsSubagent,
+            };
+            const classification = classifyAgentsPaneTarget(target);
+            if (classification === "subagent") {
+              recordSubagentChildRelationshipHint({
+                sessionId: navigationSessionId,
+                parentSessionId: activeParentSessionId,
+                sessionLinkId: agent.provenance.sessionLinkId,
+                workspaceId: activeWorkspaceId,
+              });
+              openAgentsPaneTarget(target);
+              return;
+            }
+            if (
+              classification === "promoted"
+              || classification === "other_relationship"
+            ) {
+              void openWorkspaceSession({
+                workspaceId: navigationWorkspaceId ?? activeWorkspaceId,
+                sessionId: navigationSessionId,
+              });
+            }
+            return;
+          }
+          if (navigationWorkspaceId ?? activeWorkspaceId) {
+            void openWorkspaceSession({
+              workspaceId: navigationWorkspaceId ?? activeWorkspaceId!,
+              sessionId: navigationSessionId,
+            });
+          }
         }
         : undefined}
     />

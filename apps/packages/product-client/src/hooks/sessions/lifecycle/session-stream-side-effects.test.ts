@@ -9,6 +9,7 @@ import {
   createTranscriptState,
   type SessionEventEnvelope,
   type SessionLiveConfigSnapshot,
+  type ToolCallItem,
 } from "@anyharness/sdk";
 import {
   applyBatchedStreamSideEffects,
@@ -205,6 +206,64 @@ describe("applyBatchedStreamSideEffects", () => {
     expect(mocks.notifyUserFacingTurnEnd).toHaveBeenNthCalledWith(1, "session-1", "turn_ended");
     expect(mocks.notifyUserFacingTurnEnd).toHaveBeenNthCalledWith(2, "session-1", "error");
   });
+
+  it("marks durable and mapped client aliases before invalidating promotion rosters", () => {
+    const input = baseInput();
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById["tool-1"] = workspacePromotionToolCall();
+    input.resolveClientSessionId.mockReturnValue("client-session");
+    const invalidateSessionSubagents = vi.mocked(
+      input.sessionStreamCache.invalidateSessionSubagents,
+    );
+
+    applyBatchedStreamSideEffects({
+      ...input,
+      transcript,
+      envelopes: [itemCompleted(2, "tool-1")],
+    });
+
+    expect(input.resolveClientSessionId).toHaveBeenCalledWith("durable-session");
+    expect(input.markSessionPromoted).toHaveBeenCalledWith(
+      ["durable-session", "client-session"],
+      "workspace-1",
+    );
+    expect(invalidateSessionSubagents).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      sessionId: "durable-session-1",
+    });
+    expect(input.markSessionPromoted.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidateSessionSubagents.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("records and mounts a created child through its existing client alias", () => {
+    const input = baseInput();
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById["tool-create"] = workspaceCreateToolCall();
+    input.resolveClientSessionId.mockImplementation((sessionId: string) =>
+      sessionId === "durable-created" ? "client-created" : null
+    );
+
+    applyBatchedStreamSideEffects({
+      ...input,
+      transcript,
+      envelopes: [itemCompleted(2, "tool-create")],
+    });
+
+    expect(input.recordSessionRelationshipHint).toHaveBeenCalledWith(
+      "client-created",
+      expect.objectContaining({
+        kind: "subagent_child",
+        parentSessionId: "durable-session-1",
+      }),
+    );
+    expect(input.mountSubagentChildSession).toHaveBeenCalledWith(
+      expect.objectContaining({ childSessionId: "client-created" }),
+    );
+    expect(input.mountSubagentChildSession).not.toHaveBeenCalledWith(
+      expect.objectContaining({ childSessionId: "durable-created" }),
+    );
+  });
 });
 
 function baseInput(overrides?: {
@@ -216,6 +275,7 @@ function baseInput(overrides?: {
   return {
     sessionStreamCache: createTestSessionStreamCache(),
     sessionId: "session-1",
+    materializedSessionId: "durable-session-1",
     runtimeUrl: "http://runtime.test",
     workspaceId: "workspace-1",
     agentKind: "codex",
@@ -225,6 +285,8 @@ function baseInput(overrides?: {
     reconciledIntents: [],
     mountSubagentChildSession: vi.fn(),
     recordSessionRelationshipHint: vi.fn(),
+    resolveClientSessionId: vi.fn((_sessionId: string): string | null => null),
+    markSessionPromoted: vi.fn(),
     getSessionRelationship: vi.fn((sessionId: string) =>
       sessionId === "session-1" ? sessionRelationship : null),
     persistReconciledControlPreferences: vi.fn(),
@@ -234,6 +296,82 @@ function baseInput(overrides?: {
     scheduleActiveSummaryRefresh: vi.fn(),
     scheduleStartupReadyRefresh: vi.fn(),
   };
+}
+
+function workspacePromotionToolCall(): ToolCallItem {
+  return {
+    kind: "tool_call",
+    itemId: "tool-1",
+    turnId: "turn-1",
+    status: "completed",
+    sourceAgentKind: "codex",
+    messageId: null,
+    title: "Promote subagent",
+    nativeToolName: "mcp__workspace__promote_subagent",
+    parentToolCallId: null,
+    rawInput: { agentId: "durable-session" },
+    rawOutput: {
+      identity: { runtimeId: "runtime-1", sessionId: "durable-session" },
+      workspace: { runtimeId: "runtime-1", workspaceId: "workspace-1" },
+      role: "ordinary",
+      parent: null,
+      configuration: { agentKind: "codex", modelId: null, modeId: null },
+      status: { presentation: "available", execution: "idle", hasLiveActor: true },
+      capabilities: ["get_agent", "send_message"],
+      createdAt: "2026-04-04T00:00:00Z",
+      updatedAt: "2026-04-04T00:00:01Z",
+    },
+    contentParts: [],
+    timestamp: "2026-04-04T00:00:01Z",
+    startedSeq: 1,
+    lastUpdatedSeq: 2,
+    completedSeq: 2,
+    completedAt: "2026-04-04T00:00:02Z",
+    toolCallId: "tool-1",
+    toolKind: "other",
+    semanticKind: "other",
+    approvalState: "none",
+  };
+}
+
+function workspaceCreateToolCall(): ToolCallItem {
+  const item = workspacePromotionToolCall();
+  const rawOutput = item.rawOutput as Record<string, unknown>;
+  return {
+    ...item,
+    itemId: "tool-create",
+    title: "Create subagent",
+    nativeToolName: "mcp__workspace__create_agent",
+    rawInput: {
+      kind: "subagent",
+      task: "Inspect schemas",
+      workspaceId: "workspace-1",
+    },
+    rawOutput: {
+      ...rawOutput,
+      identity: { runtimeId: "runtime-1", sessionId: "durable-created" },
+      parent: { runtimeId: "runtime-1", sessionId: "durable-session-1" },
+      role: "subagent",
+      title: "Schema agent",
+    },
+    toolCallId: "tool-create",
+  };
+}
+
+function itemCompleted(seq: number, itemId: string): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_completed",
+      item: itemId === "tool-create"
+        ? workspaceCreateToolCall()
+        : workspacePromotionToolCall(),
+    },
+  } as SessionEventEnvelope;
 }
 
 function createTestSessionStreamCache(): SessionStreamCache {

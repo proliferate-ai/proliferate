@@ -13,11 +13,13 @@ import {
   type PendingPromptListProps,
 } from "#product/components/workspace/chat/input/PendingPromptList";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { delegatedWorkVisualIdentity } from "#product/lib/domain/delegated-work/identity";
 import { solidSealGeometry } from "#product/lib/domain/delegated-work/solid-seal";
 
 const usePendingPromptQueueMock = vi.hoisted(() => vi.fn());
 const openWorkspaceSessionMock = vi.hoisted(() => vi.fn());
+const openAgentsPaneTargetMock = vi.hoisted(() => vi.fn());
 
 vi.mock("#product/hooks/chat/ui/use-pending-prompt-queue", () => ({
   usePendingPromptQueue: usePendingPromptQueueMock,
@@ -26,6 +28,16 @@ vi.mock("#product/hooks/chat/ui/use-pending-prompt-queue", () => ({
 vi.mock("#product/hooks/workspaces/workflows/use-workspace-activation-workflow", () => ({
   useWorkspaceActivationWorkflow: () => ({
     openWorkspaceSession: openWorkspaceSessionMock,
+  }),
+}));
+
+vi.mock("#product/hooks/agents/workflows/use-agents-pane-navigation-actions", async (importOriginal) => ({
+  ...await importOriginal<
+    typeof import("#product/hooks/agents/workflows/use-agents-pane-navigation-actions")
+  >(),
+  useAgentsPaneNavigationActions: () => ({
+    classifyAgentsPaneTarget: () => "subagent",
+    openAgentsPaneTarget: openAgentsPaneTargetMock,
   }),
 }));
 
@@ -66,7 +78,9 @@ describe("PendingPromptList", () => {
     cleanup();
     usePendingPromptQueueMock.mockReset();
     openWorkspaceSessionMock.mockReset();
+    openAgentsPaneTargetMock.mockReset();
     useSessionDirectoryStore.getState().clearEntries();
+    useSessionSelectionStore.getState().clearSelection();
   });
 
   it("uses native keyboard-operable buttons for reorder handles", () => {
@@ -305,6 +319,7 @@ describe("PendingPromptList", () => {
         workspaceId: "workspace-agent",
         agentKind: "codex",
         title: "Schema audit",
+        sessionRelationship: { kind: "root" },
       });
     });
     expect(renderCount).toBeGreaterThan(initialRenderCount);

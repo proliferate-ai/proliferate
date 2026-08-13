@@ -18,6 +18,7 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
       summary: buildPlaygroundSubagentSummary(args.subagentRows),
       overflowCount: 0,
       openSubagent: noop,
+      openCluster: noop,
       openParent: noop,
       scheduleWake: noop,
       isSchedulingWake: false,

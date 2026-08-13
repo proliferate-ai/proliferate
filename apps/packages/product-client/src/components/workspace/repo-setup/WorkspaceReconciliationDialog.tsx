@@ -20,7 +20,7 @@ import { useWorkspaceGitReconciliationActions } from "#product/hooks/workspaces/
 import { useMaterializationHealthPass } from "#product/hooks/workspaces/workflows/use-materialization-health-pass";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import { useWorkspaceShellActions } from "#product/hooks/workspaces/workflows/use-workspace-shell-actions";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import type { WorkspaceReconcileContinuation } from "#product/stores/cloud/workspace-availability-intent-store";
 

@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import type { SessionEventEnvelope } from "@anyharness/sdk";
 import { useFetchSessionMutation } from "@anyharness/sdk-react";
 import {
   createSessionRecordFromSummary,
@@ -26,7 +25,7 @@ interface MountSubagentChildInput {
 }
 
 export function useLinkedSessionMounting() {
-  const fetchSessionMutation = useFetchSessionMutation();
+  const { mutateAsync: fetchSession } = useFetchSessionMutation();
   const mountLinkedSessionSlot = useCallback(async (
     input: MountLinkedSessionInput,
   ): Promise<void> => {
@@ -40,7 +39,7 @@ export function useLinkedSessionMounting() {
     }
 
     try {
-      const session = await fetchSessionMutation.mutateAsync({
+      const session = await fetchSession({
         workspaceId: input.workspaceId,
         sessionId: input.sessionId,
         requestOptions: input.requestHeaders ? { headers: input.requestHeaders } : undefined,
@@ -61,7 +60,7 @@ export function useLinkedSessionMounting() {
       // Linked session mounting is opportunistic. The source transcript still
       // contains durable metadata and users can open the linked session later.
     }
-  }, [fetchSessionMutation]);
+  }, [fetchSession]);
 
   const mountSubagentChildSession = useCallback((
     input: MountSubagentChildInput,
@@ -79,38 +78,7 @@ export function useLinkedSessionMounting() {
     requestHeaders: input.requestHeaders,
   }), [mountLinkedSessionSlot]);
 
-  const mountSubagentChildrenFromEvents = useCallback((
-    parentWorkspaceId: string | null,
-    events: readonly SessionEventEnvelope[],
-    requestHeaders?: HeadersInit,
-  ): void => {
-    if (!parentWorkspaceId) {
-      return;
-    }
-
-    const seenChildSessionIds = new Set<string>();
-    for (const envelope of events) {
-      const event = envelope.event;
-      if (event.type !== "subagent_turn_completed") {
-        continue;
-      }
-      if (seenChildSessionIds.has(event.childSessionId)) {
-        continue;
-      }
-      seenChildSessionIds.add(event.childSessionId);
-      void mountSubagentChildSession({
-        childSessionId: event.childSessionId,
-        label: event.label ?? null,
-        workspaceId: parentWorkspaceId,
-        parentSessionId: event.parentSessionId,
-        sessionLinkId: event.sessionLinkId,
-        requestHeaders,
-      });
-    }
-  }, [mountSubagentChildSession]);
-
   return {
     mountSubagentChildSession,
-    mountSubagentChildrenFromEvents,
   };
 }

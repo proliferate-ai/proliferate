@@ -50,6 +50,7 @@ export interface AgentOperationsAgentTarget {
   runtimeId: string | null;
   sessionId: string | null;
   workspaceId: string | null;
+  parentSessionId: string | null;
   title: string | null;
   role: string | null;
   presentationStatus: string | null;

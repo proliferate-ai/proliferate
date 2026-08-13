@@ -10,6 +10,7 @@ export function targetAgentFromDurableId(sessionId: string): AgentOperationsAgen
     runtimeId: null,
     sessionId,
     workspaceId: null,
+    parentSessionId: null,
     title: null,
     role: null,
     presentationStatus: null,
@@ -87,6 +88,7 @@ export function parseAgentTarget(value: Record<string, unknown>): AgentOperation
   const identity = coerceRecord(value.identity) ?? {};
   const workspace = coerceRecord(value.workspace) ?? {};
   const status = coerceRecord(value.status) ?? {};
+  const parent = coerceRecord(value.parent) ?? {};
   const sessionId = readString(identity, "sessionId");
   const presentationStatus = readString(status, "presentation");
   const executionStatus = readString(status, "execution");
@@ -94,6 +96,7 @@ export function parseAgentTarget(value: Record<string, unknown>): AgentOperation
     runtimeId: readString(identity, "runtimeId"),
     sessionId,
     workspaceId: readString(workspace, "workspaceId"),
+    parentSessionId: readString(parent, "sessionId"),
     title: readString(value, "title"),
     role: readString(value, "role"),
     presentationStatus,

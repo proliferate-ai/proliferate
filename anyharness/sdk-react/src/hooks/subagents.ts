@@ -18,6 +18,13 @@ interface WorkspaceQueryOptions {
   enabled?: boolean;
 }
 
+interface SessionSubagentsQueryOptions extends WorkspaceQueryOptions {
+  /** Passthrough to React Query; omit to keep the default (no polling). */
+  refetchInterval?: number | false;
+  /** Passthrough to React Query; omit to keep the client's default. */
+  refetchOnWindowFocus?: boolean;
+}
+
 type SubagentLifecycleMutationInput = {
   parentSessionId: string;
   childSessionId: string;
@@ -25,7 +32,7 @@ type SubagentLifecycleMutationInput = {
 
 export function useSessionSubagentsQuery(
   sessionId: string | null | undefined,
-  options?: WorkspaceQueryOptions,
+  options?: SessionSubagentsQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
@@ -34,6 +41,14 @@ export function useSessionSubagentsQuery(
   return useQuery({
     queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, sessionId),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
+    // Spread conditionally: an explicit `undefined` would override the host
+    // QueryClient's global defaults, silently changing every omitted-option caller.
+    ...(options?.refetchInterval !== undefined
+      ? { refetchInterval: options.refetchInterval }
+      : {}),
+    ...(options?.refetchOnWindowFocus !== undefined
+      ? { refetchOnWindowFocus: options.refetchOnWindowFocus }
+      : {}),
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
@@ -60,8 +75,11 @@ function useSubagentLifecycleMutation(
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions[action](input.parentSessionId, input.childSessionId);
     },
-    onSuccess: async (_response, variables) => {
-      await Promise.all([
+    onSuccess: (_response, variables) => {
+      // Reconciliation belongs to this hook, but an accepted lifecycle
+      // response is immediate product truth. Do not hold mutateAsync (and the
+      // Close/Open/Promote UI transition) behind active-query refetches.
+      void Promise.allSettled([
         queryClient.invalidateQueries({
           queryKey: anyHarnessWorkspaceSubagentsKey(cacheScopeKey, workspaceId),
         }),
