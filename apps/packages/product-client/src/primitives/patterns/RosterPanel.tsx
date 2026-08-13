@@ -24,8 +24,9 @@ import { twMerge } from "#product/primitives/utils/tw-merge";
  * place of the rows (`LoopsPanel` while composing) passes `null` to suppress
  * the empty line rather than growing a second axis.
  */
-export interface RosterPanelProps extends HTMLAttributes<HTMLDivElement> {
-  /** Static section label. */
+export interface RosterPanelProps
+  extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
+  /** Static section label. Widens the DOM `title` attribute, which is a string. */
   title: ReactNode;
   /** Right-aligned header control (an `IconButton`, not a tab). */
   headerAction?: ReactNode;
