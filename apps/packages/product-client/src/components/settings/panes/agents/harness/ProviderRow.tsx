@@ -1,5 +1,6 @@
 import { ChevronRight } from "#product/primitives/icons/core";
 import { Button } from "#product/primitives/Button";
+import { IconTile } from "#product/primitives/IconTile";
 import { Input } from "#product/primitives/Input";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import {
@@ -12,9 +13,11 @@ import { PROVIDER_LOGO_URLS } from "#product/config/provider-logos.generated";
 function ProviderLogo({ provider }: { provider: ProviderRegistryEntry }) {
   const src = PROVIDER_LOGO_URLS[provider.id];
   return (
-    <span
+    <IconTile
+      tone="outlined"
+      size="sm"
       aria-hidden
-      className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border-light bg-surface-control font-mono text-ui-sm text-muted-foreground"
+      className="font-mono text-ui-sm"
     >
       {src === undefined
         ? provider.displayName.slice(0, 1).toUpperCase()
@@ -28,7 +31,7 @@ function ProviderLogo({ provider }: { provider: ProviderRegistryEntry }) {
             className="size-4 brightness-0 invert-[0.78]"
           />
         )}
-    </span>
+    </IconTile>
   );
 }
 
@@ -66,6 +69,15 @@ export function ProviderRow({
 }) {
   const envVarName = getProviderSecretEnvVar(provider);
   return (
+    // Disclosure is deferred here (frozen spec §4.3 pattern): the modal keeps
+    // only ONE row's form mounted at a time and several tests assert true
+    // unmount on collapse (screen.queryByLabelText(...).toBeNull()) —
+    // Disclosure's AnimatedCollapsibleContent keeps children permanently
+    // mounted (aria-hidden + inert, never removed), which Testing Library's
+    // non-role queries do not filter out. Swapping would break those
+    // assertions without a matching product change, so the hand-rolled
+    // expand/collapse (real unmount) stays; only the icon tile adopts the
+    // shared primitive below.
     <li className={expanded ? "bg-selected" : undefined}>
       <Button
         type="button"

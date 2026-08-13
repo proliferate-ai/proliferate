@@ -3,8 +3,7 @@ import { useId, useState, type FormEvent } from "react";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
-
-import { ACCOUNT_ROW_CLASS } from "#product/components/settings/panes/account/AccountSignInMethods";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 
 export interface AccountPasswordCredentialSubmit {
   currentPassword?: string;
@@ -87,12 +86,11 @@ export function AccountPasswordCredentialRow({
 
   return (
     <div>
-      <div className={ACCOUNT_ROW_CLASS}>
-        <div className="min-w-0 flex-1 space-y-px">
-          <div className="text-ui text-foreground">Email &amp; password</div>
-          <div className="text-ui-sm text-muted-foreground [text-wrap:pretty]">{detailText}</div>
-        </div>
-        {credential.onSubmit ? (
+      <RosterRow
+        density="comfortable"
+        title="Email & password"
+        secondary={detailText}
+        trailing={credential.onSubmit ? (
           <Button
             type="button"
             variant="secondary"
@@ -113,7 +111,7 @@ export function AccountPasswordCredentialRow({
             {editing ? "Cancel" : credential.enabled ? "Change password" : "Set password"}
           </Button>
         ) : null}
-      </div>
+      />
 
       {editing ? (
         <form className="grid gap-3 px-3.5 pb-3.5 sm:max-w-md" onSubmit={submit}>

@@ -1,6 +1,7 @@
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { Button } from "#product/primitives/Button";
+import { ProgressBar } from "#product/primitives/ProgressBar";
 import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import type { BillingUnitBalancePresentation } from "#product/lib/domain/settings/billing-settings-presentation";
 
@@ -73,19 +74,12 @@ function BillingUnitPoolRow({
       description={(
         <span className="flex flex-col gap-1.5">
           <span>{balance.available} of {balance.purchased} available</span>
-          <span
+          <ProgressBar
+            value={percent}
             className="block h-1 w-24 overflow-hidden rounded-full bg-surface-control"
-            role="progressbar"
-            aria-valuenow={percent}
-            aria-valuemin={0}
-            aria-valuemax={100}
+            indicatorClassName="block h-full rounded-full bg-foreground/40"
             aria-label={`${balance.title} available`}
-          >
-            <span
-              className="block h-full rounded-full bg-foreground/40"
-              style={{ width: `${percent}%` }}
-            />
-          </span>
+          />
         </span>
       )}
     >

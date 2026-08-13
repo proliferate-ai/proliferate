@@ -4,6 +4,7 @@ import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
 import type { SettingsSection } from "#product/config/settings";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import { Button } from "#product/primitives/Button";
+import { Disclosure } from "#product/primitives/patterns/Disclosure";
 
 interface SettingsContentBoundaryProps {
   section: SettingsSection;
@@ -21,6 +22,7 @@ interface SettingsContentErrorBoundaryProps extends SettingsContentBoundaryProps
 
 interface SettingsContentBoundaryState {
   error: Error | null;
+  detailsOpen: boolean;
 }
 
 class SettingsContentErrorBoundary extends React.Component<
@@ -29,6 +31,7 @@ class SettingsContentErrorBoundary extends React.Component<
 > {
   state: SettingsContentBoundaryState = {
     error: null,
+    detailsOpen: false,
   };
 
   static getDerivedStateFromError(error: Error): SettingsContentBoundaryState {
@@ -60,13 +63,22 @@ class SettingsContentErrorBoundary extends React.Component<
     this.setState({ error: null });
   };
 
+  private handleDetailsOpenChange = (open: boolean) => {
+    this.setState({ detailsOpen: open });
+  };
+
   render() {
     if (!this.state.error) {
       return this.props.children;
     }
 
     return (
-      <section className="space-y-4 py-8">
+      // w-full max-w-[50rem]: SettingsScreen's page-width contract used to
+      // live on a wrapper around this boundary; now that panes carry it
+      // themselves via SettingsPageBody, the error fallback — the one thing
+      // this boundary renders that isn't a pane — carries it directly so it
+      // doesn't regress to full-bleed width.
+      <section className="w-full max-w-[50rem] space-y-4 py-8">
         <div className="space-y-1">
           <h2 className="text-heading font-medium">{SETTINGS_COPY.errorTitle}</h2>
           <p className="text-body text-muted-foreground">
@@ -76,14 +88,17 @@ class SettingsContentErrorBoundary extends React.Component<
         <Button variant="secondary" onClick={this.handleRetry}>
           {SETTINGS_COPY.errorRetry}
         </Button>
-        <details className="rounded-lg border border-border/60 bg-surface-elevated-secondary px-4 py-3 text-body">
-          <summary className="cursor-pointer select-none text-muted-foreground">
-            {SETTINGS_COPY.errorDetailsLabel}
-          </summary>
+        <Disclosure
+          className="rounded-lg border border-border/60 bg-surface-elevated-secondary px-4 py-3 text-body"
+          chevronSide="trailing"
+          open={this.state.detailsOpen}
+          onOpenChange={this.handleDetailsOpenChange}
+          title={SETTINGS_COPY.errorDetailsLabel}
+        >
           <p className="mt-3 break-words text-muted-foreground">
             {this.state.error.message || this.state.error.name}
           </p>
-        </details>
+        </Disclosure>
       </section>
     );
   }

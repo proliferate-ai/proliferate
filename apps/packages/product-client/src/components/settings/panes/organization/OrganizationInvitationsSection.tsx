@@ -44,11 +44,13 @@ export function OrganizationInvitationsSection({
           description="Share this link with people who already have an invitation for this organization."
         >
           <div className="flex flex-col items-stretch gap-2 px-3.5 py-[13px] sm:flex-row">
-            <div className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-3 text-ui text-foreground">
-              <span className="min-w-0 truncate font-mono text-ui-sm">
-                {inviteLinkUrl || (copyingInviteLink ? "Loading invite link…" : "Invite link unavailable")}
-              </span>
-            </div>
+            <Input
+              readOnly
+              value={inviteLinkUrl ?? ""}
+              placeholder={copyingInviteLink ? "Loading invite link…" : "Invite link unavailable"}
+              aria-label="Invite link"
+              className="min-w-0 flex-1 bg-background font-mono text-ui-sm"
+            />
             <Button
               type="button"
               variant="secondary"

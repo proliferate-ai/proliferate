@@ -148,7 +148,11 @@ export function WorktreePolicyRow({
             size="icon"
             aria-label="Fewer ideal worktrees"
             disabled={value <= WORKTREE_AUTO_DELETE_LIMIT_MIN}
-            className="h-7 w-7 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
+            // variant="ghost" already owns text-muted-foreground/hover:bg-hover/
+            // hover:text-foreground/active:bg-active — only the icon-button
+            // geometry override belongs here (C7: don't restate a state stack
+            // the adopted component already owns).
+            className="h-7 w-7 rounded-none"
             onClick={() => step(-1)}
           >
             <Minus className="icon-paired" />
@@ -168,7 +172,11 @@ export function WorktreePolicyRow({
             size="icon"
             aria-label="More ideal worktrees"
             disabled={value >= WORKTREE_AUTO_DELETE_LIMIT_MAX}
-            className="h-7 w-7 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
+            // variant="ghost" already owns text-muted-foreground/hover:bg-hover/
+            // hover:text-foreground/active:bg-active — only the icon-button
+            // geometry override belongs here (C7: don't restate a state stack
+            // the adopted component already owns).
+            className="h-7 w-7 rounded-none"
             onClick={() => step(1)}
           >
             <Plus className="icon-paired" />

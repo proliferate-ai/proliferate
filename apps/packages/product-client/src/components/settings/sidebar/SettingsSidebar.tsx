@@ -22,7 +22,7 @@ import { Brain } from "#product/primitives/icons/product";
 import { SidebarNavRow } from "#product/primitives/patterns/sidebar/SidebarNavRow";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
-import { HarnessStatusDot } from "#product/components/settings/sidebar/HarnessStatusDot";
+import { StatusDot } from "#product/primitives/StatusDot";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
@@ -39,6 +39,7 @@ import {
   type SettingsScope,
 } from "#product/lib/domain/settings/navigation-presentation";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { getHarnessAttentionDotTone } from "#product/lib/domain/agents/status-presentation";
 import { useAppVersion } from "#product/hooks/access/tauri/app/use-app-version";
 import { useSettingsSectionShortcuts } from "#product/hooks/settings/ui/use-settings-section-shortcuts";
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
@@ -70,12 +71,6 @@ const SETTINGS_GROUPS_CLASS = "flex flex-col";
 const SETTINGS_GROUP_CLASS = "flex flex-col gap-0.5";
 const SETTINGS_GROUP_SPACING_CLASS = "mt-6";
 const SETTINGS_GROUP_HEADING_SPACING_CLASS = "px-2.5 pb-1.5";
-const SETTINGS_ROW_INACTIVE_CLASS =
-  "!text-muted-foreground hover:!text-foreground";
-const SETTINGS_ROW_ACTIVE_CLASS =
-  "!text-foreground";
-const SETTINGS_ROW_DISABLED_CLASS =
-  "!text-muted-foreground hover:!text-muted-foreground";
 
 /** Brand glyph for a per-harness nav entry, adapted to the icon-map contract. */
 function harnessNavIcon(kind: string) {
@@ -112,13 +107,6 @@ const SETTINGS_NAV_ICONS = {
   worktrees: Scissors,
 } satisfies Record<SettingsNavIconId, ComponentType<{ className?: string }>>;
 
-function settingsRowClass(active: boolean, disabled = false) {
-  return [
-    active ? SETTINGS_ROW_ACTIVE_CLASS : SETTINGS_ROW_INACTIVE_CLASS,
-    disabled ? SETTINGS_ROW_DISABLED_CLASS : "",
-  ].filter(Boolean).join(" ");
-}
-
 function isSettingsItemActive(item: SettingsNavItem, activeSection: SettingsSection) {
   return item.kind === "section" && activeSection === item.id;
 }
@@ -146,7 +134,10 @@ function settingsItemStatus(
   if (item.kind === "section" && isSettingsHarnessSection(item.id)) {
     const harnessKind = getHarnessKindForSettingsSection(item.id);
     const agent = agentsByKind.get(harnessKind);
-    statusItems.push(<HarnessStatusDot key="harness-status" agent={agent} />);
+    const attentionTone = getHarnessAttentionDotTone(agent);
+    if (attentionTone) {
+      statusItems.push(<StatusDot key="harness-status" tone={attentionTone} />);
+    }
   }
 
   if (item.kind === "action" && item.id === "checkForUpdates") {
@@ -287,7 +278,6 @@ export function SettingsSidebar({
         active={active}
         disabled={disabled}
         aria-current={active ? "page" : undefined}
-        className={settingsRowClass(active, disabled)}
         shortcutRevealVisible={shortcutRevealVisible}
       />
     );
