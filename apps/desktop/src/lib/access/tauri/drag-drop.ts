@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { DroppedPathsSnapshot } from "@proliferate/product-client/host/desktop-bridge";
+import type { DroppedPathsSnapshot } from "@proliferate/product-client/host/desktop-file-drop-bridge";
 
 /**
  * The drag pasteboard's current change count; identifies the drag session

@@ -184,8 +184,11 @@ export const ChatView = memo(function ChatView({
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   // The drag pasteboard change count captured while the current drag session
   // is over this surface; binds the drop's path snapshot to that session.
-  const dragSessionChangeCountRef = useRef<number | null>(null);
-  const pendingDropChangeCountRef = useRef<number | null>(null);
+  // Held as one promise per drag session: a promise's value cannot be
+  // clobbered by a later session's capture, and a drop that lands before the
+  // capture resolves awaits it instead of skipping the comparison.
+  const dragSessionChangeCountRef = useRef<Promise<number> | null>(null);
+  const pendingDropChangeCountRef = useRef<Promise<number> | null>(null);
   // Dropped-path recovery only makes sense when the agent shares this
   // machine's filesystem. Mirrors resolveRuntimeTargetForWorkspace: `cloud:*`
   // runs in a cloud sandbox and `target:*` on an SSH target — neither can
@@ -200,13 +203,18 @@ export const ChatView = memo(function ChatView({
     return async () => {
       const expectedChangeCount = pendingDropChangeCountRef.current;
       pendingDropChangeCountRef.current = null;
-      const snapshot = await desktopFiles.readDroppedPaths();
-      // A different drag session wrote the pasteboard after this drop's drag
-      // entered the surface; empty entries route the drop to byte uploads.
-      if (expectedChangeCount !== null && snapshot.changeCount !== expectedChangeCount) {
+      // No captured drag session means the snapshot cannot be attributed;
+      // empty entries route the drop to byte uploads.
+      if (!expectedChangeCount) {
         return [];
       }
-      return snapshot.entries;
+      const [snapshot, expected] = await Promise.all([
+        desktopFiles.readDroppedPaths(),
+        expectedChangeCount,
+      ]);
+      // A different drag session wrote the pasteboard after this drop's drag
+      // entered the surface.
+      return snapshot.changeCount === expected ? snapshot.entries : [];
     };
   }, [desktopFiles, selectedWorkspaceId]);
   const promptAttachments = useChatPromptAttachments({
@@ -264,12 +272,7 @@ export const ChatView = memo(function ChatView({
     if (dragSessionChangeCountRef.current === null && desktopFiles && resolveDroppedPaths) {
       // Arm once per drag session; the count identifies the session that
       // will deliver the drop.
-      dragSessionChangeCountRef.current = -1;
-      void desktopFiles.getDragPasteboardChangeCount().then((changeCount) => {
-        if (dragSessionChangeCountRef.current !== null) {
-          dragSessionChangeCountRef.current = changeCount;
-        }
-      });
+      dragSessionChangeCountRef.current = desktopFiles.getDragPasteboardChangeCount();
     }
     return true;
   }, [canAcceptFileDrop, desktopFiles, resolveDroppedPaths]);
@@ -287,7 +290,7 @@ export const ChatView = memo(function ChatView({
     // No files.length gate: WebKit can surface folder-only drops with an
     // empty FileList, and the host path resolver still recovers those items.
     if (canAcceptFileDrop) {
-      pendingDropChangeCountRef.current = sessionChangeCount === -1 ? null : sessionChangeCount;
+      pendingDropChangeCountRef.current = sessionChangeCount;
       promptAttachments.addDroppedFiles(event.dataTransfer.files);
     }
   }, [canAcceptFileDrop, promptAttachments.addDroppedFiles]);

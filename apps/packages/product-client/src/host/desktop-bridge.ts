@@ -1,5 +1,6 @@
 import type { AnyHarnessClientConnection } from "@anyharness/sdk-react";
 import type { ServerMeta } from "#product/lib/domain/auth/connect-server";
+import type { DroppedPathsSnapshot } from "./desktop-file-drop-bridge";
 import type { DesktopUpdaterBridge } from "./desktop-updater-bridge";
 
 /**
@@ -80,23 +81,6 @@ export type DirectoryPickerUnavailableReason =
   | "native_host_required"
   | "picker_failed";
 
-/** One item of the drag session that just dropped onto the webview, resolved
- * to an absolute local path. `size` is null for directories. */
-export interface DroppedPathEntry {
-  path: string;
-  name: string;
-  isDirectory: boolean;
-  size: number | null;
-}
-
-/** A drag-pasteboard snapshot: the pasteboard change count it was read under
- * plus the resolved entries. The change count identifies the drag session —
- * compare against the count captured at drag-enter to bind the snapshot to
- * the drop being handled. */
-export interface DroppedPathsSnapshot {
-  changeCount: number;
-  entries: DroppedPathEntry[];
-}
 
 /** A directory-picker outcome with cancellation kept distinct from a missing
  * or failed native transport. Product workflows decide how to present the
