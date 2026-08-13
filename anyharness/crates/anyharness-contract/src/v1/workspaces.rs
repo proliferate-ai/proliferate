@@ -55,6 +55,7 @@ pub enum WorkspaceSurface {
 pub enum WorkspaceLifecycleState {
     Active,
     Retired,
+    Archived,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

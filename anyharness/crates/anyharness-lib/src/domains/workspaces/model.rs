@@ -81,6 +81,7 @@ pub enum WorkspaceSurface {
 pub enum WorkspaceLifecycleState {
     Active,
     Retired,
+    Archived,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -136,6 +137,7 @@ impl WorkspaceLifecycleState {
         match self {
             Self::Active => "active",
             Self::Retired => "retired",
+            Self::Archived => "archived",
         }
     }
 }
@@ -191,6 +193,7 @@ impl TryFrom<&str> for WorkspaceLifecycleState {
         match value {
             "active" => Ok(Self::Active),
             "retired" => Ok(Self::Retired),
+            "archived" => Ok(Self::Archived),
             _ => Err(WorkspaceModelError::unknown("lifecycle_state", value)),
         }
     }

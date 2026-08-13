@@ -65,11 +65,7 @@ pub(super) fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> 
         display_name: row.get("display_name")?,
         origin: decode_origin_json("workspaces", &id, origin_json),
         creator_context: decode_creator_context_json("workspaces", &id, creator_context_json),
-        lifecycle_state: parse_workspace_enum::<WorkspaceLifecycleState>(
-            row,
-            "lifecycle_state",
-            10,
-        )?,
+        lifecycle_state: parse_workspace_lifecycle(row, &id)?,
         cleanup_state: parse_workspace_enum::<WorkspaceCleanupState>(row, "cleanup_state", 11)?,
         cleanup_operation,
         cleanup_error_message: row.get("cleanup_error_message")?,
@@ -92,6 +88,30 @@ where
     T::try_from(value.as_str()).map_err(|error| {
         rusqlite::Error::FromSqlConversionFailure(column_index, Type::Text, Box::new(error))
     })
+}
+
+// Lifecycle-only tolerance. parse_workspace_enum stays generic and STRICT for
+// kind / surface / cleanup_state; splitting lifecycle off the shared helper is
+// the point of this rung. Unknown value -> Archived: hidden from the store's
+// active-lifecycle readers, and never a collection-wide parse failure. The
+// column read itself still errors (a missing or non-text column is a schema
+// fault, not an unknown enum value).
+fn parse_workspace_lifecycle(
+    row: &rusqlite::Row,
+    workspace_id: &str,
+) -> rusqlite::Result<WorkspaceLifecycleState> {
+    let value: String = row.get("lifecycle_state")?;
+    Ok(
+        WorkspaceLifecycleState::try_from(value.as_str()).unwrap_or_else(|_| {
+            tracing::warn!(
+                table = "workspaces",
+                row_id = workspace_id,
+                lifecycle_state = %value,
+                "unknown workspace lifecycle_state; reading as archived"
+            );
+            WorkspaceLifecycleState::Archived
+        }),
+    )
 }
 
 fn parse_optional_workspace_enum<T>(

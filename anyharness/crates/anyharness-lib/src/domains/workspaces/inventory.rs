@@ -109,6 +109,7 @@ pub enum WorkspaceKind {
 pub enum WorkspaceLifecycleState {
     Active,
     Retired,
+    Archived,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -495,6 +496,7 @@ fn workspace_lifecycle(state: DomainWorkspaceLifecycleState) -> WorkspaceLifecyc
     match state {
         DomainWorkspaceLifecycleState::Retired => WorkspaceLifecycleState::Retired,
         DomainWorkspaceLifecycleState::Active => WorkspaceLifecycleState::Active,
+        DomainWorkspaceLifecycleState::Archived => WorkspaceLifecycleState::Archived,
     }
 }
 

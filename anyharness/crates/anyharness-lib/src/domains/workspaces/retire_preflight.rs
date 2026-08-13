@@ -587,6 +587,7 @@ fn workspace_lifecycle_to_contract(
     match value {
         DomainWorkspaceLifecycleState::Retired => WorkspaceLifecycleState::Retired,
         DomainWorkspaceLifecycleState::Active => WorkspaceLifecycleState::Active,
+        DomainWorkspaceLifecycleState::Archived => WorkspaceLifecycleState::Archived,
     }
 }
 
