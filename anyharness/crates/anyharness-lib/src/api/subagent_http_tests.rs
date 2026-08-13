@@ -414,6 +414,60 @@ async fn lifecycle_routes_preserve_identity_are_idempotent_and_hide_non_targets(
     }
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn open_subagent_resume_precondition_maps_to_conflict() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state();
+
+    // A workspace whose local checkout directory does not exist on disk: the
+    // shared live-start pre-flight (startup.rs `start_live_session`) refuses
+    // resume with a typed WorkspaceDirectoryMissing precondition BEFORE any
+    // agent-readiness work. Opening a dormant subagent resumes it, so that
+    // precondition surfaces as SubagentLifecycleError::Resume(...). It must map
+    // to 409 Conflict (same family as
+    // sessions_errors::map_ensure_live_session_error), not the generic 400 the
+    // wildcard used to hand back.
+    let missing_path = std::env::temp_dir().join(format!(
+        "anyharness-subagent-open-missing-checkout-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let missing_ws = uuid::Uuid::new_v4().to_string();
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        &missing_ws,
+        "worktree",
+        &missing_path.to_string_lossy(),
+    );
+
+    let parent = insert_session_row(&state, &missing_ws);
+    let child = insert_session_row(&state, &missing_ws);
+    state
+        .subagent_service
+        .link_child(&parent, &child, None, None, None)
+        .expect("link child");
+    // Reversibly close so the child is dormant (no live actor): open must take
+    // the resume path rather than reuse a ready handle.
+    state
+        .session_runtime
+        .close_subagent(&parent, &child)
+        .await
+        .expect("reversibly close child");
+
+    let (status, payload) = call(
+        &state,
+        "POST",
+        format!("/v1/sessions/{parent}/subagents/{child}/open"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{payload}");
+    assert_eq!(payload["code"], "WORKSPACE_DIRECTORY_MISSING", "{payload}");
+}
+
 #[test]
 fn subagent_http_routes_require_read_or_parent_control_with_matching_scope() {
     let read = claim(ClaimPermissions {

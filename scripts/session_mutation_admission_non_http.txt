@@ -18,3 +18,13 @@
 # a STALE entry and also fails (mirrors the HTTP checker's stale-entry teeth).
 
 domains/workspaces/retention.rs::run_pass admit_retention_sessions acquire_exclusive,WorkspaceLifecycleState::Retired,retire_worktree_materialization
+
+# Subagent lifecycle engine seams. The HTTP handlers (subagents::{close,open,
+# promote}_subagent) are classified `engine-fenced` in
+# session_mutation_admission.txt because admission lives here, at the
+# agent-operations runtime, rather than in the HTTP handler (re-admitting at the
+# HTTP boundary would deadlock on the shared per-session permit). Each must call
+# admit_target BEFORE the `.subagent_lifecycle(` store write.
+domains/agent_operations/runtime/subagent_lifecycle.rs::close_subagent_lifecycle admit_target .subagent_lifecycle(
+domains/agent_operations/runtime/subagent_lifecycle.rs::open_subagent_lifecycle admit_target .subagent_lifecycle(
+domains/agent_operations/runtime/subagent_lifecycle.rs::promote_subagent_lifecycle admit_target .subagent_lifecycle(
