@@ -1010,6 +1010,7 @@ class TestAgentAuthState:
             "revision": 0,
             "user_id": user_id,
             "harnesses": [],
+            "harness_settings": {},
         }
 
     @pytest.mark.asyncio
