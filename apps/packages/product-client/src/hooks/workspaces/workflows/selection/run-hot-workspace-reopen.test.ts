@@ -51,6 +51,9 @@ describe("runHotWorkspaceReopen", () => {
       lastViewedSessionByWorkspace: {
         "workspace-1": "session-1",
       },
+      activeShellTabKeyByWorkspace: {},
+      recentlyHiddenChatSessionIdsByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
     });
   });
 
@@ -77,6 +80,70 @@ describe("runHotWorkspaceReopen", () => {
     });
     expect(deps.bootstrapWorkspace).not.toHaveBeenCalled();
     expect(deps.reconcileHotWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("aligns the persisted shell tab intent with the reopened session", () => {
+    useWorkspaceUiStore.setState({
+      activeShellTabKeyByWorkspace: {
+        "workspace-1": "chat:session-stale-draft",
+      },
+    });
+    const deps = depsForHotReopen();
+
+    const didHotReopen = runHotWorkspaceReopen(deps, {
+      workspaceId: "workspace-1",
+    });
+
+    expect(didHotReopen).toBe(true);
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-1");
+    expect(
+      useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["workspace-1"],
+    ).toBe("chat:session-1");
+  });
+
+  it("does not resurrect a session whose tab was recently hidden", () => {
+    putSessionRecord({
+      ...createEmptySessionRecord("session-2", "codex", {
+        workspaceId: "workspace-1",
+      }),
+      transcriptHydrated: true,
+    });
+    useWorkspaceUiStore.setState({
+      recentlyHiddenChatSessionIdsByWorkspace: {
+        "workspace-1": ["session-1"],
+      },
+    });
+    const deps = depsForHotReopen();
+
+    const didHotReopen = runHotWorkspaceReopen(deps, {
+      workspaceId: "workspace-1",
+    });
+
+    expect(didHotReopen).toBe(true);
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-2");
+  });
+
+  it("reveals a hidden session when it is requested explicitly", () => {
+    useWorkspaceUiStore.setState({
+      recentlyHiddenChatSessionIdsByWorkspace: {
+        "workspace-1": ["session-1"],
+      },
+    });
+    const deps = depsForHotReopen();
+
+    const didHotReopen = runHotWorkspaceReopen(deps, {
+      workspaceId: "workspace-1",
+      options: { initialActiveSessionId: "session-1" },
+    });
+
+    expect(didHotReopen).toBe(true);
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-1");
+    expect(
+      useWorkspaceUiStore.getState().recentlyHiddenChatSessionIdsByWorkspace["workspace-1"],
+    ).toEqual([]);
+    expect(
+      useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["workspace-1"],
+    ).toBe("chat:session-1");
   });
 
   it("clears the hot gate after paint and starts guarded reconcile", async () => {

@@ -184,6 +184,36 @@ describe("useWorkspaceShellActivation", () => {
       .toHaveBeenCalledWith("mop_1", "aborted");
   });
 
+  it("aborts a deferred activation whose target tab was hidden during the coalesce window", async () => {
+    const { result } = renderHook(() => useWorkspaceShellActivation());
+
+    let activationPromise!: Promise<any>;
+    act(() => {
+      activationPromise = result.current.activateChatTab({
+        workspaceId: "workspace-1",
+        sessionId: "session-1",
+      });
+    });
+    useWorkspaceUiStore.getState()
+      .rememberHiddenChatSessionForWorkspace("workspace-1", "session-1");
+
+    let outcome: any;
+    await act(async () => {
+      vi.advanceTimersByTime(180);
+      hookMocks.scheduledCallbacks.shift()?.();
+      outcome = await activationPromise;
+    });
+
+    expect(outcome).toMatchObject({
+      result: "stale",
+      sessionId: "session-1",
+      reason: "tab-hidden",
+    });
+    expect(hookMocks.selectSession).not.toHaveBeenCalled();
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["workspace-1"])
+      .toBeUndefined();
+  });
+
   it("aborts the previous pending hot-switch measurement when superseded", async () => {
     const { result } = renderHook(() => useWorkspaceShellActivation());
 

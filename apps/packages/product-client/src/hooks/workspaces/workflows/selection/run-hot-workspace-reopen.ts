@@ -1,8 +1,10 @@
 import { findLogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import { resolveLogicalWorkspaceMaterializationId } from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
+  hotReopenWorkspaceLookupIds,
   resolveHotReopenCandidate,
 } from "#product/lib/domain/workspaces/selection/hot-reopen";
+import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import {
   markWorkspaceViewed,
   rememberLastViewedSession,
@@ -63,13 +65,20 @@ export function runHotWorkspaceReopen(
     return false;
   }
 
+  const workspaceUiState = useWorkspaceUiStore.getState();
   const candidate = resolveHotReopenCandidate({
     resolvedWorkspaceId,
     logicalWorkspace,
     initialActiveSessionId: request.options?.initialActiveSessionId ?? null,
-    lastViewedSessionByWorkspace: useWorkspaceUiStore.getState().lastViewedSessionByWorkspace,
+    lastViewedSessionByWorkspace: workspaceUiState.lastViewedSessionByWorkspace,
     sessionSlots: getSessionRecords(),
     isPendingSessionId,
+    hiddenSessionIds: new Set(
+      hotReopenWorkspaceLookupIds(resolvedWorkspaceId, logicalWorkspace).flatMap(
+        (workspaceId) =>
+          workspaceUiState.recentlyHiddenChatSessionIdsByWorkspace[workspaceId] ?? [],
+      ),
+    ),
   });
   if (!candidate) {
     return false;
@@ -114,6 +123,18 @@ export function runHotWorkspaceReopen(
       operationId,
       kind: "workspace_hot_reopen",
     },
+  });
+  // The persisted shell tab intent may still point at whatever tab was active
+  // when the workspace was left (a since-replaced draft, another session, or
+  // the new-chat surface). Without this write the intent disagrees with the
+  // restored active session and activation degrades to the chat-shell surface
+  // while the composer stays armed at an invisible session (PRO-106). Mirrors
+  // the cold path's prepareOptimisticWorkspaceSessionShell.
+  writeChatShellIntentForSession({
+    workspaceId: resolvedWorkspaceId,
+    shellWorkspaceId: logicalWorkspaceId,
+    sessionId: candidate.sessionId,
+    invalidateSessionIntent: false,
   });
   recordMeasurementWorkflowStep({
     operationId,

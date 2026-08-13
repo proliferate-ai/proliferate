@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GitBranchRef } from "@anyharness/sdk";
 import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
@@ -81,5 +81,14 @@ describe("GitReviewTargetSelector picker", () => {
 
     fireEvent.click(list.getByText("origin/feature-7"));
     expect(onSelect).toHaveBeenCalledWith("origin/feature-7");
+  });
+
+  // Carried over from #1796, which added this guard on the hand-rolled field
+  // the picker migration replaced. Kept as its own case so the autofocus
+  // contract survives independently of the skeleton test's other claims.
+  it("focuses branch search when the picker opens", async () => {
+    const { search } = openSelector([branch("origin/main", true)]);
+
+    await waitFor(() => expect(document.activeElement).toBe(search));
   });
 });

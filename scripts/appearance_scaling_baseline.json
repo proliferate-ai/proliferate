@@ -41,6 +41,7 @@
         "apps/packages/product-client/src/components/workspace/open-target/OpenTargetMenu.tsx": 1,
         "apps/packages/product-client/src/components/workspace/repo-setup/WorkspaceInventory.tsx": 3,
         "apps/packages/product-client/src/components/workspace/shell/screen/MainSidebarPageShell.tsx": 2,
+        "apps/packages/product-client/src/components/workspace/shell/screen/WorkspaceResizeSeparator.tsx": 1,
         "apps/packages/product-client/src/components/workspace/shell/screen/WorkspaceShellRightPanelToggle.tsx": 1,
         "apps/packages/product-client/src/components/workspace/shell/sidebar/ProductSidebarRepositories.tsx": 3,
         "apps/packages/product-client/src/components/workspace/shell/sidebar/ProductSidebarThreads.tsx": 2,
@@ -63,7 +64,7 @@
         "apps/packages/product-client/src/primitives/patterns/toast/ToastBody.tsx": 3,
         "apps/packages/product-client/src/primitives/patterns/toast/ToastExpansion.tsx": 1
       },
-      "justification": "PR G widens the appearance gate to the w-[\u2026]/h-[\u2026]/p-[\u2026]/m-[\u2026]/inset-[\u2026] families, which DESIGN_SYSTEM.md Current Gaps recorded as having no gate rule at all. The rule newly SEES these pre-existing sites; it does not authorise new ones. Every file and count below is the tree as of this PR, and the census is shrink-only from here \u2014 the surface slices that own each directory burn them down onto the spacing scale."
+      "justification": "PR G widens the appearance gate to the w-[\u2026]/h-[\u2026]/p-[\u2026]/m-[\u2026]/inset-[\u2026] families, which DESIGN_SYSTEM.md Current Gaps recorded as having no gate rule at all. The rule newly SEES these pre-existing sites; it does not authorise new ones. Every file and count below is the tree as of this PR, and the census is shrink-only from here \u2014 the surface slices that own each directory burn them down onto the spacing scale. One entry arrived after that census froze: WorkspaceResizeSeparator's before:w-[0.5px] came from #1801 on main while this PR was open. It is the tree's established sub-pixel hairline idiom (ring-[0.5px] on the popover, tooltip and command-palette surfaces, h-[0.5px] on the sidebar footer rule), not a spacing-scale miss, and it is recorded here rather than silently rebaselined."
     },
     "foreground-alpha-foundation": {
       "files": {
@@ -158,6 +159,7 @@
     "apps/packages/product-client/src/components/workspace/repo-setup/WorkspaceInventory.tsx|arbitrary-bracket-geometry": 3,
     "apps/packages/product-client/src/components/workspace/repo-setup/WorkspaceInventory.tsx|foreground-alpha-foundation": 5,
     "apps/packages/product-client/src/components/workspace/shell/screen/MainSidebarPageShell.tsx|arbitrary-bracket-geometry": 2,
+    "apps/packages/product-client/src/components/workspace/shell/screen/WorkspaceResizeSeparator.tsx|arbitrary-bracket-geometry": 1,
     "apps/packages/product-client/src/components/workspace/shell/screen/WorkspaceShellRightPanelToggle.tsx|arbitrary-bracket-geometry": 1,
     "apps/packages/product-client/src/components/workspace/shell/sidebar/ProductSidebarRepositories.tsx|arbitrary-bracket-geometry": 3,
     "apps/packages/product-client/src/components/workspace/shell/sidebar/ProductSidebarThreads.tsx|arbitrary-bracket-geometry": 2,
