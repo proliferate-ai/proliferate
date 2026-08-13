@@ -41,34 +41,41 @@ afterAll(async () => {
   await viteServer?.close();
 }, 60_000);
 
-describe("PopoverSearchField", () => {
-  it("keeps the focused placeholder clear of the native caret without shifting entered text", async () => {
+describe("native placeholder caret spacing", () => {
+  it("keeps focused input and textarea placeholders clear without shifting entered text", async () => {
     const page = await browser.newPage({ viewport: { width: 360, height: 160 } });
     try {
       await page.goto(fixtureUrl, { waitUntil: "networkidle" });
-      const input = page.getByPlaceholder("Search models");
+      const fields = [
+        page.getByPlaceholder("Search models"),
+        page.getByPlaceholder("Search files"),
+        page.getByPlaceholder("Add objective"),
+      ];
 
-      await input.focus();
-      const focusedIndent = await input.evaluate((element) => ({
-        input: getComputedStyle(element).textIndent,
-        placeholder: getComputedStyle(element, "::placeholder").textIndent,
-      }));
-      expect(focusedIndent).toEqual({
-        input: "0px",
-        placeholder: "2px",
-      });
+      for (const field of fields) {
+        await field.focus();
+        const focusedIndent = await field.evaluate((element) => ({
+          input: getComputedStyle(element).textIndent,
+          placeholder: getComputedStyle(element, "::placeholder").textIndent,
+        }));
+        expect(focusedIndent).toEqual({
+          input: "0px",
+          placeholder: "2px",
+        });
 
-      await input.fill("claude");
-      expect(
-        await input.evaluate((element) => getComputedStyle(element).textIndent),
-      ).toBe("0px");
+        await field.fill("entered text");
+        expect(
+          await field.evaluate((element) => getComputedStyle(element).textIndent),
+        ).toBe("0px");
 
-      await page.getByRole("button", { name: "Done" }).focus();
-      expect(
-        await input.evaluate(
-          (element) => getComputedStyle(element, "::placeholder").textIndent,
-        ),
-      ).toBe("0px");
+        await field.fill("");
+        await page.getByRole("button", { name: "Done" }).focus();
+        expect(
+          await field.evaluate(
+            (element) => getComputedStyle(element, "::placeholder").textIndent,
+          ),
+        ).toBe("0px");
+      }
     } finally {
       await page.close();
     }
@@ -94,6 +101,8 @@ function renderFixtureHtml(): string {
       </head>
       <body>
         <div id="fixture">${searchField}</div>
+        <input placeholder="Search files" />
+        <textarea placeholder="Add objective"></textarea>
         <button type="button">Done</button>
       </body>
     </html>`;

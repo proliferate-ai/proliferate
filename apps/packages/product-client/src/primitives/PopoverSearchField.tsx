@@ -34,8 +34,6 @@ export function PopoverSearchField({
   return (
     <div className="flex items-center gap-2 px-2.5 py-[7px]">
       <Search className="icon-paired shrink-0 text-muted-foreground/75" />
-      {/* The native WebKit caret occupies two pixels at the insertion origin.
-          Move only the focused placeholder so entered text stays aligned. */}
       <Input
         variant="unstyled"
         value={value}
@@ -44,7 +42,7 @@ export function PopoverSearchField({
         autoFocus={autoFocus}
         aria-label={ariaLabel}
         onKeyDown={onKeyDown}
-        className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui text-foreground shadow-none outline-none placeholder:text-muted-foreground focus:placeholder:indent-0.5 focus:ring-0 disabled:opacity-60"
+        className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui text-foreground shadow-none outline-none placeholder:text-muted-foreground focus:ring-0 disabled:opacity-60"
       />
     </div>
   );
