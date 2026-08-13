@@ -182,6 +182,10 @@ export const ChatView = memo(function ChatView({
   const host = useProductHost();
   const desktopFiles = host.desktop?.files ?? null;
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  // The drag pasteboard change count captured while the current drag session
+  // is over this surface; binds the drop's path snapshot to that session.
+  const dragSessionChangeCountRef = useRef<number | null>(null);
+  const pendingDropChangeCountRef = useRef<number | null>(null);
   // Dropped-path recovery only makes sense when the agent shares this
   // machine's filesystem. Mirrors resolveRuntimeTargetForWorkspace: `cloud:*`
   // runs in a cloud sandbox and `target:*` on an SSH target — neither can
@@ -193,7 +197,17 @@ export const ChatView = memo(function ChatView({
     if (!desktopFiles || !isLocalRuntimeWorkspace) {
       return null;
     }
-    return () => desktopFiles.readDroppedPaths();
+    return async () => {
+      const expectedChangeCount = pendingDropChangeCountRef.current;
+      pendingDropChangeCountRef.current = null;
+      const snapshot = await desktopFiles.readDroppedPaths();
+      // A different drag session wrote the pasteboard after this drop's drag
+      // entered the surface; empty entries route the drop to byte uploads.
+      if (expectedChangeCount !== null && snapshot.changeCount !== expectedChangeCount) {
+        return [];
+      }
+      return snapshot.entries;
+    };
   }, [desktopFiles, selectedWorkspaceId]);
   const promptAttachments = useChatPromptAttachments({
     scopeKey: workspaceUiKey,
@@ -247,8 +261,18 @@ export const ChatView = memo(function ChatView({
     event.preventDefault();
     event.dataTransfer.dropEffect = canAcceptFileDrop ? "copy" : "none";
     setFileDragOver(canAcceptFileDrop);
+    if (dragSessionChangeCountRef.current === null && desktopFiles && resolveDroppedPaths) {
+      // Arm once per drag session; the count identifies the session that
+      // will deliver the drop.
+      dragSessionChangeCountRef.current = -1;
+      void desktopFiles.getDragPasteboardChangeCount().then((changeCount) => {
+        if (dragSessionChangeCountRef.current !== null) {
+          dragSessionChangeCountRef.current = changeCount;
+        }
+      });
+    }
     return true;
-  }, [canAcceptFileDrop]);
+  }, [canAcceptFileDrop, desktopFiles, resolveDroppedPaths]);
 
   const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
     const dragInput = readFileDragInput(event.dataTransfer);
@@ -258,9 +282,12 @@ export const ChatView = memo(function ChatView({
     event.preventDefault();
     event.stopPropagation();
     setFileDragOver(false);
+    const sessionChangeCount = dragSessionChangeCountRef.current;
+    dragSessionChangeCountRef.current = null;
     // No files.length gate: WebKit can surface folder-only drops with an
     // empty FileList, and the host path resolver still recovers those items.
     if (canAcceptFileDrop) {
+      pendingDropChangeCountRef.current = sessionChangeCount === -1 ? null : sessionChangeCount;
       promptAttachments.addDroppedFiles(event.dataTransfer.files);
     }
   }, [canAcceptFileDrop, promptAttachments.addDroppedFiles]);
@@ -271,6 +298,7 @@ export const ChatView = memo(function ChatView({
       return;
     }
     setFileDragOver(false);
+    dragSessionChangeCountRef.current = null;
   }, []);
   const handleRootPointerDownCapture = useChatRootFocus(rootRef);
 

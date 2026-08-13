@@ -89,6 +89,15 @@ export interface DroppedPathEntry {
   size: number | null;
 }
 
+/** A drag-pasteboard snapshot: the pasteboard change count it was read under
+ * plus the resolved entries. The change count identifies the drag session —
+ * compare against the count captured at drag-enter to bind the snapshot to
+ * the drop being handled. */
+export interface DroppedPathsSnapshot {
+  changeCount: number;
+  entries: DroppedPathEntry[];
+}
+
 /** A directory-picker outcome with cancellation kept distinct from a missing
  * or failed native transport. Product workflows decide how to present the
  * unavailable reason; a normal user cancellation remains silent. */
@@ -107,12 +116,20 @@ export interface DesktopFilesBridge {
   isDirectory(path: string): Promise<boolean>;
 
   /**
-   * Absolute paths for the files/folders of the drag session that just
-   * dropped onto the webview (HTML5 drops never expose paths). Resolves to an
-   * empty list when the platform cannot recover paths, so callers fall back
-   * to byte-based `File` handling.
+   * The drag pasteboard's current change count, captured while a drag is over
+   * the webview to identify the session that later delivers the DOM drop.
+   * -1 when the platform has no drag pasteboard.
    */
-  readDroppedPaths(): Promise<DroppedPathEntry[]>;
+  getDragPasteboardChangeCount(): Promise<number>;
+
+  /**
+   * Absolute paths for the files/folders of the drag session that just
+   * dropped onto the webview (HTML5 drops never expose paths), with the
+   * change count the snapshot was read under. Resolves with empty entries
+   * when the platform cannot recover paths, so callers fall back to
+   * byte-based `File` handling.
+   */
+  readDroppedPaths(): Promise<DroppedPathsSnapshot>;
 
   listAvailableEditors(): Promise<EditorInfo[]>;
   listOpenTargets(pathKind?: PathKind): Promise<OpenTarget[]>;

@@ -619,8 +619,11 @@ paths and keep the byte-upload-only behavior, as do the web host and any drag
 whose pasteboard carries no filenames or whose shape does not correspond to
 the dropped FileList (`droppedPathsMatchFiles`: every File must consume a
 distinct candidate, leftover candidates must be directories — the
-stale-pasteboard guard; the flow falls back to `addFiles`, and the native
-read discards snapshots whose pasteboard changeCount moved mid-read).
+stale-pasteboard guard; the flow falls back to `addFiles`). The pasteboard
+snapshot is additionally bound to the drop's drag session: `ChatView`
+captures the pasteboard changeCount while the drag is over the surface and
+rejects a snapshot read under a different count, and the native read
+discards snapshots whose changeCount moved mid-read.
 In-flight path resolutions are discarded when the workspace scope changes so
 a drop never lands attachments into another workspace's draft. Drops still
 require an active session with prompt capabilities; the new-chat attachment

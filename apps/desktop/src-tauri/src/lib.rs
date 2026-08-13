@@ -239,6 +239,7 @@ pub fn run() {
             workspace_scratch::write_workspace_scratch_pad,
             quit_flow::set_running_agent_count,
             workspace_activity_indicator::set_workspace_activity_indicator,
+            drag_drop::drag_pasteboard_change_count,
             drag_drop::read_drag_drop_paths,
             shell::pick_folder,
             shell::copy_text,

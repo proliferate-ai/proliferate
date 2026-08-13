@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PromptCapabilities } from "@anyharness/sdk";
 import {
   droppedPathsMatchFiles,
@@ -80,17 +80,19 @@ export function usePromptAttachments(
 
   // Bumped when the attachment scope ends (workspace switch or unmount) so
   // in-flight dropped-path resolutions from the old scope discard their
-  // results instead of attaching into the new one.
+  // results instead of attaching into the new one. Layout effects run
+  // synchronously inside the commit, so no promise continuation can observe
+  // the new scope before the generation advances.
   const dropScopeGenerationRef = useRef(0);
 
-  useEffect(() => () => {
+  useLayoutEffect(() => () => {
     dropScopeGenerationRef.current += 1;
     const outgoing = entriesRef.current;
     entriesRef.current = [];
     releaseEntries(outgoing);
   }, [releaseEntries]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     dropScopeGenerationRef.current += 1;
     if (entriesRef.current.length === 0) {
       return;

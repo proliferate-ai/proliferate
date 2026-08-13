@@ -11,24 +11,44 @@ pub struct DroppedPathEntry {
     pub size: Option<u64>,
 }
 
-/// Absolute paths for the items in the drag session that just dropped onto the
-/// webview. HTML5 drops never expose filesystem paths, so the composer calls
-/// this right after a DOM drop while the macOS drag pasteboard still holds the
-/// dragged filenames — the same source wry reads for native drag-drop events.
-/// Returns an empty list off macOS or when the drag carried no file paths
-/// (e.g. content dragged out of another app rather than Finder).
-///
-/// The drag pasteboard carries no per-drop session token, so full correlation
-/// with the DOM drop is impossible by construction; `changeCount` guards the
-/// read against a new drag session replacing the pasteboard mid-snapshot, and
-/// the renderer rejects results whose shape does not correspond to the
-/// dropped FileList.
+/// The drag pasteboard's current change count. Each drag session writes the
+/// pasteboard once, incrementing the count, so a count captured during a DOM
+/// drag-enter identifies the session that later delivers the DOM drop. -1 off
+/// macOS.
 #[tauri::command]
-pub fn read_drag_drop_paths() -> Vec<DroppedPathEntry> {
-    drag_pasteboard_paths()
-        .into_iter()
-        .filter_map(entry_for_path)
-        .collect()
+pub fn drag_pasteboard_change_count() -> i64 {
+    drag_pasteboard_change_count_impl()
+}
+
+/// Absolute paths for the items in the drag session that just dropped onto the
+/// webview, plus the pasteboard change count the snapshot was read under.
+/// HTML5 drops never expose filesystem paths, so the composer calls this right
+/// after a DOM drop while the macOS drag pasteboard still holds the dragged
+/// filenames — the same source wry reads for native drag-drop events. The
+/// entries are empty off macOS or when the drag carried no file paths (e.g.
+/// content dragged out of another app rather than Finder).
+///
+/// Correlation with the DOM drop: the renderer captures
+/// `drag_pasteboard_change_count` when the drag enters the webview and rejects
+/// this snapshot when the counts differ (another drag session replaced the
+/// pasteboard). The read itself is also discarded when the count moves
+/// mid-snapshot.
+#[tauri::command]
+pub fn read_drag_drop_paths() -> DroppedPathsSnapshot {
+    let (change_count, paths) = drag_pasteboard_paths();
+    DroppedPathsSnapshot {
+        change_count,
+        entries: paths.into_iter().filter_map(entry_for_path).collect(),
+    }
+}
+
+/// A pasteboard snapshot: the change count it was read under and the resolved
+/// entries.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DroppedPathsSnapshot {
+    pub change_count: i64,
+    pub entries: Vec<DroppedPathEntry>,
 }
 
 fn entry_for_path(path: String) -> Option<DroppedPathEntry> {
@@ -47,7 +67,18 @@ fn entry_for_path(path: String) -> Option<DroppedPathEntry> {
 }
 
 #[cfg(target_os = "macos")]
-fn drag_pasteboard_paths() -> Vec<String> {
+fn drag_pasteboard_change_count_impl() -> i64 {
+    use objc2_app_kit::{NSPasteboard, NSPasteboardNameDrag};
+    unsafe { NSPasteboard::pasteboardWithName(NSPasteboardNameDrag).changeCount() as i64 }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn drag_pasteboard_change_count_impl() -> i64 {
+    -1
+}
+
+#[cfg(target_os = "macos")]
+fn drag_pasteboard_paths() -> (i64, Vec<String>) {
     #[allow(deprecated)]
     use objc2_app_kit::{NSFilenamesPboardType, NSPasteboard, NSPasteboardNameDrag};
     use objc2_foundation::{NSArray, NSString};
@@ -56,16 +87,16 @@ fn drag_pasteboard_paths() -> Vec<String> {
     #[allow(deprecated)]
     unsafe {
         let pasteboard = NSPasteboard::pasteboardWithName(NSPasteboardNameDrag);
-        let change_count = pasteboard.changeCount();
+        let change_count = pasteboard.changeCount() as i64;
         let types = NSArray::arrayWithObject(NSFilenamesPboardType);
         if pasteboard.availableTypeFromArray(&types).is_none() {
-            return paths;
+            return (change_count, paths);
         }
         let Some(list) = pasteboard.propertyListForType(NSFilenamesPboardType) else {
-            return paths;
+            return (change_count, paths);
         };
         let Ok(list) = list.downcast::<NSArray>() else {
-            return paths;
+            return (change_count, paths);
         };
         for item in list {
             if let Ok(item) = item.downcast::<NSString>() {
@@ -74,16 +105,16 @@ fn drag_pasteboard_paths() -> Vec<String> {
         }
         // A new drag session replaced the pasteboard while this snapshot was
         // being read; the paths no longer describe the drop being handled.
-        if pasteboard.changeCount() != change_count {
-            return Vec::new();
+        if pasteboard.changeCount() as i64 != change_count {
+            return (change_count, Vec::new());
         }
+        (change_count, paths)
     }
-    paths
 }
 
 #[cfg(not(target_os = "macos"))]
-fn drag_pasteboard_paths() -> Vec<String> {
-    Vec::new()
+fn drag_pasteboard_paths() -> (i64, Vec<String>) {
+    (-1, Vec::new())
 }
 
 #[cfg(test)]
