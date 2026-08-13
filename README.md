@@ -7,7 +7,7 @@
   </picture>
 </p>
 
-<h3>The Open Source AI IDE</h3>
+<h3>The open-source AI IDE</h3>
 
 <p>
   <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
