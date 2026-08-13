@@ -165,8 +165,7 @@ fn error_chain_class(error: &anyhow::Error) -> &'static str {
 }
 
 fn log_delivered(delivery: &CompletionDeliveryRecord, delivered_at: &str) {
-    let queue_age_ms = timestamp_age_ms(&delivery.created_at, delivered_at);
-    let delivery_latency_ms = timestamp_age_ms(&delivery.created_at, delivered_at);
+    let (queue_age_ms, delivery_latency_ms) = delivery_timing_ms(delivery, delivered_at);
     tracing::info!(
         delivery_id = %delivery.delivery_id,
         attempt_count = delivery.attempt_count,
@@ -175,6 +174,17 @@ fn log_delivered(delivery: &CompletionDeliveryRecord, delivered_at: &str) {
         delivery_latency_ms,
         "completion delivery visible in parent transcript"
     );
+}
+
+fn delivery_timing_ms(delivery: &CompletionDeliveryRecord, delivered_at: &str) -> (i64, i64) {
+    let queue_started_at = delivery
+        .enqueued_at
+        .as_deref()
+        .unwrap_or(&delivery.created_at);
+    (
+        timestamp_age_ms(queue_started_at, delivered_at),
+        timestamp_age_ms(&delivery.created_at, delivered_at),
+    )
 }
 
 fn timestamp_age_ms(start: &str, end: &str) -> i64 {

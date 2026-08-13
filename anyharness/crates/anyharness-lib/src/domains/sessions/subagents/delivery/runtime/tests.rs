@@ -29,6 +29,41 @@ fn enqueued_backoff_increases_and_caps_at_sixty_seconds() {
     );
 }
 
+#[test]
+fn delivery_timing_uses_enqueue_time_for_queue_age() {
+    let delivery = CompletionDeliveryRecord {
+        delivery_id: "delivery".into(),
+        completion_id: "completion".into(),
+        session_link_id: "link".into(),
+        parent_session_id: PARENT_ID.into(),
+        child_session_id: CHILD_ID.into(),
+        subagent_public_id: None,
+        label: None,
+        child_turn_id: "turn".into(),
+        child_last_event_seq: 1,
+        outcome: SessionTurnOutcome::Completed,
+        assistant_text: None,
+        notification_text: "done".into(),
+        state: CompletionDeliveryState::Enqueued,
+        parent_prompt_seq: Some(1),
+        parent_turn_id: None,
+        attempt_count: 0,
+        next_attempt_at: "2026-08-13T00:00:00Z".into(),
+        lease_token: None,
+        lease_expires_at: None,
+        last_error_code: None,
+        created_at: "2026-08-13T00:00:00Z".into(),
+        updated_at: "2026-08-13T00:00:05Z".into(),
+        enqueued_at: Some("2026-08-13T00:00:05Z".into()),
+        delivered_at: None,
+    };
+
+    assert_eq!(
+        delivery_timing_ms(&delivery, "2026-08-13T00:00:10Z"),
+        (5_000, 10_000)
+    );
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn restarted_worker_repairs_retired_closed_turn_once_after_store_recovers() {
     let _lock = test_support::lock_env();
