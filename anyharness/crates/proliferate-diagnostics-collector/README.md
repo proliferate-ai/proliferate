@@ -113,6 +113,7 @@ The destination is two environment values, both read once at startup:
 ```text
 PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT=<https URL, or an http loopback URL>
 PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS=<name=value,name=value>
+PROLIFERATE_DIAGNOSTICS_DEV_TAG=<name; defaults to $USER>
 ```
 
 `/v1/logs` is appended unless the endpoint already ends with it. A plaintext
@@ -120,16 +121,20 @@ endpoint is accepted only for a loopback host, so a configured credential never
 crosses a network unencrypted. Provider identity and credentials live entirely
 in these values; nothing in this crate names a vendor. The parsed destination
 has no `Clone`, no serialization, and a `Debug` that redacts header values.
+`PROLIFERATE_DIAGNOSTICS_DEV_TAG` identifies whose desktop produced a record
+when teammates share one dogfood environment; it is optional and, unless both
+it and `$USER` are unset or blank, is read once and attached as the `dev.user`
+resource attribute.
 
 Accepted records are offered to a bounded queue as they are accepted and
 converted to OTLP/HTTP JSON logs: one resource per producer boot
 (`service.name`, `service.version`, `service.instance.id`,
-`deployment.environment.name`), one scope per admitted schema version, a
-detailed message or the stable record name as the body, and every remaining
-contract field as a `proliferate.*` attribute. Typed arguments become
-`proliferate.argument.<name>`. A record classified `secret` is refused rather
-than encoded, which is a second fence behind ingest admission rather than a new
-privacy path.
+`deployment.environment.name`, and `dev.user` when a developer tag is
+configured), one scope per admitted schema version, a detailed message or the
+stable record name as the body, and every remaining contract field as a
+`proliferate.*` attribute. Typed arguments become `proliferate.argument.<name>`.
+A record classified `secret` is refused rather than encoded, which is a second
+fence behind ingest admission rather than a new privacy path.
 
 The export bounds are internal-only and independent of the runtime caps above:
 a 512-record queue, a 128-record or 512 KiB batch, a 250 ms batch linger, a

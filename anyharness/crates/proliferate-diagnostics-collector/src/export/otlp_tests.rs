@@ -1,5 +1,6 @@
 use proliferate_diagnostics_protocol::v1::types::{
-    ArgumentValueV1, CollectorAcceptedRecordV1, PrivacyClassificationV1, TypedArgumentV1,
+    ArgumentValueV1, CollectorAcceptedRecordV1, ComponentV1, PrivacyClassificationV1,
+    TypedArgumentV1,
 };
 use proliferate_diagnostics_protocol::v1::validation::parse_producer_record_value;
 use serde_json::Value;
@@ -268,6 +269,58 @@ fn a_secret_classified_record_is_refused_instead_of_encoded() {
     let (payload, refused) = encode_batch(std::slice::from_ref(&record));
     assert_eq!(refused, 1);
     assert!(all_log_records(&payload).is_empty());
+}
+
+fn sample_resource_key() -> ResourceKey {
+    ResourceKey {
+        component: ComponentV1::DesktopTauri,
+        producer_boot_id: "boot-1".to_owned(),
+        release: "2026.08.10-rc1".to_owned(),
+        environment: "dogfood".to_owned(),
+    }
+}
+
+fn assert_base_resource_attributes(attributes: &[Value], key: &ResourceKey) {
+    let value_of = |attr_key: &str| {
+        attributes
+            .iter()
+            .find(|attribute| attribute["key"] == attr_key)
+            .unwrap_or_else(|| panic!("missing {attr_key}"))["value"]["stringValue"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{attr_key} is not a string"))
+            .to_owned()
+    };
+    assert_eq!(value_of("service.name"), component_name(key.component));
+    assert_eq!(value_of("service.version"), key.release);
+    assert_eq!(value_of("service.instance.id"), key.producer_boot_id);
+    assert_eq!(value_of("deployment.environment.name"), key.environment);
+    assert_eq!(value_of("telemetry.sdk.name"), SCOPE_NAME);
+}
+
+#[test]
+fn a_configured_dev_tag_is_added_to_resource_attributes_without_disturbing_the_rest() {
+    let key = sample_resource_key();
+    let attributes = resource_attributes(&key, Some("alice"));
+    assert_eq!(attributes.len(), 6, "the five base attributes plus dev.user");
+    assert_eq!(
+        attributes
+            .iter()
+            .find(|attribute| attribute["key"] == "dev.user")
+            .expect("dev.user attribute")["value"],
+        serde_json::json!({ "stringValue": "alice" })
+    );
+    assert_base_resource_attributes(&attributes, &key);
+}
+
+#[test]
+fn an_absent_dev_tag_omits_dev_user_and_leaves_the_rest_unchanged() {
+    let key = sample_resource_key();
+    let attributes = resource_attributes(&key, None);
+    assert_eq!(attributes.len(), 5, "no dev.user attribute is added");
+    assert!(attributes
+        .iter()
+        .all(|attribute| attribute["key"] != "dev.user"));
+    assert_base_resource_attributes(&attributes, &key);
 }
 
 #[test]

@@ -27,3 +27,27 @@ mod target;
 mod worker;
 
 pub(crate) use handle::ExporterHandle;
+
+/// The environment variable that names whose desktop produced an exported
+/// record, taking priority over `$USER`.
+#[cfg(feature = "internal-dogfood-export")]
+const DEV_TAG_ENV: &str = "PROLIFERATE_DIAGNOSTICS_DEV_TAG";
+
+#[cfg(feature = "internal-dogfood-export")]
+static DEV_TAG: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+/// The configured per-developer tag, if any. `PROLIFERATE_DIAGNOSTICS_DEV_TAG`
+/// takes priority over `$USER`; unset or whitespace-only values count as
+/// absent. Read from the environment once and cached for the process
+/// lifetime.
+#[cfg(feature = "internal-dogfood-export")]
+fn dev_tag() -> Option<&'static str> {
+    DEV_TAG
+        .get_or_init(|| {
+            std::env::var(DEV_TAG_ENV)
+                .ok()
+                .or_else(|| std::env::var("USER").ok())
+                .filter(|value| !value.trim().is_empty())
+        })
+        .as_deref()
+}
