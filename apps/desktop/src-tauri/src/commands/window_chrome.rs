@@ -18,7 +18,8 @@ impl Default for WindowChromeZoom {
 
 impl WindowChromeZoom {
     fn factor(&self) -> f64 {
-        self.0.lock().map(|guard| *guard).unwrap_or(1.0)
+        // A poisoning panic cannot tear an f64 store, so the value stays true.
+        *self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
@@ -72,21 +73,20 @@ pub fn set_webview_zoom(
     }
 
     let clamped = scale_factor.clamp(0.8, 1.2);
+    // Hold the lock across zoom + store + chrome: concurrent zoom commands
+    // serialize, so the webview zoom, the stored factor, and the button
+    // layout always reflect a single command rather than an interleaving.
+    // `set_zoom` posts to the event loop without waiting, so nothing under
+    // this lock blocks on the main thread.
+    let mut guard = zoom.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     window.set_zoom(clamped).map_err(|error| error.to_string())?;
-    if let Ok(mut guard) = zoom.0.lock() {
-        *guard = clamped;
-    }
+    *guard = clamped;
 
     #[cfg(target_os = "macos")]
-    {
-        // Re-read the stored factor instead of using `clamped`: concurrent
-        // zoom commands then converge on whichever factor was stored last,
-        // rather than on whichever reposition happened to finish last.
-        apply_traffic_light_position(
-            window.ns_window().map_err(|error| error.to_string())?,
-            zoom.factor(),
-        )?;
-    }
+    apply_traffic_light_position(
+        window.ns_window().map_err(|error| error.to_string())?,
+        clamped,
+    )?;
 
     Ok(())
 }
