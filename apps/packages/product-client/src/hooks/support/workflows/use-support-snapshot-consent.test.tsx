@@ -285,6 +285,38 @@ describe("useSupportSnapshotConsent", () => {
     });
   });
 
+  it("releases a preparation superseded while native was still admitting it", async () => {
+    let admit: (() => void) | null = null;
+    bridge.beginPreparation.mockImplementation(() =>
+      new Promise((resolve) => {
+        admit = () => resolve(PREPARATION);
+      })
+    );
+    const rendered = renderConsent();
+
+    act(() => { rendered.result.current.setConsent(true); });
+    let pending: Promise<unknown> | null = null;
+    await act(async () => {
+      pending = rendered.result.current.prepare();
+      await waitFor(() => expect(bridge.beginPreparation).toHaveBeenCalled());
+    });
+
+    await act(async () => {
+      // Superseded before the admitted preparation ever came back.
+      rendered.result.current.cancel();
+      admit?.();
+      await pending;
+    });
+
+    expect(await pending!).toEqual({ state: "cancelled" });
+    expect(bridge.finishPreparation).not.toHaveBeenCalled();
+    expect(bridge.cancelPreparation).toHaveBeenCalledWith({
+      clientJobId: "job-1",
+      consentEpoch: expect.any(String),
+      preparationId: "prep-1",
+    });
+  });
+
   it("surfaces a fatal preparation failure instead of downgrading intent", async () => {
     bridge.finishPreparation.mockRejectedValueOnce(new Error("stage_failed"));
     const rendered = renderConsent();

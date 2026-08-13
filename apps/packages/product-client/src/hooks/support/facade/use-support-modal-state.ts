@@ -141,10 +141,12 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
     }
   }
 
+  // A Save a copy… preparation already owns the single admission slot, so Send
+  // waits for it rather than racing a second preparation on the same epoch.
   const canSend = (
     message.trim().length > 0
     || attachments.length > 0
-  ) && !isSubmitting;
+  ) && !isSubmitting && !snapshotConsent.isPreparing;
 
   async function handleSend() {
     if (!canSend || submittingRef.current) {

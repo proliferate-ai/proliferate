@@ -341,6 +341,49 @@ describe("useSupportModalState", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("holds Send while a Save a copy preparation owns the admission slot", async () => {
+    enableSupportSnapshotHost();
+    let releaseEvidence: (() => void) | null = null;
+    access.collectResolvedSupportSessionEvidence.mockImplementation(() =>
+      new Promise((resolve) => {
+        releaseEvidence = () => resolve({
+          state: "omitted",
+          sessionEvidenceJson: null,
+          sessionCollection: {
+            state: "omitted",
+            reason: "no_selected_bundled_local_workspace",
+          },
+        });
+      })
+    );
+    const rendered = renderHook(() =>
+      useSupportModalState({ kind: "bug", onClose: vi.fn() })
+    );
+
+    act(() => {
+      rendered.result.current.setMessage("It broke");
+      rendered.result.current.snapshotConsent.setConsent(true);
+    });
+    expect(rendered.result.current.canSend).toBe(true);
+
+    let saving: Promise<void> | null = null;
+    act(() => {
+      saving = rendered.result.current.snapshotConsent.saveCopy();
+    });
+    await waitFor(() => {
+      expect(rendered.result.current.snapshotConsent.isPreparing).toBe(true);
+    });
+    expect(rendered.result.current.canSend).toBe(false);
+
+    await act(async () => {
+      releaseEvidence?.();
+      await saving;
+    });
+
+    expect(snapshotBridge.saveArchive).toHaveBeenCalledTimes(1);
+    expect(rendered.result.current.canSend).toBe(true);
+  });
+
   it("supersedes an in-flight preparation when the modal is cancelled", async () => {
     enableSupportSnapshotHost();
     let releaseEvidence: (() => void) | null = null;

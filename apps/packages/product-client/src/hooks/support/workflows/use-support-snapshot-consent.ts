@@ -21,7 +21,12 @@ const SAVE_FAILED_MESSAGE = "Couldn't save a copy of the diagnostic snapshot.";
 
 export type SupportSnapshotPreparationResult =
   | { state: "none" }
-  | { state: "prepared"; intent: Extract<SupportReportSnapshotIntent, { kind: "prepared" }> }
+  | {
+      state: "prepared";
+      /** The epoch the artifact was staged under; nothing else may spend it. */
+      consentEpoch: string;
+      intent: Extract<SupportReportSnapshotIntent, { kind: "prepared" }>;
+    }
   | { state: "failed" }
   | { state: "cancelled" };
 
@@ -148,11 +153,13 @@ export function useSupportSnapshotConsent(
         consentEpoch: epoch,
         consent: grantedConsent,
       });
-      inFlightRef.current = {
-        controller,
-        cancel: () => cancelPreparation(bridge, options.clientJobId, epoch, preparation.preparationId),
-      };
+      const cancel = () =>
+        cancelPreparation(bridge, options.clientJobId, epoch, preparation.preparationId);
+      inFlightRef.current = { controller, cancel };
       if (!isCurrent()) {
+        // Superseded while native was admitting it: release the preparation
+        // rather than leaving an admitted operation without a terminal.
+        void cancel();
         return { state: "cancelled" };
       }
       const evidence = await collectResolvedSupportSessionEvidence({
@@ -177,6 +184,7 @@ export function useSupportSnapshotConsent(
       }
       return {
         state: "prepared",
+        consentEpoch: epoch,
         intent: { kind: "prepared", consent: grantedConsent, artifact },
       };
     } catch {
@@ -200,7 +208,7 @@ export function useSupportSnapshotConsent(
     }
     const artifactId = prepared.intent.artifact.artifactId;
     try {
-      await bridge.saveArchive({ artifactId, consentEpoch: epochRef.current });
+      await bridge.saveArchive({ artifactId, consentEpoch: prepared.consentEpoch });
     } catch {
       setError(SAVE_FAILED_MESSAGE);
     } finally {
