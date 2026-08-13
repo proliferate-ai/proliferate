@@ -2,7 +2,6 @@ import type {
   ManagedWorkflowHistoryItem,
   ManagedWorkflowInvocationResponse,
 } from "@proliferate/cloud-sdk";
-import type { StatusDotTone } from "#product/primitives/StatusDot";
 
 export type WorkflowRun = ManagedWorkflowInvocationResponse;
 export type WorkflowRunHistoryItem = ManagedWorkflowHistoryItem;
@@ -12,23 +11,6 @@ export type WorkflowRunTone = "neutral" | "info" | "success" | "warning" | "dang
 export interface WorkflowRunStatusView {
   label: string;
   tone: WorkflowRunTone;
-}
-
-/**
- * Maps a run/definition status tone onto `StatusDot`'s tone axis. The single
- * owner of that mapping — `WorkflowRunDetail` and `WorkflowRunList` both used
- * to hand-roll their own `tone -> text-*` map with the same three branches.
- */
-const STATUS_DOT_TONE: Record<WorkflowRunTone, StatusDotTone> = {
-  neutral: "muted",
-  info: "info",
-  success: "success",
-  warning: "warning",
-  danger: "danger",
-};
-
-export function workflowRunStatusDotTone(tone: WorkflowRunTone): StatusDotTone {
-  return STATUS_DOT_TONE[tone];
 }
 
 export interface WorkflowRunPresentation {

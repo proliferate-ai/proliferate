@@ -1,8 +1,8 @@
 import {
   workflowHistoryItemPresentation,
-  workflowRunStatusDotTone,
   type WorkflowRunHistoryItem,
 } from "#product/domain/workflows/run-presentation";
+import { workflowRunStatusDotTone } from "#product/components/workflows/workflow-run-status-dot";
 import { Button } from "#product/primitives/Button";
 import { StatusDot } from "#product/primitives/StatusDot";
 import { Card } from "#product/primitives/patterns/Card";
