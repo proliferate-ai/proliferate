@@ -1,11 +1,9 @@
 use std::{
-    fs::OpenOptions,
     io::{self, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{atomic::AtomicBool, Arc},
 };
 
-use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::{
@@ -20,9 +18,15 @@ use crate::{
     sidecar::{resolve_shell_path, SharedSidecar},
 };
 
+mod database_lock;
 mod launcher;
 pub(crate) mod lifecycle;
 
+#[cfg(test)]
+use database_lock::{acquire_worker_database_lock, WORKER_CREDENTIALS_LOCKED_ERROR};
+use database_lock::{
+    lock_for_fresh_enrollment, worker_database_lock_is_held, worker_identity_exists,
+};
 use launcher::find_proliferate_worker_launcher;
 
 const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
@@ -35,8 +39,6 @@ const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
 const WORKER_STATE_NAMESPACE: &str = "cloud-worker-v2";
 #[cfg(test)]
 const LEGACY_WORKER_STATE_NAMESPACE: &str = "cloud-worker";
-const WORKER_CREDENTIALS_LOCKED_ERROR: &str =
-    "Cannot replace worker credentials while a Proliferate Worker is still running.";
 
 #[derive(Default)]
 pub struct CloudWorkerState {
@@ -59,21 +61,12 @@ struct CloudWorkerProcess {
     config_path: PathBuf,
 }
 
-struct WorkerDatabaseLock {
-    file: std::fs::File,
-}
-
-impl Drop for WorkerDatabaseLock {
-    fn drop(&mut self) {
-        let _ = self.file.unlock();
-    }
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnsureDesktopDispatchWorkerInput {
     target_id: String,
     enrollment_token: Option<String>,
+    reusable_worker_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -108,7 +101,10 @@ pub async fn ensure_desktop_dispatch_worker(
         .enrollment_token
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
-
+    let reusable_worker_id = input
+        .reusable_worker_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
     let Some(mut lifecycle) = lifecycle::lock_for_worker_start(&worker_state).await else {
         let config_path = worker_paths(&target_id)?.config;
         return Ok(EnsureDesktopDispatchWorkerResult {
@@ -130,13 +126,18 @@ pub async fn ensure_desktop_dispatch_worker(
             config_path: config_path.to_string_lossy().into_owned(),
         });
     }
-
-    let launcher = find_proliferate_worker_launcher()
-        .ok_or_else(|| "Proliferate Worker binary was not found.".to_string())?;
     let paths = worker_paths(&target_id)?;
     let mut mutation_lock = None;
     if enrollment_token.is_some() {
-        mutation_lock = Some(acquire_worker_database_lock(&paths.database)?);
+        mutation_lock = lock_for_fresh_enrollment(&paths.database, reusable_worker_id.as_deref())?;
+        if mutation_lock.is_none() {
+            tracing::info!("Reusing untracked Proliferate Worker with persisted credentials");
+            return Ok(EnsureDesktopDispatchWorkerResult {
+                target_id,
+                status: "already_running_elsewhere",
+                config_path: paths.config.to_string_lossy().into_owned(),
+            });
+        }
     } else {
         if worker_database_lock_is_held(&paths.database)? {
             return Ok(EnsureDesktopDispatchWorkerResult {
@@ -152,6 +153,8 @@ pub async fn ensure_desktop_dispatch_worker(
             );
         }
     }
+    let launcher = find_proliferate_worker_launcher()
+        .ok_or_else(|| "Proliferate Worker binary was not found.".to_string())?;
     if enrollment_token.is_some() && paths.database.exists() {
         std::fs::remove_file(&paths.database).map_err(|error| {
             format!(
@@ -317,104 +320,6 @@ fn worker_paths_in_namespace(app_dir: &Path, namespace: &str, target_id: &str) -
         config: root.join("config.toml"),
         database: root.join("worker.sqlite3"),
         log: root.join("worker.log"),
-    }
-}
-
-fn worker_identity_exists(path: &Path) -> Result<bool, String> {
-    if !path.exists() {
-        return Ok(false);
-    }
-    let connection = match rusqlite::Connection::open_with_flags(
-        path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-    ) {
-        Ok(connection) => connection,
-        Err(error) if matches!(error, rusqlite::Error::SqliteFailure(_, _)) => return Ok(false),
-        Err(error) => {
-            return Err(format!(
-                "Failed to inspect worker identity at {}: {error}",
-                path.display()
-            ));
-        }
-    };
-    match connection.query_row(
-        "SELECT EXISTS(SELECT 1 FROM identity WHERE id = 1 AND worker_token <> '')",
-        [],
-        |row| row.get::<_, i64>(0),
-    ) {
-        Ok(value) => Ok(value == 1),
-        Err(rusqlite::Error::SqliteFailure(error, _))
-            if error.code == rusqlite::ErrorCode::Unknown =>
-        {
-            Ok(false)
-        }
-        Err(error) => Err(format!(
-            "Failed to inspect worker identity at {}: {error}",
-            path.display()
-        )),
-    }
-}
-
-fn worker_database_lock_is_held(database_path: &Path) -> Result<bool, String> {
-    match acquire_worker_database_lock(database_path) {
-        Ok(_lock) => Ok(false),
-        Err(error) if error == WORKER_CREDENTIALS_LOCKED_ERROR => Ok(true),
-        Err(error) => Err(error),
-    }
-}
-
-fn acquire_worker_database_lock(database_path: &Path) -> Result<WorkerDatabaseLock, String> {
-    let lock_path = worker_lock_path(database_path);
-    if let Some(parent) = lock_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
-    }
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(&lock_path)
-        .map_err(|error| {
-            format!(
-                "Failed to inspect worker lock at {}: {error}",
-                lock_path.display()
-            )
-        })?;
-    match file.try_lock_exclusive() {
-        Ok(()) => Ok(WorkerDatabaseLock { file }),
-        Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-            Err(WORKER_CREDENTIALS_LOCKED_ERROR.to_string())
-        }
-        Err(error) => Err(format!(
-            "Failed to inspect worker lock at {}: {error}",
-            lock_path.display()
-        )),
-    }
-}
-
-fn worker_lock_path(database_path: &Path) -> PathBuf {
-    let database_path = canonical_database_path(database_path);
-    let extension = database_path
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(|value| format!("{value}.lock"))
-        .unwrap_or_else(|| "lock".to_string());
-    database_path.with_extension(extension)
-}
-
-fn canonical_database_path(database_path: &Path) -> PathBuf {
-    if let Ok(path) = database_path.canonicalize() {
-        return path;
-    }
-    let Some(parent) = database_path.parent() else {
-        return database_path.to_path_buf();
-    };
-    let Ok(parent) = parent.canonicalize() else {
-        return database_path.to_path_buf();
-    };
-    match database_path.file_name() {
-        Some(file_name) => parent.join(file_name),
-        None => database_path.to_path_buf(),
     }
 }
 

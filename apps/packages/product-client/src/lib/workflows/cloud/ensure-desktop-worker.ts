@@ -61,6 +61,7 @@ export function ensureDesktopWorker(
       await worker.ensure({
         targetId: desktopInstallId,
         enrollmentToken: enrollment.enrollmentToken,
+        reusableWorkerId: enrollment.reusableWorkerId ?? null,
       });
       return true;
     } catch (error) {

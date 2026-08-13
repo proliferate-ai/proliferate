@@ -14,10 +14,11 @@ use super::lifecycle::{
     prepare_existing_worker_for_ensure,
 };
 use super::{
-    acquire_worker_database_lock, read_worker_log_tail, startup_watch_window,
-    worker_database_lock_is_held, worker_paths_in_namespace, worker_startup_failure_message,
-    write_worker_config, CloudWorkerLifecycle, CloudWorkerProcess, CloudWorkerState,
-    LEGACY_WORKER_STATE_NAMESPACE, WORKER_LOG_TAIL_MAX_BYTES, WORKER_STATE_NAMESPACE,
+    acquire_worker_database_lock, lock_for_fresh_enrollment, read_worker_log_tail,
+    startup_watch_window, worker_database_lock_is_held, worker_paths_in_namespace,
+    worker_startup_failure_message, write_worker_config, CloudWorkerLifecycle, CloudWorkerProcess,
+    CloudWorkerState, LEGACY_WORKER_STATE_NAMESPACE, WORKER_CREDENTIALS_LOCKED_ERROR,
+    WORKER_LOG_TAIL_MAX_BYTES, WORKER_STATE_NAMESPACE,
 };
 
 const TEST_WORKER_LOCK_PATH_ENV: &str = "PROLIFERATE_TEST_WORKER_LOCK_PATH";
@@ -195,6 +196,82 @@ async fn credential_rotation_retains_owned_worker_after_stop_failure_and_retries
     assert!(lifecycle.process.is_none());
     assert!(!worker_database_lock_is_held(&database_path).expect("lock released after retry"));
 
+    fs::remove_dir_all(root).expect("remove temporary worker root");
+}
+
+#[tokio::test]
+async fn fresh_enrollment_reuses_untracked_worker_only_with_matching_server_proof() {
+    let root = env::temp_dir().join(format!(
+        "proliferate-worker-untracked-reuse-{}",
+        uuid::Uuid::new_v4()
+    ));
+    fs::create_dir_all(&root).expect("create temporary worker root");
+    let database_path = root.join("worker.sqlite3");
+    let mut child = Command::new(env::current_exe().expect("resolve test executable"))
+        .arg("worker_database_lock_holder_fixture")
+        .arg("--ignored")
+        .env(TEST_WORKER_LOCK_PATH_ENV, &database_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawn untracked lock-holder stand-in");
+
+    let lock_deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if worker_database_lock_is_held(&database_path).expect("inspect untracked worker lock") {
+            break;
+        }
+        if let Some(status) = child.try_wait().expect("inspect untracked lock holder") {
+            panic!("untracked lock holder exited before acquiring the lock: {status}");
+        }
+        assert!(
+            Instant::now() < lock_deadline,
+            "untracked lock holder did not start"
+        );
+        sleep(Duration::from_millis(20)).await;
+    }
+
+    let error = match lock_for_fresh_enrollment(&database_path, Some("worker-1")) {
+        Ok(_) => panic!("an unenrolled lock holder must not be reused"),
+        Err(error) => error,
+    };
+    assert_eq!(error, WORKER_CREDENTIALS_LOCKED_ERROR);
+
+    let connection = rusqlite::Connection::open(&database_path).expect("open worker database");
+    connection
+        .execute_batch(
+            "CREATE TABLE identity (\
+                id INTEGER PRIMARY KEY CHECK (id = 1),\
+                worker_id TEXT NOT NULL,\
+                worker_token TEXT NOT NULL\
+            );\
+            INSERT INTO identity (id, worker_id, worker_token)\
+            VALUES (1, 'worker-1', 'worker-token-1');",
+        )
+        .expect("persist worker identity");
+    drop(connection);
+
+    let error = match lock_for_fresh_enrollment(&database_path, None) {
+        Ok(_) => panic!("an enrolled lock holder needs a server reuse proof"),
+        Err(error) => error,
+    };
+    assert_eq!(error, WORKER_CREDENTIALS_LOCKED_ERROR);
+    let error = match lock_for_fresh_enrollment(&database_path, Some("worker-2")) {
+        Ok(_) => panic!("a mismatched worker reuse proof must be rejected"),
+        Err(error) => error,
+    };
+    assert_eq!(error, WORKER_CREDENTIALS_LOCKED_ERROR);
+
+    assert!(lock_for_fresh_enrollment(&database_path, Some("worker-1"))
+        .expect("reuse enrolled untracked worker")
+        .is_none());
+    assert!(worker_database_lock_is_held(&database_path).expect("worker remains running"));
+
+    child
+        .kill()
+        .await
+        .expect("stop untracked lock-holder fixture");
     fs::remove_dir_all(root).expect("remove temporary worker root");
 }
 

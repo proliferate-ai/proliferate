@@ -38,6 +38,7 @@ describe("ensureDesktopWorker", () => {
       enrollmentToken: "ticket-1",
       expiresAt: "2026-01-01T00:00:00Z",
       pendingTicketPolicy: "newest_wins",
+      reusableWorkerId: "worker-1",
     });
   });
 
@@ -50,6 +51,7 @@ describe("ensureDesktopWorker", () => {
     expect(tauriMocks.ensureDesktopDispatchWorker).toHaveBeenCalledWith({
       targetId: "install-1",
       enrollmentToken: "ticket-1",
+      reusableWorkerId: "worker-1",
     });
   });
 
@@ -59,6 +61,25 @@ describe("ensureDesktopWorker", () => {
     ).resolves.toBe(true);
 
     expect(sdkMocks.enrollDesktopWorker).toHaveBeenCalledWith("install-1", null);
+  });
+
+  it("passes an absent reuse proof through as null", async () => {
+    sdkMocks.enrollDesktopWorker.mockResolvedValue({
+      enrollmentToken: "ticket-1",
+      expiresAt: "2026-01-01T00:00:00Z",
+      pendingTicketPolicy: "newest_wins",
+      reusableWorkerId: null,
+    });
+
+    await expect(
+      ensureDesktopWorker(null, worker, { onFailure: vi.fn(), captureException }),
+    ).resolves.toBe(true);
+
+    expect(tauriMocks.ensureDesktopDispatchWorker).toHaveBeenCalledWith({
+      targetId: "install-1",
+      enrollmentToken: "ticket-1",
+      reusableWorkerId: null,
+    });
   });
 
   it("resolves false when enrollment fails so the guard can retry", async () => {

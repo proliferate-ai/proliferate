@@ -148,6 +148,12 @@ class DesktopWorkerEnrollmentResponse(_CamelModel):
     enrollment_token: str
     expires_at: datetime
     pending_ticket_policy: Literal["newest_wins"] = "newest_wins"
+    reusable_worker_id: str | None = Field(
+        default=None,
+        description=(
+            "Exact online Worker identity that this authenticated Desktop enrollment may reuse."
+        ),
+    )
 
 
 class DesktopWorkerRevokeRequest(_CamelModel):

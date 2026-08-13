@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -251,6 +251,89 @@ class TestRuntimeWorkerEnrollment:
             json={},
         )
         assert fresh.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_reuse_proof_requires_an_online_worker_in_the_exact_identity_scope(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        owner = await _authed_user(client, db_session, prefix="worker-reuse-proof-owner")
+        other_user = await _authed_user(
+            client,
+            db_session,
+            prefix="worker-reuse-proof-other",
+        )
+        install_id = "install-reuse-proof"
+
+        initial_ticket = await client.post(
+            "/v1/cloud/workers/desktop/enrollment",
+            headers=owner.headers,
+            json={"desktopInstallId": install_id},
+        )
+        assert initial_ticket.status_code == 200, initial_ticket.text
+        assert initial_ticket.json()["reusableWorkerId"] is None
+        enrolled = await client.post(
+            "/v1/cloud/worker/enroll",
+            json={"enrollmentToken": initial_ticket.json()["enrollmentToken"]},
+        )
+        assert enrolled.status_code == 200, enrolled.text
+        worker_id = enrolled.json()["workerId"]
+
+        same_identity = await client.post(
+            "/v1/cloud/workers/desktop/enrollment",
+            headers=owner.headers,
+            json={"desktopInstallId": install_id},
+        )
+        assert same_identity.status_code == 200, same_identity.text
+        assert same_identity.json()["reusableWorkerId"] == worker_id
+
+        organization_id = await _create_org_with_member(
+            db_session,
+            user_id=owner.user_id,
+        )
+        other_organization = await client.post(
+            "/v1/cloud/workers/desktop/enrollment",
+            headers=owner.headers,
+            json={
+                "desktopInstallId": install_id,
+                "organizationId": organization_id,
+            },
+        )
+        assert other_organization.status_code == 200, other_organization.text
+        assert other_organization.json()["reusableWorkerId"] is None
+
+        other_owner = await client.post(
+            "/v1/cloud/workers/desktop/enrollment",
+            headers=other_user.headers,
+            json={"desktopInstallId": install_id},
+        )
+        assert other_owner.status_code == 200, other_owner.text
+        assert other_owner.json()["reusableWorkerId"] is None
+
+        worker = await db_session.get(CloudRuntimeWorker, uuid.UUID(worker_id))
+        assert worker is not None
+        worker.last_seen_at = datetime.now(UTC) - timedelta(minutes=5)
+        await db_session.commit()
+
+        stale_worker = await client.post(
+            "/v1/cloud/workers/desktop/enrollment",
+            headers=owner.headers,
+            json={"desktopInstallId": install_id},
+        )
+        assert stale_worker.status_code == 200, stale_worker.text
+        assert stale_worker.json()["reusableWorkerId"] is None
+
+        worker.status = "revoked"
+        worker.last_seen_at = datetime.now(UTC)
+        await db_session.commit()
+        revoked_worker = await client.post(
+            "/v1/cloud/workers/desktop/enrollment",
+            headers=owner.headers,
+            json={"desktopInstallId": install_id},
+        )
+        assert revoked_worker.status_code == 200, revoked_worker.text
+        assert revoked_worker.json()["reusableWorkerId"] is None
 
 
 class TestOrgScopedEnrollment:
