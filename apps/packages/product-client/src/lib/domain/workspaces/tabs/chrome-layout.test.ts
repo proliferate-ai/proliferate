@@ -5,6 +5,7 @@ import {
   CHROME_TAB_MIN_WIDTH,
   CHROME_TAB_SMALL_WIDTH,
   TAB_GROUP_PILL_WIDTH,
+  computeActiveTabScrollLeft,
   computeChromeTabPositions,
   computeChromeTabWidths,
   computeHeaderStripLayout,
@@ -82,6 +83,32 @@ describe("computeHeaderStripLayout", () => {
     expect(layout.widths.every((w) => w === CHROME_TAB_MIN_WIDTH)).toBe(true);
     const last = layout.positions[layout.positions.length - 1] + layout.widths[layout.widths.length - 1];
     expect(last).toBeGreaterThan(200);
+  });
+
+  it("keeps a min-width tab title visible without scroll ping-pong in a narrower viewport (PRO-226)", () => {
+    // Viewport narrower than one min-width tab: never scroll the title start
+    // out of view, from rest or from a mid-glitch right-aligned position.
+    const geometry = { tabLeft: 0, tabWidth: CHROME_TAB_MIN_WIDTH, clientWidth: 116 };
+    expect(computeActiveTabScrollLeft({ ...geometry, scrollLeft: 0 })).toBeNull();
+    expect(computeActiveTabScrollLeft({ ...geometry, scrollLeft: 24 })).toBe(0);
+
+    // Second tab wider than the viewport: left-aligns once, then settles.
+    const second = { tabLeft: 136, tabWidth: CHROME_TAB_MIN_WIDTH, clientWidth: 116 };
+    expect(computeActiveTabScrollLeft({ ...second, scrollLeft: 0 })).toBe(136);
+    expect(computeActiveTabScrollLeft({ ...second, scrollLeft: 136 })).toBeNull();
+  });
+
+  it("scrolls an overflowing tab into view when it fits the viewport", () => {
+    // Right overflow aligns the tab's right edge; left overflow its left edge.
+    expect(computeActiveTabScrollLeft({
+      tabLeft: 200, tabWidth: 136, scrollLeft: 0, clientWidth: 240,
+    })).toBe(96);
+    expect(computeActiveTabScrollLeft({
+      tabLeft: 40, tabWidth: 136, scrollLeft: 100, clientWidth: 240,
+    })).toBe(40);
+    expect(computeActiveTabScrollLeft({
+      tabLeft: 40, tabWidth: 136, scrollLeft: 40, clientWidth: 240,
+    })).toBeNull();
   });
 
   it("honors narrower max widths for delegated-agent tabs", () => {

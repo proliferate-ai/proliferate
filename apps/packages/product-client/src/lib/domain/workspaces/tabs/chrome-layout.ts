@@ -150,6 +150,35 @@ export function computeHeaderStripLayout({
   return { widths, positions };
 }
 
+/**
+ * Scroll offset that brings the active tab into view, or null when no scroll
+ * is needed. When the viewport is narrower than the tab, the right-overflow
+ * target is clamped to the tab's left edge: aligning the right edge would push
+ * the title start out of view, and the next run's left-edge correction would
+ * scroll back — a ping-pong that runs continuously while a live session
+ * re-derives the layout (PRO-226). The clamp makes repeat applications settle
+ * (left-aligned) instead.
+ */
+export function computeActiveTabScrollLeft({
+  tabLeft,
+  tabWidth,
+  scrollLeft,
+  clientWidth,
+}: {
+  tabLeft: number;
+  tabWidth: number;
+  scrollLeft: number;
+  clientWidth: number;
+}): number | null {
+  const tabRight = tabLeft + tabWidth;
+  const target = tabLeft < scrollLeft
+    ? tabLeft
+    : tabRight > scrollLeft + clientWidth
+      ? Math.min(tabLeft, tabRight - clientWidth)
+      : null;
+  return target === scrollLeft ? null : target;
+}
+
 function computeSegmentedTabWidths(args: {
   availableWidth: number;
   maxWidths: readonly number[];
