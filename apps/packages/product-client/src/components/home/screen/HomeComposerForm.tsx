@@ -156,7 +156,10 @@ export function HomeComposerForm({
       </DebugProfiler>
 
       <DebugProfiler id="home-composer">
-        <div className="relative z-10" data-focus-zone="chat">
+        {/* @container: Home has no ChatComposerDock column, so the composer
+            wrapper itself anchors the control row's compact-tier container
+            queries (see chat-layout.ts). */}
+        <div className="relative z-10 @container" data-focus-zone="chat">
           <ChatComposerSurface>
             <form
               className="relative flex flex-col"

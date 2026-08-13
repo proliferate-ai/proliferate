@@ -74,6 +74,9 @@ export function OrganizationMembersSection({
             className="pl-9"
           />
         </div>
+        {/* 22rem fits two OrganizationSelectMenu triggers side by side without
+            either truncating its longest option label ("All statuses"); no
+            semantic width token in the scale lands there. */}
         <div className="grid grid-cols-2 gap-2 lg:w-[22rem]">
           <OrganizationSelectMenu
             value={roleFilter}

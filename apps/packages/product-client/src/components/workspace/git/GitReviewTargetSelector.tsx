@@ -86,6 +86,7 @@ export function GitReviewTargetSelector({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search branches"
+              autoFocus
               className="h-full border-0 bg-transparent px-0 text-ui focus:ring-0"
             />
           </div>

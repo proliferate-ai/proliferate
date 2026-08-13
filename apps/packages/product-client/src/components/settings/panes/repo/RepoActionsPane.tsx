@@ -2,7 +2,8 @@ import { type ChangeEvent } from "react";
 import type { SetupHint } from "@anyharness/sdk";
 import { useDetectRepoRootSetupQuery } from "@anyharness/sdk-react";
 import { ScriptBlock } from "#product/components/settings/panes/repo/ScriptBlock";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { SettingsSaveFooter } from "#product/primitives/patterns/settings/SettingsSaveFooter";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
@@ -58,8 +59,9 @@ export function RepoActionsPane({
     );
   }
   return (
-    <section className="space-y-5">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Actions"
         description="Commands that run in agent workspaces for this repo."
       />
@@ -78,7 +80,7 @@ export function RepoActionsPane({
           onSelectCloudEnvironment={onSelectCloudEnvironment}
         />
       )}
-    </section>
+    </SettingsPageBody>
   );
 }
 
@@ -279,7 +281,7 @@ function SetupHintRows({
           return (
             <Label
               key={hint.id}
-              className="mb-0 flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/50"
+              className="mb-0 flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-hover"
             >
               <Checkbox
                 checked={checked}

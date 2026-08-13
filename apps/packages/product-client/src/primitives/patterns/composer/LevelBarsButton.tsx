@@ -23,6 +23,8 @@ interface LevelBarsButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   levelOptionAttribute?: string;
   /** Overrides the derived current-level label (e.g. to animate label swaps). */
   label?: ReactNode;
+  /** Forwarded to `ComposerControlButton` (width-conditional label removal). */
+  labelWrapperClassName?: string;
 }
 
 // HTML bars, not an inline SVG: WebKit does not compositor-accelerate

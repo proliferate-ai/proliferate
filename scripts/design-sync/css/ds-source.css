@@ -1,0 +1,57 @@
+/* Tailwind compile source for the design-sync bundle.
+   TEMPLATE, not directly compilable CSS. build-css.mjs fills in two markers
+   before compiling: the absolute path to the built product.css below, and a
+   generated safelist further down.
+
+   Mirrors apps/web's own product.css import, but points straight at the
+   built package output (apps/packages/design/dist/css/product.css) so this
+   compiles standalone, outside the app's own Vite graph. That file's own
+   theme.css and Geist font imports only resolve from dist, and its own
+   product-client/src source scan already covers the live registry, so this
+   template does not repeat that scan. */
+@import "{{PRODUCT_CSS_ABS_PATH}}";
+
+/* Paint the root surface.
+ *
+ * This design system is DARK-FIRST: theme.css puts the dark values on `:root`
+ * and flips to light under `:root[data-mode="light"]`. product.css sets
+ * `body { background: var(--color-background) }` early, but a later rule in
+ * the same file resets `html, body` to `background: transparent` — in the
+ * real app the shell (`#root`) paints the surface instead.
+ *
+ * A preview card and a design built with this DS have no such shell, so
+ * without this the page falls back to white while the tokens stay dark — and
+ * `--color-primary` (#ffffff in dark mode) then renders a white primary
+ * button on a white page, i.e. invisible. Every default-variant control would
+ * silently disappear.
+ *
+ * The `html body` compound selector is deliberate: it beats a plain `body`
+ * rule from a linked stylesheet on specificity (0,0,2 vs 0,0,1), including
+ * the converter's own inline `body{background:#fff}` card fallback.
+ */
+html,
+html body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* Safelist: designs are rendered from STATIC css.
+ *
+ * Tailwind only emits a utility it actually sees in a scanned source, so a
+ * bundle compiled from the DS package alone would carry only the classes the
+ * DS itself happens to use. A design agent composing new layout writes
+ * ordinary utilities (gap-12, grid-cols-3, mt-16) and the DS's own semantic
+ * roles (bg-surface-elevated, text-ui-sm) and needs both to exist.
+ *
+ * The DS colour/type-role block below is generated from the token authority
+ * (--color-* / --text-* in theme.css) by make-safelist.mjs — regenerate
+ * there, never hand-edit the block build-css.mjs injects here.
+ */
+{{GENERATED_SAFELIST}}
+
+/* Fractional spacing steps (gap-1.5, px-0.5, …).
+ * `@source inline(...)` cannot express these — the "." in 0.5 breaks its
+ * parsing and the whole family silently fails to emit, while integer steps
+ * from the same list emit fine. A scanned plain-text file works, because
+ * Tailwind extracts class-like tokens from any source it scans. */
+@source "./safelist-extra.txt";

@@ -257,7 +257,15 @@ function ComposerEditorBridge({
     editor.update(() => {
       $getRoot().clear();
       if (value) $convertFromMarkdownString(value, INPUT_TRANSFORMERS);
-      $getRoot().selectEnd();
+      // Reset inherited text formats along with the content: the selection's
+      // format bits survive a root clear, so a code-formatted draft would
+      // otherwise re-apply `code` to everything typed after a send (PRO-159).
+      const selection = $getRoot().selectEnd();
+      if (selection.format !== 0 || selection.style !== "") {
+        selection.format = 0;
+        selection.style = "";
+        selection.dirty = true;
+      }
     }, { tag: EXTERNAL_VALUE_TAG });
   }, [editor, snapshot, value]);
 

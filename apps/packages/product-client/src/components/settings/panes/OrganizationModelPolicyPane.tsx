@@ -7,7 +7,8 @@ import {
 import { Button } from "#product/primitives/Button";
 import { Switch } from "#product/primitives/Switch";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 
@@ -107,8 +108,9 @@ export function OrganizationModelPolicyPane() {
   const violationRows = violations.data?.violations ?? [];
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Model policy"
         description="Which agents and auth routes organization members can use."
       />
@@ -225,7 +227,7 @@ export function OrganizationModelPolicyPane() {
           </SettingsSection>
         </>
       )}
-    </section>
+    </SettingsPageBody>
   );
 }
 
