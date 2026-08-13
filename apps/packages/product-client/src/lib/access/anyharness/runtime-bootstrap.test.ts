@@ -36,6 +36,7 @@ beforeEach(() => {
   setRendererDiagnosticsSink({ emit: mocks.rendererDiagnostic });
   useHarnessConnectionStore.setState({
     runtimeUrl: "",
+    runtimeUrlSource: "default_fallback",
     connectionState: "connecting",
     error: null,
   });
@@ -60,6 +61,7 @@ describe("bootstrapHarnessRuntime", () => {
     expect(runtime.getConnection).toHaveBeenCalledTimes(1);
     expect(useHarnessConnectionStore.getState()).toMatchObject({
       runtimeUrl: "http://127.0.0.1:9001",
+      runtimeUrlSource: "native_capture",
       connectionState: "healthy",
       error: null,
     });
@@ -87,6 +89,7 @@ describe("bootstrapHarnessRuntime", () => {
     expect(runtime.getConnection).toHaveBeenCalledTimes(2);
     expect(useHarnessConnectionStore.getState()).toMatchObject({
       runtimeUrl: "http://127.0.0.1:9002",
+      runtimeUrlSource: "native_capture",
       connectionState: "healthy",
       error: null,
     });
@@ -119,8 +122,11 @@ describe("bootstrapHarnessRuntime", () => {
     await vi.advanceTimersByTimeAsync(500);
     await bootstrap;
 
+    // The dev fallback is not a natively captured runtime. Consented support
+    // snapshots refuse it, so the provenance has to say so.
     expect(useHarnessConnectionStore.getState()).toMatchObject({
       runtimeUrl: DEFAULT_RUNTIME_URL,
+      runtimeUrlSource: "default_fallback",
       connectionState: "healthy",
       error: null,
     });
