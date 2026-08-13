@@ -101,6 +101,10 @@ function ActivityChip({
     >
       {() => (
         <ComposerPopoverSurface
+          // C4: a comfortable fixed popover width that still fits a narrow
+          // viewport (min against 100vw minus a 1rem margin). Deliberately
+          // duplicated in GoalBarResultPopover.tsx — the two popovers are
+          // siblings on the same goal-bar row and are meant to size alike.
           className="w-[min(22rem,calc(100vw-1rem))] p-1.5"
           data-telemetry-mask
         >
