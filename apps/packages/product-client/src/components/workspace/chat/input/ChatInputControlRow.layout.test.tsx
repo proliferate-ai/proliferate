@@ -296,7 +296,7 @@ function ComposerPane({ scenario }: { scenario: PaneScenario }) {
       {/* Production nesting from ChatComposerDock: gutter column, container-
           query column, composer surface, form. The compact tier resolves
           against the @container div, so the replica must keep it. */}
-      <div className={`pointer-events-none relative z-10 pb-4 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
+      <div className={`pointer-events-none relative z-raised pb-4 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
         <div
           data-chat-composer-column="true"
           className={`pointer-events-auto relative @container ${CHAT_COLUMN_CLASSNAME}`}
