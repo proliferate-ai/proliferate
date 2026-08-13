@@ -51,6 +51,7 @@ impl CollectorServer {
             ));
         }
         let core = CollectorCore::new(&config)?;
+        core.spawn_exporter();
         let app = crate::http::router(Arc::clone(&core), &config.capability)
             .map_err(ServerError::InvalidConfig)?;
         config.capability.fill(0);
@@ -120,6 +121,7 @@ impl CollectorServer {
             let _ = shutdown.send(true);
         }
         let Some(mut task) = self.task.take() else {
+            self.core.shutdown_exporter().await;
             self.core.finish_shutdown(TerminalOutcomeV1::Succeeded);
             return Ok(());
         };
@@ -136,6 +138,10 @@ impl CollectorServer {
                     (TerminalOutcomeV1::TimedOut, None)
                 }
             };
+        // A bounded final flush after the listener is closed. Customer builds
+        // return immediately, and the internal wait is capped independently of
+        // the collector's own shutdown deadline.
+        self.core.shutdown_exporter().await;
         self.core.finish_shutdown(outcome);
         match failure {
             Some(error) => Err(error),

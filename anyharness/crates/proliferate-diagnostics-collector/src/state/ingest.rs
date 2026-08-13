@@ -312,6 +312,10 @@ impl CollectorCore {
         };
         self.retain_locked(inner, stored);
         inner.newest_accepted_cursor = Some(order);
+        // Both fan-outs are non-blocking and lossy by construction, so neither
+        // a slow tail reader nor a failing internal exporter can change what
+        // this record's acceptance already decided.
+        self.exporter.offer(&encoded);
         let _ = self.tail_tx.send(encoded);
         Ok(AcceptDisposition::Accepted(order))
     }

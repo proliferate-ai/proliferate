@@ -14,6 +14,7 @@ use proliferate_diagnostics_protocol::v1::types::{
 use tokio::sync::{broadcast, Semaphore};
 
 use crate::config::CollectorConfig;
+use crate::export::ExporterHandle;
 
 pub use ingest::IngestResult;
 pub(crate) use ingest::{IngestCandidate, PreparedRecord};
@@ -115,6 +116,8 @@ pub struct CollectorCore {
     pub(crate) tail_tx: broadcast::Sender<Arc<[u8]>>,
     pub(crate) tail_slots: Arc<Semaphore>,
     pub(crate) export_slots: Arc<Semaphore>,
+    /// Internal/dogfood OTLP fan-out. Absent from customer builds.
+    pub(crate) exporter: ExporterHandle,
 }
 
 impl CollectorCore {
@@ -160,6 +163,7 @@ impl CollectorCore {
             tail_tx,
             tail_slots: Arc::new(Semaphore::new(config.runtime_limits.tail_readers)),
             export_slots: Arc::new(Semaphore::new(config.runtime_limits.concurrent_exports)),
+            exporter: ExporterHandle::from_environment(),
         });
         {
             let mut inner = core.lock();
@@ -177,6 +181,18 @@ impl CollectorCore {
 
     pub fn boot_id(&self) -> &str {
         &self.boot_id
+    }
+
+    /// Starts the internal export task inside the collector runtime. It is a
+    /// no-op in a customer build and in an internal build with no destination.
+    pub fn spawn_exporter(&self) {
+        self.exporter.spawn();
+    }
+
+    /// Gives the internal exporter one bounded final flush. Never a shutdown
+    /// gate, and a no-op in a customer build.
+    pub async fn shutdown_exporter(&self) {
+        self.exporter.shutdown().await;
     }
 
     pub fn mark_ready(&self) {
