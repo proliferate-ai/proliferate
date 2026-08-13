@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HomeTargetPicker } from "#product/components/home/screen/HomeTargetPicker";
 import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
@@ -208,6 +208,19 @@ describe("HomeTargetPicker", () => {
 
     expect(callbacks.onSelectBranch).toHaveBeenCalledWith("staging");
     expect(callbacks.onSelectRuntime).not.toHaveBeenCalled();
+  });
+
+  it("focuses the search field whenever a searchable target picker opens", async () => {
+    renderPicker();
+
+    fireEvent.click(screen.getByRole("button", { name: /Project: Keystone repository/i }));
+    const projectSearch = screen.getByPlaceholderText("Search projects");
+    await waitFor(() => expect(document.activeElement).toBe(projectSearch));
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: /Branch: main/i }));
+    const branchSearch = screen.getByPlaceholderText("Search branches");
+    await waitFor(() => expect(document.activeElement).toBe(branchSearch));
   });
 
   it("filters repositories and branches in their own selectors", () => {

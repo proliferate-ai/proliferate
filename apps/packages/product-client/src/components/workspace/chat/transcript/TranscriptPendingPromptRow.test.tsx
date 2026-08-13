@@ -10,12 +10,14 @@ import {
   type PromptOutboxEntry,
 } from "#product/domain/sessions/intents/session-intent-model";
 import { TranscriptPendingPromptRow } from "#product/components/workspace/chat/transcript/TranscriptPendingPromptRow";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 const NOW = "2026-05-20T17:00:00.000Z";
 
 describe("TranscriptPendingPromptRow", () => {
   afterEach(() => {
     cleanup();
+    useSessionSelectionStore.setState({ pendingWorkspaceEntry: null });
   });
 
   it("renders closed-session send failures as a compact line", () => {
@@ -178,7 +180,10 @@ describe("TranscriptPendingPromptRow", () => {
     expect(footer?.querySelector("[data-turn-assistant-footer-slot]")?.className).toContain("h-6");
   });
 
-  it("hosts the workspace-creation receipt in the frontier slot instead of the trailing status", () => {
+  it("hosts the receipt alone while the workspace creation is still in flight", () => {
+    useSessionSelectionStore.setState({
+      pendingWorkspaceEntry: { source: "worktree-created" } as never,
+    });
     const { container } = render(
       <TranscriptPendingPromptRow
         activeSessionId="session-1"
@@ -198,6 +203,30 @@ describe("TranscriptPendingPromptRow", () => {
     const receipt = screen.getByTestId("receipt");
     const frontier = container.querySelector("[data-pending-frontier]");
     expect(frontier?.contains(receipt)).toBe(true);
+  });
+
+  it("renders the working status below the settled receipt until the first turn lands (PRO-119)", () => {
+    // No pending workspace entry: the creation settled, the session exists,
+    // and the prompt is in flight — the frontier must not read as a dead
+    // session while the agent boots.
+    const { container } = render(
+      <TranscriptPendingPromptRow
+        activeSessionId="session-1"
+        rowIndex={0}
+        prompt={createOptimisticPendingPrompt("Make me a worktree", "prompt-1", NOW)}
+        outboxEntry={null}
+        optimisticTrailingStatus={<div data-testid="thinking">Thinking</div>}
+        outboxActions={{
+          retryPrompt: vi.fn(),
+          dismissPrompt: vi.fn(),
+        }}
+        workspaceReceipt={<div data-testid="receipt">Worktree created</div>}
+      />,
+    );
+
+    const frontier = container.querySelector("[data-pending-frontier]");
+    expect(frontier?.contains(screen.getByTestId("receipt"))).toBe(true);
+    expect(frontier?.contains(screen.getByTestId("thinking"))).toBe(true);
   });
 
   it("keeps the failed_before_dispatch line unaffected by the workspaceReceipt prop", () => {

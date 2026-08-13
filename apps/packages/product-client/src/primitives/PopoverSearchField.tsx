@@ -6,6 +6,7 @@ export interface PopoverSearchFieldProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Picker search owns focus when its surface opens unless explicitly disabled. */
   autoFocus?: boolean;
   /** Accessible name when the placeholder alone is not descriptive enough. */
   ariaLabel?: string;
@@ -29,7 +30,7 @@ export function PopoverSearchField({
   value,
   onChange,
   placeholder = "Search",
-  autoFocus,
+  autoFocus = true,
   ariaLabel,
   onKeyDown,
 }: PopoverSearchFieldProps) {
@@ -37,13 +38,14 @@ export function PopoverSearchField({
     <div className="flex items-center gap-2 px-2.5 py-[7px]">
       <Search className="icon-paired shrink-0 text-muted-foreground/75" />
       <Input
+        variant="unstyled"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
         aria-label={ariaLabel}
         onKeyDown={onKeyDown}
-        className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
+        className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui text-foreground shadow-none outline-none placeholder:text-muted-foreground focus:ring-0 disabled:opacity-60"
       />
     </div>
   );
