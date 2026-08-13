@@ -36,6 +36,7 @@ import {
   completePendingWorkspaceCreationInBackground,
   failPendingWorkspaceEntry,
   finalizePendingWorkspaceSelection,
+  shouldFinalizePendingWorkspaceSelection,
 } from "#product/hooks/workspaces/workflows/workspace-entry-finalization";
 import {
   runLightweightLocalWorkspaceEntry,
@@ -48,9 +49,6 @@ import type {
 } from "#product/hooks/workspaces/workflows/workspace-entry-types";
 
 const EMPTY_REPO_ROOTS: RepoRoot[] = [], EMPTY_WORKSPACES: Workspace[] = [];
-
-const isAttemptCurrent = (attemptId: string): boolean =>
-  useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
 
 function requestChatInputFocus(): void { useChatInputStore.getState().requestFocus(); }
 
@@ -112,7 +110,7 @@ export function useWorkspaceEntryActions() {
         ...entry,
         workspaceId: workspace.id,
       };
-      if (!isAttemptCurrent(entry.attemptId)) {
+      if (!shouldFinalizePendingWorkspaceSelection(selectionEntry, entrySelectionDeps)) {
         return completePendingWorkspaceCreationInBackground({
           entry: selectionEntry,
           workspaceId: workspace.id,
@@ -313,7 +311,7 @@ export function useWorkspaceEntryActions() {
         fallbackBaseRef: resolved.params.baseRef,
         setupScript: result.setupScript ?? null,
       });
-      if (!isAttemptCurrent(entry.attemptId)) {
+      if (!shouldFinalizePendingWorkspaceSelection(selectionEntry, entrySelectionDeps)) {
         return completePendingWorkspaceCreationInBackground({
           entry: selectionEntry,
           workspaceId: result.workspace.id,

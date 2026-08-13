@@ -3,6 +3,7 @@ import type { HotPaintGate } from "#product/lib/domain/sessions/hot-paint-gate";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   buildPendingWorkspaceUiKey,
+  pendingWorkspaceEntrySurvivesWorkspaceSwitch,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import type { WorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
 import type {
@@ -107,9 +108,10 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
 
   activateWorkspace: (options) => {
     set((state) => ({
-      pendingWorkspaceEntry: options.clearPending === false
-        ? state.pendingWorkspaceEntry
-        : null,
+      pendingWorkspaceEntry: resolvePendingEntryAcrossActivation(
+        state.pendingWorkspaceEntry,
+        options.clearPending,
+      ),
       selectedLogicalWorkspaceId: options.logicalWorkspaceId,
       selectedWorkspaceId: options.workspaceId,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
@@ -129,9 +131,10 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
 
   activateHotWorkspace: (options) => {
     set((state) => ({
-      pendingWorkspaceEntry: options.clearPending === false
-        ? state.pendingWorkspaceEntry
-        : null,
+      pendingWorkspaceEntry: resolvePendingEntryAcrossActivation(
+        state.pendingWorkspaceEntry,
+        options.clearPending,
+      ),
       selectedLogicalWorkspaceId: options.logicalWorkspaceId,
       selectedWorkspaceId: options.workspaceId,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
@@ -253,6 +256,16 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
     });
   },
 }));
+
+function resolvePendingEntryAcrossActivation(
+  entry: PendingWorkspaceEntry | null,
+  clearPending: boolean | undefined,
+): PendingWorkspaceEntry | null {
+  if (clearPending === false || !entry) {
+    return entry;
+  }
+  return pendingWorkspaceEntrySurvivesWorkspaceSwitch(entry) ? entry : null;
+}
 
 function bumpVersionIfChanged(
   version: number,

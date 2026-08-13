@@ -97,7 +97,9 @@ describe("session selection store invariants", () => {
     unsubscribe();
     expect(listener).toHaveBeenCalledTimes(1);
     expect(useSessionSelectionStore.getState()).toMatchObject({
-      pendingWorkspaceEntry: null,
+      // An in-flight local/worktree creation survives the switch so its
+      // sidebar row keeps its slot while the create call finishes.
+      pendingWorkspaceEntry: pendingWorkspaceEntry(),
       selectedLogicalWorkspaceId: "logical-a",
       selectedWorkspaceId: "workspace-a",
       workspaceSelectionNonce: 1,
@@ -111,6 +113,39 @@ describe("session selection store invariants", () => {
       activeSessionVersion: 3,
       hotPaintGate: gate,
     });
+  });
+
+  it("clears a failed pending entry when activating another workspace", () => {
+    useSessionSelectionStore.setState({
+      pendingWorkspaceEntry: {
+        ...pendingWorkspaceEntry(),
+        stage: "failed",
+        errorMessage: "boom",
+      },
+    });
+
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-a",
+      workspaceId: "workspace-a",
+    });
+
+    expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
+  });
+
+  it("clears a cloud pending entry when activating another workspace", () => {
+    useSessionSelectionStore.setState({
+      pendingWorkspaceEntry: {
+        ...pendingWorkspaceEntry(),
+        source: "cloud-created",
+      },
+    });
+
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-a",
+      workspaceId: "workspace-a",
+    });
+
+    expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
   });
 
   it("deselects workspace shell state without clearing cached session metadata", () => {

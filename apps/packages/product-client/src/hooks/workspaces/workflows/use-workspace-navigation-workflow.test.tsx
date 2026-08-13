@@ -15,6 +15,7 @@ const harnessMocks = vi.hoisted(() => ({
     selectedLogicalWorkspaceId: null as string | null,
     selectedWorkspaceId: null as string | null,
     deselectWorkspacePreservingSessions: vi.fn(),
+    enterPendingWorkspaceShell: vi.fn(),
   },
 }));
 
@@ -53,8 +54,10 @@ vi.mock("react-router-dom", () => ({
 }));
 
 vi.mock("#product/stores/sessions/session-selection-store", () => ({
-  useSessionSelectionStore: (selector: (state: typeof harnessMocks.state) => unknown) =>
-    selector(harnessMocks.state),
+  useSessionSelectionStore: Object.assign(
+    (selector: (state: typeof harnessMocks.state) => unknown) => selector(harnessMocks.state),
+    { getState: () => harnessMocks.state },
+  ),
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
@@ -137,6 +140,19 @@ describe("useWorkspaceNavigationWorkflow", () => {
     expect(harnessMocks.state.deselectWorkspacePreservingSessions).toHaveBeenCalledTimes(1);
     expect(editorMocks.resetWorkspaceEditorState).toHaveBeenCalledTimes(1);
     expect(routerMocks.navigate).toHaveBeenCalledWith("/");
+  });
+
+  it("re-enters a still-creating pending shell when its sidebar row is selected", () => {
+    harnessMocks.state.pendingWorkspaceEntry = { attemptId: "attempt-7" };
+    const { result } = renderHook(() => useWorkspaceNavigationWorkflow());
+
+    act(() => result.current.selectWorkspaceFromSurface("pending-workspace:attempt-7", "sidebar"));
+
+    expect(harnessMocks.state.enterPendingWorkspaceShell).toHaveBeenCalledWith(
+      harnessMocks.state.pendingWorkspaceEntry,
+      { initialActiveSessionId: null },
+    );
+    expect(selectionMocks.selectWorkspace).not.toHaveBeenCalled();
   });
 
   it("deselects logical-only workspace state before top-level navigation", () => {

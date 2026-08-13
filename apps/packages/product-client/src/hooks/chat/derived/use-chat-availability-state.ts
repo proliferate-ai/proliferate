@@ -9,6 +9,7 @@ import {
   type ChatInputAvailabilityState,
 } from "#product/lib/domain/chat/composer/chat-input";
 import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/availability";
+import { pendingWorkspaceEntryOwnsSelection } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { missingCheckoutCopy } from "#product/copy/workspaces/workspace-availability-copy";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -62,6 +63,13 @@ export function useChatAvailabilityState(options?: {
     workspaceCollections?.cloudWorkspaces.find((workspace) => workspace.id === selectedCloudWorkspaceId)
     ?? null;
   const selectedCloudWorkspaceStatus = resolveCloudWorkspaceStatus(selectedCloudWorkspace);
+  // A pending creation surviving in the background must not gate another
+  // selected workspace's composer.
+  const ownedPendingWorkspaceEntry =
+    pendingWorkspaceEntry
+    && pendingWorkspaceEntryOwnsSelection(pendingWorkspaceEntry, selectedWorkspaceId)
+      ? pendingWorkspaceEntry
+      : null;
 
   const availability = useMemo(() => resolveChatInputAvailability({
     selectedWorkspaceId,
@@ -84,7 +92,7 @@ export function useChatAvailabilityState(options?: {
           workspaceSessionRecovery.reason,
         )
         : null,
-    pendingWorkspaceEntry,
+    pendingWorkspaceEntry: ownedPendingWorkspaceEntry,
     pendingInteractionKind: primaryPendingInteractionKind,
   }), [
     activeSessionId,
@@ -92,7 +100,7 @@ export function useChatAvailabilityState(options?: {
     launchReadiness.disabledReason,
     launchReadiness.isLoading,
     launchReadiness.isReady,
-    pendingWorkspaceEntry,
+    ownedPendingWorkspaceEntry,
     primaryPendingInteractionKind,
     selectedCloudRuntime.state?.actionBlockReason,
     selectedCloudRuntime.state?.phase,

@@ -32,8 +32,8 @@ export function useWorkspaceEntrySelectionDeps(): WorkspaceEntrySelectionDeps {
     selectWorkspace,
     setPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
-    trackWorkspaceInteraction: (workspaceId: string) =>
-      trackWorkspaceInteraction(workspaceId, new Date().toISOString()),
+    trackWorkspaceInteraction: (workspaceId: string, at?: string) =>
+      trackWorkspaceInteraction(workspaceId, at ?? new Date().toISOString()),
   }), [
     materializePendingWorkspaceSessions,
     selectWorkspace,

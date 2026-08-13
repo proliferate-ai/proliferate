@@ -17,6 +17,7 @@ import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { shouldMountWorkspaceShell } from "#product/lib/domain/chat/surface/chat-surface";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { pendingWorkspaceEntryOwnsSelection } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
@@ -110,7 +111,10 @@ export function useMainScreenState(): MainScreenState {
     workspaceUiKey,
     materializedWorkspaceId,
     isCloudWorkspaceSelected,
-    rightPanelSuppressed: Boolean(pendingWorkspaceEntry),
+    rightPanelSuppressed: Boolean(
+      pendingWorkspaceEntry
+      && pendingWorkspaceEntryOwnsSelection(pendingWorkspaceEntry, selectedWorkspaceId),
+    ),
   });
 
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
