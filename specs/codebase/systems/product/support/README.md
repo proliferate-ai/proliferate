@@ -143,6 +143,52 @@ returned to JavaScript.
 `diagnostics.json` bytes. The archive is never enqueued as an attachment and is
 not removed by queue cleanup.
 
+## Artifact contents at a glance
+
+`diagnostics.json` is one canonical JSON document (`SupportSnapshotV3`). Read
+top to bottom it answers: what build produced this, what the user agreed to,
+what the evidence is, how healthy the pipeline was, and what is not in the
+file and why.
+
+- Identity and build context: `schema_version` (3), `snapshot_id`,
+  `generated_at`, and `app` (version, release, platform, runtime version and
+  status).
+- Consent and selection: the disclosure version the user saw, when consent
+  was granted, the chosen scope, the exact fifteen-minute
+  `source_time_from`/`source_time_to` window, and the bound workspace and
+  session identifiers. Everything in the file must be attributable to this
+  grant.
+- Evidence, organized by source family:
+  - `records`: accepted-order collector records (lifecycle, warnings, errors,
+    and detail from renderer, Tauri, collector, bundled AnyHarness, and
+    Desktop Worker);
+  - `session_ledger`: per selected session, one summary, at most 200
+    normalized events, and at most 100 raw notifications;
+  - `fallback_evidence`: bounded per-component file tails;
+  - `legacy_evidence`: read-only legacy compatibility tails.
+- Pipeline health: `collector` export metadata and `producer_health`, so a
+  missing record is distinguishable as "producer was down" versus "did not
+  happen".
+- The manifest: per-source read/included byte accounting, gaps, omissions,
+  truncation reasons, per-category scrub counts (counts only, never values),
+  the limits in force, and `removed_by_tier` degradation accounting. Absence
+  is always explained, never silent.
+
+Degradation removes candidate groups from tier 8 upward until the exact
+uncompressed bytes fit the cap, oldest first within a tier, and a lifecycle
+started/terminal pair is admitted or removed atomically. The fixed tiers:
+
+| Tier | Contents |
+| --- | --- |
+| 1 | Selected active-session summary and events (Current session scope) |
+| 2 | Collector lifecycle, loss-summary, and WARN/ERROR records |
+| 3 | Collector records correlated to the selection identifiers |
+| 4 | Remaining collector records |
+| 5 | Fallback file tails |
+| 6 | Recent-activity session summaries and events |
+| 7 | Raw session notifications |
+| 8 | Legacy compatibility lines |
+
 ## Privacy
 
 Support reports, diagnostics, and attachments are private by default.
