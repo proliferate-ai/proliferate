@@ -11,7 +11,7 @@ import {
   recordTerminalStreamClosed,
   recordTerminalStreamError,
   recordTerminalStreamOpened,
-} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-connection";
 
 const MAX_REPLAY_DATA_BYTES = 256 * 1024;
 const MAX_REPLAY_ENTRIES = 1000;

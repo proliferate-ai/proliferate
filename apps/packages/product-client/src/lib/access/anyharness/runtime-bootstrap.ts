@@ -7,7 +7,7 @@ import {
   diagnosticField,
   recordRendererDiagnostic,
 } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
-import { recordRuntimeConnectionState } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import { recordRuntimeConnectionState } from "#product/lib/infra/diagnostics/renderer-diagnostics-connection";
 // Narrow bootstrap wiring: this module is the canonical boot orchestrator for
 // AnyHarness runtime connection state.
 import {

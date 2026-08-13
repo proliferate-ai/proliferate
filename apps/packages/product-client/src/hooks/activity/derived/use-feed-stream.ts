@@ -7,7 +7,7 @@ import {
   recordTerminalStreamClosed,
   recordTerminalStreamError,
   recordTerminalStreamOpened,
-} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-connection";
 
 export interface FeedStreamState {
   /** Accumulated feed content (terminal bytes decoded as UTF-8, or text lines). */

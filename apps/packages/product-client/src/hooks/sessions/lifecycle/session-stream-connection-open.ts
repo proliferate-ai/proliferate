@@ -15,7 +15,7 @@ import {
   recordSessionStreamError,
   recordSessionStreamOpened,
   type SessionStreamCloseReason,
-} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-connection";
 import { classifyRendererErrorClass } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {

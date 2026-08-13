@@ -5,7 +5,7 @@ import {
   registerOfflineSessionReconnect,
   scheduleSessionReconnectTimer,
 } from "#product/lib/workflows/sessions/session-reconnect-state";
-import { recordSessionStreamReconnectScheduled } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import { recordSessionStreamReconnectScheduled } from "#product/lib/infra/diagnostics/renderer-diagnostics-connection";
 import { isConnectivityOnline } from "#product/stores/infra/connectivity-store";
 import { shouldReconnectStream } from "#product/hooks/sessions/lifecycle/session-runtime-helpers";
 import type {
