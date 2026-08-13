@@ -61,21 +61,41 @@ describe("ChromeTab", () => {
     expect(container.querySelector(".workspace-shell-tab__underline")).toBeNull();
   });
 
-  it("yields the trailing status slot to a revealed shortcut", () => {
-    render(
-      <ChromeTab
-        isActive
-        width={180}
-        label="Session one"
-        badge={<span aria-hidden="true">Working</span>}
-        shortcutLabel="⌘1"
-        shortcutRevealVisible
-        onSelect={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+  it.each([true, false])(
+    "keeps a revealed shortcut in the trailing flow for an active=%s constrained tab",
+    (isActive) => {
+      const { container } = render(
+        <ChromeTab
+          isActive={isActive}
+          width={84}
+          label="A long session title that must truncate"
+          badge={<span aria-hidden="true">Working</span>}
+          shortcutLabel="⌘⌥1"
+          shortcutRevealVisible
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
 
-    expect(screen.getByText("Working").parentElement?.className).toContain("opacity-0");
-    expect(screen.getByText("⌘1").className).toContain("workspace-shell-tab__shortcut");
-  });
+      const tabRoot = container.querySelector<HTMLElement>(".workspace-shell-tab");
+      const tabButton = screen.getByRole("tab", { name: "A long session title that must truncate" });
+      const sessionTitle = screen.getByText("A long session title that must truncate");
+      const shortcut = screen.getByText("⌘⌥1");
+
+      expect(tabRoot?.style.width).toBe("84px");
+      expect(tabRoot?.getAttribute("data-has-shortcut")).toBe("true");
+      expect(sessionTitle.className).toContain("min-w-0");
+      expect(sessionTitle.className).toContain("truncate");
+      expect(shortcut.parentElement).toBe(tabButton);
+      expect(shortcut.getAttribute("aria-hidden")).toBe("true");
+      expect(shortcut.className).toContain("shrink-0");
+      expect(shortcut.className).toContain("group-hover/tab:invisible");
+      expect(shortcut.className).toContain("group-focus-within/tab:invisible");
+      expect(shortcut.className).not.toContain("absolute");
+      expect(screen.getByText("Working").parentElement?.className).toContain("opacity-0");
+      expect(screen.getByRole("button", { name: "Close tab" }).className).toContain(
+        "group-hover/tab:inline-flex",
+      );
+    },
+  );
 });
