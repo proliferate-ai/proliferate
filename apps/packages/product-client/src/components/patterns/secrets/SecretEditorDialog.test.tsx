@@ -75,4 +75,19 @@ describe("SecretEditorDialog", () => {
     fireEvent.blur(screen.getByLabelText("Variable name"));
     expect(screen.getByText("Enter a variable name.")).toBeTruthy();
   });
+
+  // The inline error is `NoticeBanner tone="destructive"` — the same adoption
+  // `ApiKeyCreatorModal` made — so it announces itself as a live region. The
+  // hand-rolled div it replaced was a silent `<div>`.
+  it("announces the save error through the shared destructive notice", () => {
+    renderDialog();
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    cleanup();
+    renderDialog({ error: "Could not save the secret." });
+
+    const notice = screen.getByRole("alert");
+    expect(notice.textContent).toContain("Could not save the secret.");
+    expect(notice.className).toContain("bg-destructive-subtle");
+  });
 });
