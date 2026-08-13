@@ -1,15 +1,23 @@
 mod artifacts;
 mod byte_allocation;
+mod cancellation;
 mod capture;
+mod closing;
+#[cfg(test)]
+mod closing_fence_tests;
 mod control;
 #[cfg(test)]
 mod deadline_race_tests;
+#[cfg(test)]
+mod fake_runtime;
 mod file_accounting;
 mod finish;
 #[cfg(test)]
 mod lifecycle_tests;
 pub(crate) mod model;
 mod preparation;
+#[cfg(test)]
+mod preparation_matrix_tests;
 mod runtime;
 mod session_accounting;
 mod session_cross_check;

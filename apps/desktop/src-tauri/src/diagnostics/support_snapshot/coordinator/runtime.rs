@@ -9,6 +9,18 @@ pub(super) trait CoordinatorRuntime: Send + Sync {
     fn instant_now(&self) -> Instant;
     fn new_id(&self) -> String;
     fn sleep_until(&self, deadline: Instant) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+
+    fn watchdog_sleep_until(&self, deadline: Instant) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        self.sleep_until(deadline)
+    }
+
+    fn before_finish_publication(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async {})
+    }
+
+    fn before_finish_result_publish(&self) {}
+
+    fn finish_timer_fired(&self) {}
 }
 
 pub(super) struct SystemCoordinatorRuntime;

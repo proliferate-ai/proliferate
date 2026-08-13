@@ -3,11 +3,15 @@ use std::sync::Arc;
 use proliferate_diagnostics_protocol::v1::types::TerminalOutcomeV1;
 use tokio::time::Duration;
 
+use super::super::artifact_store::SupportArtifactStore;
+use super::super::schema::enums::SupportSessionOmissionReasonV1;
+use super::super::schema::model::manifest::SupportSessionCollectionManifestV1;
 use super::control::{PreparationControl, PreparationInterruption};
 use super::finish::{check_finish, FinishError, FinishResult};
 use super::lifecycle_tests::assert_lifecycle_pair;
 use super::model::{
-    CancelSupportSnapshotInput, PreparedSupportSnapshotOutput, PreparedSupportSnapshotSummaryOutput,
+    CancelSupportSnapshotInput, FinishSupportSnapshotInput, PreparedSupportSnapshotOutput,
+    PreparedSupportSnapshotSummaryOutput,
 };
 use super::runtime::CoordinatorRuntime;
 use super::state::PreparationPhase;
@@ -166,17 +170,12 @@ async fn finish_watchdog_owns_a_detached_success_until_work_is_idle() {
         tokio::task::yield_now().await;
     }
     assert_eq!(control.interruption(), PreparationInterruption::Deadline);
-    assert!(coordinator.state.lock().await.preparation.is_some());
+    let closing = wait_for_closing(&coordinator).await;
+    assert!(coordinator.state.lock().await.preparation.is_none());
     drop(active_finish);
-    tokio::time::timeout(Duration::from_secs(1), control.wait_idle())
+    tokio::time::timeout(Duration::from_secs(1), closing.wait_completed())
         .await
-        .expect("watchdogs became idle");
-    for _ in 0..64 {
-        if coordinator.state.lock().await.preparation.is_none() {
-            break;
-        }
-        tokio::task::yield_now().await;
-    }
+        .expect("closing owner became idle and completed");
     assert!(coordinator.state.lock().await.preparation.is_none());
     for _ in 0..64 {
         if coordinator.producer.support_lifecycle_snapshot().len() >= 2 {
@@ -197,6 +196,133 @@ async fn finish_watchdog_owns_a_detached_success_until_work_is_idle() {
     );
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn final_publication_lock_rechecks_the_effective_deadline_before_authorization() {
+    let (root, store) = ready_store("publication-deadline");
+    let runtime = Arc::new(FakeRuntime::new());
+    runtime.pause_finish_publication();
+    let coordinator = test_coordinator(Some(Arc::clone(&store)), Arc::clone(&runtime));
+    let (control, _, preparation_id) = insert_awaiting_preparation(&coordinator, &runtime).await;
+    coordinator
+        .state
+        .lock()
+        .await
+        .preparation
+        .as_mut()
+        .expect("preparation")
+        .captured = Some(super::test_support::empty_capture("2026-08-12T00:00:00Z"));
+
+    let finish = tokio::spawn({
+        let coordinator = Arc::clone(&coordinator);
+        async move {
+            coordinator
+                .finish_preparation(finish_input(preparation_id))
+                .await
+        }
+    });
+    tokio::time::timeout(Duration::from_secs(1), runtime.wait_finish_publication())
+        .await
+        .expect("finisher reached publication boundary");
+
+    let state_guard = coordinator.state.lock().await;
+    runtime.release_finish_publication();
+    tokio::task::yield_now().await;
+    runtime.advance(Duration::from_secs(10));
+    tokio::task::yield_now().await;
+    drop(state_guard);
+
+    let error = finish
+        .await
+        .expect("finish task")
+        .expect_err("hard deadline wins");
+    assert_eq!(error, "support_snapshot_preparation_timeout");
+    let state = coordinator.state.lock().await;
+    assert!(state.preparation.is_none());
+    assert!(state.closing_preparation.is_none());
+    assert!(state.artifacts.is_empty());
+    drop(state);
+    assert_eq!(control.active_work(), 0);
+    let artifact_id =
+        SupportArtifactStore::artifact_id(&begin_input().client_job_id).expect("artifact id");
+    assert!(!store.root().join(format!("{artifact_id}.json")).exists());
+    assert_lifecycle_pair(
+        &coordinator,
+        "desktop.support_snapshot.prepare",
+        &begin_input().client_job_id,
+        None,
+        TerminalOutcomeV1::TimedOut,
+        Some("preparation_timeout"),
+        None,
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn command_finish_timer_retains_cleanup_owner_after_finish_future_is_dropped() {
+    let (root, store) = ready_store("detached-command-timer");
+    let runtime = Arc::new(FakeRuntime::new());
+    runtime.pause_finish_result();
+    runtime.pause_watchdog_deadlines();
+    let coordinator = test_coordinator(Some(Arc::clone(&store)), Arc::clone(&runtime));
+    let (control, _, preparation_id) = insert_awaiting_preparation(&coordinator, &runtime).await;
+    coordinator
+        .state
+        .lock()
+        .await
+        .preparation
+        .as_mut()
+        .expect("preparation")
+        .captured = Some(super::test_support::empty_capture("2026-08-12T00:00:00Z"));
+
+    let finish = tokio::spawn({
+        let coordinator = Arc::clone(&coordinator);
+        async move {
+            coordinator
+                .finish_preparation(finish_input(preparation_id))
+                .await
+        }
+    });
+    tokio::time::timeout(Duration::from_secs(1), runtime.wait_finish_result())
+        .await
+        .expect("blocking result withheld after staging");
+    let artifact_id =
+        SupportArtifactStore::artifact_id(&begin_input().client_job_id).expect("artifact id");
+    let artifact_path = store.root().join(format!("{artifact_id}.json"));
+    assert!(artifact_path.exists());
+
+    runtime.advance(Duration::from_secs(10));
+    tokio::time::timeout(Duration::from_secs(1), runtime.wait_finish_timer())
+        .await
+        .expect("command-local timer fired first");
+    let closing = wait_for_closing(&coordinator).await;
+    finish.abort();
+    let _ = finish.await;
+    runtime.release_finish_result();
+    tokio::time::timeout(Duration::from_secs(1), closing.wait_completed())
+        .await
+        .expect("coordinator-owned closing completed");
+
+    assert_eq!(control.active_work(), 0);
+    let state = coordinator.state.lock().await;
+    assert!(state.preparation.is_none());
+    assert!(state.closing_preparation.is_none());
+    assert!(state.artifacts.is_empty());
+    drop(state);
+    assert!(!artifact_path.exists());
+    assert_lifecycle_pair(
+        &coordinator,
+        "desktop.support_snapshot.prepare",
+        &begin_input().client_job_id,
+        None,
+        TerminalOutcomeV1::TimedOut,
+        Some("preparation_timeout"),
+        None,
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[test]
 fn blocking_finish_commits_an_observed_deadline_before_later_cancel() {
     let runtime = FakeRuntime::new();
@@ -210,4 +336,48 @@ fn blocking_finish_commits_an_observed_deadline_before_later_cancel() {
     );
     assert!(!control.request(PreparationInterruption::Cancelled));
     assert_eq!(control.interruption(), PreparationInterruption::Deadline);
+}
+
+fn finish_input(preparation_id: String) -> FinishSupportSnapshotInput {
+    FinishSupportSnapshotInput {
+        preparation_id,
+        consent_epoch: "epoch-1".to_string(),
+        session_evidence_json: None,
+        session_collection: SupportSessionCollectionManifestV1::Omitted {
+            reason: SupportSessionOmissionReasonV1::NoSelectedBundledLocalWorkspace,
+        },
+    }
+}
+
+async fn wait_for_closing(
+    coordinator: &Arc<super::SupportSnapshotCoordinator>,
+) -> Arc<super::state::ClosingPreparation> {
+    for _ in 0..128 {
+        if let Some(closing) = coordinator.state.lock().await.closing_preparation.clone() {
+            return closing;
+        }
+        tokio::task::yield_now().await;
+    }
+    panic!("preparation transferred to closing registry");
+}
+
+#[cfg(unix)]
+fn ready_store(prefix: &str) -> (std::path::PathBuf, Arc<SupportArtifactStore>) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = std::env::temp_dir().join(format!("pr6-{prefix}-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&root).expect("app root");
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).expect("app root mode");
+    let store = Arc::new(SupportArtifactStore::for_test(
+        &root,
+        &root.join("attachments"),
+    ));
+    store
+        .reconcile(
+            &[],
+            &[],
+            std::time::Instant::now() + std::time::Duration::from_secs(1),
+        )
+        .expect("store ready");
+    (root, store)
 }

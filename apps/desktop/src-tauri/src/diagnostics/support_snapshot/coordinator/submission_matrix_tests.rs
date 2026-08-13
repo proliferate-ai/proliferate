@@ -3,6 +3,7 @@ use std::sync::Arc;
 use proliferate_diagnostics_protocol::v1::types::TerminalOutcomeV1;
 use tokio::time::Duration;
 
+use super::fake_runtime::FakeRuntime;
 use super::lifecycle_tests::assert_lifecycle_operation;
 use super::model::{
     BeginSupportSnapshotSubmissionInput, FinishSupportSnapshotSubmissionInput as Finish,
@@ -11,7 +12,13 @@ use super::model::{
 };
 use super::runtime::CoordinatorRuntime;
 use super::state::{ArtifactAuthorization, ReadVerificationProof, ReadinessState};
-use super::tests::{reference, test_coordinator, FakeRuntime};
+use super::tests::{reference, test_coordinator};
+
+struct SubmissionTerminalCase {
+    finish: Finish,
+    outcome: TerminalOutcomeV1,
+    classification: Option<&'static str>,
+}
 
 #[tokio::test]
 async fn every_admitted_submission_has_exact_correlation_and_one_terminal() {
@@ -33,7 +40,7 @@ async fn every_admitted_submission_has_exact_correlation_and_one_terminal() {
         );
     }
 
-    for case in 0..6_u64 {
+    for (case, build_terminal) in terminal_cases().into_iter().enumerate() {
         coordinator.state.lock().await.read_proofs.insert(
             reference.artifact_id.clone(),
             ReadVerificationProof {
@@ -41,7 +48,7 @@ async fn every_admitted_submission_has_exact_correlation_and_one_terminal() {
                 expires_at: runtime.instant_now() + Duration::from_secs(30),
             },
         );
-        let attempt = case + 1;
+        let attempt = case as u64 + 1;
         let begun = coordinator
             .begin_submission(BeginSupportSnapshotSubmissionInput {
                 artifact_id: reference.artifact_id.clone(),
@@ -51,19 +58,25 @@ async fn every_admitted_submission_has_exact_correlation_and_one_terminal() {
             })
             .await
             .expect("submission admission");
-        let (finish, outcome, classification) = terminal_case(case, &begun.submission_id);
+        assert!(coordinator.state.lock().await.submission.is_some());
+        let terminal = build_terminal(&begun.submission_id);
         coordinator
-            .finish_submission(finish)
+            .finish_submission(terminal.finish)
             .await
             .expect("submission terminal");
+        let state = coordinator.state.lock().await;
+        assert!(state.submission.is_none());
+        assert!(state.read_proofs.is_empty());
+        assert!(state.artifacts.contains_key(&reference.artifact_id));
+        drop(state);
         assert_lifecycle_operation(
             &coordinator,
             "desktop.support_snapshot.submit",
             Some(&begun.operation_id),
             &reference.client_job_id,
             Some(&parent_operation_id),
-            outcome,
-            classification,
+            terminal.outcome,
+            terminal.classification,
             Some(attempt),
         );
     }
@@ -119,62 +132,146 @@ async fn shutdown_abandons_an_admitted_submission_with_original_correlation() {
     );
 }
 
-fn terminal_case(
-    case: u64,
-    submission_id: &str,
-) -> (Finish, TerminalOutcomeV1, Option<&'static str>) {
-    let submission_id = submission_id.to_string();
-    match case {
-        0 => (
-            Finish::Succeeded {
-                submission_id,
-                report_id: None,
-            },
-            TerminalOutcomeV1::Succeeded,
-            None,
-        ),
-        1 => (
-            Finish::Cancelled {
-                submission_id,
-                report_id: None,
-            },
-            TerminalOutcomeV1::Cancelled,
-            None,
-        ),
-        2 => (
-            Finish::Abandoned {
-                submission_id,
-                report_id: None,
-            },
-            TerminalOutcomeV1::Abandoned,
-            None,
-        ),
-        3 => (
-            Finish::TimedOut {
-                submission_id,
-                error_classification: UploadTimeoutClassificationInput::UploadTimeout,
-                report_id: None,
-            },
-            TerminalOutcomeV1::TimedOut,
-            Some("upload_timeout"),
-        ),
-        4 => (
-            Finish::Rejected {
-                submission_id,
-                error_classification: SubmissionRejectedClassificationInput::LocalPayloadInvalid,
-                report_id: None,
-            },
-            TerminalOutcomeV1::Rejected,
-            Some("local_payload_invalid"),
-        ),
-        _ => (
-            Finish::Failed {
-                submission_id,
-                error_classification: SubmissionFailedClassificationInput::Transient,
-                report_id: None,
-            },
-            TerminalOutcomeV1::Failed,
-            Some("transient"),
-        ),
+fn terminal_cases() -> [fn(&str) -> SubmissionTerminalCase; 12] {
+    [
+        succeeded,
+        cancelled,
+        abandoned,
+        timed_out,
+        rejected_local_payload_invalid,
+        rejected_upload_conflict,
+        rejected_upload_rejected,
+        failed_auth_required,
+        failed_cloud_unconfigured,
+        failed_dev_auth_bypass,
+        failed_storage_unconfigured,
+        failed_transient,
+    ]
+}
+
+fn succeeded(submission_id: &str) -> SubmissionTerminalCase {
+    SubmissionTerminalCase {
+        finish: Finish::Succeeded {
+            submission_id: submission_id.to_string(),
+            report_id: None,
+        },
+        outcome: TerminalOutcomeV1::Succeeded,
+        classification: None,
     }
 }
+
+fn cancelled(submission_id: &str) -> SubmissionTerminalCase {
+    SubmissionTerminalCase {
+        finish: Finish::Cancelled {
+            submission_id: submission_id.to_string(),
+            report_id: None,
+        },
+        outcome: TerminalOutcomeV1::Cancelled,
+        classification: None,
+    }
+}
+
+fn abandoned(submission_id: &str) -> SubmissionTerminalCase {
+    SubmissionTerminalCase {
+        finish: Finish::Abandoned {
+            submission_id: submission_id.to_string(),
+            report_id: None,
+        },
+        outcome: TerminalOutcomeV1::Abandoned,
+        classification: None,
+    }
+}
+
+fn timed_out(submission_id: &str) -> SubmissionTerminalCase {
+    SubmissionTerminalCase {
+        finish: Finish::TimedOut {
+            submission_id: submission_id.to_string(),
+            error_classification: UploadTimeoutClassificationInput::UploadTimeout,
+            report_id: None,
+        },
+        outcome: TerminalOutcomeV1::TimedOut,
+        classification: Some("upload_timeout"),
+    }
+}
+
+fn rejected(
+    submission_id: &str,
+    error_classification: SubmissionRejectedClassificationInput,
+    classification: &'static str,
+) -> SubmissionTerminalCase {
+    SubmissionTerminalCase {
+        finish: Finish::Rejected {
+            submission_id: submission_id.to_string(),
+            error_classification,
+            report_id: None,
+        },
+        outcome: TerminalOutcomeV1::Rejected,
+        classification: Some(classification),
+    }
+}
+
+fn rejected_local_payload_invalid(submission_id: &str) -> SubmissionTerminalCase {
+    rejected(
+        submission_id,
+        SubmissionRejectedClassificationInput::LocalPayloadInvalid,
+        "local_payload_invalid",
+    )
+}
+
+fn rejected_upload_conflict(submission_id: &str) -> SubmissionTerminalCase {
+    rejected(
+        submission_id,
+        SubmissionRejectedClassificationInput::UploadConflict,
+        "upload_conflict",
+    )
+}
+
+fn rejected_upload_rejected(submission_id: &str) -> SubmissionTerminalCase {
+    rejected(
+        submission_id,
+        SubmissionRejectedClassificationInput::UploadRejected,
+        "upload_rejected",
+    )
+}
+
+fn failed(
+    submission_id: &str,
+    error_classification: SubmissionFailedClassificationInput,
+    classification: &'static str,
+) -> SubmissionTerminalCase {
+    SubmissionTerminalCase {
+        finish: Finish::Failed {
+            submission_id: submission_id.to_string(),
+            error_classification,
+            report_id: None,
+        },
+        outcome: TerminalOutcomeV1::Failed,
+        classification: Some(classification),
+    }
+}
+
+macro_rules! failed_case {
+    ($function:ident, $variant:ident, $classification:literal) => {
+        fn $function(submission_id: &str) -> SubmissionTerminalCase {
+            failed(
+                submission_id,
+                SubmissionFailedClassificationInput::$variant,
+                $classification,
+            )
+        }
+    };
+}
+
+failed_case!(failed_auth_required, AuthRequired, "auth_required");
+failed_case!(
+    failed_cloud_unconfigured,
+    CloudUnconfigured,
+    "cloud_unconfigured"
+);
+failed_case!(failed_dev_auth_bypass, DevAuthBypass, "dev_auth_bypass");
+failed_case!(
+    failed_storage_unconfigured,
+    StorageUnconfigured,
+    "storage_unconfigured"
+);
+failed_case!(failed_transient, Transient, "transient");

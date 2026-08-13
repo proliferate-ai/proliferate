@@ -45,9 +45,34 @@ pub(super) fn assert_lifecycle_operation(
         })
         .collect::<Vec<_>>();
     assert_eq!(records.len(), 2, "exactly one start and terminal");
+    assert_eq!(
+        records
+            .iter()
+            .filter(|record| {
+                record.lifecycle.as_ref().map(|lifecycle| lifecycle.phase)
+                    == Some(LifecyclePhaseV1::Started)
+            })
+            .count(),
+        1,
+        "exactly one start"
+    );
+    assert_eq!(
+        records
+            .iter()
+            .filter(|record| {
+                record.lifecycle.as_ref().map(|lifecycle| lifecycle.phase)
+                    == Some(LifecyclePhaseV1::Terminal)
+            })
+            .count(),
+        1,
+        "exactly one terminal"
+    );
     let start = record_with_phase(&records, LifecyclePhaseV1::Started);
     let terminal = record_with_phase(&records, LifecyclePhaseV1::Terminal);
     assert_eq!(start.operation_id, terminal.operation_id);
+    if let Some(operation_id) = operation_id {
+        assert_eq!(start.operation_id, operation_id);
+    }
     for record in [start, terminal] {
         assert_eq!(record.item_id.as_deref(), Some(item_id));
         assert_eq!(record.parent_operation_id.as_deref(), parent_operation_id);
@@ -63,6 +88,14 @@ pub(super) fn assert_lifecycle_operation(
             None => assert!(record.arguments.is_empty()),
         }
     }
+    assert_eq!(start.error_classification, None);
+    assert_eq!(
+        start
+            .lifecycle
+            .as_ref()
+            .and_then(|lifecycle| lifecycle.outcome),
+        None
+    );
     assert_eq!(terminal.error_classification.as_deref(), classification);
     assert_eq!(
         terminal

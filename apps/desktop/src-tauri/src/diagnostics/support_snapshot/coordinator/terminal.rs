@@ -4,7 +4,7 @@ use crate::diagnostics_collector::producer::lifecycle::support_lifecycle::{
     SupportPreparationOperation, SupportSnapshotPreparationFailureClassificationV1 as Failure,
 };
 
-use super::control::{PreparationControl, PreparationInterruption};
+use super::control::PreparationInterruption;
 use super::finish::FinishError;
 
 fn take_operation(
@@ -43,16 +43,6 @@ pub(super) fn failed(
     }
 }
 
-pub(super) fn finish_interruption(control: &PreparationControl) -> Option<FinishError> {
-    match control.interruption() {
-        PreparationInterruption::Running => None,
-        PreparationInterruption::Cancelled | PreparationInterruption::Abandoned => {
-            Some(FinishError::Cancelled)
-        }
-        PreparationInterruption::Deadline => Some(FinishError::Deadline),
-    }
-}
-
 pub(super) fn interruption_error_code(interruption: PreparationInterruption) -> &'static str {
     match interruption {
         PreparationInterruption::Deadline => "support_snapshot_preparation_timeout",
@@ -61,14 +51,6 @@ pub(super) fn interruption_error_code(interruption: PreparationInterruption) -> 
         }
         PreparationInterruption::Running => "support_snapshot_stale_preparation",
     }
-}
-
-pub(super) fn code_for_interruption(
-    operation: &Arc<Mutex<Option<SupportPreparationOperation>>>,
-    control: &PreparationControl,
-) -> String {
-    terminal_for_interruption(operation, control.interruption());
-    interruption_error_code(control.interruption()).to_string()
 }
 
 pub(super) fn terminal_for_interruption(

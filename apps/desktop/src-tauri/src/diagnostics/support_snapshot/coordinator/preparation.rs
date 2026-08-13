@@ -5,25 +5,21 @@ use tokio::time::Duration;
 
 use crate::diagnostics_collector::producer::lifecycle::support_lifecycle::SupportSnapshotPreparationFailureClassificationV1 as Failure;
 
-use super::super::artifact_store::{SupportArtifactStore, MAX_ARTIFACT_REFERENCES};
+use super::super::artifact_store::MAX_ARTIFACT_REFERENCES;
 use super::super::schema::validate::{validate_id, validate_timestamp};
 use super::capture::{capture_native_support_evidence, CaptureError};
 use super::control::{PreparationControl, PreparationInterruption};
 use super::finish::{finish_and_stage, FinishError, FinishResult, FinishWork};
 use super::model::{
-    BeginSupportSnapshotInput, CancelSupportSnapshotInput, FinishSupportSnapshotInput,
-    PreparedSupportSnapshotOutput, SupportSnapshotPreparationOutput, SupportSnapshotSelectionInput,
-    SupportSnapshotWindowOutput, SupportSnapshotWorkspaceInput, DISCLOSURE_VERSION,
-    SESSION_EVIDENCE_BYTES,
+    BeginSupportSnapshotInput, FinishSupportSnapshotInput, PreparedSupportSnapshotOutput,
+    SupportSnapshotPreparationOutput, SupportSnapshotSelectionInput, SupportSnapshotWindowOutput,
+    SupportSnapshotWorkspaceInput, DISCLOSURE_VERSION, SESSION_EVIDENCE_BYTES,
 };
-use super::state::{
-    ArtifactAuthorization, ClosedPreparation, OpenPreparation, PreparationPhase, ReadinessState,
-};
+use super::state::{ArtifactAuthorization, OpenPreparation, PreparationPhase, ReadinessState};
 use super::terminal::{
-    abandoned as terminal_abandoned, cancelled as terminal_cancelled,
-    code_for_interruption as terminal_code_for_interruption, failed as terminal_failed,
-    finish as finish_terminal, finish_error_code, finish_interruption, interruption_error_code,
-    succeeded as terminal_succeeded, terminal_for_interruption,
+    abandoned as terminal_abandoned, cancelled as terminal_cancelled, failed as terminal_failed,
+    finish as finish_terminal, finish_error_code, interruption_error_code,
+    succeeded as terminal_succeeded,
 };
 use super::watchdog::spawn_preparation_watchdog;
 use super::SupportSnapshotCoordinator;
@@ -58,7 +54,7 @@ impl SupportSnapshotCoordinator {
             {
                 return Err("support_snapshot_not_ready".to_string());
             }
-            if state.preparation.is_some() {
+            if state.preparation.is_some() || state.closing_preparation.is_some() {
                 return Err("support_snapshot_preparation_busy".to_string());
             }
             if state.artifacts.len() >= MAX_ARTIFACT_REFERENCES {
@@ -117,7 +113,32 @@ impl SupportSnapshotCoordinator {
         });
         if !matches {
             drop(state);
-            return Err(terminal_code_for_interruption(&operation, &control));
+            if control.interruption() == PreparationInterruption::Running {
+                terminal_failed(&operation, Failure::PreparationRejected);
+                return Err("support_snapshot_stale_preparation".to_string());
+            }
+            return Err(interruption_error_code(control.interruption()).to_string());
+        }
+        if control.interruption() == PreparationInterruption::Running {
+            match &capture {
+                Err(CaptureError::Deadline) => {
+                    control.request(PreparationInterruption::Deadline);
+                }
+                Err(CaptureError::Cancelled) => {
+                    control.request(PreparationInterruption::Cancelled);
+                }
+                _ => {}
+            }
+        }
+        if control.interruption() != PreparationInterruption::Running {
+            let closing = state
+                .transfer_preparation_to_closing(&preparation_id)
+                .expect("matching interrupted preparation closes");
+            drop(state);
+            drop(_capture_work);
+            self.spawn_closing_owner(Arc::clone(&closing));
+            closing.wait_completed().await;
+            return Err(interruption_error_code(closing.interruption).to_string());
         }
         match capture {
             Ok(captured) if control.interruption() == PreparationInterruption::Running => {
@@ -147,13 +168,11 @@ impl SupportSnapshotCoordinator {
                 drop(state);
                 control.stop_watchdog();
                 match (result, control.interruption()) {
-                    (_, PreparationInterruption::Deadline)
-                    | (Err(CaptureError::Deadline), PreparationInterruption::Running) => {
+                    (_, PreparationInterruption::Deadline) => {
                         terminal_failed(&operation, Failure::PreparationTimeout);
                         Err("support_snapshot_preparation_timeout".to_string())
                     }
-                    (_, PreparationInterruption::Cancelled)
-                    | (Err(CaptureError::Cancelled), PreparationInterruption::Running) => {
+                    (_, PreparationInterruption::Cancelled) => {
                         terminal_cancelled(&operation);
                         Err("support_snapshot_preparation_cancelled".to_string())
                     }
@@ -162,6 +181,10 @@ impl SupportSnapshotCoordinator {
                         Err("support_snapshot_preparation_cancelled".to_string())
                     }
                     (Err(CaptureError::Invalid), PreparationInterruption::Running)
+                    | (
+                        Err(CaptureError::Deadline | CaptureError::Cancelled),
+                        PreparationInterruption::Running,
+                    )
                     | (Ok(_), PreparationInterruption::Running) => {
                         terminal_failed(&operation, Failure::PreparationRejected);
                         Err("support_snapshot_preparation_rejected".to_string())
@@ -189,7 +212,7 @@ impl SupportSnapshotCoordinator {
             .as_ref()
             .cloned()
             .ok_or_else(|| "support_snapshot_not_ready".to_string())?;
-        let _artifact_guard = self.artifact_gate.lock().await;
+        let artifact_guard = self.artifact_gate.lock().await;
         let (work, operation, control, finish_deadline, finish_work, finish_call_work) = {
             let mut state = self.state.lock().await;
             if state.shutdown_armed || state.readiness != ReadinessState::Ready {
@@ -214,16 +237,16 @@ impl SupportSnapshotCoordinator {
                 .as_ref()
                 .is_some_and(|open| self.runtime.instant_now() >= open.deadline)
             {
-                let open = state.preparation.take().expect("matching preparation");
+                let open = state.preparation.as_ref().expect("matching preparation");
                 open.control.request(PreparationInterruption::Deadline);
-                state.closed_preparation = Some(ClosedPreparation {
-                    preparation_id: open.preparation_id.clone(),
-                    consent_epoch: open.input.consent_epoch.clone(),
-                    interruption: PreparationInterruption::Deadline,
-                });
+                let closing = state
+                    .transfer_preparation_to_closing(&input.preparation_id)
+                    .expect("matching preparation closes");
                 drop(state);
-                terminal_failed(&open.operation, Failure::PreparationTimeout);
-                return Err("support_snapshot_preparation_timeout".to_string());
+                drop(artifact_guard);
+                self.spawn_closing_owner(Arc::clone(&closing));
+                closing.wait_completed().await;
+                return Err(interruption_error_code(closing.interruption).to_string());
             }
             if state
                 .preparation
@@ -272,7 +295,6 @@ impl SupportSnapshotCoordinator {
                 finish_call_work,
             )
         };
-        let _finish_call_work = finish_call_work;
         // Coordinator ownership survives a dropped finish invocation.
         spawn_preparation_watchdog(
             self,
@@ -282,8 +304,13 @@ impl SupportSnapshotCoordinator {
         );
         let mut signal = control.subscribe();
         let interrupted = async {
-            if !*signal.borrow() {
-                let _ = signal.changed().await;
+            loop {
+                if control.interruption() != PreparationInterruption::Running {
+                    return;
+                }
+                if signal.changed().await.is_err() {
+                    return;
+                }
             }
         };
         tokio::pin!(interrupted);
@@ -306,6 +333,7 @@ impl SupportSnapshotCoordinator {
                 finish_deadline,
                 blocking_runtime.as_ref(),
             );
+            blocking_runtime.before_finish_result_publish();
             blocking_completion.publish(result);
         });
         let finish_timer = self.runtime.sleep_until(finish_deadline);
@@ -314,223 +342,140 @@ impl SupportSnapshotCoordinator {
             result = &mut task => { let _ = result; }
             _ = &mut finish_timer => {
                 control.request(PreparationInterruption::Deadline);
+                self.runtime.finish_timer_fired();
                 let _ = task.await;
             }
             _ = &mut interrupted => {
                 let _ = task.await;
             }
         }
-        let mut result = finish_completion
-            .take()
-            .unwrap_or(Err(FinishError::Manifest));
+        // The pre-lock check is only an optimization. The hard arbitration
+        // happens again while holding the state/publication critical section.
         if control.interruption() == PreparationInterruption::Running
             && self.runtime.instant_now() >= finish_deadline
         {
             control.request(PreparationInterruption::Deadline);
         }
-        if let Some(interrupted) = finish_interruption(&control) {
-            if let Ok(success) = &result {
-                let _ = store.delete(&success.reference.artifact_id);
-            }
-            result = Err(interrupted);
-        }
+        self.runtime.before_finish_publication().await;
         let mut state = self.state.lock().await;
         let still_current = state.preparation.as_ref().is_some_and(|open| {
             open.preparation_id == input.preparation_id
                 && open.input.consent_epoch == input.consent_epoch
                 && open.phase == PreparationPhase::Finishing
         });
-        if still_current {
-            state.preparation.take();
+        if still_current && self.runtime.instant_now() >= finish_deadline {
+            control.request(PreparationInterruption::Deadline);
         }
-        if control.interruption() == PreparationInterruption::Cancelled {
-            if let Ok(success) = &result {
-                let artifact_id = success.reference.artifact_id.clone();
-                drop(state);
-                let _ = store.delete(&artifact_id);
-            } else {
-                drop(state);
+        let closing = if still_current && control.interruption() != PreparationInterruption::Running
+        {
+            state.transfer_preparation_to_closing(&input.preparation_id)
+        } else {
+            state
+                .closing_preparation
+                .as_ref()
+                .filter(|closing| closing.preparation_id == input.preparation_id)
+                .cloned()
+        };
+        if let Some(closing) = closing {
+            drop(state);
+            drop(finish_call_work);
+            drop(artifact_guard);
+            self.spawn_closing_owner(Arc::clone(&closing));
+            closing.wait_completed().await;
+            return Err(interruption_error_code(closing.interruption).to_string());
+        }
+
+        let result = finish_completion
+            .take()
+            .unwrap_or(Err(FinishError::Manifest));
+        if !still_current {
+            drop(state);
+            drop(finish_call_work);
+            drop(artifact_guard);
+            if let Ok(success) = result {
+                let _ = store.delete(&success.reference.artifact_id);
             }
-            terminal_cancelled(&operation);
-            return Err("support_snapshot_preparation_cancelled".to_string());
+            control.stop_watchdog();
+            terminal_failed(&operation, Failure::PreparationRejected);
+            return Err("support_snapshot_stale_preparation".to_string());
         }
-        if control.interruption() == PreparationInterruption::Deadline {
-            state.closed_preparation = Some(ClosedPreparation {
-                preparation_id: input.preparation_id.clone(),
-                consent_epoch: input.consent_epoch.clone(),
-                interruption: PreparationInterruption::Deadline,
-            });
-            if let Ok(success) = &result {
-                let artifact_id = success.reference.artifact_id.clone();
-                drop(state);
-                let _ = store.delete(&artifact_id);
-            } else {
-                drop(state);
-            }
-            terminal_failed(&operation, Failure::PreparationTimeout);
-            return Err("support_snapshot_preparation_timeout".to_string());
-        }
-        if control.interruption() == PreparationInterruption::Abandoned {
-            if let Ok(success) = &result {
-                let artifact_id = success.reference.artifact_id.clone();
-                drop(state);
-                let _ = store.delete(&artifact_id);
-            } else {
-                drop(state);
-            }
-            terminal_abandoned(&operation);
-            return Err("support_snapshot_preparation_cancelled".to_string());
-        }
+
         match result {
-            Ok(FinishResult { output, reference }) if still_current => {
+            Ok(success) => {
+                // Recheck immediately before authorization while this mutex
+                // excludes watchdog, cancellation, and shutdown publication.
+                if self.runtime.instant_now() >= finish_deadline {
+                    control.request(PreparationInterruption::Deadline);
+                }
+                if control.interruption() != PreparationInterruption::Running {
+                    finish_completion.publish(Ok(success));
+                    let closing = state
+                        .transfer_preparation_to_closing(&input.preparation_id)
+                        .expect("current interrupted preparation closes");
+                    drop(state);
+                    drop(finish_call_work);
+                    drop(artifact_guard);
+                    self.spawn_closing_owner(Arc::clone(&closing));
+                    closing.wait_completed().await;
+                    return Err(interruption_error_code(closing.interruption).to_string());
+                }
+                let FinishResult { output, reference } = success;
                 state.closed_preparation = None;
                 let authorization = ArtifactAuthorization {
                     reference,
-                    preparation_id: Some(input.preparation_id),
+                    preparation_id: Some(input.preparation_id.clone()),
                     preparation_operation_id: Some(output.preparation_operation_id.clone()),
-                    consent_epoch: Some(input.consent_epoch),
+                    consent_epoch: Some(input.consent_epoch.clone()),
                 };
                 if !finish_completion.authorize() {
                     let artifact_id = authorization.reference.artifact_id;
+                    state.preparation.take();
                     drop(state);
+                    drop(finish_call_work);
+                    drop(artifact_guard);
                     let _ = store.delete(&artifact_id);
-                    return Err(terminal_code_for_interruption(&operation, &control));
+                    control.stop_watchdog();
+                    terminal_failed(&operation, Failure::PreparationRejected);
+                    return Err("support_snapshot_stale_preparation".to_string());
                 }
+                state.preparation.take();
                 state
                     .artifacts
                     .insert(authorization.reference.artifact_id.clone(), authorization);
                 drop(state);
+                drop(finish_call_work);
                 control.stop_watchdog();
                 terminal_succeeded(&operation);
                 Ok(output)
             }
-            Ok(success) => {
+            Err(error @ (FinishError::Deadline | FinishError::Cancelled)) => {
+                match error {
+                    FinishError::Deadline => {
+                        control.request(PreparationInterruption::Deadline);
+                    }
+                    _ => {
+                        control.request(PreparationInterruption::Cancelled);
+                    }
+                }
+                let closing = state
+                    .transfer_preparation_to_closing(&input.preparation_id)
+                    .expect("current interrupted preparation closes");
                 drop(state);
-                let _ = store.delete(&success.reference.artifact_id);
-                control.stop_watchdog();
-                terminal_failed(&operation, Failure::PreparationRejected);
-                Err("support_snapshot_stale_preparation".to_string())
+                drop(finish_call_work);
+                drop(artifact_guard);
+                self.spawn_closing_owner(Arc::clone(&closing));
+                closing.wait_completed().await;
+                Err(interruption_error_code(closing.interruption).to_string())
             }
             Err(error) => {
+                state.preparation.take();
                 drop(state);
+                drop(finish_call_work);
                 control.stop_watchdog();
                 finish_terminal(&operation, error);
                 Err(finish_error_code(error).to_string())
             }
         }
-    }
-
-    pub(crate) async fn cancel_preparation(
-        &self,
-        input: CancelSupportSnapshotInput,
-    ) -> Result<(), String> {
-        if canonical_uuid(&input.client_job_id).is_err()
-            || validate_id(&input.consent_epoch).is_err()
-            || input
-                .preparation_id
-                .as_deref()
-                .is_some_and(|value| canonical_uuid(value).is_err())
-        {
-            return Err("support_snapshot_invalid_input".to_string());
-        }
-        let (operation, control, terminal_interruption, mut deletes) = {
-            let mut state = self.state.lock().await;
-            let matching = state.preparation.as_ref().is_some_and(|open| {
-                open.input.client_job_id == input.client_job_id
-                    && open.input.consent_epoch == input.consent_epoch
-                    && input
-                        .preparation_id
-                        .as_ref()
-                        .is_none_or(|value| value == &open.preparation_id)
-            });
-            let (operation, control, terminal_interruption) = if matching {
-                let open = state.preparation.as_ref().expect("matching preparation");
-                if self.runtime.instant_now() >= open.deadline {
-                    open.control.request(PreparationInterruption::Deadline);
-                }
-                open.control.request(PreparationInterruption::Cancelled);
-                let control = Arc::clone(&open.control);
-                if open.phase == PreparationPhase::AwaitingFinish {
-                    let open = state.preparation.take().expect("matching preparation");
-                    let interruption = control.interruption();
-                    state.closed_preparation = Some(ClosedPreparation {
-                        preparation_id: open.preparation_id.clone(),
-                        consent_epoch: open.input.consent_epoch.clone(),
-                        interruption,
-                    });
-                    (Some(open.operation), Some(control), Some(interruption))
-                } else {
-                    (None, Some(control), None)
-                }
-            } else {
-                (None, None, None)
-            };
-            let ids = state
-                .artifacts
-                .iter()
-                .filter(|(_, authorization)| {
-                    authorization.reference.client_job_id == input.client_job_id
-                        && authorization.consent_epoch.as_deref() == Some(&input.consent_epoch)
-                        && input.preparation_id.as_ref().is_none_or(|value| {
-                            authorization.preparation_id.as_ref() == Some(value)
-                        })
-                })
-                .map(|(id, _)| id.clone())
-                .collect::<Vec<_>>();
-            for id in &ids {
-                state.artifacts.remove(id);
-                state.read_proofs.remove(id);
-            }
-            (operation, control, terminal_interruption, ids)
-        };
-        if let Some(control) = &control {
-            control.wait_idle().await;
-        }
-        let detached_operation = if operation.is_none() {
-            let mut state = self.state.lock().await;
-            let detached = state.preparation.as_ref().is_some_and(|open| {
-                control
-                    .as_ref()
-                    .is_some_and(|control| Arc::ptr_eq(&open.control, control))
-            });
-            detached.then(|| {
-                let open = state.preparation.take().expect("detached preparation");
-                let interruption = open.control.interruption();
-                state.closed_preparation = Some(ClosedPreparation {
-                    preparation_id: open.preparation_id,
-                    consent_epoch: open.input.consent_epoch,
-                    interruption,
-                });
-                open.operation
-            })
-        } else {
-            None
-        };
-        if let (Some(operation), Some(interruption)) = (
-            operation.or(detached_operation),
-            terminal_interruption
-                .or_else(|| control.as_ref().map(|control| control.interruption())),
-        ) {
-            terminal_for_interruption(&operation, interruption);
-        }
-        if let Some(success) = control
-            .as_ref()
-            .and_then(|control| control.finish_completion().claim_cleanup())
-        {
-            if !deletes.contains(&success.reference.artifact_id) {
-                deletes.push(success.reference.artifact_id);
-            }
-        }
-        if control.is_some() {
-            if let Ok(artifact_id) = SupportArtifactStore::artifact_id(&input.client_job_id) {
-                if !deletes.contains(&artifact_id) {
-                    deletes.push(artifact_id);
-                }
-            }
-        }
-        let _artifact_guard = self.artifact_gate.lock().await;
-        self.delete_artifacts(deletes).await;
-        Ok(())
     }
 }
 
@@ -590,7 +535,7 @@ fn validate_begin_times(
     Ok(())
 }
 
-fn canonical_uuid(value: &str) -> Result<(), String> {
+pub(super) fn canonical_uuid(value: &str) -> Result<(), String> {
     let parsed =
         uuid::Uuid::parse_str(value).map_err(|_| "support_snapshot_invalid_input".to_string())?;
     if parsed.to_string() != value {

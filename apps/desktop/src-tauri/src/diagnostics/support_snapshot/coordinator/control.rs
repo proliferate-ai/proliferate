@@ -24,6 +24,7 @@ pub(super) struct PreparationControl {
     cancelled: Arc<AtomicBool>,
     deadline_expired: Arc<AtomicBool>,
     signal: watch::Sender<bool>,
+    watchdog_stopped: AtomicBool,
     work: Arc<WorkFence>,
 }
 
@@ -35,6 +36,7 @@ impl PreparationControl {
             cancelled: Arc::new(AtomicBool::new(false)),
             deadline_expired: Arc::new(AtomicBool::new(false)),
             signal,
+            watchdog_stopped: AtomicBool::new(false),
             work: Arc::new(WorkFence::default()),
         })
     }
@@ -83,7 +85,12 @@ impl PreparationControl {
     }
 
     pub(super) fn stop_watchdog(&self) {
+        self.watchdog_stopped.store(true, Ordering::Release);
         self.signal.send_replace(true);
+    }
+
+    pub(super) fn watchdog_stopped(&self) -> bool {
+        self.watchdog_stopped.load(Ordering::Acquire)
     }
 
     pub(super) fn cancelled_flag(&self) -> Arc<AtomicBool> {

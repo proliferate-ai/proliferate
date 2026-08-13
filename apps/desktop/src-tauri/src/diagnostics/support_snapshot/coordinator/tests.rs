@@ -1,9 +1,7 @@
 use std::sync::{Arc, Mutex as StdMutex};
-use std::{future::Future, pin::Pin};
 
-use chrono::{DateTime, Utc};
 use proliferate_diagnostics_protocol::v1::types::TerminalOutcomeV1;
-use tokio::time::{Duration, Instant};
+use tokio::time::Duration;
 
 use super::super::artifact_store::SupportArtifactStore;
 use super::super::schema::enums::SupportSessionOmissionReasonV1;
@@ -24,70 +22,7 @@ use crate::diagnostics_collector::producer::TauriDiagnosticsProducer;
 use crate::diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor;
 use crate::sidecar::create_sidecar;
 
-pub(super) struct FakeRuntime {
-    clock: Arc<FakeClock>,
-    next_id: StdMutex<u64>,
-}
-
-struct FakeClock {
-    utc: StdMutex<DateTime<Utc>>,
-    instant: StdMutex<Instant>,
-    advanced: tokio::sync::Notify,
-}
-
-impl FakeRuntime {
-    pub(super) fn new() -> Self {
-        Self {
-            clock: Arc::new(FakeClock {
-                utc: StdMutex::new(
-                    DateTime::parse_from_rfc3339("2026-08-12T00:00:00Z")
-                        .expect("time")
-                        .with_timezone(&Utc),
-                ),
-                instant: StdMutex::new(Instant::now()),
-                advanced: tokio::sync::Notify::new(),
-            }),
-            next_id: StdMutex::new(0),
-        }
-    }
-
-    pub(super) fn advance(&self, duration: Duration) {
-        let mut instant = self.clock.instant.lock().expect("fake instant");
-        *instant += duration;
-        let mut utc = self.clock.utc.lock().expect("fake utc");
-        *utc += chrono::Duration::from_std(duration).expect("fake duration");
-        self.clock.advanced.notify_waiters();
-    }
-}
-
-impl CoordinatorRuntime for FakeRuntime {
-    fn utc_now(&self) -> DateTime<Utc> {
-        self.clock.utc.lock().expect("fake utc").to_owned()
-    }
-
-    fn instant_now(&self) -> Instant {
-        *self.clock.instant.lock().expect("fake instant")
-    }
-
-    fn new_id(&self) -> String {
-        let mut next = self.next_id.lock().expect("fake id");
-        *next += 1;
-        uuid::Uuid::from_u128(*next as u128).to_string()
-    }
-
-    fn sleep_until(&self, deadline: Instant) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-        let clock = Arc::clone(&self.clock);
-        Box::pin(async move {
-            loop {
-                let advanced = clock.advanced.notified();
-                if *clock.instant.lock().expect("fake instant") >= deadline {
-                    return;
-                }
-                advanced.await;
-            }
-        })
-    }
-}
+pub(super) use super::fake_runtime::FakeRuntime;
 
 pub(super) fn test_coordinator(
     store: Option<Arc<SupportArtifactStore>>,
@@ -216,6 +151,12 @@ async fn awaiting_finish_watchdog_owns_the_absolute_terminal() {
 
     runtime.advance(Duration::from_secs(25));
     control.wait_idle().await;
+    for _ in 0..64 {
+        if operation.lock().expect("operation").is_none() {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
 
     let state = coordinator.state.lock().await;
     assert!(state.preparation.is_none());
