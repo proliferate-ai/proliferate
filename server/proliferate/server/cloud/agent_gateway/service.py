@@ -396,7 +396,7 @@ async def get_auth_state(
     *,
     user_id: UUID,
     surface: str,
-) -> tuple[dict[str, object], str]:
+) -> tuple[dict[str, object], str, dict[str, dict[str, object]]]:
     """Render the user's state.json v2 (document, fingerprint) for one surface.
 
     Same render path as the cloud materializer. A surface with no resolvable
@@ -404,8 +404,22 @@ async def get_auth_state(
     fingerprint (the renderer's sha256 of the canonical document) rides the
     response so the desktop can echo it back through the delivery ack — the
     server never has to trust a client-computed hash.
+
+    The third element is the surface's full persisted harness-settings map
+    (``agent_auth_harness_settings``), keyed by harness_kind. It exists for
+    the ``harness_settings`` response rider: the rendered document only
+    carries a harness's ``settings`` passenger when that harness has an
+    enabled selection (the fail-closed law forbids emitting a settings-only
+    entry), so the settings pane would otherwise read defaults back for a
+    native-auth harness and its toggles would never hold.
     """
-    return await build_agent_auth_state(db, user_id, surface=surface)
+    state, fingerprint = await build_agent_auth_state(db, user_id, surface=surface)
+    harness_settings = await agent_gateway_store.list_harness_settings_for_surface(
+        db,
+        user_id=user_id,
+        surface=surface,
+    )
+    return state, fingerprint, harness_settings
 
 
 async def ack_auth_state_delivery(

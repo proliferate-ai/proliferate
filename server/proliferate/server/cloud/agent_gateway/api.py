@@ -217,8 +217,12 @@ async def get_agent_auth_state_endpoint(
     materializer writes into the user's own sandbox. Nothing crosses a user
     boundary.
     """
-    state, fingerprint = await service.get_auth_state(db, user_id=user.id, surface=surface)
-    return agent_auth_state_payload(state, fingerprint=fingerprint)
+    state, fingerprint, harness_settings = await service.get_auth_state(
+        db, user_id=user.id, surface=surface
+    )
+    return agent_auth_state_payload(
+        state, fingerprint=fingerprint, harness_settings=harness_settings
+    )
 
 
 @router.post("/state/ack", response_model=AgentAuthDeliveryAckResponse)

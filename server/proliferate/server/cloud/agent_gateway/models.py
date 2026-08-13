@@ -157,6 +157,15 @@ class AgentAuthStateResponse(BaseModel):
     canonical document), NOT part of the state.json wire contract: the desktop
     echoes it through ``POST /state/ack`` after a successful runtime push and
     must strip it before pushing the document to the local runtime.
+
+    ``harness_settings`` is a second response-only rider: the surface's full
+    persisted harness-settings map (``agent_auth_harness_settings``), keyed by
+    harness_kind. The document's per-harness ``settings`` passenger only rides
+    when the harness has an enabled selection — the fail-closed law forbids a
+    settings-only ``harnesses`` entry — so the settings pane reads this rider
+    to show persisted toggle values for a native-auth harness. Like
+    ``fingerprint``, the desktop strips it before pushing the document to the
+    local runtime.
     """
 
     version: int
@@ -164,6 +173,7 @@ class AgentAuthStateResponse(BaseModel):
     user_id: str | None = None
     harnesses: list[AgentAuthStateHarness]
     fingerprint: str | None = None
+    harness_settings: dict[str, dict[str, Any]] | None = None
 
 
 class AgentAuthStateAckRequest(BaseModel):
@@ -341,9 +351,11 @@ def agent_auth_state_payload(
     state: dict[str, object],
     *,
     fingerprint: str | None = None,
+    harness_settings: dict[str, dict[str, Any]] | None = None,
 ) -> AgentAuthStateResponse:
     response = AgentAuthStateResponse.model_validate(state)
     response.fingerprint = fingerprint
+    response.harness_settings = harness_settings
     return response
 
 

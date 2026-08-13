@@ -151,6 +151,19 @@ CLI-flag/env deltas — entirely outside the auth pipeline. Read
 the content; nothing in it is a secret and nothing in it affects which
 credentials a session runs on.
 
+The passenger needs a vehicle: a harness only gets a `harnesses` entry
+when it has an enabled selection ("Absent means native; present-but-empty
+fails closed" forbids a settings-only entry), so a native-auth harness's
+persisted settings never appear in the rendered document. The settings
+pane therefore reads them from the `harness_settings` **response rider**
+on `GET /state` — the surface's full persisted map, keyed by
+harness_kind, carried next to `fingerprint` and stripped the same way by
+the desktop before the runtime push
+([local-auth-state.ts](../../apps/packages/product-client/src/lib/domain/agents/local-auth-state.ts)).
+The runtime consequence stands: a native-auth harness's settings do not
+reach `resolve_settings_deltas`, because the document that would carry
+them is exactly the one a selection-less harness is absent from.
+
 `provider_hint` on a selection row is likewise display-only ("this key is
 my Anthropic key"); the renderer never puts it on the wire and nothing at
 launch reads it.
@@ -1144,6 +1157,21 @@ Deltas between this document and the integration stack
       `deployment` was dropped from the UI field spec and the server's
       create validation because the renderer deliberately never translated
       it.
+- [ ] **A native-auth harness's settings never reach the runtime.** The
+      `harness_settings` response rider makes the settings pane read and
+      hold persisted toggle values for a selection-less harness (PRO-129),
+      but the delivered `state.json` still cannot carry them: the
+      fail-closed law forbids a settings-only `harnesses` entry, and every
+      deployed runtime reads present-but-empty `sources` as a refused
+      launch, so the launch-time `resolve_settings_deltas` join sees no
+      settings for a native-auth harness. Closing this needs a
+      wire-contract change the old-runtime fleet can survive (for example
+      a settings channel outside `harnesses`, ignored by old readers),
+      plus the matching runtime read. Separately, claude's `--chrome`
+      mapping lands on the agent-process sidecar's argv, and the pinned
+      `@proliferate/claude-agent-acp` does not forward unrecognized argv
+      to the wrapped CLI — the flag is inert until the sidecar forwards
+      it (its own repo + a catalog pin bump).
 - [ ] **Module split.** The route prefix split landed (S1): vault,
       selections, state, and org policy now live under `/v1/cloud/agent-auth/`,
       and enrollment/capabilities stayed at `/v1/cloud/agent-gateway/`
