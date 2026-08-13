@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
-import { AuthProviderButton } from "#product/primitives/patterns/AuthProviderButton";
 import { CommandPaletteGroup, CommandPaletteInput, CommandPaletteItem, CommandPaletteList, CommandPaletteRoot } from "#product/primitives/patterns/CommandPalette";
 import { ComposerActionButton } from "#product/primitives/patterns/composer/ComposerActionButton";
 import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
@@ -10,7 +9,6 @@ import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDia
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { EnvironmentSearchSelect } from "#product/primitives/patterns/EnvironmentSearchSelect";
 import { LevelBarsButton } from "#product/primitives/patterns/composer/LevelBarsButton";
-import { ListRow } from "#product/primitives/patterns/ListRow";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { PageContentFrame } from "#product/primitives/patterns/PageContentFrame";
 import { PaneOptionsMenuItem } from "#product/primitives/patterns/panel/PaneOptionsMenuItem";
@@ -314,9 +312,6 @@ function ToastHostDemo() {
 }
 
 export const PATTERNS_ENTRIES: LibraryEntry[] = [
-  { name: "AuthProviderButton", subpath: "#product/primitives/patterns/AuthProviderButton", render: () => (
-    <AuthProviderButton onClick={noop}>Continue with GitHub</AuthProviderButton>
-  ) },
   { name: "AutoHideScrollArea", subpath: "#product/primitives/patterns/AutoHideScrollArea", render: AutoHideScrollAreaDemo },
   CARD_ENTRY,
   { name: "CommandPalette", subpath: "#product/primitives/patterns/CommandPalette", render: CommandPaletteDemo },
@@ -341,9 +336,6 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
   ) },
   { name: "EnvironmentSearchSelect", subpath: "#product/primitives/patterns/EnvironmentSearchSelect", render: EnvironmentSearchSelectDemo },
   { name: "LevelBarsButton", subpath: "#product/primitives/patterns/composer/LevelBarsButton", render: LevelBarsButtonDemo },
-  { name: "ListRow", subpath: "#product/primitives/patterns/ListRow", render: () => (
-    <ListRow title="Row title" description="Row description" onClick={noop} />
-  ) },
   { name: "ModalShell", subpath: "#product/primitives/patterns/ModalShell", render: ModalShellDemo },
   NOTICE_BANNER_ENTRY,
   { name: "PageContentFrame", subpath: "#product/primitives/patterns/PageContentFrame", render: () => (

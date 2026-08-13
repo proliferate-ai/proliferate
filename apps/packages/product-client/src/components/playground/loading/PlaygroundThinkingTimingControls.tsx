@@ -1,8 +1,8 @@
 import { useState, type CSSProperties } from "react";
 import { Button } from "#product/primitives/Button";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
+import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
-import { RangeSlider } from "#product/primitives/RangeSlider";
 
 // Timing lab for the PRODUCT ThinkingText animation. The two-layer compositor
 // sweep (.thinking-text-band / .thinking-text-band-glyphs, design product.css —
@@ -171,7 +171,10 @@ function TimingRangeControl({
           {formatValue(value)}
         </span>
       </div>
-      <RangeSlider
+      <Input
+        type="range"
+        variant="unstyled"
+        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-input accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
         id={id}
         min={min}
         max={max}

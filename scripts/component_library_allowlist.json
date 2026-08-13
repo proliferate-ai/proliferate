@@ -1,18 +1,5 @@
 {
-  "deadLibraryComponents": {
-    "apps/packages/product-client/src/primitives/RangeSlider.tsx": {
-      "count": 1,
-      "justification": "FOUNDER: zero product call sites (dead vocabulary). PR G specification authorises deletion only on founder sign-off, which was not given at build time, so the row and the file stay and this allowance records the debt."
-    },
-    "apps/packages/product-client/src/primitives/patterns/AuthProviderButton.tsx": {
-      "count": 1,
-      "justification": "FOUNDER: zero product call sites; already named as dead vocabulary in DESIGN_SYSTEM.md Current Gaps. Retirement needs founder sign-off, not a gate decision."
-    },
-    "apps/packages/product-client/src/primitives/patterns/ListRow.tsx": {
-      "count": 1,
-      "justification": "FOUNDER: zero product call sites; the two files that mention it do so in recorded review comments explaining why they did NOT adopt it. Retirement needs founder sign-off."
-    }
-  },
+  "deadLibraryComponents": {},
   "handRolledOverlayRoles": {
     "apps/packages/product-client/src/components/content/ui/FileDiffCard.tsx": {
       "count": 1,
@@ -132,10 +119,6 @@
       "count": 1,
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
     },
-    "apps/packages/product-client/src/primitives/RangeSlider.tsx": {
-      "count": 1,
-      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
-    },
     "apps/packages/product-client/src/primitives/RowActionIconButton.tsx": {
       "count": 1,
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
@@ -176,10 +159,6 @@
       "count": 1,
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
     },
-    "apps/packages/product-client/src/primitives/patterns/AuthProviderButton.tsx": {
-      "count": 1,
-      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
-    },
     "apps/packages/product-client/src/primitives/patterns/AutoHideScrollArea.tsx": {
       "count": 1,
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
@@ -197,10 +176,6 @@
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
     },
     "apps/packages/product-client/src/primitives/patterns/EnvironmentSearchSelect.tsx": {
-      "count": 1,
-      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
-    },
-    "apps/packages/product-client/src/primitives/patterns/ListRow.tsx": {
       "count": 1,
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
     },
