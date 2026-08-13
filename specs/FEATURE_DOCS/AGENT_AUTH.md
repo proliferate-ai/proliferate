@@ -1007,6 +1007,7 @@ server/proliferate/
     │   ├── api.py                             /v1/cloud/agent-auth routes
     │   ├── service.py                         write orchestration, org-policy enforcement,
     │   │                                      re-materialize trigger
+    │   ├── harness_settings.py                settings toggle validation + upsert (not auth)
     │   └── selection_rules.py                 per-harness cardinality
     └── materialization/
         ├── service.py                         after-commit task scheduling

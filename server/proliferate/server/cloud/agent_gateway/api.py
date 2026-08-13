@@ -21,7 +21,7 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.permissions import CurrentOrgUser, current_path_org_admin
-from proliferate.server.cloud.agent_gateway import service
+from proliferate.server.cloud.agent_gateway import harness_settings, service
 from proliferate.server.cloud.agent_gateway.models import (
     AgentApiKeyCreateRequest,
     AgentApiKeyResponse,
@@ -177,7 +177,7 @@ async def put_agent_auth_selections_endpoint(
     )
     # Persist settings alongside sources when provided.
     if body.settings is not None:
-        await service.put_harness_settings(
+        await harness_settings.put_harness_settings(
             db,
             user_id=user.id,
             harness_kind=harness_kind,
@@ -217,11 +217,11 @@ async def get_agent_auth_state_endpoint(
     materializer writes into the user's own sandbox. Nothing crosses a user
     boundary.
     """
-    state, fingerprint, harness_settings = await service.get_auth_state(
+    state, fingerprint, settings_by_harness = await service.get_auth_state(
         db, user_id=user.id, surface=surface
     )
     return agent_auth_state_payload(
-        state, fingerprint=fingerprint, harness_settings=harness_settings
+        state, fingerprint=fingerprint, harness_settings=settings_by_harness
     )
 
 

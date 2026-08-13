@@ -365,32 +365,6 @@ async def put_auth_selections(
     return rows
 
 
-async def put_harness_settings(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    harness_kind: str,
-    surface: str,
-    settings_dict: dict[str, object],
-) -> dict[str, object]:
-    """Validate shape (all values must be bool) and upsert harness settings."""
-    for key, value in settings_dict.items():
-        if not isinstance(key, str) or not isinstance(value, bool):
-            raise CloudApiError(
-                "invalid_harness_settings",
-                "Settings must be a dict[str, bool]. "
-                f"Key {key!r} has value of type {type(value).__name__}.",
-                status_code=400,
-            )
-    return await agent_gateway_store.put_harness_settings(
-        db,
-        user_id=user_id,
-        harness_kind=harness_kind,
-        surface=surface,
-        settings=settings_dict,
-    )
-
-
 async def get_auth_state(
     db: AsyncSession,
     *,
@@ -415,9 +389,7 @@ async def get_auth_state(
     """
     state, fingerprint = await build_agent_auth_state(db, user_id, surface=surface)
     harness_settings = await agent_gateway_store.list_harness_settings_for_surface(
-        db,
-        user_id=user_id,
-        surface=surface,
+        db, user_id=user_id, surface=surface
     )
     return state, fingerprint, harness_settings
 
