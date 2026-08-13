@@ -48,11 +48,34 @@ interface DisclosureProps {
  * — grouped lists lead with the chevron, card and section headers trail it —
  * and the rotation is identical either way so the two never drift.
  *
- * incubating: workflows slices, wave 2. The chat transcript's disclosures
- * cannot adopt this as written — it paints hover and pressed backgrounds on
- * its header with no suppression, which reinstates the PRO-120 complaint, and
- * it forces a chevron and a 17px title onto 14px quiet rows. A quiet spelling
- * is required first.
+ * Adoption is partial, and the blockers are recorded here rather than in each
+ * refusing call site, because this is the file a quiet spelling gets written
+ * in. Four independent limitations, each verified against a real surface that
+ * mapped to this shape and could not take it:
+ *
+ * - **The row paint is closed.** `className` reaches the outer wrapper only;
+ *   the header row's `rounded-lg px-2 hover:bg-hover active:bg-active` is
+ *   written on an inner div with no slot, so a call site can neither suppress
+ *   it nor replace it. On the chat transcript's 15 mapped quiet rows that
+ *   reinstates the pressed rectangle PRO-120 removed; on the git review pane
+ *   (`GitReviewFileSectionShell`) it cannot host that header's sticky,
+ *   full-bleed, near-opaque `color-mix` ground without a specificity override,
+ *   which is itself the escape hatch the doctrine forbids.
+ * - **The title type is fixed** at `text-heading` (17px), against the 14px of
+ *   the transcript rows that would otherwise adopt it.
+ * - **There is no always-visible body slot.** Every child goes inside the
+ *   collapsible region, so a header with a summary line that stays visible
+ *   while the detail collapses cannot be expressed
+ *   (`HarnessAllModelsSection`, whose model-count line sits between the
+ *   header and the collapsing list).
+ * - **Collapsed children stay mounted.** `AnimatedCollapsibleContent` hides
+ *   with `aria-hidden` + `inert` and never unmounts, so a caller that relies
+ *   on unmount cannot swap onto this (`ProviderRow`, where the modal keeps one
+ *   form mounted at a time and its tests assert true unmount on collapse).
+ *
+ * A quiet spelling therefore needs an overridable (or suppressible) row paint,
+ * a title-type choice, a summary slot outside the collapsible region, and an
+ * unmount-on-close option — not just a `quiet` tone.
  */
 export function Disclosure({
   open,

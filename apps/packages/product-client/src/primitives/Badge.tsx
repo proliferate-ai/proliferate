@@ -11,11 +11,17 @@ export type BadgeTone =
   | "sidebar";
 
 /**
- * Geometry only. `default` is the bordered pill; `micro` is the square
- * count/label chip that sits inside dense chrome (popover triggers, roster
- * meta lines) — tighter radius and padding, no visible edge, and a flat
- * `muted` fill for the neutral tone. Every non-neutral tone keeps its own
- * tint and ink at either size, so tone and size stay independent axes.
+ * Geometry, with one tone exception. `default` is the bordered pill; `micro`
+ * is the square count/label chip that sits inside dense chrome (popover
+ * triggers, roster meta lines) — tighter radius and padding, and no visible
+ * edge (the border stays for the box model, painted transparent).
+ *
+ * The exception: `neutral` at `micro` swaps its fill from the pill's
+ * `surface-control` chrome to the flat `muted` step, because an edgeless chip
+ * needs a fill that reads on its own. That single cross-product cell is
+ * deliberate and load-bearing — both chips this size was promoted from
+ * painted `bg-muted`. Every other tone keeps its own tint and ink unchanged
+ * at either size, so `tone` and `size` are otherwise independent.
  */
 export type BadgeSize = "default" | "micro";
 
