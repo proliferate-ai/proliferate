@@ -8,7 +8,9 @@ use crate::domains::agent_operations::model::{
     CreateAgentInput, CreateWorkspaceInput, ListAgentsInput, ListWorkspacesInput, SendMessageInput,
     WorkspaceIdentity,
 };
-use crate::domains::agent_operations::runtime::{AgentOperations, AgentOperationsError};
+use crate::domains::agent_operations::runtime::{
+    agent_operations_outcome_class, AgentOperations, AgentOperationsError,
+};
 use crate::domains::sessions::task_output::{
     TaskOutputPage, TaskOutputRole, TaskOutputSender, DEFAULT_TASK_OUTPUT_LIMIT,
 };
@@ -90,6 +92,21 @@ struct ListAgentsArgs {
 }
 
 pub async fn call_tool(
+    operations: &AgentOperations,
+    ctx: &WorkspaceMcpContext,
+    name: &str,
+    arguments: Option<Value>,
+) -> anyhow::Result<Value> {
+    // Single outcome record for every Workspace tool. The 18 handlers carry
+    // only a `tracing::instrument` span, so denials, missing targets and
+    // successes are all invisible without this.
+    let target_session_id = target_session_id(arguments.as_ref());
+    let result = dispatch_tool(operations, ctx, name, arguments).await;
+    record_tool_call(ctx, name, target_session_id.as_deref(), result.as_ref().err());
+    result
+}
+
+async fn dispatch_tool(
     operations: &AgentOperations,
     ctx: &WorkspaceMcpContext,
     name: &str,
@@ -312,10 +329,22 @@ pub async fn call_tool_output(
     arguments: Option<Value>,
 ) -> anyhow::Result<McpToolOutput> {
     if name != "get_task_output" {
+        // `call_tool` records its own outcome.
         return call_tool(operations, ctx, name, arguments)
             .await
             .map(McpToolOutput::Structured);
     }
+    let target_session_id = target_session_id(arguments.as_ref());
+    let result = task_output_response(operations, ctx, arguments);
+    record_tool_call(ctx, name, target_session_id.as_deref(), result.as_ref().err());
+    result
+}
+
+fn task_output_response(
+    operations: &AgentOperations,
+    ctx: &WorkspaceMcpContext,
+    arguments: Option<Value>,
+) -> anyhow::Result<McpToolOutput> {
     let args = parse::<TaskOutputArgs>(arguments)?;
     let target = AgentIdentity::new(operations.runtime_identity().clone(), args.agent_id);
     let page = operations
@@ -333,6 +362,48 @@ pub async fn call_tool_output(
         text,
         max_response_bytes: 65_536,
     })
+}
+
+/// Tool arguments name their target agent uniformly as `agentId`; tools that
+/// address a workspace (or nothing) simply have none.
+fn target_session_id(arguments: Option<&Value>) -> Option<String> {
+    arguments?.get("agentId")?.as_str().map(str::to_string)
+}
+
+/// One `anyharness.agent_ops.tool_call` record per Workspace tool outcome.
+/// Only the stable error code is logged: public messages can interpolate
+/// caller-supplied values.
+fn record_tool_call(
+    ctx: &WorkspaceMcpContext,
+    operation: &str,
+    target_session_id: Option<&str>,
+    error: Option<&anyhow::Error>,
+) {
+    let caller_session_id = ctx.caller.identity().session_id.as_str();
+    let Some(error) = error else {
+        tracing::info!(
+            target: "anyharness.agent_ops.tool_call",
+            operation,
+            outcome = "ok",
+            caller_session_id,
+            target_session_id,
+            "Workspace MCP tool call completed"
+        );
+        return;
+    };
+    let error_code = error
+        .downcast_ref::<McpToolCallError>()
+        .map(|error| error.code)
+        .unwrap_or("AGENT_OPERATIONS_INTERNAL");
+    tracing::warn!(
+        target: "anyharness.agent_ops.tool_call",
+        operation,
+        outcome = agent_operations_outcome_class(error_code),
+        error_code,
+        caller_session_id,
+        target_session_id,
+        "Workspace MCP tool call failed"
+    );
 }
 
 fn parse<T: DeserializeOwned>(arguments: Option<Value>) -> anyhow::Result<T> {
@@ -398,4 +469,24 @@ fn task_output_text(page: &TaskOutputPage) -> String {
         text.push_str("\n[Text view truncated; use structuredContent.]\n");
     }
     text
+}
+
+#[cfg(test)]
+mod diagnostics_tests {
+    use super::*;
+
+    #[test]
+    fn target_session_id_is_read_only_from_the_agent_id_argument() {
+        assert_eq!(
+            target_session_id(Some(&json!({ "agentId": "session-2" }))).as_deref(),
+            Some("session-2")
+        );
+        assert_eq!(target_session_id(None), None);
+        assert_eq!(target_session_id(Some(&json!({}))), None);
+        assert_eq!(
+            target_session_id(Some(&json!({ "workspaceId": "workspace-1" }))),
+            None
+        );
+        assert_eq!(target_session_id(Some(&json!({ "agentId": 7 }))), None);
+    }
 }
