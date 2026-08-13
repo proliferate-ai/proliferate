@@ -47,6 +47,7 @@ pub(in crate::live::sessions::actor) async fn finalize_established_actor_exit(
     let now = chrono::Utc::now().to_rfc3339();
 
     tracing::info!(
+        target: "anyharness.session.exited",
         session_id = %session_id,
         disposition = ?disposition,
         busy = busy,

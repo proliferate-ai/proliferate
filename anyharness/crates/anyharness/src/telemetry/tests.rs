@@ -3,11 +3,13 @@ use std::{collections::BTreeMap, sync::Arc};
 use sentry::protocol::{Breadcrumb, Context as SentryContext, SpanId, TraceId, User, Value};
 
 use super::{
-    default_release, log_path_for_command, runtime_home_from_install, runtime_home_from_serve,
-    scrub, sentry_event_filter, sentry_event_filter_for_target, sentry_event_mapper,
-    sentry_scope_tags, sentry_user_from_id, stamped_git_sha, suppresses_legacy_file_sink,
-    BundledActivation, RUNTIME_INCIDENT_FINGERPRINT,
+    anyharness_target_mappings, default_release, log_path_for_command, runtime_home_from_install,
+    runtime_home_from_serve, scrub, sentry_event_filter, sentry_event_filter_for_target,
+    sentry_event_mapper, sentry_scope_tags, sentry_user_from_id, stamped_git_sha,
+    suppresses_legacy_file_sink, BundledActivation, RUNTIME_INCIDENT_FINGERPRINT,
 };
+use proliferate_diagnostics_client::ResolvedRecordName;
+use proliferate_diagnostics_protocol::v1::types::{DetailedKindV1, StandardStreamV1};
 use crate::{
     cli::Commands,
     commands::{install_agents::InstallAgentsArgs, serve::ServeArgs},
@@ -446,4 +448,49 @@ fn install_command_log_path_lands_under_runtime_home_logs() {
         path.to_string_lossy(),
         "/tmp/anyharness-install/logs/anyharness.log"
     );
+}
+
+#[test]
+fn anyharness_targets_resolve_to_record_names_by_table_then_pass_through() {
+    let mappings = anyharness_target_mappings();
+    let cases: [(&str, ResolvedRecordName<'_>); 7] = [
+        (
+            AGENT_STDERR_TRACING_TARGET,
+            ResolvedRecordName::Mapped {
+                name: "anyharness.agent.stderr",
+                kind: DetailedKindV1::Stdio,
+                stream: Some(StandardStreamV1::Stderr),
+            },
+        ),
+        (
+            RUNTIME_INCIDENT_TRACING_TARGET,
+            ResolvedRecordName::Mapped {
+                name: "anyharness.runtime.incident",
+                kind: DetailedKindV1::SpanEvent,
+                stream: None,
+            },
+        ),
+        (
+            "anyharness.turn.finished",
+            ResolvedRecordName::PassThrough("anyharness.turn.finished"),
+        ),
+        (
+            "anyharness.acp.send",
+            ResolvedRecordName::PassThrough("anyharness.acp.send"),
+        ),
+        (
+            "anyharness_lib::live::sessions::actor",
+            ResolvedRecordName::Anonymous,
+        ),
+        ("anyharness", ResolvedRecordName::Anonymous),
+        ("anyharness.", ResolvedRecordName::Anonymous),
+    ];
+
+    for (target, expected) in cases {
+        assert_eq!(
+            mappings.resolve(target),
+            expected,
+            "unexpected record identity for target {target}"
+        );
+    }
 }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use proliferate_diagnostics_client::{
     install_desktop_producer, BundledDesktopDiagnosticsBootstrap, DesktopDiagnosticsActivation,
-    DiagnosticsComponent, DiagnosticsProducerGuard,
+    DiagnosticsComponent, DiagnosticsProducerGuard, TargetMappingConfig,
 };
 use sentry::protocol::{Breadcrumb, Event, Frame, Log, LogEntry, Stacktrace, Value};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
@@ -18,6 +18,7 @@ const TARGET_SENTRY_TRACES_SAMPLE_RATE_ENV: &str = "PROLIFERATE_TARGET_SENTRY_TR
 /// The single env-like Sentry tag preserved as bounded deployment identity.
 /// Its allowed live value is `e2b`; every other env-like tag stays redacted.
 const RUNTIME_ENV_TAG: &str = "runtime_env";
+const WORKER_RECORD_NAME_PREFIX: &str = "desktop_worker.";
 
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
@@ -383,7 +384,14 @@ pub fn init(activation: DesktopDiagnosticsActivation) -> TelemetryGuards {
         }
     };
     let (diagnostics_layer, diagnostics) = match installation {
-        Some(installation) => (Some(installation.layer), Some(installation.guard)),
+        Some(installation) => (
+            Some(
+                installation
+                    .layer
+                    .with_target_mappings(worker_target_mappings()),
+            ),
+            Some(installation.guard),
+        ),
         None => (None, None),
     };
     let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
@@ -429,6 +437,13 @@ pub fn init(activation: DesktopDiagnosticsActivation) -> TelemetryGuards {
     }
 }
 
+/// Record naming for this component: no rewritten targets, so every
+/// `desktop_worker.` target simply names its own record and everything else
+/// stays anonymous.
+fn worker_target_mappings() -> TargetMappingConfig {
+    TargetMappingConfig::new(Vec::new()).with_passthrough_prefix(WORKER_RECORD_NAME_PREFIX)
+}
+
 fn install_local(
     activation: BundledDesktopDiagnosticsBootstrap,
 ) -> Option<proliferate_diagnostics_client::DiagnosticsInstallation> {
@@ -454,7 +469,40 @@ fn install_local(
 mod tests {
     use sentry::protocol::{Event, Exception, Frame, Stacktrace, Value};
 
-    use super::{default_release, scrub_event, sentry_user_from_id, stamped_git_sha};
+    use proliferate_diagnostics_client::ResolvedRecordName;
+
+    use super::{
+        default_release, scrub_event, sentry_user_from_id, stamped_git_sha, worker_target_mappings,
+    };
+
+    #[test]
+    fn worker_targets_resolve_to_record_names_by_pass_through() {
+        let mappings = worker_target_mappings();
+        let cases: [(&str, ResolvedRecordName<'_>); 5] = [
+            (
+                "desktop_worker.runtime.boot",
+                ResolvedRecordName::PassThrough("desktop_worker.runtime.boot"),
+            ),
+            (
+                "desktop_worker.anyharness_update.rollback",
+                ResolvedRecordName::PassThrough("desktop_worker.anyharness_update.rollback"),
+            ),
+            (
+                "proliferate_worker::runtime",
+                ResolvedRecordName::Anonymous,
+            ),
+            ("anyharness.turn.finished", ResolvedRecordName::Anonymous),
+            ("desktop_worker.", ResolvedRecordName::Anonymous),
+        ];
+
+        for (target, expected) in cases {
+            assert_eq!(
+                mappings.resolve(target),
+                expected,
+                "unexpected record identity for target {target}"
+            );
+        }
+    }
 
     #[test]
     fn default_release_is_canonical_for_this_component() {

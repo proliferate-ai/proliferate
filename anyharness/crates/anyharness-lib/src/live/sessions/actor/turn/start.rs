@@ -92,6 +92,14 @@ impl SessionActor {
                 content_parts,
                 payload.public_provenance(),
             );
+            tracing::info!(
+                target: "anyharness.turn.started",
+                session_id = %self.session_id,
+                prompt_id = ?prompt_id.as_deref(),
+                turn_id = %turn_id,
+                source = prompt_turn_source(payload, queue_seq),
+                "session.actor.prompt.turn_started"
+            );
             if let Err(error) = self.caps.attachments.mark_prompt_attachments_state(
                 &self.session_id,
                 &payload.attachment_ids(),
@@ -126,6 +134,18 @@ impl SessionActor {
             acp_blocks,
             turn_id,
         })
+    }
+}
+
+/// What put this turn on the wire. Recorded provenance wins because it is the
+/// only thing that distinguishes an engine wake (subagent completion, review
+/// feedback, automation) from an ordinary prompt; a plain prompt drained from
+/// the pending queue reads as `queued`, and everything else as `user`.
+fn prompt_turn_source(payload: &PromptPayload, queue_seq: Option<i64>) -> &'static str {
+    match payload.provenance.as_ref() {
+        Some(provenance) => provenance.kind_label(),
+        None if queue_seq.is_some() => "queued",
+        None => "user",
     }
 }
 

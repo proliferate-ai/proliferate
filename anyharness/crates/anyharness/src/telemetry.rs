@@ -26,6 +26,7 @@ use crate::{
 mod scrub;
 
 const ANYHARNESS_TELEMETRY_MODE: &str = "hosted_product";
+const ANYHARNESS_RECORD_NAME_PREFIX: &str = "anyharness.";
 const RUNTIME_ENV_TAG: &str = "runtime_env";
 const RUNTIME_INCIDENT_FINGERPRINT: &str = "anyharness:runtime_incident";
 
@@ -292,23 +293,14 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
     let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
 
     let (diagnostics_layer, diagnostics) = match installation {
-        Some(installation) => {
-            let mappings = TargetMappingConfig::new(vec![
-                TargetMapping::stdio(
-                    AGENT_STDERR_TRACING_TARGET,
-                    "anyharness.agent.stderr",
-                    StandardStreamV1::Stderr,
-                ),
-                TargetMapping::span_event(
-                    RUNTIME_INCIDENT_TRACING_TARGET,
-                    "anyharness.runtime.incident",
-                ),
-            ]);
-            (
-                Some(installation.layer.with_target_mappings(mappings)),
-                Some(installation.guard),
-            )
-        }
+        Some(installation) => (
+            Some(
+                installation
+                    .layer
+                    .with_target_mappings(anyharness_target_mappings()),
+            ),
+            Some(installation.guard),
+        ),
         None => (None, None),
     };
 
@@ -344,6 +336,24 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
         _file_log: file_sink.map(|sink| sink.guard),
         diagnostics,
     }
+}
+
+/// Record naming for this component: the two legacy targets keep their
+/// rewritten names and kinds, and every other `anyharness.` target names its
+/// own record, so adding a named event is only a `target:`.
+fn anyharness_target_mappings() -> TargetMappingConfig {
+    TargetMappingConfig::new(vec![
+        TargetMapping::stdio(
+            AGENT_STDERR_TRACING_TARGET,
+            "anyharness.agent.stderr",
+            StandardStreamV1::Stderr,
+        ),
+        TargetMapping::span_event(
+            RUNTIME_INCIDENT_TRACING_TARGET,
+            "anyharness.runtime.incident",
+        ),
+    ])
+    .with_passthrough_prefix(ANYHARNESS_RECORD_NAME_PREFIX)
 }
 
 fn install_local(

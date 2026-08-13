@@ -24,6 +24,11 @@ pub(in crate::live::sessions) async fn establish_connection(
 
     let transport = acp::ByteStreams::new(stdin.compat_write(), stdout.compat());
 
+    // Captured for the connection-ended record: the handlers below consume
+    // their own clones of the door, and the shutdown task outlives them.
+    let session_id = client.session_id.clone();
+    let live_session_handle = client.live_session_handle.clone();
+
     let client_for_notif = client.clone();
     let client_for_perm = client.clone();
     let client_for_ext = client.clone();
@@ -89,7 +94,13 @@ pub(in crate::live::sessions) async fn establish_connection(
 
     tokio::task::spawn_local(async move {
         if let Err(e) = connect_future.await {
-            tracing::warn!(error = %e, "ACP connection ended");
+            tracing::warn!(
+                target: "anyharness.agent.process_exited",
+                session_id = %session_id,
+                during_turn = live_session_handle.is_busy(),
+                error = %e,
+                "ACP connection ended"
+            );
         }
     });
 

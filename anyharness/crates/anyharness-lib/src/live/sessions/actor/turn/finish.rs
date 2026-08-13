@@ -75,10 +75,12 @@ impl SessionActor {
                     sink.debug_snapshot()
                 };
                 tracing::info!(
+                    target: "anyharness.turn.finished",
                     session_id = %self.session_id,
                     prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
                     turn_id = ?sink_snapshot_before_turn_end.current_turn_id,
                     stop_reason = ?resp.stop_reason,
+                    conn = "resolved",
                     prompt_elapsed_ms = prompt_diagnostics.prompt_started_at.elapsed().as_millis() as u64,
                     last_raw_kind = ?prompt_diagnostics.last_raw_kind,
                     last_raw_age_ms = age_ms(prompt_diagnostics.last_raw_at),
@@ -187,11 +189,30 @@ impl SessionActor {
                     let sink = self.event_sink.lock().await;
                     sink.debug_snapshot()
                 };
+                // Classify before logging: the turn-failure record is the one
+                // place the provider/network class is visible, and the sink
+                // path below consumes the classification by value.
+                let error_message = e.to_string();
+                let (error_details, error_code) =
+                    match classify_provider_rate_limit_error(&error_message) {
+                        Some(details) => {
+                            (Some(details), Some(PROVIDER_RATE_LIMIT_CODE.to_string()))
+                        }
+                        None => match classify_network_connection_error(&error_message) {
+                            Some(details) => {
+                                (Some(details), Some(NETWORK_CONNECTION_CODE.to_string()))
+                            }
+                            None => (None, None),
+                        },
+                    };
                 tracing::warn!(
+                    target: "anyharness.turn.failed",
                     session_id = %self.session_id,
                     prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
                     turn_id = ?sink_snapshot_on_error.current_turn_id,
-                    error = %e,
+                    error = %error_message,
+                    error_class = error_code.as_deref().unwrap_or("unclassified"),
+                    conn = "failed",
                     prompt_elapsed_ms = prompt_diagnostics.prompt_started_at.elapsed().as_millis() as u64,
                     last_raw_kind = ?prompt_diagnostics.last_raw_kind,
                     last_raw_age_ms = age_ms(prompt_diagnostics.last_raw_at),
@@ -206,19 +227,6 @@ impl SessionActor {
                     background_work_count = self.background_work_registry.tracker_count(),
                     "session.actor.prompt.conn_failed"
                 );
-                let error_message = e.to_string();
-                let (error_details, error_code) =
-                    match classify_provider_rate_limit_error(&error_message) {
-                        Some(details) => {
-                            (Some(details), Some(PROVIDER_RATE_LIMIT_CODE.to_string()))
-                        }
-                        None => match classify_network_connection_error(&error_message) {
-                            Some(details) => {
-                                (Some(details), Some(NETWORK_CONNECTION_CODE.to_string()))
-                            }
-                            None => (None, None),
-                        },
-                    };
                 let mut sink = self.event_sink.lock().await;
                 sink.error_with_details(error_message, error_code, error_details.clone());
                 let last_event_seq = sink.debug_snapshot().next_seq - 1;

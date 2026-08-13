@@ -28,7 +28,9 @@ pub use producer::status::{
     ProducerStatusSnapshot,
 };
 pub use producer::{DiagnosticsProducerGuard, DiagnosticsProducerHandle, DropClassification};
-pub use tracing_layer::{DiagnosticsTracingLayer, TargetMapping, TargetMappingConfig};
+pub use tracing_layer::{
+    DiagnosticsTracingLayer, ResolvedRecordName, TargetMapping, TargetMappingConfig,
+};
 
 /// Producer identity fixed by the binary installing this adapter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

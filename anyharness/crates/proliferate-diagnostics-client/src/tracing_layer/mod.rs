@@ -76,21 +76,72 @@ impl TargetMapping {
     }
 }
 
+/// How one tracing target resolves to a record name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResolvedRecordName<'a> {
+    /// A table entry names this record and carries its kind.
+    Mapped {
+        name: &'static str,
+        kind: DetailedKindV1,
+        stream: Option<StandardStreamV1>,
+    },
+    /// The target is under the pass-through prefix and names itself.
+    PassThrough(&'a str),
+    /// Neither: the component's anonymous record name.
+    Anonymous,
+}
+
 #[derive(Clone, Default)]
 pub struct TargetMappingConfig {
     mappings: Vec<TargetMapping>,
+    passthrough_prefix: Option<&'static str>,
 }
 
 impl TargetMappingConfig {
     pub fn new(mappings: Vec<TargetMapping>) -> Self {
-        Self { mappings }
+        Self {
+            mappings,
+            passthrough_prefix: None,
+        }
+    }
+
+    /// Lets any target under `prefix` name its own record, so a new named
+    /// event needs a `target:` and no table entry.
+    pub fn with_passthrough_prefix(mut self, prefix: &'static str) -> Self {
+        self.passthrough_prefix = Some(prefix);
+        self
+    }
+
+    /// Explicit table entries win; then the pass-through prefix; then the
+    /// anonymous name. A target the producer would reject as a record name
+    /// (charset or length) falls back to anonymous rather than being dropped
+    /// on the floor by record preparation.
+    pub fn resolve<'a>(&self, target: &'a str) -> ResolvedRecordName<'a> {
+        if let Some(mapping) = self
+            .mappings
+            .iter()
+            .find(|mapping| mapping.target == target)
+        {
+            return ResolvedRecordName::Mapped {
+                name: mapping.name,
+                kind: mapping.kind,
+                stream: mapping.stream,
+            };
+        }
+        let prefixed = self.passthrough_prefix.is_some_and(|prefix| {
+            target.len() > prefix.len() && target.starts_with(prefix)
+        });
+        if prefixed && crate::producer::record::valid_name(target) {
+            return ResolvedRecordName::PassThrough(target);
+        }
+        ResolvedRecordName::Anonymous
     }
 }
 
 #[derive(Clone)]
 pub struct DiagnosticsTracingLayer {
     handle: DiagnosticsProducerHandle,
-    mappings: Arc<[TargetMapping]>,
+    mappings: Arc<TargetMappingConfig>,
 }
 
 #[derive(Default)]
@@ -100,20 +151,20 @@ impl DiagnosticsTracingLayer {
     pub(crate) fn new(handle: DiagnosticsProducerHandle) -> Self {
         Self {
             handle,
-            mappings: Arc::from([]),
+            mappings: Arc::new(TargetMappingConfig::default()),
         }
     }
 
     pub fn with_target_mappings(mut self, config: TargetMappingConfig) -> Self {
-        self.mappings = Arc::from(config.mappings);
+        self.mappings = Arc::new(config);
         self
     }
 
-    fn mapping_for(&self, target: &str) -> Option<TargetMapping> {
-        self.mappings
-            .iter()
-            .copied()
-            .find(|mapping| mapping.target == target)
+    fn anonymous_name(&self) -> &'static str {
+        match self.handle.component() {
+            crate::DiagnosticsComponent::AnyHarness => "anyharness.tracing.event",
+            crate::DiagnosticsComponent::DesktopWorker => "desktop_worker.tracing.event",
+        }
     }
 }
 
@@ -192,16 +243,22 @@ where
         merged.extend(visitor.finish());
 
         let metadata = event.metadata();
-        let mapping = self.mapping_for(metadata.target());
-        let name = mapping.map_or_else(
-            || match self.handle.component() {
-                crate::DiagnosticsComponent::AnyHarness => "anyharness.tracing.event",
-                crate::DiagnosticsComponent::DesktopWorker => "desktop_worker.tracing.event",
-            },
-            |mapping| mapping.name,
-        );
-        let kind = mapping.map_or(DetailedKindV1::Log, |mapping| mapping.kind);
-        let stream = mapping.and_then(|mapping| mapping.stream);
+        let (name, kind, stream): (std::borrow::Cow<'static, str>, _, _) =
+            match self.mappings.resolve(metadata.target()) {
+                ResolvedRecordName::Mapped { name, kind, stream } => {
+                    (std::borrow::Cow::Borrowed(name), kind, stream)
+                }
+                ResolvedRecordName::PassThrough(target) => (
+                    std::borrow::Cow::Owned(target.to_owned()),
+                    DetailedKindV1::Log,
+                    None,
+                ),
+                ResolvedRecordName::Anonymous => (
+                    std::borrow::Cow::Borrowed(self.anonymous_name()),
+                    DetailedKindV1::Log,
+                    None,
+                ),
+            };
         let message = merged.take_message();
         let correlation = merged.take_correlation();
         let error_classification = merged.take_error_classification();
@@ -222,7 +279,7 @@ where
         }
         let arguments = bound_tracing_arguments(arguments);
         let input = DetailedDiagnosticInput {
-            name: name.into(),
+            name,
             severity: map_level(metadata.level()),
             kind,
             privacy: if message.is_some() {
@@ -297,7 +354,72 @@ fn suppressed() -> bool {
 
 #[cfg(test)]
 mod tests {
+    use proliferate_diagnostics_protocol::v1::limits::MAX_NAME_BYTES;
+
     use super::*;
+
+    fn passthrough_config() -> TargetMappingConfig {
+        TargetMappingConfig::new(vec![
+            TargetMapping::stdio(
+                "anyharness.agent_stderr",
+                "anyharness.agent.stderr",
+                StandardStreamV1::Stderr,
+            ),
+            TargetMapping::span_event("anyharness.runtime_incident", "anyharness.runtime.incident"),
+        ])
+        .with_passthrough_prefix("anyharness.")
+    }
+
+    #[test]
+    fn explicit_mappings_keep_their_name_kind_and_stream_under_pass_through() {
+        let config = passthrough_config();
+
+        assert_eq!(
+            config.resolve("anyharness.agent_stderr"),
+            ResolvedRecordName::Mapped {
+                name: "anyharness.agent.stderr",
+                kind: DetailedKindV1::Stdio,
+                stream: Some(StandardStreamV1::Stderr),
+            }
+        );
+        assert_eq!(
+            config.resolve("anyharness.runtime_incident"),
+            ResolvedRecordName::Mapped {
+                name: "anyharness.runtime.incident",
+                kind: DetailedKindV1::SpanEvent,
+                stream: None,
+            }
+        );
+    }
+
+    #[test]
+    fn pass_through_refuses_targets_the_producer_would_reject_as_a_name() {
+        let config = passthrough_config();
+        let overlong = format!("anyharness.{}", "x".repeat(MAX_NAME_BYTES));
+
+        for target in [
+            "anyharness.",
+            "anyharness.Turn.Finished",
+            "anyharness.turn finished",
+            overlong.as_str(),
+        ] {
+            assert_eq!(
+                config.resolve(target),
+                ResolvedRecordName::Anonymous,
+                "target must not name a record: {target}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_config_without_a_prefix_never_passes_a_target_through() {
+        let config = TargetMappingConfig::new(Vec::new());
+
+        assert_eq!(
+            config.resolve("anyharness.turn.finished"),
+            ResolvedRecordName::Anonymous
+        );
+    }
 
     #[test]
     fn tracing_arguments_are_bounded_with_structural_loss_evidence() {
