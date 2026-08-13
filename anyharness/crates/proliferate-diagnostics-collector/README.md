@@ -2,9 +2,10 @@
 
 `proliferate-diagnostics-collector` is the standalone, memory-only consumer of
 the diagnostics v1.1 contract. It owns local admission, accepted ordering,
-bounded retention, query, tail, export, health, and the four collector lifecycle
-operations. It does not own Desktop supervision, producer routing, support
-archives, OTLP, or product instrumentation.
+bounded retention, query, tail, export, health, the four collector lifecycle
+operations, and — in internal builds only — the provider-neutral OTLP export
+adapter described below. It does not own Desktop supervision, producer routing,
+support archives, or product instrumentation.
 
 ## Process interface
 
@@ -94,7 +95,57 @@ oldest first.
 
 No record, token, descriptor, queue, or replay state is written to disk. A new
 process begins with a new boot ID and only its own boot lifecycle evidence.
-Standalone exporter and fallback health remain neutral.
+Standalone fallback health remains neutral, and so does exporter health in
+every build of this package that is not compiled for internal dogfooding.
+
+## Internal OTLP export
+
+The `internal-dogfood-export` Cargo feature is off by default and is the whole
+gate. A customer release builds this package with default features, so the
+binary contains no destination read, queue, task, HTTP client, or credential
+handling; the release job proves that by refusing to ship a bundle whose
+binaries contain the endpoint variable name. Compiling the feature is necessary
+but not sufficient: an internal binary still exports nothing until a
+destination arrives out of band.
+
+The destination is two environment values, both read once at startup:
+
+```text
+PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT=<https URL, or an http loopback URL>
+PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS=<name=value,name=value>
+```
+
+`/v1/logs` is appended unless the endpoint already ends with it. A plaintext
+endpoint is accepted only for a loopback host, so a configured credential never
+crosses a network unencrypted. Provider identity and credentials live entirely
+in these values; nothing in this crate names a vendor. The parsed destination
+has no `Clone`, no serialization, and a `Debug` that redacts header values.
+
+Accepted records are offered to a bounded queue as they are accepted and
+converted to OTLP/HTTP JSON logs: one resource per producer boot
+(`service.name`, `service.version`, `service.instance.id`,
+`deployment.environment.name`), one scope per admitted schema version, a
+detailed message or the stable record name as the body, and every remaining
+contract field as a `proliferate.*` attribute. Typed arguments become
+`proliferate.argument.<name>`. A record classified `secret` is refused rather
+than encoded, which is a second fence behind ingest admission rather than a new
+privacy path.
+
+The export bounds are internal-only and independent of the runtime caps above:
+a 512-record queue, a 128-record or 512 KiB batch, a 250 ms batch linger, a
+10-second request timeout, one attempt plus two retries at 250 ms and 1 s, a
+30-second cooldown after five consecutive failed batches, and a 1-second final
+flush at shutdown. There is no disk outbox, replay queue, or exactly-once
+protocol. An overflowing queue drops the offered record and counts it; the
+offer itself is a non-blocking send on the accepting path, so a slow or failing
+destination cannot delay, fail, or alter an accepted record.
+
+`/v1/health` reports the result as `exporter.state` (`disabled`, `ready`, or
+`degraded`), `exporter.dropped_records`, and
+`exporter.last_error_classification`. The classification is drawn from a fixed
+table — `invalid_configuration`, `encode`, `connect`, `timeout`,
+`http_client_error`, `http_server_error`, `request` — and is never built from a
+provider message, URL, or response body.
 
 ## Validation
 
@@ -111,3 +162,16 @@ proliferate-diagnostics-rss-profile \
 
 The runner writes the target, input and binary hashes, exact counters, response
 latency, 250 ms RSS samples, peak RSS, security checks, and pass/fail result.
+
+The export adapter is proved separately, and only under its feature:
+
+```text
+cargo test -p proliferate-diagnostics-collector --features internal-dogfood-export
+```
+
+`tests/otlp_dogfood.rs` runs the real collector binary as a child against a
+strict local OTLP receiver that rejects any body deviating from the OTLP JSON
+encoding. It establishes wire conformance, header delivery, exporter health,
+and that a failing, missing, or misconfigured destination leaves ingestion and
+retention untouched. It does not establish that a specific vendor accepts the
+payload; no live hosted export is performed.

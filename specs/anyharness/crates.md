@@ -150,9 +150,14 @@ This crate owns the standalone, memory-only Desktop diagnostics collector:
 - bounded ingest, lifecycle validation, query, tail, export, and health state
 - inherited capability and control file-descriptor process seams
 - deterministic resource profiling for the standalone process
+- the internal/dogfood OTLP export adapter behind the non-default
+  `internal-dogfood-export` feature
 
 It consumes `proliferate-diagnostics-protocol` as its only wire-contract
 authority. It must not own Desktop/Tauri wiring, producer queues, AnyHarness
-runtime behavior, Worker behavior, server/cloud integration, durable storage,
-or upload/export destinations. Its process and transport surfaces are documented
-in `proliferate-diagnostics-collector/README.md`.
+runtime behavior, Worker behavior, server/cloud integration, or durable storage.
+The export adapter it does own is provider-neutral OTLP over HTTP; the
+destination URL and its request headers arrive as environment values, so no
+provider identity or credential is part of any contract this crate holds. Its
+process, transport, and export surfaces are documented in
+`proliferate-diagnostics-collector/README.md`.
