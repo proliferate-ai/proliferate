@@ -73,7 +73,12 @@ class SettingsContentErrorBoundary extends React.Component<
     }
 
     return (
-      <section className="space-y-4 py-8">
+      // w-full max-w-[50rem]: SettingsScreen's page-width contract used to
+      // live on a wrapper around this boundary; now that panes carry it
+      // themselves via SettingsPageBody, the error fallback — the one thing
+      // this boundary renders that isn't a pane — carries it directly so it
+      // doesn't regress to full-bleed width.
+      <section className="w-full max-w-[50rem] space-y-4 py-8">
         <div className="space-y-1">
           <h2 className="text-heading font-medium">{SETTINGS_COPY.errorTitle}</h2>
           <p className="text-body text-muted-foreground">
