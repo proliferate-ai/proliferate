@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { PopoverButton } from "#product/primitives/PopoverButton";
 import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 
@@ -69,5 +70,37 @@ describe("RowActionIconButton reveal transition", () => {
     const className = screen.getByRole("button", { name: "Pinned" }).className;
     expect(className).not.toContain("opacity-0");
     expect(className).toMatch(/transition-\[[^\]]*opacity[^\]]*\]/);
+  });
+});
+
+/**
+ * PRO-133: the adapter must forward Radix trigger attributes to the base
+ * `<button>` — without them its `data-[state=open]:*` classes can never
+ * match, so a section trigger lost its highlight the moment the cursor left,
+ * even with its menu still open. The open state mirrors the hover ink.
+ */
+describe("SidebarActionButton as a popover trigger", () => {
+  it("carries data-state to the DOM and keeps the hover ink while open", () => {
+    render(
+      <PopoverButton
+        trigger={(
+          <SidebarActionButton title="Repository options" variant="section">
+            <span>…</span>
+          </SidebarActionButton>
+        )}
+      >
+        {() => <div>menu</div>}
+      </PopoverButton>,
+    );
+
+    const button = screen.getByRole("button", { name: "Repository options" });
+    expect(button.getAttribute("data-state")).toBe("closed");
+
+    fireEvent.click(button);
+
+    expect(button.getAttribute("data-state")).toBe("open");
+    expect(button.className).toContain("data-[state=open]:text-sidebar-foreground");
+    expect(button.className).toContain("data-[state=open]:opacity-100");
+    expect(button.className).toContain("data-[state=open]:bg-transparent");
   });
 });
