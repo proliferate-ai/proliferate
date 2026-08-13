@@ -34,6 +34,16 @@ afterEach(() => {
 });
 
 describe("FullTranscriptRowList", () => {
+  it("keeps the complete transcript row stack visibly selectable", () => {
+    const { container } = render(<FullTranscriptRowList {...makeProps(vi.fn(), 50)} />);
+    const selectionRoot = container.querySelector<HTMLElement>(
+      '[data-chat-transcript-root="true"]',
+    );
+
+    expect(selectionRoot?.classList.contains("select-text")).toBe(true);
+    expect(selectionRoot?.classList.contains("select-none")).toBe(false);
+  });
+
   it("continues from a newer older-history cursor while pinned at the top", async () => {
     const onLoadOlderHistory = vi.fn();
     const props = makeProps(onLoadOlderHistory, 50);

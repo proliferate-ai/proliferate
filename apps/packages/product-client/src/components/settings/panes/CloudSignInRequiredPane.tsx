@@ -1,6 +1,7 @@
 import { Button } from "#product/primitives/Button";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { AUTH_ACCOUNT_LABELS } from "#product/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 import { useGitHubSignIn } from "#product/hooks/auth/workflows/use-github-sign-in";
@@ -14,8 +15,9 @@ export function CloudSignInRequiredPane() {
   } = useGitHubSignIn();
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Cloud"
         description={CAPABILITY_COPY.cloudSignInDescription}
       />
@@ -45,6 +47,6 @@ export function CloudSignInRequiredPane() {
           </>
         }
       />
-    </section>
+    </SettingsPageBody>
   );
 }

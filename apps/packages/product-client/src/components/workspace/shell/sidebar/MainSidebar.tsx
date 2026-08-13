@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { useRemoveCloudRepoEnvironment, useRepositories } from "@proliferate/cloud-sdk-react";
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
-import { ProliferateIcon } from "#product/primitives/icons/proliferate-icons";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
 import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
@@ -338,10 +337,7 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
           </DebugProfiler>
         )}>
         <ProductSidebarBody>
-          <ProductSidebarBrandRow
-            icon={<ProliferateIcon className="icon-paired shrink-0" />}
-            label="Proliferate"
-          />
+          <ProductSidebarBrandRow label="Proliferate" />
           <DebugProfiler id="workspace-sidebar-primary-nav">
             <SidebarPrimaryNavigation
               homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}

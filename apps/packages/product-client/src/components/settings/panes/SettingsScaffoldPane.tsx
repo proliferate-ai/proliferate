@@ -5,7 +5,8 @@ import {
 } from "#product/copy/settings/settings-scaffold-copy";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 
 interface SettingsScaffoldPaneProps {
   pageId: SettingsScaffoldPageId;
@@ -18,8 +19,8 @@ export function SettingsScaffoldPane({ pageId }: SettingsScaffoldPaneProps) {
   }
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader title={copy.title} description={copy.description} />
+    <SettingsPageBody>
+      <PageHeader variant="flat" title={copy.title} description={copy.description} />
 
       <SettingsSection>
         {copy.rows.map((row) => (
@@ -30,6 +31,6 @@ export function SettingsScaffoldPane({ pageId }: SettingsScaffoldPaneProps) {
           />
         ))}
       </SettingsSection>
-    </section>
+    </SettingsPageBody>
   );
 }

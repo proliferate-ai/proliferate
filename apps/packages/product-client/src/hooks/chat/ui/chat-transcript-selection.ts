@@ -22,6 +22,7 @@ import {
   getSelectedAssistantResponse,
   isSelectedResponseInViewport,
 } from "#product/hooks/chat/ui/selected-response-selection";
+import { selectElementContents } from "#product/lib/infra/dom/dom-select-all";
 
 interface UseChatTranscriptSelectionArgs {
   rootRef: RefObject<HTMLElement | null>;
@@ -86,9 +87,12 @@ export function useChatTranscriptSelection({
       getActiveElement: () => document.activeElement,
       getSelection: () => document.getSelection(),
       getTargetFactsForEvent: getTargetFacts,
+      isSelectAllCommandOwner,
       focusRoot: (root) => root.focus({ preventScroll: true }),
-      setFullSelectionMarker: setCollapsedRootMarker,
-      isFullSelectionMarker: isCollapsedRootMarkerSelection,
+      setFullSelectionMarker: (root) => {
+        selectElementContents(root);
+      },
+      isFullSelectionMarker: isExactRootSelection,
       isExactRootSelection,
       nodeInsideRoot,
       getSelectionDirection,
@@ -140,10 +144,58 @@ function getTargetFacts(
     selectableInteractiveText: !!element.closest('a, [role="link"]'),
     textEntry: isTextEntryElement(element),
     terminalZone: !!element.closest('[data-focus-zone="terminal"]'),
+    browserZone: !!element.closest('[data-focus-zone="browser"]'),
     ignoredChrome: !!element.closest("[data-chat-transcript-ignore]"),
     nativeInteractive: isNativeInteractiveElement(element),
     ariaInteractive: isAriaInteractiveElement(element),
   };
+}
+
+function isSelectAllCommandOwner(
+  target: EventTarget | null,
+  root: HTMLElement | null,
+): boolean {
+  const element = targetToElement(target);
+  if (!root || !element || !isRenderedTranscriptRoot(root)) {
+    return false;
+  }
+
+  const chatRoot = root.closest<HTMLElement>('[data-focus-zone="chat"]');
+  if (!chatRoot) {
+    return false;
+  }
+
+  if (element === document.body || element === document.documentElement) {
+    const renderedRoots = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-chat-transcript-root="true"]'),
+    ).filter(isRenderedTranscriptRoot);
+    return renderedRoots.length === 1 && renderedRoots[0] === root;
+  }
+
+  return chatRoot.contains(element);
+}
+
+function isRenderedTranscriptRoot(root: HTMLElement): boolean {
+  if (!root.isConnected) {
+    return false;
+  }
+
+  let current: HTMLElement | null = root;
+  while (current) {
+    if (
+      current.hidden
+      || current.hasAttribute("inert")
+      || current.getAttribute("aria-hidden") === "true"
+    ) {
+      return false;
+    }
+    const style = window.getComputedStyle(current);
+    if (style.display === "none" || style.visibility === "hidden") {
+      return false;
+    }
+    current = current.parentElement;
+  }
+  return true;
 }
 
 function targetToElement(target: EventTarget | null): Element | null {
@@ -184,29 +236,6 @@ function isAriaInteractiveElement(element: Element): boolean {
     || role === "menuitem"
     || role === "option"
     || role === "tab";
-}
-
-function setCollapsedRootMarker(root: HTMLElement): void {
-  const selection = document.getSelection();
-  if (!selection) {
-    return;
-  }
-  selection.removeAllRanges();
-  const range = document.createRange();
-  range.selectNodeContents(root);
-  range.collapse(false);
-  selection.addRange(range);
-}
-
-function isCollapsedRootMarkerSelection(
-  selection: Selection,
-  root: HTMLElement,
-): boolean {
-  if (selection.rangeCount !== 1 || !selection.isCollapsed) {
-    return false;
-  }
-  const range = selection.getRangeAt(0);
-  return range.startContainer === root && range.endContainer === root;
 }
 
 function isExactRootSelection(

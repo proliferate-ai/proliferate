@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { useState } from "react";
 import { Button } from "#product/primitives/Button";
 import { PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
 
 afterEach(() => {
   cleanup();
@@ -32,7 +33,32 @@ function ControlledPopoverHarness() {
   );
 }
 
+function SearchPopoverHarness() {
+  const [search, setSearch] = useState("");
+
+  return (
+    <PopoverButton trigger={<Button variant="ghost">Choose project</Button>}>
+      {() => (
+        <PopoverSearchField
+          value={search}
+          onChange={setSearch}
+          placeholder="Search projects"
+        />
+      )}
+    </PopoverButton>
+  );
+}
+
 describe("PopoverButton", () => {
+  it("focuses a picker search field when the popover opens", async () => {
+    render(<SearchPopoverHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose project" }));
+    const search = screen.getByPlaceholderText("Search projects");
+
+    await waitFor(() => expect(document.activeElement).toBe(search));
+  });
+
   it("honors an external close after the trigger opened the popover", async () => {
     render(<ControlledPopoverHarness />);
 

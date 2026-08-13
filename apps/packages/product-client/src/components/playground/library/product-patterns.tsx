@@ -4,7 +4,6 @@ import {
 } from "#product/components/patterns/BillingGateState";
 import { billingGateView } from "#product/lib/domain/billing/billing-gate-presentation";
 import { PrStatusDot } from "#product/components/patterns/PrStatusBadge";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import type { LibraryEntry, LibraryTier } from "./types";
@@ -55,9 +54,6 @@ export const PRODUCT_PATTERNS_ENTRIES: LibraryEntry[] = [
   { name: "BillingGateState", subpath: "#product/components/patterns/BillingGateState", render: BillingGateStateDemo },
   { name: "PrStatusBadge", subpath: "#product/components/patterns/PrStatusBadge", render: () => (
     <PrStatusDot status={{ kind: "open", number: 42 }} />
-  ) },
-  { name: "SettingsPageHeader", subpath: "#product/components/patterns/SettingsPageHeader", render: () => (
-    <SettingsPageHeader title="Settings" description="Page description" />
   ) },
   { name: "secrets/SecretManagementPanel", subpath: "#product/components/patterns/secrets/SecretManagementPanel", render: SecretManagementPanelDemo },
 ];

@@ -14,7 +14,10 @@ import { renderAttachedSlot } from "#product/components/playground/composer-slot
 import { renderOutboundSlot } from "#product/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
 import { PlaygroundLoadingStates } from "#product/components/playground/loading/PlaygroundLoadingStates";
 import { renderComposerSurfaceForScenario } from "#product/components/playground/PlaygroundComposerSurfaces";
-import { PLAYGROUND_SLASH_COMMANDS } from "#product/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
+import {
+  PLAYGROUND_FILE_MENTIONS,
+  PLAYGROUND_SLASH_COMMANDS,
+} from "#product/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
 import {
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
 } from "#product/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
@@ -286,10 +289,12 @@ describe("playground scenarios", () => {
     expect(Object.keys(SCENARIOS)).toContain("file-mention-empty");
 
     const resultsText = visibleText(renderComposerSurfaceMarkup("file-mention-search"));
+    expect(PLAYGROUND_FILE_MENTIONS.length).toBeGreaterThan(10);
     expect(resultsText).toContain("tokens.ts");
     // The directory is the row's disambiguator and must be visible next to the
     // basename, not hidden behind a tooltip.
     expect(resultsText).toContain("apps/packages/design/src");
+    expect(resultsText).toContain("composer.md");
 
     expect(renderComposerSurfaceMarkup("file-mention-empty"))
       .toContain("No matching files.");

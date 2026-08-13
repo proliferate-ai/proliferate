@@ -37,7 +37,7 @@ In scope:
 - Reusable UI primitives every feature spec consumes:
   `CredentialPicker`, `AgentRunConfigSelector`, `RuntimeReadinessPanel`,
   `PublicCapabilityList`, `WhereUsedDrawer`. Existing primitives
-  (`SettingsPageHeader`, `SettingsSection`, `SettingsRow`) are
+  (`PageHeader` with `variant="flat"`, `SettingsSection`, `SettingsRow`) are
   preserved.
 - Shared product vocabulary: workspace type, origin, exposure, access,
   sandbox type. Every spec that mentions these uses the same names.
@@ -89,9 +89,9 @@ Three rules every settings page follows:
    No raw client construction inside settings panes.
    (frontend/guides/access.md)
 
-3. Page chrome uses SettingsPageHeader + SettingsSection + SettingsRow
-   (from #product/components/patterns). New pages do not invent
-   new wrappers.
+3. Page chrome uses `PageHeader` (`variant="flat"`) + SettingsSection +
+   SettingsRow (PageHeader from #product/primitives/patterns, the rest from
+   the settings kit). New pages do not invent new wrappers.
 
 4. The Agents `Local` surface remains useful without a Cloud session. Its
    model list comes directly from the local AnyHarness launch catalog; Cloud
@@ -281,12 +281,12 @@ subfolders:
 > [`AGENT_AUTH.md`](../../../../FEATURE_DOCS/AGENT_AUTH.md).
 
 **Existing shared primitives**: page chrome lives in the settings kit at
-`apps/packages/product-client/src/primitives/patterns/settings/`, except
-`SettingsPageHeader.tsx`, which is still in
-`apps/packages/product-client/src/components/patterns/`:
+`apps/packages/product-client/src/primitives/patterns/settings/`, plus
+`PageHeader.tsx` (`variant="flat"`) in
+`apps/packages/product-client/src/primitives/patterns/`:
 
 ```text
-SettingsPageHeader.tsx    title + description + action slot
+PageHeader.tsx            title + description + action slot (variant="flat")
 SettingsSection.tsx       muted label (or emphasized title) over a wash card of rows
 SettingsRow.tsx           in-card label + control row, no self-divider
 SettingsScopeTabs.tsx     horizontal underline scope switcher
@@ -844,7 +844,7 @@ in copy/settings/vocabulary-copy.ts keys.
 Existing (kept; no changes):
 
 ```text
-SettingsPageHeader          apps/packages/product-client/src/components/patterns/SettingsPageHeader.tsx
+PageHeader                  apps/packages/product-client/src/primitives/patterns/PageHeader.tsx
 SettingsSection             apps/packages/product-client/src/primitives/patterns/settings/SettingsSection.tsx
 SettingsRow                 apps/packages/product-client/src/primitives/patterns/settings/SettingsRow.tsx
 SettingsScopeTabs / SettingsEmptyState

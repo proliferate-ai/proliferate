@@ -54,6 +54,16 @@ export const PLAYGROUND_FILE_MENTIONS: FileMentionResult[] = [
   { path: "apps/packages/design/src/tokens.ts", name: "tokens.ts", parent: "apps/packages/design/src" },
   { path: "specs/README.md", name: "README.md", parent: "specs" },
   { path: "Cargo.toml", name: "Cargo.toml", parent: "" },
+  { path: "AGENTS.md", name: "AGENTS.md", parent: "" },
+  { path: "apps/desktop/src/App.tsx", name: "App.tsx", parent: "apps/desktop/src" },
+  { path: "apps/web/src/main.tsx", name: "main.tsx", parent: "apps/web/src" },
+  { path: "server/proliferate/api.py", name: "api.py", parent: "server/proliferate" },
+  { path: "server/proliferate/constants.py", name: "constants.py", parent: "server/proliferate" },
+  { path: "anyharness/crates/anyharness-lib/src/api/http/files.rs", name: "files.rs", parent: "anyharness/crates/anyharness-lib/src/api/http" },
+  { path: "anyharness/sdk/src/client/files.ts", name: "files.ts", parent: "anyharness/sdk/src/client" },
+  { path: "scripts/check_docs.py", name: "check_docs.py", parent: "scripts" },
+  { path: "specs/codebase/systems/product/chat/composer.md", name: "composer.md", parent: "specs/codebase/systems/product/chat" },
+  { path: "Makefile", name: "Makefile", parent: "" },
 ];
 
 export const PLAYGROUND_LONG_COMPOSER_DRAFT = [

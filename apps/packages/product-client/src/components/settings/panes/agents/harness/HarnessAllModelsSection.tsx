@@ -17,7 +17,7 @@ import { IconButton } from "#product/primitives/IconButton";
 import { Input } from "#product/primitives/Input";
 import { ModelTable, type ModelTableRow } from "#product/components/settings/panes/agents/harness/ModelTable";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
-import { HarnessSection } from "#product/components/settings/panes/agents/harness/HarnessSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import {
@@ -134,11 +134,11 @@ export function HarnessAllModelsSection({
 
   if (!isLocal && !cloudActive) {
     return (
-      <HarnessSection title={HARNESS_PANE_COPY.tabAllModels}>
+      <SettingsSection title={HARNESS_PANE_COPY.tabAllModels} titleWeight="emphasized" surface="plain">
         <p className="text-ui-sm text-muted-foreground">
           {HARNESS_PANE_COPY.signInDescription(displayName)}
         </p>
-      </HarnessSection>
+      </SettingsSection>
     );
   }
 
@@ -244,8 +244,10 @@ export function HarnessAllModelsSection({
           : freshnessLine;
 
   return (
-    <HarnessSection
+    <SettingsSection
       title={HARNESS_PANE_COPY.tabAllModels}
+      titleWeight="emphasized"
+      surface="plain"
       action={(
         <>
           {canManuallyRefresh ? (
@@ -300,7 +302,10 @@ export function HarnessAllModelsSection({
         {rows.length > 0 ? (
           // Canonical picker-search treatment (PopoverSearchField recipe): muted
           // magnifier + borderless transparent input — no boxed field — with a
-          // hairline divider between the row and the table below.
+          // hairline divider between the row and the table below. py-[7px]
+          // matches PopoverSearchField's own filter-row height exactly, so the
+          // two recipes stay pixel-identical rather than drifting to the
+          // nearest space-scale step.
           <div className="flex items-center gap-2 border-b border-border px-2.5 py-[7px]">
             <Search className="icon-paired shrink-0 text-muted-foreground/75" />
             <Input
@@ -346,6 +351,6 @@ export function HarnessAllModelsSection({
         )}
       </div>
       </AnimatedCollapsibleContent>
-    </HarnessSection>
+    </SettingsSection>
   );
 }

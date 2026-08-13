@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { motion } from "@proliferate/design/motion";
 import { AnimatedCollapsibleContent } from "#product/primitives/AnimatedCollapsibleContent";
 import { Button } from "#product/primitives/Button";
-import { Trash, RotateCcw } from "#product/primitives/icons/core";
+import { Trash } from "#product/primitives/icons/core";
 import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import type {
   HeaderChatMenuEntry,
@@ -157,7 +157,6 @@ export function ClosedChatTabsMenu({
                   {formatRelativeTime(row.closedAt)}
                 </span>
               )}
-              <RotateCcw className="icon-compact shrink-0 text-muted-foreground" aria-hidden="true" />
             </div>
           </AnimatedCollapsibleContent>
         ))}
