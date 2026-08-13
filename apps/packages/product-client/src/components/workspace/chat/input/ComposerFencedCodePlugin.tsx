@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import {
   $addUpdateTag,
   $createParagraphNode,
+  $isElementNode,
   $isLineBreakNode,
   $isParagraphNode,
   HISTORY_PUSH_TAG,
@@ -18,47 +19,83 @@ import {
   selectComposerContinuationAfter,
 } from "#product/components/workspace/chat/input/ComposerEditorDocument";
 
+const CODE_NODE_KLASS = COMPOSER_CODE_TRANSFORMER.dependencies[0]!;
+
 /** Promotes a typed Markdown fence only after its matching close fence exists. */
 export function ComposerFencedCodePlugin() {
   const [editor] = useLexicalComposerContext();
 
-  useEffect(() => editor.registerNodeTransform(TextNode, (textNode) => {
-    const paragraph = textNode.getParent();
-    if (!$isParagraphNode(paragraph) || paragraph.getParent()?.getType() !== "root") {
-      return;
-    }
-    const markdown = paragraph.getTextContent();
-    const fence = findCompleteComposerCodeFence(markdown);
-    if (!fence) return;
+  useEffect(() => {
+    const unregisterTextTransform = editor.registerNodeTransform(TextNode, (textNode) => {
+      // The composer has no way to author the inline-code text format (typed
+      // backticks stay literal), so any occurrence is rich-paste debris. Left
+      // alone it renders unstyled yet serializes backtick-wrapped, turning
+      // subsequent messages into code (PRO-159) — keep the characters, drop
+      // the format.
+      if (textNode.hasFormat("code")) {
+        textNode.toggleFormat("code");
+        return;
+      }
+      const paragraph = textNode.getParent();
+      if (!$isParagraphNode(paragraph) || paragraph.getParent()?.getType() !== "root") {
+        return;
+      }
+      const markdown = paragraph.getTextContent();
+      const fence = findCompleteComposerCodeFence(markdown);
+      if (!fence) return;
 
-    const importedNodes = $generateNodesFromMarkdownString(
-      fence.markdown,
-      [COMPOSER_CODE_TRANSFORMER],
-    );
-    const codeNode = importedNodes.length === 1 ? importedNodes[0] : null;
-    if (!codeNode || codeNode.getType() !== "code") return;
+      const importedNodes = $generateNodesFromMarkdownString(
+        fence.markdown,
+        [COMPOSER_CODE_TRANSFORMER],
+      );
+      const codeNode = importedNodes.length === 1 ? importedNodes[0] : null;
+      if (!codeNode || codeNode.getType() !== "code") return;
 
-    const children = paragraph.getChildren();
-    const fenceStart = childBoundaryAtOffset(children, fence.start);
-    const fenceEnd = childBoundaryAtOffset(children, fence.end);
-    if (fenceStart === null || fenceEnd === null) return;
+      const children = paragraph.getChildren();
+      const fenceStart = childBoundaryAtOffset(children, fence.start);
+      const fenceEnd = childBoundaryAtOffset(children, fence.end);
+      if (fenceStart === null || fenceEnd === null) return;
 
-    let replaceStart = fenceStart;
-    let replaceEnd = fenceEnd;
-    if ($isLineBreakNode(children[replaceStart - 1])) replaceStart -= 1;
-    if ($isLineBreakNode(children[replaceEnd])) replaceEnd += 1;
+      let replaceStart = fenceStart;
+      let replaceEnd = fenceEnd;
+      if ($isLineBreakNode(children[replaceStart - 1])) replaceStart -= 1;
+      if ($isLineBreakNode(children[replaceEnd])) replaceEnd += 1;
 
-    const suffixChildren = children.slice(replaceEnd);
-    const suffix = suffixChildren.length > 0 ? $createParagraphNode() : null;
-    suffix?.append(...suffixChildren);
-    for (const child of children.slice(replaceStart, replaceEnd)) child.remove();
+      const suffixChildren = children.slice(replaceEnd);
+      const suffix = suffixChildren.length > 0 ? $createParagraphNode() : null;
+      suffix?.append(...suffixChildren);
+      for (const child of children.slice(replaceStart, replaceEnd)) child.remove();
 
-    if (paragraph.isEmpty()) paragraph.replace(codeNode);
-    else paragraph.insertAfter(codeNode);
-    if (suffix) codeNode.insertAfter(suffix);
-    selectComposerContinuationAfter([codeNode]);
-    $addUpdateTag(HISTORY_PUSH_TAG);
-  }), [editor]);
+      if (paragraph.isEmpty()) paragraph.replace(codeNode);
+      else paragraph.insertAfter(codeNode);
+      if (suffix) codeNode.insertAfter(suffix);
+      selectComposerContinuationAfter([codeNode]);
+      $addUpdateTag(HISTORY_PUSH_TAG);
+    });
+
+    const unregisterCodeTransform = editor.registerNodeTransform(CODE_NODE_KLASS, (codeNode) => {
+      if (!$isElementNode(codeNode)) return;
+      // Lexical's HTML import converts a pasted <pre><code> pair into a code
+      // block nested inside another one; dissolve the inner block into its
+      // parent so the paste is one editable block.
+      if (codeNode.getParent()?.getType() === "code") {
+        for (const child of codeNode.getChildren()) codeNode.insertBefore(child);
+        codeNode.remove();
+        return;
+      }
+      // A code block has no closing fence to type past, so a document that
+      // ends with one traps the caret. Guarantee the continuation paragraph
+      // the typed-fence path already creates.
+      if (codeNode.getParent()?.getType() === "root" && codeNode.getNextSibling() === null) {
+        codeNode.insertAfter($createParagraphNode());
+      }
+    });
+
+    return () => {
+      unregisterTextTransform();
+      unregisterCodeTransform();
+    };
+  }, [editor]);
 
   return null;
 }

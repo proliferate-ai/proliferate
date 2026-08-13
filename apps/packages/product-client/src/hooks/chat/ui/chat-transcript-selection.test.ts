@@ -75,6 +75,7 @@ describe("attachChatTranscriptSelectionListeners", () => {
       pointerdown: vi.fn(),
       pointerup: vi.fn(),
       keydown: vi.fn(),
+      selectall: vi.fn(),
       copy: vi.fn(),
       selectionchange: vi.fn(),
       scroll: vi.fn(),
@@ -85,6 +86,7 @@ describe("attachChatTranscriptSelectionListeners", () => {
       { type: "pointerup", options: { capture: true } },
       { type: "pointercancel", options: { capture: true } },
       { type: "keydown", options: { capture: true } },
+      { type: "proliferate:select-all", options: undefined },
       { type: "copy", options: { capture: true } },
       { type: "scroll", options: { capture: true } },
     ]);
@@ -99,6 +101,7 @@ describe("attachChatTranscriptSelectionListeners", () => {
       { type: "pointerup", options: { capture: true } },
       { type: "pointercancel", options: { capture: true } },
       { type: "keydown", options: { capture: true } },
+      { type: "proliferate:select-all", options: undefined },
       { type: "copy", options: { capture: true } },
       { type: "scroll", options: { capture: true } },
     ]);
@@ -125,6 +128,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       getSelection: () => selection,
       getTargetFactsForEvent: (target) =>
         target === transcriptTarget ? facts({ insideRoot: true }) : facts(),
+      isSelectAllCommandOwner: () => false,
       focusRoot: (targetRoot) => targetRoot.focus(),
       setFullSelectionMarker: () => {
         markerSet = true;
@@ -179,6 +183,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
         if (target === textEntryTarget) return facts({ insideRoot: true, textEntry: true });
         return facts();
       },
+      isSelectAllCommandOwner: () => false,
       focusRoot: (targetRoot) => targetRoot.focus(),
       setFullSelectionMarker: () => {
         markerSet = true;
@@ -232,6 +237,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       getSelection: () => selection,
       getTargetFactsForEvent: (target) =>
         target === transcriptTarget ? facts({ insideRoot: true }) : facts(),
+      isSelectAllCommandOwner: () => false,
       focusRoot: vi.fn(),
       setFullSelectionMarker: vi.fn(),
       isFullSelectionMarker: () => false,
@@ -295,6 +301,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
         }
         return facts();
       },
+      isSelectAllCommandOwner: () => false,
       focusRoot: vi.fn(),
       setFullSelectionMarker: vi.fn(),
       isFullSelectionMarker: () => false,
@@ -351,6 +358,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       getActiveElement: () => root,
       getSelection: () => ({ rangeCount: 1 } as Selection),
       getTargetFactsForEvent: () => facts({ insideRoot: true }),
+      isSelectAllCommandOwner: () => false,
       focusRoot: vi.fn(),
       setFullSelectionMarker: vi.fn(),
       isFullSelectionMarker: () => false,
@@ -415,6 +423,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       getActiveElement: () => root,
       getSelection: () => selection,
       getTargetFactsForEvent: () => facts({ insideRoot: true }),
+      isSelectAllCommandOwner: () => false,
       focusRoot: vi.fn(),
       setFullSelectionMarker: vi.fn(),
       isFullSelectionMarker: () => false,
