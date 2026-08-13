@@ -26,5 +26,7 @@ export function promptFallbackTitle(text: string | null | undefined): string | n
   if (!collapsed) {
     return null;
   }
-  return collapsed.slice(0, PROMPT_TITLE_MAX_CHARS).trimEnd();
+  // Truncate by code points to match the runtime's chars()-based cap, so the
+  // optimistic and persisted titles agree and no surrogate pair is split.
+  return Array.from(collapsed).slice(0, PROMPT_TITLE_MAX_CHARS).join("").trimEnd();
 }
