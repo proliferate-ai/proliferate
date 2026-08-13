@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
 use agent_client_protocol as acp;
+use futures::{AsyncBufReadExt, AsyncWriteExt, StreamExt};
 use tokio::sync::oneshot;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
+use crate::live::sessions::driver::frame_tee::{log_frame, FrameDirection};
 use crate::live::sessions::driver::inbound::InboundDoor;
 
 /// Establishes the ACP client connection over the agent's stdio: registers the
@@ -22,7 +24,30 @@ pub(in crate::live::sessions) async fn establish_connection(
     // shuts down, causing the connect_with closure to exit.
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
-    let transport = acp::ByteStreams::new(stdin.compat_write(), stdout.compat());
+    // `Lines` is the same transport `ByteStreams` builds internally (newline
+    // framing over the child's stdio); taking it directly is what makes the
+    // per-frame tee possible without re-serializing anything.
+    let recv_session_id = client.session_id.clone();
+    let incoming = Box::pin(
+        futures::io::BufReader::new(stdout.compat())
+            .lines()
+            .inspect(move |line| {
+                if let Ok(line) = line {
+                    log_frame(&recv_session_id, FrameDirection::Recv, line);
+                }
+            }),
+    );
+    let outgoing = futures::sink::unfold(
+        (Box::pin(stdin.compat_write()), client.session_id.clone()),
+        async move |(mut writer, session_id), line: String| {
+            log_frame(&session_id, FrameDirection::Send, &line);
+            let mut bytes = line.into_bytes();
+            bytes.push(b'\n');
+            writer.write_all(&bytes).await?;
+            Ok::<_, std::io::Error>((writer, session_id))
+        },
+    );
+    let transport = acp::Lines::new(outgoing, incoming);
 
     // Captured for the connection-ended record: the handlers below consume
     // their own clones of the door, and the shutdown task outlives them.
