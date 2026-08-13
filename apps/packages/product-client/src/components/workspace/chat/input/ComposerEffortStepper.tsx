@@ -27,7 +27,7 @@ const LADDER_LIT_STAGGER_MS = 30;
  * The composer's reasoning-effort control: a six-bar ladder that steps to the
  * next level on click and wraps at the top. No popover and no menu — the glyph
  * is both the readout and the affordance. Replaces ComposerReasoningEffortBars
- * in the composer row (LevelBarsButton survives for non-composer surfaces).
+ * in the composer row.
  */
 export function ComposerEffortStepper({ control }: ComposerEffortStepperProps) {
   const currentIndex = control.options.findIndex((option) => option.selected);
@@ -45,6 +45,11 @@ export function ComposerEffortStepper({ control }: ComposerEffortStepperProps) {
     currentLevel,
     currentOption?.description ?? null,
   ) + ". Click to step.";
+
+  // A one-rung ladder has nowhere to step: stepping it would re-select the
+  // level that is already selected. Same guard shape as ComposerModeBadge's
+  // `nextValue` — the control renders, reads, and is disabled.
+  const canStep = control.options.length >= 2;
 
   const handleStep = () => {
     const nextIndex = (effectiveIndex + 1) % control.options.length;
@@ -68,37 +73,39 @@ export function ComposerEffortStepper({ control }: ComposerEffortStepperProps) {
         // Compact tier: the level word yields, the bars keep reading the level.
         labelWrapperClassName={COMPOSER_COMPACT_HIDDEN_CLASSNAME}
         className="gap-1"
-        disabled={!control.settable}
+        disabled={!control.settable || !canStep}
         title={tooltip}
         aria-label={ariaLabel}
         data-reasoning-effort-trigger=""
         data-reasoning-effort-selected={currentOption?.value ?? ""}
-        onClick={handleStep}
+        onClick={canStep ? handleStep : undefined}
       />
     </Tooltip>
   );
 }
 
-// The ruled 22×15 glyph, expressed in ems against the chip's own 13px text so
-// the ladder tracks the Appearance scale like every other composer glyph
-// (LevelBarsButton's convention; no semantic --icon-* tier is 22×15).
-const LADDER_WIDTH_EM = formatEm(22 / 13);
-const LADDER_HEIGHT_EM = formatEm(15 / 13);
-
-function formatEm(value: number): string {
-  return `${Number(value.toFixed(6))}em`;
-}
+// Width derived from the glyph's own viewBox, never authored: the height comes
+// from a semantic tier, so the only thing left to say is the ladder's shape.
+const LADDER_WIDTH_FROM_HEIGHT = "calc(var(--icon-paired) * 22 / 15)";
 
 function EffortLadderGlyph({ litCount }: { litCount: number }) {
   return (
     <svg
       viewBox="0 0 22 15"
       fill="none"
-      className="block shrink-0"
-      style={{ width: LADDER_WIDTH_EM, height: LADDER_HEIGHT_EM }}
+      // Same semantic sizing idiom as the pressure ring: HEIGHT is the paired
+      // icon tier pinned to the composer's own control text (--text-ui), and
+      // WIDTH is derived from the 22:15 viewBox rather than authored. At the
+      // default scale --text-ui is 13px and --icon-paired is 1.230769em, so the
+      // glyph renders 16px tall and 16 × 22/15 = 23.5px wide — the ruled 22×15
+      // to within a pixel, at a single uniform 16/15 scale that keeps the bar
+      // geometry exact. Every Appearance step moves both dimensions together
+      // through the tier, so no 13px divisor survives in this file.
+      className="block shrink-0 icon-paired [font-size:var(--text-ui)]"
+      style={{ width: LADDER_WIDTH_FROM_HEIGHT }}
       aria-hidden="true"
-      data-effort-ladder
-      data-effort-ladder-lit={litCount}
+      data-reasoning-effort-ladder
+      data-reasoning-effort-ladder-lit={litCount}
     >
       {Array.from({ length: LADDER_BAR_COUNT }, (_, i) => (
         <rect

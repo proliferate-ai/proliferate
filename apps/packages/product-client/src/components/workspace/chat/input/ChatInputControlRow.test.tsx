@@ -154,7 +154,7 @@ describe("ChatInputControlRow", () => {
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
     expect(reasoning.getAttribute("title")?.startsWith("Reasoning: Medium")).toBe(true);
     expect(reasoning.className).toContain("h-6");
-    const ladder = reasoning.querySelector("[data-effort-ladder]");
+    const ladder = reasoning.querySelector("[data-reasoning-effort-ladder]");
     expect(ladder?.querySelectorAll("rect").length).toBe(6);
     expect(screen.getByText("Medium").className).not.toContain("sr-only");
   });
@@ -176,8 +176,10 @@ describe("ChatInputControlRow", () => {
     renderControlRow();
     const mode = screen.getByRole("button", { name: "Mode: Default" });
     expect(mode.querySelector("svg")).not.toBeNull();
-    // The mode name survives only as the badge's screen-reader label.
-    expect(screen.getByText("Default").className).toContain("sr-only");
+    // The badge paints no word at all; the mode name survives only as the
+    // aria-label the getByRole query above matched.
+    expect(mode.textContent).toBe("");
+    expect(mode.getAttribute("aria-label")).toContain("Default");
   });
 
   it("disables the mode badge for a non-settable working mode", () => {
@@ -244,7 +246,7 @@ describe("ChatInputControlRow", () => {
     expect(label.closest('[class*="@max-[32rem]:hidden"]')).not.toBeNull();
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
     expect(
-      reasoning.querySelector("[data-effort-ladder]")
+      reasoning.querySelector("[data-reasoning-effort-ladder]")
         ?.closest('[class*="@max-[32rem]:hidden"]'),
     ).toBeNull();
   });

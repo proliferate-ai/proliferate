@@ -193,8 +193,9 @@ for (const [name, expected] of Object.entries({
   "--color-primary": "#1a1c1f",
   "--color-primary-foreground": "#ffffff",
   // Off-white, not the #ffffff plane: borderless composer chrome means the
-  // fill alone separates the composer from the page (see tokens.ts).
-  "--color-composer-background": "#f4f4f4",
+  // fill alone separates the composer from the page (see tokens.ts). It reuses
+  // the rail plane above rather than introducing a fourth opaque light plane.
+  "--color-composer-background": "#f6f6f6",
   "--color-composer-backdrop-filter": "none",
   "--color-composer-control-foreground": "var(--color-muted-foreground)",
   "--color-composer-control-muted-foreground": "var(--color-faint)",
@@ -214,7 +215,6 @@ for (const [name, expected] of Object.entries({
   "--shadow-popover": "0 0 0 0.5px rgba(26, 28, 31, 0.05), 0 4px 12px rgba(26, 28, 31, 0.1)",
   "--shadow-modal": "0 16px 40px rgba(26, 28, 31, 0.18)",
   "--shadow-user-message": "0 1px 2px rgba(26, 28, 31, 0.05)",
-  "--color-composer-shadow": "0 0 0 0.5px rgba(26, 28, 31, 0.06), 0 1px 3px rgba(26, 28, 31, 0.08), 0 4px 12px rgba(26, 28, 31, 0.06)",
 })) {
   assert(themeTokens[name]?.light === expected, `${name} drifted from the light palette planes`);
 }

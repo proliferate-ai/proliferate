@@ -51,7 +51,7 @@ The tier arrays are **composed**, not literal: entries are spread in from `libra
 ### Groups (kit-aware, ruled)
 Group per entry, rule order:
 1. subpath matches `#product/primitives/patterns/<kit>/…` → `<kit>`, asserted against the closed kit set `{composer, toast, sidebar, tabs, panel, settings}` (an unknown pattern subdirectory is a hard failure, not a new group)
-2. else by name: starts with `Composer` or is `LevelBarsButton` → `composer`; is `ToastHost`/`Sonner` or starts with `Toast` → `toast`; starts with `Sidebar` → `sidebar`; starts with `Settings` → `settings`
+2. else by name: starts with `Composer` → `composer`; is `ToastHost`/`Sonner` or starts with `Toast` → `toast`; starts with `Sidebar` → `sidebar`; starts with `Settings` → `settings`
 3. else tier id: primitives → `primitives`, patterns → `patterns`, icons → `icons`, product-patterns → `product-patterns`
 
 Display name (card dir, file names, group matching) is `name.split("/").pop()`; the raw name stays the `__demos` key. Kit membership follows the file, so `secrets/SecretManagementPanel` (under `components/patterns/`, not `primitives/patterns/`) stays in `product-patterns` and lands at `components/product-patterns/SecretManagementPanel/`.

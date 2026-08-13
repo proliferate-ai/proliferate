@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ComposerContextRing } from "#product/components/workspace/chat/input/ComposerContextRing";
+import { ComposerPressureRing } from "#product/components/workspace/chat/input/ComposerPressureRing";
 import type {
   RuntimePressureControlState,
   RuntimePressureTargetState,
@@ -49,22 +49,22 @@ afterEach(() => {
   mocks.state = null;
 });
 
-describe("ComposerContextRing", () => {
+describe("ComposerPressureRing", () => {
   it("renders nothing when the pressure facade has no target", () => {
     mocks.state = createState(null, false);
-    const { container } = render(<ComposerContextRing />);
+    const { container } = render(<ComposerPressureRing />);
     expect(container.innerHTML).toBe("");
   });
 
   it("renders nothing when the target reports no ring progress", () => {
     mocks.state = createState(createIndicator({ ringProgressPercent: null }));
-    const { container } = render(<ComposerContextRing />);
+    const { container } = render(<ComposerPressureRing />);
     expect(container.innerHTML).toBe("");
   });
 
   it("draws the arc from the facade's ring progress and stays neutral below the threshold", () => {
     mocks.state = createState(createIndicator());
-    render(<ComposerContextRing />);
+    render(<ComposerPressureRing />);
 
     const trigger = screen.getByRole("button", { name: /4\/10 worktrees/ });
     const arc = trigger.querySelectorAll("circle")[1]!;
@@ -81,7 +81,7 @@ describe("ComposerContextRing", () => {
       ringProgressPercent: 85.7,
       pressureLabel: "60% pressure",
     }));
-    render(<ComposerContextRing />);
+    render(<ComposerPressureRing />);
 
     const trigger = screen.getByRole("button", { name: /60% pressure/ });
     const arc = trigger.querySelectorAll("circle")[1]!;
@@ -92,7 +92,7 @@ describe("ComposerContextRing", () => {
 
   it("opens a read-only details popover with the facade's own copy", () => {
     mocks.state = createState(createIndicator());
-    render(<ComposerContextRing />);
+    render(<ComposerPressureRing />);
 
     fireEvent.click(screen.getByRole("button", { name: /4\/10 worktrees/ }));
 

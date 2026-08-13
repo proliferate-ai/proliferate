@@ -65,19 +65,25 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     // squeezed inside it. Single-glyph icons are narrower than the floor, so
     // they still render as the same square they always did.
     const compact = size === "compact";
+    // 9px inset is the ruled 24px-chip metric from the composer handoff
+    // (COMPONENT-LEDGER "compact control"); deliberately off the 4px scale — a
+    // scale key would change the ruled chip width.
+    const compactLabeledClassName =
+      "h-6 min-w-0 max-w-full !justify-start px-[9px] py-0 text-left text-ui font-control";
     const sizeClassName = iconOnly
       ? compact
         ? "h-6 min-w-6 shrink-0 !justify-center px-1"
         : "h-7 min-w-7 shrink-0 !justify-center px-1"
       : compact
-        ? "h-6 min-w-0 max-w-full !justify-start px-[9px] py-0 text-left text-ui font-medium"
+        ? compactLabeledClassName
         : "h-7 min-w-0 max-w-full !justify-start px-1.5 py-0 text-left text-ui";
     const buttonClassName = `${sizeClassName} ${baseClassName} ${className}`;
-    const iconOnlyLabel = typeof label === "string"
-      ? label
-      : typeof props["aria-label"] === "string"
-        ? props["aria-label"]
-        : "Composer control";
+    // An explicit aria-label already IS the accessible name, so the sr-only
+    // span would only duplicate it. It is rendered solely as the fallback that
+    // gives an icon-only control a name when the caller supplied none.
+    const hasAriaLabel = typeof props["aria-label"] === "string"
+      && props["aria-label"].trim().length > 0;
+    const iconOnlyLabel = typeof label === "string" ? label : "Composer control";
 
     return (
       <Button
@@ -93,7 +99,7 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
             items-center actually center them. */}
         {icon && <span className={`flex shrink-0 items-center ${iconWrapperClassName}`}>{icon}</span>}
         {iconOnly ? (
-          <span className="sr-only">{iconOnlyLabel}</span>
+          hasAriaLabel ? null : <span className="sr-only">{iconOnlyLabel}</span>
         ) : (
           <span className={`flex min-w-0 items-center gap-1 ${labelWrapperClassName}`}>
             <span

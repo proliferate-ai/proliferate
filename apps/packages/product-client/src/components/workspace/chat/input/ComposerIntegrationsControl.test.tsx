@@ -96,8 +96,31 @@ describe("ComposerIntegrationsControl", () => {
     render(<ComposerIntegrationsControl />);
 
     const trigger = screen.getByRole("button", { name: /needs re-authentication/i });
-    expect(trigger.className).toContain("text-foreground");
+    // The atom's own `active` vocabulary, not a text-color override reaching
+    // past it.
+    expect(trigger.className).toContain("text-composer-control-active-foreground");
     expect(trigger.innerHTML).not.toContain("warning");
+  });
+
+  it("paints no warning token anywhere in the control or its popover", () => {
+    mocks.state = {
+      mode: "urgent",
+      connectedCount: 2,
+      providers: [
+        healthyProvider({ health: "needs_reauth", needsReauth: true }),
+        healthyProvider({ definitionId: "def-2", namespace: "notion", displayName: "Notion" }),
+      ],
+      reauthLabel: "Linear needs re-authentication",
+    };
+    render(<ComposerIntegrationsControl />);
+    fireEvent.click(screen.getByRole("button", { name: /needs re-authentication/i }));
+
+    // The composer's --color-warning* ban covers the popover it owns, so the
+    // whole rendered tree — trigger chip and provider rows alike — must not
+    // carry a single `warning` class. The provider row's dot is the one that
+    // used to.
+    expect(screen.getByText("Linear")).toBeTruthy();
+    expect(document.body.innerHTML).not.toContain("warning");
   });
 
   it("shows the count reauth label when several providers need reauth", () => {

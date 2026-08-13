@@ -38,6 +38,9 @@ export function ComposerIntegrationsControl() {
   }
 
   const triggerAriaLabel = `${reauthLabel}. Open connected integrations.`;
+  // Same helper the popover rows call, so trigger and rows cannot drift: on the
+  // composer surface `needs_reauth` resolves to the neutral foreground dot.
+  const triggerDot = composerIntegrationHealthDot("needs_reauth", { surface: "composer" });
 
   return (
     <PopoverButton
@@ -50,18 +53,20 @@ export function ComposerIntegrationsControl() {
           size="compact"
           label={reauthLabel}
           // The urgent label stays visible (and shrinkable) at every width —
-          // a warning reduced to a dot is no warning.
-          className="text-foreground"
+          // a warning reduced to a dot is no warning. `active` is the atom's own
+          // way to say "this control reads at full ink", rather than a
+          // text-color override reaching past its vocabulary.
+          active
           aria-label={triggerAriaLabel}
           icon={(
             // Neutral emphasis, not a hue: the yellow --color-warning dot this
             // replaced is banned in the composer, and the composer's only
-            // colored signal is the context ring's destructive arc. OPEN TOKEN
+            // colored signal is the pressure ring's destructive arc. OPEN TOKEN
             // DECISION (handoff): whether re-auth eventually earns a
             // destructive tone or stays foreground-neutral is unresolved.
             <span
               aria-hidden="true"
-              className="block icon-status rounded-full bg-foreground"
+              className={`block icon-status rounded-full ${triggerDot.className}`}
             />
           )}
         />
@@ -127,7 +132,7 @@ function ProviderRow({
   provider: ComposerIntegrationProvider;
   onReconnect: () => void;
 }) {
-  const dot = composerIntegrationHealthDot(provider.health);
+  const dot = composerIntegrationHealthDot(provider.health, { surface: "composer" });
 
   return (
     <StatusRow
@@ -141,8 +146,10 @@ function ProviderRow({
               variant="unstyled"
               size="unstyled"
               onClick={onReconnect}
-              // Neutral, not warning: no --color-warning* survives anywhere in
-              // the composer (same open token decision as the trigger dot).
+              // Neutral, not warning: no --color-warning* token is painted
+              // anywhere in the composer, its popover included — the health dot
+              // beside this button takes the composer surface variant for the
+              // same reason.
               className="shrink-0 rounded-sm px-1 text-ui text-muted-foreground hover:text-foreground"
             >
               Reconnect

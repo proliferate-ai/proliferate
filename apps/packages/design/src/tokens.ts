@@ -82,11 +82,6 @@ export const themeTokens = {
     light: motion.cssMs(motion.activity.streamRevealFadeMs),
     provenance: "[SHIPPED:motion/authority]",
   },
-  "--activity-level-bar-step": {
-    dark: motion.cssMs(motion.activity.levelBarStepMs),
-    light: motion.cssMs(motion.activity.levelBarStepMs),
-    provenance: "[RETUNE:motion/level-bar-cadence]",
-  },
   "--animate-popover-in": {
     dark: "popover-in var(--duration-enter) var(--ease-out-quint)",
     light: "popover-in var(--duration-enter) var(--ease-out-quint)",
@@ -191,10 +186,13 @@ export const themeTokens = {
     dark: "#2d2d2d",
     // Light was pure white when the composer still drew a 0.5px stroke +
     // elevation; borderless chrome (composer-input cleanup) means the fill IS
-    // the surface, so white-on-white would make the composer invisible. #f4f4f4
-    // is the light analogue of dark's own step off the page (#181818 → #2d2d2d).
-    light: "#f4f4f4",
-    provenance: "[COMPOSER-CLEANUP:fill-defined-surface]",
+    // the surface, so white-on-white would make the composer invisible. It
+    // reuses the sanctioned rail plane #f6f6f6 (--color-surface-under /
+    // --color-sidebar) rather than adding a fourth opaque light plane — light
+    // has exactly three, and the rail is already the step off the page that
+    // dark spells #181818 → #2d2d2d.
+    light: "#f6f6f6",
+    provenance: "[RETUNE:surface/composer-fill]",
   },
   "--color-composer-control-active-foreground": {
     dark: "var(--color-foreground)",
@@ -220,11 +218,6 @@ export const themeTokens = {
     dark: "var(--color-background)",
     light: "var(--color-primary-foreground)",
     provenance: "[SHIPPED]",
-  },
-  "--color-composer-shadow": {
-    dark: "var(--shadow-subtle)",
-    light: "0 0 0 0.5px rgba(26, 28, 31, 0.06), 0 1px 3px rgba(26, 28, 31, 0.08), 0 4px 12px rgba(26, 28, 31, 0.06)",
-    provenance: "[RETUNE:light/ink-tinted-elevation]",
   },
   "--color-compute-target-amber": {
     dark: "#b59a3a",
@@ -835,8 +828,7 @@ export const themeTokens = {
    * already separates the bubble and a border would be surplus chrome. In light
    * the card is #ffffff on a #ffffff pane, so the fill separates nothing and the
    * edge is the only thing carrying the shape. Same component, opposite needs —
-   * so the difference lives in a token rather than a `dark:` variant, matching
-   * `--color-composer-shadow` right above.
+   * so the difference lives in a token rather than a `dark:` variant.
    */
   "--color-user-message-border": {
     dark: "transparent",
@@ -1021,11 +1013,6 @@ export const themeTokens = {
     light: motion.cssMs(motion.duration.panelMs),
     provenance: "[RETUNE:motion/roles]",
   },
-  "--ease-emphasized": {
-    dark: motion.ease.emphasized,
-    light: motion.ease.emphasized,
-    provenance: "[COMPOSER-CLEANUP:mode-badge-drop]",
-  },
   "--ease-linear": {
     dark: motion.ease.linear,
     light: motion.ease.linear,
@@ -1177,7 +1164,7 @@ export const themeTokens = {
   "--radius-composer": {
     dark: "1.75rem",
     light: "1.75rem",
-    provenance: "[RETUNE:radii/soft-scale]",
+    provenance: "[RETUNE:radii/composer-soft]",
   },
   "--radius-full": {
     dark: "9999px",

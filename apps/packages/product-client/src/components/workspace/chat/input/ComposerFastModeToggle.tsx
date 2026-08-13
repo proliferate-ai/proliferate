@@ -64,5 +64,5 @@ export function ComposerFastModeToggle({ control }: ComposerFastModeToggleProps)
     );
   }
 
-  return <Tooltip content={tooltip}>{toggle}</Tooltip>;
+  return <Tooltip content={tooltip} keepOpenOnPress>{toggle}</Tooltip>;
 }

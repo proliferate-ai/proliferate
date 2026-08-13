@@ -1,3 +1,4 @@
+import { isComposerRingDestructive } from "#product/hooks/workspaces/facade/runtime-pressure-threshold";
 import { useRuntimePressureControlState } from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
@@ -5,15 +6,6 @@ import { ComposerControlButton } from "#product/primitives/patterns/composer/Com
 // r=7 on a 16px viewBox: 2πr = 43.98. Authored as the literal the arc's
 // dash math needs rather than recomputed per render.
 const RING_CIRCUMFERENCE = 43.98;
-/**
- * Where the ring stops being neutral. Expressed against the target's own
- * limit (not a flat 85% of the axis) so a cloud target whose ideal max is 70%
- * escalates at 59.5% actual — the same "85% of the way to the ceiling" the
- * design ruled. The ONLY colored signal in the composer: there is no warning
- * step, because a yellow ring in the control row is exactly the ambient alarm
- * this redesign removed.
- */
-const DESTRUCTIVE_FRACTION_OF_LIMIT = 0.85;
 
 /**
  * The composer's runtime-pressure ring. Bound to the runtime-pressure facade —
@@ -21,7 +13,7 @@ const DESTRUCTIVE_FRACTION_OF_LIMIT = 0.85;
  * the facade actually measures (worktree count locally, CPU/RAM/disk on cloud)
  * in the facade's own words rather than inventing a token budget.
  */
-export function ComposerContextRing() {
+export function ComposerPressureRing() {
   const pressure = useRuntimePressureControlState();
   const indicator = pressure.indicator;
 
@@ -30,8 +22,10 @@ export function ComposerContextRing() {
   }
 
   const usedFraction = indicator.ringProgressPercent / 100;
-  const isOverThreshold = indicator.pressurePercent !== null
-    && indicator.pressurePercent >= DESTRUCTIVE_FRACTION_OF_LIMIT * indicator.pressureLimitPercent;
+  // The arc is the ONLY colored signal in the composer; where it turns is
+  // pressure→tone policy, so it lives in runtime-pressure-threshold.ts with the
+  // rest of that policy rather than here.
+  const isOverThreshold = isComposerRingDestructive(indicator.ringProgressPercent);
   const percentLabel = `${Math.round(indicator.ringProgressPercent)}%`;
   const tooltip = `${indicator.pressureLabel}. Click for details.`;
 
@@ -48,9 +42,9 @@ export function ComposerContextRing() {
           data-runtime-pressure-over-threshold={isOverThreshold ? "" : undefined}
           label="Runtime pressure"
           // `title`, not the Tooltip primitive: Tooltip wraps its child in a
-          // span that swallows the ref/onClick PopoverButton merges onto its
-          // trigger, so every popover trigger in the composer carries its
-          // hover copy natively (see ComposerIntegrationsControl).
+          // span, and that span swallows the ref and onClick PopoverButton
+          // merges onto its trigger — so a popover trigger has to carry its
+          // hover copy natively.
           aria-label={tooltip}
           title={tooltip}
           icon={<PressureRing usedFraction={usedFraction} isOverThreshold={isOverThreshold} />}
@@ -65,7 +59,10 @@ export function ComposerContextRing() {
             </span>
             <span className="shrink-0 text-ui text-muted-foreground">{percentLabel}</span>
           </div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-hover">
+          {/* bg-muted, not bg-hover: this track is a static low fill, and the
+              hover/active tokens are state vocabulary that means "the pointer
+              is doing something here". */}
+          <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
             <div
               className={`h-full rounded-full ${
                 isOverThreshold ? "bg-destructive" : "bg-muted-foreground"

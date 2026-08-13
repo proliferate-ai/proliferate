@@ -35,8 +35,8 @@ describe("ComposerEffortStepper", () => {
 
     const ladder = screen
       .getByRole("button", { name: "Reasoning: Medium" })
-      .querySelector("[data-effort-ladder]");
-    expect(ladder?.getAttribute("data-effort-ladder-lit")).toBe("2");
+      .querySelector("[data-reasoning-effort-ladder]");
+    expect(ladder?.getAttribute("data-reasoning-effort-ladder-lit")).toBe("2");
     expect(ladder?.querySelectorAll("rect").length).toBe(6);
   });
 
@@ -58,6 +58,20 @@ describe("ComposerEffortStepper", () => {
 
   it("disables the stepper when the level is not settable", () => {
     const control = createEffortControl("medium", { settable: false });
+    render(<ComposerEffortStepper control={control} />);
+
+    const trigger = screen.getByRole("button", { name: "Reasoning: Medium" });
+    expect(trigger).toHaveProperty("disabled", true);
+    fireEvent.click(trigger);
+    expect(control.onSelect).not.toHaveBeenCalled();
+  });
+
+  it("disables the stepper when the ladder has only one rung", () => {
+    // A one-option ladder has nowhere to step: stepping would re-select the
+    // level already selected, so the control still reads but cannot be pressed.
+    const control = createEffortControl("medium", {
+      options: [{ value: "medium", label: "Medium", selected: true }],
+    });
     render(<ComposerEffortStepper control={control} />);
 
     const trigger = screen.getByRole("button", { name: "Reasoning: Medium" });

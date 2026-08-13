@@ -4,7 +4,7 @@ import { ComposerEffortStepper } from "./ComposerEffortStepper";
 import { ComposerFastModeToggle } from "./ComposerFastModeToggle";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
-import { ComposerContextRing } from "./ComposerContextRing";
+import { ComposerPressureRing } from "./ComposerPressureRing";
 import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
 import { ComposerModeBadge } from "./ComposerModeBadge";
 import {
@@ -187,7 +187,7 @@ export function ComposerTrailingControls({
   return (
     <>
       {/* 7. Runtime-pressure ring — self-gating on the pressure facade. */}
-      <ComposerContextRing />
+      <ComposerPressureRing />
 
       {/* 8. Plus button — direct file attach */}
       {!isEditingQueuedPrompt && (

@@ -44,13 +44,6 @@ export const motion = {
     outCubic: "cubic-bezier(0.22, 0.61, 0.36, 1)",
     spring: "cubic-bezier(0.16, 1, 0.3, 1)",
     standard: "cubic-bezier(0.4, 0, 0.2, 1)",
-    /**
-     * Emphasized decelerate: leaves at full speed and lands hard on the end
-     * value with no settle. For a glyph that is *replaced* rather than moved —
-     * the arrival, not the travel, is the message. Distinct from `spring`
-     * (which overshoots) and `standard` (which eases in as well as out).
-     */
-    emphasized: "cubic-bezier(0.2, 0, 0, 1)",
     linear: "linear",
   },
   /**
@@ -61,16 +54,6 @@ export const motion = {
     thinkingCycleMs: 1800,
     streamRevealFadeMs: 320,
     streamRevealHandoffDelayMs: 160,
-    /**
-     * One bar's grow/shrink when the reasoning-effort control steps. Not the
-     * `hover` role it used to borrow: at 120ms the climb was over before the
-     * eye caught it, and the ask is explicitly to watch a bar travel from the
-     * bottom to its full height. A single-level step -- the common case -- is
-     * therefore exactly this long; multi-level steps add the per-bar stagger on
-     * top. Paired with `ease.outCubic`, which spends this budget on a quick
-     * departure that then decelerates into the top.
-     */
-    levelBarStepMs: 500,
     /**
      * Typewriter reveal of a tab label the first time a session is titled.
      * A cadence, not an interaction: it is per-character and must survive the

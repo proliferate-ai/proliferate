@@ -418,8 +418,9 @@ function rgbToHex(channels: readonly [number, number, number]): string {
 }
 const COMPOSER_DARK_HEX = rgbToHex([0x2d, 0x2d, 0x2d]);
 // Off-white, not the page's #ffffff: with the borderless composer chrome the
-// fill alone separates the surface from the page in light mode.
-const COMPOSER_LIGHT_HEX = rgbToHex([0xf4, 0xf4, 0xf4]);
+// fill alone separates the surface from the page in light mode. It is the
+// sanctioned rail plane, not a fourth opaque light plane.
+const COMPOSER_LIGHT_HEX = rgbToHex([0xf6, 0xf6, 0xf6]);
 
 describe("chat retune tokens", () => {
   it("makes the composer surface fully opaque in both modes", () => {

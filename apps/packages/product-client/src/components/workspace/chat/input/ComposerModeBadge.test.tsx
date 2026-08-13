@@ -37,8 +37,12 @@ describe("ComposerModeBadge", () => {
       name: "Permissions: Plan — Plan without execution.",
     });
     expect(badge.querySelector("svg")).not.toBeNull();
-    // Icon-only at every width: the mode name exists only for screen readers.
-    expect(screen.getByText("Plan").className).toContain("sr-only");
+    // Icon-only at every width: the badge paints no word at all, and the mode
+    // name reaches a screen reader through the aria-label the getByRole query
+    // above already matched — not through a duplicate sr-only span.
+    expect(badge.textContent).toBe("");
+    expect(badge.getAttribute("aria-label")).toContain("Plan");
+    expect(screen.queryByText("Plan")).toBeNull();
   });
 
   it("advances to the next mode on click and wraps at the end", () => {
