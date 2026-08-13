@@ -61,6 +61,36 @@ describe("ChromeTab", () => {
     expect(container.querySelector(".workspace-shell-tab__underline")).toBeNull();
   });
 
+  it("keeps the status badge on narrow tabs and drops it only below the compact floor (PRO-226)", () => {
+    const { container, rerender } = render(
+      <ChromeTab
+        isActive
+        width={70}
+        label="Session one"
+        badge={<span aria-hidden="true">Working</span>}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Working")).toBeTruthy();
+    expect(container.querySelector(".workspace-shell-tab")?.getAttribute("data-has-status")).toBe("true");
+
+    rerender(
+      <ChromeTab
+        isActive
+        width={50}
+        label="Session one"
+        badge={<span aria-hidden="true">Working</span>}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Working")).toBeNull();
+    expect(container.querySelector(".workspace-shell-tab")?.getAttribute("data-has-status")).toBeNull();
+  });
+
   it("yields the trailing status slot to a revealed shortcut", () => {
     render(
       <ChromeTab
