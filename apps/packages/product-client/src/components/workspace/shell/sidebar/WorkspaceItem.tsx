@@ -34,6 +34,7 @@ import {
   SidebarWorkspaceGitGlyph,
 } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
 import { WorkspaceDeleteConfirmMenu } from "#product/components/workspace/shell/sidebar/WorkspaceDeleteConfirmMenu";
+import { useWorkspacePeek } from "#product/components/workspace/shell/sidebar/WorkspacePeekCard";
 import { WorkspaceItemMenu } from "#product/components/workspace/shell/sidebar/WorkspaceItemMenu";
 import { WorkspaceRenamePopover } from "#product/components/workspace/shell/sidebar/WorkspaceRenamePopover";
 import { ProductSidebarWorkspaceRow } from "#product/components/workspace/shell/sidebar/ProductSidebarRepositories";
@@ -65,6 +66,10 @@ interface WorkspaceItemProps {
   shortcutRevealVisible?: boolean;
   /** Current git branch, shown read-only in the three-dot menu git section. */
   branchName?: string | null;
+  /** Owning repository, shown in the hover peek card. */
+  repoName?: string | null;
+  /** Relative last-activity label ("38m ago") for the hover peek card. */
+  lastActivityLabel?: string | null;
   /**
    * Composed git/PR status. Together with `variant` it decides the trailing
    * identity glyph and its tooltip; it also drives the conflicts alert in the
@@ -111,6 +116,8 @@ export function WorkspaceItem({
   shortcutLabel = null,
   shortcutRevealVisible = false,
   branchName = null,
+  repoName = null,
+  lastActivityLabel = null,
   gitStatus = null,
   needsReview = false,
   onSelect,
@@ -223,6 +230,14 @@ export function WorkspaceItem({
     />
   ) : null;
 
+  const { onPointerEnter, onPointerLeave, peekCard } = useWorkspacePeek({
+    name,
+    time: lastActivityLabel,
+    repo: repoName,
+    branch: branchName ?? gitStatus?.branch ?? null,
+    gitStatus,
+  });
+
   const row = (
     <ProductSidebarWorkspaceRow
       active={active}
@@ -236,7 +251,11 @@ export function WorkspaceItem({
       hoverAction={workspaceMenu}
       onSelect={onSelect}
       onContextMenuCapture={onContextMenuCapture}
-      onPointerEnter={onHover}
+      onPointerEnter={(event) => {
+        onHover?.();
+        onPointerEnter(event);
+      }}
+      onPointerLeave={onPointerLeave}
       data-sidebar-workspace-item={workspaceId ?? ""}
       data-sidebar-workspace-variant={variant}
     />
@@ -383,7 +402,7 @@ export function WorkspaceItem({
   );
 
   if (!onRename) {
-    return contextMenu;
+    return <>{contextMenu}{peekCard}</>;
   }
 
   // Wrap with a controlled rename popover. The trigger is a span containing
@@ -392,16 +411,19 @@ export function WorkspaceItem({
   // bonus affordance. Using doubleClick avoids conflicting with onSelect
   // (single click) and the existing right-click context menu.
   return (
-    <WorkspaceRenamePopover
-      currentName={name}
-      defaultName={defaultName ?? name}
-      hasOverride={hasDisplayNameOverride}
-      onRename={onRename}
-      externalOpen={renameOpen}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) setRenameOpen(false);
-      }}
-      trigger={<div>{contextMenu}</div>}
-    />
+    <>
+      <WorkspaceRenamePopover
+        currentName={name}
+        defaultName={defaultName ?? name}
+        hasOverride={hasDisplayNameOverride}
+        onRename={onRename}
+        externalOpen={renameOpen}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setRenameOpen(false);
+        }}
+        trigger={<div>{contextMenu}</div>}
+      />
+      {peekCard}
+    </>
   );
 }

@@ -1,11 +1,18 @@
 import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
+import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
 
 export interface SidebarWorkspaceItemsProps {
   items: SidebarWorkspaceItemState[];
+  /**
+   * Owning repository shown in the hover peek card. Repo group bodies pass
+   * their group name; rows rendered outside a group (Pinned) fall back to the
+   * item's own repo name.
+   */
+  repoName?: string | null;
   shortcutLabelByWorkspaceId: ReadonlyMap<string, string>;
   shortcutRevealVisible: boolean;
   onSelectWorkspace: (workspaceId: string) => void;
@@ -37,6 +44,7 @@ export interface SidebarWorkspaceItemsProps {
  */
 export function SidebarWorkspaceItems({
   items,
+  repoName = null,
   shortcutLabelByWorkspaceId,
   shortcutRevealVisible,
   onSelectWorkspace,
@@ -67,6 +75,10 @@ export function SidebarWorkspaceItems({
       variant={item.variant}
       statusIndicator={item.statusIndicator}
       branchName={item.branchName}
+      repoName={repoName ?? item.repoName}
+      lastActivityLabel={item.lastInteracted
+        ? formatRelativeTime(item.lastInteracted)
+        : null}
       gitStatus={item.gitStatus}
       needsReview={item.needsReview}
       shortcutLabel={shortcutLabelByWorkspaceId.get(item.id) ?? null}

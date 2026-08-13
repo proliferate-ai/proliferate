@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
+import { WORKSPACE_PEEK_DELAY_MS } from "#product/components/workspace/shell/sidebar/WorkspacePeekCard";
 
 const webTestHost = { desktop: null } as ProductHost;
 
@@ -261,6 +262,35 @@ describe("WorkspaceItem", () => {
 
     expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
     expect(screen.queryByRole("img", { name: "Unseen activity" })).toBeNull();
+  });
+
+  it("opens the hover peek card from the row itself", () => {
+    vi.useFakeTimers();
+    try {
+      renderWithProductHost(
+        <WorkspaceItem
+          name="Feature worktree"
+          variant="worktree"
+          repoName="proliferate"
+          lastActivityLabel="38m ago"
+          gitStatus={makeGitStatus()}
+          onSelect={vi.fn()}
+        />,
+      );
+
+      const row = screen.getByText("Feature worktree").closest('[role="button"]');
+      fireEvent.pointerEnter(row!);
+      act(() => {
+        vi.advanceTimersByTime(WORKSPACE_PEEK_DELAY_MS);
+      });
+
+      const card = document.querySelector("[data-workspace-peek-card]");
+      expect(card).not.toBeNull();
+      expect(card?.textContent).toContain("proliferate");
+      expect(card?.textContent).toContain("PR #805 · Open");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("opens the pull request from the context menu", () => {
