@@ -9,6 +9,12 @@ lifecycle. A delegated agent remains a normal durable session. Its authority
 comes from current workspace and relationship state, not from the role it had
 when its MCP capability token was minted.
 
+The stable product MCP id and generic endpoint route slug are `workspace`.
+The ACP-visible server name is `proliferate_workspace`, so native tool names
+use the `mcp__proliferate_workspace__<tool>` namespace. Binding summaries keep
+the stable id `internal:workspace` while reporting `proliferate_workspace` as
+their `serverName`.
+
 ## Tool Contract
 
 `initialize` and `tools/list` expose exactly these 18 tools. Argument and return

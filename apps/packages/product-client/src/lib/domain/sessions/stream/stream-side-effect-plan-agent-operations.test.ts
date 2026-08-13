@@ -34,6 +34,45 @@ describe("planBatchedStreamSideEffects Workspace-MCP authority", () => {
     ]);
   });
 
+  it("grants immediate create authority from a production-shaped Codex envelope", () => {
+    const direct = workspaceAgentOperation("create_agent", "subagent");
+    const plan = planWorkspaceAgentOperation({
+      ...direct,
+      nativeToolName: null,
+      rawInput: {
+        server: "workspace",
+        tool: "create_agent",
+        arguments: direct.rawInput,
+      },
+      rawOutput: {
+        content: [{ type: "text", text: JSON.stringify(direct.rawOutput) }],
+        isError: false,
+        structuredContent: direct.rawOutput,
+      },
+    });
+
+    expect(plan.invalidateSessionSubagents).toBe(true);
+    expect(plan.eventEffects).toEqual([
+      {
+        kind: "record_session_relationship_hint",
+        sessionId: "workspace-agent",
+        relationship: {
+          kind: "subagent_child",
+          parentSessionId: "session-1",
+          relation: "subagent",
+          workspaceId: "workspace-1",
+        },
+      },
+      {
+        kind: "mount_subagent_child_session",
+        childSessionId: "workspace-agent",
+        label: "Workspace agent",
+        workspaceId: "workspace-1",
+        parentSessionId: "session-1",
+      },
+    ]);
+  });
+
   it("plans a monotonic promotion mark and roster refresh for promotion", () => {
     const plan = planWorkspaceAgentOperation(
       workspaceAgentOperation("promote_subagent", "ordinary"),
@@ -235,7 +274,7 @@ function workspaceAgentOperation(
     sourceAgentKind: "codex",
     messageId: null,
     title: "Agent operation",
-    nativeToolName: `mcp__workspace__${action}`,
+    nativeToolName: `mcp__proliferate_workspace__${action}`,
     parentToolCallId: null,
     rawInput: action === "create_agent"
       ? { workspaceId: "workspace-1", kind: "subagent", task: "Help" }

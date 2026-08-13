@@ -429,7 +429,7 @@ function operationItem(
   rowPresentation: AgentOperationsReceiptPresentation,
 ): ToolCallItem {
   return toolCallItem({
-    nativeToolName: `mcp__workspace__${rowPresentation.action}`,
+    nativeToolName: `mcp__proliferate_workspace__${rowPresentation.action}`,
     rawInput: rowPresentation.action === "create_agent"
       ? { workspaceId: "workspace-1", kind: "subagent", task: "Schema audit" }
       : { agentId: rowPresentation.targetAgentId ?? "durable-child" },

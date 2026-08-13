@@ -37,7 +37,7 @@ export function workspaceCreateAgent(
 ): ToolCallItem {
   return {
     ...toolItem(itemId, "turn-1", 1, "other", status),
-    nativeToolName: "mcp__workspace__create_agent",
+    nativeToolName: "mcp__proliferate_workspace__create_agent",
     rawInput: { workspaceId, kind: "subagent", task: title },
     rawOutput: sessionId
       ? {
@@ -53,5 +53,20 @@ export function workspaceCreateAgent(
         updatedAt: "2026-04-04T00:00:01Z",
       }
       : null,
+  };
+}
+
+export function codexWorkspaceEnvelope(item: ToolCallItem): ToolCallItem {
+  const toolNameParts = item.nativeToolName?.split("__") ?? [];
+  const tool = toolNameParts[toolNameParts.length - 1] ?? "create_agent";
+  return {
+    ...item,
+    nativeToolName: null,
+    rawInput: { server: "workspace", tool, arguments: item.rawInput },
+    rawOutput: {
+      content: [{ type: "text", text: JSON.stringify(item.rawOutput) }],
+      isError: item.status === "failed",
+      structuredContent: item.rawOutput,
+    },
   };
 }

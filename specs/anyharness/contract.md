@@ -159,9 +159,11 @@ whether those refreshed bindings are persisted. An explicit empty
 `pluginBundle` is a clear request and must be sent with an MCP refresh; this
 keeps the clear self-contained after a runtime process restart.
 
-`CreateSessionRequest.subagentsEnabled` is a create-time session policy.
-Omitted values default to enabled for compatibility. Resume requests do not
-carry this flag; resumed sessions use their persisted policy.
+`CreateSessionRequest.subagentsEnabled` remains accepted and persisted for
+wire and mobility compatibility. Omitted values default to enabled. Workspace
+attachment and current Agent Operations authority do not consult this legacy
+flag. Resume requests do not carry it; resumed sessions retain the persisted
+compatibility value.
 
 ### Cloud Access And Optional Worker Interaction
 

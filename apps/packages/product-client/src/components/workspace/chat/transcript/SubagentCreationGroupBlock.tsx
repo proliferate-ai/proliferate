@@ -4,6 +4,7 @@ import { AgentIdentityChip } from "#product/components/workspace/chat/transcript
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
 import { Button } from "#product/primitives/Button";
+import { ProliferateIcon } from "#product/primitives/icons/proliferate-icons";
 import {
   useTranscriptCanOpenSession,
   useTranscriptOpenSession,
@@ -29,6 +30,10 @@ import {
   useAgentsPaneNavigationActions,
 } from "#product/hooks/agents/workflows/use-agents-pane-navigation-actions";
 import { deriveAuthoritativeAgentOperation } from "#product/lib/domain/sessions/agent-operations-authority";
+import {
+  readAgentOperationsInput,
+  readAgentOperationsOutput,
+} from "#product/domain/chats/tools/agent-operations-tool-wire";
 
 interface SpawnReceipt {
   key: string;
@@ -36,6 +41,7 @@ interface SpawnReceipt {
   sessionId: string | null;
   workspaceId: string | null;
   title: string;
+  pending: boolean;
   failed: boolean;
   historicalNavigationAuthorized: boolean;
 }
@@ -77,20 +83,21 @@ export function SubagentCreationGroupBlock({
     const receipt = spawnReceipt(item, parentDurableSessionId, parentAuthorityWorkspaceId);
     return receipt ? [receipt] : [];
   });
-  const visibleReceipts = receipts.filter((receipt) => receipt.sessionId || receipt.failed);
+  const visibleReceipts = receipts;
   if (visibleReceipts.length === 0) {
     return null;
   }
 
   const failedCount = visibleReceipts.filter((receipt) => receipt.failed).length;
-  const successfulCount = visibleReceipts.length - failedCount;
-  const trailingVerb = successfulCount > 0
-    ? failedCount > 0
-      ? `started working · ${failedCount} failed`
-      : "started working"
-    : failedCount === 1
-      ? "failed to start"
-      : `${failedCount} failed to start`;
+  const pendingCount = visibleReceipts.filter((receipt) => receipt.pending).length;
+  const successfulCount = visibleReceipts.filter((receipt) => receipt.sessionId).length;
+  const unresolvedCount = visibleReceipts.length - failedCount - pendingCount - successfulCount;
+  const trailingVerb = creationRunVerb({
+    successfulCount,
+    pendingCount,
+    failedCount,
+    unresolvedCount,
+  });
 
   return (
     <>
@@ -103,9 +110,18 @@ export function SubagentCreationGroupBlock({
           return (
             <span
               key={receipt.key}
-              data-subagent-spawn-failed
-              className="inline-flex h-7 max-w-72 min-w-0 items-center rounded-full border border-destructive/25 bg-destructive/5 px-2 text-destructive/80"
+              data-subagent-spawn-failed={receipt.failed ? "true" : undefined}
+              data-subagent-spawn-pending={receipt.pending ? "true" : undefined}
+              className={`inline-flex h-7 max-w-72 min-w-0 items-center gap-1.5 rounded-full border px-2 ${
+                receipt.failed
+                  ? "border-destructive/25 bg-destructive/5 text-destructive/80"
+                  : "border-border/70 bg-surface-elevated text-muted-foreground"
+              }`}
             >
+              <ProliferateIcon
+                data-agent-operations-product-mark
+                className="icon-compact shrink-0 text-faint [font-size:var(--text-chat)]"
+              />
               <span className="truncate">{receipt.title}</span>
             </span>
           );
@@ -339,12 +355,21 @@ function spawnReceipt(
     sessionId: workspacePresentation.agent?.sessionId ?? null,
     workspaceId: workspacePresentation.agent?.workspaceId ?? null,
     title: workspacePresentation.agent?.title ?? readInputTitle(item) ?? "Subagent",
+    pending: item.status === "in_progress",
     failed: item.status === "failed",
     historicalNavigationAuthorized: authoritativePresentation?.action === "create_agent",
   };
 }
 
 function creationResultText(item: ToolCallItem): string | null {
+  const structuredOutput = readAgentOperationsOutput(item);
+  if (structuredOutput) {
+    try {
+      return JSON.stringify(structuredOutput, null, 2);
+    } catch {
+      return null;
+    }
+  }
   const toolResultText = item.contentParts.flatMap((part) =>
     part.type === "tool_result_text" ? [part.text] : []
   ).join("\n\n");
@@ -365,10 +390,8 @@ function creationResultText(item: ToolCallItem): string | null {
 }
 
 function readInputTitle(item: ToolCallItem): string | null {
-  if (!item.rawInput || typeof item.rawInput !== "object" || Array.isArray(item.rawInput)) {
-    return null;
-  }
-  const input = item.rawInput as Record<string, unknown>;
+  const input = readAgentOperationsInput(item);
+  if (!input) return null;
   for (const key of ["title", "label", "task"]) {
     const value = input[key];
     if (typeof value === "string" && value.trim().length > 0) {
@@ -376,4 +399,27 @@ function readInputTitle(item: ToolCallItem): string | null {
     }
   }
   return null;
+}
+
+function creationRunVerb(counts: {
+  successfulCount: number;
+  pendingCount: number;
+  failedCount: number;
+  unresolvedCount: number;
+}): string {
+  const parts = [
+    counts.successfulCount > 0 ? "started working" : null,
+    counts.pendingCount === 1
+      ? "starting"
+      : counts.pendingCount > 1
+        ? `${counts.pendingCount} starting`
+        : null,
+    counts.failedCount === 1
+      ? "failed to start"
+      : counts.failedCount > 1
+        ? `${counts.failedCount} failed to start`
+        : null,
+    counts.unresolvedCount > 0 ? "identity unavailable" : null,
+  ].filter((part): part is string => part !== null);
+  return parts.join(" · ");
 }

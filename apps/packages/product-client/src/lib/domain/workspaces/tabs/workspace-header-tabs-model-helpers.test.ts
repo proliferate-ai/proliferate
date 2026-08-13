@@ -3,11 +3,15 @@ import type { Session } from "@anyharness/sdk";
 import {
   buildHeaderLiveVisibilityCandidates,
   buildKnownHeaderSessions,
+  filterPaneOnlyHeaderVisibility,
   getKnownSessionCanFork,
   getKnownSessionHasAssignedTitle,
   getKnownSessionId,
   getKnownSessionViewState,
   resolveHierarchyMaterializedSessionId,
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+import type {
+  HeaderHierarchyChildRow,
 } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 import type { SessionDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 
@@ -46,6 +50,25 @@ function session(canFork: boolean, overrides: Partial<Session> = {}): Session {
     actionCapabilities: { fork: canFork, targetedFork: false },
     ...overrides,
   } as Session;
+}
+
+function hierarchyChild(
+  sessionId: string,
+  parentSessionId: string,
+  source: HeaderHierarchyChildRow["source"],
+): HeaderHierarchyChildRow {
+  return {
+    sessionLinkId: `link-${sessionId}`,
+    sessionId,
+    parentSessionId,
+    title: sessionId,
+    agentKind: "codex",
+    source,
+    meta: null,
+    statusLabel: "Idle",
+    wakeScheduled: false,
+    isActive: false,
+  };
 }
 
 describe("getKnownSessionCanFork", () => {
@@ -158,6 +181,29 @@ describe("buildHeaderLiveVisibilityCandidates", () => {
       { sessionId: "child", parentSessionId: "resolved-parent" },
       { sessionId: "linked-child", parentSessionId: "parent" },
     ]);
+  });
+
+  it("excludes pane-only subagents and children anchored beneath them", () => {
+    expect(filterPaneOnlyHeaderVisibility({
+      activeSessionId: "subagent",
+      knownSessionIds: ["parent", "subagent", "review-child", "cowork-child"],
+      hierarchyVisibilityCandidates: [
+        { sessionId: "review-child", parentSessionId: "subagent" },
+        { sessionId: "cowork-child", parentSessionId: "parent" },
+      ],
+      rowsBySessionId: new Map([
+        ["review-child", hierarchyChild("review-child", "subagent", "review")],
+        ["cowork-child", hierarchyChild("cowork-child", "parent", "cowork")],
+      ]),
+      paneOnlySubagentSessionIds: new Set(["subagent"]),
+    })).toMatchObject({
+      activeSessionId: null,
+      knownSessionIds: ["parent", "cowork-child"],
+      hierarchyVisibilityCandidates: [
+        { sessionId: "cowork-child", parentSessionId: "parent" },
+      ],
+      paneOnlySessionIds: new Set(["subagent", "review-child"]),
+    });
   });
 });
 

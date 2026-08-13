@@ -154,7 +154,7 @@ mod tests {
     static DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
         id: "workspace",
         route_slug: "workspace",
-        acp_server_name: "workspace",
+        acp_server_name: "proliferate_workspace",
         server_info_name: "proliferate-workspace",
         display_name: "Workspace",
         description: "Workspace",
@@ -182,7 +182,7 @@ mod tests {
         };
 
         assert_eq!(summary.id, "internal:workspace");
-        assert_eq!(summary.server_name, DEFINITION.acp_server_name);
+        assert_eq!(summary.server_name, "proliferate_workspace");
         assert_eq!(
             summary.display_name.as_deref(),
             Some(DEFINITION.display_name)

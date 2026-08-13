@@ -222,7 +222,10 @@ The pure Workspace MCP parser owns the wire-to-presentation boundary:
 
 ```text
 apps/packages/product-client/src/domain/chats/tools/agent-operations-tool-presentation.ts
-  exact mcp__workspace__<tool> classification and typed receipt projection
+  exact mcp__proliferate_workspace__<tool> classification and typed receipt projection
+
+apps/packages/product-client/src/domain/chats/tools/agent-operations-tool-wire.ts
+  flat native-call and provider-neutral MCP-envelope normalization
 
 apps/packages/product-client/src/components/workspace/chat/tool-calls/AgentOperationsToolActionRow.tsx
   compact mutation receipts and expandable raw details
@@ -233,14 +236,26 @@ apps/packages/product-client/src/components/workspace/chat/transcript/AgentMessa
 
 Workspace reads (`whoami`, list/get/options calls, and `get_task_output`) remain
 generic foldable work. A structured-only read result is formatted into the
-existing expandable generic result row; malformed or absent output keeps the
-non-expandable fallback. Workspace mutations (`create_workspace`, agent create,
+existing expandable generic result row with the Proliferate mark; malformed or
+absent output keeps the non-expandable Proliferate-mark fallback. Workspace
+reads that name one durable `agentId` (`get_agent`, configuration options, and
+task output) keep the same foldable row but replace the product mark with that
+agent's Solid Seal. Workspace
+mutations (`create_workspace`, agent create,
 configure, resume, message, interrupt, Close, Open, and Promote) bypass generic
 history folding so their receipts remain visible after turn completion. The
 MCP parser consumes direct `AgentView` lifecycle outputs, the configure
 `{agent, applyState}` wrapper, the send `{target, queueSeq, status}` wrapper,
 and the workspace `{workspace, creationMode}` wrapper. It must not accept the
 HTTP lifecycle `{agent, relationship}` envelope.
+
+The presentation boundary accepts either the exact flat native name
+`mcp__proliferate_workspace__<tool>` or the provider-neutral Codex MCP envelope
+`{server, tool, arguments}` when `server` is `proliferate_workspace` or the
+historical transport id `workspace`. It canonicalizes the latter's
+`arguments` and `rawOutput.structuredContent` before presentation and strict
+authority checks. This does not restore `mcp__workspace__*` as a native-name
+alias.
 
 Agent identity follows one rule on every surface: only a durable runtime
 session ID mints the Solid Seal glyph. Existing-target mutations may use their
@@ -251,6 +266,9 @@ directory entry maps a durable ID to a ProductClient client-session ID, the
 durable ID continues to seed the glyph while navigation uses the mapped client
 ID. Cross-workspace navigation also requires the directory or direct
 `AgentView.workspace.workspaceId`; an unresolved location stays non-clickable.
+An in-progress or failed create uses the Proliferate product mark because no
+durable created-session identity exists. A successful create replaces that
+product-level attribution with the returned agent's Solid Seal.
 
 Creation grouping belongs in the transcript presentation layer:
 
@@ -269,8 +287,9 @@ Rules:
 - Each settled durable identity is a 28px chip containing a 16px Solid Seal.
   The line ends with the quiet phrase `started working`. A failed create may
   show its real task text in a neutral failure capsule but must not invent a
-  glyph. An in-progress create with no output identity adds no provisional
-  identity. The trailing phrase is also the accessible disclosure for each
+  glyph. An in-progress or failed create with no authoritative output identity
+  uses the Proliferate product mark and never mints a provisional identity. The
+  trailing phrase is also the accessible disclosure for each
   create call's distinguishable structured result or failure detail.
 - Each newly settled live chip receives one 280ms opacity-and-scale pop keyed
   by its tool item ID. Existing chips never remount, and hydrated, revisited,
@@ -338,10 +357,12 @@ both optimistic rendering and the compare-and-swap payload. A pending glyph
 is clickable only when directory metadata supplies an authoritative workspace,
 and navigation uses its mapped client-session ID.
 
-`mcp__workspace__*` is the only Product MCP input to these Agent Operations
-renderers. Removed `mcp__subagents__*` names have no compatibility
-classification or navigation fallback; unrecognized historical tool records
-use generic tool rendering.
+`mcp__proliferate_workspace__*` is the only native-name Product MCP input to
+these Agent Operations renderers; the trusted Codex transport envelope above
+canonicalizes to that namespace. Removed `mcp__subagents__*` names have no
+compatibility classification or navigation fallback, and
+`mcp__workspace__*` is not a native-name alias. Unrecognized historical tool
+records use generic tool rendering.
 
 Native harness subagents use the same durable item stream as the parent turn:
 

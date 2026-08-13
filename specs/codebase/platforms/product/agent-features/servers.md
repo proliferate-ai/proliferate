@@ -339,8 +339,10 @@ Tool definitions should be easy to unit test. Do not hide business logic in
 tool-list construction.
 
 Tool names stay generic (`create_artifact`, not `create_cowork_artifact`)
-because the product MCP id namespaces them at the agent surface
-(`mcp__artifacts__create_artifact`).
+because the ACP server name namespaces them at the agent surface
+(`mcp__artifacts__create_artifact`). Product identity, route slug, and ACP
+server name may differ; Workspace uses id and route slug `workspace` with ACP
+server name `proliferate_workspace`.
 
 ### `calls.rs`
 
@@ -537,7 +539,7 @@ Product MCP injection produces a normal MCP server config.
 For local AnyHarness:
 
 ```text
-server name: product MCP id or stable display name
+server name: stable ACP namespace (which may differ from the product MCP id)
 transport: HTTP MCP
 url: /v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/{product_mcp_id}
 headers:
@@ -549,7 +551,8 @@ The capability token is minted at launch and scoped to the selected product
 MCP. It is not durable user config.
 
 The binding summary should make attached product MCPs visible without exposing
-secret headers.
+secret headers. Its stable id is derived from the product MCP id, while its
+`serverName` reports the ACP server name used for native tool names.
 
 ## Endpoint Flow
 

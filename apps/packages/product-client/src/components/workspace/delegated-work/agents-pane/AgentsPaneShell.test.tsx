@@ -4,8 +4,8 @@ import type { ComponentProps } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RightPanelContent } from "#product/components/workspace/shell/right-panel/RightPanelContent";
+import { RightPanelHeaderEntryList } from "#product/components/workspace/shell/right-panel/RightPanelHeaderEntryList";
 import { RightPanelPlaceholder } from "#product/components/workspace/shell/right-panel/RightPanelPlaceholder";
-import { ToolHeaderButton } from "#product/components/workspace/shell/right-panel/ToolHeaderButton";
 import { DEFAULT_RIGHT_PANEL_TOOL_ORDER } from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 vi.mock("#product/components/workspace/delegated-work/agents-pane/AgentsPane", () => ({
@@ -68,12 +68,35 @@ describe("Agents right-panel shell", () => {
   it("renders Agents as a real third tool tab with its icon and selection behavior", () => {
     const onSelect = vi.fn();
     const { container } = render(
-      <ToolHeaderButton
-        tool="agents"
-        isActive
-        isDragging={false}
-        shouldSuppressClick={() => false}
-        onSelect={onSelect}
+      <RightPanelHeaderEntryList
+        entries={[{ key: "tool:agents", kind: "tool", tool: "agents" }]}
+        activeEntryKey="tool:agents"
+        unreadByTerminal={{}}
+        buffersByPath={{}}
+        tabModes={{}}
+        isWorkspaceReady
+        drag={{
+          draggedHeaderKey: null,
+          getEntryDragState: () => ({
+            isDragging: false,
+            dragOffsetX: 0,
+            showDropIndicator: false,
+          }),
+          registerHeaderEntryNode: () => undefined,
+          handleHeaderPointerDown: () => undefined,
+          handleHeaderPointerMove: () => undefined,
+          finishHeaderPointerDrag: () => undefined,
+          cancelHeaderPointerDrag: () => undefined,
+          shouldSuppressHeaderClick: () => false,
+        }}
+        shortcutRevealVisible={false}
+        onActivateEntry={() => {
+          onSelect();
+          return true;
+        }}
+        onCloseTerminal={() => undefined}
+        onCloseViewerTarget={() => undefined}
+        onRenameTerminal={async () => undefined}
       />,
     );
 
@@ -82,7 +105,7 @@ describe("Agents right-panel shell", () => {
     expect(tab.getAttribute("aria-selected")).toBe("true");
     expect(tab.getAttribute("aria-controls"))
       .toBe("tabpanel-workspace-right-panel-agents");
-    expect(container.querySelector("svg.ui-tab-system-tab__icon")).not.toBeNull();
+    expect(tab.querySelector("svg")).not.toBeNull();
 
     fireEvent.click(tab);
     expect(onSelect).toHaveBeenCalledTimes(1);

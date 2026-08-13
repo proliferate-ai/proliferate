@@ -276,7 +276,7 @@ describe("buildTurnPresentation", () => {
       create1: subagentCreationItem("create1", 1),
       send: {
         ...toolItem("send", "turn-1", 2, "other"),
-        nativeToolName: "mcp__workspace__send_message",
+        nativeToolName: "mcp__proliferate_workspace__send_message",
       },
       create2: subagentCreationItem("create2", 3),
     };
@@ -855,7 +855,7 @@ function subagentCreationItem(itemId: string, startedSeq: number): ToolCallItem 
   return {
     ...toolItem(itemId, "turn-1", startedSeq, "other"),
     title: "Create agent",
-    nativeToolName: "mcp__workspace__create_agent",
+    nativeToolName: "mcp__proliferate_workspace__create_agent",
     rawInput: {
       kind: "subagent",
       task: `Prompt for ${itemId}`,

@@ -52,7 +52,7 @@ export function workspaceTool(
     ? { workspaceId: "workspace-1", kind: "subagent", task: "Schema audit" }
     : { agentId: "agent-session-1" };
   return toolCallItem({
-    nativeToolName: `mcp__workspace__${action}`,
+    nativeToolName: `mcp__proliferate_workspace__${action}`,
     rawInput,
     rawOutput: agentView(),
     ...overrides,

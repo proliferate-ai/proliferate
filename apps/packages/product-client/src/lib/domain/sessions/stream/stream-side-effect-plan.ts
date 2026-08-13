@@ -9,7 +9,7 @@ import type {
   PendingSessionConfigChanges,
 } from "#product/domain/sessions/pending-config";
 import {
-  classifyAgentOperationsTool,
+  resolveAgentOperationsTool,
 } from "#product/domain/chats/tools/agent-operations-tool-presentation";
 import {
   deriveAuthoritativeAgentOperation,
@@ -212,7 +212,7 @@ export function planBatchedStreamSideEffects(input: {
         : null;
       const agentOperationClassification = item?.kind === "tool_call"
         && item.status === "completed"
-        ? classifyAgentOperationsTool(item.nativeToolName)
+        ? resolveAgentOperationsTool(item)
         : null;
       if (
         agentOperationClassification?.action === "create_agent"

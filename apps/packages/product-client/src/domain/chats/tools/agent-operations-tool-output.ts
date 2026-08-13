@@ -1,4 +1,4 @@
-import type { ToolCallItem, ToolResultTextContentPart, Workspace } from "@anyharness/sdk";
+import type { Workspace } from "@anyharness/sdk";
 import type {
   AgentOperationsAgentTarget,
   AgentOperationsReceiptAction,
@@ -242,32 +242,6 @@ export function detailLabel(
     return status ? formatWords(status) : null;
   }
   return null;
-}
-
-export function readStructuredOutput(item: ToolCallItem): Record<string, unknown> | null {
-  const rawObject = coerceRecord(item.rawOutput);
-  if (rawObject) {
-    return rawObject;
-  }
-  if (typeof item.rawOutput === "string") {
-    const parsedRawOutput = parseJsonRecord(item.rawOutput);
-    if (parsedRawOutput) {
-      return parsedRawOutput;
-    }
-  }
-  const text = item.contentParts
-    .filter((part): part is ToolResultTextContentPart => part.type === "tool_result_text")
-    .map((part) => part.text.trim())
-    .find((part) => part.length > 0);
-  return text ? parseJsonRecord(text) : null;
-}
-
-function parseJsonRecord(value: string): Record<string, unknown> | null {
-  try {
-    return coerceRecord(JSON.parse(value));
-  } catch {
-    return null;
-  }
 }
 
 export function coerceRecord(value: unknown): Record<string, unknown> | null {

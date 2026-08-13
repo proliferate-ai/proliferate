@@ -88,6 +88,10 @@ impl AgentOperationsError {
             Self::CallerNotFound => "AGENT_CALLER_NOT_FOUND",
             Self::CallerClosed => "AGENT_CALLER_CLOSED",
             Self::AgentNotFound => "AGENT_NOT_FOUND",
+            Self::CapabilityDenied {
+                denial: CapabilityDenial::SubagentSameWorkspaceRequired,
+                ..
+            } => "SUBAGENT_SAME_WORKSPACE_REQUIRED",
             Self::CapabilityDenied { .. } => "AGENT_CAPABILITY_DENIED",
             Self::SubagentOpenRequired => "SUBAGENT_OPEN_REQUIRED",
             Self::InvalidCursor => "AGENT_CURSOR_INVALID",
@@ -151,6 +155,10 @@ impl AgentOperationsError {
             Self::CallerNotFound => "The calling agent was not found.".into(),
             Self::CallerClosed => "The calling agent is closed.".into(),
             Self::AgentNotFound => "The requested agent was not found.".into(),
+            Self::CapabilityDenied {
+                denial: CapabilityDenial::SubagentSameWorkspaceRequired,
+                ..
+            } => "Subagents must use the calling agent's workspaceId. Use whoami to get it, or create an ordinary agent for another workspace.".into(),
             Self::CapabilityDenied { .. } => {
                 "The calling agent does not have this capability.".into()
             }

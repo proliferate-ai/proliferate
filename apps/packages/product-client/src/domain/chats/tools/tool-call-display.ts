@@ -5,6 +5,7 @@ import {
   parseMcpToolName,
 } from "./mcp-tool-presentation";
 import { resolveSubagentLaunchDisplay } from "../subagents/subagent-launch";
+import { resolveAgentOperationsTool } from "./agent-operations-tool-presentation";
 
 export type ToolDisplayIconKey =
   | "terminal"
@@ -31,6 +32,7 @@ export function describeToolCallDisplay(
   const normalizedToolName = cleanedToolName.toLowerCase();
   const raw = isRecord(item.rawInput);
   const parsedMcp = parseMcpToolName(nativeName || cleanedToolName);
+  const agentOperationsTool = resolveAgentOperationsTool(item);
 
   switch (item.semanticKind) {
     case "subagent": {
@@ -98,6 +100,13 @@ export function describeToolCallDisplay(
         iconKey: "proliferate",
       };
     default:
+      if (agentOperationsTool) {
+        return {
+          label: formatMcpActionLabel(agentOperationsTool.action),
+          hint: "Workspace",
+          iconKey: "proliferate",
+        };
+      }
       if (parsedMcp) {
         if (parsedMcp.server === "proliferate_skills") {
           return describeSkillsMcpDisplay(parsedMcp.action, raw);

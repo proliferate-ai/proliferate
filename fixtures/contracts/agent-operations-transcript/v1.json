@@ -29,7 +29,7 @@
           "sourceAgentKind": "codex",
           "title": "Create review agent",
           "toolCallId": "create-review",
-          "nativeToolName": "mcp__workspace__create_agent",
+          "nativeToolName": "mcp__proliferate_workspace__create_agent",
           "rawInput": {
             "workspaceId": "workspace-1",
             "kind": "subagent",
@@ -41,7 +41,7 @@
               "toolCallId": "create-review",
               "title": "Create review agent",
               "toolKind": "other",
-              "nativeToolName": "mcp__workspace__create_agent"
+              "nativeToolName": "mcp__proliferate_workspace__create_agent"
             }
           ]
         }
@@ -61,7 +61,7 @@
           "sourceAgentKind": "codex",
           "title": "Create review agent",
           "toolCallId": "create-review",
-          "nativeToolName": "mcp__workspace__create_agent",
+          "nativeToolName": "mcp__proliferate_workspace__create_agent",
           "rawInput": {
             "workspaceId": "workspace-1",
             "kind": "subagent",
@@ -97,7 +97,7 @@
               "toolCallId": "create-review",
               "title": "Create review agent",
               "toolKind": "other",
-              "nativeToolName": "mcp__workspace__create_agent"
+              "nativeToolName": "mcp__proliferate_workspace__create_agent"
             }
           ]
         }
@@ -117,7 +117,7 @@
           "sourceAgentKind": "codex",
           "title": "Create test agent",
           "toolCallId": "create-tests",
-          "nativeToolName": "mcp__workspace__create_agent",
+          "nativeToolName": "mcp__proliferate_workspace__create_agent",
           "rawInput": {
             "workspaceId": "workspace-1",
             "kind": "subagent",
@@ -129,7 +129,7 @@
               "toolCallId": "create-tests",
               "title": "Create test agent",
               "toolKind": "other",
-              "nativeToolName": "mcp__workspace__create_agent"
+              "nativeToolName": "mcp__proliferate_workspace__create_agent"
             }
           ]
         }
@@ -149,7 +149,7 @@
           "sourceAgentKind": "codex",
           "title": "Create test agent",
           "toolCallId": "create-tests",
-          "nativeToolName": "mcp__workspace__create_agent",
+          "nativeToolName": "mcp__proliferate_workspace__create_agent",
           "rawInput": {
             "workspaceId": "workspace-1",
             "kind": "subagent",
@@ -186,7 +186,7 @@
               "toolCallId": "create-tests",
               "title": "Create test agent",
               "toolKind": "other",
-              "nativeToolName": "mcp__workspace__create_agent"
+              "nativeToolName": "mcp__proliferate_workspace__create_agent"
             }
           ]
         }
@@ -206,7 +206,7 @@
           "sourceAgentKind": "codex",
           "title": "Message review agent",
           "toolCallId": "send-review",
-          "nativeToolName": "mcp__workspace__send_message",
+          "nativeToolName": "mcp__proliferate_workspace__send_message",
           "rawInput": {
             "agentId": "review-session",
             "message": "Check replay ordering exactly."
@@ -217,7 +217,7 @@
               "toolCallId": "send-review",
               "title": "Message review agent",
               "toolKind": "other",
-              "nativeToolName": "mcp__workspace__send_message"
+              "nativeToolName": "mcp__proliferate_workspace__send_message"
             }
           ]
         }
@@ -237,7 +237,7 @@
           "sourceAgentKind": "codex",
           "title": "Message review agent",
           "toolCallId": "send-review",
-          "nativeToolName": "mcp__workspace__send_message",
+          "nativeToolName": "mcp__proliferate_workspace__send_message",
           "rawInput": {
             "agentId": "review-session",
             "message": "Check replay ordering exactly."
@@ -256,7 +256,7 @@
               "toolCallId": "send-review",
               "title": "Message review agent",
               "toolKind": "other",
-              "nativeToolName": "mcp__workspace__send_message"
+              "nativeToolName": "mcp__proliferate_workspace__send_message"
             }
           ]
         }
@@ -276,7 +276,7 @@
           "sourceAgentKind": "codex",
           "title": "List agents",
           "toolCallId": "list-agents",
-          "nativeToolName": "mcp__workspace__list_agents",
+          "nativeToolName": "mcp__proliferate_workspace__list_agents",
           "rawInput": {},
           "contentParts": [
             {
@@ -284,7 +284,7 @@
               "toolCallId": "list-agents",
               "title": "List agents",
               "toolKind": "other",
-              "nativeToolName": "mcp__workspace__list_agents"
+              "nativeToolName": "mcp__proliferate_workspace__list_agents"
             }
           ]
         }
@@ -304,7 +304,7 @@
           "sourceAgentKind": "codex",
           "title": "List agents",
           "toolCallId": "list-agents",
-          "nativeToolName": "mcp__workspace__list_agents",
+          "nativeToolName": "mcp__proliferate_workspace__list_agents",
           "rawInput": {},
           "rawOutput": { "agents": [] },
           "contentParts": [
@@ -313,7 +313,7 @@
               "toolCallId": "list-agents",
               "title": "List agents",
               "toolKind": "other",
-              "nativeToolName": "mcp__workspace__list_agents"
+              "nativeToolName": "mcp__proliferate_workspace__list_agents"
             }
           ]
         }

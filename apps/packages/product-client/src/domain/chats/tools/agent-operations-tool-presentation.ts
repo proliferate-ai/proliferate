@@ -1,6 +1,5 @@
 import type { ToolCallItem, Workspace } from "@anyharness/sdk";
 import {
-  coerceRecord,
   detailLabel,
   extractAgentRecord,
   formatWorkspaceDetail,
@@ -8,11 +7,16 @@ import {
   parseCreateWorkspaceEnvelope,
   parseWorkspaceTarget,
   readString,
-  readStructuredOutput,
   targetAgentFromDurableId,
 } from "./agent-operations-tool-output";
+import {
+  AGENT_OPERATIONS_TOOL_PREFIX,
+  readAgentOperationsInput,
+  readAgentOperationsOutput,
+  resolveAgentOperationsToolName,
+} from "./agent-operations-tool-wire";
 
-const TOOL_PREFIX = "mcp__workspace__";
+const TOOL_PREFIX = AGENT_OPERATIONS_TOOL_PREFIX;
 
 export const AGENT_OPERATIONS_READ_ACTIONS = [
   "whoami",
@@ -98,36 +102,75 @@ export function classifyAgentOperationsTool(
   return null;
 }
 
-export function isAgentOperationsReadAction(item: Pick<ToolCallItem, "nativeToolName">): boolean {
-  return classifyAgentOperationsTool(item.nativeToolName)?.presentation === "read";
+export function resolveAgentOperationsTool(
+  item: Pick<ToolCallItem, "nativeToolName" | "rawInput">,
+): AgentOperationsToolClassification | null {
+  return classifyAgentOperationsTool(resolveAgentOperationsToolName(item));
 }
 
-export function isAgentOperationsReceiptAction(item: Pick<ToolCallItem, "nativeToolName">): boolean {
-  return classifyAgentOperationsTool(item.nativeToolName)?.presentation === "receipt";
+export function isAgentOperationsReadAction(
+  item: Pick<ToolCallItem, "nativeToolName" | "rawInput">,
+): boolean {
+  return resolveAgentOperationsTool(item)?.presentation === "read";
+}
+
+export function isAgentOperationsReceiptAction(
+  item: Pick<ToolCallItem, "nativeToolName" | "rawInput">,
+): boolean {
+  return resolveAgentOperationsTool(item)?.presentation === "receipt";
+}
+
+export function deriveAgentOperationsReadTarget(
+  item: ToolCallItem,
+): AgentOperationsAgentTarget | null {
+  const classification = resolveAgentOperationsTool(item);
+  if (
+    classification?.presentation !== "read"
+    || !["get_agent", "list_agent_config_options", "get_task_output"].includes(
+      classification.action,
+    )
+  ) {
+    return null;
+  }
+  const input = readAgentOperationsInput(item) ?? {};
+  const targetAgentId = readString(input, "agentId");
+  if (!targetAgentId) {
+    return null;
+  }
+  if (classification.action === "get_agent") {
+    const output = readAgentOperationsOutput(item);
+    if (output) {
+      const parsed = parseAgentTarget(output);
+      if (parsed.sessionId === targetAgentId) {
+        return parsed;
+      }
+    }
+  }
+  return targetAgentFromDurableId(targetAgentId);
 }
 
 export function isWorkspaceSubagentCreationAction(
   item: Pick<ToolCallItem, "nativeToolName" | "rawInput">,
 ): boolean {
-  const classification = classifyAgentOperationsTool(item.nativeToolName);
+  const classification = resolveAgentOperationsTool(item);
   if (classification?.action !== "create_agent") {
     return false;
   }
-  const input = coerceRecord(item.rawInput) ?? {};
+  const input = readAgentOperationsInput(item) ?? {};
   return readString(input, "kind")?.toLowerCase() === "subagent";
 }
 
 export function deriveAgentOperationsReceiptPresentation(
   item: ToolCallItem,
 ): AgentOperationsReceiptPresentation | null {
-  const classification = classifyAgentOperationsTool(item.nativeToolName);
+  const classification = resolveAgentOperationsTool(item);
   if (!classification || classification.presentation !== "receipt") {
     return null;
   }
 
   const action = classification.action;
-  const input = coerceRecord(item.rawInput) ?? {};
-  const output = readStructuredOutput(item);
+  const input = readAgentOperationsInput(item) ?? {};
+  const output = readAgentOperationsOutput(item);
   const isRunning = item.status === "in_progress";
   const isFailed = item.status === "failed";
   const targetAgentId = readString(input, "agentId");
@@ -151,7 +194,9 @@ export function deriveAgentOperationsReceiptPresentation(
     };
   }
 
-  const agentRecord = extractAgentRecord(action, output);
+  const agentRecord = action === "create_agent" && item.status !== "completed"
+    ? null
+    : extractAgentRecord(action, output);
   const agent = agentRecord
     ? parseAgentTarget(agentRecord)
     : targetAgentId && action !== "create_agent"
@@ -177,7 +222,7 @@ export function deriveAgentOperationsReceiptPresentation(
 export function readAgentOperationsStructuredOutput(
   item: ToolCallItem,
 ): Record<string, unknown> | null {
-  return readStructuredOutput(item);
+  return readAgentOperationsOutput(item);
 }
 
 function actionLabel(

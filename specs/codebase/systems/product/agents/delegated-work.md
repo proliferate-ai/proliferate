@@ -295,39 +295,50 @@ Rules:
 
 ## Tab Strip
 
-Tabs carry lightweight delegated-work presence.
+Same-workspace subagents are Agents-pane-only until promotion. They never
+appear as main chat tabs, attached tabs, or entries in the closed-tabs menu.
+Opening a subagent receipt, composer row, or roster row changes only the
+independent right-pane route; it does not change the active main chat tab.
+Promote preserves the durable session and transcript, removes the relationship,
+and opens that same session as an ordinary top-level chat tab.
 
-Target delegated-agent tab shape:
+Review and Cowork child sessions remain real attached chat tabs because their
+owned workflows require a full main-chat surface. Their target shape is:
 
 ```text
-[X] Main session  [X] robot Mary  [other tabs]
+[X] Main session  [X] reviewer Mary  [other tabs]
 ```
 
 Rules:
 
 - The close `X` lives on the left side of the tab.
-- A delegated-agent tab uses a robot icon colored by the agent's deterministic
+- An attached review/Cowork tab uses an icon colored by the agent's deterministic
   semantic identity token. The text remains normal tab text color.
-- A delegated-agent tab label is only the generated agent name. The full
+- Its label is only the generated agent name. The full
   `GeneratedName (title ID)` identity stays in the hover card and transcript
   receipts.
 - Running, attention, and error states use a status ring/badge around or beside
-  the robot. Status must remain visible and must not replace the robot icon.
+  the icon. Status must remain visible and must not replace the identity.
 - The parent tab is the anchor. It is not itself a member of the delegated
   agent group.
-- Open delegated-agent tabs appear immediately to the right of the parent tab
-  and remain contiguous with sibling delegated-agent tabs for that parent.
-- Delegated-agent tabs are shorter by default than normal chat tabs.
-- Hover on a delegated-agent tab shows origin, parent/source context, and
+- Open review/Cowork child tabs appear immediately to the right of the parent
+  tab and remain contiguous with sibling attached tabs for that parent.
+- Attached child tabs are shorter by default than normal chat tabs.
+- Hover shows origin, parent/source context, and
   status.
-- Closing a delegated-agent tab hides the tab only. It does not delete the
+- Closing an attached child tab hides the tab only. It does not delete the
   delegated item or end active work.
+- Cowork child tabs carry their managed `workspaceId`, relationship source,
+  and link handle through the view model. Selecting one opens that session in
+  the managed Cowork workspace, not in the parent's current workspace.
+- Existing manual tab grouping stays supported, but an attached child run is a
+  sibling anchored after the parent, not a group that contains the parent.
 
 Example hover:
 
 ```text
 Mary (API Surface Check abc123)
-Subagent
+Code review
 Parent: Main session
 Running
 ```
@@ -335,33 +346,6 @@ Running
 Review runs are logical delegated-work items. Reviewer sessions remain real
 chat tabs, and each reviewer tab uses its own generated identity. Review
 `kind: code` maps to `code_review`; review `kind: plan` maps to `plan_review`.
-
-### Attached Agent Tabs
-
-When the user opens a delegated agent, its chat tab appears immediately to the
-right of the parent session tab, inside the parent's attached-agent run.
-
-Target expanded shape:
-
-```text
-[X] Main session  [X] robot Mary  [X] robot Nina
-```
-
-Rules:
-
-- Opening any delegated agent inserts or moves that tab next to its parent.
-- All open delegated-agent tabs for the same parent remain contiguous.
-- The parent remains the left anchor and is not visually grouped inside the
-  delegated-agent run.
-- Cowork child tabs must carry their managed `workspaceId`, relationship
-  source, and link handle through the tab view model. Selecting a cowork child
-  tab opens that session in the managed cowork workspace, not in the parent's
-  current workspace.
-- Existing tab grouping stays supported, but the child-agent group is a sibling
-  attached to the parent, not a group that contains the parent.
-- Reordering normal tabs must not separate open delegated-agent tabs from their
-  parent unless the user explicitly detaches them through a future advanced
-  action.
 
 ## Composer Agents Popover
 

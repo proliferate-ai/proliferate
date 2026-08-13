@@ -35,7 +35,7 @@ fn workspace_selector_failure_remains_typed_and_bounded() {
 
 #[test]
 fn workspace_summary_assembly_failure_remains_typed() {
-    let mut invalid_summary = summary("internal:workspace", "workspace");
+    let mut invalid_summary = summary("internal:workspace", "proliferate_workspace");
     invalid_summary.id = "invalid Workspace id".to_string();
     let catalog = ProductMcpLaunchCatalog::new(
         "http://127.0.0.1:4317".to_string(),
@@ -111,11 +111,24 @@ fn workspace_token_failure_is_typed_and_a_later_launch_remints() {
     .expect("later explicit launch retries token mint");
 
     assert_eq!(attempts.load(Ordering::SeqCst), 2);
-    assert_eq!(retry.mcp_servers.len(), 1);
-    assert!(retry
-        .mcp_binding_summaries_json
-        .as_deref()
-        .is_some_and(|json| json.contains("internal:workspace")));
+    let [SessionMcpServer::Http(server)] = retry.mcp_servers.as_slice() else {
+        panic!("one Workspace HTTP MCP server");
+    };
+    assert_eq!(server.connection_id, "workspace");
+    assert_eq!(server.server_name, "proliferate_workspace");
+    assert!(server.url.ends_with("/mcp/workspace"));
+    let summaries: Vec<SessionMcpBindingSummary> = serde_json::from_str(
+        retry
+            .mcp_binding_summaries_json
+            .as_deref()
+            .expect("Workspace binding summary"),
+    )
+    .expect("parse Workspace binding summaries");
+    let [summary] = summaries.as_slice() else {
+        panic!("one Workspace binding summary");
+    };
+    assert_eq!(summary.id, "internal:workspace");
+    assert_eq!(summary.server_name, "proliferate_workspace");
 }
 
 #[test]

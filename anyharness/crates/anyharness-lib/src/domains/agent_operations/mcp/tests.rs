@@ -441,6 +441,42 @@ async fn workspace_mcp_denials_are_typed_and_do_not_leak_foreign_subagent_metada
         spoofed["result"]["structuredContent"]["error"]["code"],
         "WORKSPACE_MCP_ARGUMENTS_INVALID"
     );
+
+    let cross_workspace_subagent = authenticated_dispatch(
+        &server,
+        &p_token,
+        context("workspace-a", "P"),
+        json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_agent",
+                "arguments": {
+                    "workspaceId": "workspace-b",
+                    "kind": "subagent",
+                    "task": "review the target"
+                }
+            }
+        }),
+    )
+    .await
+    .expect("cross-workspace subagent dispatch")
+    .expect("cross-workspace subagent response");
+    assert_eq!(cross_workspace_subagent["result"]["isError"], true);
+    assert_eq!(
+        cross_workspace_subagent["result"]["structuredContent"]["error"],
+        json!({
+            "code": "SUBAGENT_SAME_WORKSPACE_REQUIRED",
+            "message": "Subagents must use the calling agent's workspaceId. Use whoami to get it, or create an ordinary agent for another workspace.",
+        })
+    );
+    assert!(
+        serde_json::to_vec(&cross_workspace_subagent)
+            .expect("serialize denial response")
+            .len()
+            <= 65_536
+    );
 }
 
 #[tokio::test]

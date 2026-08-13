@@ -143,6 +143,23 @@ export function useWorkspaceHeaderTabsViewModel() {
     workspaceId: selectedWorkspaceId,
     sessionIds: knownSessionIds,
   });
+  const paneOnlySubagentSessionIds = useMemo(() => {
+    const sessionIds = new Set(hierarchy.paneOnlySubagentSessionIds);
+    for (const slot of liveSlots) {
+      if (slot.sessionRelationship.kind === "subagent_child") {
+        sessionIds.add(slot.sessionId);
+      }
+    }
+    return sessionIds;
+  }, [hierarchy.paneOnlySubagentSessionIds, liveSlots]);
+  const headerHierarchy = useMemo(() => ({
+    ...hierarchy,
+    paneOnlySubagentSessionIds,
+  }), [hierarchy, paneOnlySubagentSessionIds]);
+  const headerKnownSessionIds = useStableStringArray(useMemo(
+    () => knownSessionIds.filter((sessionId) => !paneOnlySubagentSessionIds.has(sessionId)),
+    [knownSessionIds, paneOnlySubagentSessionIds],
+  ));
   const {
     displayManualGroups,
     groupedTabs,
@@ -154,8 +171,8 @@ export function useWorkspaceHeaderTabsViewModel() {
     visibleChatSessionIds,
   } = useWorkspaceHeaderTabsVisibility({
     activeSessionId,
-    hierarchy,
-    knownSessionIds,
+    hierarchy: headerHierarchy,
+    knownSessionIds: headerKnownSessionIds,
     persistedManualGroups,
     persistedVisibleIds,
     recentlyHiddenIds,
@@ -271,7 +288,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     activeSessionId,
     childToParent: hierarchy.childToParent,
     childrenByParentSessionId: hierarchy.childrenByParentSessionId,
-    knownSessionIds,
+    knownSessionIds: headerKnownSessionIds,
     resolvedHierarchySessionIds: hierarchy.resolvedSessionIds,
   });
 
@@ -290,8 +307,18 @@ export function useWorkspaceHeaderTabsViewModel() {
     }, () => buildHeaderClosedChatTabs({
       highlightedChatSessionId,
       rowsBySessionId: hierarchyChildren.rowsBySessionId,
-      knownSessions: knownSessions.values(),
-      recentlyHiddenIds,
+      knownSessions: Array.from(knownSessions.values()).filter((known) =>
+        !paneOnlySubagentSessionIds.has(
+          known.kind === "slot"
+            ? known.slot.sessionId
+            : known.kind === "session"
+              ? known.clientSessionId ?? known.session.id
+              : known.sessionId,
+        )
+      ),
+      recentlyHiddenIds: recentlyHiddenIds.filter(
+        (sessionId) => !paneOnlySubagentSessionIds.has(sessionId),
+      ),
       visibleChatSessionIds,
       sessionLastInteracted,
       sessionLastViewedAt,
@@ -300,6 +327,7 @@ export function useWorkspaceHeaderTabsViewModel() {
       highlightedChatSessionId,
       hierarchyChildren.rowsBySessionId,
       knownSessions,
+      paneOnlySubagentSessionIds,
       recentlyHiddenIds,
       sessionLastInteracted,
       sessionLastViewedAt,
@@ -314,7 +342,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     activeShellTabKey,
     closedChatTabsCount: closedChatTabs.length,
     displayShellRowsCount: displayShellRows.length,
-    knownSessionIds,
+    knownSessionIds: headerKnownSessionIds,
     liveSlots,
     materializedWorkspaceId,
     orderedShellTabKeys,

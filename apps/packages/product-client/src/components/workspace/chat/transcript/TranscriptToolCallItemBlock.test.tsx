@@ -512,6 +512,79 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(screen.queryByText("Created workspace")).toBeNull();
   });
 
+  it("renders a production-shaped Codex ordinary create with its deterministic glyph", () => {
+    const created = agentView({
+      identity: { runtimeId: "runtime-1", sessionId: "ordinary-created" },
+      role: "ordinary",
+      parent: null,
+      title: "Ordinary reviewer",
+    });
+    const item = workspaceTool("create_agent", {
+      nativeToolName: null,
+      rawInput: {
+        server: "workspace",
+        tool: "create_agent",
+        arguments: { workspaceId: "workspace-1", kind: "ordinary" },
+      },
+      rawOutput: {
+        content: [{ type: "text", text: JSON.stringify(created) }],
+        isError: false,
+        structuredContent: created,
+      },
+    });
+
+    const { container } = render(
+      <TranscriptToolCallItemBlock item={item} workspaceId="workspace-1" onOpenArtifact={() => {}} />,
+    );
+
+    expect(container.querySelector("[data-agent-identity-chip] svg")).toBeTruthy();
+    expect(container.querySelector("[data-agent-operations-product-mark]")).toBeNull();
+    expect(screen.getByText("Ordinary reviewer")).toBeTruthy();
+    expect(screen.getByText("created")).toBeTruthy();
+  });
+
+  it("keeps a targeted Workspace read foldable while using the agent glyph", () => {
+    const item = workspaceTool("get_task_output", {
+      rawInput: { agentId: "target-agent", limit: 10 },
+      rawOutput: { messages: [{ role: "assistant", text: "Done" }] },
+    });
+
+    const { container } = render(
+      <TranscriptToolCallItemBlock item={item} workspaceId="workspace-1" onOpenArtifact={() => {}} />,
+    );
+
+    expect(container.querySelector("[data-solid-seal-notch]")).toBeTruthy();
+    expect(container.querySelector("[data-agent-operations-product-mark]")).toBeNull();
+    expect(screen.getByRole("button").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it.each(["in_progress", "failed"] as const)(
+    "renders a %s Codex create with the product mark and no invented identity",
+    (status) => {
+      const item = workspaceTool("create_agent", {
+        status,
+        nativeToolName: null,
+        rawInput: {
+          server: "proliferate_workspace",
+          tool: "create_agent",
+          arguments: { workspaceId: "workspace-1", kind: "ordinary" },
+        },
+        rawOutput: {
+          content: [],
+          isError: status === "failed",
+          structuredContent: agentView(),
+        },
+      });
+
+      const { container } = render(
+        <TranscriptToolCallItemBlock item={item} workspaceId="workspace-1" onOpenArtifact={() => {}} />,
+      );
+
+      expect(container.querySelector("[data-agent-operations-product-mark]")).toBeTruthy();
+      expect(container.querySelector("[data-agent-identity-chip]")).toBeNull();
+    },
+  );
+
   it.each([
     ["create_agent", "created"],
     ["configure_agent", "configured"],
