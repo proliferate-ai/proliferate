@@ -137,6 +137,12 @@ fn attributes(accepted: &CollectorAcceptedRecordV1) -> Vec<Value> {
             string_value(component_name(record.component)),
         ),
         attribute("proliferate.source", string_value(source_name(record.source))),
+        // Also the resource's `service.instance.id`. Repeating it on the record
+        // keeps producer identity queryable without a resource join.
+        attribute(
+            "proliferate.producer_boot_id",
+            string_value(&record.producer_boot_id),
+        ),
         attribute(
             "proliferate.privacy",
             string_value(privacy_name(record.privacy)),
