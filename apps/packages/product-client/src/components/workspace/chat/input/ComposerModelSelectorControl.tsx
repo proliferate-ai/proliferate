@@ -120,6 +120,9 @@ export function ComposerModelSelectorControl({
         data-composer-selected-model={selectedModelId}
         icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-body)]" /> : undefined}
         label={triggerLabel}
+        // 13px/500 composer control grammar: --text-ui is already 13px, so
+        // only the weight is added here (the compact tier bakes it in).
+        labelClassName="font-medium"
         className="max-w-[min(15rem,100%)]"
       />
     );
@@ -135,6 +138,7 @@ export function ComposerModelSelectorControl({
             data-composer-selected-model={selectedModelId}
             icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-body)]" /> : undefined}
             label={triggerLabel}
+            labelClassName="font-medium"
             trailing={showsPendingConfigIndicator(currentModel?.pendingState ?? null)
               ? <PendingConfigIndicator pendingState={currentModel?.pendingState ?? null} />
               : null}

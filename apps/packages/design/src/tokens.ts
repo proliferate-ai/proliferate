@@ -189,8 +189,12 @@ export const themeTokens = {
    */
   "--color-composer-background": {
     dark: "#2d2d2d",
-    light: "#ffffff",
-    provenance: "[RETUNE:light/independent-scale]",
+    // Light was pure white when the composer still drew a 0.5px stroke +
+    // elevation; borderless chrome (composer-input cleanup) means the fill IS
+    // the surface, so white-on-white would make the composer invisible. #f4f4f4
+    // is the light analogue of dark's own step off the page (#181818 → #2d2d2d).
+    light: "#f4f4f4",
+    provenance: "[COMPOSER-CLEANUP:fill-defined-surface]",
   },
   "--color-composer-control-active-foreground": {
     dark: "var(--color-foreground)",
@@ -1017,6 +1021,11 @@ export const themeTokens = {
     light: motion.cssMs(motion.duration.panelMs),
     provenance: "[RETUNE:motion/roles]",
   },
+  "--ease-emphasized": {
+    dark: motion.ease.emphasized,
+    light: motion.ease.emphasized,
+    provenance: "[COMPOSER-CLEANUP:mode-badge-drop]",
+  },
   "--ease-linear": {
     dark: motion.ease.linear,
     light: motion.ease.linear,
@@ -1166,8 +1175,8 @@ export const themeTokens = {
     provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-composer": {
-    dark: "1.25rem",
-    light: "1.25rem",
+    dark: "1.75rem",
+    light: "1.75rem",
     provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-full": {

@@ -1,12 +1,12 @@
-import type { ReactNode } from "react";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerModelSelectorControl } from "./ComposerModelSelectorControl";
-import { ComposerReasoningEffortBars } from "./ComposerReasoningEffortBars";
+import { ComposerEffortStepper } from "./ComposerEffortStepper";
 import { ComposerFastModeToggle } from "./ComposerFastModeToggle";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import { ComposerContextRing } from "./ComposerContextRing";
 import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
-import { SessionModeControl } from "./SessionModeControl";
+import { ComposerModeBadge } from "./ComposerModeBadge";
 import {
   buildComposerSessionControlGroups,
 } from "#product/lib/domain/chat/session-controls/composer-control-groups";
@@ -36,8 +36,6 @@ export interface ChatInputControlRowProps {
   isEmpty: boolean;
   onSubmit: () => void;
   onCancel: () => void;
-  /** Workspace-status trigger — slots after the runtime-pressure ring. */
-  statusControl?: ReactNode;
 }
 
 export interface ComposerLeadingControlsProps {
@@ -49,11 +47,12 @@ export interface ComposerLeadingControlsProps {
 }
 
 /**
- * The leading control cluster (model selector, mode, reasoning bars, fast mode,
- * goal, integrations). Shared verbatim between the in-session chat composer
- * (ChatInputControlRow) and the home/new-chat composer (HomeNextScreen slot):
- * home feeds it launch-time control descriptors instead of live-session
- * ones, and session-only controls (goal) hide via their own gating.
+ * The leading control cluster (model selector, fast mode, effort stepper, mode
+ * badge, goal, urgent integrations). Shared verbatim between the in-session
+ * chat composer (ChatInputControlRow) and the home/new-chat composer
+ * (HomeNextScreen slot): home feeds it launch-time control descriptors instead
+ * of live-session ones, and session-only controls (goal) hide via their own
+ * gating.
  */
 export function ComposerLeadingControls({
   runtimeControlsDisabled,
@@ -89,33 +88,7 @@ export function ComposerLeadingControls({
         />
       </div>
 
-      {/* 2. Primary working mode control (bypass/plan/etc). The trigger is
-          the flex item itself (no wrapper span): SessionModeControl owns its
-          compact-tier shrink behavior, and a min-w-0 wrapper would let the
-          cluster squeeze the pill below its icon regardless. */}
-      {controlGroups.modeControl && (
-        <SessionModeControl
-          agentKind={agentKind}
-          control={controlGroups.modeControl}
-          triggerStyle="value"
-          className={runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""}
-        />
-      )}
-
-      {/* 3. Reasoning/effort bars */}
-      {controlGroups.reasoningEffortControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerReasoningEffortBars
-            control={controlGroups.reasoningEffortControl}
-          />
-        </span>
-      )}
-
-      {/* 4. Fast mode toggle */}
+      {/* 2. Fast mode toggle */}
       {controlGroups.fastModeControl && (
         <span
           className={`inline-flex shrink-0 ${
@@ -126,10 +99,34 @@ export function ComposerLeadingControls({
         </span>
       )}
 
-      {/* 5. Goal button */}
+      {/* 3. Reasoning effort stepper */}
+      {controlGroups.reasoningEffortControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerEffortStepper
+            control={controlGroups.reasoningEffortControl}
+          />
+        </span>
+      )}
+
+      {/* 4. Working mode badge (bypass/plan/etc) — icon-only, steps on click. */}
+      {controlGroups.modeControl && (
+        <ComposerModeBadge
+          agentKind={agentKind}
+          control={controlGroups.modeControl}
+          className={runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""}
+        />
+      )}
+
+      {/* 5. Goal button. Kept on the compact grammar: the goal system is
+          unchanged by this pass, so its only entry path must not be orphaned. */}
       {canSetGoal && (
         <ComposerControlButton
           iconOnly
+          size="compact"
           icon={<Target className="icon-control" />}
           label="Set goal"
           aria-label="Set goal"
@@ -142,7 +139,7 @@ export function ComposerLeadingControls({
         />
       )}
 
-      {/* 6. Integrations control */}
+      {/* 6. Integrations — renders only for an urgent re-auth. */}
       <ComposerIntegrationsControl />
     </>
   );
@@ -157,16 +154,14 @@ export interface ComposerTrailingControlsProps {
   canAttachFiles: boolean;
   activeSessionId: string | null;
   onAttachFile: () => void;
-  /** Workspace-status trigger — slots after the runtime-pressure ring. */
-  statusControl?: ReactNode;
 }
 
 /**
- * The trailing control cluster (attach, runtime pressure, overflow) —
- * shared between chat and home like ComposerLeadingControls. Home
- * passes supportsAttachments/canAttachFiles=false and gets the exact
- * disabled plus-button + "available after a session starts" detail that
- * chat's pre-session state shows.
+ * The trailing control cluster (runtime-pressure ring, attach) — shared
+ * between chat and home like ComposerLeadingControls. Home passes
+ * supportsAttachments/canAttachFiles=false and gets the exact disabled
+ * plus-button + "available after a session starts" detail that chat's
+ * pre-session state shows.
  */
 export function ComposerTrailingControls({
   runtimeControlsDisabled,
@@ -177,7 +172,6 @@ export function ComposerTrailingControls({
   canAttachFiles,
   activeSessionId,
   onAttachFile,
-  statusControl,
 }: ComposerTrailingControlsProps) {
   const canUseUtilityActions =
     !isEditingQueuedPrompt && !chatDisabled && !runtimeControlsDisabled && !isSubmitting;
@@ -192,7 +186,10 @@ export function ComposerTrailingControls({
 
   return (
     <>
-      {/* 7. Plus button — direct file attach */}
+      {/* 7. Runtime-pressure ring — self-gating on the pressure facade. */}
+      <ComposerContextRing />
+
+      {/* 8. Plus button — direct file attach */}
       {!isEditingQueuedPrompt && (
         <ComposerControlButton
           iconOnly
@@ -204,11 +201,6 @@ export function ComposerTrailingControls({
           onClick={onAttachFile}
         />
       )}
-
-      {/* 8. Workspace status — the single ambient-state surface: background
-          work, source control, runtime resources, and the advanced session
-          config that used to live in the "..." overflow menu. */}
-      {statusControl}
     </>
   );
 }
@@ -230,7 +222,6 @@ export function ChatInputControlRow({
   isEmpty,
   onSubmit,
   onCancel,
-  statusControl,
 }: ChatInputControlRowProps) {
   return (
     <ChatComposerControlRowFrame
@@ -253,7 +244,6 @@ export function ChatInputControlRow({
           canAttachFiles={canAttachFiles}
           activeSessionId={activeSessionId}
           onAttachFile={onAttachFile}
-          statusControl={statusControl}
         />
       )}
       action={(

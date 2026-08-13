@@ -417,7 +417,9 @@ function rgbToHex(channels: readonly [number, number, number]): string {
   return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 const COMPOSER_DARK_HEX = rgbToHex([0x2d, 0x2d, 0x2d]);
-const COMPOSER_LIGHT_HEX = rgbToHex([0xff, 0xff, 0xff]);
+// Off-white, not the page's #ffffff: with the borderless composer chrome the
+// fill alone separates the surface from the page in light mode.
+const COMPOSER_LIGHT_HEX = rgbToHex([0xf4, 0xf4, 0xf4]);
 
 describe("chat retune tokens", () => {
   it("makes the composer surface fully opaque in both modes", () => {
@@ -437,6 +439,8 @@ describe("chat retune tokens", () => {
     const composerSurfaceRule = readRule(productCss, /\.chat-composer-surface\s*\{([\s\S]*?)\}/);
     expect(composerSurfaceRule).toContain("background-color: var(--color-composer-background);");
     expect(composerSurfaceRule).toContain("var(--color-composer-backdrop-filter)");
+    // Fill only: the 0.5px shadow-stroke and elevation stack were replaced.
+    expect(composerSurfaceRule).not.toContain("box-shadow");
   });
 
   it("declares the adopted transcript measure and turn-rhythm tokens", () => {
@@ -445,12 +449,11 @@ describe("chat retune tokens", () => {
     expect(themeDeclarations["--spacing-transcript-turn"]).toBe("1rem");
   });
 
-  it("rounds the composer to the reference ramp's 20px radius", () => {
-    // Round-2 retune: adopts the reference multiline-surface radius
-    // (--radius-3xl-base 1.25rem × --corner-radius-scale 1 = 20px) instead of
-    // the earlier 12px [RAD-04] deviation. The composer keeps a SEPARATE
-    // token name from --radius-xl so the two can diverge again later.
-    expect(themeDeclarations["--radius-composer"]).toBe("1.25rem");
+  it("rounds the composer to the 28px chrome radius", () => {
+    // Composer-cleanup retune: the borderless composer carries its shape in
+    // the radius alone, so 20px becomes 28px. It keeps a SEPARATE token name
+    // from --radius-xl so the two can diverge again later.
+    expect(themeDeclarations["--radius-composer"]).toBe("1.75rem");
   });
 });
 

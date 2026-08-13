@@ -50,18 +50,12 @@ afterEach(() => {
 });
 
 describe("ComposerIntegrationsControl", () => {
-  it("renders an icon-only trigger with an empty popover when nothing is connected", () => {
-    render(<ComposerIntegrationsControl />);
-
-    const trigger = screen.getByRole("button", { name: /0 connected integrations/i });
-    expect(trigger.textContent).not.toContain("0");
-    expect(trigger.querySelector("svg")?.className.baseVal).toContain("icon-control");
-
-    fireEvent.click(trigger);
-    expect(screen.getByText("Manage integrations")).toBeTruthy();
+  it("renders nothing when nothing is connected", () => {
+    const { container } = render(<ComposerIntegrationsControl />);
+    expect(container.innerHTML).toBe("");
   });
 
-  it("shows the connected count in the quiet state", () => {
+  it("renders nothing while every connected integration is healthy", () => {
     mocks.state = {
       mode: "quiet",
       connectedCount: 3,
@@ -72,10 +66,9 @@ describe("ComposerIntegrationsControl", () => {
       ],
       reauthLabel: null,
     };
-    render(<ComposerIntegrationsControl />);
+    const { container } = render(<ComposerIntegrationsControl />);
 
-    expect(screen.getByRole("button", { name: /3 connected integrations/i })).toBeTruthy();
-    expect(screen.getByText("3")).toBeTruthy();
+    expect(container.innerHTML).toBe("");
   });
 
   it("shows the single-provider reauth label in the urgent state", () => {
@@ -91,6 +84,20 @@ describe("ComposerIntegrationsControl", () => {
     render(<ComposerIntegrationsControl />);
 
     expect(screen.getByText("Notion needs re-authentication")).toBeTruthy();
+  });
+
+  it("carries the urgent chip on neutral ink, never a warning tone", () => {
+    mocks.state = {
+      mode: "urgent",
+      connectedCount: 1,
+      providers: [healthyProvider({ health: "needs_reauth", needsReauth: true })],
+      reauthLabel: "Linear needs re-authentication",
+    };
+    render(<ComposerIntegrationsControl />);
+
+    const trigger = screen.getByRole("button", { name: /needs re-authentication/i });
+    expect(trigger.className).toContain("text-foreground");
+    expect(trigger.innerHTML).not.toContain("warning");
   });
 
   it("shows the count reauth label when several providers need reauth", () => {
@@ -110,17 +117,17 @@ describe("ComposerIntegrationsControl", () => {
 
   it("opens a popover listing connected providers on click", () => {
     mocks.state = {
-      mode: "quiet",
+      mode: "urgent",
       connectedCount: 2,
       providers: [
-        healthyProvider(),
+        healthyProvider({ health: "needs_reauth", needsReauth: true }),
         healthyProvider({ definitionId: "def-2", namespace: "notion", displayName: "Notion" }),
       ],
-      reauthLabel: null,
+      reauthLabel: "Linear needs re-authentication",
     };
     render(<ComposerIntegrationsControl />);
 
-    fireEvent.click(screen.getByRole("button", { name: /connected integrations/i }));
+    fireEvent.click(screen.getByRole("button", { name: /needs re-authentication/i }));
 
     expect(screen.getByText("Linear")).toBeTruthy();
     expect(screen.getByText("Notion")).toBeTruthy();
@@ -146,14 +153,14 @@ describe("ComposerIntegrationsControl", () => {
 
   it("deep-links Manage integrations to the user integrations settings section", () => {
     mocks.state = {
-      mode: "quiet",
+      mode: "urgent",
       connectedCount: 1,
-      providers: [healthyProvider()],
-      reauthLabel: null,
+      providers: [healthyProvider({ health: "needs_reauth", needsReauth: true })],
+      reauthLabel: "Linear needs re-authentication",
     };
     render(<ComposerIntegrationsControl />);
 
-    fireEvent.click(screen.getByRole("button", { name: /connected integration/i }));
+    fireEvent.click(screen.getByRole("button", { name: /needs re-authentication/i }));
     fireEvent.click(screen.getByText("Manage integrations"));
 
     expect(mocks.navigate).toHaveBeenCalledWith("/settings?section=integrations");

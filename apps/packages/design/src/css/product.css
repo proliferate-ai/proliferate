@@ -307,13 +307,16 @@ body {
   box-shadow: var(--shadow-user-message);
 }
 
-/* Composer chrome: no border — a 0.5px stroke painted in
-   the shadow stack plus the elevation shadow. */
+/* Composer chrome: fill only. No stroke and no elevation — the composer is
+   read by its own fill against the pane and by its 28px radius, so the 0.5px
+   shadow-stroke and the elevation stack that used to sit here are both gone.
+   This is a replacement of the chrome, not a variant: every
+   .chat-composer-surface instance is borderless and shadowless.
+   --color-composer-shadow stays defined in tokens.ts (the settings
+   worktree/light-mode elevation vocabulary still references it) but the
+   composer no longer paints it. */
 .chat-composer-surface {
   background-color: var(--color-composer-background);
-  box-shadow:
-    0 0 0 0.5px var(--color-border),
-    var(--color-composer-shadow);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
@@ -323,11 +326,13 @@ body {
    so it takes the identical translucent fill and backdrop treatment — a cap
    that skipped the blur would be translucent over an unblurred transcript one
    pixel above a surface translucent over a blurred one, reading as two
-   different greys at the seam. It carries no elevation shadow (it is not the
-   floating edge); its 1px stroke is painted outside the border-box by the
-   consumer (ring-*) to line up with the surface's 0.5px shadow stroke, and the
-   bottom of that stroke is clipped here because the surface below is no longer
-   opaque enough to cover the bleed at 96% alpha. */
+   different greys at the seam. It carries no elevation shadow and no stroke of
+   its own; the 1px stroke that outlines the cap is painted outside the
+   border-box by the consumer (ring-*), and the bottom of it is clipped here
+   because the surface below is no longer opaque enough to cover the bleed at
+   96% alpha. The surface's own 0.5px shadow-stroke that this used to line up
+   with is gone (see .chat-composer-surface above); the cap's ring is the
+   activity card's chrome and is out of the composer-input scope. */
 .chat-composer-surface--cap {
   background-color: var(--color-composer-background);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
@@ -1309,6 +1314,51 @@ body {
   100% {
     transform: translateY(100%);
     opacity: 0;
+  }
+}
+
+/* Composer effort ladder: the six bars only ever change opacity between lit
+   (1) and unlit (0.3), and ComposerEffortStepper.tsx supplies the per-bar
+   transition-delay that makes the lit edge travel up the ladder rather than
+   the whole glyph flipping at once. The ruled 240ms is --duration-panel. */
+.composer-effort-ladder-bar {
+  transition: opacity var(--duration-panel) var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-effort-ladder-bar {
+    transition: none;
+  }
+}
+
+/* Composer mode badge glyph swap: the badge is icon-only, so the mode change
+   has nothing but the glyph to carry it. The new mode drops in from above
+   instead of crossfading — a crossfade of two 18px glyphs reads as a redraw,
+   the drop reads as a different mode arriving. Compositor-only
+   (transform/opacity); the element is keyed on the mode value in
+   ComposerModeBadge.tsx so the animation replays per step.
+   The ruled 200ms lands exactly on --duration-disclosure; the ruled
+   cubic-bezier(0.2, 0, 0, 1) had no owner on the ease scale, so it entered it
+   as --ease-emphasized (motion.ts) rather than being authored raw here or
+   rounded onto a neighbouring curve. */
+.composer-mode-badge-glyph {
+  animation: composer-mode-badge-glyph-in var(--duration-disclosure) var(--ease-emphasized) both;
+}
+
+@keyframes composer-mode-badge-glyph-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-7px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-mode-badge-glyph {
+    animation: none;
   }
 }
 

@@ -27,9 +27,11 @@ export function ComposerFastModeToggle({ control }: ComposerFastModeToggleProps)
 
   const toggle = (
     <ComposerControlButton
-      iconOnly
+      size="compact"
       disabled={!control.settable || !nextValue}
       active={!!control.isEnabled}
+      // Pressed state is the neutral hover fill, never a hue: Fast is a
+      // routing choice, not a warning or an accent moment.
       className={control.isEnabled ? "bg-hover" : ""}
       icon={
         <Zap
@@ -53,7 +55,7 @@ export function ComposerFastModeToggle({ control }: ComposerFastModeToggleProps)
 
   if (showsPendingConfigIndicator(control.pendingState)) {
     return (
-      <Tooltip content={tooltip}>
+      <Tooltip content={tooltip} keepOpenOnPress>
         <span className="inline-flex items-center gap-1">
           {toggle}
           <PendingConfigIndicator pendingState={control.pendingState} />

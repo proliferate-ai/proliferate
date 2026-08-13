@@ -44,6 +44,13 @@ export const motion = {
     outCubic: "cubic-bezier(0.22, 0.61, 0.36, 1)",
     spring: "cubic-bezier(0.16, 1, 0.3, 1)",
     standard: "cubic-bezier(0.4, 0, 0.2, 1)",
+    /**
+     * Emphasized decelerate: leaves at full speed and lands hard on the end
+     * value with no settle. For a glyph that is *replaced* rather than moved —
+     * the arrival, not the travel, is the message. Distinct from `spring`
+     * (which overshoots) and `standard` (which eases in as well as out).
+     */
+    emphasized: "cubic-bezier(0.2, 0, 0, 1)",
     linear: "linear",
   },
   /**

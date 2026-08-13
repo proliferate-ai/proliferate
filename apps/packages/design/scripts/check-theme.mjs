@@ -192,7 +192,9 @@ for (const [name, expected] of Object.entries({
   "--color-surface-editor": "#fafafa",
   "--color-primary": "#1a1c1f",
   "--color-primary-foreground": "#ffffff",
-  "--color-composer-background": "#ffffff",
+  // Off-white, not the #ffffff plane: borderless composer chrome means the
+  // fill alone separates the composer from the page (see tokens.ts).
+  "--color-composer-background": "#f4f4f4",
   "--color-composer-backdrop-filter": "none",
   "--color-composer-control-foreground": "var(--color-muted-foreground)",
   "--color-composer-control-muted-foreground": "var(--color-faint)",

@@ -1,9 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "#product/primitives/Button";
-import {
-  COMPOSER_COMPACT_HIDDEN_CLASSNAME,
-  COMPOSER_COMPACT_SHRINK_NONE_CLASSNAME,
-} from "#product/config/chat-layout";
 import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { ArrowUpRight, Settings } from "#product/primitives/icons/core";
@@ -22,13 +18,13 @@ import {
 } from "#product/components/workspace/chat/input/workspace-status/StatusCardPrimitives";
 
 /**
- * The single composer integrations control. Always present: an icon-only plug
- * when nothing is connected, a quiet plug + count when every connected
- * integration is healthy, and the old reauth chip's urgent warning
- * presentation the moment one needs re-authentication. Clicking opens a
- * status-card-anatomy popover listing the connected providers, each with a
- * health dot and — when it needs re-authentication — a Reconnect affordance
- * that deep-links to Settings.
+ * The composer integrations control — urgent states only. A healthy
+ * integration is not news, so connected/quiet renders nothing at all and the
+ * control row keeps one fewer permanent resident; the chip appears only when a
+ * provider needs re-authentication, which is the one state the composer can
+ * act on. Clicking opens the unchanged status-card-anatomy popover listing the
+ * connected providers, each with a health dot and — when it needs
+ * re-authentication — a Reconnect affordance that deep-links to Settings.
  */
 export function ComposerIntegrationsControl() {
   const navigate = useNavigate();
@@ -37,15 +33,11 @@ export function ComposerIntegrationsControl() {
   const goToIntegrations = () =>
     navigate(buildSettingsHref({ section: "integrations" }));
 
-  const isUrgent = mode === "urgent" && reauthLabel !== null;
-  const triggerLabel = isUrgent
-    ? reauthLabel
-    : connectedCount > 0
-      ? String(connectedCount)
-      : "Integrations";
-  const triggerAriaLabel = isUrgent
-    ? `${reauthLabel}. Open connected integrations.`
-    : `${connectedCount} connected ${connectedCount === 1 ? "integration" : "integrations"}. Open connected integrations.`;
+  if (mode !== "urgent" || reauthLabel === null) {
+    return null;
+  }
+
+  const triggerAriaLabel = `${reauthLabel}. Open connected integrations.`;
 
   return (
     <PopoverButton
@@ -55,29 +47,23 @@ export function ComposerIntegrationsControl() {
       className="w-auto border-0 bg-transparent p-0 shadow-none"
       trigger={(
         <ComposerControlButton
-          iconOnly={connectedCount === 0 && !isUrgent}
-          label={triggerLabel}
-          // Compact tier: the connected count yields to the glyph alone. The
-          // urgent re-auth label stays visible (and shrinkable) at every
-          // width — a warning reduced to a dot is no warning.
-          labelWrapperClassName={isUrgent ? "" : COMPOSER_COMPACT_HIDDEN_CLASSNAME}
-          className={isUrgent ? "" : COMPOSER_COMPACT_SHRINK_NONE_CLASSNAME}
+          size="compact"
+          label={reauthLabel}
+          // The urgent label stays visible (and shrinkable) at every width —
+          // a warning reduced to a dot is no warning.
+          className="text-foreground"
           aria-label={triggerAriaLabel}
-          icon={
-            isUrgent ? (
-              <span
-                aria-hidden="true"
-                className="block icon-status rounded-full bg-warning-foreground"
-              />
-            ) : (
-              // Reference: the sidebar's own "Connections" entry (the
-              // settings section this control deep-links to) uses a
-              // network/globe glyph, not a literal plug or puzzle-piece —
-              // matched here via the in-repo Globe icon rather than the
-              // reference's own path data.
-              <Globe aria-hidden="true" className="icon-control" />
-            )
-          }
+          icon={(
+            // Neutral emphasis, not a hue: the yellow --color-warning dot this
+            // replaced is banned in the composer, and the composer's only
+            // colored signal is the context ring's destructive arc. OPEN TOKEN
+            // DECISION (handoff): whether re-auth eventually earns a
+            // destructive tone or stays foreground-neutral is unresolved.
+            <span
+              aria-hidden="true"
+              className="block icon-status rounded-full bg-foreground"
+            />
+          )}
         />
       )}
     >
@@ -155,7 +141,9 @@ function ProviderRow({
               variant="unstyled"
               size="unstyled"
               onClick={onReconnect}
-              className="shrink-0 rounded-sm px-1 text-ui text-warning-foreground hover:text-foreground"
+              // Neutral, not warning: no --color-warning* survives anywhere in
+              // the composer (same open token decision as the trigger dot).
+              className="shrink-0 rounded-sm px-1 text-ui text-muted-foreground hover:text-foreground"
             >
               Reconnect
             </Button>
