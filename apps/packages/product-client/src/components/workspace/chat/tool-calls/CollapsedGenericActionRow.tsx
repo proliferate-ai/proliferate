@@ -12,6 +12,7 @@ import {
   PlainActionRow,
 } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
+import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 
 export function GenericActionRow({ item }: { item: ToolCallItem }) {
   const [expanded, setExpanded] = useState(false);
@@ -38,7 +39,7 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
           onToggle={() => setExpanded((value) => !value)}
         />
         {expanded && (
-          <div className="mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-surface-elevated-secondary">
+          <ToolActionDetailsPanel className="mt-1.5">
             <div className="flex items-center justify-between gap-2 px-2 py-1 text-chat text-muted-foreground">
               <span>Result</span>
             </div>
@@ -51,7 +52,7 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
                 <code>{output}</code>
               </pre>
             </AutoHideScrollArea>
-          </div>
+          </ToolActionDetailsPanel>
         )}
       </div>
     );

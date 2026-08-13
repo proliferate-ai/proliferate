@@ -110,6 +110,11 @@ export function WorkspaceCreationReceiptView({
       </Button>
 
       {expanded && hasLog && (
+        // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review,
+        // check 1): the setup log is an unfilled frame — a hairline around
+        // transcript ground, so the log reads as part of the column rather than
+        // as a raised card. `Card`'s two surfaces both paint a fill, and there
+        // is no borderless-with-edge spelling. Needs a ruling on `Card`.
         <div
           id={logId}
           data-chat-transcript-ignore

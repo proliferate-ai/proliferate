@@ -157,6 +157,11 @@ export function SessionErrorItem({
         </div>
       ) : null}
       {detailsExpanded && presentation.technicalDetail && (
+        // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review,
+        // check 1): the technical detail deliberately recedes to a translucent
+        // `bg-background/70` — below the error block it sits inside, not above
+        // it. `Card`'s fills both read as raised surfaces, so neither expresses
+        // a recessed well. Needs a ruling on `Card` rather than a repaint here.
         <div className="mt-2 whitespace-pre-wrap rounded-md border border-border/70 bg-background/70 px-2.5 py-2 font-mono text-chat leading-5 text-muted-foreground select-text">
           {presentation.technicalDetail}
         </div>

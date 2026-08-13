@@ -1,7 +1,7 @@
 import type { ReactNode, RefObject } from "react";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 import { Button } from "#product/primitives/Button";
-import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
+import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 
 /**
  * Shared chrome for the composer's inline menus (slash commands, `@` file
@@ -12,7 +12,9 @@ import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
  * a popper: full composer width, `mb-2` off the input's top edge. It reuses the
  * canonical popover frame (fill, hairline ring, blur, 12px radius) so an
  * inline composer menu and a floating dropdown are recognizably the same
- * object; only the anchoring differs.
+ * object; only the anchoring differs. The frame itself comes from the composer
+ * kit's own `ComposerPopoverSurface` — paint is the library's job, so the
+ * canonical frame is composed here rather than pasted in as a class constant.
  */
 export function ComposerInlineMenuPanel({
   listRef,
@@ -26,13 +28,21 @@ export function ComposerInlineMenuPanel({
   className?: string;
 }) {
   return (
-    <div
+    <ComposerPopoverSurface
       data-composer-overlay-floating-ui
       data-telemetry-mask
-      className={twMerge(POPOVER_FRAME_CLASS, "mb-2 overflow-hidden p-1", className)}
+      // `m-px` preserves the 1px inset the borrowed frame constant carried, so
+      // the panel's hairline ring does not sit flush against the composer's own
+      // edge at full composer width.
+      className={twMerge("m-px mb-2 overflow-hidden", className)}
     >
       <div
         ref={listRef}
+        // Recorded exemption (DESIGN_SYSTEM.md § UI-conformance review, check 3):
+        // none of the sanctioned overlay paths owns a listbox anchored by normal
+        // document flow. `PopoverButton`, `DropdownMenu` and `Tooltip` are all
+        // popper-positioned and portalled, and moving this menu onto a popper
+        // would change its anchoring — a product decision, not a cleanup.
         role="listbox"
         aria-label={label}
         // Ten rows on a normal viewport, with a proportional cap when the
@@ -42,7 +52,7 @@ export function ComposerInlineMenuPanel({
       >
         {children}
       </div>
-    </div>
+    </ComposerPopoverSurface>
   );
 }
 
@@ -55,6 +65,15 @@ export function ComposerInlineMenuPanel({
  * truncates. Hover and keyboard highlight share the `bg-hover` paint;
  * `bg-selected` is not used here because the highlight is transient (it tracks
  * the keyboard position), not a persisted selection.
+ *
+ * NOT a second instance of `PopoverMenuItem`, and deliberately not folded into
+ * it: that row's label is `min-w-0 flex-1 truncate` and absorbs the row's slack,
+ * while here `primary` is `flex-none` and the muted `secondary` absorbs it, at a
+ * different text scale (`text-ui` vs `text-ui-sm`). Different slot structure is
+ * a different shape. Because it is a distinct first-instance shape, its
+ * `hover:bg-hover focus:bg-hover` pair below is legal under the rule-of-two
+ * state carve-out — built only from shared state tokens and riding with the
+ * shape (DESIGN_SYSTEM.md § UI-conformance review, check 7).
  */
 export function ComposerInlineMenuRow({
   id,
@@ -88,6 +107,10 @@ export function ComposerInlineMenuRow({
       type="button"
       variant="unstyled"
       size="unstyled"
+      // Recorded exemption (DESIGN_SYSTEM.md § UI-conformance review, check 3),
+      // the option half of the ruling written on `role="listbox"` in
+      // `ComposerInlineMenuPanel` above: the roles ride together, and no
+      // sanctioned overlay path owns a layout-anchored listbox.
       role="option"
       data-list-navigation-item
       aria-selected={selected}
@@ -124,15 +147,6 @@ export function ComposerInlineMenuRow({
 export function ComposerInlineMenuGroupLabel({ children }: { children: ReactNode }) {
   return (
     <div className="px-2.5 pb-0.5 pt-1.5 text-ui-sm text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
-/** Non-selectable status row (empty result, loading, blocked runtime). */
-export function ComposerInlineMenuStatusRow({ children }: { children: ReactNode }) {
-  return (
-    <div className="px-2.5 py-[5px] text-ui text-muted-foreground">
       {children}
     </div>
   );

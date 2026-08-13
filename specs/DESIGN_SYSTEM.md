@@ -838,7 +838,7 @@ index is the closed set, not a sample of it.
 | `DropdownMenu` | [DropdownMenu.tsx](../apps/packages/product-client/src/primitives/DropdownMenu.tsx) | Raw `@radix-ui/react-dropdown-menu` wrapper — see DropdownMenu status below. |
 | `FixedPositionLayer` | [FixedPositionLayer.tsx](../apps/packages/product-client/src/primitives/FixedPositionLayer.tsx) | Fixed-position wrapper for viewport-anchored overlay content. |
 | `IconButton` | [IconButton.tsx](../apps/packages/product-client/src/primitives/IconButton.tsx) | Icon-only button, tone/size variants. |
-| `IconTile` | [IconTile.tsx](../apps/packages/product-client/src/primitives/IconTile.tsx) | Glyph in a rounded tinted square, `tone` × `size`; non-interactive by construction, so it owns no state stack and never becomes a button. Promoted from 14 hand-rolled tiles across harness, repo-setup, billing and transcript surfaces. |
+| `IconTile` | [IconTile.tsx](../apps/packages/product-client/src/primitives/IconTile.tsx) | Glyph in a rounded tinted square, `tone` × `size`; non-interactive by construction, so it owns no state stack and never becomes a button. Promoted from 14 hand-rolled tiles across harness, repo-setup, billing and transcript surfaces. Two of the transcript tiles have migrated. |
 | `Input` | [Input.tsx](../apps/packages/product-client/src/primitives/Input.tsx) | Text input field. |
 | `Label` | [Label.tsx](../apps/packages/product-client/src/primitives/Label.tsx) | Form field label. |
 | `PaneIconButton` | [PaneIconButton.tsx](../apps/packages/product-client/src/primitives/PaneIconButton.tsx) | Pane-scoped icon button (24px box), composes `Button`. |
@@ -875,13 +875,14 @@ module is the styled call-site entry point most consumers use.
 
 **`DropdownMenu` status.** `DropdownMenu.tsx` is a legacy menu system living
 alongside the sanctioned `PopoverButton`/`PopoverMenuItem` pair, not a second
-tier. Four files still import it directly:
+tier. Five files import it directly:
 [WorkspaceItemMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/sidebar/WorkspaceItemMenu.tsx),
 [RightPanelNewTabMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/right-panel/RightPanelNewTabMenu.tsx),
 [WorkspaceActionsMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/topbar/WorkspaceActionsMenu.tsx)
 (all `product-client`), and
-[ProposedPlanCard.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx)
-(`product-client`). Migrating them onto `PopoverButton`/`PopoverMenuItem` waits
+[ProposedPlanCard.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx), and
+[SelectedResponseActionMenu.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/SelectedResponseActionMenu.tsx)
+(both `product-client`; the latter replaced chat's hand-rolled `role="menu"` machine). Migrating them onto `PopoverButton`/`PopoverMenuItem` waits
 on parity: Radix's dropdown-menu primitive provides roving-tabindex arrow-key
 navigation, typeahead, and managed focus-return-to-trigger that
 `PopoverButton`/`PopoverMenuItem` do not implement today. Behavior parity is an
@@ -889,7 +890,7 @@ admission requirement for sanctioned replacements — a library component is not
 declared the sanctioned replacement for a vendor-backed primitive until it
 matches that primitive's keyboard and focus behavior. Until
 `PopoverButton`/`PopoverMenuItem` reach parity, `DropdownMenu` remains the
-sanctioned path for menus that need keyboard navigation (the four consumers
+sanctioned path for menus that need keyboard navigation (the five consumers
 above are not migration debt); click-only popovers use
 `PopoverButton`/`PopoverMenuItem`.
 
@@ -899,7 +900,7 @@ above are not migration debt); click-only popovers use
 | --- | --- | --- |
 | `AuthProviderButton` | [AuthProviderButton.tsx](../apps/packages/product-client/src/primitives/patterns/AuthProviderButton.tsx) | Auth-provider sign-in button with a loading state, composes `Spinner`. |
 | `AutoHideScrollArea` | [AutoHideScrollArea.tsx](../apps/packages/product-client/src/primitives/patterns/AutoHideScrollArea.tsx) | Scroll area whose scrollbar affordance auto-hides. |
-| `Card` | [Card.tsx](../apps/packages/product-client/src/primitives/patterns/Card.tsx) | The card surface — fill, radius, clipping and header layering, and nothing else (padding and width stay at the call site). `surface` (`tint` wash / `opaque` bordered panel) × `plane` (which ground a sticky header paints on); `stickyHeader` is a header-slot property, not a third axis. Promoted from 16 hand-rolled shells in the workflows area and 21 in chat. |
+| `Card` | [Card.tsx](../apps/packages/product-client/src/primitives/patterns/Card.tsx) | The card surface — fill, radius, clipping and header layering, and nothing else (padding and width stay at the call site). `surface` (`tint` wash / `opaque` bordered panel) × `plane` (which ground a sticky header paints on); `stickyHeader` is a header-slot property, not a third axis. Promoted from 16 hand-rolled shells in the workflows area and 21 in chat. Of the chat 21, 2 have migrated onto `Card`, 3 went to `NoticeBanner` (they are notices, not cards) and 3 folded onto the shared tool-call detail panel; the remaining 13 carry a recorded exclusion at the site — most need a fill the two-value `surface` axis does not carry (alpha-modified cards, `bg-muted`/`bg-background` washes, `--color-diff-panel-surface`), some need to overflow their frame, one needs no fill at all, and one needs interaction states `Card` does not own. |
 | `ChromeTab` | [tabs/ChromeTab.tsx](../apps/packages/product-client/src/primitives/patterns/tabs/ChromeTab.tsx) | Tabs kit — the workspace-shell chrome tab: fixed-width truncating label, optional badge and shortcut reveal, hover-revealed close. Composes `Button`/`ShortcutBadge`/`TypewriterRevealText`. |
 | `CommandPalette` | [CommandPalette.tsx](../apps/packages/product-client/src/primitives/patterns/CommandPalette.tsx) | Command-palette shell/context, built directly on `cmdk` (not on the `Command` primitive — see `Command` row above). |
 | `ComposerActionButton` | [ComposerActionButton.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerActionButton.tsx) | Composer primary-action button, composes `Button`. |
@@ -907,7 +908,7 @@ above are not migration debt); click-only popovers use
 | `ComposerTextarea` | [ComposerTextarea.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerTextarea.tsx) | Composer-sized text input, composes `Textarea`. |
 | `ComposerTextareaFrame` | [ComposerTextareaFrame.tsx](../apps/packages/product-client/src/primitives/patterns/composer/ComposerTextareaFrame.tsx) | Composer textarea's outer frame/top-inset shell. |
 | `ConfirmationDialog` | [ConfirmationDialog.tsx](../apps/packages/product-client/src/primitives/patterns/ConfirmationDialog.tsx) | Confirm/cancel dialog, built on `ModalShell` + `Button`. |
-| `Disclosure` | [Disclosure.tsx](../apps/packages/product-client/src/primitives/patterns/Disclosure.tsx) | The chevron expand/collapse shape: a real `<button>` header row (`aria-expanded`/`aria-controls`, native Enter/Space) over an `AnimatedCollapsibleContent` region that is `inert` when closed. Owns the row's whole state stack; `chevronSide` is its one axis, and the `trailing` slot sits outside the toggle so it can hold its own controls. Promoted from 13 hand-rolled disclosures, with 15 more mapped in the chat area. |
+| `Disclosure` | [Disclosure.tsx](../apps/packages/product-client/src/primitives/patterns/Disclosure.tsx) | The chevron expand/collapse shape: a real `<button>` header row (`aria-expanded`/`aria-controls`, native Enter/Space) over an `AnimatedCollapsibleContent` region that is `inert` when closed. Owns the row's whole state stack; `chevronSide` is its one axis, and the `trailing` slot sits outside the toggle so it can hold its own controls. Promoted from 13 hand-rolled disclosures. The 15 mapped in the chat area are blocked: the pattern paints its own hover and pressed states with no suppression, so adopting it on the transcript's quiet rows reinstates the pressed rectangle PRO-120 removed. |
 | `EmptyState` | [EmptyState.tsx](../apps/packages/product-client/src/primitives/patterns/EmptyState.tsx) | Title/description/action empty-state block. |
 | `EnvironmentSearchSelect` | [EnvironmentSearchSelect.tsx](../apps/packages/product-client/src/primitives/patterns/EnvironmentSearchSelect.tsx) | Searchable environment picker, composes `PopoverButton`/`PopoverMenuItem`/`PickerPopoverContent`. |
 | `LevelBarsButton` | [LevelBarsButton.tsx](../apps/packages/product-client/src/primitives/patterns/composer/LevelBarsButton.tsx) | Stepped-level control button (level-bars affordance), composes `ComposerControlButton`. |
