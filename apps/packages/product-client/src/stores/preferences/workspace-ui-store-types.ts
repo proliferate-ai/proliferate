@@ -49,7 +49,7 @@ export interface WorkspaceUiState {
   unarchiveWorkspace: (id: string) => void;
   unarchiveWorkspaces: (ids: string[]) => void;
   pinWorkspace: (id: string) => void;
-  unpinWorkspace: (id: string) => void;
+  unpinWorkspace: (ids: string[]) => void;
   hideRepoRoot: (repoRootId: string) => void;
   unhideRepoRoot: (repoRootId: string) => void;
   toggleRepoGroupCollapsed: (repoKey: string) => void;

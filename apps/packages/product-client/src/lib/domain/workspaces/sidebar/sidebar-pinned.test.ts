@@ -22,14 +22,14 @@ describe("collectPinnedSidebarItems", () => {
     });
 
     for (const item of groups.flatMap((group) => group.items)) {
-      expect(item.pinned).toBe(pinnedIds.includes(item.id));
+      expect(item.pinnedIds).toEqual(pinnedIds.includes(item.id) ? [item.id] : []);
     }
 
     const pinnedItems = collectPinnedSidebarItems(groups, pinnedIds);
     expect(pinnedItems.map((item) => item.id)).toEqual(["ws-c", "ws-a"]);
   });
 
-  it("matches pins recorded under the local materialization id", () => {
+  it("matches pins recorded under the local materialization id and keeps them unpinnable", () => {
     const pinnedIds = ["ws-b-materialization"];
     const groups = buildGroups({
       logicalWorkspaces: makeWorkspaces(),
@@ -38,6 +38,9 @@ describe("collectPinnedSidebarItems", () => {
 
     const pinnedItems = collectPinnedSidebarItems(groups, pinnedIds);
     expect(pinnedItems.map((item) => item.id)).toEqual(["ws-b"]);
+    // The row exposes the stored pin id it matched, so unpinning removes the
+    // pin even though it was recorded under a different identity.
+    expect(pinnedItems[0]?.pinnedIds).toEqual(["ws-b-materialization"]);
   });
 
   it("keeps archived workspaces out of the pinned items", () => {

@@ -21,7 +21,9 @@ export interface SidebarWorkspaceItemsProps {
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
   onPinWorkspace: (workspaceId: string) => void;
-  onUnpinWorkspace: (workspaceId: string) => void;
+  /** Receives every pin id the row matched (`item.pinnedIds`), not just the
+   * current projection id, so unpin clears pins from former identities too. */
+  onUnpinWorkspace: (pinnedIds: string[]) => void;
   onRenameWorkspace: (
     workspaceId: string,
     displayName: string | null,
@@ -61,7 +63,7 @@ export function SidebarWorkspaceItems({
       subtitle={item.subtitle}
       active={item.active}
       archived={item.archived}
-      pinned={item.pinned}
+      pinned={item.pinnedIds.length > 0}
       variant={item.variant}
       statusIndicator={item.statusIndicator}
       branchName={item.branchName}
@@ -98,8 +100,8 @@ export function SidebarWorkspaceItems({
       onHover={onWorkspaceHover}
       onArchive={item.archived ? undefined : () => onArchiveWorkspace(item.id)}
       onUnarchive={item.archived ? () => onUnarchiveWorkspace(item.id) : undefined}
-      onPin={item.pinned ? undefined : () => onPinWorkspace(item.id)}
-      onUnpin={item.pinned ? () => onUnpinWorkspace(item.id) : undefined}
+      onPin={item.pinnedIds.length > 0 ? undefined : () => onPinWorkspace(item.id)}
+      onUnpin={item.pinnedIds.length > 0 ? () => onUnpinWorkspace(item.pinnedIds) : undefined}
       onRename={
         item.renameSupported
           ? (displayName) => onRenameWorkspace(item.id, displayName)

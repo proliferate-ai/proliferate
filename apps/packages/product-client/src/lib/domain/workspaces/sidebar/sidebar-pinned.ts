@@ -14,14 +14,10 @@ export function collectPinnedSidebarItems(
   pinnedWorkspaceIds: readonly string[],
 ): SidebarWorkspaceItemState[] {
   const pinRankById = new Map(pinnedWorkspaceIds.map((id, index) => [id, index]));
-  const pinRank = (item: SidebarWorkspaceItemState): number => {
-    const ranks = [item.id, item.localWorkspaceId, item.cloudWorkspaceId]
-      .map((id) => (id ? pinRankById.get(id) : undefined))
-      .filter((rank): rank is number => rank !== undefined);
-    return ranks.length > 0 ? Math.min(...ranks) : pinnedWorkspaceIds.length;
-  };
+  const pinRank = (item: SidebarWorkspaceItemState): number =>
+    Math.min(...item.pinnedIds.map((id) => pinRankById.get(id) ?? pinnedWorkspaceIds.length));
   return groups
     .flatMap((group) => group.items)
-    .filter((item) => item.pinned)
+    .filter((item) => item.pinnedIds.length > 0)
     .sort((left, right) => pinRank(left) - pinRank(right));
 }

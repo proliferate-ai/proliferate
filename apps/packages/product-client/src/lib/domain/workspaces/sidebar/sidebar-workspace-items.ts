@@ -235,7 +235,7 @@ function buildSidebarWorkspaceItem(
       subtitle: active ? args.activeSessionTitle : null,
       active,
       archived,
-      pinned: logicalWorkspaceRelatedIds(entry).some((id) => args.pinnedSet?.has(id)),
+      pinnedIds: logicalWorkspaceRelatedIds(entry).filter((id) => args.pinnedSet?.has(id)),
       variant,
       statusIndicator: entry.localWorkspace && isWorkspaceDirectoryMissing(entry.localWorkspace)
         ? worktreeMissingStatusIndicator(

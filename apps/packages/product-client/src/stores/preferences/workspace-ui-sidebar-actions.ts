@@ -80,9 +80,12 @@ export function createWorkspaceUiSidebarActions(
       set({ pinnedWorkspaceIds: [...current, id] });
     },
 
-    unpinWorkspace: (id) => {
+    // Removes every id the workspace answers to, so a pin recorded under a
+    // former identity (alias/local-slot/materialization id) cannot survive.
+    unpinWorkspace: (ids) => {
+      const idSet = new Set(ids);
       const current = get().pinnedWorkspaceIds;
-      const next = current.filter((workspaceId) => workspaceId !== id);
+      const next = current.filter((workspaceId) => !idSet.has(workspaceId));
       if (next.length === current.length) {
         return;
       }

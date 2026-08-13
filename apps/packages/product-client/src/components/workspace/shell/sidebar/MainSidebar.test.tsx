@@ -329,7 +329,7 @@ function makePinnedItemState(overrides: Partial<SidebarWorkspaceItemState> = {})
     subtitle: null,
     active: false,
     archived: false,
-    pinned: true,
+    pinnedIds: ["ws-pinned"],
     variant: "worktree",
     statusIndicator: null,
     lastInteracted: null,

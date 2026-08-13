@@ -56,7 +56,7 @@ interface SidebarWorkspaceContentProps {
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
   onPinWorkspace: (workspaceId: string) => void;
-  onUnpinWorkspace: (workspaceId: string) => void;
+  onUnpinWorkspace: (pinnedIds: string[]) => void;
   onRenameWorkspace: (
     workspaceId: string,
     displayName: string | null,

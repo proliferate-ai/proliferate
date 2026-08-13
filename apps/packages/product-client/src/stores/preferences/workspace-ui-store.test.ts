@@ -96,8 +96,10 @@ describe("workspace ui tab persistence", () => {
 
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-1", "ws-2"]);
 
-    useWorkspaceUiStore.getState().unpinWorkspace("ws-1");
-    useWorkspaceUiStore.getState().unpinWorkspace("ws-missing");
+    // Unpin clears every id the workspace answers to, including pins recorded
+    // under a former identity, and ignores ids that were never pinned.
+    useWorkspaceUiStore.getState().unpinWorkspace(["ws-1", "ws-1-former-alias"]);
+    useWorkspaceUiStore.getState().unpinWorkspace(["ws-missing"]);
 
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-2"]);
   });
