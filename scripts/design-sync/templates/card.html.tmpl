@@ -1,0 +1,63 @@
+<!-- @dsCard group="__DS_GROUP__"__DS_VIEWPORT_ATTR__ -->
+<!doctype html>
+<html><head><meta charset="utf-8">
+  <link rel="stylesheet" href="../../../styles.css">
+  <link rel="stylesheet" href="../../../_ds_bundle.css">
+  <style>
+    body{margin:0;padding:24px;background:#fff}
+    /* auto-fit (not auto-fill): empty tracks collapse, so a 1-2 story card
+       fills the width instead of stranding stories in a half-width left
+       column beside phantom empty columns */
+    .ds-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;align-items:start}
+    .ds-grid.ds-col{grid-template-columns:1fr}
+    .ds-cell{border:1px solid var(--color-border,#e5e7eb);border-radius:8px;padding:12px;min-width:0;overflow:hidden;transform:translateZ(0)}
+    .ds-cell>h4{margin:0 0 8px;font:600 12px system-ui;color:var(--color-muted-foreground,#6b7280);text-transform:uppercase;letter-spacing:.04em}
+    .ds-single{transform:translateZ(0)}
+  </style>
+</head><body>
+  <div class="ds-grid" id="g"></div>
+  <script src="../../../_vendor/react.js"></script>
+  <script src="../../../_vendor/react-dom.js"></script>
+  <script src="../../../_ds_bundle.js"></script>
+  <script src="../../../_preview/__DS_NAME__.js"></script>
+  <script>
+    var h=React.createElement, g=document.getElementById('g');
+    var E=[]; for (var k in (window.__dsPreview||{})) {
+      if (typeof window.__dsPreview[k]==='function' && /^[A-Z]/.test(k)) E.push(k);
+    }
+    window.__dsCells=E.slice();
+    var q=null; try{q=new URLSearchParams(location.search).get('story')}catch(e){}
+    var MODE="__DS_MODE__";
+    window.__dsMode=MODE;
+    var PRIMARY="__DS_PRIMARY__";
+    if(MODE==='column'){
+      g.className+=' ds-col';
+      // primaryStory renders first — it's what shows above the product's fold.
+      var cpi=PRIMARY?E.indexOf(PRIMARY):-1;
+      if(cpi>0){E.splice(cpi,1);E.unshift(PRIMARY)}
+    }
+    function mount(id,key){try{ReactDOM.createRoot(document.getElementById(id)).render(h(window.__dsPreview[key]))}catch(e){document.getElementById(id).textContent='⚠ '+(e&&e.message||e)}}
+    var pick=null;
+    if(q){for(var j=0;j<E.length;j++){if(E[j]===q||E[j].toLowerCase()===q.toLowerCase()){pick=E[j];break}}}
+    else if(MODE==='single'&&E.length){pick=E.indexOf(PRIMARY)>=0?PRIMARY:E[0]}
+    if(q&&!pick){g.textContent='⚠ no export named '+q}
+    else if(pick){
+      var s=document.createElement('div'); s.className='ds-single'; s.id='r0';
+      // The PRODUCT's default single render is full-bleed: a full-viewport
+      // story root (100vh / Grommet full) plus body padding guarantees a
+      // permanent 48px whitespace scrollbar in the card otherwise. Gated on
+      // !q so ?story= captures keep the padding gutter — the graded framing
+      // (and its edge-shadow room vs the storybook reference) stays
+      // byte-identical to what every existing verdict was minted on.
+      if(!q)document.body.style.padding='0';
+      g.parentNode.replaceChild(s,g); mount('r0',pick);
+    } else {
+      for(var i=0;i<E.length;i++){
+        var cell=document.createElement('section'); cell.className='ds-cell';
+        cell.innerHTML='<h4>'+E[i]+'</h4><div id="r'+i+'"></div>'; g.appendChild(cell);
+        mount('r'+i,E[i]);
+      }
+      if(E.length===0){g.textContent='⚠ no PascalCase exports in _preview/__DS_NAME__.js'}
+    }
+  </script>
+</body></html>

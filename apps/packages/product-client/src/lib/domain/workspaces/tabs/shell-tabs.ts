@@ -266,6 +266,10 @@ export function resolveRelativeWorkspaceShellTab(args: {
   }
 
   const nextIndex = (activeIndex + delta + tabs.length) % tabs.length;
+  if (nextIndex === activeIndex) {
+    return null;
+  }
+
   return tabs[nextIndex] ?? null;
 }
 

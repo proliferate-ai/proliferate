@@ -30,6 +30,43 @@ export const XTERM_CURSOR_OPTIONS = {
   cursorWidth: 1,
 } as const;
 
+export const XTERM_RESIZE_REPORT_SETTLE_MS = 200;
+
+/**
+ * Coalesces the grid-size stream a live separator drag produces into one
+ * report per settled size. The surface itself refits on every container
+ * resize so columns track the pointer, but each report crosses to the
+ * runtime PTY (an HTTP resize call plus a SIGWINCH-driven redraw of whatever
+ * runs in the terminal) — streaming one per column change is what made
+ * right-panel drags heavy.
+ */
+export function createSettledResizeReporter(
+  report: (size: { cols: number; rows: number }) => void,
+  settleMs = XTERM_RESIZE_REPORT_SETTLE_MS,
+): {
+  observe: (size: { cols: number; rows: number }) => void;
+  cancel: () => void;
+} {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return {
+    observe(size) {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+      timer = setTimeout(() => {
+        timer = null;
+        report(size);
+      }, settleMs);
+    },
+    cancel() {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+      timer = null;
+    },
+  };
+}
+
 export function resolveXtermSurfaceTypography(
   readableCodeFontSizeId: unknown,
   overrides: Pick<UseXtermSurfaceInput, "fontSize" | "lineHeight"> = {},
@@ -107,6 +144,7 @@ export function useXtermSurface({
     setIsReady(false);
     let cancelled = false;
     let resizeObserver: ResizeObserver | null = null;
+    let settledResizeReporter: ReturnType<typeof createSettledResizeReporter> | null = null;
     let unsubscribeTheme = () => {};
 
     void (async () => {
@@ -163,8 +201,11 @@ export function useXtermSurface({
         onDataRef.current?.(data);
       });
 
-      term.onResize((size) => {
+      settledResizeReporter = createSettledResizeReporter((size) => {
         onResizeRef.current?.(size);
+      });
+      term.onResize((size) => {
+        settledResizeReporter?.observe(size);
       });
 
       resizeObserver = new ResizeObserver(() => {
@@ -177,6 +218,7 @@ export function useXtermSurface({
     return () => {
       cancelled = true;
       resizeObserver?.disconnect();
+      settledResizeReporter?.cancel();
       unsubscribeTheme();
       terminalRef.current?.dispose();
       terminalRef.current = null;
