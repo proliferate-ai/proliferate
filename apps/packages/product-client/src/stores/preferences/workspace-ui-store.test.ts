@@ -109,7 +109,10 @@ describe("workspace ui tab persistence", () => {
 
     expect(useWorkspaceUiStore.getState().rightPanelMaterializedByWorkspace.w1?.activeEntryKey)
       .toBe("terminal:t1");
-    expect(useWorkspaceUiStore.getState().rightPanelDurableByWorkspace.w1?.width).toBe(700);
+    // No fixed maximum: widths persist as chosen (the rail's rendered clamp
+    // and the drag's measured ceiling bound them per window); only the
+    // legibility floor clamps here.
+    expect(useWorkspaceUiStore.getState().rightPanelDurableByWorkspace.w1?.width).toBe(900);
   });
 
   it("stores shell tab state without notifying on unchanged writes", () => {

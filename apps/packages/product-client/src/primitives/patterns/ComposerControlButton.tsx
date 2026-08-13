@@ -16,6 +16,13 @@ interface ComposerControlButtonProps extends Omit<ButtonHTMLAttributes<HTMLButto
   emphasizeLabel?: boolean;
   labelClassName?: string;
   detailClassName?: string;
+  /**
+   * Classes on the wrapper spans, for width-conditional variants that must
+   * remove the whole flex item (`hidden` on the inner content alone would
+   * leave a zero-width item that still claims a flex gap).
+   */
+  iconWrapperClassName?: string;
+  labelWrapperClassName?: string;
 }
 
 export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerControlButtonProps>(
@@ -29,6 +36,8 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     emphasizeLabel = false,
     labelClassName = "",
     detailClassName = "",
+    iconWrapperClassName = "",
+    labelWrapperClassName = "",
     className = "",
     type = "button",
     ...props
@@ -68,11 +77,11 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
         {/* flex, not inline: an inline wrapper baseline-aligns inline-flex
             icons (e.g. the level bars) instead of letting the button's
             items-center actually center them. */}
-        {icon && <span className="flex shrink-0 items-center">{icon}</span>}
+        {icon && <span className={`flex shrink-0 items-center ${iconWrapperClassName}`}>{icon}</span>}
         {iconOnly ? (
           <span className="sr-only">{iconOnlyLabel}</span>
         ) : (
-          <span className="flex min-w-0 items-center gap-1">
+          <span className={`flex min-w-0 items-center gap-1 ${labelWrapperClassName}`}>
             <span
               className={`min-w-0 truncate text-left ${
                 emphasizeLabel ? "text-composer-control-active-foreground" : ""

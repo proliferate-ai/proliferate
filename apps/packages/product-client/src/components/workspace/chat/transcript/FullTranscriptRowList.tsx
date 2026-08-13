@@ -274,7 +274,7 @@ export function FullTranscriptRowList({
             ref={selectionRootRef}
             data-chat-transcript-root="true"
             tabIndex={-1}
-            className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
+            className={`${columnClassName} select-text outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
           >
             {TRANSCRIPT_TOP_PADDING_PX > 0 && (
               <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />

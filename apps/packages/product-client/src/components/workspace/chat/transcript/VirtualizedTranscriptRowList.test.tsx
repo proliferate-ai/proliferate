@@ -76,6 +76,16 @@ function getViewport(container: HTMLElement): HTMLDivElement {
 describe("VirtualizedTranscriptRowList", () => {
   // jsdom does no layout, so the tanstack virtualizer surfaces no virtual items
   // here; these are wiring smoke tests, not layout/measurement tests.
+  it("keeps the complete transcript row stack visibly selectable", () => {
+    const { container } = render(<VirtualizedTranscriptRowList {...makeProps()} />);
+    const selectionRoot = container.querySelector<HTMLElement>(
+      '[data-chat-transcript-root="true"]',
+    );
+
+    expect(selectionRoot?.classList.contains("select-text")).toBe(true);
+    expect(selectionRoot?.classList.contains("select-none")).toBe(false);
+  });
+
   it("mounts and starts pinned (scroll-to-bottom affordance hidden)", () => {
     const { container } = render(<VirtualizedTranscriptRowList {...makeProps()} />);
     const button = container.querySelector('[aria-label="Scroll to bottom"]');
