@@ -75,12 +75,17 @@ export function useResize({
         overlay.remove();
         document.removeEventListener("mousemove", handleMouseMove);
         document.removeEventListener("mouseup", handleMouseUp);
+        window.removeEventListener("blur", handleMouseUp);
         activeDragCleanupRef.current = null;
         onResizeEnd?.();
       };
 
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
+      // A window that loses focus mid-drag may never see the mouseup; the
+      // gesture ends here too so consumers' "resizing" state (and this
+      // overlay) cannot outlive the drag.
+      window.addEventListener("blur", handleMouseUp);
       activeDragCleanupRef.current = handleMouseUp;
     },
     [direction, size, resolveSize, onResize, onResizeEnd, reverse, min, max],
