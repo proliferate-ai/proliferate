@@ -5,9 +5,12 @@ import type {
 import { resolveSessionStatus } from "#product/domain/sessions/activity";
 import {
   finishOrCancelMeasurementOperation,
+  logLatency,
   markOperationForNextCommit,
   recordMeasurementMetric,
 } from "#product/lib/infra/measurement/measurement-port";
+import { recordSessionHistoryRehydrateFailure } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 import type {
   MeasurementOperationId,
   MeasurementOperationKind,
@@ -37,6 +40,43 @@ export function isSessionHistoryTimeoutAbort(error: unknown): boolean {
   return error instanceof Error
     && error.name === "AbortError"
     && error.message === "Session history request timed out";
+}
+
+// A failed rehydrate reports to three places at once: the renderer diagnostics
+// port, the latency log, and (in dev only) the console. Timeout aborts are
+// expected under slow networks, so they stay out of the console.
+export function reportSessionHistoryRehydrateFailure(input: {
+  error: unknown;
+  sessionId: string;
+  operationId?: MeasurementOperationId | null;
+  afterSeq?: number | null;
+  beforeSeq?: number | null;
+  limit?: number | null;
+  turnLimit?: number | null;
+  timeoutMs?: number | null;
+  elapsedMs: number;
+}): void {
+  const errorName = safeRendererErrorName(input.error);
+  const timeoutAbort = isSessionHistoryTimeoutAbort(input.error);
+  recordSessionHistoryRehydrateFailure({
+    sessionId: input.sessionId,
+    operationId: input.operationId ?? undefined,
+    errorName,
+    timeoutAbort,
+  });
+  if (import.meta.env.DEV && !timeoutAbort) {
+    console.debug("[session-runtime] session history rehydrate failed", input.error);
+  }
+  logLatency("session.history.rehydrate.failed", {
+    sessionId: input.sessionId,
+    afterSeq: input.afterSeq ?? null,
+    beforeSeq: input.beforeSeq ?? null,
+    limit: input.limit ?? null,
+    turnLimit: input.turnLimit ?? null,
+    timeoutMs: input.timeoutMs ?? null,
+    elapsedMs: input.elapsedMs,
+    errorName,
+  });
 }
 
 export function resolveHistoryApplyOperationKind(input: {

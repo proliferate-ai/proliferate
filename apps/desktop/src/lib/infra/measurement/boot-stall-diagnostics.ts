@@ -1,12 +1,4 @@
-import {
-  diagnosticField,
-  recordRendererDiagnostic,
-} from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostics-port";
-import {
-  rendererDiagnosticCorrelation,
-  rendererDiagnosticFields,
-  rendererDiagnosticName,
-} from "@/lib/infra/diagnostics/renderer-diagnostic-callsite";
+import { recordBootRendererDiagnostic } from "./boot-stall-renderer-diagnostic";
 import {
   BOOT_DIAGNOSTICS_EVENTS_STORAGE_KEY,
   BOOT_DIAGNOSTICS_PARAM,
@@ -168,30 +160,7 @@ export function recordBootDiagnostic(
   }
 }
 
-export function recordBootRendererDiagnostic(
-  label: string,
-  elapsedMs: number,
-  metadata?: Record<string, unknown>,
-): void {
-  if (isNoisyBootLabel(label)) {
-    return;
-  }
-  const name = rendererDiagnosticName("renderer.boot", label);
-  if (name === null) {
-    return;
-  }
-  const metadataFields = rendererDiagnosticFields(metadata, "sensitive");
-  const fields = metadataFields ?? {};
-  fields.elapsed_ms = diagnosticField(elapsedMs, "operational");
-  recordRendererDiagnostic({
-    name,
-    severity: "info",
-    kind: "milestone",
-    privacy: metadataFields === undefined ? "operational" : "sensitive",
-    fields,
-    correlation: rendererDiagnosticCorrelation(metadata),
-  });
-}
+export { recordBootRendererDiagnostic } from "./boot-stall-renderer-diagnostic";
 
 export function recordBootDiagnosticOnce(
   label: string,
