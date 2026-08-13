@@ -19,6 +19,10 @@ pub use bridge::activation::{
     DesktopDiagnosticsActivation, DesktopDiagnosticsBootstrap, DesktopDiagnosticsDegradedBootstrap,
     InitialCollectorState, UnavailableClassification,
 };
+#[cfg(debug_assertions)]
+pub use bridge::activation::{
+    DevEnvDiagnosticsBootstrap, DEV_CAPABILITY_ENV, DEV_COLLECTOR_BOOT_ID_ENV, DEV_ENDPOINT_ENV,
+};
 pub use fallback::{
     parse_fallback_record_line, FallbackReason, FallbackRecordV1, FALLBACK_SCHEMA,
     FALLBACK_SEGMENTS, FALLBACK_SEGMENT_BYTES, FALLBACK_TOTAL_BYTES,

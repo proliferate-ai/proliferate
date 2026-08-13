@@ -382,6 +382,10 @@ pub fn init(activation: DesktopDiagnosticsActivation) -> TelemetryGuards {
         DesktopDiagnosticsActivation::BundledDegraded(bootstrap) => {
             install_local(BundledDesktopDiagnosticsBootstrap::Degraded(bootstrap))
         }
+        #[cfg(debug_assertions)]
+        DesktopDiagnosticsActivation::DevEnv(bootstrap) => {
+            install_local(BundledDesktopDiagnosticsBootstrap::DevEnv(bootstrap))
+        }
     };
     let (diagnostics_layer, diagnostics) = match installation {
         Some(installation) => (

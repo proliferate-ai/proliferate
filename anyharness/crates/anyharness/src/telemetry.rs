@@ -272,6 +272,13 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
                     installation,
                 )
             }
+            // The dev fallback owns no bridge and makes no claim over this
+            // process's logging, so file logging stays exactly as it was.
+            #[cfg(debug_assertions)]
+            DesktopDiagnosticsActivation::DevEnv(bootstrap) => (
+                false,
+                install_local(BundledDesktopDiagnosticsBootstrap::DevEnv(bootstrap)),
+            ),
         }
     } else {
         (false, None)

@@ -32,6 +32,8 @@ pub(super) async fn boot_inner(
             persist_runtime_info(&guard.info, None);
         }
         let _ = wait_healthy(sidecar, false).await;
+        #[cfg(all(debug_assertions, unix))]
+        diagnostics::publish_dev_diagnostics_env(supervisor);
         return BootOutcome::External;
     }
 

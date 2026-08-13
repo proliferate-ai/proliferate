@@ -13,11 +13,16 @@ pub enum DesktopDiagnosticsActivation {
     Disabled,
     Bundled(DesktopDiagnosticsBootstrap),
     BundledDegraded(DesktopDiagnosticsDegradedBootstrap),
+    /// Dev-only, see [`DevEnvDiagnosticsBootstrap`].
+    #[cfg(debug_assertions)]
+    DevEnv(DevEnvDiagnosticsBootstrap),
 }
 
 pub enum BundledDesktopDiagnosticsBootstrap {
     Ready(DesktopDiagnosticsBootstrap),
     Degraded(DesktopDiagnosticsDegradedBootstrap),
+    #[cfg(debug_assertions)]
+    DevEnv(DevEnvDiagnosticsBootstrap),
 }
 
 impl From<DesktopDiagnosticsBootstrap> for BundledDesktopDiagnosticsBootstrap {
@@ -29,6 +34,13 @@ impl From<DesktopDiagnosticsBootstrap> for BundledDesktopDiagnosticsBootstrap {
 impl From<DesktopDiagnosticsDegradedBootstrap> for BundledDesktopDiagnosticsBootstrap {
     fn from(value: DesktopDiagnosticsDegradedBootstrap) -> Self {
         Self::Degraded(value)
+    }
+}
+
+#[cfg(debug_assertions)]
+impl From<DevEnvDiagnosticsBootstrap> for BundledDesktopDiagnosticsBootstrap {
+    fn from(value: DevEnvDiagnosticsBootstrap) -> Self {
+        Self::DevEnv(value)
     }
 }
 
@@ -73,6 +85,42 @@ pub struct DesktopDiagnosticsDegradedBootstrap {
     pub(crate) shutdown: Option<std::os::fd::OwnedFd>,
 }
 
+/// Dev-only activation for a runtime the Desktop host did not spawn.
+///
+/// With `ANYHARNESS_DEV_URL` the runtime is launched by `make dev`, so it never
+/// inherits the control-bridge descriptor and the protected activation above
+/// correctly reports `Disabled` — which is why a dev session sees zero runtime
+/// records. Given the collector's loopback endpoint and capability in the
+/// environment, this bootstrap talks to the same collector directly.
+///
+/// It deliberately carries no bridge: this producer never learns of a
+/// collector generation change, so a collector restart ends its delivery until
+/// the runtime is restarted with fresh values. Debug builds only.
+#[cfg(debug_assertions)]
+pub struct DevEnvDiagnosticsBootstrap {
+    pub(crate) initial_state: InitialCollectorState,
+}
+
+/// Collector ingest endpoint, e.g. `http://127.0.0.1:53421/`.
+#[cfg(debug_assertions)]
+pub const DEV_ENDPOINT_ENV: &str = "PROLIFERATE_DIAGNOSTICS_BRIDGE_ENDPOINT";
+/// Collector capability (bearer token) the host normally passes over the fd.
+#[cfg(debug_assertions)]
+pub const DEV_CAPABILITY_ENV: &str = "PROLIFERATE_DIAGNOSTICS_BRIDGE_TOKEN";
+/// Collector boot id. Required: ingest receipts carrying a different boot id
+/// latch the generation unusable, so a guessed value would silently stop
+/// delivery after the first batch.
+#[cfg(debug_assertions)]
+pub const DEV_COLLECTOR_BOOT_ID_ENV: &str = "PROLIFERATE_DIAGNOSTICS_BRIDGE_COLLECTOR_BOOT_ID";
+
+/// Fixed: with no bridge there is nothing to advance the generation.
+#[cfg(debug_assertions)]
+const DEV_COLLECTOR_GENERATION: u64 = 1;
+/// Matches the transport's own capability bound; longer values are rejected
+/// there anyway.
+#[cfg(debug_assertions)]
+const DEV_CAPABILITY_MAX_BYTES: usize = 256;
+
 pub(crate) struct FallbackDirectoryHandle {
     #[cfg(unix)]
     pub(crate) descriptor: std::os::fd::OwnedFd,
@@ -116,7 +164,55 @@ pub fn take_desktop_activation(component: DiagnosticsComponent) -> DesktopDiagno
     if ACTIVATION_TAKEN.swap(true, Ordering::AcqRel) {
         return DesktopDiagnosticsActivation::Disabled;
     }
-    platform::take(component)
+    match platform::take(component) {
+        // Only the absence of the inherited bridge is eligible for the dev
+        // fallback: a descriptor that exists but is unusable stays degraded.
+        DesktopDiagnosticsActivation::Disabled => dev_env_activation(),
+        activation => activation,
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn dev_env_activation() -> DesktopDiagnosticsActivation {
+    DesktopDiagnosticsActivation::Disabled
+}
+
+#[cfg(debug_assertions)]
+fn dev_env_activation() -> DesktopDiagnosticsActivation {
+    use proliferate_diagnostics_protocol::v1::limits::MAX_ID_BYTES;
+
+    let Some(endpoint) = bounded_env(DEV_ENDPOINT_ENV, MAX_ID_BYTES) else {
+        return DesktopDiagnosticsActivation::Disabled;
+    };
+    let (Some(capability), Some(collector_boot_id)) = (
+        bounded_env(DEV_CAPABILITY_ENV, DEV_CAPABILITY_MAX_BYTES),
+        bounded_env(DEV_COLLECTOR_BOOT_ID_ENV, MAX_ID_BYTES),
+    ) else {
+        eprintln!(
+            "[desktop-diagnostics] {DEV_ENDPOINT_ENV} set without {DEV_CAPABILITY_ENV} and {DEV_COLLECTOR_BOOT_ID_ENV}; dev activation skipped"
+        );
+        return DesktopDiagnosticsActivation::Disabled;
+    };
+    let Ok(client) = CollectorClient::new(&endpoint, capability) else {
+        eprintln!("[desktop-diagnostics] dev collector endpoint rejected: {endpoint}");
+        return DesktopDiagnosticsActivation::Disabled;
+    };
+    eprintln!("[desktop-diagnostics] dev activation against {endpoint}");
+    DesktopDiagnosticsActivation::DevEnv(DevEnvDiagnosticsBootstrap {
+        initial_state: InitialCollectorState::Ready(CollectorGenerationHandle {
+            generation: DEV_COLLECTOR_GENERATION,
+            collector_boot_id,
+            client: std::sync::Arc::new(client),
+        }),
+    })
+}
+
+#[cfg(debug_assertions)]
+fn bounded_env(name: &str, limit: usize) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty() && value.len() <= limit)
 }
 
 #[cfg(all(
