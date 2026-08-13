@@ -22,7 +22,10 @@ import {
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
-import { recordAutomationClaimPollFailure } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import {
+  recordAutomationClaimPollFailure,
+  recordAutomationClaimPollRecovered,
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 const AUTOMATION_LOCAL_EXECUTOR_ID_KEY = "automationLocalExecutorId";
@@ -114,12 +117,30 @@ export function useLocalAutomationClaimPoller(args: {
       }
     };
 
+    // The loop ticks every LOCAL_EXECUTOR_POLL_MS for the life of the app, so a
+    // record (or a console line) per failed poll turns one unreachable runtime
+    // into an unbounded stream. Report the edges instead: once when a streak
+    // opens, once when it closes, each carrying the streak length.
+    let consecutiveFailures = 0;
+
     const loop = () => {
       void tick()
+        .then(() => {
+          if (consecutiveFailures === 0) {
+            return;
+          }
+          const recoveredAfter = consecutiveFailures;
+          consecutiveFailures = 0;
+          recordAutomationClaimPollRecovered({ consecutiveFailures: recoveredAfter });
+          console.info("Local automation claim poll recovered", { recoveredAfter });
+        })
         .catch((error) => {
           const errorName = safeRendererErrorName(error);
-          recordAutomationClaimPollFailure(errorName);
-          console.warn("Local automation claim poll failed", { errorName });
+          consecutiveFailures += 1;
+          if (consecutiveFailures === 1) {
+            recordAutomationClaimPollFailure({ errorName, consecutiveFailures });
+            console.warn("Local automation claim poll failed", { errorName });
+          }
         })
         .finally(() => {
           if (!cancelled) {

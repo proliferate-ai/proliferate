@@ -4,16 +4,40 @@ import {
 } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 import type { RendererErrorClass } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
-export function recordAutomationClaimPollFailure(errorName: string): void {
+/**
+ * Emitted when a claim-poll failure streak STARTS, not once per poll. The poller
+ * ticks every 10s for as long as the app is open, so a per-poll record made a
+ * single unreachable runtime the loudest thing in the diagnostics stream.
+ */
+export function recordAutomationClaimPollFailure(input: {
+  errorName: string;
+  consecutiveFailures: number;
+}): void {
   recordRendererDiagnostic({
     name: "renderer.automation.claim_poll_failed",
     severity: "warn",
     kind: "transport",
     privacy: "operational",
     fields: {
-      error_name: diagnosticField(errorName, "operational"),
+      error_name: diagnosticField(input.errorName, "operational"),
+      consecutive_failures: diagnosticField(input.consecutiveFailures, "operational"),
     },
     errorClassification: "automation_claim_poll_failed",
+  });
+}
+
+/** Closes the streak opened by recordAutomationClaimPollFailure. */
+export function recordAutomationClaimPollRecovered(input: {
+  consecutiveFailures: number;
+}): void {
+  recordRendererDiagnostic({
+    name: "renderer.automation.claim_poll_recovered",
+    severity: "info",
+    kind: "transport",
+    privacy: "operational",
+    fields: {
+      consecutive_failures: diagnosticField(input.consecutiveFailures, "operational"),
+    },
   });
 }
 
