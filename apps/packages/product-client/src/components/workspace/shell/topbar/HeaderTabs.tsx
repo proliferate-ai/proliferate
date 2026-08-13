@@ -154,7 +154,14 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     if (tabLeft < viewLeft) {
       strip.scrollTo({ left: tabLeft, behavior: "smooth" });
     } else if (tabRight > viewRight) {
-      strip.scrollTo({ left: tabRight - strip.clientWidth, behavior: "smooth" });
+      // Clamp to the tab's left edge: when the viewport is narrower than the
+      // tab, aligning its right edge pushes the title start out of view, and
+      // the next run's left-edge branch scrolls back — a ping-pong that runs
+      // continuously while a live session re-derives the layout (PRO-226).
+      strip.scrollTo({
+        left: Math.min(tabLeft, tabRight - strip.clientWidth),
+        behavior: "smooth",
+      });
     }
   }, [activeTabIndex, layout.positions, layout.widths]);
 
