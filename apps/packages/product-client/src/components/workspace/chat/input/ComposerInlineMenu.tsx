@@ -35,9 +35,10 @@ export function ComposerInlineMenuPanel({
         ref={listRef}
         role="listbox"
         aria-label={label}
-        // 320px is the height at which the list still reads as a menu rather
-        // than a panel: ~10 rows visible, the rest scrolled.
-        className="file-tree-scroll flex max-h-[320px] min-h-0 flex-col overflow-y-auto"
+        // Ten rows on a normal viewport, with a proportional cap when the
+        // window is short. Remaining rows stay reachable through native
+        // wheel/trackpad scrolling and keyboard navigation.
+        className="file-tree-scroll flex max-h-[min(320px,40dvh)] min-h-0 flex-col overflow-y-auto [scrollbar-gutter:stable]"
       >
         {children}
       </div>

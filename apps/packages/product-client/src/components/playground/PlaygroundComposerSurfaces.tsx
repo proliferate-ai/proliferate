@@ -208,7 +208,7 @@ function PlaygroundFileMentionComposerSurface({
           results={results}
           highlightedIndex={0}
           listRef={listRef}
-          query="tok"
+          query="a"
           isLoading={false}
           isError={false}
           isPending={false}
@@ -228,7 +228,7 @@ function PlaygroundFileMentionComposerSurface({
             data-telemetry-mask
             className="mb-2 flex min-h-14 flex-grow select-text items-start px-5 text-composer text-foreground"
           >
-            <span>Look at @tok</span>
+            <span>Look at @a</span>
           </div>
           <PlaygroundComposerControlRow />
         </form>
