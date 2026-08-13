@@ -14,7 +14,7 @@
  * entries flow through without editing this file (only EXPECTED_TOTAL, the
  * deliberate drift tripwire, is pinned).
  */
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -130,12 +130,36 @@ export function modeFor(displayName) {
   return "grid";
 }
 
-/** Reads the evaluated dump, running it first if `.out/` doesn't have one
- * yet (build.mjs runs dump-registry.mjs as its own stage, so a full build
- * always evaluates fresh; standalone stages get a lazy dump instead of a
- * confusing "missing file" failure). */
+/** Newest mtime under the library directory — the registry's whole source of
+ * truth, since a dump only records names, subpaths and tiers, all of which are
+ * written in these files. */
+function newestLibraryMtimeMs(dir = LIBRARY_DIR) {
+  let newest = 0;
+  for (const dirent of readdirSync(dir, { withFileTypes: true })) {
+    const abs = path.join(dir, dirent.name);
+    const mtime = dirent.isDirectory()
+      ? newestLibraryMtimeMs(abs)
+      : statSync(abs).mtimeMs;
+    if (mtime > newest) newest = mtime;
+  }
+  return newest;
+}
+
+/** Reads the evaluated dump, re-running it when there isn't one or when the
+ * library has been edited since the last one was written.
+ *
+ * build.mjs runs dump-registry.mjs as its own first stage, so a full build
+ * always evaluates fresh and this check is a no-op. It exists for the
+ * standalone stage runs build.mjs advertises: without it, a stage rerun after
+ * a registry edit would silently reuse the previous dump and emit a payload
+ * describing a registry that no longer exists (retired entries still carded,
+ * new ones missing, group moves stale). */
 async function readRegistryDump() {
-  if (!existsSync(REGISTRY_JSON_PATH)) await dumpRegistry();
+  const stale =
+    existsSync(REGISTRY_JSON_PATH) &&
+    statSync(REGISTRY_JSON_PATH).mtimeMs < newestLibraryMtimeMs();
+  if (stale) console.log("registry-manifest: library changed since the last dump, re-evaluating");
+  if (stale || !existsSync(REGISTRY_JSON_PATH)) await dumpRegistry();
   return JSON.parse(await readFile(REGISTRY_JSON_PATH, "utf8"));
 }
 
