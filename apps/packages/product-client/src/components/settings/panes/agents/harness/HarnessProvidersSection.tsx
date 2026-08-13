@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useCreateAgentApiKey, useRevokeAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { Button } from "#product/primitives/Button";
+import { IconTile } from "#product/primitives/IconTile";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import {
   getProviderSecretEnvVar,
   PROVIDER_REGISTRY,
@@ -8,7 +10,6 @@ import {
 } from "#product/config/harness-env-vars";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
-import { HarnessSection } from "#product/components/settings/panes/agents/harness/HarnessSection";
 import {
   deriveProvidersStatus,
   HarnessAuthStatusAction,
@@ -135,9 +136,11 @@ export function HarnessProvidersSection({
   );
 
   return (
-    <HarnessSection
+    <SettingsSection
       title={HARNESS_PANE_COPY.providersTitle}
       description={HARNESS_PANE_COPY.providersDescription}
+      titleWeight="emphasized"
+      surface="plain"
       action={(
         <HarnessAuthStatusAction
           status={status}
@@ -160,12 +163,14 @@ export function HarnessProvidersSection({
               {configured.map(({ row, provider }, index) => {
                 const logoSrc = provider ? logoUrls?.[provider.id] : undefined;
                 return (
-                  <span
+                  <IconTile
                     key={row.uid}
+                    tone="outlined"
+                    size="md"
                     aria-hidden
                     title={provider?.displayName ?? row.envVarName}
                     className={[
-                      "flex size-7 items-center justify-center rounded-md border border-border-light bg-surface-control font-mono text-ui-sm text-muted-foreground",
+                      "font-mono text-ui-sm",
                       index > 0 ? "-ml-1.5" : "",
                       row.enabled ? "" : "opacity-60",
                     ].join(" ")}
@@ -182,7 +187,7 @@ export function HarnessProvidersSection({
                         className="size-4 brightness-0 invert-[0.78]"
                       />
                     )}
-                  </span>
+                  </IconTile>
                 );
               })}
             </div>
@@ -233,6 +238,6 @@ export function HarnessProvidersSection({
           />
         </Suspense>
       ) : null}
-    </HarnessSection>
+    </SettingsSection>
   );
 }
