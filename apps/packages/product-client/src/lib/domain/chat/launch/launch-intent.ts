@@ -85,6 +85,38 @@ export function resolveLaunchIntentScope(intent: ChatLaunchIntent): LaunchIntent
   };
 }
 
+/**
+ * Whether a launch intent with the given scope may own the surface of the
+ * shell identified by `shellLogicalWorkspaceId`/`shellWorkspaceId`.
+ *
+ * A scoped intent (it has created a pending-workspace attempt, targets an
+ * existing workspace, or has materialized one) may only own the matching
+ * shell — this is what stops one workspace's launch intent from hijacking an
+ * unrelated workspace's transcript (PRO-230). An unscoped intent (nothing
+ * known yet — the Home first-paint window before anything materializes) may
+ * only own a shell that itself has no workspace selected.
+ */
+export function launchIntentOwnsShell(args: {
+  scope: LaunchIntentScope | null;
+  shellLogicalWorkspaceId: string | null;
+  shellWorkspaceId: string | null;
+}): boolean {
+  const pendingUiKey = args.scope?.pendingUiKey ?? null;
+  const workspaceId = args.scope?.workspaceId ?? null;
+
+  if (pendingUiKey === null && workspaceId === null) {
+    return args.shellLogicalWorkspaceId === null && args.shellWorkspaceId === null;
+  }
+
+  return Boolean(
+    (pendingUiKey !== null && args.shellLogicalWorkspaceId === pendingUiKey)
+    || (workspaceId !== null && (
+      args.shellWorkspaceId === workspaceId
+      || args.shellLogicalWorkspaceId === workspaceId
+    )),
+  );
+}
+
 export interface ChatLaunchIntentViewModel {
   title: string;
   detail: string;

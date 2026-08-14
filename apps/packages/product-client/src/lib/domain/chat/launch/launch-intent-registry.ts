@@ -1,8 +1,8 @@
 import {
+  launchIntentOwnsShell,
   resolveLaunchIntentScope,
   type ChatLaunchIntent,
 } from "#product/lib/domain/chat/launch/launch-intent";
-import { launchIntentOwnsShell } from "#product/lib/domain/chat/surface/chat-surface";
 
 /**
  * Client-owned launch intents, keyed by intent id. Mirrors the pending-workspace
