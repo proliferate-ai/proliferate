@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import type {
   AnyHarnessRequestOptions,
   WorkflowRunAddAdhocNodeRequestV2,
@@ -102,20 +104,95 @@ export function useWorkflowRunsQuery(
   });
 }
 
-function patchRunInList(
+/**
+ * Place a run row in a cached list: replace it where it already sits, insert it
+ * where it does not.
+ *
+ * Insertion is required, not optional — the list routes are the only source of
+ * a run row, so a run placed while a list is already cached (the gen-2 trigger)
+ * would otherwise stay invisible until that query refetched.
+ *
+ * `listWorkspaceId` is the filter its cache key was built with: a list scoped
+ * to another workspace must not gain the row, because the route that filled it
+ * would never have returned it. Insertion keeps the routes' `created_at DESC`
+ * order (`store.rs` `all_runs`/`runs_for_workspace`), so a freshly placed run
+ * lands at the head; a replacement stays where it is, since a status change
+ * does not move a row.
+ */
+function upsertRunInList(
   data: WorkflowRunsListResponseV2 | undefined,
   run: WorkflowRunV2,
+  listWorkspaceId: string | null,
 ): WorkflowRunsListResponseV2 | undefined {
   if (!data) {
     return data;
   }
   const index = data.runs.findIndex((candidate) => candidate.id === run.id);
-  if (index === -1) {
+  if (index !== -1) {
+    const runs = [...data.runs];
+    runs[index] = run;
+    return { ...data, runs };
+  }
+  if (listWorkspaceId !== null && listWorkspaceId !== run.workspaceId) {
     return data;
   }
+  const firstOlder = data.runs.findIndex((candidate) => candidate.createdAt < run.createdAt);
   const runs = [...data.runs];
-  runs[index] = run;
+  runs.splice(firstOlder === -1 ? runs.length : firstOlder, 0, run);
   return { ...data, runs };
+}
+
+/** The workspace filter a runs-list key carries; `null` = every run. */
+function listWorkspaceFilter(queryKey: readonly unknown[]): string | null {
+  const filter = queryKey[queryKey.length - 1];
+  return typeof filter === "string" ? filter : null;
+}
+
+function writeRunProjection(
+  queryClient: QueryClient,
+  scope: { runtimeUrl: string; cacheScopeKey: string; runId: string },
+  projection: WorkflowRunProjectionV2,
+): void {
+  queryClient.setQueryData(
+    anyHarnessWorkflowRunKey(scope.runtimeUrl, scope.cacheScopeKey, scope.runId),
+    projection,
+  );
+  // Read the keys rather than `setQueriesData`: the workspace filter each
+  // cached list was built with decides whether the row may be inserted, and
+  // only the key carries it.
+  const cachedLists = queryClient.getQueriesData<WorkflowRunsListResponseV2>({
+    queryKey: anyHarnessWorkflowRunsListScopeKey(scope.runtimeUrl, scope.cacheScopeKey),
+  });
+  for (const [queryKey, data] of cachedLists) {
+    const next = upsertRunInList(data, projection.run, listWorkspaceFilter(queryKey));
+    if (next !== data) {
+      queryClient.setQueryData(queryKey, next);
+    }
+  }
+}
+
+/**
+ * Cache write-through for a projection its caller obtained outside these hooks:
+ * the gen-2 trigger's `PUT /v1/workflow-runs/{run_id}`, whose run id is minted
+ * at submit time and so cannot bind `useWorkflowRunMutations` at mount. Same
+ * contract as the mutations below — the response is the fresh projection, so it
+ * is written, never invalidated.
+ */
+export function useWorkflowRunProjectionWriter(): (
+  projection: WorkflowRunProjectionV2,
+) => void {
+  const runtime = useAnyHarnessRuntimeContext();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
+  const queryClient = useQueryClient();
+
+  return useCallback((projection: WorkflowRunProjectionV2) => {
+    writeRunProjection(
+      queryClient,
+      { runtimeUrl, cacheScopeKey, runId: projection.run.id },
+      projection,
+    );
+  }, [cacheScopeKey, queryClient, runtimeUrl]);
 }
 
 /**
@@ -124,7 +201,7 @@ function patchRunInList(
  * around the fresh full projection in its response. The contract those routes
  * share: commands never need a follow-up read. So every mutation here writes
  * its response straight into the run-detail cache with `setQueryData` (never
- * `invalidateQueries`), and patches the matching row in any cached runs list.
+ * `invalidateQueries`), and places the row in any cached runs list.
  */
 export function useWorkflowRunMutations(runId: string) {
   const runtime = useAnyHarnessRuntimeContext();
@@ -133,14 +210,7 @@ export function useWorkflowRunMutations(runId: string) {
   const queryClient = useQueryClient();
 
   const writeProjection = (projection: WorkflowRunProjectionV2) => {
-    queryClient.setQueryData(
-      anyHarnessWorkflowRunKey(runtimeUrl, cacheScopeKey, runId),
-      projection,
-    );
-    queryClient.setQueriesData<WorkflowRunsListResponseV2>(
-      { queryKey: anyHarnessWorkflowRunsListScopeKey(runtimeUrl, cacheScopeKey) },
-      (data) => patchRunInList(data, projection.run),
-    );
+    writeRunProjection(queryClient, { runtimeUrl, cacheScopeKey, runId }, projection);
   };
 
   const putRun = useMutation({

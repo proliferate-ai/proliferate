@@ -10,8 +10,8 @@ export const WORKFLOW_TRIGGER_COPY = {
   optionalHint: "Optional",
   repositoryLabel: "Repository",
   repositoryPlaceholder: "Select a repository",
-  repositoryUnavailable: (repoConfigId: string) =>
-    `Saved repository unavailable (${repoConfigId})`,
+  repositoryUnavailable: (repoRootId: string) =>
+    `Saved repository unavailable (${repoRootId})`,
   repositoriesLoadFailed:
     "Repositories could not be loaded. Close this dialog and try again.",
   placementLabel: "Placement",

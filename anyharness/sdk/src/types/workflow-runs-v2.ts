@@ -27,10 +27,19 @@ export interface WorkflowSnapshotNodeV2 {
   model?: WorkflowNodeModelV2 | null;
 }
 
+/**
+ * `edges` is REQUIRED, unlike `inputs`/`docTemplates`: the runtime's
+ * `WorkflowDefinition` (definition.rs) declares `edges` with no `serde(default)`
+ * under `deny_unknown_fields`, so a body that omits it fails to deserialize and
+ * the PUT is rejected — the regenerated schema agrees (`edges` required,
+ * `inputs`/`docTemplates` optional). Control plane responses always carry the
+ * key (its Pydantic field has `default_factory=list`), so nothing on the
+ * courier path has to synthesize it.
+ */
 export interface WorkflowSnapshotDefinitionV2 {
   schemaVersion: 2;
   nodes: WorkflowSnapshotNodeV2[];
-  edges?: { from: string; to: string }[];
+  edges: { from: string; to: string }[];
   inputs?: { name: string; description?: string; required: boolean }[];
   docTemplates?: { slug: string; producingNodeId: string; body: string }[];
 }

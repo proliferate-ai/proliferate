@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { RepoRoot } from "@anyharness/sdk";
 import type { WorkflowDefinitionRecordV2 } from "@proliferate/cloud-sdk";
 import { WorkflowTriggerDialog } from "#product/components/workflows/trigger/WorkflowTriggerDialog";
 
@@ -11,12 +12,26 @@ const triggerActions = vi.hoisted(() => ({
   error: null as string | null,
 }));
 
-const repositoriesQuery = vi.hoisted(() => ({
-  data: {
-    repositories: [
-      { id: "repo-1", gitOwner: "proliferate-ai", gitRepoName: "proliferate" },
-    ],
-  },
+// Runtime repo roots, not cloud repo configs: the runtime resolves
+// `placement.repoConfigId` in its own id space.
+const repoRootsQuery = vi.hoisted(() => ({
+  data: [
+    {
+      id: "root-1",
+      kind: "external" as const,
+      path: "/Users/dev/code/proliferate",
+      displayName: "proliferate",
+      createdAt: "2026-08-14T12:00:00Z",
+      updatedAt: "2026-08-14T12:00:00Z",
+    },
+    {
+      id: "root-2",
+      kind: "managed" as const,
+      path: "/Users/dev/code/sidecar",
+      createdAt: "2026-08-14T12:00:00Z",
+      updatedAt: "2026-08-14T12:00:00Z",
+    },
+  ] satisfies RepoRoot[],
   isLoading: false,
   isError: false,
 }));
@@ -25,8 +40,8 @@ vi.mock("#product/hooks/workflows/workflows/use-workflow-trigger-actions", () =>
   useWorkflowTriggerActions: () => triggerActions,
 }));
 
-vi.mock("#product/hooks/access/cloud/workflows/use-workflow-trigger-access", () => ({
-  useWorkflowTriggerRepositoriesAccess: () => repositoriesQuery,
+vi.mock("@anyharness/sdk-react", () => ({
+  useRepoRootsQuery: () => repoRootsQuery,
 }));
 
 // Radix Dialog (ModalShell) touches DOM APIs jsdom doesn't implement.
@@ -70,35 +85,66 @@ describe("WorkflowTriggerDialog", () => {
       .toBe("false");
   });
 
-  it("submits the definition id, supplied arguments and placement", () => {
+  it("submits an argument for every declared input, blank optionals included", () => {
     renderDialog();
 
     fireEvent.change(screen.getByLabelText("issue"), { target: { value: " PRO-174 " } });
+    // `notes` is left blank on purpose: a prompt that reads `@input:notes`
+    // cannot launch unless the argument is present, so it must arrive as "".
+    expect(screen.getByLabelText("notes")).toHaveProperty("value", "");
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(triggerActions.triggerRun).toHaveBeenCalledWith({
       workflowDefinitionId: "wf-1",
-      arguments: { issue: "PRO-174" },
-      placement: { repoConfigId: "repo-1", mode: "worktree" },
+      arguments: { issue: "PRO-174", notes: "" },
+      placement: { repoConfigId: "root-1", mode: "worktree" },
     });
   });
 
-  it("carries the chosen repository and repo-root placement into the trigger", () => {
+  it("carries the chosen repo root and repo-root placement into the trigger", () => {
     renderDialog({
       ...definitionRecord(),
       defaultRepoConfigId: null,
     });
 
     fireEvent.change(screen.getByLabelText("issue"), { target: { value: "PRO-174" } });
-    fireEvent.change(screen.getByLabelText("Repository"), { target: { value: "repo-1" } });
+    fireEvent.change(screen.getByLabelText("Repository"), { target: { value: "root-2" } });
     fireEvent.click(screen.getByRole("radio", { name: "Repo root" }));
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(triggerActions.triggerRun).toHaveBeenCalledWith({
       workflowDefinitionId: "wf-1",
-      arguments: { issue: "PRO-174" },
-      placement: { repoConfigId: "repo-1", mode: "repo_root" },
+      arguments: { issue: "PRO-174", notes: "" },
+      placement: { repoConfigId: "root-2", mode: "repo_root" },
     });
+  });
+
+  it("offers the listed repo roots, falling back to the folder name", () => {
+    renderDialog();
+
+    const options = Array.from(
+      screen.getByLabelText("Repository").querySelectorAll("option"),
+    ).map((option) => [option.getAttribute("value"), option.textContent]);
+    expect(options).toEqual([
+      ["", "Select a repository"],
+      ["root-1", "proliferate"],
+      ["root-2", "sidecar"],
+    ]);
+  });
+
+  it("blocks Start run while the saved repository is not a listed repo root", () => {
+    renderDialog({
+      ...definitionRecord(),
+      defaultRepoConfigId: "repo-config-9",
+    });
+
+    fireEvent.change(screen.getByLabelText("issue"), { target: { value: "PRO-174" } });
+    expect(screen.getByText("Saved repository unavailable (repo-config-9)")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start run" })).toHaveProperty("disabled", true);
+
+    // Negative control: the same form submits once a listed root is picked.
+    fireEvent.change(screen.getByLabelText("Repository"), { target: { value: "root-1" } });
+    expect(screen.getByRole("button", { name: "Start run" })).toHaveProperty("disabled", false);
   });
 
   it("renders the trigger error inline", () => {
@@ -118,7 +164,7 @@ function definitionRecord(): WorkflowDefinitionRecordV2 {
     description: "",
     schemaVersion: 2,
     revision: 3,
-    defaultRepoConfigId: "repo-1",
+    defaultRepoConfigId: "root-1",
     definition: {
       schemaVersion: 2,
       nodes: [{

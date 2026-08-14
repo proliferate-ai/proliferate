@@ -2,92 +2,45 @@ import type {
   WorkflowDefinitionV2,
   WorkflowNodeV2,
 } from "@proliferate/cloud-sdk";
+import {
+  NODE_ID_PATTERN,
+  collectPromptReferences,
+  describeMalformedReference,
+} from "./definition-v2-references";
 
 /**
- * Gen-2 (schema_version 2) prompt token grammar and pure structural
- * validation for `WorkflowDefinitionV2`.
+ * Gen-2 (schema_version 2) pure structural validation for
+ * `WorkflowDefinitionV2`. The prompt reference grammar it applies lives in
+ * `definition-v2-references.ts` and is re-exported here so consumers keep one
+ * import path for the pair.
  *
  * Kept beside gen-1's `definition.ts`/`validation.ts` rather than folded into
  * them: schema_version 1 (stages/steps) and schema_version 2 (nodes/edges)
  * are different wire shapes that only share this directory, not a type
  * hierarchy.
- *
- * `parsePromptTokens` is reused by the builder's chip rendering (highlighting
- * `@input:`/`@doc:` references inline as the author types), so it returns
- * ordered segments that cover the entire input string — not just the
- * matches — with text segments carrying everything between tokens.
  */
 
-export type PromptToken =
-  | { kind: "text"; text: string }
-  | { kind: "input"; name: string; raw: string }
-  | { kind: "doc"; slug: string; raw: string };
-
-/**
- * Splits a prompt into an ordered sequence of text/`@input:`/`@doc:`
- * segments. NAME/SLUG match `[a-z0-9_-]+`; a token ends at the first
- * character outside that class, so trailing punctuation (`@doc:slug.`) and
- * unknown sigils (`@foo:`, which never matches `input`/`doc` and so is left
- * as plain text) fall through untouched.
- *
- * Matching is case-insensitive on both the sigil word and the name/slug body
- * (`@INPUT:Name` parses the same as `@input:Name`); the captured name/slug
- * preserves whatever casing the author typed.
- */
-export function parsePromptTokens(prompt: string): PromptToken[] {
-  // A fresh RegExp per call: a shared module-level `g` regex carries mutable
-  // `lastIndex` state across calls, which would corrupt repeat invocations —
-  // this parser is expected to run on every keystroke from chip rendering.
-  const pattern = /@(input|doc):([a-z0-9_-]+)/gi;
-  const tokens: PromptToken[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(prompt)) !== null) {
-    const [raw, sigil, name] = match;
-    if (match.index > lastIndex) {
-      tokens.push({ kind: "text", text: prompt.slice(lastIndex, match.index) });
-    }
-    if (sigil.toLowerCase() === "input") {
-      tokens.push({ kind: "input", name, raw });
-    } else {
-      tokens.push({ kind: "doc", slug: name, raw });
-    }
-    lastIndex = match.index + raw.length;
-  }
-  if (lastIndex < prompt.length) {
-    tokens.push({ kind: "text", text: prompt.slice(lastIndex) });
-  }
-  return tokens;
-}
-
-/** Distinct `@input:`/`@doc:` references in a prompt, in first-appearance order. */
-export function collectPromptReferences(
-  prompt: string,
-): { inputs: string[]; docs: string[] } {
-  const inputs: string[] = [];
-  const docs: string[] = [];
-  const seenInputs = new Set<string>();
-  const seenDocs = new Set<string>();
-  for (const token of parsePromptTokens(prompt)) {
-    if (token.kind === "input") {
-      if (!seenInputs.has(token.name)) {
-        seenInputs.add(token.name);
-        inputs.push(token.name);
-      }
-    } else if (token.kind === "doc") {
-      if (!seenDocs.has(token.slug)) {
-        seenDocs.add(token.slug);
-        docs.push(token.slug);
-      }
-    }
-  }
-  return { inputs, docs };
-}
+export {
+  DOC_SLUG_PATTERN,
+  INPUT_NAME_PATTERN,
+  NODE_ID_PATTERN,
+  collectPromptReferences,
+  parsePromptTokens,
+} from "./definition-v2-references";
+export type {
+  MalformedPromptReference,
+  MalformedPromptReferenceReason,
+  PromptReferences,
+  PromptToken,
+} from "./definition-v2-references";
 
 export type DefinitionV2IssueCode =
   | "not_linear"
+  | "invalid_node_id"
   | "duplicate_node_id"
+  | "duplicate_input_name"
   | "duplicate_doc_slug"
+  | "malformed_reference"
   | "unknown_input_ref"
   | "unknown_doc_ref"
   | "unknown_producing_node"
@@ -99,27 +52,52 @@ export interface DefinitionV2Issue {
   message: string;
   nodeId?: string;
   ref?: string;
+  /**
+   * Position within the collection the issue belongs to, when the shared
+   * contract fixtures pin one: `duplicate_input_name` is attributed to the
+   * repeated entry (`inputs.1.name`), not to the first declaration.
+   */
+  index?: number;
 }
 
 /**
  * Same rules the server enforces for a gen-2 definition. Empty array = valid.
  *
- * Structural checks (dangling edges, duplicate ids/slugs, unknown producing
- * nodes, unresolved prompt references) are independent of one another and of
- * linearity: linearity is computed over the definition's *distinct* node ids,
- * so a duplicated id or a dangling edge is reported as its own issue without
- * also forcing a `not_linear` issue for an otherwise-linear graph.
+ * Structural checks (dangling edges, duplicate ids/names/slugs, unknown
+ * producing nodes, malformed and unresolved prompt references) are independent
+ * of one another and of linearity: linearity is computed over the definition's
+ * *distinct* node ids, so a duplicated id or a dangling edge is reported as its
+ * own issue without also forcing a `not_linear` issue for an otherwise-linear
+ * graph.
+ *
+ * Node ids are checked against the shared node-id grammar where they are
+ * declared; references to a node id from an edge or a doc template are covered
+ * by `dangling_edge`/`unknown_producing_node` instead of reported twice.
+ * Declared input names and doc slugs are grammar-checked by the control plane's
+ * wire models, not here — this validator sees whatever the builder holds.
  */
 export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Issue[] {
   const issues: DefinitionV2Issue[] = [];
-  // The wire document (PR2's WorkflowDefinitionDocumentV2) allows the three
-  // secondary arrays to be omitted; omitted means "none".
-  const edges = def.edges ?? [];
+  // `edges` is required on the wire (the runtime rejects a definition without
+  // it); `inputs`/`docTemplates` may be omitted, and omitted means "none".
+  const edges = def.edges;
   const inputs = def.inputs ?? [];
   const docTemplates = def.docTemplates ?? [];
 
   if (def.nodes.length === 0) {
     issues.push({ code: "empty_nodes", message: "Add at least one node." });
+  }
+
+  for (const node of def.nodes) {
+    if (!NODE_ID_PATTERN.test(node.id)) {
+      issues.push({
+        code: "invalid_node_id",
+        message:
+          `Node id “${node.id}” must start with a letter and use only letters, ` +
+          "digits, underscores, and dashes.",
+        nodeId: node.id,
+      });
+    }
   }
 
   const idCounts = new Map<string, number>();
@@ -135,6 +113,24 @@ export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Iss
       });
     }
   }
+
+  // Attributed to the repeated declaration, matching the contract fixture's
+  // `inputs.1.name`, so the builder can point at the entry the author has to
+  // rename rather than at the one that was already fine.
+  const seenInputNames = new Set<string>();
+  inputs.forEach((input, index) => {
+    if (seenInputNames.has(input.name)) {
+      issues.push({
+        code: "duplicate_input_name",
+        message:
+          `Input name “${input.name}” is already declared; input names must be unique.`,
+        ref: input.name,
+        index,
+      });
+      return;
+    }
+    seenInputNames.add(input.name);
+  });
 
   const slugCounts = new Map<string, number>();
   for (const doc of docTemplates) {
@@ -190,6 +186,16 @@ export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Iss
   const docSlugs = new Set(docTemplates.map((doc) => doc.slug));
   for (const node of def.nodes) {
     const refs = collectPromptReferences(node.prompt);
+    for (const malformed of refs.malformed) {
+      issues.push({
+        code: "malformed_reference",
+        message:
+          `Node “${node.id}” prompt has a malformed reference “${malformed.raw}”: ` +
+          `${describeMalformedReference(malformed)}.`,
+        nodeId: node.id,
+        ref: malformed.raw,
+      });
+    }
     for (const name of refs.inputs) {
       if (!inputNames.has(name)) {
         issues.push({
@@ -248,7 +254,7 @@ function computeLinearOrder(def: WorkflowDefinitionV2): string[] | null {
 
   const outNext = new Map<string, string[]>();
   const inPrev = new Map<string, string[]>();
-  for (const edge of def.edges ?? []) {
+  for (const edge of def.edges) {
     if (!presentIds.has(edge.from) || !presentIds.has(edge.to)) {
       // Dangling edges are reported as their own issue; ignore them here so
       // they don't also masquerade as a linearity violation.

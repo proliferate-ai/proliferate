@@ -14,6 +14,7 @@ import {
   WORKFLOW_RUN_ACTIVE_INTERVAL_MS,
   resolveWorkflowRunRefetchInterval,
   useWorkflowRunMutations,
+  useWorkflowRunProjectionWriter,
 } from "./workflow-runs.js";
 
 const RUNTIME_URL = "http://runtime.test";
@@ -136,11 +137,12 @@ describe("useWorkflowRunMutations cache write-through", () => {
       .toEqual(updated.run);
   });
 
-  it("leaves an unrelated cached list untouched when it has no matching row (negative control)", async () => {
+  it("inserts an absent run into a cached list, newest first", async () => {
     const queryClient = createQueryClient();
     const listKey = anyHarnessWorkflowRunsListKey(RUNTIME_URL, RUNTIME_URL, null);
-    const seededList: WorkflowRunsListResponseV2 = { runs: [run({ id: "run-9" })] };
-    queryClient.setQueryData(listKey, seededList);
+    const older = run({ id: "run-9", createdAt: "2026-08-13T00:00:00.000Z" });
+    const newer = run({ id: "run-8", createdAt: "2026-08-15T00:00:00.000Z" });
+    queryClient.setQueryData(listKey, { runs: [newer, older] } satisfies WorkflowRunsListResponseV2);
 
     const updated = projection({ status: "completed" });
     mocks.approve.mockResolvedValue(updated);
@@ -153,7 +155,73 @@ describe("useWorkflowRunMutations cache write-through", () => {
       await result.current.approve.mutateAsync({ nodeRowId: "node-1" });
     });
 
-    expect(queryClient.getQueryData<WorkflowRunsListResponseV2>(listKey)).toBe(seededList);
+    expect(queryClient.getQueryData<WorkflowRunsListResponseV2>(listKey)).toEqual({
+      runs: [newer, updated.run, older],
+    });
+  });
+
+  it("leaves a list scoped to another workspace untouched (negative control)", async () => {
+    const queryClient = createQueryClient();
+    const otherWorkspaceKey = anyHarnessWorkflowRunsListKey(
+      RUNTIME_URL,
+      RUNTIME_URL,
+      "workspace-2",
+    );
+    const seededList: WorkflowRunsListResponseV2 = {
+      runs: [run({ id: "run-9", workspaceId: "workspace-2" })],
+    };
+    queryClient.setQueryData(otherWorkspaceKey, seededList);
+
+    const updated = projection({ status: "completed" });
+    mocks.approve.mockResolvedValue(updated);
+
+    const { result } = renderHook(() => useWorkflowRunMutations("run-1"), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.approve.mutateAsync({ nodeRowId: "node-1" });
+    });
+
+    expect(queryClient.getQueryData<WorkflowRunsListResponseV2>(otherWorkspaceKey))
+      .toBe(seededList);
+  });
+
+  it("writes a projection obtained outside the mutations into the detail cache and every eligible list", () => {
+    const queryClient = createQueryClient();
+    const allRunsKey = anyHarnessWorkflowRunsListKey(RUNTIME_URL, RUNTIME_URL, null);
+    const workspaceScopedKey = anyHarnessWorkflowRunsListKey(
+      RUNTIME_URL,
+      RUNTIME_URL,
+      "workspace-1",
+    );
+    const otherWorkspaceKey = anyHarnessWorkflowRunsListKey(
+      RUNTIME_URL,
+      RUNTIME_URL,
+      "workspace-2",
+    );
+    queryClient.setQueryData(allRunsKey, { runs: [] } satisfies WorkflowRunsListResponseV2);
+    queryClient.setQueryData(workspaceScopedKey, { runs: [] } satisfies WorkflowRunsListResponseV2);
+    const otherWorkspaceList: WorkflowRunsListResponseV2 = { runs: [] };
+    queryClient.setQueryData(otherWorkspaceKey, otherWorkspaceList);
+
+    const placed = projection({ status: "running" });
+    const { result } = renderHook(() => useWorkflowRunProjectionWriter(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    act(() => {
+      result.current(placed);
+    });
+
+    expect(queryClient.getQueryData(anyHarnessWorkflowRunKey(RUNTIME_URL, RUNTIME_URL, "run-1")))
+      .toBe(placed);
+    expect(queryClient.getQueryData<WorkflowRunsListResponseV2>(allRunsKey)?.runs)
+      .toEqual([placed.run]);
+    expect(queryClient.getQueryData<WorkflowRunsListResponseV2>(workspaceScopedKey)?.runs)
+      .toEqual([placed.run]);
+    expect(queryClient.getQueryData<WorkflowRunsListResponseV2>(otherWorkspaceKey))
+      .toBe(otherWorkspaceList);
   });
 
   it("routes flipType through the same write-through path", async () => {

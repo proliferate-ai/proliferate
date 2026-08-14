@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowDefinitionV2, WorkflowNodeV2 } from "@proliferate/cloud-sdk";
-import {
-  collectPromptReferences,
-  orderedNodes,
-  parsePromptTokens,
-  validateDefinitionV2,
-} from "./definition-v2";
+import v2FullFixture from "../../../../../../fixtures/contracts/workflow-definition/v2-full.json";
+import { orderedNodes, validateDefinitionV2 } from "./definition-v2";
+
+// Structural validation. The reference-grammar cases live in
+// `definition-v2-references.test.ts`.
 
 function node(overrides: Partial<WorkflowNodeV2> & { id: string }): WorkflowNodeV2 {
   return {
@@ -15,91 +14,6 @@ function node(overrides: Partial<WorkflowNodeV2> & { id: string }): WorkflowNode
     ...overrides,
   };
 }
-
-describe("parsePromptTokens", () => {
-  it("returns a single text token for a prompt with no sigils", () => {
-    expect(parsePromptTokens("Investigate the ticket")).toEqual([
-      { kind: "text", text: "Investigate the ticket" },
-    ]);
-  });
-
-  it("parses back-to-back tokens with no text between them", () => {
-    expect(parsePromptTokens("@input:a@doc:b")).toEqual([
-      { kind: "input", name: "a", raw: "@input:a" },
-      { kind: "doc", slug: "b", raw: "@doc:b" },
-    ]);
-  });
-
-  it("parses a token at the very start of the prompt", () => {
-    expect(parsePromptTokens("@input:ticket please investigate")).toEqual([
-      { kind: "input", name: "ticket", raw: "@input:ticket" },
-      { kind: "text", text: " please investigate" },
-    ]);
-  });
-
-  it("parses a token at the very end of the prompt, with no trailing text segment", () => {
-    expect(parsePromptTokens("please see @doc:notes")).toEqual([
-      { kind: "text", text: "please see " },
-      { kind: "doc", slug: "notes", raw: "@doc:notes" },
-    ]);
-  });
-
-  it("ends a token at punctuation, keeping it as trailing text", () => {
-    expect(parsePromptTokens("See @doc:research-findings.")).toEqual([
-      { kind: "text", text: "See " },
-      { kind: "doc", slug: "research-findings", raw: "@doc:research-findings" },
-      { kind: "text", text: "." },
-    ]);
-  });
-
-  it("leaves an unknown sigil as plain text", () => {
-    expect(parsePromptTokens("Contact @foo:bar for help")).toEqual([
-      { kind: "text", text: "Contact @foo:bar for help" },
-    ]);
-  });
-
-  it("leaves a bare sigil with no valid name/slug characters as plain text", () => {
-    expect(parsePromptTokens("@input: nothing follows the colon")).toEqual([
-      { kind: "text", text: "@input: nothing follows the colon" },
-    ]);
-  });
-
-  it("matches the sigil word and the name/slug body case-insensitively while preserving raw casing", () => {
-    expect(parsePromptTokens("@INPUT:Ticket-ID and @Doc:Notes")).toEqual([
-      { kind: "input", name: "Ticket-ID", raw: "@INPUT:Ticket-ID" },
-      { kind: "text", text: " and " },
-      { kind: "doc", slug: "Notes", raw: "@Doc:Notes" },
-    ]);
-  });
-
-  it("covers the whole string when segments are concatenated back together", () => {
-    const prompt = "Resolve @input:ticket using @doc:runbook, then close it.";
-    const tokens = parsePromptTokens(prompt);
-    const reassembled = tokens.map((token) =>
-      token.kind === "text" ? token.text : token.raw
-    ).join("");
-    expect(reassembled).toBe(prompt);
-  });
-});
-
-describe("collectPromptReferences", () => {
-  it("dedupes repeated references, preserving first-appearance order", () => {
-    const prompt =
-      "Resolve @input:ticket, check @doc:notes, then @input:ticket again, " +
-      "consult @input:other and @doc:notes once more.";
-    expect(collectPromptReferences(prompt)).toEqual({
-      inputs: ["ticket", "other"],
-      docs: ["notes"],
-    });
-  });
-
-  it("returns empty arrays for a prompt with no references", () => {
-    expect(collectPromptReferences("Just investigate the issue.")).toEqual({
-      inputs: [],
-      docs: [],
-    });
-  });
-});
 
 describe("validateDefinitionV2", () => {
   function linearDef(overrides: Partial<WorkflowDefinitionV2> = {}): WorkflowDefinitionV2 {
@@ -291,6 +205,137 @@ describe("validateDefinitionV2", () => {
         ref: "missing-notes",
       },
     ]);
+  });
+
+  it("flags duplicate_input_name only, attributed to the repeated declaration's index", () => {
+    // Mirrors fixtures/contracts/workflow-definition/v2-invalid-duplicate-input-name.json,
+    // whose expectedIssuePath is `inputs.1.name` — the second `topic`.
+    const def = linearDef({
+      inputs: [
+        { name: "topic", description: "First", required: true },
+        { name: "topic", description: "Second", required: false },
+      ],
+      docTemplates: [],
+      nodes: [
+        node({ id: "a", prompt: "Investigate @input:topic" }),
+        node({ id: "b", type: "human_in_loop", prompt: "Review @input:topic" }),
+      ],
+    });
+    expect(validateDefinitionV2(def)).toEqual([
+      {
+        code: "duplicate_input_name",
+        message: "Input name “topic” is already declared; input names must be unique.",
+        ref: "topic",
+        index: 1,
+      },
+    ]);
+  });
+
+  it("flags malformed_reference only, for a mis-cased sigil that would never substitute", () => {
+    const def = linearDef({
+      inputs: [{ name: "topic", description: "", required: true }],
+      docTemplates: [],
+      nodes: [
+        node({ id: "a", prompt: "Investigate @INPUT:topic" }),
+        node({ id: "b", type: "human_in_loop", prompt: "Review it" }),
+      ],
+    });
+    expect(validateDefinitionV2(def)).toEqual([
+      {
+        code: "malformed_reference",
+        message:
+          "Node “a” prompt has a malformed reference “@INPUT:topic”: " +
+          "the sigil must be lowercase “@input:”.",
+        nodeId: "a",
+        ref: "@INPUT:topic",
+      },
+    ]);
+  });
+
+  it("flags malformed_reference, not unknown_doc_ref, for a doc slug outside the grammar", () => {
+    const def = linearDef({
+      inputs: [],
+      docTemplates: [],
+      nodes: [
+        node({ id: "a", prompt: "Write @doc:my_doc" }),
+        node({ id: "b", type: "human_in_loop", prompt: "Open @doc:plan.md" }),
+      ],
+    });
+    expect(validateDefinitionV2(def)).toEqual([
+      {
+        code: "malformed_reference",
+        message:
+          "Node “a” prompt has a malformed reference “@doc:my_doc”: " +
+          "doc slug “my_doc” must be lowercase kebab-case: letters and digits " +
+          "joined by single dashes.",
+        nodeId: "a",
+        ref: "@doc:my_doc",
+      },
+      {
+        code: "malformed_reference",
+        message:
+          "Node “b” prompt has a malformed reference “@doc:plan.md”: " +
+          "doc slug “plan.md” must be lowercase kebab-case: letters and digits " +
+          "joined by single dashes.",
+        nodeId: "b",
+        ref: "@doc:plan.md",
+      },
+    ]);
+  });
+
+  it("accepts a mixed-case underscored input name and a kebab-case doc slug", () => {
+    const def = linearDef({
+      inputs: [{ name: "Topic_2", description: "", required: true }],
+      docTemplates: [
+        { slug: "research-findings", producingNodeId: "a", body: "" },
+      ],
+      nodes: [
+        node({ id: "a", prompt: "Research @input:Topic_2 into @doc:research-findings." }),
+        node({ id: "b", type: "human_in_loop", prompt: "Review @doc:research-findings." }),
+      ],
+    });
+    expect(validateDefinitionV2(def)).toEqual([]);
+  });
+
+  it("accepts the valid contract exemplar verbatim (three-plane lockstep)", () => {
+    // fixtures/contracts/workflow-definition/v2-full.json is the definition
+    // every plane must accept; the CP and Rust suites consume it too. The
+    // trailing full stops in its prompts are the load-bearing part — a scan
+    // that took every non-space character as the token would read
+    // `research-findings.` as a malformed slug and reject a definition the
+    // other two planes accept.
+    const def = v2FullFixture.definition as WorkflowDefinitionV2;
+    expect(validateDefinitionV2(def)).toEqual([]);
+  });
+
+  it("flags invalid_node_id for a node id outside the node-id grammar", () => {
+    const def: WorkflowDefinitionV2 = {
+      schemaVersion: 2,
+      nodes: [node({ id: "1st" })],
+      edges: [],
+      inputs: [],
+      docTemplates: [],
+    };
+    expect(validateDefinitionV2(def)).toEqual([
+      {
+        code: "invalid_node_id",
+        message:
+          "Node id “1st” must start with a letter and use only letters, digits, " +
+          "underscores, and dashes.",
+        nodeId: "1st",
+      },
+    ]);
+  });
+
+  it("accepts a node id with underscores and dashes", () => {
+    const def: WorkflowDefinitionV2 = {
+      schemaVersion: 2,
+      nodes: [node({ id: "n_research-2" })],
+      edges: [],
+      inputs: [],
+      docTemplates: [],
+    };
+    expect(validateDefinitionV2(def)).toEqual([]);
   });
 
   it("flags unknown_producing_node only, for a doc template naming a node that doesn't exist", () => {

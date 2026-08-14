@@ -5,6 +5,7 @@ import type {
 } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { putWorkflowRun } from "#product/lib/access/anyharness/workflow-runs";
+import { WorkflowRuntimeNotConnectedError } from "#product/lib/domain/workflows/workflow-trigger-failure";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 export type WorkflowRunPut = (
@@ -28,7 +29,7 @@ export function useWorkflowRunPut(): WorkflowRunPut {
   return useCallback<WorkflowRunPut>((runId, body, options) => {
     const trimmedRuntimeUrl = runtimeUrl.trim();
     if (!trimmedRuntimeUrl) {
-      return Promise.reject(new Error("The local runtime is not connected yet."));
+      return Promise.reject(new WorkflowRuntimeNotConnectedError());
     }
     return putWorkflowRun({ runtimeUrl: trimmedRuntimeUrl }, runId, body, options);
   }, [runtimeUrl]);

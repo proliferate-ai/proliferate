@@ -41,10 +41,19 @@ export interface WorkflowDocTemplateV2 {
   body: string;
 }
 
+/**
+ * `edges` is REQUIRED, unlike `inputs`/`docTemplates`: the frozen definition
+ * travels verbatim into the runtime's PUT body, where `WorkflowDefinition`
+ * (definition.rs) declares `edges` with no `serde(default)` under
+ * `deny_unknown_fields` — a definition without the key is undeliverable. CP
+ * tolerates an omitted `edges` on writes and normalizes it to `[]`, and every
+ * CP response carries the key, so requiring it here only forbids authoring a
+ * document the runtime would reject.
+ */
 export interface WorkflowDefinitionV2 {
   schemaVersion: 2;
   nodes: WorkflowNodeV2[];
-  edges?: WorkflowEdgeV2[];
+  edges: WorkflowEdgeV2[];
   inputs?: WorkflowInputV2[];
   docTemplates?: WorkflowDocTemplateV2[];
 }
