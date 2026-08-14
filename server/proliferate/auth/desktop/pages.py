@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fastapi.responses import HTMLResponse
 
 from proliferate.auth.identity.types import AuthProviderName
@@ -12,6 +14,12 @@ _PROVIDER_LABELS: dict[AuthProviderName, str] = {
     "google": "Google",
     "apple": "Apple",
 }
+
+# OAuth error codes are a small, conservative vocabulary (e.g. "access_denied",
+# "server_error"). Only echo the provider-supplied error when it matches this
+# shape; anything else renders a generic detail instead of trusting provider
+# input straight into the page.
+_SAFE_ERROR_CODE = re.compile(r"[a-z0-9_]{1,64}")
 
 
 def make_browser_flow_page(*, title: str, message: str) -> HTMLResponse:
@@ -33,7 +41,7 @@ def make_desktop_handoff_page(
     message = (
         "Redirecting to desktop app..."
         if launch_deep_link
-        else "Your GitHub session is verified. Return to Proliferate and it will unlock shortly."
+        else f"Your {label} session is verified. Return to Proliferate and it will unlock shortly."
     )
     fallback_message = (
         "If Proliferate did not open automatically, use the button below or return to the app. "
@@ -79,13 +87,18 @@ def make_desktop_provider_error_page(
     label = _PROVIDER_LABELS[provider]
     title = f"{label} sign-in failed"
     fallback_message = "If Proliferate did not open automatically, use the button below."
+    detail = (
+        f"The provider returned: {error}"
+        if _SAFE_ERROR_CODE.fullmatch(error)
+        else "The provider reported an error."
+    )
     return HTMLResponse(
         render_redirect_callback_page(
             title=title,
             status_label="Desktop sign-in",
             message="Return to Proliferate and try signing in again.",
             tone="error",
-            detail=f"The provider returned: {error}",
+            detail=detail,
             action_label="Open Proliferate",
             action_href=deep_link_url,
             action_visible=not launch_deep_link,

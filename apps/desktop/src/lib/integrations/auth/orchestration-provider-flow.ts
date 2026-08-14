@@ -37,6 +37,7 @@ import {
   applyAuthenticatedState,
   applyDevBypassState,
   clearPendingGitHubAuth,
+  clearPublishedAuthIssue,
   toError,
   type AuthOrchestrationDeps,
 } from "./orchestration-effects";
@@ -48,6 +49,10 @@ export async function signInWithGitHub(
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
+  // A retry after a failed attempt must not leave the previous attempt's
+  // published issue rendered underneath the new one.
+  clearPublishedAuthIssue(deps);
+
   if (isDevAuthBypassed()) {
     applyDevBypassState(deps);
     return {
@@ -248,6 +253,10 @@ export async function signInWithSso(
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
+  // Same retry-hygiene as signInWithGitHub: don't let a prior attempt's
+  // published issue linger into this one.
+  clearPublishedAuthIssue(deps);
+
   if (isDevAuthBypassed()) {
     applyDevBypassState(deps);
     return {
@@ -370,6 +379,10 @@ export async function signOut(deps: AuthOrchestrationDeps): Promise<{
   };
 }
 
-export async function cancelActiveAuthFlow(message = "Sign-in cancelled."): Promise<void> {
+export async function cancelActiveAuthFlow(
+  message = "Sign-in cancelled.",
+  deps: AuthOrchestrationDeps,
+): Promise<void> {
   await clearPendingGitHubAuth(undefined, abortError(message));
+  clearPublishedAuthIssue(deps);
 }

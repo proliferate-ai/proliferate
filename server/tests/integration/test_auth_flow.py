@@ -1,5 +1,7 @@
 """Integration tests for the auth flow: GitHub OAuth → desktop PKCE exchange."""
 
+import html
+import re
 import time
 from datetime import UTC, datetime
 from unittest.mock import Mock
@@ -1265,7 +1267,7 @@ class TestWebMobileProductAuthFlow:
         assert token.json()["user"]["email"] == "desktop-existing-github@example.com"
 
     @pytest.mark.asyncio
-    async def test_desktop_github_callback_success_launches_deep_link_then_completes_via_poll(
+    async def test_desktop_github_callback_success_embeds_exchangeable_code_in_handoff_page(
         self,
         client: AsyncClient,
         monkeypatch: pytest.MonkeyPatch,
@@ -1296,11 +1298,25 @@ class TestWebMobileProductAuthFlow:
         assert "proliferate://auth/callback?code=" in callback.text
         assert "window.location.replace" in callback.text
 
+        # The launch script embeds the deep link JSON-encoded, with < > & escaped
+        # as \u sequences, so pull the exchangeable code from the handoff page's
+        # anchor href instead: it carries the same URL, HTML-escaped, which is
+        # simpler to unescape and parse.
+        href_match = re.search(r'<a class="action" href="([^"]+)"', callback.text)
+        assert href_match is not None
+        deep_link_url = html.unescape(href_match.group(1))
+        deep_link_query = parse_qs(urlparse(deep_link_url).query)
+        assert deep_link_query["state"][0] == "desktop-launch-github-state"
+        auth_code = deep_link_query["code"][0]
+        assert auth_code
+
+        # Prove the embedded code is actually exchangeable, not just present.
         token = await client.post(
-            "/auth/desktop/poll",
+            "/auth/desktop/token",
             json={
-                "state": "desktop-launch-github-state",
+                "code": auth_code,
                 "code_verifier": verifier,
+                "grant_type": "authorization_code",
             },
         )
         assert token.status_code == 200
@@ -1336,7 +1352,7 @@ class TestWebMobileProductAuthFlow:
         assert callback.status_code == 200
         assert "text/html" in callback.headers["content-type"]
         assert "proliferate://auth/callback?error=access_denied" in callback.text
-        assert "tone-error" in callback.text
+        assert 'class="status tone-error"' in callback.text
 
     @pytest.mark.asyncio
     async def test_web_github_callback_success_stays_a_redirect(
