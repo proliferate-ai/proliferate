@@ -160,6 +160,7 @@ export function useRightPanelController({
     workspaceUiKey,
     activeEntryKey: state.activeEntryKey,
     activeTool,
+    isOpen,
     activeTerminalId,
     activeViewerTarget,
     entries: headerEntries,

@@ -6,6 +6,9 @@
     "noEmit": true,
     "sourceMap": false
   },
-  "include": ["src/workflow-runs.type-test.ts"],
+  "include": [
+    "src/subagents.type-test.ts",
+    "src/workflow-runs.type-test.ts"
+  ],
   "exclude": []
 }

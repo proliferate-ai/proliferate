@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
+import { type ComponentProps } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createTranscriptState } from "@anyharness/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createOptimisticPendingPrompt,
@@ -9,10 +11,23 @@ import {
   createPromptOutboxEntry,
   type PromptOutboxEntry,
 } from "#product/domain/sessions/intents/session-intent-model";
-import { TranscriptPendingPromptRow } from "#product/components/workspace/chat/transcript/TranscriptPendingPromptRow";
+import { TranscriptPendingPromptRow as TranscriptPendingPromptRowImpl } from "#product/components/workspace/chat/transcript/TranscriptPendingPromptRow";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 const NOW = "2026-05-20T17:00:00.000Z";
+const TRANSCRIPT = createTranscriptState("session-1");
+
+function TranscriptPendingPromptRow(
+  props: Omit<ComponentProps<typeof TranscriptPendingPromptRowImpl>, "transcript" | "workspaceId">,
+) {
+  return (
+    <TranscriptPendingPromptRowImpl
+      {...props}
+      transcript={TRANSCRIPT}
+      workspaceId="workspace-1"
+    />
+  );
+}
 
 describe("TranscriptPendingPromptRow", () => {
   afterEach(() => {
@@ -178,6 +193,33 @@ describe("TranscriptPendingPromptRow", () => {
     const footer = container.querySelector("[data-turn-assistant-footer]");
     expect(frontier?.nextElementSibling).toBe(footer);
     expect(footer?.querySelector("[data-turn-assistant-footer-slot]")?.className).toContain("h-6");
+  });
+
+  it("renders a pending agent reply as a right receipt instead of a user bubble", () => {
+    const prompt = {
+      ...createOptimisticPendingPrompt("Exact pending agent reply", "prompt-agent", NOW),
+      promptProvenance: {
+        type: "agentSession" as const,
+        sourceSessionId: "agent-session-1",
+        label: "Schema audit",
+      },
+    };
+    const { container } = render(
+      <TranscriptPendingPromptRow
+        activeSessionId="session-1"
+        rowIndex={0}
+        prompt={prompt}
+        outboxEntry={null}
+        optimisticTrailingStatus={null}
+        outboxActions={{ retryPrompt: vi.fn(), dismissPrompt: vi.fn() }}
+      />,
+    );
+
+    expect(container.querySelector("[data-agent-origin-prompt]")?.className).toContain("justify-end");
+    expect(container.querySelector("[data-agent-message-receipt]")?.textContent)
+      .toContain("Schema audit");
+    expect(container.querySelector("[data-chat-user-message]")).toBeNull();
+    expect(container.textContent).not.toContain("Exact pending agent reply");
   });
 
   it("hosts the receipt alone while the workspace creation is still in flight", () => {

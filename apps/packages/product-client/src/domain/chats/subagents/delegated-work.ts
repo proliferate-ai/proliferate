@@ -2,7 +2,6 @@ export type DelegatedWorkSummaryPriority =
   | "needs_action"
   | "failed"
   | "running"
-  | "wake_scheduled"
   | "finished";
 
 export interface DelegatedWorkSummaryCandidate {
@@ -15,8 +14,7 @@ const PRIORITY_ORDER: Record<DelegatedWorkSummaryPriority, number> = {
   needs_action: 0,
   failed: 1,
   running: 2,
-  wake_scheduled: 3,
-  finished: 4,
+  finished: 3,
 };
 
 export interface DelegatedWorkSummary {

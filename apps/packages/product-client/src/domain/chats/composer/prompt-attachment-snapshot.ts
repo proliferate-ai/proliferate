@@ -1,4 +1,4 @@
-import type { ContentPart } from "@anyharness/sdk";
+import type { PromptAttachmentPathKind } from "./prompt-attachment-rules";
 
 export type PromptAttachmentSource = "upload" | "paste";
 
@@ -7,8 +7,10 @@ export interface PromptAttachmentSnapshotDescriptor {
   name: string;
   mimeType: string;
   size: number;
-  kind: "image" | "text_resource";
+  kind: "image" | "text_resource" | "local_ref";
   source: PromptAttachmentSource;
+  localPath?: string;
+  pathKind?: PromptAttachmentPathKind;
 }
 
 export interface PromptAttachmentSnapshot<TFile = unknown> {
@@ -16,9 +18,12 @@ export interface PromptAttachmentSnapshot<TFile = unknown> {
   name: string;
   mimeType: string;
   size: number;
-  kind: "image" | "text_resource";
+  kind: "image" | "text_resource" | "local_ref";
   source: PromptAttachmentSource;
+  /** Null for local_ref attachments, which carry no bytes. */
   file: TFile;
+  localPath?: string;
+  pathKind?: PromptAttachmentPathKind;
 }
 
 export function createPromptAttachmentSnapshot<TFile>(
@@ -33,6 +38,8 @@ export function createPromptAttachmentSnapshot<TFile>(
     kind: descriptor.kind,
     source: descriptor.source,
     file,
+    localPath: descriptor.localPath,
+    pathKind: descriptor.pathKind,
   };
 }
 
@@ -45,28 +52,7 @@ export function clonePromptAttachmentSnapshot<TFile>(
   };
 }
 
-export function promptAttachmentSnapshotsToContentParts(
-  snapshots: readonly PromptAttachmentSnapshot[],
-): ContentPart[] {
-  return snapshots.map((snapshot): ContentPart => {
-    if (snapshot.kind === "image") {
-      return {
-        type: "image",
-        attachmentId: snapshot.id,
-        mimeType: snapshot.mimeType,
-        name: snapshot.name,
-        size: snapshot.size,
-        source: snapshot.source,
-      };
-    }
-    return {
-      type: "resource",
-      attachmentId: snapshot.id,
-      uri: `file://${snapshot.name}`,
-      name: snapshot.name,
-      mimeType: snapshot.mimeType,
-      size: snapshot.size,
-      source: snapshot.source,
-    };
-  });
+/** Encode an absolute POSIX path as a file:// URI. */
+export function localPathToFileUri(path: string): string {
+  return `file://${path.split("/").map(encodeURIComponent).join("/")}`;
 }

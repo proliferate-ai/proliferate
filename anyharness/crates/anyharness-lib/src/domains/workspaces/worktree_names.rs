@@ -7,6 +7,24 @@ pub enum WorktreeNameConflictPolicy {
     SuffixPathAndBranch,
 }
 
+/// Low-cardinality owner classification for an exact worktree name that lost
+/// either a preflight check or a race at creation time. The source remains
+/// available to internal diagnostics while the stable variant crosses adapter
+/// boundaries.
+#[derive(Debug, thiserror::Error)]
+pub enum WorktreeNameConflictError {
+    #[error("the requested worktree branch is already in use")]
+    Branch {
+        #[source]
+        source: anyhow::Error,
+    },
+    #[error("the requested worktree path is already in use")]
+    Path {
+        #[source]
+        source: anyhow::Error,
+    },
+}
+
 impl Default for WorktreeNameConflictPolicy {
     fn default() -> Self {
         Self::Fail

@@ -11,6 +11,11 @@ impl SessionEventSink {
         &mut self,
         event: RuntimeInjectedSessionEvent,
     ) -> Result<SessionEventEnvelope, RuntimeEventInjectionError> {
+        if self.has_staged_terminal() {
+            return Err(RuntimeEventInjectionError::PersistenceFailed(
+                "terminal transaction unresolved".to_string(),
+            ));
+        }
         let touch_session_activity = event.updates_session_activity_at();
         let envelope = publish_session_event_strict(
             &self.session_id,

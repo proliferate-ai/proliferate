@@ -4,7 +4,7 @@ export function ProductSidebarShowToggleRow({
   label,
   onClick,
 }: {
-  label: "Show more" | "Show less";
+  label: "Show more" | "Show less" | `Show ${number} more`;
   onClick: () => void;
 }) {
   return (

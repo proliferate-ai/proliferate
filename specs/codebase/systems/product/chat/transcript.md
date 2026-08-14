@@ -27,6 +27,28 @@ In-app find (Cmd+F) over transcript prose is documented separately in
   keep requests abortable, key top-of-scroll prefetches by the oldest loaded
   sequence, and do not spin forever when a page returns no new rows.
 
+### Embedded Non-Active Transcripts
+
+The Agents right-pane detail renders a child transcript without making that
+child the active main chat. It must reuse the mapped ProductClient session's
+existing directory entry, transcript store, history hydration, transcript row
+model, and send-or-queue intent path. Do not create a pane-specific transcript
+cache or reducer, and do not write the child's ID into the main
+`activeSessionId` as a rendering shortcut.
+
+A non-Closed detail explicitly requests an arbitrary-session stream through the
+shared stream lifecycle. The pane releases only the handle it opened; it must
+not tear down a pre-existing handle or one owned by hot-session ingestion.
+Closed detail hydrates persisted history read-only and opens no stream. The
+embedded `MessageList` uses the same transcript-session target resolver as the
+main transcript so cowork, linked-child, and ordinary-session navigation keeps
+its existing workspace semantics.
+
+This embedded transcript opts out of transcript content search
+(`contentSearchEnabled={false}`). It must not register or paint matches for the
+workspace Cmd+F surface while the active main transcript remains the search
+owner.
+
 Before merging transcript or stream-runtime changes, run focused coverage for
 stream flushing, session runtime/history loading, transcript row modeling, SDK
 transcript reducer immutability, plus:
@@ -192,9 +214,61 @@ prompt, not separate context inserts.
 
 ## Delegated-Work Receipts
 
-Subagent creation, parent/child communication, and wake/completion receipts are
-durable transcript events. They must render as delegated-work product events,
-not as raw MCP mechanics.
+Agent creation, lifecycle changes, messages, and completion notifications are
+durable transcript events. They render as Agent Operations product receipts,
+not as raw MCP mechanics or ordinary user-message bubbles.
+
+The pure Workspace MCP parser owns the wire-to-presentation boundary:
+
+```text
+apps/packages/product-client/src/domain/chats/tools/agent-operations-tool-presentation.ts
+  exact mcp__proliferate_workspace__<tool> classification and typed receipt projection
+
+apps/packages/product-client/src/domain/chats/tools/agent-operations-tool-wire.ts
+  flat native-call and provider-neutral MCP-envelope normalization
+
+apps/packages/product-client/src/components/workspace/chat/tool-calls/AgentOperationsToolActionRow.tsx
+  compact mutation receipts and expandable raw details
+
+apps/packages/product-client/src/components/workspace/chat/transcript/AgentMessageReceipt.tsx
+  shared left/right agent-message grammar
+```
+
+Workspace reads (`whoami`, list/get/options calls, and `get_task_output`) remain
+generic foldable work. A structured-only read result is formatted into the
+existing expandable generic result row with the Proliferate mark; malformed or
+absent output keeps the non-expandable Proliferate-mark fallback. Workspace
+reads that name one durable `agentId` (`get_agent`, configuration options, and
+task output) keep the same foldable row but replace the product mark with that
+agent's Solid Seal. Workspace
+mutations (`create_workspace`, agent create,
+configure, resume, message, interrupt, Close, Open, and Promote) bypass generic
+history folding so their receipts remain visible after turn completion. The
+MCP parser consumes direct `AgentView` lifecycle outputs, the configure
+`{agent, applyState}` wrapper, the send `{target, queueSeq, status}` wrapper,
+and the workspace `{workspace, creationMode}` wrapper. It must not accept the
+HTTP lifecycle `{agent, relationship}` envelope.
+
+The presentation boundary accepts either the exact flat native name
+`mcp__proliferate_workspace__<tool>` or the provider-neutral Codex MCP envelope
+`{server, tool, arguments}` when `server` is `proliferate_workspace` or the
+historical transport id `workspace`. It canonicalizes the latter's
+`arguments` and `rawOutput.structuredContent` before presentation and strict
+authority checks. This does not restore `mcp__workspace__*` as a native-name
+alias.
+
+Agent identity follows one rule on every surface: only a durable runtime
+session ID mints the Solid Seal glyph. Existing-target mutations may use their
+`agentId` input while running or failed because that field is the durable
+address; a create call waits for its output `identity.sessionId`. Relationship,
+tool-call, prompt, and ProductClient session IDs never mint a glyph. When a
+directory entry maps a durable ID to a ProductClient client-session ID, the
+durable ID continues to seed the glyph while navigation uses the mapped client
+ID. Cross-workspace navigation also requires the directory or direct
+`AgentView.workspace.workspaceId`; an unresolved location stays non-clickable.
+An in-progress or failed create uses the Proliferate product mark because no
+durable created-session identity exists. A successful create replaces that
+product-level attribution with the returned agent's Solid Seal.
 
 Creation grouping belongs in the transcript presentation layer:
 
@@ -205,31 +279,90 @@ apps/packages/product-client/src/domain/chats/transcript/transcript-presentation
 
 Rules:
 
-- Group only adjacent subagent creation receipts from the same assistant/tool
-  call cluster.
-- Do not group creation with send, wake, status, read, search, close, or
-  generic tool calls.
-- A single completed creation receipt collapses as `Subagent finished`.
-- Multiple adjacent completed creation receipts collapse as
-  `N subagents finished`.
-- Collapsed creation labels use the same muted, backgroundless collapsed-action
-  trigger treatment as normal transcript tool summaries such as
-  `Explored 1 listing`.
-- Expanded group rows use `GeneratedName — done` (or `— failed`) and stay on
-  one truncating line. Expanding a row shows only the clean structured result
-  summary, plus an `Open subagent session` action when a valid target exists;
-  raw orchestration receipts remain hidden.
+- Group only adjacent `create_agent` calls whose input `kind` is `subagent`.
+  Ordinary-agent creation and every send, lifecycle, read, search, and generic
+  tool call terminate the run.
+- The run key is its first tool item ID. Appending a settled creation therefore
+  adds a chip without remounting the existing run.
+- Each settled durable identity is a 28px chip containing a 16px Solid Seal.
+  The line ends with the quiet phrase `started working`. A failed create may
+  show its real task text in a neutral failure capsule but must not invent a
+  glyph. An in-progress or failed create with no authoritative output identity
+  uses the Proliferate product mark and never mints a provisional identity. The
+  trailing phrase is also the accessible disclosure for each
+  create call's distinguishable structured result or failure detail.
+- Each newly settled live chip receives one 280ms opacity-and-scale pop keyed
+  by its tool item ID. Existing chips never remount, and hydrated, revisited,
+  virtualized, or reduced-motion presentations stay static.
+- A chip opens the returned session only when its workspace/session target is
+  authoritative. Replayed creation runs remain visible outside completed work
+  history.
 
 Communication receipts:
 
-- Parent messages rendered inside a child session show
-  `Sent by parent - {parent chat title}`.
-- Wake/completion receipts rendered in the parent transcript use one line:
-  `GeneratedName (title ID) finished a turn`.
-- Wake receipts source labels from prompt provenance plus
-  `linkCompletionsByCompletionId`.
-- When a valid child target exists, the whole wake/completion receipt chip and
-  not a separate visible action or hover card, opens the child session.
+- Outgoing `send_message` renders on the left as identity chip then the quiet
+  verb `messaged`. Agent create/configure/resume/interrupt/Close/Open/Promote
+  use the same chip-first grammar (`created`, `configured`, `resumed`, and so
+  on). Running and failed rows use truthful progressive/failure verbs rather
+  than success copy.
+- Incoming `agentSession`, `subagentWake`, and `linkWake` prompts render on the
+  right as one receipt and never as a user bubble. The exact message is
+  available on mouse hover and keyboard focus, including when identity is not
+  yet resolved. Unresolved labels are width-bounded and truncate without
+  removing that exact-message disclosure.
+- Wake identity and outcome come only from
+`linkCompletionsByCompletionId`. Missing completion projection renders a
+  neutral `updated` receipt with no glyph and never claims success. Resolved
+  outcomes use `finished`, `failed`, or `cancelled`. The composer queue
+  subscribes to this structurally shared index directly rather than to the
+  full active transcript, so unrelated stream batches do not invalidate it.
+- Directory relationship metadata determines whether a resolved incoming
+  source opens as generic, linked-child, or cowork. Relationship hints and
+  open actions use the mapped ProductClient session ID, never the durable glyph
+  seed when those IDs differ.
+- In the selected workspace, authoritative subagent creation chips, Agent
+  Operations receipts, incoming agent-origin receipts, and pending
+  `From subagents` glyphs open the child's Agents-pane detail without selecting
+  a chat tab. A receipt whose current relationship is ordinary/promoted,
+  cowork, review, or another non-subagent relationship keeps its existing
+  transcript/session navigation.
+  Historical subagent provenance is not enough to override a conflicting live
+  relationship.
+- Close preserves the same glyph and dims that glyph to 45% opacity only after
+  a successful/actually closed result. Open and Promote restore/reuse the same
+  durable identity; a failed Close is not dimmed.
+- A successful Promote result records root authority for both the durable
+  runtime ID and its mapped ProductClient session ID. Receipt replay, directory
+  relationship hints, roster refreshes, and header hierarchy refreshes must not
+  resurrect that session as an Agents-pane child; the Promote receipt and later
+  opens route to the ordinary session.
+- Compact rows keep detailed structured output inspectable through their own
+  quiet verb or operation mark. They do not add a second generic tool glyph.
+- `create_workspace` uses a one-line Proliferate-mark receipt and a lower-case
+  provenance phrase such as `worktree from main`. Opaque repository IDs are
+  never shown as labels. Its Open action passes the returned `WorkspaceView`
+  as `knownWorkspace`, because the collections cache may not contain a newly
+  created workspace yet.
+
+Pending agent-origin prompts are hidden from the ordinary editable queue and
+reduced to one final `From subagents` aggregate after user/review rows. The
+aggregate shows one deterministic 14px glyph per resolved durable sender in a
+20px overlapping shell, the total update count, and no edit/delete/reorder
+controls. Unresolved wake prompts count toward the total without creating a
+glyph. An authoritative same-workspace subagent glyph opens the Agents-pane
+detail; a promoted or otherwise non-subagent target uses its current session
+route. Reordering replaces only eligible runtime-owned plain-message slots;
+review, local-outbox, and hidden-agent slots retain their exact positions in
+both optimistic rendering and the compare-and-swap payload. A pending glyph
+is clickable only when directory metadata supplies an authoritative workspace,
+and navigation uses its mapped client-session ID.
+
+`mcp__proliferate_workspace__*` is the only native-name Product MCP input to
+these Agent Operations renderers; the trusted Codex transport envelope above
+canonicalizes to that namespace. Removed `mcp__subagents__*` names have no
+compatibility classification or navigation fallback, and
+`mcp__workspace__*` is not a native-name alias. Unrecognized historical tool
+records use generic tool rendering.
 
 Native harness subagents use the same durable item stream as the parent turn:
 

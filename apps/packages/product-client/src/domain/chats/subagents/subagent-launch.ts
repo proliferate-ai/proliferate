@@ -25,18 +25,6 @@ export interface SubagentLaunchDisplay {
   prompt: string | null;
 }
 
-export interface SubagentLaunchResult {
-  subagentId: string | null;
-  sessionLinkId: string | null;
-  childSessionId: string | null;
-}
-
-export interface SubagentProvisioningStatus extends SubagentLaunchResult {
-  promptStatus: string | null;
-  wakeScheduled: boolean | null;
-  wakeScheduleCreated: boolean | null;
-}
-
 export function resolveSubagentExecutionState(
   item: ToolCallItem,
 ): SubagentExecutionState {
@@ -97,7 +85,7 @@ export function resolveSubagentLaunchDisplay(
     ?? readStringField(rawOutput, "label");
   const prompt = readStringField(rawInput, "prompt") ?? extractToolInputText(item);
   const title = label
-    ?? (isAnyHarnessSubagentTool(item) ? "Subagent" : item.title)
+    ?? item.title
     ?? "Agent task";
 
   return {
@@ -161,61 +149,6 @@ function isLaunchReceiptText(text: string): boolean {
   return /async agent launched/iu.test(text);
 }
 
-export function parseSubagentLaunchResult(
-  item: ToolCallItem,
-): SubagentLaunchResult | null {
-  const provisioningStatus = parseSubagentProvisioningStatus(item);
-  if (
-    !provisioningStatus
-    || (
-      !provisioningStatus.subagentId
-      && !provisioningStatus.sessionLinkId
-      && !provisioningStatus.childSessionId
-    )
-  ) {
-    return null;
-  }
-
-  return {
-    subagentId: provisioningStatus.subagentId,
-    sessionLinkId: provisioningStatus.sessionLinkId,
-    childSessionId: provisioningStatus.childSessionId,
-  };
-}
-
-export function parseSubagentProvisioningStatus(
-  item: ToolCallItem,
-): SubagentProvisioningStatus | null {
-  if (!isSubagent(item)) {
-    return null;
-  }
-
-  const output = isRecord(item.rawOutput)
-    ? item.rawOutput
-    : parseToolResultJsonObject(item);
-  if (!output) {
-    return null;
-  }
-
-  const wake = isRecord(output.wake) ? output.wake : null;
-  return {
-    subagentId: readStringField(output, "subagentId"),
-    sessionLinkId: readStringField(output, "sessionLinkId"),
-    childSessionId: readStringField(output, "childSessionId"),
-    promptStatus:
-      readStringField(output, "promptStatus")
-      ?? readStringField(output, "status"),
-    wakeScheduled:
-      readOptionalBooleanField(output, "wakeScheduled")
-      ?? readOptionalBooleanField(output, "scheduled")
-      ?? (wake ? readOptionalBooleanField(wake, "scheduled") : null),
-    wakeScheduleCreated:
-      readOptionalBooleanField(output, "wakeScheduleCreated")
-      ?? readOptionalBooleanField(output, "created")
-      ?? (wake ? readOptionalBooleanField(wake, "created") : null),
-  };
-}
-
 function extractToolResultText(item: ToolCallItem): string {
   return item.contentParts
     .filter((part): part is ToolResultTextContentPart => part.type === "tool_result_text")
@@ -252,11 +185,6 @@ function readBooleanField(value: unknown, key: string): boolean {
   return value[key] === true;
 }
 
-function readOptionalBooleanField(value: Record<string, unknown>, key: string): boolean | null {
-  const field = value[key];
-  return typeof field === "boolean" ? field : null;
-}
-
 function parseToolResultJsonObject(item: ToolCallItem): Record<string, unknown> | null {
   const text = extractToolResultText(item).trim();
   if (!text.startsWith("{") || !text.endsWith("}")) {
@@ -281,10 +209,6 @@ function getBackgroundWork(item: ToolCallItem): ToolBackgroundWorkMetadata | nul
 
 function isSubagent(item: ToolCallItem): boolean {
   return item.nativeToolName === "Agent" || item.semanticKind === "subagent";
-}
-
-function isAnyHarnessSubagentTool(item: ToolCallItem): boolean {
-  return item.nativeToolName === "mcp__subagents__create_subagent";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

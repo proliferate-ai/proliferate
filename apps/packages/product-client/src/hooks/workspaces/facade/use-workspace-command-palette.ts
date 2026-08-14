@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
 import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useWorkspaceFileSearch } from "#product/hooks/workspaces/ui/files/use-workspace-file-search";
 import { useWorkspaceCommandPaletteOpenFiles } from "#product/hooks/workspaces/derived/use-workspace-command-palette-open-files";
@@ -56,7 +56,6 @@ export function useWorkspaceCommandPalette({
   onToggleLeftSidebar,
   onToggleRightPanel,
 }: UseWorkspaceCommandPaletteArgs) {
-  const navigate = useNavigate();
   const appActions = useAppCommandActionsContext();
   const { openFile } = useWorkspaceFileActions();
   const {
@@ -125,7 +124,7 @@ export function useWorkspaceCommandPalette({
       canOpenNewSessionTab,
       canOpenRepositorySettings,
       hasWorkspaceShell,
-      navigate,
+      navigate: navigateApp,
       newSessionDisabledReason,
       onToggleLeftSidebar,
       onToggleRightPanel,
@@ -149,7 +148,6 @@ export function useWorkspaceCommandPalette({
     canActivateRelativeTab,
     canOpenNewSessionTab,
     hasWorkspaceShell,
-    navigate,
     newSessionDisabledReason,
     onToggleLeftSidebar,
     onToggleRightPanel,

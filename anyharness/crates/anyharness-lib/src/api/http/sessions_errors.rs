@@ -2,7 +2,13 @@ use super::access::map_access_error;
 use super::error::ApiError;
 use crate::domains::agents::route_auth::RouteAuthError;
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
+use crate::domains::sessions::mcp_bindings::workspace_attachment::{
+    WORKSPACE_MCP_ATTACHMENT_CODE, WORKSPACE_MCP_ATTACHMENT_DETAIL,
+};
 use crate::domains::sessions::model::{AgentStartupExitError, RequestedModeApplyError};
+use crate::domains::sessions::prompt::{
+    AGENT_PRODUCT_CONTEXT_UNAVAILABLE_CODE, AGENT_PRODUCT_CONTEXT_UNAVAILABLE_DETAIL,
+};
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
     PendingPromptMutationError, PendingPromptQueueError, ResolveInteractionError, SendPromptError,
@@ -139,6 +145,12 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
         CreateAndStartSessionError::MissingDataKey => {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }
+        CreateAndStartSessionError::WorkspaceMcpAttachmentFailed(_) => {
+            ApiError::internal_runtime_incident(
+                WORKSPACE_MCP_ATTACHMENT_DETAIL,
+                WORKSPACE_MCP_ATTACHMENT_CODE,
+            )
+        }
         CreateAndStartSessionError::RouteAuth(error) => map_route_auth_error(&error),
         CreateAndStartSessionError::StartFailed(error) => map_acp_session_start_error(error),
         CreateAndStartSessionError::Internal(error) => {
@@ -189,6 +201,12 @@ pub(super) fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> Ap
         ),
         EnsureLiveSessionError::MissingDataKey => {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
+        }
+        EnsureLiveSessionError::WorkspaceMcpAttachmentFailed(_) => {
+            ApiError::internal_runtime_incident(
+                WORKSPACE_MCP_ATTACHMENT_DETAIL,
+                WORKSPACE_MCP_ATTACHMENT_CODE,
+            )
         }
         EnsureLiveSessionError::RouteAuth(error) => map_route_auth_error(&error),
         // A9 Scope C: the live-start readiness gate now runs on resume too
@@ -249,6 +267,17 @@ pub(super) fn map_send_prompt_error(error: SendPromptError) -> ApiError {
             "WORKSPACE_DIRECTORY_MISSING",
         ),
         SendPromptError::InvalidPrompt(error) => ApiError::bad_request(error.detail, error.code),
+        SendPromptError::WorkspaceMcpAttachmentFailed(_) => ApiError::internal_runtime_incident(
+            WORKSPACE_MCP_ATTACHMENT_DETAIL,
+            WORKSPACE_MCP_ATTACHMENT_CODE,
+        ),
+        SendPromptError::ProductContextUnavailable { incident_id, .. } => {
+            ApiError::service_unavailable_runtime_incident(
+                AGENT_PRODUCT_CONTEXT_UNAVAILABLE_DETAIL,
+                AGENT_PRODUCT_CONTEXT_UNAVAILABLE_CODE,
+                &incident_id,
+            )
+        }
         // {error:#} keeps the anyhow cause chain; to_string() would drop it.
         SendPromptError::Internal(error) => {
             let telemetry_safe_detail = format!("{error:#}");
@@ -313,6 +342,10 @@ pub(super) fn map_pending_prompt_mutation_error(error: PendingPromptMutationErro
         PendingPromptMutationError::NotFound => {
             ApiError::not_found("Pending prompt not found", "PENDING_PROMPT_NOT_FOUND")
         }
+        PendingPromptMutationError::Protected => ApiError::conflict(
+            "Canonical completion wake prompts cannot be edited or deleted",
+            "PENDING_PROMPT_PROTECTED",
+        ),
         PendingPromptMutationError::InvalidPrompt(error) => {
             ApiError::bad_request(error.detail, error.code)
         }
@@ -380,12 +413,15 @@ pub(super) fn map_session_lifecycle_error(error: SessionLifecycleError) -> ApiEr
 }
 
 #[cfg(test)]
+#[path = "sessions_errors_failure_tests.rs"]
+mod failure_tests;
+
+#[cfg(test)]
 mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
     use crate::domains::agents::catalog::service::ActiveUniverse;
-    use crate::domains::sessions::model::{AgentStartupExitError, RequestedModeApplyError};
     use crate::domains::sessions::runtime::{CreateAndStartSessionError, ResolveInteractionError};
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 
@@ -407,6 +443,15 @@ mod tests {
         })
         .into_response();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn protected_completion_prompt_maps_to_stable_conflict() {
+        use crate::domains::sessions::runtime::PendingPromptMutationError;
+
+        let error = super::map_pending_prompt_mutation_error(PendingPromptMutationError::Protected);
+        assert_eq!(error.status(), StatusCode::CONFLICT);
+        assert_eq!(error.code(), Some("PENDING_PROMPT_PROTECTED"));
     }
 
     /// An unsatisfiable agent-auth selection must reach the client as a typed
@@ -436,11 +481,12 @@ mod tests {
     /// and carrying no per-context unlock enumeration.
     #[test]
     fn unsupported_model_maps_to_the_single_refusal_naming_the_active_universe() {
-        let mapped = super::map_create_session_error(CreateAndStartSessionError::ModelUnsupported {
-            agent_kind: "claude".to_string(),
-            model_id: "opus".to_string(),
-            active_universe: ActiveUniverse::MachineObservation,
-        });
+        let mapped =
+            super::map_create_session_error(CreateAndStartSessionError::ModelUnsupported {
+                agent_kind: "claude".to_string(),
+                model_id: "opus".to_string(),
+                active_universe: ActiveUniverse::MachineObservation,
+            });
 
         assert_eq!(mapped.status(), StatusCode::BAD_REQUEST);
         assert_eq!(mapped.code(), Some("SESSION_MODEL_UNSUPPORTED"));
@@ -464,66 +510,6 @@ mod tests {
         .into_response();
 
         assert_eq!(response.status(), StatusCode::CONFLICT);
-    }
-
-    #[test]
-    fn unconfirmed_requested_mode_maps_to_typed_bad_request() {
-        let mapped = super::map_create_session_error(CreateAndStartSessionError::StartFailed(
-            anyhow::Error::new(RequestedModeApplyError::new("claude", "bypassPermissions")),
-        ));
-
-        assert_eq!(mapped.code(), Some("SESSION_MODE_UNSUPPORTED"));
-        assert_eq!(
-            mapped.detail(),
-            Some(
-                "mode 'bypassPermissions' is not supported by the active session for agent 'claude'"
-            )
-        );
-        assert_eq!(mapped.into_response().status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[test]
-    fn startup_stderr_detail_reaches_caller_through_safe_typed_error() {
-        let error = AgentStartupExitError::new(
-            "agent process exited during ACP startup (exit status: 1)".to_string(),
-            "agent process exited during ACP startup (exit status: 1). Agent stderr:\nmissing binary"
-                .to_string(),
-        );
-
-        let mapped = super::map_create_session_error(CreateAndStartSessionError::StartFailed(
-            anyhow::Error::new(error),
-        ));
-
-        assert_eq!(
-            mapped.detail(),
-            Some(
-                "ACP session start failed: agent process exited during ACP startup (exit status: 1). Agent stderr:\nmissing binary"
-            )
-        );
-        assert_eq!(mapped.code(), Some("AGENT_STARTUP_FAILED"));
-    }
-
-    #[test]
-    fn resume_startup_stderr_detail_reaches_caller_through_safe_typed_error() {
-        use crate::domains::sessions::runtime::EnsureLiveSessionError;
-
-        let error = AgentStartupExitError::new(
-            "agent process exited during ACP startup (exit status: 1)".to_string(),
-            "agent process exited during ACP startup (exit status: 1). Agent stderr:\nmissing binary"
-                .to_string(),
-        );
-
-        let mapped = super::map_ensure_live_session_error(EnsureLiveSessionError::Internal(
-            anyhow::Error::new(error),
-        ));
-
-        assert_eq!(
-            mapped.detail(),
-            Some(
-                "resume failed: agent process exited during ACP startup (exit status: 1). Agent stderr:\nmissing binary"
-            )
-        );
-        assert_eq!(mapped.code(), Some("AGENT_STARTUP_FAILED"));
     }
 
     #[test]

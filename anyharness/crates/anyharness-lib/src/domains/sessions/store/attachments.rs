@@ -122,7 +122,9 @@ impl SessionStore {
     }
 }
 
-fn map_prompt_attachment(row: &rusqlite::Row) -> rusqlite::Result<PromptAttachmentRecord> {
+pub(super) fn map_prompt_attachment(
+    row: &rusqlite::Row,
+) -> rusqlite::Result<PromptAttachmentRecord> {
     let state: String = row.get("state")?;
     let kind: String = row.get("kind")?;
     let source: String = row.get("source")?;

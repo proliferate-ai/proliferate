@@ -6,6 +6,14 @@ import type { SessionControlIconKey } from "#product/lib/domain/chat/session-con
 import { resolveConfiguredSessionControlValue } from "#product/lib/domain/chat/session-controls/session-mode-control";
 import { SessionControlIcon } from "#product/components/workspace/chat/session-controls/SessionControlIcon";
 
+/**
+ * The session-control family is filled, with one ruled exception: the plan
+ * mode's folded map is an outline glyph (stroke 1.6, fill none) because its
+ * fold seams ARE the drawing — a filled map is a blob. Ruled in the composer
+ * cleanup design contract; every other key must stay filled.
+ */
+const OUTLINE_ICON_KEYS = new Set<SessionControlIconKey>(["plan"]);
+
 describe("SessionControlIcon", () => {
   it("renders every icon used by configured session controls", () => {
     const iconKeys = new Set<SessionControlIconKey>();
@@ -22,7 +30,12 @@ describe("SessionControlIcon", () => {
         createElement(SessionControlIcon, { icon, className: "size-4" }),
       );
       expect(html).toContain("<svg");
-      expect(html).not.toContain("stroke=");
+      if (OUTLINE_ICON_KEYS.has(icon)) {
+        expect(html).toContain("stroke=\"currentColor\"");
+        expect(html).toContain("fill=\"none\"");
+      } else {
+        expect(html).not.toContain("stroke=");
+      }
     }
   });
 

@@ -84,11 +84,11 @@ const zUtilities = [
   "top",
 ].map((name) => utility(`z-${name}`, "z-index"));
 
-const durationUtilities = ["hover", "enter", "exit", "disclosure", "panel", "emphasized"].map(
+const durationUtilities = ["hover", "enter", "exit", "disclosure", "panel", "pop", "emphasized"].map(
   (name) => utility(`duration-${name}`, "transition-duration"),
 );
 
-const easeUtilities = ["out-quint", "spring", "standard", "linear"].map((name) =>
+const easeUtilities = ["out-quint", "pop", "spring", "standard", "linear"].map((name) =>
   utility(`ease-${name}`, "transition-timing-function"),
 );
 
@@ -147,6 +147,7 @@ ${[
     --duration-exit: 0ms;
     --duration-disclosure: 0ms;
     --duration-panel: 0ms;
+    --duration-pop: 0ms;
     --duration-emphasized: 0ms;
   }
 

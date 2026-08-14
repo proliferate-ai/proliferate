@@ -15,7 +15,6 @@ type PlaygroundSubagentStripRow = {
   statusLabel: string;
   statusCategory: DelegatedWorkStatusCategory;
   latestCompletionLabel: string | null;
-  wakeScheduled: boolean;
 };
 
 const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
@@ -25,7 +24,6 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     label: "session-lifecycle",
     statusLabel: "Idle",
     latestCompletionLabel: "Completed turn",
-    wakeScheduled: false,
   },
   {
     sessionLinkId: "link-sonnet-cloud-auth",
@@ -33,7 +31,6 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     label: "cloud-auth",
     statusLabel: "Idle",
     latestCompletionLabel: null,
-    wakeScheduled: true,
   },
   {
     sessionLinkId: "link-codex-server-routes",
@@ -41,7 +38,6 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     label: "server-routes",
     statusLabel: "Idle",
     latestCompletionLabel: "Completed turn",
-    wakeScheduled: false,
   },
   {
     sessionLinkId: "link-codex-cicd",
@@ -49,7 +45,6 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     label: "ci-cd",
     statusLabel: "Idle",
     latestCompletionLabel: "Completed turn",
-    wakeScheduled: false,
   },
   {
     sessionLinkId: "link-grok-mcp-catalog",
@@ -57,7 +52,6 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     label: "mcp-catalog",
     statusLabel: "Failed",
     latestCompletionLabel: "Failed turn",
-    wakeScheduled: false,
   },
   {
     sessionLinkId: "link-grok-sdk",
@@ -65,7 +59,6 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     label: "sdk-surface",
     statusLabel: "Working",
     latestCompletionLabel: null,
-    wakeScheduled: true,
   },
   {
     sessionLinkId: "link-opencode-cloud-runtime",
@@ -73,7 +66,6 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     label: "cloud-runtime",
     statusLabel: "Working",
     latestCompletionLabel: null,
-    wakeScheduled: false,
   },
   {
     sessionLinkId: "link-cursor-tauri-commands",
@@ -81,7 +73,6 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     label: "tauri-commands",
     statusLabel: "Idle",
     latestCompletionLabel: "Completed turn",
-    wakeScheduled: false,
   },
   {
     sessionLinkId: "link-runtime-server-sdk-survey",
@@ -89,7 +80,6 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     label: "runtime-server-sdk-survey",
     statusLabel: "Working",
     latestCompletionLabel: null,
-    wakeScheduled: true,
   },
   {
     sessionLinkId: "link-frontend-repo-survey",
@@ -97,7 +87,6 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     label: "frontend-repo-survey",
     statusLabel: "Working",
     latestCompletionLabel: null,
-    wakeScheduled: true,
   },
 ] satisfies Omit<PlaygroundSubagentStripRow, "identity" | "statusCategory">[];
 
@@ -112,6 +101,5 @@ export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] =
     }),
     statusCategory: delegatedWorkStatusCategoryFromLabel({
       statusLabel: row.statusLabel,
-      wakeScheduled: row.wakeScheduled,
     }),
   }));

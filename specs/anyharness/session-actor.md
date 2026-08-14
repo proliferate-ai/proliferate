@@ -48,7 +48,7 @@ pending prompt edits
 queued config changes
 background work updates
 interaction resolutions
-cancel/close/dismiss/shutdown
+cancel/close/dismiss/non-terminal unload/shutdown
 ```
 
 It does not own the whole session product. It is one live component inside:
@@ -198,6 +198,11 @@ Cancel
 Close / Dismiss
   record shutdown intent and finish safely
 
+Unload
+  retire the actor without ending or hiding the durable session; if a turn is
+  active, request ACP cancellation, preserve streamed output, finish the turn
+  as Cancelled after a bounded grace period, then remove the actor
+
 Snapshot
   return live execution snapshot without mutating actor state
 ```
@@ -273,6 +278,7 @@ Prompt            -> start turn
 SetConfigOption   -> apply to ACP/current config immediately
 Fork              -> attempt fork if supported
 Close/Dismiss     -> shutdown directly
+Unload            -> retire actor without a terminal session event
 Snapshot          -> return current snapshot
 ```
 
@@ -286,6 +292,8 @@ SetConfigOption   -> durably queue pending config change
 ResolveInteraction -> complete pending interaction
 Cancel            -> forward cancellation to ACP
 Close/Dismiss     -> record shutdown intent; finish/cancel safely
+Unload            -> cancel with a bounded grace period, finish as Cancelled,
+                     then retire actor without closing the session
 Fork              -> reject as busy
 Snapshot          -> return current snapshot
 ```
@@ -567,7 +575,7 @@ Responsibilities:
 
 ```text
 handle.rs
-  Close, Dismiss, Cancel, provider-error, and actor-error entrypoints
+  Close, Dismiss, Unload, Cancel, provider-error, and actor-error entrypoints
 
 cleanup.rs
   stop/cancel provider work, close the driver, resolve pending interactions,
@@ -579,6 +587,13 @@ persist.rs
 
 Shutdown code owns finalization ordering. It should not format API errors or
 decide product retention/cleanup policy.
+
+`Unload` is intentionally non-terminal. It resolves pending interactions,
+bounds provider cancellation, preserves any assistant output already ingested,
+emits the active turn's `Cancelled` end when needed, and returns the durable
+session to `idle`. It emits no `session_ended` event and does not write
+`closed_at` or `dismissed_at`. The transcript, native ACP session id, and live
+configuration therefore remain the inputs to a later actor restart.
 
 ## Connection Boundary
 

@@ -322,6 +322,7 @@ export function buildGroups(args: {
   workspaceTypes?: SidebarWorkspaceVariant[];
   showArchived?: boolean;
   archivedIds?: string[];
+  pinnedIds?: string[];
   hiddenRepoRootIds?: string[];
   selectedLogicalWorkspaceId?: string | null;
   selectedWorkspaceId?: string | null;
@@ -343,6 +344,7 @@ export function buildGroups(args: {
     showArchived: args.showArchived ?? false,
     workspaceTypes: args.workspaceTypes ?? DEFAULT_SIDEBAR_WORKSPACE_TYPES,
     archivedSet: new Set(args.archivedIds ?? []),
+    pinnedSet: new Set(args.pinnedIds ?? []),
     hiddenRepoRootIds: new Set(args.hiddenRepoRootIds ?? []),
     selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId ?? null,
     selectedWorkspaceId: args.selectedWorkspaceId ?? null,

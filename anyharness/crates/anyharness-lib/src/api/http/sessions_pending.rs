@@ -27,7 +27,7 @@ use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
     ),
     request_body = anyharness_contract::v1::EditPendingPromptRequest,
     responses(
-        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Pending prompt is protected or session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Pending prompt updated", body = Session),
         (status = 404, description = "Session or pending prompt not found", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -67,7 +67,7 @@ pub async fn edit_pending_prompt(
         ("seq" = i64, Path, description = "Stable queue-entry sequence identity"),
     ),
     responses(
-        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Pending prompt is protected or session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Pending prompt deleted", body = Session),
         (status = 404, description = "Session or pending prompt not found", body = anyharness_contract::v1::ProblemDetails),
     ),
