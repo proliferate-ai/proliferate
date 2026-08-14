@@ -33,9 +33,7 @@ import {
 } from "#product/stores/preferences/workspace-ui-store";
 import { getSessionRecord, patchSessionRecord, removeSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import {
-  pendingWorkspaceEntryForWorkspaceId,
-} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import { pendingWorkspaceEntryForWorkspaceId } from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import { markWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 import { useDeferredWorkspaceFileTreePrefetch } from "#product/hooks/workspaces/lifecycle/files/use-deferred-workspace-file-tree-prefetch";
 import { useHotWorkspaceReconcileAction } from "#product/hooks/workspaces/workflows/use-hot-workspace-reconcile-action";
@@ -210,10 +208,7 @@ export function useWorkspaceBootstrapActions() {
         fetchWorkspaceSessions,
         getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
         getSessionRecord,
-        getPendingWorkspaceEntry: () => pendingWorkspaceEntryForWorkspaceId(
-          useSessionSelectionStore.getState().pendingWorkspaces,
-          workspaceId,
-        ),
+        getPendingWorkspaceEntry: () => pendingWorkspaceEntryForWorkspaceId(useSessionSelectionStore.getState().pendingWorkspaces, workspaceId),
         markWorkspaceBootstrappedInSession,
       };
       const sessionsLoadResult = await loadWorkspaceSessionDirectory({
@@ -234,9 +229,7 @@ export function useWorkspaceBootstrapActions() {
       }
       if (sessionsLoadResult.kind === "failed") {
         measurementFinishReason = "error_sanitized";
-        const billingBlock = getCloudWorkspaceBillingBlockFromError(
-          sessionsLoadResult.error,
-        );
+        const billingBlock = getCloudWorkspaceBillingBlockFromError(sessionsLoadResult.error);
         if (billingBlock) {
           useCloudWorkspaceBillingBlockStore
             .getState()
