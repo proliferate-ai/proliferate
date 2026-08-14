@@ -18,6 +18,9 @@ import {
 import {
   pendingWorkspaceEntryForWorkspaceId,
 } from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import {
+  isAttemptAttended,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 
 export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,
@@ -90,6 +93,15 @@ export function useSelectedCloudRuntimeRehydration(
 
     shouldRehydrateOnReadyRef.current = false;
 
+    // Attendance is decided here, before the bootstrap await, and threaded into
+    // materialization — PR1's convention. Re-reading it afterwards would let a
+    // switch-away during bootstrap change the decision that governs the rest of
+    // the sequence (PRO-230 review finding 5).
+    const attendedAttemptId = pendingWorkspaceEntry?.attemptId ?? null;
+    const attendedBeforeBootstrap = attendedAttemptId
+      ? isAttemptAttended(attendedAttemptId)
+      : false;
+
     let cancelled = false;
     void (async () => {
       const freshConnectionInfo = await withFreshCloudSandboxGatewayAccessToken(connectionInfo);
@@ -132,7 +144,14 @@ export function useSelectedCloudRuntimeRehydration(
       materializePendingWorkspaceSessions(
         pendingWorkspaceEntry,
         workspaceId,
-        { eventPrefix: "workspace.cloud_runtime_rehydration" },
+        {
+          eventPrefix: "workspace.cloud_runtime_rehydration",
+          // Only the attempt the decision was taken for carries it; a different
+          // attempt landing during the await falls back to its own read.
+          ...(pendingWorkspaceEntry.attemptId === attendedAttemptId
+            ? { attended: attendedBeforeBootstrap }
+            : {}),
+        },
       );
       clearPendingWorkspaceEntry(pendingWorkspaceEntry.attemptId);
       setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({

@@ -3,6 +3,13 @@ import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
 import {
+  notifyQueuedPromptSendFailure,
+} from "#product/hooks/sessions/workflows/queued-prompt-failure-notice";
+import {
+  formatSessionCreateCause,
+} from "#product/lib/domain/sessions/creation/create-session-error";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
+import {
   useDeferredHomeLaunchStore,
   type DeferredHomeLaunch,
 } from "#product/stores/home/deferred-home-launch-store";
@@ -48,10 +55,10 @@ export function useHomeDeferredLaunchRunner() {
   const launchesById = useDeferredHomeLaunchStore((state) => state.launches);
   const pendingWorkspaces = useSessionSelectionStore((state) => state.pendingWorkspaces);
   const markConsuming = useDeferredHomeLaunchStore((state) => state.markConsuming);
-  const markPending = useDeferredHomeLaunchStore((state) => state.markPending);
   const clear = useDeferredHomeLaunchStore((state) => state.clear);
   const failLaunchIntent = useChatLaunchIntentStore((state) => state.fail);
   const { createSessionWithResolvedConfig } = useSessionCreationActions();
+  const { selectWorkspace } = useWorkspaceSelection();
   const {
     data: workspaceCollections,
     isSuccess: workspaceCollectionsLoaded,
@@ -73,6 +80,8 @@ export function useHomeDeferredLaunchRunner() {
     }
     return byId;
   }, [workspaceCollections?.cloudWorkspaces]);
+  const cloudWorkspacesByIdRef = useRef(cloudWorkspacesById);
+  cloudWorkspacesByIdRef.current = cloudWorkspacesById;
 
   useEffect(() => {
     const now = Date.now();
@@ -151,10 +160,36 @@ export function useHomeDeferredLaunchRunner() {
     }
   }, [clear, failedLaunchKey, failLaunchIntent]);
 
-  const consumeLaunch = useCallback(async (
+  // Presentation only. By the time this fires the create has already resolved
+  // (the prompt was enqueued), so the launch and its intent are cleared and the
+  // creation workflow has run its own cleanup; what is missing is a report that
+  // names the workspace nobody is looking at.
+  const announceBackgroundSendFailure = useCallback((
     launch: DeferredHomeLaunch,
-    isCancelled: () => boolean,
+    error: unknown,
   ) => {
+    notifyQueuedPromptSendFailure({
+      workspaceId: launch.workspaceId,
+      workspaceName: cloudWorkspacesByIdRef.current.get(launch.cloudWorkspaceId)?.displayName
+        ?? null,
+      cause: formatSessionCreateCause(error),
+      showWorkspace: () => {
+        void selectWorkspace(launch.workspaceId, { force: true }).catch(() => {
+          // The toast is the report; a failed open re-reports itself through
+          // the selection path's own error handling.
+        });
+      },
+    });
+  }, [selectWorkspace]);
+
+  // `markConsuming` is the claim: it removes the launch from the ready bucket,
+  // which re-runs the effect that started this call. So a "was the effect torn
+  // down mid-flight?" check would be true for every failure and would put the
+  // launch straight back to pending — an unbounded retry of a launch that
+  // failed for a reason that will not change (a blocked runtime, a missing
+  // workspace). The claim is single-flight on its own, so a failure is reported
+  // instead of retried (PRO-230 review finding 6).
+  const consumeLaunch = useCallback(async (launch: DeferredHomeLaunch) => {
     if (!markConsuming(launch.id)) {
       return;
     }
@@ -180,16 +215,21 @@ export function useHomeDeferredLaunchRunner() {
         activateOnCreate: attended,
         targetWorkspaceUiKey: attended ? null : launch.workspaceId,
         ...(launch.modeId ? { modeId: launch.modeId } : {}),
+        // A create carrying a prompt resolves at enqueue, so a send that fails
+        // downstream never reaches the catch below. Attended, the composer copy
+        // the creation workflow raises is right and stays. Unattended it is
+        // not — no composer holds this prompt — so the announcement moves here,
+        // where the workspace is known (PRO-230 review finding 3).
+        ...(attended ? {} : {
+          onQueuedPromptFailure: (error: unknown) => {
+            announceBackgroundSendFailure(launch, error);
+          },
+        }),
       });
       // Clear even if the hook re-ran mid-flight; the prompt was sent, so a remount must not retry it.
       clear(launch.id);
       useChatLaunchIntentStore.getState().clear(launch.launchIntentId);
     } catch {
-      if (isCancelled()) {
-        markPending(launch.id);
-        return;
-      }
-
       const stillExists = knownCloudWorkspaceIdsRef.current.has(launch.cloudWorkspaceId);
       if (!stillExists) {
         clear(launch.id);
@@ -209,11 +249,11 @@ export function useHomeDeferredLaunchRunner() {
       showToast("Cloud workspace is ready, but the queued prompt could not be sent.");
     }
   }, [
+    announceBackgroundSendFailure,
     clear,
     createSessionWithResolvedConfig,
     failLaunchIntent,
     markConsuming,
-    markPending,
     showToast,
   ]);
 
@@ -226,15 +266,10 @@ export function useHomeDeferredLaunchRunner() {
       return;
     }
 
-    let cancelled = false;
     // Each launch consumes on its own; `markConsuming` is the single-flight
     // guard, so a second launch becoming ready cannot restart the first.
     for (const launch of readyLaunchesRef.current) {
-      void consumeLaunch(launch, () => cancelled);
+      void consumeLaunch(launch);
     }
-
-    return () => {
-      cancelled = true;
-    };
   }, [consumeLaunch, readyLaunchKey]);
 }

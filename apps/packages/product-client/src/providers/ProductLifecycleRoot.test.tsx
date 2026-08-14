@@ -36,6 +36,7 @@ vi.mock("#product/hooks/agents/lifecycle/use-first-run-auth-adoption", () => ({ 
 vi.mock("#product/hooks/agents/lifecycle/use-local-auth-state-sync", () => ({ useLocalAuthStateSync: vi.fn() }));
 vi.mock("#product/hooks/automations/lifecycle/use-local-automation-executor", () => ({ useLocalAutomationExecutor: vi.fn() }));
 vi.mock("#product/hooks/home/lifecycle/use-home-deferred-launch-runner", () => ({ useHomeDeferredLaunchRunner: vi.fn() }));
+vi.mock("#product/hooks/workspaces/lifecycle/use-cloud-workspace-polling", () => ({ useCloudWorkspacePolling: vi.fn() }));
 vi.mock("#product/hooks/preferences/lifecycle/use-appearance-preference-lifecycle", () => ({ useAppearancePreferenceLifecycle: vi.fn() }));
 vi.mock("#product/hooks/preferences/lifecycle/use-repo-preferences-lifecycle", () => ({ useRepoPreferencesLifecycle: vi.fn() }));
 vi.mock("#product/hooks/preferences/lifecycle/use-user-preferences-lifecycle", () => ({ useUserPreferencesLifecycle: vi.fn() }));
@@ -97,6 +98,7 @@ vi.mock("#product/providers/DesktopProductLifecycleRoot", () => ({
 
 import { ProductLifecycleRoot } from "#product/providers/ProductLifecycleRoot";
 import { useAppCommandActionsContext } from "#product/providers/AppCommandActionsProvider";
+import { useCloudWorkspacePolling } from "#product/hooks/workspaces/lifecycle/use-cloud-workspace-polling";
 import { useHomeDeferredLaunchRunner } from "#product/hooks/home/lifecycle/use-home-deferred-launch-runner";
 
 function CommandContextProbe() {
@@ -255,11 +257,14 @@ describe("ProductLifecycleRoot", () => {
   });
 
   it("keeps the launch lifecycles off the signed-out shell and mounts them once authenticated", async () => {
-    // Residency AND reachability. The launch registry only exists for a
-    // signed-in viewer, so the runner is mounted behind the authenticated gate
-    // as a lazy chunk — the login first-load graph never pulls the launch /
-    // session-creation modules it depends on (PRO-230, login JS budget). It
-    // still lives above the route tree, so a launch survives navigating away.
+    // Residency AND reachability. Both loops must outlive the workspace shell:
+    // mounted inside it they would stop the moment the user sits on Home or
+    // /workflows — both of which null the selection ids and unmount the shell —
+    // leaving parked cloud attempts unpolled and prompts sent into attempts
+    // nothing will finalize (PRO-230 review finding 1). But the launch registry
+    // only exists for a signed-in viewer, so they are mounted behind the
+    // authenticated gate as a lazy chunk, which is what keeps the launch /
+    // session-creation graph out of the login first-load budget.
     authStatus.value = "anonymous";
     const host = makeTestProductHost({
       auth: { restoreSession: vi.fn().mockResolvedValue(undefined) },
@@ -276,11 +281,13 @@ describe("ProductLifecycleRoot", () => {
 
     expect(screen.getByTestId("app-tree")).toBeTruthy();
     expect(useHomeDeferredLaunchRunner).not.toHaveBeenCalled();
+    expect(useCloudWorkspacePolling).not.toHaveBeenCalled();
 
     authStatus.value = "authenticated";
     rerender(tree());
 
     await waitFor(() => expect(useHomeDeferredLaunchRunner).toHaveBeenCalled());
+    expect(useCloudWorkspacePolling).toHaveBeenCalled();
   });
 
   it("keeps a single Desktop lifecycle mount under StrictMode", () => {

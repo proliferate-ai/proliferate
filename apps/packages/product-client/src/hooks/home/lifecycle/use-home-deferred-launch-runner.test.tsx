@@ -6,8 +6,6 @@ import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud
 import type { CreateSessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
 import {
   buildPendingWorkspaceUiKey,
-  buildSubmittingPendingWorkspaceEntry,
-  type PendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   EMPTY_PENDING_WORKSPACE_REGISTRY,
@@ -19,12 +17,26 @@ import {
 } from "#product/stores/home/deferred-home-launch-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useHomeDeferredLaunchRunner } from "#product/hooks/home/lifecycle/use-home-deferred-launch-runner";
+import {
+  awaitingCloudWorkspaceEntryFixture as awaitingEntry,
+  cloudWorkspaceFixture as cloudWorkspace,
+} from "#product/test/cloud-workspace-fixtures";
 
 const mocks = vi.hoisted(() => ({
   createSessionWithResolvedConfig: vi.fn(),
+  notifyQueuedPromptSendFailure: vi.fn(),
+  selectWorkspace: vi.fn(),
   workspaceCollections: {
     cloudWorkspaces: [] as CloudWorkspaceSummary[],
   },
+}));
+
+vi.mock("#product/hooks/sessions/workflows/queued-prompt-failure-notice", () => ({
+  notifyQueuedPromptSendFailure: mocks.notifyQueuedPromptSendFailure,
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
+  useWorkspaceSelection: () => ({ selectWorkspace: mocks.selectWorkspace }),
 }));
 
 vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
@@ -43,6 +55,9 @@ vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => 
 describe("useHomeDeferredLaunchRunner", () => {
   beforeEach(() => {
     mocks.createSessionWithResolvedConfig.mockReset();
+    mocks.notifyQueuedPromptSendFailure.mockReset();
+    mocks.selectWorkspace.mockReset();
+    mocks.selectWorkspace.mockResolvedValue(undefined);
     // Standing in for the real create: activating a session is exactly the
     // camera move a background promotion must not make.
     mocks.createSessionWithResolvedConfig.mockImplementation(
@@ -192,6 +207,61 @@ describe("useHomeDeferredLaunchRunner", () => {
       .toBe("pending");
   });
 
+  it("announces a background send failure with its workspace instead of the composer copy", async () => {
+    // The create resolves at prompt enqueue, so the failure arrives on the
+    // callback rather than the await below. Unattended it must not be reported
+    // as "your message is still in the composer" — there is no composer holding
+    // it, and the toast would name no workspace (PRO-230 review finding 3).
+    mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({ status: "ready" })];
+    mocks.createSessionWithResolvedConfig.mockImplementation(
+      async (options: CreateSessionWithResolvedConfigOptions) => {
+        options.onQueuedPromptFailure?.(new Error("Runtime gateway refused the prompt"));
+        return "session-1";
+      },
+    );
+    enqueueLaunch(deferredLaunch());
+    useSessionSelectionStore.setState({
+      selectedWorkspaceId: "cloud:other",
+      selectedLogicalWorkspaceId: "cloud:other",
+    });
+
+    renderHook(() => useHomeDeferredLaunchRunner());
+
+    await waitFor(() => {
+      expect(mocks.notifyQueuedPromptSendFailure).toHaveBeenCalledTimes(1);
+    });
+    const notice = mocks.notifyQueuedPromptSendFailure.mock.calls[0]?.[0];
+    expect(notice).toMatchObject({
+      workspaceId: "cloud:cloud-1",
+      workspaceName: "feature-branch",
+    });
+    expect(notice.cause).toContain("Runtime gateway refused the prompt");
+
+    // Its Show action opens the workspace the prompt was meant for.
+    notice.showWorkspace();
+    expect(mocks.selectWorkspace).toHaveBeenCalledWith("cloud:cloud-1", { force: true });
+  });
+
+  it("leaves an attended send failure to the composer-owned announcement", async () => {
+    mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({ status: "ready" })];
+    enqueueLaunch(deferredLaunch());
+    useSessionSelectionStore.setState({
+      selectedWorkspaceId: "cloud:cloud-1",
+      selectedLogicalWorkspaceId: "cloud:cloud-1",
+    });
+
+    renderHook(() => useHomeDeferredLaunchRunner());
+
+    await waitFor(() => {
+      expect(mocks.createSessionWithResolvedConfig).toHaveBeenCalledTimes(1);
+    });
+    // No callback passed: the user is watching this launch and their composer
+    // does hold the text, so the creation workflow's own copy is correct.
+    const options = mocks.createSessionWithResolvedConfig.mock.calls[0]?.[0];
+    expect(options.onQueuedPromptFailure).toBeUndefined();
+    expect(mocks.notifyQueuedPromptSendFailure).not.toHaveBeenCalled();
+  });
+
   it("releases the queued prompt when the launch's attempt failed", async () => {
     mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({ status: "pending" })];
     enqueueLaunch(deferredLaunch());
@@ -233,53 +303,4 @@ function deferredLaunch(
 
 function enqueueLaunch(launch: DeferredHomeLaunch) {
   useDeferredHomeLaunchStore.getState().enqueue(launch);
-}
-
-function awaitingEntry(attemptId: string, workspaceId: string): PendingWorkspaceEntry {
-  return {
-    ...buildSubmittingPendingWorkspaceEntry({
-      attemptId,
-      selectedWorkspaceId: null,
-      source: "cloud-created",
-      displayName: "feature-branch",
-      repoLabel: "proliferate-ai/proliferate",
-      baseBranchName: "main",
-      request: { kind: "select-existing", workspaceId },
-    }),
-    stage: "awaiting-cloud-ready",
-    workspaceId,
-  };
-}
-
-function cloudWorkspace(
-  input: Partial<CloudWorkspaceSummary> & {
-    status: CloudWorkspaceSummary["status"];
-  },
-): CloudWorkspaceSummary {
-  return {
-    id: input.id ?? "cloud-1",
-    displayName: "feature-branch",
-    repo: {
-      provider: "github",
-      owner: "proliferate-ai",
-      name: "proliferate",
-      branch: "feature-branch",
-      baseBranch: "main",
-    },
-    status: input.status,
-    workspaceStatus: input.status,
-    runtime: undefined,
-    statusDetail: null,
-    lastError: null,
-    templateVersion: null,
-    updatedAt: null,
-    createdAt: null,
-    readyAt: input.status === "ready" ? "2026-04-14T00:00:00Z" : null,
-    postReadyPhase: "",
-    postReadyFilesTotal: 0,
-    postReadyFilesApplied: 0,
-    postReadyStartedAt: null,
-    postReadyCompletedAt: null,
-    visibility: "private",
-  };
 }

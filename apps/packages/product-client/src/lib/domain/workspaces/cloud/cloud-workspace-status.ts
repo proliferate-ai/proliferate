@@ -63,6 +63,18 @@ export function isCloudWorkspaceFailedBeforeReady(
     && workspace.productLifecycle !== "archived";
 }
 
+/**
+ * The workspace has reached a state it will never leave on its own, and that
+ * state is not `ready`. An attempt waiting on it is waiting for something that
+ * cannot happen, so it must be failed rather than parked (PRO-230).
+ */
+export function isCloudWorkspaceTerminallyUnavailable(
+  workspace: CloudWorkspaceStatusFields | null | undefined,
+): boolean {
+  const status = resolveCloudWorkspaceStatus(workspace);
+  return status === "lost" || status === "archived";
+}
+
 export function shouldPollCloudWorkspaceForUpdates(
   workspace: CloudWorkspaceSummary,
 ): boolean {
