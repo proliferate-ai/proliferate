@@ -90,8 +90,12 @@ export function useSessionCreationActions() {
       throw new Error("No workspace selected");
     }
     // An unattended launch materializes its session while the user is looking
-    // at another workspace, so the caller names the shell rather than letting
-    // the current selection stand in for it.
+    // at another workspace, so failure recovery cannot derive its ui key from
+    // the current selection (that would name the wrong workspace); the caller
+    // names it instead. Shell intent is deliberately not keyed from this: the
+    // writer's own resolution already yields this same id while the workspace
+    // is unselected, and yields the logical id once it is selected, which is
+    // the key later reads use (PRO-230).
     const targetWorkspaceUiKey = options.targetWorkspaceUiKey ?? null;
     const recoveryWorkspaceUiKey = targetWorkspaceUiKey
       ?? resolveWorkspaceUiKey(current.selectedLogicalWorkspaceId, workspaceId)
@@ -189,8 +193,9 @@ export function useSessionCreationActions() {
     const writeOwnedShellIntent = (sessionId: string, shellWorkspaceId?: string | null): void => {
       const write = writeChatShellIntentForSession({
         workspaceId,
-        // Null falls back to the writer's own selection-derived resolution.
-        shellWorkspaceId: shellWorkspaceId ?? targetWorkspaceUiKey,
+        // Null falls back to the writer's own selection-derived resolution,
+        // which is the key every later read resolves to.
+        shellWorkspaceId: shellWorkspaceId ?? null,
         sessionId,
       });
       if (!write) {

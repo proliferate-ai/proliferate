@@ -136,6 +136,69 @@ describe("createCoworkThreadWorkflow", () => {
     });
     expect(clearPendingWorkspaceEntry).toHaveBeenCalledWith("attempt-1");
   });
+
+  it("adopts a caller's pre-minted attempt id", async () => {
+    const deps = resolvedWorkflowDeps();
+
+    await createCoworkThreadWorkflow({
+      attemptId: "attempt-from-home",
+      agentKind: "codex",
+      modelId: "gpt-5.6-codex",
+      coworkWorkspaceDelegationEnabled: false,
+      runtimeUrl: "http://127.0.0.1:4317",
+    }, deps);
+
+    expect(deps.createPendingWorkspaceAttemptId).not.toHaveBeenCalled();
+    expect(vi.mocked(deps.beginPendingWorkspace).mock.calls[0]?.[0].attemptId)
+      .toBe("attempt-from-home");
+    expect(deps.clearPendingWorkspaceEntry).toHaveBeenCalledWith("attempt-from-home");
+  });
+
+  it("does not mark an unattended thread viewed, but still tracks recency", async () => {
+    const deps = {
+      ...resolvedWorkflowDeps(),
+      isAttemptAttended: vi.fn(() => false),
+    } satisfies CreateCoworkThreadWorkflowDeps;
+
+    await createCoworkThreadWorkflow({
+      agentKind: "codex",
+      modelId: "gpt-5.6-codex",
+      coworkWorkspaceDelegationEnabled: false,
+      runtimeUrl: "http://127.0.0.1:4317",
+    }, deps);
+
+    // The thread was never on screen, so nothing may claim the user saw it.
+    expect(deps.activateWorkspace).not.toHaveBeenCalled();
+    expect(deps.rememberLastViewedSession).not.toHaveBeenCalled();
+    expect(deps.markWorkspaceViewed).not.toHaveBeenCalled();
+    expect(deps.markWorkspaceBootstrappedInSession).not.toHaveBeenCalled();
+    // Recency ordering is not a viewed stamp (spec section 8, step 6).
+    expect(deps.trackWorkspaceInteraction).toHaveBeenCalledWith(
+      "workspace-cowork",
+      "2026-07-15T12:00:00Z",
+    );
+    // Negative control: the pipeline itself still ran to completion.
+    expect(deps.clearPendingWorkspaceEntry).toHaveBeenCalledWith("attempt-1");
+  });
+
+  it("marks an attended thread viewed", async () => {
+    const deps = resolvedWorkflowDeps();
+
+    await createCoworkThreadWorkflow({
+      agentKind: "codex",
+      modelId: "gpt-5.6-codex",
+      coworkWorkspaceDelegationEnabled: false,
+      runtimeUrl: "http://127.0.0.1:4317",
+    }, deps);
+
+    expect(deps.activateWorkspace).toHaveBeenCalled();
+    expect(deps.rememberLastViewedSession).toHaveBeenCalledWith(
+      "workspace-cowork",
+      "session-cowork",
+    );
+    expect(deps.markWorkspaceViewed).toHaveBeenCalledWith("workspace-cowork");
+    expect(deps.markWorkspaceBootstrappedInSession).toHaveBeenCalledWith("workspace-cowork");
+  });
 });
 
 function resolvedWorkflowDeps(): CreateCoworkThreadWorkflowDeps {

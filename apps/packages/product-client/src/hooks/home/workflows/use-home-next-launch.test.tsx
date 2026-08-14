@@ -331,6 +331,32 @@ describe("useHomeNextLaunch", () => {
     expect(mocks.createThreadFromSelection).toHaveBeenCalledTimes(1);
   });
 
+  it("stops a dismissed Cowork launch quietly, like local and worktree (PRO-230)", async () => {
+    // A null result is a dismissal, not a failure: the same shape that the
+    // local and worktree branches already treat as a quiet stop.
+    mocks.createThreadFromSelection.mockResolvedValue(null);
+    const { result } = renderHomeNextLaunch();
+
+    let succeeded = true;
+    await act(async () => {
+      succeeded = await result.current.launch({
+        text: "start cowork on desktop",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: { kind: "cowork" },
+      });
+    });
+
+    expect(succeeded).toBe(false);
+    expect(mocks.showErrorToast).not.toHaveBeenCalled();
+    expect(useChatLaunchIntentStore.getState().activeIntent).toBeNull();
+    // The attempt id is minted by the caller, so intent and prompt routing can
+    // scope to this attempt instead of whichever entry happens to be attended.
+    expect(mocks.createThreadFromSelection.mock.calls[0]?.[0]?.attemptId)
+      .toEqual(expect.any(String));
+  });
+
   it.each([
     {
       label: "local",

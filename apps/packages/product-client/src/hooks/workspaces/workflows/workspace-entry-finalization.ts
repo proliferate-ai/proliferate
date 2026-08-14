@@ -35,6 +35,7 @@ export interface WorkspaceEntrySelectionDeps {
   materializePendingWorkspaceSessions: (
     entry: PendingWorkspaceEntry,
     workspaceId: string,
+    options?: { attended?: boolean },
   ) => void;
   selectWorkspace: (
     workspaceId: string,
@@ -125,7 +126,9 @@ export async function finalizePendingWorkspaceSelection(
     return DISMISSED_RESULT;
   }
 
-  deps.materializePendingWorkspaceSessions(input.entry, input.workspaceId);
+  // The attendance decision above governs materialization too, so the
+  // arrival event and the session activation cannot disagree.
+  deps.materializePendingWorkspaceSessions(input.entry, input.workspaceId, { attended });
 
   if (attended) {
     deps.setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({

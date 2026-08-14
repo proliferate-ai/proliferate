@@ -22,6 +22,13 @@ import {
 
 interface PendingWorkspaceSessionMaterializationOptions {
   eventPrefix?: string;
+  /**
+   * The attendance decision already made for this attempt. Finalization reads
+   * attendance once, before it force-selects the real workspace; passing that
+   * value here keeps one decision governing the whole finalize + materialize
+   * sequence instead of re-reading it after the await (PRO-230).
+   */
+  attended?: boolean;
 }
 
 export interface PendingWorkspaceSessionMaterializationResult {
@@ -130,8 +137,9 @@ export function usePendingWorkspaceSessionMaterialization() {
 
     // An unattended attempt still materializes; it just must not steal the
     // active session or write shell intent against the workspace the user is
-    // actually looking at.
-    const attended = isAttemptAttended(entry.attemptId);
+    // actually looking at. Callers that already decided attendance before an
+    // await pass it in, so the decision cannot flip mid-sequence.
+    const attended = options?.attended ?? isAttemptAttended(entry.attemptId);
     let materializationStartCount = 0;
     for (const session of projectedSessions) {
       // Session intents remain the user-visible owner while this background

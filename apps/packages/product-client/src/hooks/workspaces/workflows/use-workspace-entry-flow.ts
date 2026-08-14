@@ -198,7 +198,9 @@ export function useWorkspaceEntryFlow() {
       return { committed: false, selected: false };
     }
 
-    materializePendingWorkspaceSessions(entry, workspaceId);
+    // The attendance decision above governs materialization too, so the
+    // arrival event and the session activation cannot disagree.
+    materializePendingWorkspaceSessions(entry, workspaceId, { attended });
 
     if (attended) {
       setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({

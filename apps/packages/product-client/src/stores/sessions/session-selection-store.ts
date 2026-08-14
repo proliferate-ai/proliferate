@@ -31,6 +31,11 @@ interface EnterPendingWorkspaceShellOptions {
   initialActiveSessionId?: string | null;
 }
 
+export interface ClearSelectionOptions {
+  /** Keep every live attempt: the caller is clearing one workspace, not the app. */
+  preservePendingWorkspaces?: boolean;
+}
+
 interface SessionSelectionState {
   _hydrated: boolean;
   pendingWorkspaces: PendingWorkspaceRegistry;
@@ -55,7 +60,7 @@ interface SessionSelectionState {
   activateWorkspace: (options: ActivateWorkspaceOptions) => void;
   activateHotWorkspace: (options: ActivateWorkspaceOptions) => void;
   deselectWorkspacePreservingSessions: () => void;
-  clearSelection: () => void;
+  clearSelection: (options?: ClearSelectionOptions) => void;
   setActiveSessionId: (sessionId: string | null) => void;
   activateHotSession: (options: ActivateSessionOptions) => void;
   bumpSessionActivationIntentEpoch: (workspaceId: string) => number;
@@ -184,9 +189,15 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
     };
   }),
 
-  clearSelection: () => set((state) => {
+  clearSelection: (options) => set((state) => {
     return {
-      pendingWorkspaces: EMPTY_PENDING_WORKSPACE_REGISTRY,
+      // Emptying the registry aborts every launch in flight, which is right
+      // for an app-level reset (sign-out) and wrong for anything scoped to one
+      // workspace: retiring a workspace or dismissing one attempt must leave
+      // the other launches running (PRO-230).
+      pendingWorkspaces: options?.preservePendingWorkspaces
+        ? state.pendingWorkspaces
+        : EMPTY_PENDING_WORKSPACE_REGISTRY,
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
