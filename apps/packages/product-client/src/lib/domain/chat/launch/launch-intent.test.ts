@@ -4,7 +4,9 @@ import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creat
 import {
   resolveChatLaunchIntentView,
   resolveChatLaunchRetryMode,
+  resolveLaunchIntentPendingAttemptId,
   resolveLaunchIntentPendingWorkspaceId,
+  resolveLaunchIntentScope,
 } from "#product/lib/domain/chat/launch/launch-intent";
 
 function intent(overrides: Partial<ChatLaunchIntent> = {}): ChatLaunchIntent {
@@ -22,6 +24,8 @@ function intent(overrides: Partial<ChatLaunchIntent> = {}): ChatLaunchIntent {
     },
     materializedWorkspaceId: null,
     materializedSessionId: null,
+    attemptId: null,
+    targetWorkspaceId: null,
     createdAt: 100,
     sendAttemptedAt: null,
     failure: null,
@@ -142,5 +146,66 @@ describe("chat launch intent view", () => {
       }),
       pendingEntry({ source: "local-created" }),
     )).toBeNull();
+  });
+
+  it("matches the pending attempt id before a workspace id resolves", () => {
+    expect(resolveLaunchIntentPendingAttemptId(
+      intent({
+        targetKind: "worktree",
+        retryInput: {
+          text: "Build the thing",
+          modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+          modeId: null,
+          target: {
+            kind: "worktree",
+            repoRootId: "repo-1",
+            sourceWorkspaceId: null,
+            baseBranch: "main",
+            defaultBranch: "main",
+          },
+        },
+      }),
+      pendingEntry({ source: "worktree-created", workspaceId: null, attemptId: "attempt-2" }),
+    )).toBe("attempt-2");
+  });
+
+  it("does not match an unrelated pending entry's attempt id", () => {
+    expect(resolveLaunchIntentPendingAttemptId(
+      intent({ targetKind: "cowork" }),
+      pendingEntry({ source: "worktree-created", attemptId: "attempt-2" }),
+    )).toBeNull();
+  });
+});
+
+describe("resolveLaunchIntentScope", () => {
+  it("has no scope before an attempt or workspace is known", () => {
+    expect(resolveLaunchIntentScope(intent())).toEqual({
+      pendingUiKey: null,
+      workspaceId: null,
+    });
+  });
+
+  it("scopes to the pending-workspace UI key once an attempt id is known", () => {
+    expect(resolveLaunchIntentScope(intent({ attemptId: "attempt-1" }))).toEqual({
+      pendingUiKey: "pending-workspace:attempt-1",
+      workspaceId: null,
+    });
+  });
+
+  it("scopes to the target workspace id for launches into an existing workspace", () => {
+    expect(resolveLaunchIntentScope(intent({ targetWorkspaceId: "workspace-1" }))).toEqual({
+      pendingUiKey: null,
+      workspaceId: "workspace-1",
+    });
+  });
+
+  it("prefers the materialized workspace id over the target once it resolves", () => {
+    expect(resolveLaunchIntentScope(intent({
+      targetWorkspaceId: "workspace-target",
+      materializedWorkspaceId: "workspace-real",
+    }))).toEqual({
+      pendingUiKey: null,
+      workspaceId: "workspace-real",
+    });
   });
 });

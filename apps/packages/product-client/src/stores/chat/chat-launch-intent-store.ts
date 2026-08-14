@@ -18,6 +18,7 @@ interface ChatLaunchIntentState {
       clientSessionId?: string | null;
       workspaceId?: string | null;
       sessionId?: string | null;
+      attemptId?: string | null;
     },
   ) => void;
   markSendAttemptedIfActive: (intentId: string) => void;
@@ -76,6 +77,10 @@ export const useChatLaunchIntentStore = create<ChatLaunchIntentState>((set) => (
           materialized.sessionId !== undefined
             ? materialized.sessionId
             : state.activeIntent.materializedSessionId,
+        attemptId:
+          materialized.attemptId !== undefined
+            ? materialized.attemptId
+            : state.activeIntent.attemptId,
       },
     };
   }),

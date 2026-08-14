@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  launchIntentOwnsShell,
   resolveChatSurfaceState,
   resolveLaunchIntentSurfaceOverride,
   shouldMountWorkspaceShell,
@@ -14,8 +15,11 @@ function surfaceInput(
     selectedWorkspaceId: "workspace-1",
     hasPendingWorkspaceEntry: false,
     activeLaunchIntentId: null,
+    launchIntentScope: null,
     launchIntentInFlight: false,
     launchIntentSessionId: null,
+    shellLogicalWorkspaceId: "workspace-1",
+    shellWorkspaceId: "workspace-1",
     selectedLocalWorkspace: null,
     isArrivalWorkspace: false,
     shouldShowSelectedCloudWorkspaceStatus: false,
@@ -69,28 +73,61 @@ describe("chat surface", () => {
   it("shows launch intent before session content exists", () => {
     expect(resolveLaunchIntentSurfaceOverride({
       activeLaunchIntentId: "launch-1",
+      launchIntentScope: null,
       launchIntentSessionId: "session-1",
       activeSessionId: null,
       hasVisibleSessionContent: false,
+      shellLogicalWorkspaceId: null,
+      shellWorkspaceId: null,
     })).toEqual({ kind: "launch-intent", intentId: "launch-1" });
   });
 
   it("lets launch-owned transcript content take over from launch intent", () => {
     expect(resolveLaunchIntentSurfaceOverride({
       activeLaunchIntentId: "launch-1",
+      launchIntentScope: null,
       launchIntentSessionId: "session-1",
       activeSessionId: "session-1",
       hasVisibleSessionContent: true,
+      shellLogicalWorkspaceId: null,
+      shellWorkspaceId: null,
     })).toEqual({ kind: "session-transcript", sessionId: "session-1" });
   });
 
   it("lets projected active transcript content take over before materialization", () => {
     expect(resolveLaunchIntentSurfaceOverride({
       activeLaunchIntentId: "launch-1",
+      launchIntentScope: null,
       launchIntentSessionId: null,
       activeSessionId: "previous-session",
       hasVisibleSessionContent: true,
+      shellLogicalWorkspaceId: null,
+      shellWorkspaceId: null,
     })).toEqual({ kind: "session-transcript", sessionId: "previous-session" });
+  });
+
+  it("lets an intent scoped to the shown pending shell still own it", () => {
+    expect(resolveLaunchIntentSurfaceOverride({
+      activeLaunchIntentId: "launch-1",
+      launchIntentScope: { pendingUiKey: "pending-workspace:attempt-1", workspaceId: null },
+      launchIntentSessionId: null,
+      activeSessionId: null,
+      hasVisibleSessionContent: false,
+      shellLogicalWorkspaceId: "pending-workspace:attempt-1",
+      shellWorkspaceId: null,
+    })).toEqual({ kind: "launch-intent", intentId: "launch-1" });
+  });
+
+  it("does not let an intent scoped to another attempt own this pending shell", () => {
+    expect(resolveLaunchIntentSurfaceOverride({
+      activeLaunchIntentId: "launch-1",
+      launchIntentScope: { pendingUiKey: "pending-workspace:attempt-other", workspaceId: null },
+      launchIntentSessionId: null,
+      activeSessionId: null,
+      hasVisibleSessionContent: false,
+      shellLogicalWorkspaceId: "pending-workspace:attempt-1",
+      shellWorkspaceId: null,
+    })).toBeNull();
   });
 
   it("resolves no workspace when nothing is selected or launching", () => {
@@ -116,8 +153,11 @@ describe("chat surface", () => {
       selectedWorkspaceId: null,
       hasPendingWorkspaceEntry: true,
       activeLaunchIntentId: "launch-1",
+      launchIntentScope: { pendingUiKey: "pending-workspace:attempt-1", workspaceId: null },
       launchIntentInFlight: true,
       launchIntentSessionId: "session-1",
+      shellLogicalWorkspaceId: "pending-workspace:attempt-1",
+      shellWorkspaceId: null,
       activeSessionId: "session-1",
       hasContent: false,
       isEmpty: true,
@@ -131,8 +171,11 @@ describe("chat surface", () => {
       selectedWorkspaceId: null,
       hasPendingWorkspaceEntry: true,
       activeLaunchIntentId: "launch-1",
+      launchIntentScope: { pendingUiKey: "pending-workspace:attempt-1", workspaceId: null },
       launchIntentInFlight: false,
       launchIntentSessionId: "session-1",
+      shellLogicalWorkspaceId: "pending-workspace:attempt-1",
+      shellWorkspaceId: null,
       activeSessionId: "session-1",
       hasContent: false,
       isEmpty: true,
@@ -154,7 +197,10 @@ describe("chat surface", () => {
       selectedWorkspaceId: null,
       hasPendingWorkspaceEntry: true,
       activeLaunchIntentId: "launch-1",
+      launchIntentScope: { pendingUiKey: "pending-workspace:attempt-1", workspaceId: null },
       launchIntentSessionId: "session-1",
+      shellLogicalWorkspaceId: "pending-workspace:attempt-1",
+      shellWorkspaceId: null,
       activeSessionId: "session-1",
       hasContent: true,
       isEmpty: false,
@@ -205,5 +251,118 @@ describe("chat surface", () => {
       streamConnectionState: "connecting",
       hasContent: false,
     }))).toEqual({ kind: "session-hydrating", sessionId: "session-1" });
+  });
+
+  describe("launch intent scoping (PRO-230)", () => {
+    it("does not let an intent scoped to workspace A override workspace B's shell", () => {
+      expect(resolveChatSurfaceState(surfaceInput({
+        selectedWorkspaceId: "workspace-b",
+        activeLaunchIntentId: "launch-1",
+        launchIntentScope: { pendingUiKey: null, workspaceId: "workspace-a" },
+        shellLogicalWorkspaceId: "workspace-b",
+        shellWorkspaceId: "workspace-b",
+        activeSessionId: "session-b",
+        hasContent: true,
+        isEmpty: false,
+      }))).toEqual({ kind: "session-transcript", sessionId: "session-b" });
+    });
+
+    it("does not let a failed intent scoped to workspace A override workspace B's shell", () => {
+      expect(resolveChatSurfaceState(surfaceInput({
+        selectedWorkspaceId: "workspace-b",
+        activeLaunchIntentId: "launch-1",
+        launchIntentScope: { pendingUiKey: null, workspaceId: "workspace-a" },
+        launchIntentInFlight: false,
+        shellLogicalWorkspaceId: "workspace-b",
+        shellWorkspaceId: "workspace-b",
+        activeSessionId: "session-b",
+        hasContent: true,
+        isEmpty: false,
+      }))).toEqual({ kind: "session-transcript", sessionId: "session-b" });
+    });
+
+    it("lets an unscoped intent own an empty no-workspace shell", () => {
+      expect(resolveChatSurfaceState(surfaceInput({
+        selectedWorkspaceId: null,
+        activeLaunchIntentId: "launch-1",
+        launchIntentScope: null,
+        shellLogicalWorkspaceId: null,
+        shellWorkspaceId: null,
+        activeSessionId: null,
+        hasContent: false,
+        isEmpty: true,
+      }))).toEqual({ kind: "launch-intent", intentId: "launch-1" });
+    });
+
+    it("does not let an unscoped intent override a different selected workspace's shell", () => {
+      expect(resolveChatSurfaceState(surfaceInput({
+        selectedWorkspaceId: "workspace-b",
+        activeLaunchIntentId: "launch-1",
+        launchIntentScope: null,
+        shellLogicalWorkspaceId: "workspace-b",
+        shellWorkspaceId: "workspace-b",
+        activeSessionId: "session-b",
+        hasContent: true,
+        isEmpty: false,
+      }))).toEqual({ kind: "session-transcript", sessionId: "session-b" });
+    });
+
+    it("lets an intent scoped to the shown pending shell still own it", () => {
+      expect(resolveChatSurfaceState(surfaceInput({
+        selectedWorkspaceId: null,
+        hasPendingWorkspaceEntry: true,
+        activeLaunchIntentId: "launch-1",
+        launchIntentScope: { pendingUiKey: "pending-workspace:attempt-1", workspaceId: null },
+        launchIntentInFlight: true,
+        launchIntentSessionId: null,
+        shellLogicalWorkspaceId: "pending-workspace:attempt-1",
+        shellWorkspaceId: null,
+        activeSessionId: null,
+        hasContent: false,
+        isEmpty: true,
+      }))).toEqual({ kind: "launch-intent", intentId: "launch-1" });
+    });
+  });
+
+  describe("launchIntentOwnsShell", () => {
+    it("owns an empty shell when unscoped", () => {
+      expect(launchIntentOwnsShell({
+        scope: null,
+        shellLogicalWorkspaceId: null,
+        shellWorkspaceId: null,
+      })).toBe(true);
+    });
+
+    it("does not own a selected shell when unscoped", () => {
+      expect(launchIntentOwnsShell({
+        scope: null,
+        shellLogicalWorkspaceId: "workspace-1",
+        shellWorkspaceId: "workspace-1",
+      })).toBe(false);
+    });
+
+    it("owns the shell matching its pending UI key", () => {
+      expect(launchIntentOwnsShell({
+        scope: { pendingUiKey: "pending-workspace:attempt-1", workspaceId: null },
+        shellLogicalWorkspaceId: "pending-workspace:attempt-1",
+        shellWorkspaceId: null,
+      })).toBe(true);
+    });
+
+    it("does not own an unrelated shell when scoped", () => {
+      expect(launchIntentOwnsShell({
+        scope: { pendingUiKey: null, workspaceId: "workspace-a" },
+        shellLogicalWorkspaceId: "workspace-b",
+        shellWorkspaceId: "workspace-b",
+      })).toBe(false);
+    });
+
+    it("owns the shell matching its materialized/target workspace id", () => {
+      expect(launchIntentOwnsShell({
+        scope: { pendingUiKey: null, workspaceId: "workspace-a" },
+        shellLogicalWorkspaceId: "workspace-a",
+        shellWorkspaceId: "workspace-a",
+      })).toBe(true);
+    });
   });
 });

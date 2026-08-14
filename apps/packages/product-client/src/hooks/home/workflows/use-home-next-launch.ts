@@ -109,6 +109,11 @@ export function useHomeNextLaunch() {
       },
       materializedWorkspaceId: null,
       materializedSessionId: null,
+      // The pending-workspace attempt (if any) isn't created until after this
+      // intent begins; it gets threaded in once known via
+      // markHomeLaunchIntentMaterializedFromPendingWorkspace.
+      attemptId: null,
+      targetWorkspaceId: target.kind === "local" ? target.existingWorkspaceId : null,
       createdAt: Date.now(),
       sendAttemptedAt: null,
       failure: null,

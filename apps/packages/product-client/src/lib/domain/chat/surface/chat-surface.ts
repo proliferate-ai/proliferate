@@ -1,4 +1,5 @@
 import type { Workspace } from "@anyharness/sdk";
+import type { LaunchIntentScope } from "#product/lib/domain/chat/launch/launch-intent";
 
 export type ChatSurfaceState =
   | { kind: "no-workspace" }
@@ -28,9 +29,15 @@ export interface ResolveChatSurfaceStateInput {
   selectedWorkspaceId: string | null;
   hasPendingWorkspaceEntry: boolean;
   activeLaunchIntentId: string | null;
+  /** The workspace identities the active launch intent may own, if any. */
+  launchIntentScope: LaunchIntentScope | null;
   /** True while the active launch intent is still in flight (not failed). */
   launchIntentInFlight: boolean;
   launchIntentSessionId: string | null;
+  /** The current shell's own selected logical workspace id (pending-workspace UI key or workspace id). */
+  shellLogicalWorkspaceId: string | null;
+  /** The current shell's own selected (materialized) workspace id. */
+  shellWorkspaceId: string | null;
   selectedLocalWorkspace: Workspace | null;
   isArrivalWorkspace: boolean;
   shouldShowSelectedCloudWorkspaceStatus: boolean;
@@ -58,13 +65,56 @@ export function shouldMountWorkspaceShell(args: {
   );
 }
 
+/**
+ * Whether a launch intent with the given scope may own the surface of the
+ * shell identified by `shellLogicalWorkspaceId`/`shellWorkspaceId`.
+ *
+ * A scoped intent (it has created a pending-workspace attempt, targets an
+ * existing workspace, or has materialized one) may only own the matching
+ * shell — this is what stops one workspace's launch intent from hijacking an
+ * unrelated workspace's transcript (PRO-230). An unscoped intent (nothing
+ * known yet — the Home first-paint window before anything materializes) may
+ * only own a shell that itself has no workspace selected.
+ */
+export function launchIntentOwnsShell(args: {
+  scope: LaunchIntentScope | null;
+  shellLogicalWorkspaceId: string | null;
+  shellWorkspaceId: string | null;
+}): boolean {
+  const pendingUiKey = args.scope?.pendingUiKey ?? null;
+  const workspaceId = args.scope?.workspaceId ?? null;
+
+  if (pendingUiKey === null && workspaceId === null) {
+    return args.shellLogicalWorkspaceId === null && args.shellWorkspaceId === null;
+  }
+
+  return Boolean(
+    (pendingUiKey !== null && args.shellLogicalWorkspaceId === pendingUiKey)
+    || (workspaceId !== null && (
+      args.shellWorkspaceId === workspaceId
+      || args.shellLogicalWorkspaceId === workspaceId
+    )),
+  );
+}
+
 export function resolveLaunchIntentSurfaceOverride(args: {
   activeLaunchIntentId: string | null;
+  launchIntentScope: LaunchIntentScope | null;
   launchIntentSessionId: string | null;
   activeSessionId: string | null;
   hasVisibleSessionContent: boolean;
+  shellLogicalWorkspaceId: string | null;
+  shellWorkspaceId: string | null;
 }): LaunchIntentSurfaceOverride | null {
   if (!args.activeLaunchIntentId) {
+    return null;
+  }
+
+  if (!launchIntentOwnsShell({
+    scope: args.launchIntentScope,
+    shellLogicalWorkspaceId: args.shellLogicalWorkspaceId,
+    shellWorkspaceId: args.shellWorkspaceId,
+  })) {
     return null;
   }
 
@@ -121,9 +171,12 @@ export function resolveChatSurfaceState(input: ResolveChatSurfaceStateInput): Ch
 
   const launchIntentOverride = resolveLaunchIntentSurfaceOverride({
     activeLaunchIntentId: input.activeLaunchIntentId,
+    launchIntentScope: input.launchIntentScope,
     launchIntentSessionId: input.launchIntentSessionId,
     activeSessionId: scopedActiveSessionId,
     hasVisibleSessionContent: scopedHasContent,
+    shellLogicalWorkspaceId: input.shellLogicalWorkspaceId,
+    shellWorkspaceId: input.shellWorkspaceId,
   });
   if (launchIntentOverride) {
     return launchIntentOverride;
