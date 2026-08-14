@@ -1,0 +1,14 @@
+{
+  "rejectedBy": "shape",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "robot",
+        "title": "Step",
+        "prompt": "Run."
+      }
+    ]
+  }
+}

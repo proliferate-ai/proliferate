@@ -1,0 +1,81 @@
+"""Admit schema_version 2 workflow definitions and invocations.
+
+Gen-2 workflow definitions store their whole document in one
+``definition_json`` blob (nodes, edges, inputs, docTemplates) instead of the
+v1 ``inputs_json``/``stages_json`` split, and gen-2 invocations freeze a
+placement-carrying snapshot. Both tables' schema-version checks widen to
+``IN (1, 2)``; v1 rows are untouched and keep validating until PR7.
+
+Revision ID: c7d9e1f3a5b7
+Revises: b5d7f9a1c3e5
+Create Date: 2026-08-14 01:00:00.000000
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+from alembic import op
+
+revision: str = "c7d9e1f3a5b7"
+down_revision: str | None = "b5d7f9a1c3e5"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.add_column(
+        "workflow_definition",
+        sa.Column(
+            "definition_json",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
+    )
+    op.drop_constraint(
+        "ck_workflow_definition_schema_version",
+        "workflow_definition",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_workflow_definition_schema_version",
+        "workflow_definition",
+        "schema_version IN (1, 2)",
+    )
+    op.drop_constraint(
+        "ck_workflow_invocation_schema_version",
+        "workflow_invocation",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_workflow_invocation_schema_version",
+        "workflow_invocation",
+        "schema_version IN (1, 2)",
+    )
+
+
+def downgrade() -> None:
+    op.drop_constraint(
+        "ck_workflow_invocation_schema_version",
+        "workflow_invocation",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_workflow_invocation_schema_version",
+        "workflow_invocation",
+        "schema_version = 1",
+    )
+    op.drop_constraint(
+        "ck_workflow_definition_schema_version",
+        "workflow_definition",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_workflow_definition_schema_version",
+        "workflow_definition",
+        "schema_version = 1",
+    )
+    op.drop_column("workflow_definition", "definition_json")

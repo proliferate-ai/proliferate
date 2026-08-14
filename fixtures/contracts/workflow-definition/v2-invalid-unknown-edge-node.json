@@ -1,0 +1,27 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "edges.0.to",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step n_a",
+        "prompt": "Run step n_a."
+      },
+      {
+        "id": "n_b",
+        "type": "agent",
+        "title": "Step n_b",
+        "prompt": "Run step n_b."
+      }
+    ],
+    "edges": [
+      {
+        "from": "n_a",
+        "to": "n_ghost"
+      }
+    ]
+  }
+}

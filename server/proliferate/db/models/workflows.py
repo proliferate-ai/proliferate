@@ -27,7 +27,7 @@ class WorkflowDefinition(Base):
     __tablename__ = "workflow_definition"
     __table_args__ = (
         CheckConstraint(
-            "schema_version = 1",
+            "schema_version IN (1, 2)",
             name="ck_workflow_definition_schema_version",
         ),
         CheckConstraint(
@@ -82,6 +82,10 @@ class WorkflowDefinition(Base):
         default=list,
         server_default=text("'[]'::jsonb"),
     )
+    definition_json: Mapped[dict[str, object] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -95,7 +99,7 @@ class WorkflowInvocation(Base):
     __tablename__ = "workflow_invocation"
     __table_args__ = (
         CheckConstraint(
-            "schema_version = 1",
+            "schema_version IN (1, 2)",
             name="ck_workflow_invocation_schema_version",
         ),
         Index("ix_workflow_invocation_user_created", "user_id", "created_at", "id"),
