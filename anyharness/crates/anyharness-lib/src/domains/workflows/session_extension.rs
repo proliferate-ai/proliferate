@@ -282,8 +282,6 @@ mod tests {
     /// restoring it passes.
     #[test]
     fn on_interaction_requested_emits_full_correlation_for_a_linked_session() {
-        use anyharness_contract::v1::InteractionKind;
-
         let extension = linked_extension_fixture();
         let logged = capture_tracing_output(|| {
             extension.on_interaction_requested(SessionInteractionRequestedContext {
@@ -321,8 +319,6 @@ mod tests {
     /// restoring it passes.
     #[test]
     fn on_interaction_resolved_emits_the_outcome_for_a_linked_session() {
-        use anyharness_contract::v1::{InteractionKind, InteractionOutcome};
-
         let extension = linked_extension_fixture();
         let logged = capture_tracing_output(|| {
             extension.on_interaction_resolved(SessionInteractionResolvedContext {
