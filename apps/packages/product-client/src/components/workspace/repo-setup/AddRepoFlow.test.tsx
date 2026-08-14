@@ -2,7 +2,11 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AddRepoFlow, type AddRepoFlowProps } from "#product/components/workspace/repo-setup/AddRepoFlow";
+import {
+  AddRepoFlow,
+  GITHUB_CONNECTION_FOOTNOTE,
+  type AddRepoFlowProps,
+} from "#product/components/workspace/repo-setup/AddRepoFlow";
 import type { CloudRepoPickerProps } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 
 function buildCloudPicker(
@@ -41,13 +45,34 @@ describe("AddRepoFlow", () => {
   it("offers the Desktop host choices and reports the cloud pick", () => {
     const { onPickOption } = renderFlow();
 
-    expect(screen.getByText("Add a repository")).toBeTruthy();
     expect(screen.getByText("Add an existing folder")).toBeTruthy();
     expect(screen.getByText("Clone from GitHub")).toBeTruthy();
     expect(screen.getByText("Set up in Cloud")).toBeTruthy();
     fireEvent.click(screen.getByText("Set up in Cloud"));
 
     expect(onPickOption).toHaveBeenCalledWith("cloud");
+  });
+
+  it("names the one-time GitHub connection once, not per row", () => {
+    renderFlow({ githubConnected: false });
+
+    expect(screen.getByText(GITHUB_CONNECTION_FOOTNOTE)).toBeTruthy();
+    expect(screen.queryByText("Needs GitHub")).toBeNull();
+  });
+
+  it("drops the footnote once GitHub is connected", () => {
+    renderFlow({ githubConnected: true });
+
+    expect(screen.queryByText(GITHUB_CONNECTION_FOOTNOTE)).toBeNull();
+  });
+
+  it("renders the flow on a popover surface, animating only while open", () => {
+    renderFlow();
+
+    const content = document.querySelector("[data-slot=popover-content]");
+    expect(content?.className).toContain("w-80");
+    expect(content?.className).toContain("data-[state=open]:animate-popover-in");
+    expect(content?.className).not.toMatch(/(^|\s)animate-popover-in(\s|$)/);
   });
 
   it("reports the clone-from-github pick", () => {

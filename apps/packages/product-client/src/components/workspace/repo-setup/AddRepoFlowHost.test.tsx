@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, act, waitFor } from "@testing-library/react";
 import type {
   AddRepoFlowOption,
@@ -33,6 +33,10 @@ const cloudHook = vi.hoisted(() => ({
   onRepositorySelected: null as null | ((repo: { gitOwner: string; gitRepoName: string }) => void),
   legacyManual: vi.fn(),
   clonePicker: null as CloudRepoPickerProps | null,
+  cloudPicker: null as CloudRepoPickerProps | null,
+  // What the stubbed picker currently reports as its own prerequisite blocker;
+  // a test clears it to stand for "GitHub is connected now".
+  blocker: undefined as CloudRepoPickerProps["blocker"],
 }));
 const productHost = vi.hoisted(() => ({
   desktop: null as DesktopBridge | null,
@@ -74,7 +78,7 @@ vi.mock("#product/hooks/workspaces/workflows/use-add-cloud-environment", () => (
       query: "",
       manualValue: "acme/manual-clone",
       repositories: [],
-      blocker: OLD_PREREQ_BLOCKER,
+      blocker: cloudHook.blocker,
       onQueryChange: vi.fn(),
       onManualValueChange: vi.fn(),
       onAddRepository: vi.fn(),
@@ -117,11 +121,26 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
 
 vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 
+// The controller's own GitHub reads: the entry footnote's authorization status
+// and the check-again invalidation. Neither is what these gating tests are
+// about, so both are stubbed at their package boundary.
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
+}));
+
+vi.mock("@proliferate/cloud-sdk-react", () => ({
+  githubAppRootKey: () => ["github-app"],
+  repositoriesKey: () => ["repositories"],
+  useCloudClient: () => ({ baseUrl: "https://api.test" }),
+  useGitHubAppUserAuthorizationStatus: () => ({ data: { connected: true } }),
+}));
+
 // Expose the resolved cloudPicker.blocker title the host hands the flow.
 vi.mock("#product/components/workspace/repo-setup/AddRepoFlow", () => ({
   AddRepoFlow: ({ step, cloudPicker, clonePicker, error, onPickOption }: AddRepoFlowProps) => {
     const picker = step.kind === "clone" ? clonePicker : cloudPicker;
     cloudHook.clonePicker = clonePicker ?? null;
+    cloudHook.cloudPicker = cloudPicker ?? null;
     addRepoFlow.onPickOption = onPickOption;
     return (
       <div>
@@ -131,6 +150,10 @@ vi.mock("#product/components/workspace/repo-setup/AddRepoFlow", () => ({
     );
   },
 }));
+
+beforeEach(() => {
+  cloudHook.blocker = OLD_PREREQ_BLOCKER;
+});
 
 afterEach(() => {
   cleanup();
@@ -142,6 +165,9 @@ afterEach(() => {
   auth.status = "authenticated";
   cloudHook.onRepositorySelected = null;
   cloudHook.clonePicker = null;
+  cloudHook.cloudPicker = null;
+  cloudHook.blocker = OLD_PREREQ_BLOCKER;
+  OLD_PREREQ_BLOCKER.onAction.mockClear();
   cloudHook.legacyManual.mockClear();
   productHost.desktop = null;
   addRepoHook.addRepoFromPath.mockReset();
@@ -280,6 +306,82 @@ describe("AddRepoFlowHost cloud gating (PR2-GATING-01)", () => {
         gitOwner: "acme",
         gitRepoName: "manual-clone",
       },
+    });
+  });
+});
+
+describe("AddRepoFlowHost waiting on GitHub", () => {
+  it("parks on the waiting panel once the checklist CTA has sent the user to GitHub", () => {
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    expect(cloudHook.cloudPicker?.blocker?.waiting).toBeUndefined();
+
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.onAction?.();
+    });
+
+    // The CTA still runs — the waiting panel is in addition to opening GitHub,
+    // not instead of it.
+    expect(OLD_PREREQ_BLOCKER.onAction).toHaveBeenCalled();
+    expect(cloudHook.cloudPicker?.blocker?.waiting?.title)
+      .toBe("Finish authorizing on GitHub");
+    expect(cloudHook.cloudPicker?.blocker?.waiting?.checkAgainLabel)
+      .toBe("I've done this — Check again");
+  });
+
+  it("leaves the waiting panel on Cancel without re-querying", () => {
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.onAction?.();
+    });
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.waiting?.onCancel();
+    });
+
+    expect(cloudHook.cloudPicker?.blocker?.waiting).toBeUndefined();
+  });
+
+  it("re-checks on demand and confirms arrival once nothing blocks the picker", async () => {
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.onAction?.();
+    });
+    await act(async () => {
+      cloudHook.cloudPicker?.blocker?.waiting?.onCheckAgain();
+      await Promise.resolve();
+    });
+
+    // Still blocked (the stubbed picker never clears its prerequisite), so no
+    // premature "connected" claim — but the waiting panel is done.
+    await waitFor(() => {
+      expect(cloudHook.cloudPicker?.blocker?.waiting).toBeUndefined();
+    });
+    expect(cloudHook.cloudPicker?.connectedBanner).toBeNull();
+  });
+
+  it("confirms the connection on arrival once the re-check clears the blocker", async () => {
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.onAction?.();
+    });
+    // Standing in for the user having finished on GitHub: the next render's
+    // picker has no prerequisite left to report.
+    cloudHook.blocker = undefined;
+    await act(async () => {
+      cloudHook.cloudPicker?.blocker?.waiting?.onCheckAgain();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(cloudHook.cloudPicker?.connectedBanner)
+        .toBe("GitHub connected. Choose a repository.");
     });
   });
 });
