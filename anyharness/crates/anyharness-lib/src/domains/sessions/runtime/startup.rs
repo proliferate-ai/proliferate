@@ -9,7 +9,10 @@ use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
 use crate::domains::agents::route_auth::resolve_launch_route_auth;
 use crate::domains::agents::route_auth::state::load_state_file;
-use crate::domains::sessions::extensions::{SessionStartedContext, SessionTurnFinishedContext};
+use crate::domains::sessions::extensions::{
+    SessionInteractionRequestedContext, SessionInteractionResolvedContext, SessionStartedContext,
+    SessionTurnFinishedContext,
+};
 use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
     assemble_session_mcp_launch, SessionMcpLaunchAssemblyError,
@@ -497,6 +500,22 @@ impl SessionRuntime {
                             last_event_seq: result.last_event_seq,
                             error_details: result.error_details.clone(),
                         });
+                    }
+                }
+            })),
+            on_interaction_requested: Some(Arc::new({
+                let extensions = self.session_extensions.clone();
+                move |ctx: SessionInteractionRequestedContext| {
+                    for extension in &extensions {
+                        extension.on_interaction_requested(ctx.clone());
+                    }
+                }
+            })),
+            on_interaction_resolved: Some(Arc::new({
+                let extensions = self.session_extensions.clone();
+                move |ctx: SessionInteractionResolvedContext| {
+                    for extension in &extensions {
+                        extension.on_interaction_resolved(ctx.clone());
                     }
                 }
             })),

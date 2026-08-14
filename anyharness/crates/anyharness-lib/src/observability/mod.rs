@@ -33,3 +33,9 @@ pub const WORKFLOW_NODE_LAUNCH_FAILED_TRACING_TARGET: &str =
 pub const WORKFLOW_BOOT_FENCE_TRACING_TARGET: &str = "anyharness.workflow_boot_fence";
 pub const WORKFLOW_INVARIANT_VIOLATION_TRACING_TARGET: &str =
     "anyharness.workflow_invariant_violation";
+pub const WORKFLOW_NODE_INTERACTION_REQUESTED_TRACING_TARGET: &str =
+    "anyharness.workflow_node_interaction_requested";
+pub const WORKFLOW_NODE_INTERACTION_RESOLVED_TRACING_TARGET: &str =
+    "anyharness.workflow_node_interaction_resolved";
+pub const WORKFLOW_INTERJECTION_HELD_TRACING_TARGET: &str =
+    "anyharness.workflow_interjection_held";

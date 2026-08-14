@@ -15,7 +15,9 @@ use super::model::{
     RenderedEnvelope, WorkflowInterruptionCode, WorkflowNodeFailureCode, WorkflowNodeKind,
     WorkflowNodeStatus, WorkflowNodeType, WorkflowRunStatus,
 };
-use super::store::{AppliedTransition, NewRunParams, ResolvedSideEffect, WorkflowStore};
+use super::store::{
+    emit_decision_events, AppliedTransition, NewRunParams, ResolvedSideEffect, WorkflowStore,
+};
 use super::transition::{
     next, Decision, RunState, Transition, TurnFinished, TurnStopReason, WorkflowCommand,
     WorkflowEvent,
@@ -167,6 +169,48 @@ fn clean_turn(node_row_id: &str) -> WorkflowEvent {
 fn assert_healthy(state: &RunState) {
     let violations = invariants::sweep(state);
     assert!(violations.is_empty(), "invariants violated: {violations:?}");
+}
+
+/// Subscriber-capture harness for named-event assertions (pr11 convention):
+/// runs `body` under a fmt subscriber writing into a shared buffer, returning
+/// `body`'s result alongside the captured, formatted log text.
+fn capture_tracing_output<T>(body: impl FnOnce() -> T) -> (T, String) {
+    use std::io;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
+
+    impl io::Write for SharedLogWriter {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            self.0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend_from_slice(buffer);
+            Ok(buffer.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let log_bytes = Arc::new(Mutex::new(Vec::new()));
+    let log_writer = Arc::clone(&log_bytes);
+    let subscriber = tracing_subscriber::fmt()
+        .without_time()
+        .with_ansi(false)
+        .with_writer(move || SharedLogWriter(Arc::clone(&log_writer)))
+        .finish();
+    let result = tracing::subscriber::with_default(subscriber, body);
+    let logged = String::from_utf8(
+        log_bytes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone(),
+    )
+    .expect("formatted log is UTF-8");
+    (result, logged)
 }
 
 #[test]
@@ -1301,26 +1345,6 @@ fn running_unlinked_node_trips_only_the_at_rest_sweep() {
 /// fails this test; restoring it passes.
 #[test]
 fn fail_node_transition_event_carries_named_target_and_failure_code() {
-    use std::io;
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Clone)]
-    struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
-
-    impl io::Write for SharedLogWriter {
-        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
-            self.0
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .extend_from_slice(buffer);
-            Ok(buffer.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
     let store = test_store();
     let created = store
         .create_run_with_first_node(params("run-obs"))
@@ -1332,25 +1356,11 @@ fn fail_node_transition_event_carries_named_target_and_failure_code() {
         queue_empty: true,
     });
 
-    let log_bytes = Arc::new(Mutex::new(Vec::new()));
-    let log_writer = Arc::clone(&log_bytes);
-    let subscriber = tracing_subscriber::fmt()
-        .without_time()
-        .with_ansi(false)
-        .with_writer(move || SharedLogWriter(Arc::clone(&log_writer)))
-        .finish();
-    let applied = tracing::subscriber::with_default(subscriber, || {
+    let (applied, logged) = capture_tracing_output(|| {
         decide_and_apply(&store, "run-obs", &created.state, &errored)
     });
     assert_eq!(applied.state.run.status, WorkflowRunStatus::Failed);
 
-    let logged = String::from_utf8(
-        log_bytes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone(),
-    )
-    .expect("formatted log is UTF-8");
     let transition_line = logged
         .lines()
         .find(|line| line.contains("anyharness.workflow_transition"))
@@ -1370,4 +1380,83 @@ fn fail_node_transition_event_carries_named_target_and_failure_code() {
         logged.contains("anyharness.workflow_run_finished"),
         "{logged}"
     );
+}
+
+/// pr11b subscriber-capture proof: a queued interjection's Hold decision
+/// emits the named `anyharness.workflow_interjection_held` event, not the
+/// stale-notification target — and a genuinely stale report (unknown node
+/// row, same clean stop reason) still emits the stale target with
+/// interjection_held absent. Negative control (recorded in the PR body):
+/// reverting `emit_decision_events`'s branch to pr11's unconditional
+/// stale-warn makes the interjection_held assertions fail; restoring it
+/// passes.
+#[test]
+fn interjection_hold_emits_the_named_target_not_stale() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+    let held = WorkflowEvent::TurnFinished(TurnFinished {
+        node_row_id: plan_id.clone(),
+        stop_reason: TurnStopReason::CleanEndTurn,
+        queue_empty: false,
+    });
+    assert_eq!(next(&created.state, &held), Decision::Hold);
+
+    let (_, logged) =
+        capture_tracing_output(|| emit_decision_events("run-1", &held, &Decision::Hold));
+    let held_line = logged
+        .lines()
+        .find(|line| line.contains("anyharness.workflow_interjection_held"))
+        .expect("named interjection_held event captured");
+    assert!(held_line.contains("run-1"), "{held_line}");
+    assert!(held_line.contains(plan_id.as_str()), "{held_line}");
+    assert!(held_line.contains("clean_end_turn"), "{held_line}");
+    assert!(
+        !logged.contains("anyharness.workflow_notification_stale"),
+        "{logged}"
+    );
+
+    // In-test stale control: an unknown node row is a genuinely stale report
+    // (told apart from the interjection hold by queue_empty on the same stop
+    // reason) — the stale target fires, interjection_held stays absent.
+    let stale = clean_turn("some-unknown-node-row");
+    assert_eq!(next(&created.state, &stale), Decision::Hold);
+    let (_, stale_logged) =
+        capture_tracing_output(|| emit_decision_events("run-1", &stale, &Decision::Hold));
+    assert!(
+        stale_logged.contains("anyharness.workflow_notification_stale"),
+        "{stale_logged}"
+    );
+    assert!(
+        !stale_logged.contains("anyharness.workflow_interjection_held"),
+        "{stale_logged}"
+    );
+}
+
+/// pr11 scope-item-3 lock-in (no source change): `stamp_session` already
+/// carries `session_id` on the named `anyharness.workflow_node_launched`
+/// event, the join key the session-plane `anyharness.turn.*` stream needs.
+/// Negative control (recorded in the PR body): removing `session_id` from
+/// `stamp_session`'s `tracing::info!` call fails this test; restoring it
+/// passes.
+#[test]
+fn node_launched_carries_session_id_for_the_session_plane_join() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+
+    let (_, logged) = capture_tracing_output(|| {
+        store
+            .stamp_session(&plan_id, "sess-x", None, Some("claude"))
+            .expect("stamp session")
+    });
+    let launched_line = logged
+        .lines()
+        .find(|line| line.contains("anyharness.workflow_node_launched"))
+        .expect("named node_launched event captured");
+    assert!(launched_line.contains("session_id=sess-x"), "{launched_line}");
 }

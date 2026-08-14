@@ -20,14 +20,39 @@
 
 use std::sync::{Arc, OnceLock, Weak};
 
+use anyharness_contract::v1::{InteractionKind, InteractionOutcome};
+
 use crate::domains::sessions::extensions::{
-    SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
-    SessionTurnOutcome,
+    SessionExtension, SessionInteractionRequestedContext, SessionInteractionResolvedContext,
+    SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext, SessionTurnOutcome,
 };
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::workflows::transition::{TurnFinished, TurnStopReason};
 use crate::live::workflows::WorkflowManager;
+use crate::observability::{
+    WORKFLOW_NODE_INTERACTION_REQUESTED_TRACING_TARGET,
+    WORKFLOW_NODE_INTERACTION_RESOLVED_TRACING_TARGET,
+};
+
+fn interaction_kind_str(kind: &InteractionKind) -> &'static str {
+    match kind {
+        InteractionKind::Permission => "permission",
+        InteractionKind::UserInput => "user_input",
+        InteractionKind::McpElicitation => "mcp_elicitation",
+    }
+}
+
+fn interaction_outcome_str(outcome: &InteractionOutcome) -> &'static str {
+    match outcome {
+        InteractionOutcome::Selected { .. } => "selected",
+        InteractionOutcome::Submitted { .. } => "submitted",
+        InteractionOutcome::Accepted { .. } => "accepted",
+        InteractionOutcome::Declined => "declined",
+        InteractionOutcome::Cancelled => "cancelled",
+        InteractionOutcome::Dismissed => "dismissed",
+    }
+}
 
 pub struct WorkflowSessionExtension {
     session_store: SessionStore,
@@ -146,6 +171,59 @@ impl SessionExtension for WorkflowSessionExtension {
             },
         );
     }
+
+    fn on_interaction_requested(&self, ctx: SessionInteractionRequestedContext) {
+        let columns = match self.session_store.workflow_columns(&ctx.session_id) {
+            Ok(columns) => columns,
+            Err(error) => {
+                tracing::error!(
+                    session_id = %ctx.session_id,
+                    error = %error,
+                    "workflow column lookup failed at interaction request; report dropped",
+                );
+                return;
+            }
+        };
+        let Some((run_id, node_row_id)) = columns else {
+            return; // ordinary session, or unlinked by undo-advance
+        };
+        tracing::info!(
+            target: WORKFLOW_NODE_INTERACTION_REQUESTED_TRACING_TARGET,
+            run_id = %run_id,
+            node_row_id = %node_row_id,
+            session_id = %ctx.session_id,
+            request_id = %ctx.request_id,
+            kind = interaction_kind_str(&ctx.kind),
+            "workflow node interaction requested",
+        );
+    }
+
+    fn on_interaction_resolved(&self, ctx: SessionInteractionResolvedContext) {
+        let columns = match self.session_store.workflow_columns(&ctx.session_id) {
+            Ok(columns) => columns,
+            Err(error) => {
+                tracing::error!(
+                    session_id = %ctx.session_id,
+                    error = %error,
+                    "workflow column lookup failed at interaction resolution; report dropped",
+                );
+                return;
+            }
+        };
+        let Some((run_id, node_row_id)) = columns else {
+            return; // ordinary session, or unlinked by undo-advance
+        };
+        tracing::info!(
+            target: WORKFLOW_NODE_INTERACTION_RESOLVED_TRACING_TARGET,
+            run_id = %run_id,
+            node_row_id = %node_row_id,
+            session_id = %ctx.session_id,
+            request_id = %ctx.request_id,
+            kind = interaction_kind_str(&ctx.kind),
+            outcome = interaction_outcome_str(&ctx.outcome),
+            "workflow node interaction resolved",
+        );
+    }
 }
 
 #[cfg(test)]
@@ -192,5 +270,93 @@ mod tests {
             map_stop_reason(Cancelled, Some("forced_unload")),
             TurnStopReason::ForcedUnload
         );
+    }
+
+    /// pr11b subscriber-capture proof: a workflow-linked session's interaction
+    /// request emits the named `anyharness.workflow_node_interaction_requested`
+    /// event with full run/node/session/request correlation; an unlinked
+    /// session (no workflow columns) produces zero output — the extension's
+    /// pre-filter, exercised without a bound manager (neither hook needs it).
+    /// Negative control (recorded in the PR body): removing the
+    /// `tracing::info!` call from `on_interaction_requested` fails this test;
+    /// restoring it passes.
+    #[test]
+    fn on_interaction_requested_emits_full_correlation_for_a_linked_session() {
+        use std::io;
+        use std::sync::{Arc, Mutex};
+
+        use anyharness_contract::v1::InteractionKind;
+
+        use crate::app::test_support::{insert_session_row, seed_workspace_with_repo_root};
+        use crate::persistence::Db;
+
+        #[derive(Clone)]
+        struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
+
+        impl io::Write for SharedLogWriter {
+            fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+                self.0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .extend_from_slice(buffer);
+                Ok(buffer.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let db = Db::open_in_memory().expect("in-memory db with full migrations");
+        seed_workspace_with_repo_root(&db, "workspace-1", "worktree", "/tmp/workspace-1");
+        let session_store = SessionStore::new(db.clone());
+        insert_session_row(&session_store, "workspace-1", "session-1", "idle");
+        insert_session_row(&session_store, "workspace-1", "session-2", "idle");
+        session_store
+            .link_workflow_columns("session-1", "run-x", "node-x")
+            .expect("link workflow columns");
+
+        let extension = WorkflowSessionExtension::new(session_store, WorkflowStore::new(db));
+
+        let log_bytes = Arc::new(Mutex::new(Vec::new()));
+        let log_writer = Arc::clone(&log_bytes);
+        let subscriber = tracing_subscriber::fmt()
+            .without_time()
+            .with_ansi(false)
+            .with_writer(move || SharedLogWriter(Arc::clone(&log_writer)))
+            .finish();
+        tracing::subscriber::with_default(subscriber, || {
+            extension.on_interaction_requested(SessionInteractionRequestedContext {
+                session_id: "session-1".into(),
+                request_id: "req-1".into(),
+                kind: InteractionKind::Permission,
+            });
+            // Silence case: session-2 carries no workflow columns, so the
+            // workflow_columns pre-filter drops the report — zero output.
+            extension.on_interaction_requested(SessionInteractionRequestedContext {
+                session_id: "session-2".into(),
+                request_id: "req-2".into(),
+                kind: InteractionKind::Permission,
+            });
+        });
+
+        let logged = String::from_utf8(
+            log_bytes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
+        )
+        .expect("formatted log is UTF-8");
+        let matches: Vec<&str> = logged
+            .lines()
+            .filter(|line| line.contains("anyharness.workflow_node_interaction_requested"))
+            .collect();
+        assert_eq!(matches.len(), 1, "{logged}");
+        let requested_line = matches[0];
+        assert!(requested_line.contains("run-x"), "{requested_line}");
+        assert!(requested_line.contains("node-x"), "{requested_line}");
+        assert!(requested_line.contains("session-1"), "{requested_line}");
+        assert!(requested_line.contains("req-1"), "{requested_line}");
+        assert!(requested_line.contains("permission"), "{requested_line}");
     }
 }
