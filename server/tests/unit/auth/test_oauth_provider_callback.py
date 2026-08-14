@@ -86,7 +86,7 @@ async def test_github_profile_401_returns_to_originating_surface(
     )
     _install_github_profile_failure(monkeypatch, status_code=401)
 
-    redirect_url = await accounts_service.complete_oauth_provider_callback(
+    redirect = await accounts_service.complete_oauth_provider_callback(
         cast(AsyncSession, object()),
         cast(Request, object()),
         provider="github",
@@ -95,7 +95,9 @@ async def test_github_profile_401_returns_to_originating_surface(
         code="github-code",
     )
 
-    assert redirect_url == ("proliferate://auth/callback?error=provider_error&state=desktop-state")
+    assert redirect.url == "proliferate://auth/callback?error=provider_error&state=desktop-state"
+    assert redirect.surface == "desktop"
+    assert redirect.error == "provider_error"
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]

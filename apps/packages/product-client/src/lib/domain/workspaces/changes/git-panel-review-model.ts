@@ -120,3 +120,13 @@ export function toggleReviewSetValue<T>(set: ReadonlySet<T>, value: T): Set<T> {
   }
   return next;
 }
+
+/**
+ * True on the false→true edge only: review search just opened, so any
+ * collapsed files should expand to make their diffs searchable. Re-opening
+ * while already open (e.g. a query keystroke) must not re-expand a file the
+ * reviewer deliberately collapsed.
+ */
+export function shouldAutoExpandForReviewSearch(prevOpen: boolean, nextOpen: boolean): boolean {
+  return nextOpen && !prevOpen;
+}

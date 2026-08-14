@@ -87,6 +87,7 @@ export function GitReviewFileRow({
   openFile,
   diffTimingOptions,
   measurementOperationId,
+  contentSearchOrderKey,
 }: {
   id: string;
   workspaceId: string | null;
@@ -105,6 +106,7 @@ export function GitReviewFileRow({
   openFile: OpenFile;
   diffTimingOptions?: AnyHarnessQueryTimingOptions;
   measurementOperationId?: MeasurementOperationId | null;
+  contentSearchOrderKey: number;
 }) {
   const currentDiff = file.currentDiff;
   const isBranchMode = sectionScope === "branch";
@@ -344,6 +346,9 @@ export function GitReviewFileRow({
                 layout={layout}
                 variant={layout === "unified" ? "chat" : "default"}
                 operationId={measurementOperationId ?? null}
+                contentSearchUnitId={`review-diff:${id}`}
+                contentSearchSurface="review"
+                contentSearchOrderKey={contentSearchOrderKey}
                 overscrollBehaviorX="none"
                 overscrollBehaviorY="none"
                 chainVerticalWheel
