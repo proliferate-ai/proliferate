@@ -48,7 +48,7 @@ function makeDeps(overrides: Partial<AuthOrchestrationDeps> = {}): AuthOrchestra
     })),
     setAuthState: vi.fn(),
     clearSessionRuntimeState: vi.fn(),
-    closeRepoSetupModal: vi.fn(),
+    dismissRepoAddedReceipt: vi.fn(),
     showToast: vi.fn(),
     ...overrides,
   };
