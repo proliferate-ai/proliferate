@@ -1,4 +1,4 @@
-import type { WorkflowNodeTypeV2, WorkflowNodeV2 } from "@proliferate/cloud-sdk";
+import type { WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import {
   workflowBuilderModelOptions,
@@ -12,8 +12,8 @@ import { ArrowDown, ArrowUp, Trash } from "#product/primitives/icons/core";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { Card } from "#product/primitives/patterns/Card";
-import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { Select } from "#product/primitives/Select";
+import { Switch } from "#product/primitives/Switch";
 
 export interface WorkflowBuilderNodeCardProps {
   node: WorkflowNodeV2;
@@ -125,31 +125,24 @@ export function WorkflowBuilderNodeCard({
           />
         </div>
         <div>
-          <p className="mb-1 text-ui-sm text-muted-foreground">
-            {WORKFLOW_BUILDER_COPY.stepTypeLabel}
-          </p>
-          <SegmentedControl<WorkflowNodeTypeV2>
-            ariaLabel={WORKFLOW_BUILDER_COPY.stepTypeLabel}
-            value={node.type}
-            items={[
-              {
-                id: "agent",
-                label: WORKFLOW_BUILDER_COPY.stepTypeAgent,
-                disabled,
-              },
-              {
-                id: "human_in_loop",
-                label: WORKFLOW_BUILDER_COPY.stepTypeHuman,
-                disabled,
-              },
-            ]}
-            // Flipping to a human step drops the model with it: the fields
-            // disappear, and a retained selection would be state the author
-            // can no longer see or change.
-            onChange={(type) => onChange(
-              type === "human_in_loop" ? { type, model: null } : { type },
-            )}
-          />
+          <Label htmlFor={`${fieldPrefix}-approval`}>
+            {WORKFLOW_BUILDER_COPY.requiresApprovalLabel}
+          </Label>
+          {/* Approval does not narrow configuration: a gated step runs the
+              same agent session (the engine's launch path is shared and every
+              schema allows `model` on both kinds) and then parks for the
+              approval — so the model pick survives the toggle and the fields
+              below stay. */}
+          <div className="flex h-9 items-center">
+            <Switch
+              id={`${fieldPrefix}-approval`}
+              checked={node.type === "human_in_loop"}
+              disabled={disabled}
+              onChange={(requiresApproval) => onChange({
+                type: requiresApproval ? "human_in_loop" : "agent",
+              })}
+            />
+          </div>
           {node.type === "human_in_loop" ? (
             <p className="mt-1 text-ui-sm text-muted-foreground">
               {WORKFLOW_BUILDER_COPY.humanStepNote}
@@ -158,15 +151,13 @@ export function WorkflowBuilderNodeCard({
         </div>
       </div>
 
-      {node.type === "agent" ? (
-        <WorkflowBuilderNodeModelFields
-          fieldPrefix={fieldPrefix}
-          node={node}
-          harnesses={harnesses}
-          disabled={disabled}
-          onChange={onChange}
-        />
-      ) : null}
+      <WorkflowBuilderNodeModelFields
+        fieldPrefix={fieldPrefix}
+        node={node}
+        harnesses={harnesses}
+        disabled={disabled}
+        onChange={onChange}
+      />
 
       <div className="mt-3">
         <WorkflowBuilderPromptField

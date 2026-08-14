@@ -25,12 +25,12 @@ export const WORKFLOW_NODE_CARD_COPY = {
       : String(chainIndex + 1).padStart(2, "0");
     return `${indexLabel} · ${title}`;
   },
-  /** "Agent" / "Human gate", annotated with why this row exists at all. */
+  /** "Agent" / "Approval step", annotated with why this row exists at all. */
   kindLine: (
     nodeType: "agent" | "human_in_loop",
     kind: "defined" | "replacement" | "adhoc",
   ): string => {
-    const base = nodeType === "agent" ? "Agent" : "Human gate";
+    const base = nodeType === "agent" ? "Agent" : "Approval step";
     if (kind === "replacement") return `${base} · Retry`;
     if (kind === "adhoc") return `${base} · Side node`;
     return base;

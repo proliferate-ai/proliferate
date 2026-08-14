@@ -165,6 +165,41 @@ describe("WorkflowBuilderSurface", () => {
       .toEqual(["", "sonnet", "opus"]);
   });
 
+  it("keeps the model pick when a step is toggled to require approval", async () => {
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={null}
+        authCacheScope="user-1"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    fireEvent.change(screen.getByLabelText("Harness"), { target: { value: "claude" } });
+    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "opus" } });
+
+    fireEvent.click(screen.getByLabelText("Requires approval"));
+
+    // A gated step still runs an agent session, so the model configuration
+    // survives the toggle: the fields stay rendered, editable, and populated.
+    expect(screen.getByText("The run pauses here until someone approves the step.")).toBeTruthy();
+    expect(screen.getByLabelText("Harness")).toHaveProperty("disabled", false);
+    expect(screen.getByLabelText("Model")).toHaveProperty("value", "opus");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
+    // The wire shape is unchanged by design: the saved node carries both the
+    // gate and the model.
+    expect(mocks.create.mock.calls[0][0].definition.nodes[0]).toMatchObject({
+      type: "human_in_loop",
+      model: { agentKind: "claude", modelId: "opus" },
+    });
+
+    // Toggling back off keeps it too — the toggle only moves `type`.
+    fireEvent.click(screen.getByLabelText("Requires approval"));
+    expect(screen.getByLabelText("Model")).toHaveProperty("value", "opus");
+  });
+
   it("chips a malformed prompt reference and blocks Save", () => {
     render(
       <WorkflowBuilderSurface
