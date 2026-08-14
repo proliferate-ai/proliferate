@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
-use crate::domains::workspaces::retention::WorkspaceRetentionService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::domains::workspaces::setup_runtime::{WorkspaceSetupError, WorkspaceSetupRuntime};
 use crate::domains::workspaces::types::CreateWorktreeResult;
@@ -15,7 +14,6 @@ use crate::origin::OriginContext;
 pub struct WorkspaceWorktreeRuntime {
     workspace_runtime: Arc<WorkspaceRuntime>,
     setup_runtime: Arc<WorkspaceSetupRuntime>,
-    retention_service: Arc<WorkspaceRetentionService>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,12 +52,10 @@ impl WorkspaceWorktreeRuntime {
     pub fn new(
         workspace_runtime: Arc<WorkspaceRuntime>,
         setup_runtime: Arc<WorkspaceSetupRuntime>,
-        retention_service: Arc<WorkspaceRetentionService>,
     ) -> Self {
         Self {
             workspace_runtime,
             setup_runtime,
-            retention_service,
         }
     }
 
@@ -112,10 +108,6 @@ impl WorkspaceWorktreeRuntime {
         } else {
             false
         };
-
-        self.retention_service
-            .clone()
-            .spawn_post_create_pass(worktree.workspace.id.clone());
 
         Ok(CreateWorktreeWorkflowResult {
             worktree,

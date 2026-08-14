@@ -12,9 +12,7 @@ type Actions = ReturnType<typeof useRuntimePressureControlState>["actions"];
 
 function actions(): Actions {
   return {
-    runCleanup: vi.fn(),
     pruneOrphan: vi.fn(),
-    pruneWorkspace: vi.fn(),
     purgeWorkspace: vi.fn(),
     retryPurge: vi.fn(),
   };

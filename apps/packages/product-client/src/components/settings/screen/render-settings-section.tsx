@@ -20,7 +20,6 @@ import { BillingPane } from "#product/components/settings/panes/BillingPane";
 import { RepoActionsPane } from "#product/components/settings/panes/repo/RepoActionsPane";
 import { RepoConfigurePane } from "#product/components/settings/panes/repo/RepoConfigurePane";
 import { RepoEnvironmentPane } from "#product/components/settings/panes/repo/RepoEnvironmentPane";
-import { WorktreesPane } from "#product/components/settings/panes/WorktreesPane";
 import { type SettingsFocus } from "#product/lib/domain/settings/navigation";
 import {
   type RepoScopeSelection,
@@ -113,9 +112,6 @@ export function renderSettingsSection(
   }
   if (isSettingsScaffoldPageId(activeSection)) {
     return <SettingsScaffoldPane pageId={activeSection} />;
-  }
-  if (activeSection === "worktrees") {
-    return <WorktreesPane />;
   }
   if (activeSection === "repo-actions") {
     return (

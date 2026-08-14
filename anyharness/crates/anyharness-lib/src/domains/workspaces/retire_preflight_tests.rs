@@ -12,18 +12,18 @@ fn workspace_can_purge_accepts_active_standard_worktree() {
 }
 
 #[test]
-fn workspace_can_purge_accepts_retired_complete_or_purge_tombstone() {
+fn workspace_can_purge_accepts_archived_complete_or_purge_tombstone() {
     assert!(workspace_can_purge(&workspace_record(
         "worktree",
         "standard",
-        "retired",
+        "archived",
         "complete",
         Some("retire"),
     )));
     assert!(workspace_can_purge(&workspace_record(
         "worktree",
         "standard",
-        "retired",
+        "archived",
         "failed",
         Some("purge"),
     )));
@@ -40,7 +40,7 @@ fn workspace_can_purge_rejects_nonstandard_or_nonworktree_rows() {
     assert!(!workspace_can_purge(&workspace_record(
         "worktree",
         "standard",
-        "retired",
+        "archived",
         "failed",
         Some("retire"),
     )));
@@ -73,6 +73,10 @@ fn workspace_record(
         cleanup_error_message: None,
         cleanup_failed_at: None,
         cleanup_attempted_at: None,
+        archived_head_sha: None,
+        archived_branch: None,
+        archived_at: None,
+        partial_capture_json: None,
         created_at: "2025-01-01T00:00:00Z".to_string(),
         updated_at: "2025-01-01T00:00:00Z".to_string(),
     }

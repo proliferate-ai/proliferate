@@ -1,12 +1,11 @@
 //! Wiring family for the destructive workspace use cases: the shared retire
-//! preflight checker and the two use cases that hold it — purge and retire.
+//! preflight checker and the use case that holds it — purge.
 //!
 //! They are one family because they are one safety story. `RetirePreflightChecker`
-//! is the authoritative "may this workspace be dematerialized" check, and both
-//! purge and retire are the same fail-closed pipeline over it (spec 2b RETIRE-01
-//! ruling B: retirement fails closed exactly like purge). Grouping them here
-//! keeps the checker's construction adjacent to its only two owners instead of
-//! spread across the middle of `AppState::new`. Composition only — no behavior.
+//! is the authoritative "may this workspace be dematerialized" check, and purge is
+//! the fail-closed pipeline over it. Grouping them here keeps the checker's
+//! construction adjacent to its owner instead of spread across the middle of
+//! `AppState::new`. Composition only — no behavior.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,7 +20,6 @@ use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::purge::WorkspacePurgeService;
-use crate::domains::workspaces::retire::WorkspaceRetireService;
 use crate::domains::workspaces::retire_preflight::RetirePreflightChecker;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::terminals::TerminalService;
@@ -41,15 +39,13 @@ pub(super) struct WorkspaceDestructionDeps {
     pub terminal_service: Arc<TerminalService>,
 }
 
-/// The three handles `AppState` keeps from this family.
+/// The two handles `AppState` keeps from this family.
 pub(super) struct WorkspaceDestructionWiring {
-    /// Also injected into the retention service, which is wired separately.
     pub preflight_checker: Arc<RetirePreflightChecker>,
     pub purge: Arc<WorkspacePurgeService>,
-    pub retire: Arc<WorkspaceRetireService>,
 }
 
-/// Dependency order: the checker first, then the two use cases that hold it.
+/// Dependency order: the checker first, then the use case that holds it.
 pub(super) fn wire_workspace_destruction(
     deps: WorkspaceDestructionDeps,
 ) -> WorkspaceDestructionWiring {
@@ -74,17 +70,8 @@ pub(super) fn wire_workspace_destruction(
         preflight_checker.clone(),
         deps.runtime_home,
     ));
-    let retire = Arc::new(WorkspaceRetireService::new(
-        deps.workspace_runtime,
-        deps.workspace_access_gate,
-        deps.workspace_operation_gate,
-        preflight_checker.clone(),
-        deps.session_service,
-        deps.session_admission,
-    ));
     WorkspaceDestructionWiring {
         preflight_checker,
         purge,
-        retire,
     }
 }

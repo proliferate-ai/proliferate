@@ -16,8 +16,8 @@ use super::http::{
     files, git, goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay,
     repo_roots, reviews, sessions, sessions_config, sessions_events, sessions_fork,
     sessions_interactions, sessions_lifecycle, sessions_prompt, sessions_resume, subagents,
-    terminals, workflow_runs, workflow_workspaces, workspaces, workspaces_lifecycle,
-    workspaces_purge, workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
+    terminals, workflow_runs, workflow_workspaces, workspaces, workspaces_purge,
+    workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
@@ -116,27 +116,6 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/worktrees/orphans/prune",
             post(worktrees::prune_orphan_worktree),
-        )
-        .route(
-            "/worktrees/retention-policy",
-            get(worktrees::get_worktree_retention_policy)
-                .put(worktrees::update_worktree_retention_policy),
-        )
-        .route(
-            "/worktrees/retention/run",
-            post(worktrees::run_worktree_retention),
-        )
-        .route(
-            "/workspaces/{workspace_id}/retire/preflight",
-            get(workspaces_lifecycle::retire_workspace_preflight),
-        )
-        .route(
-            "/workspaces/{workspace_id}/retire",
-            post(workspaces_lifecycle::retire_workspace),
-        )
-        .route(
-            "/workspaces/{workspace_id}/retire/cleanup-retry",
-            post(workspaces_lifecycle::retry_retire_cleanup),
         )
         .route(
             "/repo-roots",

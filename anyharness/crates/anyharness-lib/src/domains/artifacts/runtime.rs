@@ -277,6 +277,10 @@ mod tests {
                 cleanup_error_message: None,
                 cleanup_failed_at: None,
                 cleanup_attempted_at: None,
+                archived_head_sha: None,
+                archived_branch: None,
+                archived_at: None,
+                partial_capture_json: None,
                 created_at: now.clone(),
                 updated_at: now,
             };

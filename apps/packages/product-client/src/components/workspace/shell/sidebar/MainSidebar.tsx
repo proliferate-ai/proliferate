@@ -11,7 +11,6 @@ import { SidebarScrollingNavigationSection } from "#product/components/workspace
 import { SidebarPinnedSection } from "#product/components/workspace/shell/sidebar/SidebarPinnedSection";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceContent";
-import { WorkspaceCleanupAttentionSection } from "#product/components/workspace/shell/sidebar/WorkspaceCleanupAttentionSection";
 import { CoworkThreadsSection } from "#product/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import {
   ProductSidebarBody,
@@ -97,7 +96,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     pinnedItems,
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,
-    cleanupAttentionWorkspaces,
     emptyState,
     isLoading,
   } = useWorkspaceSidebarState({
@@ -270,11 +268,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
           <SidebarScrollingNavigationSection
             onGoWorkspaces={actions.handleGoWorkspaces}
             onGoWorkflows={actions.handleGoWorkflows}
-          />
-
-          <WorkspaceCleanupAttentionSection
-            workspaces={cleanupAttentionWorkspaces}
-            onRetryCleanup={actions.handleRetryWorkspaceCleanup}
           />
 
           <SidebarPinnedSection

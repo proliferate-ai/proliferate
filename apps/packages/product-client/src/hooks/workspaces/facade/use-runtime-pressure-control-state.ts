@@ -1,10 +1,8 @@
 import type {
   HealthResponse,
   PruneOrphanWorktreeRequest,
-  RunWorktreeRetentionResponse,
   RuntimeResourcePressure,
   WorkspacePurgeResponse,
-  WorkspaceRetireResponse,
   WorktreeInventoryRow,
 } from "@anyharness/sdk";
 import { useCallback, useMemo } from "react";
@@ -14,10 +12,7 @@ import { useWorktreeSettingsTargets } from "#product/hooks/workspaces/facade/use
 import {
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
 } from "#product/lib/domain/preferences/user/worktree-auto-delete";
-import {
-  worktreeRetentionRunMessage,
-  worktreeSettingsActionFailureMessage,
-} from "#product/lib/domain/workspaces/sidebar/worktree-settings-actions";
+import { worktreeSettingsActionFailureMessage } from "#product/lib/domain/workspaces/sidebar/worktree-settings-actions";
 import type { WorktreeSettingsTarget } from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
@@ -56,9 +51,7 @@ export interface RuntimePressureControlState {
   targets: RuntimePressureTargetState[];
   isDiscovering: boolean;
   actions: {
-    runCleanup: (target: WorktreeSettingsTarget) => void;
     pruneOrphan: (target: WorktreeSettingsTarget, input: PruneOrphanWorktreeRequest) => void;
-    pruneWorkspace: (target: WorktreeSettingsTarget, workspaceId: string) => void;
     purgeWorkspace: (target: WorktreeSettingsTarget, workspaceId: string) => void;
     retryPurge: (target: WorktreeSettingsTarget, workspaceId: string) => void;
   };
@@ -143,13 +136,6 @@ export function useRuntimePressureControlStateFromSettings(
     });
   }, [showToast]);
 
-  const runCleanup = useCallback((target: WorktreeSettingsTarget) => {
-    runAction<RunWorktreeRetentionResponse>(
-      () => settings.runRetention(target, idealWorktreeCount),
-      worktreeRetentionRunMessage,
-    );
-  }, [idealWorktreeCount, runAction, settings]);
-
   const pruneOrphan = useCallback((
     target: WorktreeSettingsTarget,
     input: PruneOrphanWorktreeRequest,
@@ -157,13 +143,6 @@ export function useRuntimePressureControlStateFromSettings(
     runAction(
       () => settings.pruneOrphan(target, input),
       "Worktree checkout removed.",
-    );
-  }, [runAction, settings]);
-
-  const pruneWorkspace = useCallback((target: WorktreeSettingsTarget, workspaceId: string) => {
-    runAction<WorkspaceRetireResponse>(
-      () => settings.pruneWorkspaceCheckout(target, workspaceId),
-      "Workspace checkout removed.",
     );
   }, [runAction, settings]);
 
@@ -187,9 +166,7 @@ export function useRuntimePressureControlStateFromSettings(
     targets: combinedTargets,
     isDiscovering: settings.isDiscovering,
     actions: {
-      runCleanup,
       pruneOrphan,
-      pruneWorkspace,
       purgeWorkspace,
       retryPurge,
     },

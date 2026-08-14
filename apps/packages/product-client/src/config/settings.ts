@@ -15,7 +15,6 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "environments",
   "repo-actions",
   "repo-environment",
-  "worktrees",
   "agent-claude",
   "agent-codex",
   "agent-opencode",
@@ -33,7 +32,7 @@ export const SETTINGS_DEFAULT_SECTION: SettingsSection = "general";
 export const TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION = false;
 
 // User scope numbering: ⌘1 account, ⌘2 general, ⌘3 appearance,
-// ⌘4 personal secrets, ⌘5 pruning (worktrees).
+// ⌘4 personal secrets, ⌘5 integrations.
 export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "account",
   "general",
@@ -51,7 +50,6 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "environments",
   "repo-actions",
   "repo-environment",
-  "worktrees",
   "agent-claude",
   "agent-codex",
   "agent-opencode",

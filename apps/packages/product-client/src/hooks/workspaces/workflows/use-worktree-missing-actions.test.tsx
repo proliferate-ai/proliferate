@@ -130,13 +130,11 @@ function renderActions() {
 function seedCollections(availability: Workspace["availability"]) {
   queryClient.setQueryData(workspaceCollectionsKey("http://localhost:7007", false, null), {
     localWorkspaces: [],
-    retiredLocalWorkspaces: [],
     repoRoots: [],
     cloudWorkspaces: [],
     workspaces: [],
     allWorkspaces: [
       { id: "workspace-1", kind: "worktree", availability } as unknown as Workspace,
     ],
-    cleanupAttentionWorkspaces: [],
   });
 }

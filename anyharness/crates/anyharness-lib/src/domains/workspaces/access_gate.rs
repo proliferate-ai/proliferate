@@ -107,7 +107,7 @@ impl WorkspaceAccessGate {
             .find_by_id(workspace_id)
             .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(workspace_id.to_string()))?;
-        if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
+        if workspace.lifecycle_state == WorkspaceLifecycleState::Archived {
             return Err(WorkspaceAccessError::WorkspaceRetired(
                 workspace_id.to_string(),
             ));
@@ -202,7 +202,7 @@ impl WorkspaceAccessGate {
             .find_by_id(&session.workspace_id)
             .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(session.workspace_id.clone()))?;
-        if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
+        if workspace.lifecycle_state == WorkspaceLifecycleState::Archived {
             return Err(WorkspaceAccessError::WorkspaceRetired(session.workspace_id));
         }
         match state.mode {
@@ -250,6 +250,10 @@ mod tests {
             cleanup_error_message: None,
             cleanup_failed_at: None,
             cleanup_attempted_at: None,
+            archived_head_sha: None,
+            archived_branch: None,
+            archived_at: None,
+            partial_capture_json: None,
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         }

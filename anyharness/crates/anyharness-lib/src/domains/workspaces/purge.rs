@@ -163,7 +163,7 @@ impl WorkspacePurgeService {
             self.workspace_runtime
                 .set_lifecycle_cleanup_state(
                     workspace_id,
-                    WorkspaceLifecycleState::Retired,
+                    WorkspaceLifecycleState::Archived,
                     WorkspaceCleanupState::Pending,
                     Some(WorkspaceCleanupOperation::Purge),
                     None,
@@ -315,7 +315,7 @@ impl WorkspacePurgeService {
         let failed_at = chrono::Utc::now().to_rfc3339();
         match self.workspace_runtime.set_lifecycle_cleanup_state(
             workspace_id,
-            WorkspaceLifecycleState::Retired,
+            WorkspaceLifecycleState::Archived,
             WorkspaceCleanupState::Failed,
             Some(WorkspaceCleanupOperation::Purge),
             Some(&message),
@@ -349,7 +349,7 @@ impl WorkspacePurgeService {
 }
 
 fn is_retryable_purge(workspace: &WorkspaceRecord) -> bool {
-    workspace.lifecycle_state == WorkspaceLifecycleState::Retired
+    workspace.lifecycle_state == WorkspaceLifecycleState::Archived
         && matches!(
             workspace.cleanup_state,
             WorkspaceCleanupState::Pending | WorkspaceCleanupState::Failed

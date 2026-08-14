@@ -13,7 +13,8 @@ use crate::origin::{decode_origin_json, encode_origin_json};
 pub(super) const WORKSPACE_COLUMNS: &str = "\
     id, kind, repo_root_id, path, surface, original_branch, current_branch, display_name,
     origin_json, creator_context_json, lifecycle_state, cleanup_state, cleanup_operation,
-    cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, created_at, updated_at";
+    cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, archived_head_sha,
+    archived_branch, archived_at, partial_capture_json, created_at, updated_at";
 
 pub(super) fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<()> {
     let origin_json = encode_origin_json(&r.origin)?;
@@ -22,8 +23,12 @@ pub(super) fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqli
         "INSERT INTO workspaces (
             id, kind, repo_root_id, path, surface, original_branch, current_branch, display_name,
             origin_json, creator_context_json, lifecycle_state, cleanup_state, cleanup_operation,
-            cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, archived_head_sha,
+            archived_branch, archived_at, partial_capture_json, created_at, updated_at
+         ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
+            ?19, ?20, ?21, ?22
+         )",
         params![
             r.id,
             r.kind.as_str(),
@@ -41,6 +46,10 @@ pub(super) fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqli
             r.cleanup_error_message,
             r.cleanup_failed_at,
             r.cleanup_attempted_at,
+            r.archived_head_sha,
+            r.archived_branch,
+            r.archived_at,
+            r.partial_capture_json,
             r.created_at,
             r.updated_at,
         ],
@@ -71,6 +80,10 @@ pub(super) fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> 
         cleanup_error_message: row.get("cleanup_error_message")?,
         cleanup_failed_at: row.get("cleanup_failed_at")?,
         cleanup_attempted_at: row.get("cleanup_attempted_at")?,
+        archived_head_sha: row.get("archived_head_sha")?,
+        archived_branch: row.get("archived_branch")?,
+        archived_at: row.get("archived_at")?,
+        partial_capture_json: row.get("partial_capture_json")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
