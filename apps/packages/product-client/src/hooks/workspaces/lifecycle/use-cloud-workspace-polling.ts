@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { pendingWorkspaceEntries } from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
-import {
-  useAwaitingCloudWorkspaceEntries,
-} from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
@@ -25,6 +23,7 @@ import {
 } from "#product/hooks/workspaces/workflows/pending-workspace-failure-notice";
 import {
   resolveCloudWorkspaceFailureMessage,
+  isAwaitingCloudWorkspaceEntry,
   resolveCloudWorkspacePollAction,
   resolveCloudWorkspacePollOutcome,
   selectCloudWorkspacePollBatch,
@@ -38,6 +37,25 @@ import {
   logLatency,
   startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
+
+const EMPTY_AWAITING_ENTRIES: readonly PendingWorkspaceEntry[] = [];
+
+/**
+ * Every attempt parked on cloud provisioning, attended or not: this loop drives
+ * all of them so a launch completes while the user is elsewhere (PRO-230).
+ *
+ * It lives here rather than beside the other pending-entry readers because it
+ * is the only consumer, and those readers are reached from the signed-out
+ * shell's eager graph — keeping this hook (and the poll plan it filters with)
+ * out of that module keeps the poll plan out of the login first-load chunk.
+ */
+function useAwaitingCloudWorkspaceEntries(): readonly PendingWorkspaceEntry[] {
+  const registry = useSessionSelectionStore((state) => state.pendingWorkspaces);
+  return useMemo(() => {
+    const entries = pendingWorkspaceEntries(registry).filter(isAwaitingCloudWorkspaceEntry);
+    return entries.length > 0 ? entries : EMPTY_AWAITING_ENTRIES;
+  }, [registry]);
+}
 
 const CLOUD_WORKSPACE_POLL_INTERVAL_MS = 3000;
 /**
