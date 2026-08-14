@@ -61,7 +61,14 @@ export function useFileViewerNativeMenu(actions: FileViewerNativeMenuActions) {
   return useNativeMenu(() => buildFileViewerNativeMenuItems(actions));
 }
 
-/** Right-click variant for the viewer content area. */
+/**
+ * Right-click variant for the viewer content area. The viewer shows file
+ * content, so WebKit's select-word-under-pointer on right-click is platform
+ * behavior worth keeping — not the highlight-flash bug it is on chrome.
+ */
 export function useFileViewerNativeContextMenu(actions: FileViewerNativeMenuActions) {
-  return useNativeContextMenu(() => buildFileViewerNativeMenuItems(actions));
+  return useNativeContextMenu(
+    () => buildFileViewerNativeMenuItems(actions),
+    { preserveContextualSelection: true },
+  );
 }

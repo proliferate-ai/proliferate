@@ -12,6 +12,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Slot } from "@radix-ui/react-slot";
 import { Popover, PopoverTrigger } from "./Popover";
 import { useNativeOverlayRegistration } from "#product/primitives/overlays/overlay-presence";
+import { clearContextualWordSelection } from "#product/lib/infra/dom/contextual-word-selection";
 import { POPOVER_SURFACE_CLASS } from "./popover-surface";
 
 type PopoverAlign = "start" | "end";
@@ -45,6 +46,12 @@ interface PopoverButtonProps {
   stopPropagation?: boolean;
   /** Which interaction opens the popover. Default: "click". */
   triggerMode?: PopoverTriggerMode;
+  /**
+   * Keep the word selection WebKit makes under the pointer on right-click
+   * (dropped by default because it flashes a highlight under the menu). Set
+   * this on menus over genuinely selectable content, e.g. file-viewer text.
+   */
+  preserveContextualSelection?: boolean;
   /** Controlled open state. When provided, external code can open the popover. */
   externalOpen?: boolean;
   /** Called when the popover closes (for controlled mode). */
@@ -60,6 +67,7 @@ export function PopoverButton({
   className = `w-56 ${POPOVER_SURFACE_CLASS}`,
   stopPropagation = false,
   triggerMode = "click",
+  preserveContextualSelection = false,
   externalOpen,
   onOpenChange,
 }: PopoverButtonProps) {
@@ -107,12 +115,10 @@ export function PopoverButton({
     }
   };
 
-  // WebKit selects the word under the pointer as the secondary-button
-  // mousedown default, before `contextmenu` ever fires. Every trigger mode
-  // suppresses the browser context menu (handleContextMenu), so that
-  // pre-selection is never wanted: without this, two-finger-clicking a
-  // transcript file mention flashes a text highlight under the menu.
-  // Primary-button behavior (text selection, focus, drag) is untouched.
+  // A secondary-button press must not steal focus or start a drag-selection;
+  // note this does NOT stop WebKit's word-select-under-pointer (that happens
+  // in the platform's context-menu path, immune to mousedown preventDefault —
+  // handleContextMenu clears it after the fact instead).
   const handleMouseDown = (event: ReactMouseEvent) => {
     if (event.button === 2) {
       event.preventDefault();
@@ -131,6 +137,12 @@ export function PopoverButton({
 
   const handleContextMenu = (event: ReactMouseEvent) => {
     event.preventDefault();
+    // WebKit has already selected the word under the pointer by now (it does
+    // so before dispatching `contextmenu`, immune to any preventDefault);
+    // drop that selection before it paints under the menu.
+    if (!preserveContextualSelection) {
+      clearContextualWordSelection(event.currentTarget);
+    }
     if (stopPropagation) {
       event.stopPropagation();
     }

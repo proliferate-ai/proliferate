@@ -4,6 +4,7 @@ import type {
   NativeMenuItem,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { clearContextualWordSelection } from "#product/lib/infra/dom/contextual-word-selection";
 
 /**
  * Attach the host-provided native context menu to an element. Returns a
@@ -17,8 +18,17 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
  *
  * `buildItems` runs only when the menu is actually opened, so transient data
  * (e.g. which tab was right-clicked) can be captured via closure.
+ *
+ * Opening the menu also drops the word selection WebKit makes under the
+ * pointer right before dispatching `contextmenu` (a highlight flash under the
+ * menu otherwise). A menu over genuinely selectable content — the file
+ * viewer's content area — opts out with `preserveContextualSelection`, keeping
+ * the platform's TextEdit-style select-word-then-menu behavior there.
  */
-export function useNativeContextMenu(buildItems: () => NativeMenuItem[]) {
+export function useNativeContextMenu(
+  buildItems: () => NativeMenuItem[],
+  { preserveContextualSelection = false }: { preserveContextualSelection?: boolean } = {},
+) {
   const { buildRef, disabledRef, nativeUi, showNativeMenu } = useNativeMenuController(buildItems);
 
   const onContextMenuCapture = useCallback((event: MouseEvent) => {
@@ -35,12 +45,15 @@ export function useNativeContextMenu(buildItems: () => NativeMenuItem[]) {
     const fallbackEvent = event.nativeEvent;
     event.preventDefault();
     event.stopPropagation();
+    if (!preserveContextualSelection) {
+      clearContextualWordSelection(event.currentTarget);
+    }
     void showNativeMenu(undefined, items).then((shown) => {
       if (!shown) {
         dispatchFallbackContextMenu(fallbackTarget, fallbackEvent);
       }
     });
-  }, [buildRef, disabledRef, nativeUi, showNativeMenu]);
+  }, [buildRef, disabledRef, nativeUi, preserveContextualSelection, showNativeMenu]);
 
   return { onContextMenuCapture, showNativeMenu };
 }

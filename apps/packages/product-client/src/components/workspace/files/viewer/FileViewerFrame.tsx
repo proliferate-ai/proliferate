@@ -148,6 +148,9 @@ function FileViewerContentContextMenu({
   return (
     <PopoverButton
       triggerMode="contextMenu"
+      // The viewer shows file content: right-click's word-select is platform
+      // behavior here, not the chrome highlight-flash the default clears.
+      preserveContextualSelection
       // C4: a fixed width tuned for this menu's longest item ("Rich
       // preview" + trailing "On"/"Off"); narrower than
       // `POPOVER_SURFACE_CLASS`'s own `min-w-[240px]` deliberately, this is
