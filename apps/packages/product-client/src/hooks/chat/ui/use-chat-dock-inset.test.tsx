@@ -240,4 +240,38 @@ describe("useChatDockInset", () => {
     expect(handle.current.dockHeightPx).toBe(200);
     expect(flushSyncCalls.count).toBe(0);
   });
+
+  it("keeps the sync gate armed when a deferred measure reads freshly-collapsed geometry", () => {
+    // The un-act'ed rAF flush below intentionally leaves a React update
+    // pending (that is the scenario); silence the act() warning it triggers.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const notifyResize = stubCapturingResizeObserver();
+    const handle = renderHarness();
+    stubElementRect(handle.dockEl, 200);
+    act(() => {
+      notifyResize();
+      flushRafRound();
+    });
+    expect(handle.current.dockHeightPx).toBe(200);
+
+    // Growth queues a deferred measure for the next frame...
+    stubElementRect(handle.dockEl, 240);
+    act(() => {
+      notifyResize();
+    });
+    // ...then a collapse lands in the DOM before that rAF runs. The deferred
+    // measure reads the already-collapsed geometry, but its state has NOT
+    // committed — the gate baseline must not advance yet (advancing at
+    // measure-read time is exactly what would let the collapse frame paint
+    // against the stale taller inset).
+    stubElementRect(handle.dockEl, 80);
+    flushRafRound();
+
+    // The collapse's own ResizeObserver delivery must still take the sync path.
+    act(() => {
+      notifyResize();
+    });
+    expect(flushSyncCalls.count).toBe(1);
+    expect(handle.current.dockHeightPx).toBe(80);
+  });
 });

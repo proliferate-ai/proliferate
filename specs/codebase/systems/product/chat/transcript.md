@@ -514,7 +514,8 @@ measurement settle land as one silent jump, even when the pin was silently
 lost earlier. Entries leaving the outbox (materialization, delivery,
 dismissal) can only lower the stamp and must not re-pin. Unlike the
 scroll-to-bottom button, a submit does not consume the manual-only overlay
-range: auto-follow keeps targeting the soft bottom above any dock-slot card.
+range: auto-follow keeps targeting the soft bottom above any dock-slot card
+(a range the user already consumed stays consumed until they scroll away).
 Interaction resolutions (answering an inline question or permission request)
 are `resolve_interaction` intents, not sends, and do not re-pin today.
 

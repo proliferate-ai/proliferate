@@ -10,15 +10,28 @@ import {
 export function useChatDockInset() {
   const dockRef = useRef<HTMLDivElement>(null);
   // The transcript's structural bottom inset (stable dock reserve minus the
-  // non-displacing offset-top share) as of the last committed measure. The
+  // non-displacing offset-top share) as of the last COMMITTED metrics. The
   // ResizeObserver's shrink gate compares candidate geometry against this.
-  const lastMeasuredStructuralInsetRef = useRef(0);
+  const lastCommittedStructuralInsetRef = useRef(0);
   const [metrics, setMetrics] = useState({
     composerSurfaceHeightPx: 0,
     composerSurfaceOffsetTopPx: 0,
     composerFooterHeightPx: 0,
     dockHeightPx: 0,
   });
+
+  // The gate must compare against what the transcript has actually committed,
+  // not against what a measure has merely read: a rAF-deferred measure that
+  // runs in the same frame as a collapse (growth queued the frame before,
+  // collapse committed by a discrete event in between) would otherwise lower
+  // the baseline before its state ever commits, disarming the sync gate for
+  // exactly the frame it protects. Advancing the ref in a layout effect keyed
+  // on the committed metrics keeps it truthful on both paths — inside a
+  // flushSync it runs within the flush, still pre-paint.
+  useLayoutEffect(() => {
+    lastCommittedStructuralInsetRef.current =
+      computeChatStableBottomInsetPx(metrics) - metrics.composerSurfaceOffsetTopPx;
+  }, [metrics]);
 
   useLayoutEffect(() => {
     const dock = dockRef.current;
@@ -51,7 +64,6 @@ export function useChatDockInset() {
 
     const measure = () => {
       const nextMetrics = readDockMetrics();
-      lastMeasuredStructuralInsetRef.current = structuralInsetOf(nextMetrics);
       setMetrics((current) =>
         current.composerSurfaceHeightPx === nextMetrics.composerSurfaceHeightPx
         && current.composerSurfaceOffsetTopPx === nextMetrics.composerSurfaceOffsetTopPx
@@ -101,8 +113,10 @@ export function useChatDockInset() {
       // share, whose clamp the scroll engine already classifies as
       // non-user). Growth keeps the rAF coalescing path: next-frame is
       // prompt enough for typing, and a sync flush per grow-keystroke would
-      // tax input latency.
-      if (structuralInsetOf(readDockMetrics()) < lastMeasuredStructuralInsetRef.current) {
+      // tax input latency. Note the flush drains ALL pending work at this
+      // root (a queued live-tail stream batch included), so its cost scales
+      // with the pending tree, not with the dock subtree.
+      if (structuralInsetOf(readDockMetrics()) < lastCommittedStructuralInsetRef.current) {
         if (frameId !== null) {
           window.cancelAnimationFrame(frameId);
           frameId = null;
