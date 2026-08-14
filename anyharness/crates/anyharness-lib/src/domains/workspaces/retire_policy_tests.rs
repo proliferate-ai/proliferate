@@ -64,7 +64,7 @@ fn a_retired_purge_tombstone_refuses_retire_and_points_at_purge_retry() {
     ] {
         assert_eq!(
             decide_retire_admission(&facts(
-                WorkspaceLifecycleState::Retired,
+                WorkspaceLifecycleState::Archived,
                 cleanup_state,
                 Some(WorkspaceCleanupOperation::Purge),
             )),
@@ -78,7 +78,7 @@ fn a_retired_purge_tombstone_refuses_retire_and_points_at_purge_retry() {
 fn a_retired_workspace_with_complete_cleanup_is_already_retired_and_succeeded() {
     assert_eq!(
         decide_retire_admission(&facts(
-            WorkspaceLifecycleState::Retired,
+            WorkspaceLifecycleState::Archived,
             WorkspaceCleanupState::Complete,
             Some(WorkspaceCleanupOperation::Retire),
         )),
@@ -93,7 +93,7 @@ fn a_retired_workspace_with_complete_cleanup_is_already_retired_and_succeeded() 
 fn a_retired_workspace_with_pending_cleanup_is_already_retired_but_not_succeeded() {
     assert_eq!(
         decide_retire_admission(&facts(
-            WorkspaceLifecycleState::Retired,
+            WorkspaceLifecycleState::Archived,
             WorkspaceCleanupState::Pending,
             Some(WorkspaceCleanupOperation::Retire),
         )),
@@ -107,7 +107,7 @@ fn a_retired_workspace_with_pending_cleanup_is_already_retired_but_not_succeeded
 #[test]
 fn a_retired_workspace_with_failed_cleanup_reports_the_recorded_error() {
     let mut with_error = facts(
-        WorkspaceLifecycleState::Retired,
+        WorkspaceLifecycleState::Archived,
         WorkspaceCleanupState::Failed,
         Some(WorkspaceCleanupOperation::Retire),
     );
@@ -125,7 +125,7 @@ fn a_retired_workspace_with_failed_cleanup_reports_the_recorded_error() {
 fn a_failed_cleanup_without_a_recorded_error_falls_back_to_a_generic_message() {
     assert_eq!(
         decide_retire_admission(&facts(
-            WorkspaceLifecycleState::Retired,
+            WorkspaceLifecycleState::Archived,
             WorkspaceCleanupState::Failed,
             Some(WorkspaceCleanupOperation::Retire),
         )),
@@ -141,7 +141,7 @@ fn a_retired_workspace_with_no_cleanup_operation_is_already_retired_not_blocked(
     // `cleanup_operation: None` is not a purge tombstone, so it takes the
     // idempotent AlreadyRetired path — not the Blocked one.
     let admission = decide_retire_admission(&facts(
-        WorkspaceLifecycleState::Retired,
+        WorkspaceLifecycleState::Archived,
         WorkspaceCleanupState::None,
         None,
     ));
@@ -164,7 +164,7 @@ fn cleanup_retry_is_available_for_a_retired_retire_tombstone_mid_cleanup() {
         for operation in [None, Some(WorkspaceCleanupOperation::Retire)] {
             assert_eq!(
                 decide_retry_admission(&facts(
-                    WorkspaceLifecycleState::Retired,
+                    WorkspaceLifecycleState::Archived,
                     cleanup_state,
                     operation
                 )),
@@ -191,7 +191,7 @@ fn cleanup_retry_refuses_an_active_workspace() {
 fn cleanup_retry_refuses_a_purge_tombstone() {
     assert_eq!(
         decide_retry_admission(&facts(
-            WorkspaceLifecycleState::Retired,
+            WorkspaceLifecycleState::Archived,
             WorkspaceCleanupState::Failed,
             Some(WorkspaceCleanupOperation::Purge),
         )),
@@ -204,7 +204,7 @@ fn cleanup_retry_refuses_a_non_resumable_cleanup_state() {
     for cleanup_state in [WorkspaceCleanupState::Complete, WorkspaceCleanupState::None] {
         assert_eq!(
             decide_retry_admission(&facts(
-                WorkspaceLifecycleState::Retired,
+                WorkspaceLifecycleState::Archived,
                 cleanup_state,
                 Some(WorkspaceCleanupOperation::Retire),
             )),
@@ -222,7 +222,7 @@ fn cleanup_retry_refuses_a_non_resumable_cleanup_state() {
 #[test]
 fn retire_and_retry_disagree_about_a_retired_workspace_with_complete_cleanup() {
     let record = facts(
-        WorkspaceLifecycleState::Retired,
+        WorkspaceLifecycleState::Archived,
         WorkspaceCleanupState::Complete,
         Some(WorkspaceCleanupOperation::Retire),
     );
@@ -244,7 +244,7 @@ fn retire_and_retry_disagree_about_a_retired_workspace_with_no_cleanup_state() {
     // the caller is told cleanup is unfinished and simultaneously that no retry
     // is available. Neither rule was changed by the refactor.
     let record = facts(
-        WorkspaceLifecycleState::Retired,
+        WorkspaceLifecycleState::Archived,
         WorkspaceCleanupState::None,
         Some(WorkspaceCleanupOperation::Retire),
     );
@@ -281,7 +281,7 @@ fn preflight_mode_follows_the_retry_rule_exactly() {
     let mut checked = 0;
     for lifecycle_state in [
         WorkspaceLifecycleState::Active,
-        WorkspaceLifecycleState::Retired,
+        WorkspaceLifecycleState::Archived,
     ] {
         for cleanup_state in [
             WorkspaceCleanupState::None,
@@ -296,7 +296,7 @@ fn preflight_mode_follows_the_retry_rule_exactly() {
             ] {
                 // Hand-written expectation: retry mode needs a RETIRED record
                 // whose cleanup is resumable and which is not a purge tombstone.
-                let expected = if lifecycle_state == WorkspaceLifecycleState::Retired
+                let expected = if lifecycle_state == WorkspaceLifecycleState::Archived
                     && retried(cleanup_state, operation)
                 {
                     RetirePreflightMode::RetiredCleanupRetry
@@ -319,7 +319,7 @@ fn preflight_mode_follows_the_retry_rule_exactly() {
 fn preflight_mode_is_retired_cleanup_retry_only_for_a_resumable_retire_tombstone() {
     assert_eq!(
         retire_preflight_mode(&facts(
-            WorkspaceLifecycleState::Retired,
+            WorkspaceLifecycleState::Archived,
             WorkspaceCleanupState::Failed,
             Some(WorkspaceCleanupOperation::Retire),
         )),
@@ -336,7 +336,7 @@ fn preflight_mode_is_retired_cleanup_retry_only_for_a_resumable_retire_tombstone
     // A purge tombstone is evaluated as an ACTIVE retire, not a retry.
     assert_eq!(
         retire_preflight_mode(&facts(
-            WorkspaceLifecycleState::Retired,
+            WorkspaceLifecycleState::Archived,
             WorkspaceCleanupState::Failed,
             Some(WorkspaceCleanupOperation::Purge),
         )),
@@ -380,7 +380,7 @@ fn facts_carry_exactly_the_record_fields_the_state_machine_reads() {
         crate::domains::workspaces::model::WorkspaceKind::Worktree,
         "/tmp/anyharness-retire-policy-facts",
     );
-    record.lifecycle_state = WorkspaceLifecycleState::Retired;
+    record.lifecycle_state = WorkspaceLifecycleState::Archived;
     record.cleanup_state = WorkspaceCleanupState::Failed;
     record.cleanup_operation = Some(WorkspaceCleanupOperation::Retire);
     record.cleanup_error_message = Some("boom".to_string());
@@ -388,7 +388,7 @@ fn facts_carry_exactly_the_record_fields_the_state_machine_reads() {
     assert_eq!(
         RetireStateFacts::of(&record),
         RetireStateFacts {
-            lifecycle_state: WorkspaceLifecycleState::Retired,
+            lifecycle_state: WorkspaceLifecycleState::Archived,
             cleanup_state: WorkspaceCleanupState::Failed,
             cleanup_operation: Some(WorkspaceCleanupOperation::Retire),
             cleanup_error_message: Some("boom".to_string()),

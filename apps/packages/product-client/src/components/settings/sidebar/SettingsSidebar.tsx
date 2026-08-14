@@ -14,7 +14,6 @@ import {
   Gauge,
   MousePointerClick,
   RefreshCw,
-  Scissors,
   Settings2,
   Users,
 } from "#product/primitives/icons/platform";
@@ -104,7 +103,6 @@ const SETTINGS_NAV_ICONS = {
   "repo-actions": MousePointerClick,
   "repo-environment": KeyRound,
   support: LifeBuoy,
-  worktrees: Scissors,
 } satisfies Record<SettingsNavIconId, ComponentType<{ className?: string }>>;
 
 function isSettingsItemActive(item: SettingsNavItem, activeSection: SettingsSection) {

@@ -52,7 +52,7 @@ pub fn assert_workspace_not_retired(state: &AppState, workspace_id: &str) -> Res
         .get_workspace(workspace_id)
         .map_err(|error| ApiError::internal(error.to_string()))?
         .ok_or_else(|| ApiError::not_found("Workspace not found", "WORKSPACE_NOT_FOUND"))?;
-    if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
+    if workspace.lifecycle_state == WorkspaceLifecycleState::Archived {
         return Err(ApiError::conflict(
             format!("workspace {workspace_id} is retired"),
             "WORKSPACE_RETIRED",

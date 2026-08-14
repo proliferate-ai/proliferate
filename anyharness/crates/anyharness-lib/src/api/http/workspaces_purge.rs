@@ -318,11 +318,11 @@ mod tests {
     use anyharness_contract::v1::WorkspaceRetireBlockerCode;
 
     #[tokio::test(flavor = "current_thread")]
-    async fn purge_preflight_allows_retired_complete_workspace() {
-        let state = test_state("purge-retired-complete");
+    async fn purge_preflight_allows_archived_complete_workspace() {
+        let state = test_state("purge-archived-complete");
         let workspace = workspace_record(
-            "workspace-retired-complete",
-            "retired",
+            "workspace-archived-complete",
+            "archived",
             "complete",
             Some("retire"),
         );
@@ -340,10 +340,10 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn purge_preflight_allows_retired_purge_retry_workspace() {
-        let state = test_state("purge-retired-retry");
+    async fn purge_preflight_allows_archived_purge_retry_workspace() {
+        let state = test_state("purge-archived-retry");
         let workspace =
-            workspace_record("workspace-purge-retry", "retired", "failed", Some("purge"));
+            workspace_record("workspace-purge-retry", "archived", "failed", Some("purge"));
         WorkspaceStore::new(state.db.clone())
             .insert(&workspace)
             .expect("insert workspace");
@@ -446,7 +446,7 @@ mod tests {
         let state = test_state("purge-attachment-cleanup-failure");
         let workspace = workspace_record(
             "workspace-purge-attachment-failure",
-            "retired",
+            "archived",
             "failed",
             Some("purge"),
         );
@@ -617,6 +617,10 @@ mod tests {
             cleanup_error_message: None,
             cleanup_failed_at: None,
             cleanup_attempted_at: None,
+            archived_head_sha: None,
+            archived_branch: None,
+            archived_at: None,
+            partial_capture_json: None,
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         }

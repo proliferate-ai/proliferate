@@ -1,5 +1,4 @@
 import type { GitStatusSnapshot } from "@anyharness/sdk";
-import type { Workspace } from "@anyharness/sdk";
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import { useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -27,7 +26,6 @@ import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use
 import { useWorkspaceGitStatuses } from "#product/hooks/workspaces/derived/use-workspace-git-statuses";
 import { useWorkspaceMetadataSync } from "#product/hooks/workspaces/lifecycle/use-workspace-metadata-sync";
 import { useDebouncedWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "#product/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -50,11 +48,8 @@ interface WorkspaceSidebarState {
   selectedLogicalWorkspaceId: string | null;
   gitStatus: GitStatusSnapshot | undefined;
   emptyState: SidebarEmptyState;
-  cleanupAttentionWorkspaces: Workspace[];
   isLoading: boolean;
 }
-
-const EMPTY_WORKSPACES: Workspace[] = [];
 
 const EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION: Record<string, string> = {};
 
@@ -136,9 +131,6 @@ export function useWorkspaceSidebarState({
     [focusVisibilityNonce],
   );
   const { logicalWorkspaces, isLoading: workspacesLoading } = useLogicalWorkspaces();
-  const { data: workspaceCollections } = useWorkspaces();
-  const cleanupAttentionWorkspaces =
-    workspaceCollections?.cleanupAttentionWorkspaces ?? EMPTY_WORKSPACES;
   const { repoRoots } = useStandardRepoProjection();
   const desktopInstallId = useDesktopInstallId();
   const { data: gitStatus } = useWorkspaceMetadataSync();
@@ -257,7 +249,6 @@ export function useWorkspaceSidebarState({
     selectedLogicalWorkspaceId,
     gitStatus,
     emptyState,
-    cleanupAttentionWorkspaces,
     isLoading: workspacesLoading,
   };
 }

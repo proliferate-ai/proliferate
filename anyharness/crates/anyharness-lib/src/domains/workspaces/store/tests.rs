@@ -1,11 +1,10 @@
-use super::{WorkspaceStore, WorktreeRetentionPolicyStore};
+use super::WorkspaceStore;
 use crate::domains::repo_roots::test_support::seed_repo_root_1;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{
     WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
     WorkspaceRecord, WorkspaceSurface,
 };
-use crate::domains::workspaces::retention_policy::DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
 
@@ -27,6 +26,10 @@ fn workspace_record(id: &str, kind: WorkspaceKind, path: &str) -> WorkspaceRecor
         cleanup_error_message: None,
         cleanup_failed_at: None,
         cleanup_attempted_at: None,
+        archived_head_sha: None,
+        archived_branch: None,
+        archived_at: None,
+        partial_capture_json: None,
         created_at: "2025-01-01T00:00:00Z".to_string(),
         updated_at: "2025-01-01T00:00:00Z".to_string(),
     }
@@ -131,24 +134,24 @@ fn malformed_workspace_creator_context_is_omitted() {
 }
 
 #[test]
-fn active_path_lookup_ignores_retired_rows() {
+fn active_path_lookup_ignores_archived_rows() {
     let (_db, store) = store_with_repo_root();
 
-    let mut retired = workspace_record(
-        "workspace-retired",
+    let mut archived = workspace_record(
+        "workspace-archived",
         WorkspaceKind::Worktree,
         "/tmp/workspace",
     );
-    retired.created_at = "2024-01-01T00:00:00Z".to_string();
-    retired.lifecycle_state = WorkspaceLifecycleState::Retired;
-    retired.cleanup_state = WorkspaceCleanupState::Complete;
+    archived.created_at = "2024-01-01T00:00:00Z".to_string();
+    archived.lifecycle_state = WorkspaceLifecycleState::Archived;
+    archived.cleanup_state = WorkspaceCleanupState::Complete;
     let active = workspace_record(
         "workspace-active",
         WorkspaceKind::Worktree,
         "/tmp/workspace",
     );
 
-    store.insert(&retired).expect("insert retired workspace");
+    store.insert(&archived).expect("insert archived workspace");
     store.insert(&active).expect("insert active workspace");
 
     assert_eq!(
@@ -157,7 +160,7 @@ fn active_path_lookup_ignores_retired_rows() {
             .expect("find any path")
             .expect("historical workspace")
             .id,
-        "workspace-retired"
+        "workspace-archived"
     );
     assert_eq!(
         store
@@ -183,17 +186,17 @@ fn active_path_lookup_can_exclude_current_workspace() {
         "/tmp/workspace",
     );
     let sibling = workspace_record("workspace-sibling", WorkspaceKind::Local, "/tmp/workspace");
-    let mut retired = workspace_record(
-        "workspace-retired",
+    let mut archived = workspace_record(
+        "workspace-archived",
         WorkspaceKind::Worktree,
         "/tmp/workspace",
     );
-    retired.lifecycle_state = WorkspaceLifecycleState::Retired;
-    retired.cleanup_state = WorkspaceCleanupState::Complete;
+    archived.lifecycle_state = WorkspaceLifecycleState::Archived;
+    archived.cleanup_state = WorkspaceCleanupState::Complete;
 
     store.insert(&current).expect("insert current workspace");
     store.insert(&sibling).expect("insert sibling workspace");
-    store.insert(&retired).expect("insert retired workspace");
+    store.insert(&archived).expect("insert archived workspace");
 
     assert_eq!(
         store
@@ -261,51 +264,68 @@ fn active_path_and_kind_lookup_excludes_current_workspace() {
 }
 
 #[test]
-fn retired_incomplete_cleanup_lookup_tracks_path_ownership() {
+fn archived_lookup_reserves_the_path_of_every_archived_row() {
     let (_db, store) = store_with_repo_root();
 
+    // An archived row reserves its path for its lifetime, whatever its
+    // cleanup bookkeeping says: unarchive restores in place and never
+    // relocates, so a completed-cleanup row claims its path exactly like a
+    // failed-cleanup one.
     let mut complete = workspace_record(
         "workspace-complete",
         WorkspaceKind::Worktree,
         "/tmp/complete",
     );
-    complete.lifecycle_state = WorkspaceLifecycleState::Retired;
+    complete.lifecycle_state = WorkspaceLifecycleState::Archived;
     complete.cleanup_state = WorkspaceCleanupState::Complete;
     let mut failed = workspace_record("workspace-failed", WorkspaceKind::Worktree, "/tmp/failed");
-    failed.lifecycle_state = WorkspaceLifecycleState::Retired;
+    failed.lifecycle_state = WorkspaceLifecycleState::Archived;
     failed.cleanup_state = WorkspaceCleanupState::Failed;
+    let active = workspace_record("workspace-active", WorkspaceKind::Worktree, "/tmp/active");
 
     store.insert(&complete).expect("insert complete workspace");
     store.insert(&failed).expect("insert failed workspace");
+    store.insert(&active).expect("insert active workspace");
 
-    assert!(store
-        .find_retired_incomplete_cleanup_by_path_and_kind("/tmp/complete", WorkspaceKind::Worktree)
-        .expect("lookup complete path")
-        .is_none());
     assert_eq!(
         store
-            .find_retired_incomplete_cleanup_by_path_and_kind(
-                "/tmp/failed",
-                WorkspaceKind::Worktree
-            )
+            .find_archived_by_path_and_kind("/tmp/complete", WorkspaceKind::Worktree)
+            .expect("lookup complete path")
+            .expect("archived workspace claims its path")
+            .id,
+        "workspace-complete"
+    );
+    assert_eq!(
+        store
+            .find_archived_by_path_and_kind("/tmp/failed", WorkspaceKind::Worktree)
             .expect("lookup failed path")
-            .expect("failed retired workspace")
+            .expect("archived workspace claims its path")
             .id,
         "workspace-failed"
     );
+    // An active row's path is not reserved by this predicate, and kind is
+    // part of the claim.
+    assert!(store
+        .find_archived_by_path_and_kind("/tmp/active", WorkspaceKind::Worktree)
+        .expect("lookup active path")
+        .is_none());
+    assert!(store
+        .find_archived_by_path_and_kind("/tmp/failed", WorkspaceKind::Local)
+        .expect("lookup failed path as local")
+        .is_none());
 }
 
 #[test]
-fn active_repo_root_listing_ignores_retired_rows() {
+fn active_repo_root_listing_ignores_archived_rows() {
     let (_db, store) = store_with_repo_root();
 
-    let mut retired =
-        workspace_record("workspace-retired", WorkspaceKind::Worktree, "/tmp/retired");
-    retired.lifecycle_state = WorkspaceLifecycleState::Retired;
-    retired.cleanup_state = WorkspaceCleanupState::Complete;
+    let mut archived =
+        workspace_record("workspace-archived", WorkspaceKind::Worktree, "/tmp/archived");
+    archived.lifecycle_state = WorkspaceLifecycleState::Archived;
+    archived.cleanup_state = WorkspaceCleanupState::Complete;
     let active = workspace_record("workspace-active", WorkspaceKind::Worktree, "/tmp/active");
 
-    store.insert(&retired).expect("insert retired workspace");
+    store.insert(&archived).expect("insert archived workspace");
     store.insert(&active).expect("insert active workspace");
 
     let workspaces = store
@@ -329,7 +349,7 @@ fn lifecycle_cleanup_update_preserves_workspace_and_persists_failure_detail() {
     store
         .update_lifecycle_cleanup_state(
             &workspace.id,
-            WorkspaceLifecycleState::Retired,
+            WorkspaceLifecycleState::Archived,
             WorkspaceCleanupState::Failed,
             Some(WorkspaceCleanupOperation::Retire),
             Some("permission denied"),
@@ -343,7 +363,7 @@ fn lifecycle_cleanup_update_preserves_workspace_and_persists_failure_detail() {
         .find_by_id(&workspace.id)
         .expect("find workspace")
         .expect("workspace should still exist");
-    assert_eq!(stored.lifecycle_state, WorkspaceLifecycleState::Retired);
+    assert_eq!(stored.lifecycle_state, WorkspaceLifecycleState::Archived);
     assert_eq!(stored.cleanup_state, WorkspaceCleanupState::Failed);
     assert_eq!(
         stored.cleanup_operation,
@@ -460,6 +480,43 @@ fn unknown_lifecycle_value_survives_unrelated_mutation() {
 }
 
 #[test]
+fn archive_columns_round_trip_through_insert_and_read() {
+    let (_db, store) = store_with_repo_root();
+
+    let mut workspace =
+        workspace_record("workspace-archived", WorkspaceKind::Worktree, "/tmp/archived");
+    workspace.lifecycle_state = WorkspaceLifecycleState::Archived;
+    workspace.archived_head_sha = Some("a".repeat(40));
+    workspace.archived_branch = Some("feature/archive-me".to_string());
+    workspace.archived_at = Some("2026-08-13T00:00:00Z".to_string());
+    workspace.partial_capture_json =
+        Some(r#"{"tracked":["src/big.bin"],"untracked":[]}"#.to_string());
+
+    store.insert(&workspace).expect("insert workspace");
+    let stored = store
+        .find_by_id(&workspace.id)
+        .expect("find workspace")
+        .expect("workspace record");
+
+    assert_eq!(stored.archived_head_sha, workspace.archived_head_sha);
+    assert_eq!(stored.archived_branch, workspace.archived_branch);
+    assert_eq!(stored.archived_at, workspace.archived_at);
+    assert_eq!(stored.partial_capture_json, workspace.partial_capture_json);
+
+    let never_archived =
+        workspace_record("workspace-active", WorkspaceKind::Worktree, "/tmp/active");
+    store.insert(&never_archived).expect("insert workspace");
+    let stored = store
+        .find_by_id(&never_archived.id)
+        .expect("find workspace")
+        .expect("workspace record");
+    assert_eq!(stored.archived_head_sha, None);
+    assert_eq!(stored.archived_branch, None);
+    assert_eq!(stored.archived_at, None);
+    assert_eq!(stored.partial_capture_json, None);
+}
+
+#[test]
 fn delete_workspace_removes_workspace_row() {
     let (_db, store) = store_with_repo_root();
 
@@ -472,68 +529,4 @@ fn delete_workspace_removes_workspace_row() {
         .find_by_id(&workspace.id)
         .expect("find deleted workspace")
         .is_none());
-}
-
-// ── worktree retention policy store ──
-//
-// Row-level proofs for `store/retention.rs`. Bounds and the clock are the
-// pure policy's business (`workspaces/retention_policy.rs` unit tests); these
-// only cover read / recreate / upsert against a real DB.
-
-const POLICY_NOW: &str = "2026-01-01T00:00:00Z";
-
-#[test]
-fn reads_default_retention_policy_from_migration() {
-    let store = WorktreeRetentionPolicyStore::new(Db::open_in_memory().expect("open db"));
-
-    let policy = store.get_policy(POLICY_NOW).expect("policy");
-
-    assert_eq!(
-        policy.max_materialized_worktrees_per_repo,
-        DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO
-    );
-    assert!(!policy.updated_at.is_empty());
-}
-
-#[test]
-fn recreates_missing_retention_policy_singleton_row() {
-    let db = Db::open_in_memory().expect("open db");
-    db.with_conn(|conn| {
-        conn.execute("DELETE FROM worktree_retention_policy WHERE id = 1", [])?;
-        Ok(())
-    })
-    .expect("delete row");
-    let store = WorktreeRetentionPolicyStore::new(db);
-
-    let policy = store.get_policy(POLICY_NOW).expect("policy");
-
-    assert_eq!(
-        policy.max_materialized_worktrees_per_repo,
-        DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO
-    );
-    // The recreate path stamps the caller's clock reading, not one of its own.
-    assert_eq!(policy.updated_at, POLICY_NOW);
-}
-
-#[test]
-fn upserts_retention_policy_row() {
-    let store = WorktreeRetentionPolicyStore::new(Db::open_in_memory().expect("open db"));
-
-    let updated = store.upsert_policy(10, POLICY_NOW).expect("upsert policy");
-    assert_eq!(updated.max_materialized_worktrees_per_repo, 10);
-    assert_eq!(updated.updated_at, POLICY_NOW);
-
-    let reread = store.get_policy(POLICY_NOW).expect("policy");
-    assert_eq!(reread.max_materialized_worktrees_per_repo, 10);
-    assert_eq!(reread.updated_at, POLICY_NOW);
-
-    // Upsert is idempotent on the singleton id: a second write replaces, never
-    // duplicates.
-    let replaced = store
-        .upsert_policy(30, "2026-02-02T00:00:00Z")
-        .expect("replace policy");
-    assert_eq!(replaced.max_materialized_worktrees_per_repo, 30);
-    let reread = store.get_policy(POLICY_NOW).expect("policy");
-    assert_eq!(reread.max_materialized_worktrees_per_repo, 30);
-    assert_eq!(reread.updated_at, "2026-02-02T00:00:00Z");
 }

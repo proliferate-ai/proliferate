@@ -131,7 +131,6 @@
     "apps/packages/product-client/src/components/settings/panes/RepoPicker.tsx|arbitrary-bracket-geometry": 1,
     "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAuthApiKeyDetails.tsx|arbitrary-bracket-geometry": 1,
     "apps/packages/product-client/src/components/settings/panes/agents/harness/ProviderPickerModal.tsx|arbitrary-bracket-geometry": 1,
-    "apps/packages/product-client/src/components/settings/panes/environments/WorktreeStorageSection.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-client/src/components/settings/panes/organization/OrganizationLogo.tsx|foreground-alpha-foundation": 2,
     "apps/packages/product-client/src/components/settings/panes/organization/OrganizationMembersSection.tsx|arbitrary-bracket-geometry": 1,
     "apps/packages/product-client/src/components/settings/screen/SettingsScreen.tsx|arbitrary-bracket-geometry": 2,

@@ -6,17 +6,12 @@ import { useHarnessConnectionStore } from "#product/stores/sessions/harness-conn
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
-import {
-  getWorkspace,
-  purgeWorkspace,
-  retryPurgeWorkspace,
-  retryRetireWorkspaceCleanup,
-} from "#product/lib/access/anyharness/workspaces";
+import { purgeWorkspace } from "#product/lib/access/anyharness/workspaces";
 
-// navigateApp instead of useNavigate: retire actions run only inside click
+// navigateApp instead of useNavigate: purge actions run only inside click
 // callbacks, and useNavigate would subscribe the sidebar to every location
 // change (PRO-170, PRO-182).
-export function useWorkspaceRetireActions() {
+export function useWorkspacePurgeActions() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const refresh = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const clearSelection = useSessionSelectionStore((state) => state.clearSelection);
@@ -58,15 +53,6 @@ export function useWorkspaceRetireActions() {
           navigateApp(APP_ROUTES.home);
         }
       }
-      await refresh();
-      return result;
-    },
-    retryCleanup: async (workspaceId: string) => {
-      const connection = { runtimeUrl };
-      const workspace = await getWorkspace(connection, workspaceId);
-      const result = workspace.cleanupOperation === "purge"
-        ? await retryPurgeWorkspace(connection, workspaceId)
-        : await retryRetireWorkspaceCleanup(connection, workspaceId);
       await refresh();
       return result;
     },

@@ -1,8 +1,6 @@
 import type {
   PruneOrphanWorktreeRequest,
-  RunWorktreeRetentionResponse,
   WorkspacePurgeResponse,
-  WorkspaceRetireResponse,
 } from "@anyharness/sdk";
 import { useQueries } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
@@ -39,11 +37,8 @@ export function useWorktreeSettingsTargets() {
   const refreshTarget = useWorktreeSettingsTargetCache(runtimeUrl);
   const {
     pruneOrphan: pruneOrphanWorktree,
-    pruneWorkspaceCheckout: pruneWorkspaceCheckoutTarget,
     purgeWorkspaceHistory,
     retryWorkspacePurge,
-    runRetention: runTargetRetention,
-    updateRetentionPolicy,
   } = useWorktreeTargetActions();
   const readyCloudWorkspaces = useMemo(
     () => cloudWorkspaces.filter((workspace) => resolveCloudWorkspaceStatus(workspace) === "ready"),
@@ -106,28 +101,6 @@ export function useWorktreeSettingsTargets() {
 
   const targetStates = useWorktreeTargetInventories(targets);
 
-  const syncPolicyToTarget = useCallback(async (
-    target: WorktreeSettingsTarget,
-    maxMaterializedWorktreesPerRepo: number,
-    options: { runDeferredCleanup?: boolean } = {},
-  ) => {
-    await updateRetentionPolicy(target, { maxMaterializedWorktreesPerRepo });
-    if (options.runDeferredCleanup) {
-      await runTargetRetention(target);
-    }
-    await refreshTarget(target);
-  }, [refreshTarget, runTargetRetention, updateRetentionPolicy]);
-
-  const runRetention = useCallback(async (
-    target: WorktreeSettingsTarget,
-    maxMaterializedWorktreesPerRepo: number,
-  ): Promise<RunWorktreeRetentionResponse> => {
-    await updateRetentionPolicy(target, { maxMaterializedWorktreesPerRepo });
-    const result = await runTargetRetention(target);
-    await refreshTarget(target);
-    return result;
-  }, [refreshTarget, runTargetRetention, updateRetentionPolicy]);
-
   const pruneOrphan = useCallback(async (
     target: WorktreeSettingsTarget,
     input: PruneOrphanWorktreeRequest,
@@ -135,15 +108,6 @@ export function useWorktreeSettingsTargets() {
     await pruneOrphanWorktree(target, input);
     await refreshTarget(target);
   }, [pruneOrphanWorktree, refreshTarget]);
-
-  const pruneWorkspaceCheckout = useCallback(async (
-    target: WorktreeSettingsTarget,
-    workspaceId: string,
-  ): Promise<WorkspaceRetireResponse> => {
-    const result = await pruneWorkspaceCheckoutTarget(target, workspaceId);
-    await refreshTarget(target);
-    return result;
-  }, [pruneWorkspaceCheckoutTarget, refreshTarget]);
 
   const purgeWorkspace = useCallback(async (
     target: WorktreeSettingsTarget,
@@ -166,10 +130,7 @@ export function useWorktreeSettingsTargets() {
   return {
     targets: targetStates,
     isDiscovering: cloudConnectionQueries.some((query) => query.isLoading),
-    syncPolicyToTarget,
-    runRetention,
     pruneOrphan,
-    pruneWorkspaceCheckout,
     purgeWorkspace,
     retryPurge,
   };

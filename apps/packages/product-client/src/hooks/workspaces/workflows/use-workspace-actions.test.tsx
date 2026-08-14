@@ -67,13 +67,11 @@ vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: () => ({
     data: {
       localWorkspaces: [],
-      retiredLocalWorkspaces: [],
-      repoRoots: [],
+        repoRoots: [],
       cloudWorkspaces: [],
       workspaces: [],
       allWorkspaces: [],
-      cleanupAttentionWorkspaces: [],
-    },
+      },
   }),
 }));
 

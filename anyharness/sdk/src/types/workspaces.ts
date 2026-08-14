@@ -44,12 +44,6 @@ export type WorkspaceRetireBlockerSeverity =
   components["schemas"]["WorkspaceRetireBlockerSeverity"];
 export type WorkspaceRetireBlocker =
   components["schemas"]["WorkspaceRetireBlocker"];
-export type WorkspaceRetireOutcome =
-  components["schemas"]["WorkspaceRetireOutcome"];
-export type WorkspaceRetirePreflightResponse =
-  components["schemas"]["WorkspaceRetirePreflightResponse"];
-export type WorkspaceRetireResponse =
-  components["schemas"]["WorkspaceRetireResponse"];
 export type WorkspacePurgeOutcome = components["schemas"]["WorkspacePurgeOutcome"];
 export type WorkspacePurgePreflightResponse =
   components["schemas"]["WorkspacePurgePreflightResponse"];

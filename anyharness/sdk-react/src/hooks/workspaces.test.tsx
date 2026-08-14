@@ -10,7 +10,6 @@ import {
   anyHarnessWorkspaceDetailKey,
   anyHarnessWorkspacePurgePreflightKey,
   anyHarnessWorkspaceQueryKeyRoots,
-  anyHarnessWorkspaceRetirePreflightKey,
 } from "../lib/query-keys.js";
 import {
   useRuntimeWorkspacesQuery,
@@ -161,13 +160,10 @@ describe("sdk-react workspace query request options", () => {
     expect(requestOptions?.signal.aborted).toBe(true);
   });
 
-  it("includes retire and purge preflight roots in workspace display cancellation roots", () => {
+  it("includes the purge preflight root in workspace display cancellation roots", () => {
     const roots = anyHarnessWorkspaceQueryKeyRoots("http://runtime.test", "workspace-1")
       .map((root) => JSON.stringify(root));
 
-    expect(roots).toContain(JSON.stringify(
-      anyHarnessWorkspaceRetirePreflightKey("http://runtime.test", "workspace-1"),
-    ));
     expect(roots).toContain(JSON.stringify(
       anyHarnessWorkspacePurgePreflightKey("http://runtime.test", "workspace-1"),
     ));

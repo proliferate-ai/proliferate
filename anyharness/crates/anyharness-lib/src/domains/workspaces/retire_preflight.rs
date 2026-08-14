@@ -141,7 +141,7 @@ impl RetirePreflightChecker {
                 }
             }
             RetirePreflightMode::RetiredCleanupRetry => {
-                if workspace.lifecycle_state != DomainWorkspaceLifecycleState::Retired {
+                if workspace.lifecycle_state != DomainWorkspaceLifecycleState::Archived {
                     blockers.push(retire_blocker(
                         WorkspaceRetireBlockerCode::WorkspaceAccessBlocked,
                         "Cleanup retry requires a retired workspace.",
@@ -303,7 +303,7 @@ impl RetirePreflightChecker {
                     workspace.lifecycle_state == DomainWorkspaceLifecycleState::Active
                 }
                 RetirePreflightMode::RetiredCleanupRetry => {
-                    workspace.lifecycle_state == DomainWorkspaceLifecycleState::Retired
+                    workspace.lifecycle_state == DomainWorkspaceLifecycleState::Archived
                 }
                 RetirePreflightMode::Purge => false,
             };
@@ -585,7 +585,6 @@ fn workspace_lifecycle_to_contract(
     value: DomainWorkspaceLifecycleState,
 ) -> WorkspaceLifecycleState {
     match value {
-        DomainWorkspaceLifecycleState::Retired => WorkspaceLifecycleState::Retired,
         DomainWorkspaceLifecycleState::Active => WorkspaceLifecycleState::Active,
         DomainWorkspaceLifecycleState::Archived => WorkspaceLifecycleState::Archived,
     }

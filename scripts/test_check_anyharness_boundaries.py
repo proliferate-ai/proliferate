@@ -1237,7 +1237,7 @@ class ShippedAllowlistTest(unittest.TestCase):
              "format!-built SELECT COUNT(*) head"),
             # A DROP TABLE line, inside a cfg(test) mod the engine cannot see
             # past — the checker still flags the line itself.
-            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/workspaces/access_gate.rs", 324,
+            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/workspaces/access_gate.rs", 328,
              "DROP TABLE line"),
             # A `state.*_store` field access, which carries no store type on the
             # line for the import pass to see. This particular one is benign (an

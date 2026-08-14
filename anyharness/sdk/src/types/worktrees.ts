@@ -17,13 +17,3 @@ export type WorktreeInventoryResponse =
   components["schemas"]["WorktreeInventoryResponse"];
 export type PruneOrphanWorktreeRequest =
   components["schemas"]["PruneOrphanWorktreeRequest"];
-export type WorktreeRetentionPolicy =
-  components["schemas"]["WorktreeRetentionPolicy"];
-export type UpdateWorktreeRetentionPolicyRequest =
-  components["schemas"]["UpdateWorktreeRetentionPolicyRequest"];
-export type WorktreeRetentionRowOutcome =
-  components["schemas"]["WorktreeRetentionRowOutcome"];
-export type WorktreeRetentionRunRow =
-  components["schemas"]["WorktreeRetentionRunRow"];
-export type RunWorktreeRetentionResponse =
-  components["schemas"]["RunWorktreeRetentionResponse"];

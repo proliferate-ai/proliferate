@@ -54,7 +54,6 @@ pub enum WorkspaceSurface {
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceLifecycleState {
     Active,
-    Retired,
     Archived,
 }
 
@@ -194,50 +193,6 @@ pub struct WorkspaceRetireBlocker {
     pub paths: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation: Option<crate::v1::git::GitOperation>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspaceRetirePreflightResponse {
-    pub workspace_id: String,
-    pub workspace_kind: WorkspaceKind,
-    pub lifecycle_state: WorkspaceLifecycleState,
-    pub cleanup_state: WorkspaceCleanupState,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
-    pub can_retire: bool,
-    pub materialized: bool,
-    pub merged_into_base: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub base_ref: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub base_oid: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub head_oid: Option<String>,
-    pub head_matches_base: bool,
-    pub readiness_fingerprint: String,
-    pub blockers: Vec<WorkspaceRetireBlocker>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkspaceRetireOutcome {
-    Retired,
-    AlreadyRetired,
-    Blocked,
-    CleanupFailed,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspaceRetireResponse {
-    pub workspace: Workspace,
-    pub outcome: WorkspaceRetireOutcome,
-    pub preflight: WorkspaceRetirePreflightResponse,
-    pub cleanup_attempted: bool,
-    pub cleanup_succeeded: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

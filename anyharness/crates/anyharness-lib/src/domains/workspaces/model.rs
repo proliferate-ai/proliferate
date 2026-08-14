@@ -19,6 +19,10 @@ pub struct WorkspaceRecord {
     pub cleanup_error_message: Option<String>,
     pub cleanup_failed_at: Option<String>,
     pub cleanup_attempted_at: Option<String>,
+    pub archived_head_sha: Option<String>,
+    pub archived_branch: Option<String>,
+    pub archived_at: Option<String>,
+    pub partial_capture_json: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -80,7 +84,6 @@ pub enum WorkspaceSurface {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceLifecycleState {
     Active,
-    Retired,
     Archived,
 }
 
@@ -136,7 +139,6 @@ impl WorkspaceLifecycleState {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Active => "active",
-            Self::Retired => "retired",
             Self::Archived => "archived",
         }
     }
@@ -192,7 +194,6 @@ impl TryFrom<&str> for WorkspaceLifecycleState {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "active" => Ok(Self::Active),
-            "retired" => Ok(Self::Retired),
             "archived" => Ok(Self::Archived),
             _ => Err(WorkspaceModelError::unknown("lifecycle_state", value)),
         }
@@ -279,6 +280,10 @@ pub(crate) fn test_workspace_record(kind: WorkspaceKind, path: &str) -> Workspac
         cleanup_error_message: None,
         cleanup_failed_at: None,
         cleanup_attempted_at: None,
+        archived_head_sha: None,
+        archived_branch: None,
+        archived_at: None,
+        partial_capture_json: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
         updated_at: "2026-03-25T00:00:00Z".to_string(),
     }

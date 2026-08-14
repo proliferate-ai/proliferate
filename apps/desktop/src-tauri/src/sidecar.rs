@@ -18,7 +18,6 @@ use crate::diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor;
 const DEFAULT_HOST: &str = "127.0.0.1";
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const HEALTH_POLL_TIMEOUT: Duration = Duration::from_secs(60);
-const ANYHARNESS_DEFER_STARTUP_RETENTION_ENV: &str = "ANYHARNESS_DEFER_STARTUP_RETENTION";
 /// Read by anyharness's route-auth render plane to guard against injecting a
 /// previous server's gateway credentials right after a connect-to-server
 /// switch. Must match `route_auth::CURRENT_SERVER_ORIGIN_ENV` in
@@ -322,10 +321,6 @@ use lifecycle::{boot_inner, wait_healthy};
 fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, String>) -> Command {
     let mut cmd = Command::new(binary);
     let mut runtime_env = default_anyharness_launch_env();
-    runtime_env.insert(
-        ANYHARNESS_DEFER_STARTUP_RETENTION_ENV.to_string(),
-        "1".to_string(),
-    );
     // Every desktop install needs this so the render plane can tell a
     // stale-server state file apart from a fresh one.
     runtime_env.insert(

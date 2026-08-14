@@ -28,7 +28,6 @@ const sidebarActionMocks = vi.hoisted(() => ({
   handleGoWorkspaces: vi.fn(),
   handleMarkWorkspaceDone: vi.fn(),
   handleOpenPullRequest: vi.fn(),
-  handleRetryWorkspaceCleanup: vi.fn(),
   handleSelectWorkspace: vi.fn(),
   handleSidebarIndicatorAction: vi.fn(),
 }));
@@ -38,7 +37,6 @@ const workspaceSidebarState = vi.hoisted(() => ({
   pinnedItems: [] as unknown[],
   selectedWorkspaceId: null,
   selectedLogicalWorkspaceId: null,
-  cleanupAttentionWorkspaces: [],
   emptyState: null,
   isLoading: false,
 }));
@@ -103,10 +101,6 @@ vi.mock("./SidebarWorkspaceContent", () => ({
       </button>
     </div>
   ),
-}));
-
-vi.mock("./WorkspaceCleanupAttentionSection", () => ({
-  WorkspaceCleanupAttentionSection: () => <div data-testid="cleanup-attention" />,
 }));
 
 vi.mock("#product/components/workspace/cowork/sidebar/CoworkThreadsSection", () => ({

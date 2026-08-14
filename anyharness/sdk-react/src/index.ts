@@ -41,11 +41,9 @@ export {
   anyHarnessAgentGatewayModelsPrefixKey,
   anyHarnessAgentModelSnapshotStatusKey,
   anyHarnessRuntimeWorkspacesKey,
-  anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspacePurgePreflightKey,
   anyHarnessWorkspaceDetailKey,
   anyHarnessWorktreesInventoryKey,
-  anyHarnessWorktreesRetentionPolicyKey,
   anyHarnessRepoRootsKey,
   anyHarnessRepoRootGitBranchesKey,
   anyHarnessRepoRootDetectSetupKey,
@@ -155,19 +153,13 @@ export {
   useCreateWorkspaceMutation,
   useCreateWorktreeWorkspaceMutation,
   useRestoreWorktreeWorkspaceMutation,
-  useRetireWorkspacePreflightQuery,
   usePurgeWorkspacePreflightQuery,
-  useRetireWorkspaceMutation,
-  useRetryRetireCleanupMutation,
   usePurgeWorkspaceMutation,
   useRetryPurgeWorkspaceMutation,
 } from "./hooks/workspaces.js";
 export {
   useWorktreeInventoryQuery,
   usePruneOrphanWorktreeMutation,
-  useWorktreeRetentionPolicyQuery,
-  useUpdateWorktreeRetentionPolicyMutation,
-  useRunWorktreeRetentionMutation,
 } from "./hooks/worktrees.js";
 export {
   useSessionSubagentsQuery,

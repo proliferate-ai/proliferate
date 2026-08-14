@@ -283,16 +283,13 @@ impl WorkspaceRuntime {
         head_sha: &str,
     ) -> anyhow::Result<ExactRefWorkspace> {
         let target_path_string = target_path.to_string_lossy().to_string();
-        if let Some(retired) = self
+        if let Some(archived) = self
             .store
-            .find_retired_incomplete_cleanup_by_path_and_kind(
-                &target_path_string,
-                WorkspaceKind::Worktree,
-            )?
+            .find_archived_by_path_and_kind(&target_path_string, WorkspaceKind::Worktree)?
         {
             anyhow::bail!(
-                "destination path has pending cleanup from retired workspace {}",
-                retired.id
+                "destination path is reserved by archived workspace {}",
+                archived.id
             );
         }
         let ctx = resolver::resolve_git_context(&target_path_string).map_err(|error| {

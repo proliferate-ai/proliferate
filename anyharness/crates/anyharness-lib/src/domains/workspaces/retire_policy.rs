@@ -59,8 +59,9 @@ impl RetireStateFacts {
     }
 }
 
-/// The wire outcome vocabulary, as a domain twin. Mapped to
-/// `anyharness_contract::v1::WorkspaceRetireOutcome` at the api edge.
+/// The wire outcome vocabulary, as a domain twin. Its wire counterpart
+/// (`anyharness_contract::v1::WorkspaceRetireOutcome`) left with the retire
+/// routes; this enum has no production caller until R5 deletes the module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RetireOutcome {
     Retired,
@@ -105,7 +106,7 @@ pub struct CleanupDecision {
 
 /// Copies A and B of the retired-state machine, as one rule.
 pub fn decide_retire_admission(facts: &RetireStateFacts) -> RetireAdmission {
-    if facts.lifecycle_state != WorkspaceLifecycleState::Retired {
+    if facts.lifecycle_state != WorkspaceLifecycleState::Archived {
         return RetireAdmission::Proceed;
     }
     if facts.cleanup_operation == Some(WorkspaceCleanupOperation::Purge) {
@@ -127,7 +128,7 @@ pub fn decide_retire_admission(facts: &RetireStateFacts) -> RetireAdmission {
 /// resume it. Both asymmetries are the pre-refactor behaviour, preserved here
 /// verbatim; the second is flagged in the PR body for a ruling.
 pub fn decide_retry_admission(facts: &RetireStateFacts) -> RetryAdmission {
-    let retired = facts.lifecycle_state == WorkspaceLifecycleState::Retired;
+    let retired = facts.lifecycle_state == WorkspaceLifecycleState::Archived;
     let resumable_cleanup = matches!(
         facts.cleanup_state,
         WorkspaceCleanupState::Pending | WorkspaceCleanupState::Failed

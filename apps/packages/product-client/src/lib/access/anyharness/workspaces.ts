@@ -84,25 +84,6 @@ export function updateWorkspaceDisplayName(
   );
 }
 
-export function retireWorkspace(connection: WorkspaceConnection, workspaceId: string) {
-  return getAnyHarnessClient(connection).workspaces.retire(workspaceId);
-}
-
-export function getWorkspaceRetirePreflight(
-  connection: WorkspaceConnection,
-  workspaceId: string,
-  options?: AnyHarnessRequestOptions,
-) {
-  return getAnyHarnessClient(connection).workspaces.retirePreflight(workspaceId, options);
-}
-
-export function retryRetireWorkspaceCleanup(
-  connection: WorkspaceConnection,
-  workspaceId: string,
-) {
-  return getAnyHarnessClient(connection).workspaces.retryRetireCleanup(workspaceId);
-}
-
 export function purgeWorkspace(connection: WorkspaceConnection, workspaceId: string) {
   return getAnyHarnessClient(connection).workspaces.purge(workspaceId);
 }

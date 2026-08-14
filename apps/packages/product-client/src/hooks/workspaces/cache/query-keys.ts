@@ -68,10 +68,8 @@ function isWorkspaceCollections(value: unknown): value is WorkspaceCollections {
 
   const candidate = value as Partial<Record<keyof WorkspaceCollections, unknown>>;
   return Array.isArray(candidate.localWorkspaces)
-    && Array.isArray(candidate.retiredLocalWorkspaces)
     && Array.isArray(candidate.repoRoots)
     && Array.isArray(candidate.cloudWorkspaces)
     && Array.isArray(candidate.workspaces)
-    && Array.isArray(candidate.allWorkspaces)
-    && Array.isArray(candidate.cleanupAttentionWorkspaces);
+    && Array.isArray(candidate.allWorkspaces);
 }

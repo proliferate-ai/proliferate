@@ -19,8 +19,7 @@ const mocks = vi.hoisted(() => ({
   createLocalWorkspaceAndEnter: vi.fn(),
   createWorktreeAndEnter: vi.fn(),
   openWorkspaceSession: vi.fn(),
-  retireWorkspace: vi.fn(),
-  retryCleanup: vi.fn(),
+  purgeWorkspace: vi.fn(),
   selectWorkspace: vi.fn(),
   newWorktreeCommand: vi.fn(),
 }));
@@ -83,10 +82,9 @@ vi.mock("#product/hooks/workspaces/workflows/use-workspace-entry-actions", () =>
   }),
 }));
 
-vi.mock("#product/hooks/workspaces/workflows/use-workspace-retire-actions", () => ({
-  useWorkspaceRetireActions: () => ({
-    markDone: mocks.retireWorkspace,
-    retryCleanup: mocks.retryCleanup,
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-purge-actions", () => ({
+  useWorkspacePurgeActions: () => ({
+    markDone: mocks.purgeWorkspace,
   }),
 }));
 

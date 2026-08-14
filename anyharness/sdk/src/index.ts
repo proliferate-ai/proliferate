@@ -180,9 +180,6 @@ export type {
   WorkspaceRetireBlockerCode,
   WorkspaceRetireBlockerSeverity,
   WorkspaceRetireBlocker,
-  WorkspaceRetireOutcome,
-  WorkspaceRetirePreflightResponse,
-  WorkspaceRetireResponse,
   WorkspacePurgeOutcome,
   WorkspacePurgePreflightResponse,
   WorkspacePurgeResponse,
@@ -198,11 +195,6 @@ export type {
   WorktreeInventoryRow,
   WorktreeInventoryResponse,
   PruneOrphanWorktreeRequest,
-  WorktreeRetentionPolicy,
-  UpdateWorktreeRetentionPolicyRequest,
-  WorktreeRetentionRowOutcome,
-  WorktreeRetentionRunRow,
-  RunWorktreeRetentionResponse,
 } from "./types/worktrees.js";
 
 export type {

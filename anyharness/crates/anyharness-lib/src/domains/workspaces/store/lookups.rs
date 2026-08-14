@@ -108,7 +108,12 @@ impl WorkspaceStore {
         })
     }
 
-    pub fn find_retired_incomplete_cleanup_by_path_and_kind(
+    /// Any archived row claiming `path`. Archiving reserves a workspace's
+    /// recorded path for its lifetime: unarchive restores in place and never
+    /// relocates, so a path handed to a new workspace is a path its owner can
+    /// never come back to. That is why this covers ALL archived rows, not just
+    /// the incomplete-cleanup subset the retire-era predicate looked at.
+    pub fn find_archived_by_path_and_kind(
         &self,
         path: &str,
         kind: WorkspaceKind,
@@ -119,8 +124,7 @@ impl WorkspaceStore {
                     "SELECT {WORKSPACE_COLUMNS} FROM workspaces
                  WHERE path = ?1
                    AND kind = ?2
-                   AND lifecycle_state = 'retired'
-                   AND cleanup_state IN ('pending', 'failed')
+                   AND lifecycle_state = 'archived'
                  ORDER BY updated_at DESC
                  LIMIT 1"
                 ),

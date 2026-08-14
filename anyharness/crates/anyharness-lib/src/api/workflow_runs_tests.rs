@@ -190,7 +190,7 @@ async fn strict_shape_and_invalid_definitions_return_coded_400() {
 // Execution-crossing tests (review C2A-REV-05 / C2A-DEC-01 / C2A-REV-01):
 // these cross WorkflowRunRuntime and WorkflowRunSessionExtension against real
 // SQLite and real workspace rows. No agent is ever actually launched: every
-// path fails deterministically before a live process (bogus model, retired or
+// path fails deterministically before a live process (bogus model, archived or
 // missing workspace, nonexistent workspace path).
 // ---------------------------------------------------------------------------
 
@@ -329,8 +329,8 @@ async fn nonexistent_workspace_fails_durably_with_workspace_unavailable() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn retired_and_mutation_blocked_workspaces_fail_workspace_unavailable() {
-    // Ruling C2A-DEC-01: access-gate refusals (retired, mutation-blocked) are
+async fn archived_and_mutation_blocked_workspaces_fail_workspace_unavailable() {
+    // Ruling C2A-DEC-01: access-gate refusals (archived, mutation-blocked) are
     // "unavailable supplied workspace", not generic creation failures.
     let state = {
         let _lock = test_support::ENV_MUTEX
@@ -341,32 +341,32 @@ async fn retired_and_mutation_blocked_workspaces_fail_workspace_unavailable() {
         test_state()
     };
 
-    // Retired workspace.
-    let retired_ws = "30000000-0000-4000-8000-000000000031";
+    // Archived workspace.
+    let archived_ws = "30000000-0000-4000-8000-000000000031";
     test_support::seed_workspace_with_repo_root(
         &state.db,
-        retired_ws,
+        archived_ws,
         "worktree",
-        "/tmp/wf-retired",
+        "/tmp/wf-archived",
     );
     state
         .db
         .with_conn(|conn| {
             conn.execute(
-                "UPDATE workspaces SET lifecycle_state = 'retired' WHERE id = ?1",
-                [retired_ws],
+                "UPDATE workspaces SET lifecycle_state = 'archived' WHERE id = ?1",
+                [archived_ws],
             )
         })
-        .expect("retire workspace");
-    let retired_run = uuid::Uuid::new_v4().to_string();
+        .expect("archive workspace");
+    let archived_run = uuid::Uuid::new_v4().to_string();
     let (status, _) = put(
         &state,
-        &retired_run,
-        body_for_workspace(retired_ws, Value::Null),
+        &archived_run,
+        body_for_workspace(archived_ws, Value::Null),
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);
-    let body = poll_run_until(&state, &retired_run, "retired-workspace failure", |body| {
+    let body = poll_run_until(&state, &archived_run, "archived-workspace failure", |body| {
         body["run"]["status"] == "failed"
     })
     .await;
@@ -605,6 +605,10 @@ async fn extension_completion_terminalizes_run_and_step() {
         cleanup_error_message: None,
         cleanup_failed_at: None,
         cleanup_attempted_at: None,
+        archived_head_sha: None,
+        archived_branch: None,
+        archived_at: None,
+        partial_capture_json: None,
         created_at: "2026-07-13T00:00:00Z".to_string(),
         updated_at: "2026-07-13T00:00:00Z".to_string(),
     };
@@ -2104,11 +2108,11 @@ async fn terminal_release_restores_ordinary_session_behavior() {
 // (`find_workflow_controlled_session`) is the fence: after the destructive path
 // holds the exclusive workspace lease — which excludes the shared SessionStart
 // lease every workflow session creation needs — it re-enumerates and fails
-// closed if a workflow now controls a session. These two proofs drive the REAL
-// executor and the REAL router (purge) / real handler (retire), placing the
-// destructive path deterministically INSIDE the stale-snapshot window with
-// barriers (no sleeps for correctness), and assert the destructive path
-// conflicts before any effect and the session+workspace survive.
+// closed if a workflow now controls a session. This proof drives the REAL
+// executor and the REAL router (purge), placing the destructive path
+// deterministically INSIDE the stale-snapshot window with barriers (no sleeps
+// for correctness), and asserts the destructive path conflicts before any
+// effect and the session+workspace survive.
 
 async fn delete_workspace(state: &AppState, workspace_id: &str) -> (StatusCode, Value) {
     let response = build_router(state.clone())
@@ -2287,159 +2291,6 @@ async fn purge_fails_closed_against_session_bound_after_admission_snapshot() {
     let _ = std::fs::remove_dir_all(&runtime_home);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn retire_fails_closed_against_workflow_control_acquired_after_admission_snapshot() {
-    // Retire's ordering is: admit the CURRENT session set -> advisory preflight
-    // -> exclusive lease -> under-lease fence. The stale-snapshot window is
-    // between the up-front admission (which sees the session UNCONTROLLED, so it
-    // is admitted, not conflicted) and the exclusive lease: a workflow can bind
-    // control of that session in that gap, exactly mirroring the executor
-    // holding the shared SessionStart lease and binding a session the destroyer
-    // holds no matching permit for. This proof drives the REAL retire handler
-    // and the REAL controller policy: it admits an idle session, parks retire at
-    // the pre-exclusive-lease seam, binds a nonterminal workflow controller in
-    // that window, then releases. The under-lease fence must fail closed.
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let _bearer_guard = test_support::set_bearer_token_env(None);
-    let state = test_state();
-    const WS: &str = "40000000-0000-4000-8000-000000000045";
-    // A worktree + active workspace whose checkout path does NOT exist is
-    // retire-eligible (non-materialized skips managed-root/git checks) so
-    // preflight passes and retire reaches the seam.
-    test_support::seed_workspace_with_repo_root(
-        &state.db,
-        WS,
-        "worktree",
-        "/tmp/anyharness-fence-retire-nonexistent",
-    );
-    let session_id = uuid::Uuid::new_v4().to_string();
-    {
-        let now = chrono::Utc::now().to_rfc3339();
-        let record = crate::domains::sessions::model::SessionRecord {
-            id: session_id.clone(),
-            workspace_id: WS.to_string(),
-            agent_kind: "claude".to_string(),
-            native_session_id: None,
-            agent_auth_contexts: None,
-            requested_model_id: None,
-            current_model_id: None,
-            requested_mode_id: None,
-            current_mode_id: None,
-            title: None,
-            thinking_level_id: None,
-            thinking_budget_tokens: None,
-            status: "idle".to_string(),
-            created_at: now.clone(),
-            updated_at: now,
-            last_prompt_at: None,
-            closed_at: None,
-            dismissed_at: None,
-            mcp_bindings_ciphertext: None,
-            mcp_binding_summaries_json: None,
-            mcp_binding_policy:
-                crate::domains::sessions::model::SessionMcpBindingPolicy::InternalOnly,
-            system_prompt_append: None,
-            subagents_enabled: false,
-            action_capabilities_json: None,
-            origin: Some(crate::origin::OriginContext::system_local_runtime()),
-        };
-        state
-            .session_service
-            .store()
-            .insert(&record)
-            .expect("insert idle session");
-    }
-
-    // Park retire between its advisory preflight and the exclusive lease.
-    use crate::domains::workspaces::retire::retire_barriers;
-    let (reached_tx, reached_rx) = tokio::sync::oneshot::channel();
-    let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-    retire_barriers::install(
-        WS,
-        retire_barriers::RetireBarrier {
-            reached_tx: Some(reached_tx),
-            resume_rx: Some(resume_rx),
-        },
-    );
-    let retire_state = state.clone();
-    let retire = tokio::spawn(async move {
-        let response = build_router(retire_state.clone())
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri(format!("/v1/workspaces/{WS}/retire"))
-                    .body(Body::empty())
-                    .expect("request"),
-            )
-            .await
-            .expect("response");
-        let status = response.status();
-        let bytes = to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("body");
-        (
-            status,
-            serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null),
-        )
-    });
-
-    // Retire reached the seam: it admitted the idle session up front (no
-    // conflict) and passed its advisory preflight. NOW, in the stale-snapshot
-    // window, a workflow acquires durable control of that same session.
-    tokio::time::timeout(PROOF_WAIT, reached_rx)
-        .await
-        .expect("retire reached seam")
-        .expect("retire seam sender retained");
-    let control = control_service(&state);
-    let run_id = uuid::Uuid::new_v4().to_string();
-    control
-        .accept(&run_id, domain_input_for_workspace(WS))
-        .expect("accept controller run");
-    assert!(control.begin_run(&run_id).expect("begin_run"));
-    assert!(control
-        .bind_session(&run_id, &session_id)
-        .expect("bind controller session"));
-
-    // Release retire: it takes the exclusive lease and runs the fence.
-    resume_tx.send(()).expect("resume retire");
-    let (status, body) = tokio::time::timeout(PROOF_WAIT, retire)
-        .await
-        .expect("retire join timeout")
-        .expect("retire join");
-    assert_eq!(
-        status,
-        StatusCode::CONFLICT,
-        "retire must fail closed under the exclusive lease against a session that became controlled after admission (got {status}: {body})"
-    );
-    assert_eq!(body["code"], "SESSION_CONTROLLED_BY_WORKFLOW");
-
-    // No effect: the session survives and the workspace is not retired.
-    assert!(
-        state
-            .session_service
-            .store()
-            .find_by_id(&session_id)
-            .expect("find session")
-            .is_some(),
-        "retire must not dematerialize the newly workflow-controlled session's workspace"
-    );
-    let workspace = state
-        .workspace_runtime
-        .get_workspace(WS)
-        .expect("get workspace")
-        .expect("workspace present");
-    assert_eq!(
-        workspace.lifecycle_state,
-        crate::domains::workspaces::model::WorkspaceLifecycleState::Active,
-        "retire must not retire the workspace holding a controlled session"
-    );
-
-    retire_barriers::clear(WS);
-}
-
 // ── PR1227-WORKSPACE-FENCE-02: destruction vs. bind->terminalize race ─────────
 //
 // FENCE-01's under-lease re-check asks only for a NONTERMINAL controller
@@ -2453,9 +2304,9 @@ async fn retire_fails_closed_against_workflow_control_acquired_after_admission_s
 // originally-admitted session-id set into the destructive owner and failing
 // closed (same stable 409) if ANY session id re-enumerated under the exclusive
 // lease is absent from that set — even when its workflow already terminalized.
-// These two proofs place a fresh workflow-bound session in the stale-snapshot
-// window, drive its run to a TERMINAL state (so FENCE-01 is structurally blind),
-// and assert the destructive path still 409s before any effect.
+// This proof places a fresh workflow-bound session in the stale-snapshot
+// window, drives its run to a TERMINAL state (so FENCE-01 is structurally
+// blind), and asserts the destructive path still 409s before any effect.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn purge_fails_closed_against_session_bound_then_terminalized_after_admission_snapshot() {
@@ -2623,168 +2474,4 @@ async fn purge_fails_closed_against_session_bound_then_terminalized_after_admiss
     purge_barriers::clear(ws);
     test_barriers::clear(&run_id);
     let _ = std::fs::remove_dir_all(&runtime_home);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn retire_fails_closed_against_session_bound_then_terminalized_after_admission_snapshot() {
-    // Retire analog of the purge FENCE-02 proof, driven through the REAL retire
-    // handler and the REAL controller policy. The workspace has NO session at
-    // handler start, so the up-front admitted set is empty. In the
-    // stale-snapshot window (retire parked at its pre-exclusive-lease seam) a
-    // fresh session is inserted, a workflow binds control of it, then that run
-    // is driven TERMINAL. The under-lease FENCE-01 re-check therefore sees no
-    // nonterminal controller; only FENCE-02's admitted-set membership check
-    // catches the never-admitted session id.
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let _bearer_guard = test_support::set_bearer_token_env(None);
-    let state = test_state();
-    const WS: &str = "40000000-0000-4000-8000-000000000046";
-    test_support::seed_workspace_with_repo_root(
-        &state.db,
-        WS,
-        "worktree",
-        "/tmp/anyharness-fence2-retire-nonexistent",
-    );
-
-    // Park retire between its advisory preflight and the exclusive lease. The
-    // up-front admission snapshot is empty (no session yet).
-    use crate::domains::workspaces::retire::retire_barriers;
-    let (reached_tx, reached_rx) = tokio::sync::oneshot::channel();
-    let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-    retire_barriers::install(
-        WS,
-        retire_barriers::RetireBarrier {
-            reached_tx: Some(reached_tx),
-            resume_rx: Some(resume_rx),
-        },
-    );
-    let retire_state = state.clone();
-    let retire = tokio::spawn(async move {
-        let response = build_router(retire_state.clone())
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri(format!("/v1/workspaces/{WS}/retire"))
-                    .body(Body::empty())
-                    .expect("request"),
-            )
-            .await
-            .expect("response");
-        let status = response.status();
-        let bytes = to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("body");
-        (
-            status,
-            serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null),
-        )
-    });
-
-    // Retire reached the seam: it admitted the EMPTY session set up front and
-    // passed its advisory preflight. NOW, in the stale-snapshot window, a fresh
-    // session appears and a workflow binds control of it.
-    tokio::time::timeout(PROOF_WAIT, reached_rx)
-        .await
-        .expect("retire reached seam")
-        .expect("retire seam sender retained");
-
-    let session_id = uuid::Uuid::new_v4().to_string();
-    {
-        let now = chrono::Utc::now().to_rfc3339();
-        let record = crate::domains::sessions::model::SessionRecord {
-            id: session_id.clone(),
-            workspace_id: WS.to_string(),
-            agent_kind: "claude".to_string(),
-            native_session_id: None,
-            agent_auth_contexts: None,
-            requested_model_id: None,
-            current_model_id: None,
-            requested_mode_id: None,
-            current_mode_id: None,
-            title: None,
-            thinking_level_id: None,
-            thinking_budget_tokens: None,
-            status: "idle".to_string(),
-            created_at: now.clone(),
-            updated_at: now,
-            last_prompt_at: None,
-            closed_at: None,
-            dismissed_at: None,
-            mcp_bindings_ciphertext: None,
-            mcp_binding_summaries_json: None,
-            mcp_binding_policy:
-                crate::domains::sessions::model::SessionMcpBindingPolicy::InternalOnly,
-            system_prompt_append: None,
-            subagents_enabled: false,
-            action_capabilities_json: None,
-            origin: Some(crate::origin::OriginContext::system_local_runtime()),
-        };
-        state
-            .session_service
-            .store()
-            .insert(&record)
-            .expect("insert fresh session after snapshot");
-    }
-    let control = control_service(&state);
-    let run_id = uuid::Uuid::new_v4().to_string();
-    control
-        .accept(&run_id, domain_input_for_workspace(WS))
-        .expect("accept controller run");
-    assert!(control.begin_run(&run_id).expect("begin_run"));
-    assert!(control
-        .bind_session(&run_id, &session_id)
-        .expect("bind controller session"));
-
-    // Drive the controlling run TERMINAL and confirm durably: FENCE-01 is now
-    // structurally blind to this session (terminal controller -> None).
-    control
-        .fail_nonterminal(
-            &run_id,
-            crate::domains::workflows::model::WorkflowRunFailureCode::SessionTurnFailed,
-        )
-        .expect("terminalize controlling run");
-    assert!(
-        !control.run_in_flight(&run_id).expect("run_in_flight"),
-        "controlling run must be durably terminal before retire re-checks"
-    );
-
-    // Release retire: it takes the exclusive lease and runs the fence. Only the
-    // FENCE-02 admitted-set membership check can catch the unadmitted session.
-    resume_tx.send(()).expect("resume retire");
-    let (status, body) = tokio::time::timeout(PROOF_WAIT, retire)
-        .await
-        .expect("retire join timeout")
-        .expect("retire join");
-    assert_eq!(
-        status,
-        StatusCode::CONFLICT,
-        "retire must fail closed under the exclusive lease against a session bound then terminalized after admission (got {status}: {body})"
-    );
-    assert_eq!(body["code"], "SESSION_CONTROLLED_BY_WORKFLOW");
-
-    // No effect: the session survives and the workspace is not retired.
-    assert!(
-        state
-            .session_service
-            .store()
-            .find_by_id(&session_id)
-            .expect("find session")
-            .is_some(),
-        "retire must not dematerialize the unadmitted session"
-    );
-    let workspace = state
-        .workspace_runtime
-        .get_workspace(WS)
-        .expect("get workspace")
-        .expect("workspace present");
-    assert_eq!(
-        workspace.lifecycle_state,
-        crate::domains::workspaces::model::WorkspaceLifecycleState::Active,
-        "retire must not retire the workspace holding an unadmitted session"
-    );
-
-    retire_barriers::clear(WS);
 }
