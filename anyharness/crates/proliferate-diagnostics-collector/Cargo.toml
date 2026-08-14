@@ -5,6 +5,14 @@ edition.workspace = true
 license.workspace = true
 description = "Standalone bounded diagnostics collector for Proliferate Desktop"
 
+[features]
+default = []
+# Internal/dogfood builds only. Compiles the provider-neutral OTLP export
+# adapter into the binary. Customer releases build this package with default
+# features, so no export path, destination read, or credential handling exists
+# in a shipped collector.
+internal-dogfood-export = []
+
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true

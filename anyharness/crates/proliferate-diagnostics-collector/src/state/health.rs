@@ -2,8 +2,7 @@ use std::collections::BTreeMap;
 
 use proliferate_diagnostics_protocol::v1::limits::CURRENT_SCHEMA_VERSION;
 use proliferate_diagnostics_protocol::v1::types::{
-    ExporterHealthV1, ExporterStateV1, FallbackHealthV1, FallbackStateV1, HealthResponseV1,
-    HealthStatusV1, PressureV1,
+    FallbackHealthV1, FallbackStateV1, HealthResponseV1, HealthStatusV1, PressureV1,
 };
 use proliferate_diagnostics_protocol::v1::validation::validate_health;
 
@@ -71,11 +70,7 @@ impl CollectorCore {
                 .map(|producer| producer.health.clone())
                 .collect(),
             tail_reader_drops: inner.counters.tail_reader_drops,
-            exporter: ExporterHealthV1 {
-                state: ExporterStateV1::Disabled,
-                dropped_records: 0,
-                last_error_classification: None,
-            },
+            exporter: self.exporter.health(),
             fallback: FallbackHealthV1 {
                 state: FallbackStateV1::Inactive,
                 bytes: 0,

@@ -58,8 +58,15 @@ Standalone diagnostics collector behavior is Tier 1: exercise its real child
 process and loopback transport with inherited anonymous capability/control
 file descriptors, while keeping Desktop, AnyHarness, Worker, server, and cloud
 integration absent. Run `cargo test -p proliferate-diagnostics-collector` for
-the deterministic contract/process suite. The release-only RSS profile runner
-is a separate bounded proof and writes its JSON/CSV evidence outside the repo.
+the deterministic contract/process suite. That command builds the package with
+default features, so the internal OTLP export path and its dogfood proof are
+compiled out of it entirely; they need
+`cargo test -p proliferate-diagnostics-collector --features internal-dogfood-export`,
+which CI runs as its own step. The dogfood proof drives the real collector
+binary against a strict local OTLP receiver and establishes wire conformance
+and failure isolation, not that any hosted destination accepts the payload. The
+release-only RSS profile runner is a separate bounded proof and writes its
+JSON/CSV evidence outside the repo.
 
 The bounded producer adapter (`proliferate-diagnostics-client`) and the
 Desktop child-bridge, launch, fallback-root, and Worker-tail seams are also

@@ -69,8 +69,19 @@ diagnostics at all. Bundled runs write no `worker.log` — Desktop drains Worker
 stdout/stderr into a bounded in-memory tail — while each producer keeps a fixed
 bounded per-component fallback file family. Standalone, external
 `ANYHARNESS_DEV_URL`, cloud/Supervisor, and unsupported-platform modes keep
-their existing sinks, and historical log bytes are never rewritten. Support-file migration is not
-part of this change. Server log routing, Sentry, PostHog,
+their existing sinks, and historical log bytes are never rewritten. Support-file
+migration is not part of this change. Internal/dogfood collector builds add one
+more route for the same accepted records: a provider-neutral OTLP/HTTP JSON
+adapter behind the collector's non-default `internal-dogfood-export` feature,
+whose destination URL and request headers are environment values rather than
+contract fields. Customer builds compile no export path, no destination read,
+and no credential handling at all, and the release job refuses a bundle whose
+binaries carry the endpoint variable name. The adapter is bounded best effort —
+a fixed queue that drops rather than grows, a fixed batch, one attempt plus two
+retries, a cooldown, and no disk outbox or replay — so a failing destination
+changes only `exporter.state`, `exporter.dropped_records`, and a fixed-table
+`exporter.last_error_classification` in `/v1/health`, never local ingestion,
+retention, or a product result. Server log routing, Sentry, PostHog,
 and anonymous telemetry are unchanged. The approved boundary and slice registry live in
 [`../adrs/2026-08-10-rust-observability.md`](../adrs/2026-08-10-rust-observability.md).
 
