@@ -90,10 +90,11 @@ export function workflowRunTakesSideNode(run: WorkflowRunV2): boolean {
  * "never advance or block the run" (ADR), and the runtime enforces exactly
  * that: every chain-shaped command is rejected for `kind == Adhoc`
  * (`transition.rs` — FlipType "adhoc nodes have no gate semantics to flip",
- * FailAndRedo "adhoc nodes are re-run by creating another adhoc node",
  * UndoAdvance, and AddAdhocNode "adhoc nodes anchor to the chain, not to each
  * other"), while ApproveGate additionally requires the row to be the run's
- * current node, which an ad hoc row never becomes.
+ * current node, which an ad hoc row never becomes. FailAndRedo is the one
+ * command legal on an ad hoc row (Ruling K): it re-runs the row by minting
+ * another ad hoc node.
  *
  * `kind` alone decides it. A replacement is always a chain row: the only
  * producer of `kind: "replacement"` is the Redo transition on a chain row,
@@ -120,9 +121,9 @@ export function workflowNodeIsSideNode(node: WorkflowRunNodeV2): boolean {
  * row — the runtime refuses all three), so rendering them would turn this
  * module's one invariant inside out: a 409 would stop being a race with the
  * run and become a button that cannot ever work. Redo is the ruled recovery
- * path for a wedged or failed side node (fix-wave Ruling K: FailAndRedo is
- * legal on ad hoc rows and mints an ad hoc replacement anchored the same);
- * the runtime side of that ruling lands in the same wave as this gate.
+ * path for a wedged or failed side node (Ruling K): the runtime accepts
+ * FailAndRedo on an ad hoc row in `failed|needs_attention` and mints another
+ * ad hoc node anchored the same.
  */
 function sideNodeControls(node: WorkflowRunNodeV2): WorkflowNodeControlSet {
   return {
