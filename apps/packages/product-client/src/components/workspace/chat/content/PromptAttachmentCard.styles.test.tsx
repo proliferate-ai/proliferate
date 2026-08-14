@@ -62,6 +62,10 @@ describe("PromptAttachmentCard style ownership", () => {
     expect(html).toContain("prompt-card-remove");
     expect(html).toContain("pointer-events-none");
     expect(html).toContain("opacity-0");
+    // The disc overlays arbitrary thumbnails: hover/active must keep an
+    // opaque background fill, not the ghost variant's translucent wash.
+    expect(html).toContain("hover:bg-background");
+    expect(html).toContain("active:bg-background");
     expect(html).not.toContain("style=");
   });
 
