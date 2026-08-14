@@ -1,6 +1,6 @@
 import { Smartphone } from "#product/primitives/icons/platform";
 import { Spinner } from "#product/primitives/Spinner";
-import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import { useWorkspaceShellActions } from "#product/hooks/workspaces/workflows/use-workspace-shell-actions";
 import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 
 export function WorkspaceRemoteAccessFooterControl() {
