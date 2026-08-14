@@ -121,10 +121,6 @@ vi.mock("#product/components/diagnostics/DebugProfiler", () => ({
 vi.mock("#product/components/workspace/chat/input/ChatInputControlRow", () => ({
   ChatInputControlRow: () => null,
 }));
-vi.mock(
-  "#product/components/workspace/chat/input/workspace-status/ConnectedWorkspaceStatusComposerControl",
-  () => ({ ConnectedWorkspaceStatusComposerControl: () => null }),
-);
 vi.mock("#product/components/workspace/chat/input/ChatInputDraftArea", () => ({
   ChatInputDraftArea: ({
     onSubmit,

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import type { Workspace } from "@anyharness/sdk";
 import { CoworkWorkspaceShell } from "#product/components/workspace/cowork/CoworkWorkspaceShell";
 import { StandardWorkspaceShell } from "#product/components/workspace/shell/screen/StandardWorkspaceShell";
@@ -10,7 +10,12 @@ import { useHotSessionIngest } from "#product/hooks/sessions/lifecycle/use-hot-s
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
-export function MainScreen({ visible = true }: { visible?: boolean }) {
+// Memoized: the host re-renders on every route/search change (it reads the
+// router location), and without a memo boundary every URL change — most
+// visibly each Settings section click — re-renders the entire workspace
+// shell. `visible` only flips on home <-> elsewhere transitions, so those
+// still re-render as before.
+export const MainScreen = memo(function MainScreen({ visible = true }: { visible?: boolean }) {
   usePersistedLogicalWorkspaceSelection();
   useHotSessionIngest();
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
@@ -44,4 +49,4 @@ export function MainScreen({ visible = true }: { visible?: boolean }) {
   }
 
   return <StandardWorkspaceShell visible={visible} />;
-}
+});

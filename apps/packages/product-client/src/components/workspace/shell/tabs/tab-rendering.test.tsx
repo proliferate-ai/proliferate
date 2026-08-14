@@ -63,6 +63,41 @@ describe("renderChatTabIcon", () => {
     expect(html).toContain("bg-muted");
     expect(html).not.toContain("data-jank-canary=\"braille\"");
   });
+
+  it("dims a Closed delegated identity without changing its glyph", () => {
+    const identity = buildDelegatedAgentIdentity({
+      id: "link-closed-agent",
+      title: "Closed agent",
+      sessionId: "session-closed-agent",
+    });
+    const baseAgent = {
+      identity,
+      kind: "subagent",
+      originLabel: "Subagent",
+      statusLabel: "Done",
+      parentTitle: "Parent",
+      hoverTitle: "Subagent",
+    } as const;
+    const tab = {
+      agentKind: "claude",
+      viewState: "idle",
+      isResolvingSession: false,
+    } as const;
+
+    const openGlyph = extractSvg(renderToStaticMarkup(renderChatTabIcon({
+      ...tab,
+      delegatedAgent: { ...baseAgent, statusCategory: "finished" },
+    })));
+    const closedGlyph = extractSvg(renderToStaticMarkup(renderChatTabIcon({
+      ...tab,
+      delegatedAgent: { ...baseAgent, statusCategory: "closed" },
+    })));
+
+    expect(openGlyph).toContain("opacity:1");
+    expect(closedGlyph).toContain("opacity:0.45");
+    expect(closedGlyph.replace("opacity:0.45", "opacity"))
+      .toBe(openGlyph.replace("opacity:1", "opacity"));
+  });
 });
 
 describe("renderChatTabStatusBadge", () => {
@@ -129,3 +164,11 @@ describe("renderChatTabStatusBadge", () => {
       .toBe("helix");
   });
 });
+
+function extractSvg(markup: string): string {
+  const svg = markup.match(/<svg\b[\s\S]*?<\/svg>/u)?.[0];
+  if (!svg) {
+    throw new Error("Expected rendered delegated-agent SVG");
+  }
+  return svg;
+}

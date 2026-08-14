@@ -8,7 +8,6 @@ import { ComposerTextareaFrame } from "#product/primitives/patterns/composer/Com
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { EnvironmentSearchSelect } from "#product/primitives/patterns/EnvironmentSearchSelect";
-import { LevelBarsButton } from "#product/primitives/patterns/composer/LevelBarsButton";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { PageContentFrame } from "#product/primitives/patterns/PageContentFrame";
 import { PaneOptionsMenuItem } from "#product/primitives/patterns/panel/PaneOptionsMenuItem";
@@ -126,22 +125,6 @@ function SettingsMenuDemo() {
           { id: "b", label: "Option B", selected: selected === "b", onSelect: () => setSelected("b") },
         ],
       }]}
-    />
-  );
-}
-
-function LevelBarsButtonDemo() {
-  const [index, setIndex] = useState(1);
-  const levels = [
-    { value: "low", label: "Low" },
-    { value: "mid", label: "Mid" },
-    { value: "high", label: "High" },
-  ];
-  return (
-    <LevelBarsButton
-      levels={levels}
-      currentIndex={index}
-      onStep={(value) => setIndex(levels.findIndex((level) => level.value === value))}
     />
   );
 }
@@ -335,7 +318,6 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
     <EmptyState title="No results" description="Nothing to show yet." />
   ) },
   { name: "EnvironmentSearchSelect", subpath: "#product/primitives/patterns/EnvironmentSearchSelect", render: EnvironmentSearchSelectDemo },
-  { name: "LevelBarsButton", subpath: "#product/primitives/patterns/composer/LevelBarsButton", render: LevelBarsButtonDemo },
   { name: "ModalShell", subpath: "#product/primitives/patterns/ModalShell", render: ModalShellDemo },
   NOTICE_BANNER_ENTRY,
   { name: "PageContentFrame", subpath: "#product/primitives/patterns/PageContentFrame", render: () => (

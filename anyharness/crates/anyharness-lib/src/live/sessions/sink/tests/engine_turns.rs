@@ -58,7 +58,9 @@ fn post_turn_items_open_an_engine_initiated_turn() {
         Arc::new(store.clone()),
     );
 
-    let prompt_turn = sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    let prompt_turn = sink
+        .begin_turn("hello".to_string(), None, Vec::new(), None)
+        .expect("begin prompt turn");
     sink.agent_message_chunk(AcpChunkPayload {
         content: json!("hi"),
         ..Default::default()
@@ -85,18 +87,19 @@ fn post_turn_items_open_an_engine_initiated_turn() {
     assert_ne!(continuation_turn, prompt_turn);
     let continuation_item = events
         .iter()
-        .find(|e| {
-            e.event.event_type() == "item_started"
-                && e.seq > continuation_turn_started.seq
-        })
+        .find(|e| e.event.event_type() == "item_started" && e.seq > continuation_turn_started.seq)
         .expect("continuation item");
-    assert_eq!(continuation_item.turn_id.as_deref(), Some(continuation_turn.as_str()));
+    assert_eq!(
+        continuation_item.turn_id.as_deref(),
+        Some(continuation_turn.as_str())
+    );
 }
 
 /// A quiescent goal event (met/cleared/non-active update) published through
-/// the observer path closes the open engine-initiated turn.
+/// the observer path freezes the requested terminal outcome. The actor owns
+/// the fallible atomic commit and only closes the turn after it succeeds.
 #[test]
-fn quiescent_goal_event_closes_engine_initiated_turn() {
+fn quiescent_goal_event_requests_engine_terminal_commit() {
     use anyharness_contract::v1::{GoalMetPayload, GoalStatus};
     let store = seeded_store();
     let (tx, mut rx) = broadcast::channel(64);
@@ -108,7 +111,8 @@ fn quiescent_goal_event_closes_engine_initiated_turn() {
         Arc::new(store.clone()),
     );
 
-    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    sink.begin_turn("hello".to_string(), None, Vec::new(), None)
+        .expect("begin turn");
     sink.turn_ended(StopReason::EndTurn);
     // Continuation output opens the engine turn.
     sink.agent_message_chunk(AcpChunkPayload {
@@ -125,16 +129,44 @@ fn quiescent_goal_event_closes_engine_initiated_turn() {
     );
     sink.publish_persisted_events(vec![met]);
 
-    assert_eq!(sink.current_turn_id(), None, "engine turn must close on met");
+    assert!(
+        sink.current_turn_id().is_some(),
+        "turn stays open until commit"
+    );
+    assert_eq!(
+        sink.requested_engine_terminal_outcome(),
+        Some(crate::live::sessions::model::TerminalTurnOutcome::Completed)
+    );
     let events = drain_events(&mut rx);
     assert_eq!(
         events
             .iter()
             .filter(|e| e.event.event_type() == "turn_ended")
             .count(),
-        2,
-        "prompt turn end + engine turn end"
+        1,
+        "only the already-committed prompt end is visible before actor commit"
     );
+}
+
+#[test]
+fn goal_statuses_map_to_explicit_engine_terminal_outcomes() {
+    use crate::live::sessions::model::TerminalTurnOutcome;
+    use anyharness_contract::v1::{GoalStatus, GoalUpdatedPayload};
+
+    let cases = [
+        (GoalStatus::Met, Some(TerminalTurnOutcome::Completed)),
+        (GoalStatus::Failed, Some(TerminalTurnOutcome::Failed)),
+        (GoalStatus::Blocked, Some(TerminalTurnOutcome::Failed)),
+        (GoalStatus::Cleared, Some(TerminalTurnOutcome::Cancelled)),
+        (GoalStatus::Paused, Some(TerminalTurnOutcome::Cancelled)),
+        (GoalStatus::Active, None),
+    ];
+    for (status, expected) in cases {
+        let event = SessionEvent::GoalUpdated(GoalUpdatedPayload {
+            goal: test_goal(status),
+        });
+        assert_eq!(super::super::goal_event_terminal_outcome(&event), expected);
+    }
 }
 
 /// A quiescent goal event must NOT close a prompt-begun turn: a goal can be
@@ -152,7 +184,9 @@ fn quiescent_goal_event_does_not_close_prompt_turn() {
         Arc::new(store.clone()),
     );
 
-    let prompt_turn = sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    let prompt_turn = sink
+        .begin_turn("hello".to_string(), None, Vec::new(), None)
+        .expect("begin prompt turn");
     let met = goal_envelope(
         &sink,
         SessionEvent::GoalMet(GoalMetPayload {
@@ -181,13 +215,15 @@ fn begin_turn_sweeps_dangling_engine_initiated_turn() {
         Arc::new(store.clone()),
     );
 
-    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    sink.begin_turn("hello".to_string(), None, Vec::new(), None)
+        .expect("begin turn");
     sink.turn_ended(StopReason::EndTurn);
     sink.agent_message_chunk(AcpChunkPayload {
         content: json!("continuation"),
         ..Default::default()
     });
-    sink.begin_turn("next prompt".to_string(), None, Vec::new(), None);
+    sink.begin_turn("next prompt".to_string(), None, Vec::new(), None)
+        .expect("begin turn");
 
     let events = drain_events(&mut rx);
     let types = events
@@ -229,7 +265,8 @@ fn sweep_closes_engine_turn_that_never_received_content() {
         Arc::new(store.clone()),
     );
 
-    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    sink.begin_turn("hello".to_string(), None, Vec::new(), None)
+        .expect("begin turn");
     sink.turn_ended(StopReason::EndTurn);
     // Tag-opened engine turn (as ingest does for goal_updated), observer drops.
     sink.ensure_open_turn();
@@ -263,7 +300,8 @@ fn sweep_keeps_engine_turn_with_content_open() {
         Arc::new(store.clone()),
     );
 
-    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    sink.begin_turn("hello".to_string(), None, Vec::new(), None)
+        .expect("begin turn");
     sink.turn_ended(StopReason::EndTurn);
     sink.agent_message_chunk(AcpChunkPayload {
         content: json!("continuation"),

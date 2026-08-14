@@ -121,7 +121,7 @@ impl SessionStore {
     }
 }
 
-fn map_live_config_snapshot(
+pub(super) fn map_live_config_snapshot(
     row: &rusqlite::Row,
 ) -> rusqlite::Result<SessionLiveConfigSnapshotRecord> {
     Ok(SessionLiveConfigSnapshotRecord {
@@ -134,7 +134,9 @@ fn map_live_config_snapshot(
     })
 }
 
-fn map_pending_config_change(row: &rusqlite::Row) -> rusqlite::Result<PendingConfigChangeRecord> {
+pub(super) fn map_pending_config_change(
+    row: &rusqlite::Row,
+) -> rusqlite::Result<PendingConfigChangeRecord> {
     Ok(PendingConfigChangeRecord {
         session_id: row.get("session_id")?,
         config_id: row.get("config_id")?,

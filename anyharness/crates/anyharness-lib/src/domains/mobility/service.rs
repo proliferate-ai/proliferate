@@ -4,15 +4,11 @@ use std::sync::Arc;
 
 use anyhow::Context;
 
-use crate::adapters::git::executor::run_git_ok;
-use crate::domains::agents::portability::{collect_agent_artifacts, AgentArtifactFileData};
 use crate::domains::mobility::model::{
     MobilityFileData, WorkspaceMobilityArchiveData, WorkspaceMobilityExportOptions,
-    WorkspaceMobilitySessionBundleData, MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
+    MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
 };
-use crate::domains::mobility::workspace_delta::{collect_workspace_delta, current_branch_name};
 use crate::domains::sessions::service::SessionService;
-use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
 use crate::domains::workspaces::model::WorkspaceRecord;
@@ -22,7 +18,10 @@ use crate::{
     adapters::git::{types::GitOperation, GitService},
 };
 
-const INCLUDE_RAW_NOTIFICATIONS_ENV: &str = "ANYHARNESS_MOBILITY_INCLUDE_RAW_NOTIFICATIONS";
+mod archive;
+pub(super) use archive::archive_estimated_size_bytes;
+use archive::validate_completion_deliveries;
+mod export;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MobilityError {
@@ -51,7 +50,6 @@ pub enum MobilityError {
 pub struct MobilityService {
     workspace_runtime: Arc<WorkspaceRuntime>,
     session_service: Arc<SessionService>,
-    subagent_service: Arc<SubagentService>,
     access_gate: Arc<WorkspaceAccessGate>,
     /// The runtime home directory, for locating per-session agent artifacts.
     /// A path fact, handed in by `app/` — the same value `SessionRuntime` gets.
@@ -62,157 +60,15 @@ impl MobilityService {
     pub fn new(
         workspace_runtime: Arc<WorkspaceRuntime>,
         session_service: Arc<SessionService>,
-        subagent_service: Arc<SubagentService>,
         access_gate: Arc<WorkspaceAccessGate>,
         runtime_home: PathBuf,
     ) -> Self {
         Self {
             workspace_runtime,
             session_service,
-            subagent_service,
             access_gate,
             runtime_home,
         }
-    }
-
-    pub fn export_workspace_archive(
-        &self,
-        workspace_id: &str,
-        options: &WorkspaceMobilityExportOptions,
-    ) -> Result<WorkspaceMobilityArchiveData, MobilityError> {
-        let workspace = self.load_workspace(workspace_id)?;
-        self.validate_expected_export_runtime_state(workspace_id, options)?;
-        let workspace_path = PathBuf::from(&workspace.path);
-        let repo_root = GitService::resolve_repo_root(&workspace_path)
-            .map_err(|_| MobilityError::NotGitWorkspace(workspace.path.clone()))?;
-        let repo_root_string = repo_root.display().to_string();
-        let base_commit_sha = run_git_ok(&repo_root, &["rev-parse", "HEAD"])?
-            .trim()
-            .to_string();
-        let branch_name = current_branch_name(&repo_root)?;
-        if options.require_clean_git_state {
-            validate_expected_export_git_state(
-                workspace_id,
-                &workspace_path,
-                &base_commit_sha,
-                branch_name.as_deref(),
-                options,
-            )?;
-        }
-        let delta = collect_workspace_delta(&repo_root, &options.exclude_paths)?;
-        if options.require_clean_git_state {
-            if !delta.files.is_empty() || !delta.deleted_paths.is_empty() {
-                return Err(MobilityError::Invalid(
-                    "Source workspace changed while preparing the mobility archive".to_string(),
-                ));
-            }
-            validate_clean_repo_for_mobility(
-                workspace_id,
-                &workspace_path,
-                "Source workspace must stay clean while exporting a mobility archive",
-            )?;
-        }
-        let sessions = self.collect_workspace_sessions(&workspace)?;
-        let session_ids = sessions
-            .iter()
-            .map(|bundle| bundle.session.id.clone())
-            .collect::<HashSet<_>>();
-        let (session_links, session_link_completions, session_link_wake_schedules, partial_graph) =
-            self.subagent_service
-                .mobility_graph_for_sessions(&session_ids)
-                .map_err(MobilityError::Internal)?;
-        if let Some(missing_id) = partial_graph.first() {
-            return Err(MobilityError::Invalid(format!(
-                "cannot export partial subagent graph; linked session {missing_id} is outside the archive"
-            )));
-        }
-        self.validate_expected_export_runtime_state(workspace_id, options)?;
-
-        let archive = WorkspaceMobilityArchiveData {
-            source_workspace_id: Some(workspace.id),
-            source_workspace_path: workspace.path,
-            repo_root_path: repo_root_string,
-            branch_name,
-            base_commit_sha,
-            files: delta.files,
-            deleted_paths: delta.deleted_paths,
-            sessions,
-            session_links,
-            session_link_completions,
-            session_link_wake_schedules,
-        };
-        validate_archive_size(&archive)?;
-        Ok(archive)
-    }
-
-    fn collect_workspace_sessions(
-        &self,
-        workspace: &WorkspaceRecord,
-    ) -> Result<Vec<WorkspaceMobilitySessionBundleData>, MobilityError> {
-        let workspace_path = PathBuf::from(&workspace.path);
-        let sessions = self
-            .session_service
-            .store()
-            .list_by_workspace(&workspace.id)?;
-        let mut bundles = Vec::new();
-        let runtime_home = Some(self.runtime_home.as_path());
-        for mut session in sessions {
-            if !is_supported_agent_kind(&session.agent_kind) {
-                continue;
-            }
-            // MCP bindings are workspace-local encrypted state; sessions rebind after handoff.
-            session.mcp_bindings_ciphertext = None;
-            let live_config_snapshot = self
-                .session_service
-                .store()
-                .find_live_config_snapshot(&session.id)?;
-            let pending_config_changes = self
-                .session_service
-                .store()
-                .list_pending_config_changes(&session.id)?;
-            let pending_prompts = self
-                .session_service
-                .store()
-                .list_pending_prompts(&session.id)?;
-            let prompt_attachments = self
-                .session_service
-                .store()
-                .list_prompt_attachments(&session.id)?
-                .into_iter()
-                .map(|record| {
-                    let content = self
-                        .session_service
-                        .read_prompt_attachment_content(&record)?;
-                    Ok(
-                        crate::domains::mobility::model::MobilityPromptAttachmentData {
-                            record,
-                            content,
-                        },
-                    )
-                })
-                .collect::<anyhow::Result<Vec<_>>>()?;
-            let events = self.session_service.store().list_events(&session.id)?;
-            let raw_notifications = if include_raw_notifications_in_mobility_archive() {
-                self.session_service
-                    .store()
-                    .list_raw_notifications(&session.id)?
-            } else {
-                Vec::new()
-            };
-            let agent_artifacts = collect_agent_artifacts(&session, &workspace_path, runtime_home)?;
-
-            bundles.push(WorkspaceMobilitySessionBundleData {
-                session,
-                live_config_snapshot,
-                pending_config_changes,
-                pending_prompts,
-                prompt_attachments,
-                events,
-                raw_notifications,
-                agent_artifacts,
-            });
-        }
-        Ok(bundles)
     }
 
     pub(super) fn load_workspace(
@@ -408,6 +264,24 @@ mod tests {
 
         assert!(matches!(error, MobilityError::Invalid(_)));
     }
+
+    #[test]
+    fn mobility_wake_schedules_are_cowork_only() {
+        use crate::domains::sessions::links::model::SessionLinkRelation;
+
+        assert!(relation_owns_mobility_wake_schedule(
+            SessionLinkRelation::CoworkCodingSession
+        ));
+        assert!(!relation_owns_mobility_wake_schedule(
+            SessionLinkRelation::Subagent
+        ));
+        assert!(!relation_owns_mobility_wake_schedule(
+            SessionLinkRelation::ReviewAgent
+        ));
+        assert!(!relation_owns_mobility_wake_schedule(
+            SessionLinkRelation::Fork
+        ));
+    }
 }
 
 pub(super) fn write_workspace_file(
@@ -437,20 +311,7 @@ pub(super) fn is_supported_agent_kind(agent_kind: &str) -> bool {
     matches!(agent_kind, "claude" | "codex")
 }
 
-fn include_raw_notifications_in_mobility_archive() -> bool {
-    env_flag_enabled(INCLUDE_RAW_NOTIFICATIONS_ENV)
-}
-
-fn env_flag_enabled(key: &str) -> bool {
-    let Some(value) = std::env::var_os(key) else {
-        return false;
-    };
-    let value = value.to_string_lossy();
-    let normalized = value.trim().to_ascii_lowercase();
-    !normalized.is_empty() && !matches!(normalized.as_str(), "0" | "false" | "no" | "off")
-}
-
-fn validate_expected_export_git_state(
+pub(super) fn validate_expected_export_git_state(
     workspace_id: &str,
     workspace_path: &Path,
     base_commit_sha: &str,
@@ -589,7 +450,7 @@ pub(super) fn validate_delegated_archive_graph(
         .iter()
         .map(|bundle| bundle.session.id.as_str())
         .collect::<HashSet<_>>();
-    let mut link_ids = HashSet::new();
+    let mut link_relations = std::collections::HashMap::new();
 
     for link in &archive.session_links {
         if !session_ids.contains(link.parent_session_id.as_str()) {
@@ -604,7 +465,10 @@ pub(super) fn validate_delegated_archive_graph(
                 link.id, link.child_session_id
             )));
         }
-        if !link_ids.insert(link.id.as_str()) {
+        if link_relations
+            .insert(link.id.as_str(), link.relation)
+            .is_some()
+        {
             return Err(MobilityError::Invalid(format!(
                 "archive contains duplicate session link {}",
                 link.id
@@ -613,7 +477,7 @@ pub(super) fn validate_delegated_archive_graph(
     }
 
     for completion in &archive.session_link_completions {
-        if !link_ids.contains(completion.session_link_id.as_str()) {
+        if !link_relations.contains_key(completion.session_link_id.as_str()) {
             return Err(MobilityError::Invalid(format!(
                 "archive completion {} references missing session link {}",
                 completion.completion_id, completion.session_link_id
@@ -622,15 +486,27 @@ pub(super) fn validate_delegated_archive_graph(
     }
 
     for schedule in &archive.session_link_wake_schedules {
-        if !link_ids.contains(schedule.session_link_id.as_str()) {
+        let Some(relation) = link_relations.get(schedule.session_link_id.as_str()) else {
             return Err(MobilityError::Invalid(format!(
                 "archive wake schedule references missing session link {}",
+                schedule.session_link_id
+            )));
+        };
+        if !relation_owns_mobility_wake_schedule(*relation) {
+            return Err(MobilityError::Invalid(format!(
+                "archive wake schedule references non-Cowork session link {}",
                 schedule.session_link_id
             )));
         }
     }
 
-    Ok(())
+    validate_completion_deliveries(archive, &session_ids)
+}
+
+pub(super) fn relation_owns_mobility_wake_schedule(
+    relation: crate::domains::sessions::links::model::SessionLinkRelation,
+) -> bool {
+    relation == crate::domains::sessions::links::model::SessionLinkRelation::CoworkCodingSession
 }
 
 pub(super) fn validate_archive_size(
@@ -680,172 +556,4 @@ pub(super) fn validate_archive_size(
     }
 
     Ok(())
-}
-
-pub(super) fn archive_estimated_size_bytes(archive: &WorkspaceMobilityArchiveData) -> u64 {
-    let file_bytes = archive
-        .files
-        .iter()
-        .map(encoded_file_size_bytes)
-        .sum::<u64>();
-    let session_bytes = archive
-        .sessions
-        .iter()
-        .map(session_bundle_size_bytes)
-        .sum::<u64>();
-    file_bytes
-        .saturating_add(session_bytes)
-        .saturating_add(string_size(&archive.source_workspace_path))
-        .saturating_add(string_size(&archive.repo_root_path))
-        .saturating_add(option_string_size(&archive.branch_name))
-        .saturating_add(string_size(&archive.base_commit_sha))
-        .saturating_add(archive.deleted_paths.iter().map(string_size).sum::<u64>())
-}
-
-fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64 {
-    encoded_session_size_bytes(&bundle.session)
-        .saturating_add(
-            bundle
-                .live_config_snapshot
-                .as_ref()
-                .map(encoded_live_config_size_bytes)
-                .unwrap_or(0),
-        )
-        .saturating_add(
-            bundle
-                .pending_config_changes
-                .iter()
-                .map(|record| {
-                    string_size(&record.session_id)
-                        + string_size(&record.config_id)
-                        + string_size(&record.value)
-                        + string_size(&record.queued_at)
-                })
-                .sum::<u64>(),
-        )
-        .saturating_add(
-            bundle
-                .pending_prompts
-                .iter()
-                .map(|record| {
-                    string_size(&record.session_id)
-                        + record.seq as u64
-                        + option_string_size(&record.prompt_id)
-                        + string_size(&record.text)
-                        + option_string_size(&record.blocks_json)
-                        + string_size(&record.queued_at)
-                })
-                .sum::<u64>(),
-        )
-        .saturating_add(
-            bundle
-                .prompt_attachments
-                .iter()
-                .map(|attachment| {
-                    let record = &attachment.record;
-                    string_size(&record.attachment_id)
-                        + string_size(&record.session_id)
-                        + str_size(record.state.as_str())
-                        + str_size(record.kind.as_str())
-                        + str_size(record.source.as_str())
-                        + option_string_size(&record.mime_type)
-                        + option_string_size(&record.display_name)
-                        + option_string_size(&record.source_uri)
-                        + base64_size(attachment.content.len())
-                        + string_size(&record.sha256)
-                        + string_size(&record.created_at)
-                        + string_size(&record.updated_at)
-                })
-                .sum::<u64>(),
-        )
-        .saturating_add(
-            bundle
-                .events
-                .iter()
-                .map(|record| {
-                    string_size(&record.session_id)
-                        + record.seq as u64
-                        + string_size(&record.timestamp)
-                        + string_size(&record.event_type)
-                        + option_string_size(&record.turn_id)
-                        + option_string_size(&record.item_id)
-                        + string_size(&record.payload_json)
-                })
-                .sum::<u64>(),
-        )
-        .saturating_add(
-            bundle
-                .raw_notifications
-                .iter()
-                .map(|record| {
-                    string_size(&record.session_id)
-                        + record.seq as u64
-                        + string_size(&record.timestamp)
-                        + string_size(&record.notification_kind)
-                        + string_size(&record.payload_json)
-                })
-                .sum::<u64>(),
-        )
-        .saturating_add(
-            bundle
-                .agent_artifacts
-                .iter()
-                .map(encoded_agent_artifact_size_bytes)
-                .sum::<u64>(),
-        )
-}
-
-fn encoded_session_size_bytes(session: &crate::domains::sessions::model::SessionRecord) -> u64 {
-    string_size(&session.id)
-        + string_size(&session.workspace_id)
-        + string_size(&session.agent_kind)
-        + option_string_size(&session.native_session_id)
-        + option_string_size(&session.requested_model_id)
-        + option_string_size(&session.current_model_id)
-        + option_string_size(&session.requested_mode_id)
-        + option_string_size(&session.current_mode_id)
-        + option_string_size(&session.title)
-        + option_string_size(&session.thinking_level_id)
-        + session.thinking_budget_tokens.unwrap_or_default() as u64
-        + string_size(&session.status)
-        + string_size(&session.created_at)
-        + string_size(&session.updated_at)
-        + option_string_size(&session.last_prompt_at)
-        + option_string_size(&session.closed_at)
-        + option_string_size(&session.dismissed_at)
-        + option_string_size(&session.system_prompt_append)
-}
-
-fn encoded_live_config_size_bytes(
-    record: &crate::domains::sessions::model::SessionLiveConfigSnapshotRecord,
-) -> u64 {
-    string_size(&record.session_id)
-        + record.source_seq as u64
-        + string_size(&record.raw_config_options_json)
-        + string_size(&record.normalized_controls_json)
-        + string_size(&record.updated_at)
-}
-
-fn encoded_file_size_bytes(file: &MobilityFileData) -> u64 {
-    string_size(&file.relative_path) + file.mode as u64 + base64_size(file.content.len())
-}
-
-fn encoded_agent_artifact_size_bytes(file: &AgentArtifactFileData) -> u64 {
-    string_size(&file.relative_path) + file.mode as u64 + base64_size(file.content.len())
-}
-
-fn base64_size(byte_len: usize) -> u64 {
-    byte_len.div_ceil(3) as u64 * 4
-}
-
-fn string_size(value: &String) -> u64 {
-    value.len() as u64
-}
-
-fn str_size(value: &str) -> u64 {
-    value.len() as u64
-}
-
-fn option_string_size(value: &Option<String>) -> u64 {
-    value.as_ref().map(|value| value.len() as u64).unwrap_or(0)
 }

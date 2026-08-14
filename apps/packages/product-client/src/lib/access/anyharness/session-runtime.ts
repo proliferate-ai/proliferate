@@ -21,6 +21,7 @@ import {
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import {
   getSession,
+  getSessionSubagents,
   listSessionEvents,
   listWorkspaceSessions,
   resumeSession as resumeRuntimeSession,
@@ -206,6 +207,41 @@ export async function fetchSessionHistory(
       globalThis.clearTimeout(timeoutId);
     }
   }
+}
+
+export async function fetchSessionSubagentRoster(
+  sessionId: string,
+  options?: {
+    requestHeaders?: HeadersInit;
+    ssh?: DesktopSshBridge | null;
+    cloudClient: CloudSandboxGatewayUrlSource | null;
+  },
+) {
+  const { connection, materializedSessionId } = await getSessionClientAndWorkspace(
+    sessionId,
+    options?.ssh ?? null,
+    options?.cloudClient ?? null,
+  );
+  return getSessionSubagents(
+    connection,
+    materializedSessionId,
+    options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
+  );
+}
+
+export async function fetchSessionWorkspaceSummaries(
+  sessionId: string,
+  options?: {
+    ssh?: DesktopSshBridge | null;
+    cloudClient: CloudSandboxGatewayUrlSource | null;
+  },
+) {
+  const { connection } = await getSessionClientAndWorkspace(
+    sessionId,
+    options?.ssh ?? null,
+    options?.cloudClient ?? null,
+  );
+  return listWorkspaceSessions(connection, undefined);
 }
 
 export async function fetchSessionSummary(

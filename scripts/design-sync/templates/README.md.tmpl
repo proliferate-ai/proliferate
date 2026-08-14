@@ -1,8 +1,11 @@
 ## Building with this design system
 
 Proliferate's UI is a **Tailwind-v4 preset** system: components carry their
-own styling, and you compose layout with utility classes. Two rules matter
-more than everything else below.
+own styling, and you compose layout with utility classes. The working
+agreement for designing here — closed vocabulary, declaring every new or
+modified component, and the handoff-manifest format — is
+`guidelines/working-agreement.md`; read it before designing. Two rules
+matter more than everything else below.
 
 ### 1. The stock Tailwind palette and type ramp DO NOT EXIST here
 
@@ -113,6 +116,9 @@ below is real, current, in-repo source, not a published package snapshot.
   story list), `<Name>.jsx` (real source), `<Name>.html` (the rendered
   variant card).
 - `fonts/` — `@font-face` files + `fonts.css`.
+- `guidelines/working-agreement.md` — the rules of engagement for
+  designing with this library and the handoff-manifest format engineering
+  implements from.
 
 For a specific component, `read_file("components/<group>/<Name>/<Name>.prompt.md")`.
 

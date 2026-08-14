@@ -4,6 +4,7 @@ import {
   anyHarnessGitStatusKey,
   anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
+  anyHarnessWorkspaceSubagentsKey,
   useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -59,6 +60,9 @@ export function useSessionStreamCache(): SessionStreamCache {
     invalidateSessionSubagents({ workspaceId, sessionId }) {
       void queryClient.invalidateQueries({
         queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, sessionId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: anyHarnessWorkspaceSubagentsKey(cacheScopeKey, workspaceId),
       });
     },
     invalidateCoworkManagedWorkspaces({ runtimeUrl, sessionId }) {

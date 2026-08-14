@@ -13,6 +13,9 @@ use crate::live::sessions::actor::command::{
 };
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::model::AttachmentSource;
+use crate::live::sessions::queue_durable::{
+    PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
+};
 
 impl SessionActor {
     pub(in crate::live::sessions::actor) async fn handle_busy_prompt_queue(
@@ -21,6 +24,11 @@ impl SessionActor {
         prompt_id: Option<String>,
         from_queue_seq: Option<i64>,
     ) -> Result<PromptAcceptance, PromptAcceptError> {
+        if !self.event_mutations_admitted().await {
+            return Err(PromptAcceptError::EnqueueFailed(
+                "terminal transaction unresolved".to_string(),
+            ));
+        }
         if let Some(seq) = from_queue_seq {
             self.emit_prequeued_pending_prompt_added(seq).await;
             return Ok(PromptAcceptance::Queued { seq });
@@ -61,6 +69,9 @@ impl SessionActor {
         &self,
         seq: i64,
     ) {
+        if !self.event_mutations_admitted().await {
+            return;
+        }
         match self.caps.queue.find_pending_prompt(&self.session_id, seq) {
             Ok(Some(record)) => {
                 let mut sink = self.event_sink.lock().await;
@@ -107,6 +118,11 @@ impl SessionActor {
         seq: i64,
         payload: PromptPayload,
     ) -> Result<(), QueueMutationError> {
+        if !self.event_mutations_admitted().await {
+            return Err(QueueMutationError::Internal(
+                "terminal transaction unresolved".to_string(),
+            ));
+        }
         let old_attachment_ids = match self.caps.queue.find_pending_prompt(&self.session_id, seq) {
             Ok(Some(record)) => record.attachment_ids(),
             _ => Vec::new(),
@@ -116,7 +132,7 @@ impl SessionActor {
             .queue
             .update_pending_prompt_payload(&self.session_id, seq, &payload)
         {
-            Ok(true) => {
+            Ok(PendingPromptUpdateOutcome::Updated) => {
                 let updated_record = self
                     .caps
                     .queue
@@ -161,7 +177,8 @@ impl SessionActor {
                 });
                 Ok(())
             }
-            Ok(false) => Err(QueueMutationError::NotFound),
+            Ok(PendingPromptUpdateOutcome::NotFound) => Err(QueueMutationError::NotFound),
+            Ok(PendingPromptUpdateOutcome::Protected) => Err(QueueMutationError::Protected),
             Err(error) => {
                 tracing::warn!(
                     session_id = %self.session_id,
@@ -178,12 +195,17 @@ impl SessionActor {
         &self,
         seq: i64,
     ) -> Result<(), QueueMutationError> {
+        if !self.event_mutations_admitted().await {
+            return Err(QueueMutationError::Internal(
+                "terminal transaction unresolved".to_string(),
+            ));
+        }
         match self
             .caps
             .queue
             .delete_pending_prompt_record(&self.session_id, seq)
         {
-            Ok(Some(record)) => {
+            Ok(PendingPromptDeleteOutcome::Deleted(record)) => {
                 let attachment_ids = record.attachment_ids();
                 let attachment_refs = attachment_ids
                     .iter()
@@ -215,7 +237,8 @@ impl SessionActor {
                 });
                 Ok(())
             }
-            Ok(None) => Err(QueueMutationError::NotFound),
+            Ok(PendingPromptDeleteOutcome::NotFound) => Err(QueueMutationError::NotFound),
+            Ok(PendingPromptDeleteOutcome::Protected) => Err(QueueMutationError::Protected),
             Err(error) => {
                 tracing::warn!(
                     session_id = %self.session_id,
@@ -233,6 +256,11 @@ impl SessionActor {
         expected_seqs: Vec<i64>,
         desired_seqs: Vec<i64>,
     ) -> Result<(), QueueMutationError> {
+        if !self.event_mutations_admitted().await {
+            return Err(QueueMutationError::Internal(
+                "terminal transaction unresolved".to_string(),
+            ));
+        }
         self.persist_pending_prompt_order(&expected_seqs, &desired_seqs)
             .await
     }
@@ -244,6 +272,11 @@ impl SessionActor {
         seq: i64,
         is_busy: bool,
     ) -> Result<(), QueueMutationError> {
+        if !self.event_mutations_admitted().await {
+            return Err(QueueMutationError::Internal(
+                "terminal transaction unresolved".to_string(),
+            ));
+        }
         let current = self
             .caps
             .queue

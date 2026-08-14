@@ -123,18 +123,23 @@ impl MobilityRuntime {
         }
         if relocated_session_count == 0 {
             for link in &archive.session_links {
-                self.subagent_service
+                self.session_link_service
                     .import_link(link)
                     .map_err(MobilityError::Internal)?;
             }
             for completion in &archive.session_link_completions {
-                self.subagent_service
+                self.link_completion_store
                     .import_completion(completion)
                     .map_err(MobilityError::Internal)?;
             }
+            for delivery in &archive.session_link_completion_deliveries {
+                self.completion_delivery_store
+                    .import(delivery)
+                    .map_err(MobilityError::Internal)?;
+            }
             for schedule in &archive.session_link_wake_schedules {
-                self.subagent_service
-                    .import_wake_schedule(schedule)
+                self.link_completion_store
+                    .import_wake_schedule(&schedule.session_link_id)
                     .map_err(MobilityError::Internal)?;
             }
         } else if relocated_session_count != archive.sessions.len() {

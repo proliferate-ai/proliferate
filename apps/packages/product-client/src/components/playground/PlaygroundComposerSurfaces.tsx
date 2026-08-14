@@ -56,7 +56,15 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
         />
       );
     case "workspace-status-card":
-      return <PlaygroundComposerSurface statusControl={<PlaygroundWorkspaceStatusControl />} />;
+      // The card is no longer a composer control (the statusControl slot is
+      // gone), but the fixture is still the only place its full anatomy can be
+      // inspected — so the playground mounts it beside the composer.
+      return (
+        <div className="flex flex-col items-start gap-3">
+          <PlaygroundWorkspaceStatusControl />
+          <PlaygroundComposerSurface />
+        </div>
+      );
     case "status-live-stream":
       return <PlaygroundComposerSurface interactive />;
     case "slash-command-search":
@@ -75,11 +83,9 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
 export function PlaygroundComposerSurface({
   ultra = false,
   interactive = false,
-  statusControl,
 }: {
   ultra?: boolean;
   interactive?: boolean;
-  statusControl?: ReactNode;
 }) {
   const [draft, setDraft] = useState("");
   const [editorSnapshot, setEditorSnapshot] = useState<ChatComposerEditorSnapshot>();
@@ -116,7 +122,7 @@ export function PlaygroundComposerSurface({
             />
           )}
         </div>
-        <PlaygroundComposerControlRow ultra={ultra} statusControl={statusControl} />
+        <PlaygroundComposerControlRow ultra={ultra} />
       </form>
     </ChatComposerSurface>
   );
@@ -301,10 +307,8 @@ function usePlaygroundLiveControls(controls: LiveSessionControlDescriptor[]) {
 
 function PlaygroundComposerControlRow({
   ultra = false,
-  statusControl,
 }: {
   ultra?: boolean;
-  statusControl?: ReactNode;
 }) {
   const baseControls = useMemo(
     () => (ultra
@@ -319,7 +323,6 @@ function PlaygroundComposerControlRow({
       runtimeControlsDisabled={false}
       modelSelectorProps={createPlaygroundModelSelectorProps()}
       agentKind="codex"
-      statusControl={statusControl}
       sessionConfigControls={sessionConfigControls}
       isEditingQueuedPrompt={false}
       chatDisabled={false}
