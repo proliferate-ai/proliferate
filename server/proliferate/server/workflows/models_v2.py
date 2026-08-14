@@ -122,6 +122,9 @@ class WorkflowDefinitionDocumentV2(WorkflowDefinitionWireModel):
 class WorkflowDefinitionCreateRequestV2(WorkflowDefinitionWireModel):
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     description: Annotated[str, StringConstraints(max_length=20_000)] = ""
+    # Shape-only (Ruling A): the id lives in the RUNTIME repo-root id space
+    # (GET /v1/repo-roots), not the CP repo-config table — the CP stores it
+    # opaquely and never resolves it. Resolution is the engine plane's job.
     default_repo_config_id: UUID | None = None
     definition: WorkflowDefinitionDocumentV2
 

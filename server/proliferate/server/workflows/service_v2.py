@@ -13,7 +13,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.store import repositories as repository_store
 from proliferate.db.store import workflow_definitions as workflow_store
 from proliferate.db.store import workflow_invocations as invocation_store
 from proliferate.db.store.workflow_definitions import WorkflowDefinitionSnapshot
@@ -56,11 +55,6 @@ async def create_workflow_definition_v2(
     user_id: UUID,
     body: WorkflowDefinitionCreateRequestV2,
 ) -> WorkflowDefinitionSnapshot:
-    await _validate_default_repository(
-        db,
-        user_id=user_id,
-        repo_config_id=body.default_repo_config_id,
-    )
     _validate_document(body.definition)
     return await workflow_store.create_workflow_definition(
         db,
@@ -92,11 +86,6 @@ async def update_workflow_definition_v2(
             expected_revision=body.expected_revision,
             current_revision=current.revision,
         )
-    await _validate_default_repository(
-        db,
-        user_id=current.user_id,
-        repo_config_id=body.default_repo_config_id,
-    )
     _validate_document(body.definition)
     updated = await workflow_store.update_workflow_definition_if_revision(
         db,
@@ -274,26 +263,6 @@ def _canonical_uuid(value: str) -> UUID:
     if str(parsed) != value:
         raise InvalidWorkflowInvocation("invocationId must be a canonical lowercase UUID.")
     return parsed
-
-
-async def _validate_default_repository(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    repo_config_id: UUID | None,
-) -> None:
-    if repo_config_id is None:
-        return
-    repo = await repository_store.get_repo_config_by_id_for_user(
-        db,
-        user_id=user_id,
-        repo_config_id=repo_config_id,
-    )
-    if repo is None:
-        raise InvalidWorkflowDefinition(
-            "Default repository was not found.",
-            path="defaultRepoConfigId",
-        )
 
 
 def _normalized_description(value: str) -> str:

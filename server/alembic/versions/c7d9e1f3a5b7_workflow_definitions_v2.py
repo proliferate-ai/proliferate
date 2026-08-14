@@ -55,6 +55,16 @@ def upgrade() -> None:
         "workflow_invocation",
         "schema_version IN (1, 2)",
     )
+    # Ruling A: a v2 definition's defaultRepoConfigId lives in the RUNTIME
+    # repo-root id space, so the CP cannot resolve it — an FK into repo_config
+    # is exactly that resolution, enforced by Postgres. v1 rows keep their
+    # creation-time ownership check at the service layer, and repo_config is
+    # soft-delete-only, so the FK's ON DELETE SET NULL never fired in practice.
+    op.drop_constraint(
+        "workflow_definition_default_repo_config_id_fkey",
+        "workflow_definition",
+        type_="foreignkey",
+    )
 
 
 def downgrade() -> None:
@@ -65,6 +75,16 @@ def downgrade() -> None:
     # deliberately. Invocations go first — they reference definitions.
     op.execute(sa.text("DELETE FROM workflow_invocation WHERE schema_version = 2"))
     op.execute(sa.text("DELETE FROM workflow_definition WHERE schema_version = 2"))
+    # Safe once v2 rows are gone: surviving v1 rows only ever stored ids the
+    # service layer resolved against repo_config at write time.
+    op.create_foreign_key(
+        "workflow_definition_default_repo_config_id_fkey",
+        "workflow_definition",
+        "repo_config",
+        ["default_repo_config_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
     op.drop_constraint(
         "ck_workflow_invocation_schema_version",
         "workflow_invocation",

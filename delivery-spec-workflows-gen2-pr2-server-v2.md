@@ -215,3 +215,19 @@ Each item names what changed.
 9. **The frozen invocation embeds the definition verbatim at the storage
    layer** — `invocation_json["definition"]` equals the definition row's
    `definition_json` — and this is now pinned DB-level by the producer test.
+10. **`defaultRepoConfigId` is a runtime-space opaque id (Ruling A,
+    live-testing follow-up, 2026-08-14).** The spec inherited gen-1's
+    behavior of resolving the definition's `defaultRepoConfigId` against the
+    CP repo-config store, but the client sources that field from RUNTIME
+    repo roots (`GET /v1/repo-roots`) — so every id the builder offers was
+    rejected with 400 while ids the builder can never produce were accepted.
+    The CP now applies shape-only validation (UUID-or-null at the request
+    model) and stores the id opaquely; resolution is the engine plane's job
+    at placement time. This required dropping the DB-level resolver too:
+    `workflow_definition.default_repo_config_id`'s FK into `repo_config`
+    (Postgres-enforced CP resolution) is dropped in this PR's migration and
+    recreated on downgrade after the v2-row deletes. v1 keeps its
+    creation-time ownership check at the service layer; `repo_config` is
+    soft-delete-only, so the FK's `ON DELETE SET NULL` never fired in
+    practice. The invocation-freeze path was audited and repeats no such
+    lookup — placement was already shape-only per amendment 6.

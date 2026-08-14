@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Uuid,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -68,8 +69,11 @@ class WorkflowDefinition(Base):
         server_default=text("1"),
     )
     validated_catalog_version: Mapped[str] = mapped_column(String(128))
+    # Deliberately not an FK (Ruling A): for schema_version 2 rows this is an
+    # opaque RUNTIME repo-root id the CP never resolves; v1 rows validate
+    # ownership at the service layer instead.
     default_repo_config_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("repo_config.id", ondelete="SET NULL"),
+        Uuid,
         nullable=True,
     )
     inputs_json: Mapped[list[dict[str, object]]] = mapped_column(

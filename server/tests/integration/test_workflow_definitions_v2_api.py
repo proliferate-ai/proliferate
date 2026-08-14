@@ -204,25 +204,36 @@ async def test_v2_document_rejections_surface_paths(client: AsyncClient) -> None
 
 
 @pytest.mark.asyncio
-async def test_v2_default_repository_must_be_owned(
+async def test_v2_default_repository_is_an_opaque_runtime_space_id(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
+    """defaultRepoConfigId lives in the runtime repo-root id space (Ruling A):
+    the CP checks shape only (UUID-or-null) and never resolves it."""
+
     owner = await register_and_login(client, "wf-v2-repo-owner@example.com")
-    other = await register_and_login(client, "wf-v2-repo-other@example.com")
-    foreign_repo = await _seed_repo(db_session, user_id=other["user_id"], name="not-yours")
 
     payload = _v2_payload()
-    payload["defaultRepoConfigId"] = str(foreign_repo.id)
-    rejected = await client.post("/v1/workflows", headers=_headers(owner), json=payload)
-    assert rejected.status_code == 400
-    assert rejected.json()["detail"]["path"] == "defaultRepoConfigId"
-
-    own_repo = await _seed_repo(db_session, user_id=owner["user_id"], name="yours")
-    payload["defaultRepoConfigId"] = str(own_repo.id)
+    runtime_space_id = "7f3a9c1e-2b4d-4e6f-8a90-123456789abc"
+    payload["defaultRepoConfigId"] = runtime_space_id
     accepted = await client.post("/v1/workflows", headers=_headers(owner), json=payload)
     assert accepted.status_code == 201
-    assert accepted.json()["defaultRepoConfigId"] == str(own_repo.id)
+    assert accepted.json()["defaultRepoConfigId"] == runtime_space_id
+
+    other = await register_and_login(client, "wf-v2-repo-other@example.com")
+    foreign_repo = await _seed_repo(db_session, user_id=other["user_id"], name="not-yours")
+    payload["defaultRepoConfigId"] = str(foreign_repo.id)
+    cp_id_shaped = await client.post("/v1/workflows", headers=_headers(owner), json=payload)
+    assert cp_id_shaped.status_code == 201
+
+    payload["defaultRepoConfigId"] = "rr_local_9f2c"
+    malformed = await client.post("/v1/workflows", headers=_headers(owner), json=payload)
+    assert malformed.status_code == 422
+
+    payload["defaultRepoConfigId"] = None
+    nullable = await client.post("/v1/workflows", headers=_headers(owner), json=payload)
+    assert nullable.status_code == 201
+    assert nullable.json()["defaultRepoConfigId"] is None
 
 
 @pytest.mark.asyncio
