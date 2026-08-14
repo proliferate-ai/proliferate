@@ -17,6 +17,7 @@ interface FileDiffCardProps {
   openActionLabel?: string;
   openActionTitle?: string;
   actions?: ReactNode;
+  actionsAtRest?: boolean;
   children?: ReactNode;
   metadata?: ReactNode;
   embedded?: boolean;
@@ -39,6 +40,7 @@ export function FileDiffCard({
   openActionLabel,
   openActionTitle,
   actions,
+  actionsAtRest = false,
   children,
   metadata,
   embedded = false,
@@ -98,7 +100,9 @@ export function FileDiffCard({
   const headerInnerClass = isSidebar
     ? "group/diff-header @container/diff-header relative flex min-h-9 items-center gap-2.5 px-[calc(var(--diff-view-header-padding-x,0.75rem)+0.5rem)] py-1.5 text-chat hover:bg-[var(--diff-view-separator-surface)]"
     : `group/diff-header @container/diff-header relative flex min-h-7 items-center gap-2 px-[var(--diff-view-header-padding-x,1rem)] py-[var(--diff-view-header-padding-y,0.25rem)] text-chat transition-colors ${chatHeaderHoverClass}`;
-  const actionRevealClass = "opacity-0 transition-opacity duration-hover group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100";
+  const actionRevealClass = actionsAtRest
+    ? "opacity-100"
+    : "opacity-0 transition-opacity duration-hover group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100";
   const statsClass = isSidebar
     ? "leading-none"
     : "text-chat leading-none text-muted-foreground";

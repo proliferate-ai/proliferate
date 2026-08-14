@@ -117,4 +117,24 @@ describe("CollapsedEditActionRows", () => {
     expect(openPrimaryMock).not.toHaveBeenCalled();
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("keeps the context menu scoped to the filename", () => {
+    render(<EditRows item={editItem({ patch: true })} />);
+
+    const toggle = screen.getByRole("button", { name: "Toggle diff for edit-1.ts" });
+    fireEvent.contextMenu(toggle);
+
+    expect(screen.queryByRole("menuitem", { name: "Copy path" })).toBeNull();
+    expect(openPrimaryMock).not.toHaveBeenCalled();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("shows a persistent copy action in the expanded diff header", () => {
+    render(<EditRows item={editItem({ patch: true })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle diff for edit-1.ts" }));
+
+    const copy = screen.getByRole("button", { name: "Copy diff for edit-1.ts" });
+    expect(copy.closest(".opacity-100")).toBeTruthy();
+  });
 });

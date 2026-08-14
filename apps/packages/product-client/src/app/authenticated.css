@@ -222,11 +222,15 @@
   }
 }
 
-[data-edit-action-row]:is(:hover, :focus-within) .activity-file-change-stat-additions {
+.group\/edit-action:is(:hover, :focus-within) [data-edit-action-row] {
+  color: var(--color-foreground);
+}
+
+.group\/edit-action:is(:hover, :focus-within) .activity-file-change-stat-additions {
   color: var(--color-git-green);
 }
 
-[data-edit-action-row]:is(:hover, :focus-within) .activity-file-change-stat-deletions {
+.group\/edit-action:is(:hover, :focus-within) .activity-file-change-stat-deletions {
   color: var(--color-git-red);
 }
 
@@ -257,4 +261,11 @@
 
 .turn-document-reference-trigger:is(:hover, :focus-visible) .turn-document-open-label {
   opacity: 1;
+}
+
+/* QA-only browser capture aid; remove before handoff. */
+html,
+body,
+#root {
+  background: var(--color-background) !important;
 }

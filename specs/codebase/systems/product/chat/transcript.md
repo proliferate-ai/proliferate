@@ -102,7 +102,12 @@ apps/packages/product-client/src/components/workspace/chat/transcript/transcript
 apps/packages/product-client/src/components/workspace/chat/transcript/ProviderLinkMention.tsx
   shared inline provider-icon link mention + URL/host classification
   (isExternalHttpLink, linkHost); rendered by MarkdownBody's default anchor, so
-  every surface (web + cloud chat included) gets icon links
+  every surface (web + cloud chat included) gets icon links and the shared web
+  open/copy behavior
+
+apps/packages/product-client/src/lib/domain/chat/transcript/file-link-markdown.ts
+  pure render-copy repair for explicit local-file Markdown destinations that
+  contain literal spaces; stored and streamed transcript text stays untouched
 
 apps/packages/product-client/src/lib/domain/files/path-detection.ts
   pure path heuristics (looksLikePath, looksLikeFileReferenceHref,
@@ -118,6 +123,13 @@ Rules:
 
 - Detection happens at render time from raw markdown; do not store parsed file
   references in transcript items.
+- CommonMark does not accept an unescaped space in an ordinary link
+  destination. Repair an explicit local destination such as
+  `[notes](/workspace/My Notes.md)` by percent-encoding its spaces in the
+  Markdown render copy only. The file resolver decodes only those encoded
+  spaces, never encoded separators or traversal. Never rewrite the transcript
+  source, inline/fenced code examples, images, external URLs, or unrelated
+  malformed Markdown.
 - Once the assistant reveal frontier settles, the final unique Markdown file
   reference also renders as a compact end-resource card after prose. Its
   default subtitle identifies `Document · MD`; hover/focus changes that
@@ -129,6 +141,12 @@ Rules:
   partial absolute destination while waiting for the real closing delimiter.
 - Mention labels display the workspace-relative path plus a `(line N)` suffix;
   raw absolute hrefs must not be shown as label text.
+- Prose file references use the file or directory visual from the shared file
+  visual table, followed by a medium-weight semantic-blue label. The glyph is
+  baseline-aligned to one line of text. The full destination path is available
+  through the link tooltip. Primary opening and context-menu behavior is the
+  file-reference contract in
+  [`../workspaces/files.md`](../workspaces/files.md#file-reference-opening).
 - External/web link hrefs render as a shared inline provider-icon mention
   (`ProviderLinkMention`): a GitHub brand SVG for github hosts, otherwise the
   site's own favicon — `https://<host>/favicon.ico`, falling back to the root
@@ -137,13 +155,24 @@ Rules:
   (`isExternalHttpLink`) runs before file-path detection so a real path is never
   mistaken for a link. Favicon requests go to the linked site itself (no
   third-party favicon service), so no list of linked hosts leaks anywhere. The
-  provider mention and the file-path mention share one inline-mention treatment
-  (semantic blue link color, no underline at rest, and a dashed underline on
-  hover); this only renders because the global `a` reset lives in
+  provider mention and the prose file-path mention share one inline-mention
+  treatment: semantic blue link color, no underline at rest, pointer cursor,
+  and a dotted 0.5px underline with a 2px offset on hover. Keyboard focus uses
+  the same dotted underline at 1px. This only renders because the global
+  `a` reset lives in
   `@layer base` (see the frontend styling guide) — unlayered, it would strip the
   anchor's color/underline.
+- A web-link tooltip shows its full normalized URL. Primary click opens that URL
+  through the host browser opener. Its context menu contains exactly `Open in
+  Browser`, then `Copy link`; copying uses the normalized URL. The same actions
+  are exposed through the Desktop native context menu and the browser/test DOM
+  fallback.
 - Web falls back to unhighlighted (identically styled) code blocks; shiki stays
   out of the web bundle.
+
+This section governs references to file destinations. Composer attachment
+upload, paste, supported-type, and attachment-viewer behavior is a separate
+system and is not part of this contract.
 
 ## Contextual Assistant-Text Actions
 
@@ -297,18 +326,29 @@ Every row revealed inside an activity ledger repeats its own semantic glyph
 inherited ink as its label. Completed command details use `Ran …`; only the
 active command uses `Running …`. A read target with missing nullable workspace
 metadata is classified from its raw path against the current workspace root.
-An openable file target uses the semantic blue link color even though the
-surrounding activity row is muted: a workspace file opens in the viewer, while
-an external Desktop file uses the configured external target. It remains
-pointer- and keyboard-activatable while retrying path resolution or a failed
-external launch. A read target with no available primary action remains muted
-plain text without link or file-menu semantics rather than a disabled control.
-An edit detail shows one pen glyph followed by an inherited-color,
-dotted-underlined filename, not a second file-type glyph.
+Tool-call file references deliberately do not reuse the prose reference's blue
+tone or file-type glyph. Read and edit details render the filename in the
+surrounding row's current text color with a dotted hairline underline at rest;
+the underline has a 2px offset and the row's semantic read/edit glyph is the
+only leading glyph. Hovering or
+focusing a read reference promotes only that filename to foreground. Hovering
+or focusing an edit row promotes the whole edit hint, including its filename
+and change stats; an expanded inline-diff card stays in that same edit-row hover
+group.
+
+Reference activation and menus are present only while a primary action can be
+resolved. A transient path-resolution or external-open failure keeps the
+reference pointer- and keyboard-activatable so the next activation retries it.
+Once the host authoritatively determines that no primary action is available,
+the target is inert text without a pointer, file glyph, or file-reference menu;
+it is never a disabled button. Workspace/external routing and the exact file
+menu are defined in
+[`../workspaces/files.md`](../workspaces/files.md#file-reference-opening).
 When a transcript patch is available, clicking the edit row outside its
 filename toggles the inline diff. Clicking either the filename or the trailing
-open-file arrow opens the file without changing the row's expanded state. The
-row retains the file-reference context menu. Edit
+open-file arrow opens the file without changing the row's expanded state. Only
+the filename owns the file-reference context menu; right-clicking the rest of
+the row leaves the normal row interaction alone. Edit
 counts remain neutral beside the filename until row hover or focus within the
 row gives additions and deletions their semantic colors.
 

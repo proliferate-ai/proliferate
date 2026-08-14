@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
@@ -6,6 +7,15 @@ import {
   linkHost,
   rootDomain,
 } from "./ProviderLinkMention";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
+import { makeTestProductHost } from "#product/test/product-host-fixtures";
+
+const providerLinkTestHost = makeTestProductHost({ desktop: null });
+function renderProviderLink(link: ReactNode): string {
+  return renderToStaticMarkup(
+    <ProductHostProvider host={providerLinkTestHost}>{link}</ProductHostProvider>,
+  );
+}
 
 describe("rootDomain", () => {
   it("collapses subdomains to the last two labels", () => {
@@ -60,7 +70,7 @@ describe("linkHost", () => {
 
 describe("ProviderLinkMention", () => {
   it("uses the GitHub brand icon (no favicon) for github hosts", () => {
-    const html = renderToStaticMarkup(
+    const html = renderProviderLink(
       <ProviderLinkMention href="https://github.com/proliferate-ai/proliferate/pull/737">
         PR #737
       </ProviderLinkMention>,
@@ -75,7 +85,7 @@ describe("ProviderLinkMention", () => {
   });
 
   it("uses the host's own favicon for non-github hosts (no third party)", () => {
-    const html = renderToStaticMarkup(
+    const html = renderProviderLink(
       <ProviderLinkMention href="https://console.aws.amazon.com/ecs/home">
         ECS
       </ProviderLinkMention>,
@@ -86,7 +96,7 @@ describe("ProviderLinkMention", () => {
   });
 
   it("normalizes a scheme-less www host to https for the real href", () => {
-    const html = renderToStaticMarkup(
+    const html = renderProviderLink(
       <ProviderLinkMention href="www.example.com/docs">docs</ProviderLinkMention>,
     );
     expect(html).toContain("href=\"https://www.example.com/docs\"");
@@ -94,7 +104,7 @@ describe("ProviderLinkMention", () => {
   });
 
   it("falls back to a plain link for non-URL hrefs", () => {
-    const html = renderToStaticMarkup(
+    const html = renderProviderLink(
       <ProviderLinkMention href="mailto:support@proliferate.com">email</ProviderLinkMention>,
     );
     expect(html).not.toContain("data-provider-link-host");
@@ -105,7 +115,7 @@ describe("ProviderLinkMention", () => {
   });
 
   it("keeps every interaction state fill-free on the mention treatment", () => {
-    const html = renderToStaticMarkup(
+    const html = renderProviderLink(
       <ProviderLinkMention href="https://example.com/docs">docs</ProviderLinkMention>,
     );
 
@@ -114,5 +124,6 @@ describe("ProviderLinkMention", () => {
     expect(html).not.toMatch(/(?:hover|focus|focus-visible|active):bg-(?!transparent)/);
     expect(html).toContain("focus-visible:underline");
     expect(html).toContain("focus-visible:decoration-1");
+    expect(html).toContain('title="https://example.com/docs"');
   });
 });

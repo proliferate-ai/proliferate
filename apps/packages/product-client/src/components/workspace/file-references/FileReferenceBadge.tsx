@@ -20,7 +20,7 @@ import {
   inlineFileReferenceLabel,
 } from "#product/lib/domain/files/path-references";
 
-type FileReferenceBadgeVariant = "inline" | "chip";
+type FileReferenceBadgeVariant = "inline" | "chip" | "plain";
 
 interface FileReferenceBadgeProps {
   rawPath: string;
@@ -67,6 +67,7 @@ export function FileReferenceBadge({
   const iconShellClassName = variant === "inline"
     ? "relative mr-[3px] inline-block h-[1lh] w-3.5 shrink-0 align-bottom"
     : "inline-flex shrink-0 items-center justify-center";
+  const destinationTitle = actions.reference.absolutePath ?? actions.reference.path;
 
   const handleClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
     if (stopPropagation) {
@@ -78,9 +79,10 @@ export function FileReferenceBadge({
     void actions.openPrimary();
   }, [actions, stopPropagation]);
 
+  const showGlyph = variant !== "plain" && actions.canOpenPrimary;
   const contents = (
     <>
-      <span className={iconShellClassName}>
+      {showGlyph && <span className={iconShellClassName}>
         {useExternalInlineIcon ? (
           <span
             aria-hidden="true"
@@ -100,7 +102,7 @@ export function FileReferenceBadge({
             toneClassName={variant === "inline" ? "text-current" : "file-reference-icon"}
           />
         )}
-      </span>
+      </span>}
       <span className={variant === "inline"
         ? "min-w-0 break-words"
         : "min-w-0 truncate"}
@@ -117,7 +119,7 @@ export function FileReferenceBadge({
         data-file-reference-unavailable="true"
         data-path-kind={actions.pathKind ?? "unknown"}
         aria-busy={actions.pathKindPending || undefined}
-        title={actions.primaryUnavailableReason ?? rawPath}
+        title={destinationTitle}
         className={resolveUnavailableBadgeClassName(variant, className)}
       >
         {contents}
@@ -134,7 +136,7 @@ export function FileReferenceBadge({
       data-file-reference-badge={variant}
       data-path-kind={actions.pathKind ?? "unknown"}
       aria-busy={actions.pathKindPending || undefined}
-      title={actions.primaryUnavailableReason ?? rawPath}
+      title={destinationTitle}
       onClick={handleClick}
       onContextMenuCapture={onContextMenuCapture}
       className={resolveBadgeClassName(variant, className)}
@@ -168,6 +170,13 @@ function resolveUnavailableBadgeClassName(
     ].filter(Boolean).join(" ");
   }
 
+  if (variant === "plain") {
+    return [
+      "inline min-w-0 cursor-default truncate font-[inherit] font-normal text-inherit",
+      className,
+    ].filter(Boolean).join(" ");
+  }
+
   return [
     "group/inline-mention m-0 inline-flex cursor-default appearance-none whitespace-normal break-words border-0 bg-transparent px-0.5 py-0 text-left align-baseline font-[inherit] font-medium text-inherit shadow-none",
     className,
@@ -182,6 +191,13 @@ function resolveBadgeClassName(
   if (variant === "chip") {
     return [
       "inline-flex h-auto min-w-0 max-w-full items-center gap-px rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-ui leading-none text-foreground/90 shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border",
+      className,
+    ].filter(Boolean).join(" ");
+  }
+
+  if (variant === "plain") {
+    return [
+      "m-0 inline h-auto min-w-0 max-w-full truncate appearance-none border-0 bg-transparent p-0 text-left font-[inherit] font-normal text-current shadow-none underline decoration-current decoration-dotted decoration-[0.5px] underline-offset-2 hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground focus-visible:outline-none focus-visible:decoration-1 active:bg-transparent",
       className,
     ].filter(Boolean).join(" ");
   }

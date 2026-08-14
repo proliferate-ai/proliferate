@@ -1,6 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { GitHub } from "#product/primitives/icons/platform";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "#product/config/transcript-link-styles";
+import { PopoverButton, POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
+import { WebLinkMenu } from "#product/components/workspace/chat/transcript/WebLinkMenu";
+import { useWebLinkActions } from "#product/hooks/chat/workflows/use-web-link-actions";
+import { useWebLinkNativeContextMenu } from "#product/hooks/chat/ui/use-web-link-native-context-menu";
 
 /**
  * Inline "mention"-style rendering for external links in markdown bodies, with
@@ -42,18 +46,51 @@ export function ProviderLinkMention({
       </a>
     );
   }
-  const normalizedHref = href.includes("://") ? href : `https://${href}`;
-  return (
+  return <ExternalProviderLinkMention href={href} host={host}>{children}</ExternalProviderLinkMention>;
+}
+
+function ExternalProviderLinkMention({
+  href,
+  host,
+  children,
+}: {
+  href: string;
+  host: string;
+  children?: ReactNode;
+}) {
+  const actions = useWebLinkActions(href);
+  const nativeContextMenu = useWebLinkNativeContextMenu(actions);
+  const trigger = (
     <a
-      href={normalizedHref}
-      target="_blank"
-      rel="noopener noreferrer"
+      href={actions.normalizedHref}
+      title={actions.normalizedHref}
       data-provider-link-host={host}
       className={INLINE_MENTION_CLASS}
+      onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+        event.preventDefault();
+        void actions.openInBrowser();
+      }}
+      onContextMenuCapture={nativeContextMenu.onContextMenuCapture}
     >
       <LinkIcon host={host} />
       <span className="min-w-0 break-words">{children}</span>
     </a>
+  );
+  return (
+    <PopoverButton
+      trigger={trigger}
+      triggerMode="contextMenu"
+      stopPropagation
+      className={`w-50 ${POPOVER_FRAME_CLASS} flex select-none flex-col p-1`}
+    >
+      {(close) => (
+        <WebLinkMenu
+          close={close}
+          onOpen={() => void actions.openInBrowser()}
+          onCopy={() => void actions.copyLink()}
+        />
+      )}
+    </PopoverButton>
   );
 }
 

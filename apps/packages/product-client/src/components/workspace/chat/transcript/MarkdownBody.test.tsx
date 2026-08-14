@@ -11,6 +11,10 @@ import {
   type MarkdownLinkRenderInput,
 } from "./MarkdownBody";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "#product/config/transcript-link-styles";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
+import { makeTestProductHost } from "#product/test/product-host-fixtures";
+
+const markdownTestHost = makeTestProductHost({ desktop: null });
 
 const COMPLETE_MARKDOWN = `# Heading one
 
@@ -47,10 +51,11 @@ function renderMarkdown(
   content: string,
   props: Partial<Parameters<typeof MarkdownBody>[0]> = {},
 ): string {
-  return renderToStaticMarkup(createElement(MarkdownBody, {
-    content,
-    ...props,
-  }));
+  return renderToStaticMarkup(
+    <ProductHostProvider host={markdownTestHost}>
+      {createElement(MarkdownBody, { content, ...props })}
+    </ProductHostProvider>,
+  );
 }
 
 describe("MarkdownBody presentation", () => {
@@ -117,6 +122,20 @@ describe("MarkdownBody presentation", () => {
     }));
     expect(html).toContain('data-workspace-file="/tmp/project/config"');
     expect(html).not.toContain("(/tmp/project/config");
+  });
+
+  it("repairs settled local file links containing literal spaces in the render copy", () => {
+    const source = "Open [the draft](/Users/pablo/My Project/Final Draft.md).";
+    const renderLink = vi.fn(({ href }: MarkdownLinkRenderInput) => (
+      <span data-workspace-file={href}>the draft</span>
+    ));
+    const html = renderMarkdown(source, { renderLink });
+
+    expect(source).toBe("Open [the draft](/Users/pablo/My Project/Final Draft.md).");
+    expect(renderLink).toHaveBeenCalledWith(expect.objectContaining({
+      href: "/Users/pablo/My%20Project/Final%20Draft.md",
+    }));
+    expect(html).not.toContain("[the draft](");
   });
 
   it("keeps content-search marks inside the presentation DOM", () => {

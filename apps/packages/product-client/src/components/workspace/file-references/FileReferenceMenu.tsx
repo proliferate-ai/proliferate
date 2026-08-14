@@ -1,6 +1,7 @@
 import { FilePathContextMenuContent } from "#product/components/workspace/open-target/FilePathContextMenuContent";
 import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
 import type { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
+import { fileReferenceOpenWithTargets } from "#product/lib/domain/open-targets/model";
 
 type FileReferenceActions = ReturnType<typeof useFileReferenceActions>;
 
@@ -14,7 +15,7 @@ export function FileReferenceMenuContent({
   actions: FileReferenceActions;
   close: () => void;
 }) {
-  const openTargets = filterFileReferenceOpenTargets(actions.openTargets);
+  const openTargets = fileReferenceOpenWithTargets(actions.openTargets);
 
   return (
     <FilePathContextMenuContent
@@ -33,10 +34,4 @@ export function FileReferenceMenuContent({
       ignoreChatTranscript
     />
   );
-}
-
-function filterFileReferenceOpenTargets(
-  targets: FileReferenceActions["openTargets"],
-) {
-  return targets.filter((target) => target.id !== "copy-path");
 }

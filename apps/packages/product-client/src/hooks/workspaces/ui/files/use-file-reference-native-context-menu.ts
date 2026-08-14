@@ -6,6 +6,7 @@ import type {
   OpenTarget,
 } from "@proliferate/product-client/host/desktop-bridge";
 import type { FileReferencePathKind } from "#product/lib/domain/files/path-references";
+import { fileReferenceOpenWithTargets } from "#product/lib/domain/open-targets/model";
 
 interface FileReferenceNativeContextMenuActions {
   openTargets: OpenTarget[];
@@ -42,13 +43,13 @@ export function buildFileReferenceNativeContextMenuItems({
   openWithTarget,
   reveal,
 }: FileReferenceNativeContextMenuActions): NativeMenuItem[] {
-  const targets = filterFileReferenceOpenTargets(openTargets);
+  const targets = fileReferenceOpenWithTargets(openTargets);
   const items: NativeMenuItem[] = [];
 
   if (pathKind !== "directory") {
     items.push({
       id: "open-viewer",
-      label: "Open in viewer",
+      label: "Open in Proliferate",
       enabled: canOpenInSidebar,
       icon: { kind: "native", name: "document" },
       onSelect: openInSidebar,
@@ -86,19 +87,17 @@ export function buildFileReferenceNativeContextMenuItems({
       label: "Copy path",
       onSelect: copyPath,
     },
-    {
+  );
+  if (defaultOpenTarget?.kind !== "finder") {
+    items.push({
       id: "reveal-in-finder",
       label: pathKind === "directory" ? "Reveal folder in Finder" : "Reveal in Finder",
       enabled: canReveal,
       onSelect: reveal,
-    },
-  );
+    });
+  }
 
   return items;
-}
-
-function filterFileReferenceOpenTargets(targets: readonly OpenTarget[]): OpenTarget[] {
-  return targets.filter((target) => target.id !== "copy-path");
 }
 
 function nativeMenuIconForOpenTarget(

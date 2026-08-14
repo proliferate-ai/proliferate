@@ -20,8 +20,9 @@ interface ToolFileChipProps {
  *    the context menu.
  *  - An unavailable path is non-interactive text.
  *
- * Visual is intentionally a chip (border + background + file icon) so tool
- * results stay scannable; markdown prose uses the flat `FilePathLink` instead.
+ * Tool rows are the file-reference styling exception: the row's semantic icon
+ * already identifies the action, so the filename stays glyph-free and inherits
+ * the row color with an always-visible dotted underline.
  */
 export function ToolFileChip({
   basename,
@@ -34,7 +35,7 @@ export function ToolFileChip({
       basename={basename}
       label={basename}
       workspacePath={workspacePath}
-      variant="chip"
+      variant="plain"
     />
   );
 }

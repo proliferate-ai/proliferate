@@ -63,6 +63,14 @@ function renderBadge(rawPath: string, basename?: string) {
   );
 }
 
+function renderPlainBadge(rawPath: string) {
+  return render(
+    <ProductHostProvider host={webTestHost}>
+      <FileReferenceBadge rawPath={rawPath} variant="plain" />
+    </ProductHostProvider>,
+  );
+}
+
 function glyphSpan(container: HTMLElement) {
   return container.querySelector("[data-file-reference-badge] span[aria-hidden='true']");
 }
@@ -157,13 +165,13 @@ describe("FileReferenceBadge interaction semantics", () => {
     expect(reference?.className).not.toContain("cursor-not-allowed");
   });
 
-  it("keeps a retry reason on an actionable reference", () => {
+  it("keeps the full destination in the actionable reference tooltip", () => {
     state.primaryUnavailableReason = "Could not resolve this path. Click to retry.";
     const { container } = renderBadge("src/App.tsx");
     const reference = container.querySelector("[data-file-reference-badge='inline']");
 
     expect(reference?.getAttribute("title"))
-      .toBe("Could not resolve this path. Click to retry.");
+      .toBe("/repo/src/App.tsx");
   });
 
   it("renders an unavailable reference as plain text instead of a disabled link", () => {
@@ -176,5 +184,17 @@ describe("FileReferenceBadge interaction semantics", () => {
     expect(reference?.className).not.toContain("text-link-foreground");
     expect(reference?.className).not.toContain("cursor-not-allowed");
     expect(reference?.className).toContain("cursor-default");
+    expect(glyphSpan(container)).toBeNull();
+  });
+
+  it("renders tool-call references without a glyph in the row color", () => {
+    const { container } = renderPlainBadge("src/App.tsx");
+    const reference = container.querySelector("[data-file-reference-badge='plain']");
+
+    expect(reference?.tagName).toBe("BUTTON");
+    expect(reference?.className).toContain("text-current");
+    expect(reference?.className).toContain("decoration-dotted");
+    expect(reference?.className).not.toContain("text-link-foreground");
+    expect(glyphSpan(container)).toBeNull();
   });
 });

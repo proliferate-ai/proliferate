@@ -33,7 +33,7 @@ describe("buildFileReferenceNativeContextMenuItems", () => {
     expect(items).toMatchObject([
       {
         id: "open-viewer",
-        label: "Open in viewer",
+        label: "Open in Proliferate",
         enabled: true,
       },
       {
@@ -58,11 +58,6 @@ describe("buildFileReferenceNativeContextMenuItems", () => {
             label: "Zed",
             icon: { kind: "resource", path: "app-icons/zed.png" },
           },
-          {
-            id: "open-with:terminal",
-            label: "Terminal",
-            icon: { kind: "resource", path: "app-icons/terminal.png" },
-          },
         ],
       },
       { kind: "separator" },
@@ -81,9 +76,9 @@ describe("buildFileReferenceNativeContextMenuItems", () => {
     const submenu = items[2];
     if ("kind" in submenu && submenu.kind === "submenu") {
       const firstChild = submenu.items[0];
-      const thirdChild = submenu.items[2];
+      const secondChild = submenu.items[1];
       if ("id" in firstChild) firstChild.onSelect?.();
-      if ("id" in thirdChild) thirdChild.onSelect?.();
+      if ("id" in secondChild) secondChild.onSelect?.();
     }
     if ("id" in items[4]) items[4].onSelect?.();
     if ("id" in items[5]) items[5].onSelect?.();
@@ -91,9 +86,40 @@ describe("buildFileReferenceNativeContextMenuItems", () => {
     expect(onOpenInSidebar).toHaveBeenCalledTimes(1);
     expect(onOpenDefault).toHaveBeenCalledTimes(1);
     expect(onOpenTarget).toHaveBeenNthCalledWith(1, "cursor");
-    expect(onOpenTarget).toHaveBeenNthCalledWith(2, "terminal");
+    expect(onOpenTarget).toHaveBeenNthCalledWith(2, "zed");
     expect(onCopyPath).toHaveBeenCalledTimes(1);
     expect(onReveal).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps only editors in Open with and hides Reveal when Finder is the default", () => {
+    const finder: OpenTarget = { id: "finder", label: "Finder", kind: "finder", iconId: "finder" };
+    const cursor: OpenTarget = { id: "cursor", label: "Cursor", kind: "editor", iconId: "cursor" };
+    const terminal: OpenTarget = {
+      id: "terminal",
+      label: "Terminal",
+      kind: "terminal",
+      iconId: "terminal",
+    };
+    const items = buildFileReferenceNativeContextMenuItems({
+      openTargets: [finder, cursor, terminal],
+      defaultOpenTarget: finder,
+      pathKind: "file",
+      canOpenInSidebar: true,
+      canOpenExternal: true,
+      canReveal: true,
+      copyPath: vi.fn(),
+      openInSidebar: vi.fn(),
+      openDefault: vi.fn(),
+      openWithTarget: vi.fn(),
+      reveal: vi.fn(),
+    });
+
+    expect(items).not.toContainEqual(expect.objectContaining({ id: "reveal-in-finder" }));
+    const submenu = items.find((item) => "kind" in item && item.kind === "submenu");
+    expect(submenu).toMatchObject({
+      kind: "submenu",
+      items: [{ id: "open-with:cursor" }],
+    });
   });
 
   it("omits the viewer action for folders and keeps Finder capability explicit", () => {
