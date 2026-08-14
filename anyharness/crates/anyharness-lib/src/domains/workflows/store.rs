@@ -567,6 +567,18 @@ impl WorkflowStore {
             .with_tx_anyhow(|tx| Self::load_run_state_tx(tx, run_id))
     }
 
+    /// The one read every command replies with: the full client projection
+    /// (run, nodes, docs), from rows in a single transaction.
+    pub fn run_detail(&self, run_id: &str) -> anyhow::Result<Option<super::projection::RunProjection>> {
+        self.db.with_tx_anyhow(|tx| {
+            let Some(state) = Self::load_run_state_tx(tx, run_id)? else {
+                return Ok(None);
+            };
+            let docs = Self::list_docs_tx(tx, run_id)?;
+            Ok(Some(super::projection::project(&state, &docs)))
+        })
+    }
+
     pub fn load_run_state_tx(tx: &Connection, run_id: &str) -> anyhow::Result<Option<RunState>> {
         let Some(run) = tx
             .query_row(

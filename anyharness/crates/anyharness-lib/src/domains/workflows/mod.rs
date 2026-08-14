@@ -14,6 +14,7 @@ pub mod model;
 pub mod policy;
 pub mod projection;
 pub mod render;
+pub mod session_extension;
 pub mod store;
 pub mod transition;
 

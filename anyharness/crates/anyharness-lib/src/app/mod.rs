@@ -4,6 +4,7 @@ mod materialization;
 mod mobility;
 mod product_mcp;
 mod sessions;
+mod workflows;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -66,6 +67,8 @@ use crate::domains::sessions::mcp_bindings::product_registry::ProductMcpEndpoint
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::workflows::session_extension::WorkflowSessionExtension;
+use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::terminals::store::TerminalStore;
@@ -87,6 +90,7 @@ use crate::domains::workspaces::setup_runtime::WorkspaceSetupRuntime;
 use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
 use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::live::sessions::LiveSessionManager;
+use crate::live::workflows::WorkflowManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
 use crate::persistence::Db;
 
@@ -178,6 +182,8 @@ pub struct AppState {
     pub acp_manager: LiveSessionManager,
     pub terminal_service: Arc<TerminalService>,
     pub agent_login_terminal_service: Arc<AgentLoginTerminalService>,
+    pub workflow_store: WorkflowStore,
+    pub workflow_manager: Arc<WorkflowManager>,
 }
 
 impl AppState {
@@ -426,6 +432,13 @@ impl AppState {
             acp_manager.clone(),
         ));
         let activity_session_hooks = Arc::new(ActivitySessionHooks::new(activity_runtime.clone()));
+        // Workflows gen-2: the extension registers now (SessionRuntime consumes
+        // the list), the manager binds into it after the boot fence below.
+        let workflow_store = WorkflowStore::new(db.clone());
+        let workflow_session_extension = Arc::new(WorkflowSessionExtension::new(
+            SessionStore::new(db.clone()),
+            workflow_store.clone(),
+        ));
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
@@ -436,6 +449,7 @@ impl AppState {
             goal_session_hooks,
             loop_session_hooks,
             activity_session_hooks,
+            workflow_session_extension.clone(),
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -455,6 +469,16 @@ impl AppState {
             activity_service.clone(),
         ));
         completion_delivery_wiring.spawn(&session_runtime);
+        // Workflows gen-2, in this order: fence first (no actor may accept a
+        // command against un-fenced rows), manager second, late-bind third.
+        let _fenced_workflow_runs = workflows::run_boot_fence(&workflow_store);
+        let workflow_manager = Arc::new(WorkflowManager::new(
+            workflow_store.clone(),
+            session_runtime.clone(),
+            SessionStore::new(db.clone()),
+            WorkspaceStore::new(db.clone()),
+        ));
+        workflow_session_extension.bind_manager(workflow_manager.clone());
         // Destructive workspace family: the archive orchestrator and the
         // row-dies-last purge orchestrator, constructed directly here. There
         // is no wiring family struct left for this pair once the shared
@@ -638,6 +662,8 @@ impl AppState {
             acp_manager,
             terminal_service,
             agent_login_terminal_service,
+            workflow_store,
+            workflow_manager,
         })
     }
 }
