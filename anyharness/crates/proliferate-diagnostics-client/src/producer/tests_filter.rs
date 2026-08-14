@@ -319,3 +319,43 @@ fn debug_formatting_that_emits_tracing_cannot_recurse_or_consume_a_sequence() {
     assert_eq!(status.last_assigned_sequence, Some(1));
     assert_eq!(status.next_sequence, Some(2));
 }
+
+#[test]
+fn an_absent_string_field_costs_the_field_not_the_record() {
+    // A JSON-RPC response carries no method and a notification carries no id,
+    // so the ACP frame tee logs one of them as "". Validation treats an empty
+    // string as an invalid argument and rejects the entire record, which
+    // silently dropped every response and notification frame. The filter must
+    // strip the field first, exactly as it does for any other unusable value.
+    use crate::{DiagnosticArgument, DiagnosticPrivacy};
+    use proliferate_diagnostics_protocol::v1::types::ArgumentValueV1;
+
+    let inner = unavailable_producer();
+    let mut record = ordinary("acp frame: recv");
+    record.arguments = vec![
+        DiagnosticArgument {
+            name: "method".into(),
+            value: ArgumentValueV1::String(String::new()),
+            privacy: DiagnosticPrivacy::Operational,
+        },
+        DiagnosticArgument {
+            name: "rpc_id".into(),
+            value: ArgumentValueV1::String("42".to_owned()),
+            privacy: DiagnosticPrivacy::Operational,
+        },
+    ];
+
+    assert_eq!(emit(&inner, record), EmitDisposition::Admitted);
+
+    let records = queued_records(&inner);
+    let names: Vec<&str> = records[0]
+        .arguments
+        .iter()
+        .map(|argument| argument.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        vec!["rpc_id"],
+        "the empty field is dropped and the populated one survives"
+    );
+}

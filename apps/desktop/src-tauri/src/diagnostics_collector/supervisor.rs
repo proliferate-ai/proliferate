@@ -173,6 +173,16 @@ pub(crate) struct SupervisorExportLease {
     pub(crate) shutdown: watch::Receiver<bool>,
 }
 
+/// Everything an externally launched AnyHarness needs to reach this
+/// collector without an inherited bridge descriptor. Dev builds only; see
+/// `sidecar::diagnostics::publish_dev_diagnostics_env`.
+#[cfg(debug_assertions)]
+pub(crate) struct DevCollectorEnv {
+    pub(crate) endpoint: String,
+    pub(crate) capability: String,
+    pub(crate) collector_boot_id: String,
+}
+
 pub(crate) struct DiagnosticsCollectorSupervisor {
     inner: Mutex<SupervisorInner>,
     decisions: AsyncMutex<()>,

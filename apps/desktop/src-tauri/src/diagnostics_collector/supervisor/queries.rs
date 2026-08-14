@@ -15,6 +15,8 @@ use proliferate_diagnostics_protocol::v1::types::{
     TokenReferenceKindV1,
 };
 
+#[cfg(debug_assertions)]
+use super::DevCollectorEnv;
 use super::{
     map_client_error, set_cloexec, unavailable_for_state, validate_renderer_ingest_batch,
     validate_renderer_ingest_receipt, DesktopDiagnosticsHealthV1,
@@ -239,6 +241,36 @@ impl DiagnosticsCollectorSupervisor {
                 let _ = self.fallback.record_pre_dispatch_renderer(&serialized);
             }
         }
+    }
+
+    /// Dev-only read of the collector's connection identity, for a runtime
+    /// this host did not spawn and that therefore cannot be handed a
+    /// descriptor. The protected child path below is unaffected: it still
+    /// passes the capability over a one-shot inherited channel.
+    #[cfg(debug_assertions)]
+    pub(crate) fn dev_collector_env(&self) -> Result<DevCollectorEnv, SupervisorUnavailable> {
+        let inner = self
+            .inner
+            .lock()
+            .map_err(|_| SupervisorUnavailable::Protocol)?;
+        if self.shutdown_armed.load(Ordering::Acquire) {
+            return Err(SupervisorUnavailable::ShuttingDown);
+        }
+        let process = inner
+            .process
+            .as_ref()
+            .ok_or_else(|| unavailable_for_state(&inner.state))?;
+        if !matches!(
+            &inner.state,
+            DesktopDiagnosticsSupervisorStateV1::Ready { .. }
+        ) {
+            return Err(unavailable_for_state(&inner.state));
+        }
+        Ok(DevCollectorEnv {
+            endpoint: process.descriptor().endpoint.clone(),
+            capability: String::from_utf8_lossy(process.capability_bytes()).into_owned(),
+            collector_boot_id: process.descriptor().collector_boot_id.clone(),
+        })
     }
 
     pub(crate) fn protected_child_handoff(

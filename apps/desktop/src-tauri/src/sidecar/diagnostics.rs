@@ -235,3 +235,68 @@ impl super::SidecarProcess {
     ) {
     }
 }
+
+/// Publishes the collector's connection identity for an externally launched
+/// AnyHarness (`ANYHARNESS_DEV_URL`), which cannot inherit the bridge
+/// descriptor and so produces no diagnostics at all without this.
+///
+/// A sourceable env snippet, not a log line: the capability is a secret, so
+/// printing it into the boot log would put it in scrollback and in any log
+/// capture, while a 0600 file under the app dir is picked up by one `set -a;
+/// . <path>` in the `make dev` recipe. Only the path is logged.
+///
+/// Dev builds only, and only while the collector is Ready — the snippet is
+/// rewritten on every app boot, so a collector restart is picked up the next
+/// time the dev runtime is started.
+#[cfg(all(debug_assertions, unix))]
+pub(super) fn publish_dev_diagnostics_env(supervisor: &Arc<DiagnosticsCollectorSupervisor>) {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let Ok(path) = crate::app_config::dev_diagnostics_env_path() else {
+        return;
+    };
+    let collector = match supervisor.dev_collector_env() {
+        Ok(collector) => collector,
+        Err(unavailable) => {
+            tracing::warn!(
+                classification = unavailable.classification(),
+                "dev diagnostics env not published: collector unavailable"
+            );
+            return;
+        }
+    };
+    let snippet = format!(
+        "{}={}\n{}={}\n{}={}\n",
+        proliferate_diagnostics_client::DEV_ENDPOINT_ENV,
+        collector.endpoint,
+        proliferate_diagnostics_client::DEV_CAPABILITY_ENV,
+        collector.capability,
+        proliferate_diagnostics_client::DEV_COLLECTOR_BOOT_ID_ENV,
+        collector.collector_boot_id,
+    );
+    let written = path
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&path)?;
+            file.write_all(snippet.as_bytes())
+        });
+    match written {
+        Ok(()) => tracing::info!(
+            dev_diagnostics_env = %path.display(),
+            endpoint = %collector.endpoint,
+            "external runtime can enable diagnostics with: set -a; . <dev_diagnostics_env>; set +a"
+        ),
+        Err(error) => tracing::warn!(
+            dev_diagnostics_env = %path.display(),
+            error = %error,
+            "failed to publish dev diagnostics env"
+        ),
+    }
+}

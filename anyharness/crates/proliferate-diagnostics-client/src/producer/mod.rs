@@ -179,6 +179,9 @@ pub(crate) fn install(
             Some(bootstrap.classification),
             bootstrap.bridge.zip(bootstrap.shutdown),
         ),
+        // No inherited descriptors: no bridge thread, no fallback authority.
+        #[cfg(debug_assertions)]
+        BundledDesktopDiagnosticsBootstrap::DevEnv(dev) => (dev.initial_state, None, None, None),
     };
     #[cfg(not(unix))]
     let (initial_state, fallback_handle, degraded) = match activation {
@@ -194,6 +197,8 @@ pub(crate) fn install(
             bootstrap.fallback,
             Some(bootstrap.classification),
         ),
+        #[cfg(debug_assertions)]
+        BundledDesktopDiagnosticsBootstrap::DevEnv(dev) => (dev.initial_state, None, None),
     };
     if degraded.is_some() {
         eprintln!("[desktop-diagnostics] bundled bootstrap degraded");

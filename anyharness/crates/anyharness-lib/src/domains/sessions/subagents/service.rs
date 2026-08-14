@@ -76,12 +76,21 @@ impl SubagentService {
             created_by_turn_id,
             created_by_tool_call_id,
         };
-        self.link_service
+        let link = self
+            .link_service
             .create_subagent_link_with_child_limit(input, MAX_SUBAGENTS_PER_PARENT)
             .map_err(|error| match error {
                 CreateSessionLinkError::FanoutLimit => SubagentError::FanoutLimit,
                 other => SubagentError::Link(other),
-            })
+            })?;
+        tracing::info!(
+            target: "anyharness.subagent.spawned",
+            parent_session_id = %link.parent_session_id,
+            child_session_id = %link.child_session_id,
+            session_link_id = %link.id,
+            "subagent: parent linked to child"
+        );
+        Ok(link)
     }
 
     pub fn list_subagents(

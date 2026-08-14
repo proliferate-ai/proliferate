@@ -191,6 +191,17 @@ impl SessionLinkStore {
         })
     }
 
+    /// Terminally closes a link, idempotently. Returns whether *this* call
+    /// performed the close: an already-closed link keeps its original
+    /// `closed_at` and reports `false`, so a caller that observes the
+    /// transition (a log line, a notification) fires exactly once per link
+    /// even when teardown reaches the same link from both ends.
+    ///
+    /// The row-guard replaces an earlier `COALESCE(closed_at, ?1)` with no
+    /// change in stored state — COALESCE already preserved the first
+    /// timestamp — but the old form matched already-closed rows, so its
+    /// `bool` meant "a link with this id exists" rather than "this call
+    /// closed it".
     pub fn close_link(&self, id: &str, closed_at: &str) -> anyhow::Result<bool> {
         self.db.with_conn(|conn| {
             conn.execute(
@@ -199,8 +210,8 @@ impl SessionLinkStore {
             )?;
             let updated = conn.execute(
                 "UPDATE session_links
-                 SET closed_at = COALESCE(closed_at, ?1)
-                 WHERE id = ?2",
+                 SET closed_at = ?1
+                 WHERE id = ?2 AND closed_at IS NULL",
                 params![closed_at, id],
             )?;
             Ok(updated > 0)

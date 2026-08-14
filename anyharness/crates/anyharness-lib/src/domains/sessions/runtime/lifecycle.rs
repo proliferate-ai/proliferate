@@ -221,9 +221,24 @@ impl SessionRuntime {
             }
             self.close_session_tree(&link.child_session_id, visited)
                 .await?;
-            self.session_link_service
+            // close_session_tree above already closed this link from the
+            // child's side, so the record is the authority on who observed
+            // the transition: only the caller whose write flipped it reports
+            // the cause, and the link is logged exactly once.
+            let newly_closed = self
+                .session_link_service
                 .close_link(&link.id, &now)
                 .map_err(SessionLifecycleError::Internal)?;
+            if newly_closed {
+                tracing::info!(
+                    target: "anyharness.subagent.link_closed",
+                    parent_session_id = %link.parent_session_id,
+                    child_session_id = %link.child_session_id,
+                    relation = link.relation.as_str(),
+                    cause = "parent_session_closed",
+                    "subagent: link closed"
+                );
+            }
             closed_child_session_ids.insert(link.child_session_id);
         }
         for session_id in extension_close_session_ids {
@@ -270,9 +285,20 @@ impl SessionRuntime {
             ) {
                 continue;
             }
-            self.session_link_service
+            let newly_closed = self
+                .session_link_service
                 .close_link(&link.id, &now)
                 .map_err(SessionLifecycleError::Internal)?;
+            if newly_closed {
+                tracing::info!(
+                    target: "anyharness.subagent.link_closed",
+                    parent_session_id = %link.parent_session_id,
+                    child_session_id = %link.child_session_id,
+                    relation = link.relation.as_str(),
+                    cause = "child_session_closed",
+                    "subagent: link closed"
+                );
+            }
         }
         Ok(())
     }

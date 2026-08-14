@@ -50,10 +50,12 @@ impl PendingSessionActor {
             .replace(native_session_id.clone());
 
         tracing::info!(
+            target: "anyharness.session.spawn",
             session_id = %self.session_id,
             workspace_id = %self.workspace_id,
             native_session_id = %native_session_id,
             startup_strategy = %self.startup_strategy,
+            phase = "ready",
             elapsed_ms = self.started.elapsed().as_millis(),
             "[workspace-latency] session.actor.spawn.ready"
         );
@@ -71,10 +73,12 @@ pub fn spawn_session_actor_pending(
     let startup_strategy = config.launch.startup.as_str().to_string();
     let started = Instant::now();
     tracing::info!(
+        target: "anyharness.session.spawn",
         session_id = %session_id,
         workspace_id = %workspace_id,
         agent_kind = %agent_kind,
         startup_strategy,
+        phase = "start",
         "[workspace-latency] session.actor.spawn.start"
     );
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);

@@ -82,6 +82,13 @@ pub fn runtime_info_path() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("runtime-info.json"))
 }
 
+/// Env snippet a `make dev` shell sources so an externally launched AnyHarness
+/// can reach this app's diagnostics collector. Dev builds only.
+#[cfg(debug_assertions)]
+pub fn dev_diagnostics_env_path() -> Result<PathBuf, String> {
+    Ok(app_dir_path()?.join("diagnostics-dev.env"))
+}
+
 pub fn default_anyharness_runtime_home_path() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("anyharness"))
 }

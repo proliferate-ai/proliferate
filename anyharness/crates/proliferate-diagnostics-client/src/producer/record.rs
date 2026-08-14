@@ -187,10 +187,15 @@ fn filter_value(value: ArgumentValueV1, depth: usize) -> Option<ArgumentValueV1>
         return None;
     }
     match value {
-        ArgumentValueV1::String(value) => Some(ArgumentValueV1::String(redact_and_bound(
-            value,
-            MAX_STRING_BYTES,
-        ))),
+        // An empty string is not a valid argument, and validation rejects the
+        // whole record over one — so drop the field here, as this filter
+        // already does for every other unusable value. Callers legitimately
+        // log absent-as-empty (a JSON-RPC response has no method, a
+        // notification has no id); that should cost the field, not the record.
+        ArgumentValueV1::String(value) => {
+            let value = redact_and_bound(value, MAX_STRING_BYTES);
+            (!value.is_empty()).then_some(ArgumentValueV1::String(value))
+        }
         ArgumentValueV1::Enum(value) if valid_name(&value) => Some(ArgumentValueV1::Enum(value)),
         ArgumentValueV1::Integer(value) if value.unsigned_abs() <= MAX_SAFE_INTEGER => {
             Some(ArgumentValueV1::Integer(value))

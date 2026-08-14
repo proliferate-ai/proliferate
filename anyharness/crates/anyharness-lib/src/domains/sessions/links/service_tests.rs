@@ -178,6 +178,49 @@ fn create_subagent_link_enforces_child_limit_at_insert() {
         .is_none());
 }
 
+/// Teardown reaches a subagent link from both ends: the child's
+/// `close_inbound_delegated_links` and the parent's cascade loop both call
+/// `close_link` on the same row. Only the call that performs the transition
+/// may report it, or the diagnostics stream carries two `link_closed` records
+/// for one link with contradictory `cause` values.
+#[test]
+fn only_the_call_that_closes_a_link_reports_the_transition() {
+    let (_db, _session_store, service) = service_fixture();
+    let link = service
+        .create_link(create_input("parent-1", "child-1"))
+        .expect("create link");
+
+    assert!(
+        service
+            .close_link(&link.id, "2026-03-25T00:02:00Z")
+            .expect("first close"),
+        "the call that closes the link must report the transition"
+    );
+    assert!(
+        !service
+            .close_link(&link.id, "2026-03-25T00:03:00Z")
+            .expect("second close"),
+        "closing an already-closed link must not report a second transition"
+    );
+
+    let historical = service
+        .list_by_parent_including_closed("parent-1")
+        .expect("read closed link")
+        .into_iter()
+        .find(|candidate| candidate.id == link.id)
+        .expect("link still exists");
+    assert_eq!(
+        historical.closed_at.as_deref(),
+        Some("2026-03-25T00:02:00Z"),
+        "the second close must not overwrite the original closed_at"
+    );
+
+    // A link that never existed is not a transition either.
+    assert!(!service
+        .close_link("missing-link", "2026-03-25T00:04:00Z")
+        .expect("close absent link"));
+}
+
 #[test]
 fn closed_links_are_hidden_from_normal_lists_but_available_to_history() {
     let (_db, _session_store, service) = service_fixture();

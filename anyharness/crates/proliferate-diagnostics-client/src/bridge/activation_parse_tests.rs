@@ -591,5 +591,7 @@ fn debug_kind(activation: &DesktopDiagnosticsActivation) -> &'static str {
         DesktopDiagnosticsActivation::Disabled => "Disabled",
         DesktopDiagnosticsActivation::Bundled(_) => "Bundled",
         DesktopDiagnosticsActivation::BundledDegraded(_) => "BundledDegraded",
+        #[cfg(debug_assertions)]
+        DesktopDiagnosticsActivation::DevEnv(_) => "DevEnv",
     }
 }
