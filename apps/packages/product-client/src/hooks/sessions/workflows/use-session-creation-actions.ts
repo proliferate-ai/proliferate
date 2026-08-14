@@ -57,7 +57,7 @@ import { adoptRecoveredSessionIdentity } from "#product/hooks/sessions/workflows
 import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { resolveRecoveryWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import type { PendingEmptySessionCreationLifecycle } from "#product/hooks/sessions/workflows/pending-empty-session-creation";
 import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/caller-selected-session-create";
@@ -89,17 +89,9 @@ export function useSessionCreationActions() {
     if (!workspaceId) {
       throw new Error("No workspace selected");
     }
-    // An unattended launch materializes its session while the user is looking
-    // at another workspace, so failure recovery cannot derive its ui key from
-    // the current selection (that would name the wrong workspace); the caller
-    // names it instead. Shell intent is deliberately not keyed from this: the
-    // writer's own resolution already yields this same id while the workspace
-    // is unselected, and yields the logical id once it is selected, which is
-    // the key later reads use (PRO-230).
-    const targetWorkspaceUiKey = options.targetWorkspaceUiKey ?? null;
-    const recoveryWorkspaceUiKey = targetWorkspaceUiKey
-      ?? resolveWorkspaceUiKey(current.selectedLogicalWorkspaceId, workspaceId)
-      ?? workspaceId;
+    const recoveryWorkspaceUiKey = resolveRecoveryWorkspaceUiKey(
+      options.targetWorkspaceUiKey, current.selectedLogicalWorkspaceId, workspaceId,
+    );
 
     const blockedError = getWorkspaceRuntimeBlockError(workspaceId);
     if (blockedError) {
