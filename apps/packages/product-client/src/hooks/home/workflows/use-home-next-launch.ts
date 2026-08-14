@@ -13,14 +13,9 @@ import {
   createPendingWorkspaceAttemptId,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
-  canBeginPendingLaunch,
-  isDuplicateLaunchSubmit,
   launchSubmitFingerprint,
   type LaunchSubmitFingerprint,
 } from "#product/lib/domain/workspaces/creation/launch-concurrency";
-import {
-  pendingWorkspaceEntries,
-} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import {
   pendingWorkspaceFailureNoticeOwnsFailure,
 } from "#product/hooks/workspaces/workflows/pending-workspace-failure-notice";
@@ -31,13 +26,12 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 import { useCoworkThreadLaunchContext } from "#product/providers/CoworkThreadLaunchProvider";
 import { launchHomeCloudTarget } from "#product/hooks/home/workflows/launch-home-cloud-target";
 import {
-  buildHomePendingWorkspaceInitialSession,
-  buildResolvedHomeLaunchControlValues,
+  beginHomeNextLaunch,
   describeHomeLaunchTarget,
   homeLaunchFailureRetryMode,
   homeNextLaunchErrorMessage,
   markHomeLaunchIntentMaterializedFromPendingWorkspace,
-  newHomeNextLaunchId,
+  resolveHomeNextLaunchRefusal,
 } from "#product/hooks/home/workflows/home-next-launch-intent";
 
 interface HomeNextLaunchInput {
@@ -90,78 +84,35 @@ export function useHomeNextLaunch() {
     target,
   }: HomeNextLaunchInput): Promise<HomeNextLaunchOutcome> => {
     const prompt = text.trim();
-    if (!prompt) {
-      return "refused";
-    }
     const submit = launchSubmitFingerprint(prompt, target, Date.now());
-    if (isDuplicateLaunchSubmit(lastSubmitRef.current, submit)) {
-      // The launch this collapsed into is running, so the prompt must not come
-      // back to the composer as if nothing had happened.
-      return "duplicate";
-    }
-    if (!desktopTargetsAvailable && target.kind !== "cloud") {
-      const message = target.kind === "cowork"
-        ? "Cowork threads are available in the Desktop app."
-        : "Local launch targets are available in the Desktop app.";
-      showToast(message, "info");
-      return "refused";
-    }
-    // Prompting an existing workspace starts no workspace, so it takes no
-    // launch slot and the cap does not apply to it.
-    const createsWorkspace = target.kind !== "local" || target.existingWorkspaceId === null;
-    if (
-      createsWorkspace
-      && !canBeginPendingLaunch(
-        pendingWorkspaceEntries(useSessionSelectionStore.getState().pendingWorkspaces),
-      )
-    ) {
-      showToast("Too many workspaces starting. Wait for one to finish.", "info");
-      return "refused";
+    const refusal = resolveHomeNextLaunchRefusal({
+      prompt,
+      target,
+      submit,
+      lastSubmit: lastSubmitRef.current,
+      desktopTargetsAvailable,
+      pendingWorkspaces: useSessionSelectionStore.getState().pendingWorkspaces,
+    });
+    if (refusal) {
+      if (refusal.message) {
+        showToast(refusal.message, "info");
+      }
+      return refusal.outcome;
     }
 
     lastSubmitRef.current = submit;
     setLaunchingCount((count) => count + 1);
-    const launchIntentId = newHomeNextLaunchId();
-    const promptId = newHomeNextLaunchId();
-    const resolvedLaunchControlValues = buildResolvedHomeLaunchControlValues({
-      modeId,
-      launchControlValues,
-    });
-    const initialSession = buildHomePendingWorkspaceInitialSession({
+    const {
+      launchIntentId,
+      promptId,
+      resolvedLaunchControlValues,
+      initialSession,
+    } = beginHomeNextLaunch(beginLaunchIntent, {
+      prompt,
       modelSelection,
       modeId,
-      launchControlValues: resolvedLaunchControlValues,
-    });
-    beginLaunchIntent({
-      id: launchIntentId,
-      catalogSnapshotId: null,
-      agentKind: modelSelection.kind,
-      modelId: modelSelection.modelId,
-      modeId,
-      launchControlValues: resolvedLaunchControlValues,
-      promptId,
-      queuedPromptBlocks: [{ type: "text", text: prompt }],
-      optimisticContentParts: [{ type: "text", text: prompt }],
-      text: prompt,
-      contentParts: [{ type: "text", text: prompt }],
-      targetKind: target.kind,
-      retryInput: {
-        text: prompt,
-        modelSelection,
-        modeId,
-        launchControlValues: resolvedLaunchControlValues,
-        target,
-      },
-      materializedWorkspaceId: null,
-      materializedSessionId: null,
-      // The pending-workspace attempt (if any) isn't created until after this
-      // intent begins; it gets threaded in once known via
-      // markHomeLaunchIntentMaterializedFromPendingWorkspace.
-      attemptId: null,
-      targetWorkspaceId: target.kind === "local" ? target.existingWorkspaceId : null,
-      createdAt: Date.now(),
-      sendAttemptedAt: null,
-      failure: null,
+      launchControlValues,
+      target,
     });
 
     // Minted per target branch below; the catch needs it to scope failure state
