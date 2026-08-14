@@ -16,6 +16,19 @@ import {
   type TriggerCourierResult,
 } from "#product/lib/workflows/trigger/trigger-courier";
 
+/**
+ * Stable lowercase class for a non-courier launch error, from its name only,
+ * normalized into the renderer diagnostic classification charset (a value
+ * outside `/^[a-z0-9][a-z0-9._:-]*$/` voids the whole record).
+ */
+function classifyUnknownLaunchError(caught: unknown): string {
+  if (!(caught instanceof Error)) {
+    return "unknown";
+  }
+  const normalized = caught.name.toLowerCase().replace(/[^a-z0-9._:-]/g, "_");
+  return /^[a-z0-9]/.test(normalized) ? normalized : "unknown";
+}
+
 export interface WorkflowTriggerLaunch {
   runId: string;
   workspaceId: string;
@@ -106,10 +119,7 @@ export function useWorkflowTriggerActions({
         // outside it drops the whole record.
         errorClassification: failure
           ? `trigger_${failure.stage}`
-          : caught instanceof Error
-            ? (caught.name.toLowerCase().replace(/[^a-z0-9._:-]/g, "_")
-              || "unknown")
-            : "unknown",
+          : classifyUnknownLaunchError(caught),
       });
       retry.current = failure ? { identityKey, ids: failure.ids } : null;
       setError(workflowTriggerFailureMessage(
