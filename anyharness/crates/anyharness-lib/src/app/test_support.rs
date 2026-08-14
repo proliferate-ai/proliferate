@@ -160,8 +160,7 @@ pub(crate) fn insert_session_row(
     store.insert(&record).expect("insert session row");
 }
 
-pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &str, path: &str) {
-    let repo_root_id = format!("repo-root-{workspace_id}");
+pub(crate) fn seed_repo_root(db: &Db, repo_root_id: &str, path: &str) {
     let now = "2026-03-25T00:00:00Z";
     db.with_conn(|conn| {
         conn.execute(
@@ -171,6 +170,16 @@ pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &
              ) VALUES (?1, 'external', ?2, NULL, 'main', NULL, NULL, NULL, NULL, ?3, ?3)",
             rusqlite::params![repo_root_id, path, now],
         )?;
+        Ok(())
+    })
+    .expect("seed repo root");
+}
+
+pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &str, path: &str) {
+    let repo_root_id = format!("repo-root-{workspace_id}");
+    seed_repo_root(db, &repo_root_id, path);
+    let now = "2026-03-25T00:00:00Z";
+    db.with_conn(|conn| {
         conn.execute(
             "INSERT INTO workspaces (
                 id, kind, repo_root_id, path, surface, lifecycle_state, cleanup_state,
