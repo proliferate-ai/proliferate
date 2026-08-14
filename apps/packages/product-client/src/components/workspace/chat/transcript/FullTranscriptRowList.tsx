@@ -53,7 +53,7 @@ export function FullTranscriptRowList({
   selectedWorkspaceId,
   activeSessionId,
   isSessionBusy,
-  pendingPromptText,
+  lastPromptSubmittedAtMs,
   onLoadOlderHistory,
   onScrollSample,
   renderRow,
@@ -87,6 +87,7 @@ export function FullTranscriptRowList({
     scrollRef,
     onScrollSample,
     autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
+    lastPromptSubmittedAtMs,
   });
 
   // Content-search jump-to-match. The full list mounts every row, so the
@@ -228,7 +229,7 @@ export function FullTranscriptRowList({
   }, [
     structuralBottomInsetPx,
     isSessionBusy,
-    pendingPromptText,
+    lastPromptSubmittedAtMs,
     pinnedRef,
     rows,
     scrollToBottom,
