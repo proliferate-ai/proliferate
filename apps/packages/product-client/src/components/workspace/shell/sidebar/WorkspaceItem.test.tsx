@@ -6,6 +6,7 @@ import type { ReactElement } from "react";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { sidebarGitAttentionIndicator } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
 import { WORKSPACE_PEEK_DELAY_MS } from "#product/components/workspace/shell/sidebar/WorkspacePeekCard";
 
@@ -211,31 +212,22 @@ describe("WorkspaceItem", () => {
   });
 
   it("puts merge conflicts in the status cell, not beside the identity glyph", () => {
+    const conflicted = makeGitStatus({ conflicted: true, attention: "conflicts" });
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
-        gitStatus={makeGitStatus({ conflicted: true, attention: "conflicts" })}
+        // The row is handed the indicator the domain waterfall builds, rather
+        // than deriving conflicts itself. Resolved through the real function
+        // so the two cannot drift apart.
+        statusIndicator={sidebarGitAttentionIndicator(conflicted)}
+        gitStatus={conflicted}
       />,
     );
 
     const alert = screen.getByRole("img", { name: "Merge conflicts in worktree" });
     expect(alert.closest("[data-sidebar-trailing-status]")).not.toBeNull();
     expect(alert.closest("[data-sidebar-trailing-identity]")).toBeNull();
-  });
-
-  it("lets live activity beat the conflicts alert in the status cell", () => {
-    renderWithProductHost(
-      <WorkspaceItem
-        name="Feature worktree"
-        variant="worktree"
-        statusIndicator={{ kind: "iterating", tooltip: "Iterating" }}
-        gitStatus={makeGitStatus({ conflicted: true, attention: "conflicts" })}
-      />,
-    );
-
-    expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
-    expect(screen.queryByRole("img", { name: "Merge conflicts in worktree" })).toBeNull();
   });
 
   it("shows the unread dot in the right slot when the row needs review", () => {

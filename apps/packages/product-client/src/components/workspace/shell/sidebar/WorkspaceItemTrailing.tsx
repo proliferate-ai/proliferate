@@ -5,14 +5,9 @@ import type {
   SidebarWorkspaceVariant,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
-import {
-  SidebarGitConflictsAlert,
-  SidebarStatusIndicatorView,
-} from "#product/components/workspace/shell/sidebar/SidebarIndicators";
-import {
-  resolveSidebarWorkspaceGitIdentity,
-  SidebarWorkspaceGitGlyph,
-} from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
+import { SidebarStatusIndicatorView } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
+import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
+import { resolveSidebarWorkspaceGitIdentity } from "#product/lib/domain/workspaces/git-status/sidebar-git-identity";
 
 export interface WorkspaceItemTrailingCells {
   /** Null when the row has no git identity, so the cell collapses. */
@@ -43,19 +38,18 @@ export function resolveWorkspaceItemTrailingCells({
 }: WorkspaceItemTrailingInput): WorkspaceItemTrailingCells {
   // The identity cell exists only when there is an identity to put in it, so
   // a local row with no PR collapses the cell instead of reserving 20px for
-  // nothing.
-  const identity = resolveSidebarWorkspaceGitIdentity(gitStatus, variant)
-    ? <SidebarWorkspaceGitGlyph status={gitStatus} variant={variant} />
+  // nothing. Resolved once and handed to the glyph.
+  const gitIdentity = resolveSidebarWorkspaceGitIdentity(gitStatus, variant);
+  const identity = gitIdentity
+    ? <SidebarWorkspaceGitGlyph identity={gitIdentity} />
     : null;
-  // Right-slot precedence: live activity first, then merge conflicts (the one
-  // git attention state the identity glyph's dot does not already carry).
+  // Nothing to arbitrate here: the status cell's precedence (missing checkout,
+  // then activity, then git attention) is the domain waterfall's.
   const status = statusIndicator ? (
     <SidebarStatusIndicatorView
       indicator={statusIndicator}
       onAction={onIndicatorAction}
     />
-  ) : gitStatus?.attention === "conflicts" ? (
-    <SidebarGitConflictsAlert />
   ) : null;
 
   return { identity, status };

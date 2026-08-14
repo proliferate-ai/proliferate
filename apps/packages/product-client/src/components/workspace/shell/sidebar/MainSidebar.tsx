@@ -54,6 +54,11 @@ import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvi
 import { useReleaseNotice } from "#product/hooks/updates/facade/use-release-notice";
 import { useRepositoryHeaderNewChat } from "#product/hooks/workspaces/ui/use-repository-header-new-chat";
 
+// Platform cannot change at runtime, so the label is resolved once rather
+// than on every render of the sidebar.
+const NEW_CHAT_SHORTCUT_LABEL = getShortcutDisplayLabel(SHORTCUTS.newDefault);
+
+
 export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }: { showRightBorder?: boolean }) {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
@@ -233,7 +238,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
     [sidebarShortcutTargetIds],
   );
-  const newChatShortcutLabel = getShortcutDisplayLabel(SHORTCUTS.newDefault);
 
   return (
     <DebugProfiler id="workspace-sidebar">
@@ -258,7 +262,7 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
               homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
               onGoHome={actions.handleGoHome}
               shortcutRevealVisible={shortcutRevealVisible}
-              newChatShortcutLabel={newChatShortcutLabel}
+              newChatShortcutLabel={NEW_CHAT_SHORTCUT_LABEL}
             />
           </DebugProfiler>
 

@@ -3,6 +3,15 @@ import type { WorkspaceExecutionSummary } from "@anyharness/sdk";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import {
+  deriveGitAttention,
+  type WorkspaceGitStatus,
+  type WorkspacePrStatus,
+} from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import {
+  SIDEBAR_GIT_CONFLICTS_LABEL,
+  sidebarGitAttentionIndicator,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import {
   buildGroups,
   makeCloudLogicalWorkspace,
   makeCloudWorkspace,
@@ -382,5 +391,143 @@ describe("sidebar indicators", () => {
     const indicator = groups[0]?.items[0]?.statusIndicator;
     expect(indicator?.kind).toBe("worktree_missing");
     expect(indicator?.tooltip).toBe("Worktree no longer exists");
+  });
+});
+
+function pullRequest(overrides: Partial<WorkspacePrStatus> = {}): WorkspacePrStatus {
+  return {
+    state: "open",
+    number: 805,
+    url: "https://github.com/acme/repo/pull/805",
+    checks: "none",
+    reviewDecision: "none",
+    ...overrides,
+  };
+}
+
+function gitStatusWith(args: {
+  pr: WorkspacePrStatus | null;
+  conflicted?: boolean;
+}): WorkspaceGitStatus {
+  const conflicted = args.conflicted ?? false;
+  return {
+    branch: "feature/sidebar",
+    dirty: false,
+    conflicted,
+    ahead: 0,
+    behind: 0,
+    hasUpstream: true,
+    pr: args.pr,
+    // Derived rather than hand-set: these cases only prove anything if the
+    // attention they exercise is the one the model actually produces.
+    attention: deriveGitAttention({ conflicted, pr: args.pr }),
+    capturedAt: "2026-08-04T00:00:00.000Z",
+    source: "live",
+  };
+}
+
+describe("sidebarGitAttentionIndicator", () => {
+  it("reports failing checks on a draft PR, whose dot cannot carry them", () => {
+    const status = gitStatusWith({ pr: pullRequest({ state: "draft", checks: "failing" }) });
+
+    expect(status.attention).toBe("ci_failing");
+    expect(sidebarGitAttentionIndicator(status)).toEqual({
+      kind: "git_checks_failing",
+      tooltip: "PR checks failing",
+    });
+  });
+
+  it("stays silent for failing checks on an open PR, where the dot is already red", () => {
+    const status = gitStatusWith({ pr: pullRequest({ checks: "failing" }) });
+
+    expect(status.attention).toBe("ci_failing");
+    expect(sidebarGitAttentionIndicator(status)).toBeNull();
+  });
+
+  it("reports requested changes when the dot is showing pending checks instead", () => {
+    const status = gitStatusWith({
+      pr: pullRequest({ checks: "pending", reviewDecision: "changes_requested" }),
+    });
+
+    expect(status.attention).toBe("changes_requested");
+    expect(sidebarGitAttentionIndicator(status)).toEqual({
+      kind: "git_changes_requested",
+      tooltip: "PR changes requested",
+    });
+  });
+
+  it("reports requested changes on a merged PR, which never reaches that dot kind", () => {
+    const status = gitStatusWith({
+      pr: pullRequest({ state: "merged", reviewDecision: "changes_requested" }),
+    });
+
+    expect(sidebarGitAttentionIndicator(status)).toEqual({
+      kind: "git_changes_requested",
+      tooltip: "PR changes requested",
+    });
+  });
+
+  it("lets conflicts win over failing checks", () => {
+    const status = gitStatusWith({
+      conflicted: true,
+      pr: pullRequest({ state: "draft", checks: "failing" }),
+    });
+
+    expect(status.attention).toBe("conflicts");
+    expect(sidebarGitAttentionIndicator(status)).toEqual({
+      kind: "git_conflicts",
+      tooltip: SIDEBAR_GIT_CONFLICTS_LABEL,
+    });
+  });
+
+  it("reports nothing when there is no attention, or no status at all", () => {
+    expect(sidebarGitAttentionIndicator(gitStatusWith({ pr: pullRequest() }))).toBeNull();
+    expect(sidebarGitAttentionIndicator(gitStatusWith({ pr: null }))).toBeNull();
+    expect(sidebarGitAttentionIndicator(null)).toBeNull();
+  });
+
+  it("falls through to git attention once the row has no activity to show", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "draft-pr-red-checks",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          executionSummary: workspaceExecutionSummary("idle"),
+        }),
+      ],
+      gitStatusesByLogicalId: {
+        "draft-pr-red-checks": gitStatusWith({
+          pr: pullRequest({ state: "draft", checks: "failing" }),
+        }),
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator).toEqual({
+      kind: "git_checks_failing",
+      tooltip: "PR checks failing",
+    });
+  });
+
+  it("keeps live activity ahead of git attention", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "running-with-red-checks",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          executionSummary: workspaceExecutionSummary("running"),
+        }),
+      ],
+      gitStatusesByLogicalId: {
+        "running-with-red-checks": gitStatusWith({
+          pr: pullRequest({ state: "draft", checks: "failing" }),
+        }),
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
   });
 });

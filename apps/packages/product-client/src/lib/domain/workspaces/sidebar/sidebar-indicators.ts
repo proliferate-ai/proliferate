@@ -7,6 +7,8 @@ import { missingCheckoutCopy } from "#product/copy/workspaces/workspace-availabi
 import { isCloudWorkspacePending } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { prStatusViewFromGitStatus } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
+import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 export type SidebarWorkspaceVariant = "local" | "worktree" | "cloud" | "ssh";
 
@@ -48,6 +50,18 @@ export type SidebarStatusIndicator =
   }
   | {
     kind: "queued_prompt";
+    tooltip: string;
+  }
+  | {
+    kind: "git_conflicts";
+    tooltip: string;
+  }
+  | {
+    kind: "git_checks_failing";
+    tooltip: string;
+  }
+  | {
+    kind: "git_changes_requested";
     tooltip: string;
   };
 
@@ -138,6 +152,40 @@ export function sidebarStatusIndicatorFromActivity(args: {
   }
 
   return null;
+}
+
+export const SIDEBAR_GIT_CONFLICTS_LABEL = "Merge conflicts in worktree";
+
+/**
+ * Git attention as the status cell's last resort, below live activity.
+ *
+ * Attention surfaces here only when the identity glyph's state dot does not
+ * already carry it: an open PR with failing checks is already a danger dot,
+ * so repeating it in the status cell would say the same thing twice. Draft,
+ * merged and closed PRs never resolve to those dot kinds, which is why their
+ * failing checks and requested changes would otherwise go unreported.
+ *
+ * No ranking happens here: `deriveGitAttention` has already collapsed
+ * conflicts > ci_failing > changes_requested into the single state it reports.
+ */
+export function sidebarGitAttentionIndicator(
+  status: WorkspaceGitStatus | null,
+): SidebarStatusIndicator | null {
+  switch (status?.attention) {
+    case "conflicts":
+      return { kind: "git_conflicts", tooltip: SIDEBAR_GIT_CONFLICTS_LABEL };
+    case "ci_failing":
+      return prStatusViewFromGitStatus(status)?.kind === "checks_failing"
+        ? null
+        : { kind: "git_checks_failing", tooltip: "PR checks failing" };
+    case "changes_requested":
+      return prStatusViewFromGitStatus(status)?.kind === "changes_requested"
+        ? null
+        : { kind: "git_changes_requested", tooltip: "PR changes requested" };
+    case "none":
+    case undefined:
+      return null;
+  }
 }
 
 export function activeWorkspaceActivity(

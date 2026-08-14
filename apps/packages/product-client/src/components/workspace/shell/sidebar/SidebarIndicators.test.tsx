@@ -6,16 +6,17 @@ import { describe, expect, it } from "vitest";
 import { CircleAlert } from "#product/primitives/icons/status";
 import { Clock } from "#product/primitives/icons/core";
 import { DotCellLoader } from "#product/primitives/DotCellLoader";
-import type { SidebarStatusIndicator } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import {
   SIDEBAR_GIT_CONFLICTS_LABEL,
-  SidebarGitConflictsAlert,
-  SidebarStatusGlyph,
-} from "#product/components/workspace/shell/sidebar/SidebarIndicators";
+  type SidebarStatusIndicator,
+  type SidebarWorkspaceVariant,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import {
-  resolveSidebarWorkspaceGitIdentity,
-  SidebarWorkspaceGitGlyph,
-} from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
+  SidebarStatusGlyph,
+  SidebarStatusIndicatorView,
+} from "#product/components/workspace/shell/sidebar/SidebarIndicators";
+import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
+import { resolveSidebarWorkspaceGitIdentity } from "#product/lib/domain/workspaces/git-status/sidebar-git-identity";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
@@ -27,7 +28,10 @@ type GlyphTestKind =
   | "waiting_input"
   | "waiting_plan"
   | "iterating"
-  | "queued_prompt";
+  | "queued_prompt"
+  | "git_conflicts"
+  | "git_checks_failing"
+  | "git_changes_requested";
 
 function countElementsByType(node: ReactNode, targetType: unknown): number {
   if (Array.isArray(node)) {
@@ -98,6 +102,20 @@ function renderedGlyphMarkup(node: ReactNode): string {
   return renderToStaticMarkup(node as never);
 }
 
+/**
+ * The row's real path: resolve the identity once, and render the glyph only
+ * when there is one. An empty string therefore means the cell collapsed.
+ */
+function renderedIdentityMarkup(
+  status: WorkspaceGitStatus | null,
+  variant: SidebarWorkspaceVariant,
+): string {
+  const identity = resolveSidebarWorkspaceGitIdentity(status, variant);
+  return identity
+    ? renderedGlyphMarkup(<SidebarWorkspaceGitGlyph identity={identity} />)
+    : "";
+}
+
 describe("SidebarWorkspaceGitGlyph", () => {
   const status = (overrides: Partial<WorkspaceGitStatus> = {}): WorkspaceGitStatus => ({
     branch: "feature/sidebar",
@@ -154,9 +172,7 @@ describe("SidebarWorkspaceGitGlyph", () => {
 
       expect(identity).toMatchObject({ kind: "pull_request", fill });
 
-      const markup = renderedGlyphMarkup(
-        <SidebarWorkspaceGitGlyph status={prStatus(overrides)} variant="worktree" />,
-      );
+      const markup = renderedIdentityMarkup(prStatus(overrides), "worktree");
       // The branch strokes stay on the row's muted ink; only the standalone
       // bottom-right dot carries the state.
       expect(markup).toContain("text-sidebar-muted-foreground");
@@ -181,9 +197,7 @@ describe("SidebarWorkspaceGitGlyph", () => {
     expect(resolveSidebarWorkspaceGitIdentity(merged, "worktree"))
       .toMatchObject({ kind: "merged_pull_request" });
 
-    const markup = renderedGlyphMarkup(
-      <SidebarWorkspaceGitGlyph status={merged} variant="worktree" />,
-    );
+    const markup = renderedIdentityMarkup(merged, "worktree");
 
     expect(markup).toContain("text-sidebar-status-worktree");
     expect(markup).toContain("PR #805 · Merged");
@@ -201,12 +215,9 @@ describe("SidebarWorkspaceGitGlyph", () => {
     expect(resolveSidebarWorkspaceGitIdentity(noPr, "cloud"))
       .toEqual({ kind: "cloud" });
 
-    expect(renderedGlyphMarkup(
-      <SidebarWorkspaceGitGlyph status={noPr} variant="worktree" />,
-    )).toContain("rotate-90");
-    expect(renderedGlyphMarkup(
-      <SidebarWorkspaceGitGlyph status={noPr} variant="cloud" />,
-    )).toContain("Cloud workspace · no pull request");
+    expect(renderedIdentityMarkup(noPr, "worktree")).toContain("rotate-90");
+    expect(renderedIdentityMarkup(noPr, "cloud"))
+      .toContain("Cloud workspace · no pull request");
   });
 
   it("falls back to topology when PR data is unknown rather than absent", () => {
@@ -220,19 +231,12 @@ describe("SidebarWorkspaceGitGlyph", () => {
     "renders no identity at all for a %s row without a PR",
     (variant) => {
       expect(resolveSidebarWorkspaceGitIdentity(null, variant)).toBeNull();
-      expect(renderedGlyphMarkup(
-        <SidebarWorkspaceGitGlyph status={null} variant={variant} />,
-      )).toBe("");
+      expect(renderedIdentityMarkup(null, variant)).toBe("");
     },
   );
 
   it("leaves check and review attention to the state dot alone", () => {
-    const markup = renderedGlyphMarkup(
-      <SidebarWorkspaceGitGlyph
-        status={prStatus({ checks: "failing" })}
-        variant="worktree"
-      />,
-    );
+    const markup = renderedIdentityMarkup(prStatus({ checks: "failing" }), "worktree");
 
     // The old separate alert beside the glyph said the same thing the dot
     // already says.
@@ -241,13 +245,26 @@ describe("SidebarWorkspaceGitGlyph", () => {
   });
 });
 
-describe("SidebarGitConflictsAlert", () => {
+describe("git attention in the status cell", () => {
   it("keeps conflicts as an alert in the row's status cell", () => {
-    const markup = renderedGlyphMarkup(<SidebarGitConflictsAlert />);
+    const markup = renderedGlyphMarkup(
+      <SidebarStatusIndicatorView
+        indicator={{ kind: "git_conflicts", tooltip: SIDEBAR_GIT_CONFLICTS_LABEL }}
+      />,
+    );
 
     expect(markup).toContain("text-sidebar-status-waiting");
     expect(markup).toContain(SIDEBAR_GIT_CONFLICTS_LABEL);
     // Same fixed cell as the activity indicators it sits in place of.
     expect(markup).toContain("h-5 min-w-5");
+  });
+
+  it("gives failing checks the error ink and requested changes the waiting ink", () => {
+    expect(glyphClassName(renderGlyph("git_checks_failing")))
+      .toContain("text-sidebar-status-error");
+    expect(glyphClassName(renderGlyph("git_changes_requested")))
+      .toContain("text-sidebar-status-waiting");
+    expect(countElementsByType(renderGlyph("git_checks_failing"), CircleAlert)).toBe(1);
+    expect(countElementsByType(renderGlyph("git_changes_requested"), CircleAlert)).toBe(1);
   });
 });

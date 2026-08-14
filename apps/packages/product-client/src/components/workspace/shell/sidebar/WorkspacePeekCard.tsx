@@ -7,6 +7,7 @@ import { FixedPositionLayer } from "#product/primitives/FixedPositionLayer";
 import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
 import { statusDotToneTextClass } from "#product/primitives/StatusDot";
 import {
+  prChecksLabel,
   prStatusCompoundLabel,
   prStatusTone,
   prStatusViewFromGitStatus,
@@ -143,17 +144,12 @@ function PeekRow({
   );
 }
 
+/**
+ * The card names the absence too, unlike the shared label: it renders a fixed
+ * row rather than a tooltip segment, so an empty one would read as a bug.
+ */
 function checksLabel(status: WorkspaceGitStatus | null): string {
-  switch (status?.pr?.checks) {
-    case "passing":
-      return "Checks passing";
-    case "pending":
-      return "Checks pending";
-    case "failing":
-      return "Checks failing";
-    default:
-      return "No CI checks";
-  }
+  return prChecksLabel(status?.pr?.checks ?? "none") ?? "No CI checks";
 }
 
 /**

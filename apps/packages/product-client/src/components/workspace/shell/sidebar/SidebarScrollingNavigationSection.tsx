@@ -7,6 +7,10 @@ import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
 
+// Platform cannot change at runtime, so the label is resolved once rather
+// than on every render of the section.
+const SUPPORT_SHORTCUT_LABEL = getShortcutDisplayLabel(SHORTCUTS.openSupport);
+
 interface SidebarScrollingNavigationSectionProps {
   onGoWorkspaces: () => void;
   onGoWorkflows: () => void;
@@ -42,7 +46,7 @@ export function SidebarScrollingNavigationSection({
         onGoWorkflows={onGoWorkflows}
         onOpenSupport={handleOpenSupport}
         shortcutRevealVisible={shortcutRevealVisible}
-        supportShortcutLabel={getShortcutDisplayLabel(SHORTCUTS.openSupport)}
+        supportShortcutLabel={SUPPORT_SHORTCUT_LABEL}
       />
     </DebugProfiler>
   );

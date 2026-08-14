@@ -14,6 +14,7 @@ import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/s
 import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/availability";
 import {
   activeWorkspaceActivity,
+  sidebarGitAttentionIndicator,
   sidebarStatusIndicatorFromActivity,
   sidebarWorkspaceVariantForLogicalWorkspace,
   worktreeMissingStatusIndicator,
@@ -222,6 +223,21 @@ function buildSidebarWorkspaceItem(
     ) ?? null
     : null;
 
+  // The status cell's whole precedence, in one place: a missing checkout
+  // outranks everything, then live session activity, then whatever git
+  // attention the identity glyph's state dot does not already carry.
+  const statusIndicator = entry.localWorkspace
+      && isWorkspaceDirectoryMissing(entry.localWorkspace)
+    ? worktreeMissingStatusIndicator(
+      entry.localWorkspace.kind,
+      { kind: "open_workspace", workspaceId: entry.id },
+    )
+    : (sidebarStatusIndicatorFromActivity({
+      activity,
+      pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, entry),
+      errorAction: { kind: "open_workspace", workspaceId: entry.id },
+    }) ?? sidebarGitAttentionIndicator(gitStatus));
+
   return {
     workspace: entry,
     item: {
@@ -237,16 +253,7 @@ function buildSidebarWorkspaceItem(
       archived,
       pinnedIds: logicalWorkspaceRelatedIds(entry).filter((id) => args.pinnedSet?.has(id)),
       variant,
-      statusIndicator: entry.localWorkspace && isWorkspaceDirectoryMissing(entry.localWorkspace)
-        ? worktreeMissingStatusIndicator(
-          entry.localWorkspace.kind,
-          { kind: "open_workspace", workspaceId: entry.id },
-        )
-        : sidebarStatusIndicatorFromActivity({
-          activity,
-          pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, entry),
-          errorAction: { kind: "open_workspace", workspaceId: entry.id },
-        }),
+      statusIndicator,
       lastInteracted,
       needsReview,
       workspaceLocationCopyLabel: copyMetadata.workspaceLocation?.menuLabel ?? null,
