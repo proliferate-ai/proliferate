@@ -140,7 +140,7 @@ export function ConnectedSelectedResponseAnnotationMarkers({
           {hoveredId === marker.id ? (
             <>
               <span
-                className="absolute bottom-[calc(100%+6px)] left-0 w-max max-w-[260px] rounded-lg border border-border bg-popover px-2.5 py-1.5 text-ui-sm shadow-popover"
+                className="absolute bottom-full left-0 mb-1.5 w-max max-w-64 rounded-lg border border-border bg-popover px-2.5 py-1.5 text-ui-sm shadow-popover"
                 data-annotation-comment-preview
                 data-telemetry-mask
               >
@@ -156,7 +156,7 @@ export function ConnectedSelectedResponseAnnotationMarkers({
                 type="button"
                 variant="ghost"
                 size="unstyled"
-                className="absolute -top-1.5 left-[13px] flex size-3.5 items-center justify-center rounded-full bg-foreground text-background"
+                className="absolute -top-1.5 left-3 flex size-3.5 items-center justify-center rounded-full bg-foreground text-background"
                 aria-label={CHAT_SELECTED_RESPONSE_ACTIONS.annotationRemoveLabel}
                 title={CHAT_SELECTED_RESPONSE_ACTIONS.annotationRemoveLabel}
                 onPointerDown={(event) => event.preventDefault()}
