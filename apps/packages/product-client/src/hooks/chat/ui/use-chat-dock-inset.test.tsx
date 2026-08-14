@@ -274,4 +274,38 @@ describe("useChatDockInset", () => {
     expect(flushSyncCalls.count).toBe(1);
     expect(handle.current.dockHeightPx).toBe(80);
   });
+
+  it("sync-flushes a collapse back below a measured-but-uncommitted growth", () => {
+    // Mirror image of the previous test: here the deferred measure read GROWN
+    // geometry whose commit is still pending when the collapse lands. The
+    // committed baseline alone would miss a collapse back to the old height
+    // (not below it) — the stale tall snapshot would then commit and drop, so
+    // the gate must also honor the last measure-read baseline.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const notifyResize = stubCapturingResizeObserver();
+    const handle = renderHarness();
+    stubElementRect(handle.dockEl, 200);
+    act(() => {
+      notifyResize();
+      flushRafRound();
+    });
+    expect(handle.current.dockHeightPx).toBe(200);
+
+    // Growth to 240 queues a deferred measure; the un-act'ed rAF flush reads
+    // 240 but leaves its React update pending (a delayed default-lane commit).
+    stubElementRect(handle.dockEl, 240);
+    act(() => {
+      notifyResize();
+    });
+    flushRafRound();
+
+    // Collapse back to the previously-committed 200 — not below it. The sync
+    // path must still fire, or the pending 240 would commit and then drop.
+    stubElementRect(handle.dockEl, 200);
+    act(() => {
+      notifyResize();
+    });
+    expect(flushSyncCalls.count).toBe(1);
+    expect(handle.current.dockHeightPx).toBe(200);
+  });
 });

@@ -550,7 +550,10 @@ state. Composer-surface height remains structural and continues to re-stick
 promptly when the input itself grows. A shrink of the derived structural
 inset (the stable dock reserve minus the non-displacing offset-top share,
 recomputed from fresh rects inside the ResizeObserver callback by the same
-code path a measure commits) flushes the inset re-measure synchronously —
+code path a measure commits, and compared against the widest of the last
+committed structural inset and the last measure-read one — a measure whose
+commit is still pending must be able to raise the shrink baseline but never
+lower it) flushes the inset re-measure synchronously —
 still pre-paint — instead of deferring a frame, so the collapse frame never
 paints against the stale taller inset and then drops the whole transcript a
 notch. This covers any structural collapse (submit, Escape-clear, deleting

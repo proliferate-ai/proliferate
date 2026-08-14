@@ -7,30 +7,52 @@ import {
 } from "#product/config/chat-layout";
 
 
+interface ChatDockMetrics {
+  composerSurfaceHeightPx: number;
+  composerSurfaceOffsetTopPx: number;
+  composerFooterHeightPx: number;
+  dockHeightPx: number;
+}
+
+/**
+ * The transcript's structural bottom inset: the stable dock reserve minus the
+ * non-displacing offset-top share. The shrink gate below compares candidate
+ * geometry against this.
+ */
+function structuralInsetOf(dockMetrics: ChatDockMetrics): number {
+  return computeChatStableBottomInsetPx(dockMetrics) - dockMetrics.composerSurfaceOffsetTopPx;
+}
+
 export function useChatDockInset() {
   const dockRef = useRef<HTMLDivElement>(null);
-  // The transcript's structural bottom inset (stable dock reserve minus the
-  // non-displacing offset-top share) as of the last COMMITTED metrics. The
-  // ResizeObserver's shrink gate compares candidate geometry against this.
+  // Structural inset as of the last COMMITTED metrics.
   const lastCommittedStructuralInsetRef = useRef(0);
-  const [metrics, setMetrics] = useState({
+  // Structural inset as of the last measure READ, which may be ahead of the
+  // committed one while its state update is still pending (a rAF-deferred
+  // growth measure whose default-lane commit is delayed under load). The gate
+  // takes the max of both: a shrink below either baseline must flush, and a
+  // stale-high read can only cost an extra harmless sync flush, never a
+  // missed one.
+  const lastMeasuredStructuralInsetRef = useRef(0);
+  const [metrics, setMetrics] = useState<ChatDockMetrics>({
     composerSurfaceHeightPx: 0,
     composerSurfaceOffsetTopPx: 0,
     composerFooterHeightPx: 0,
     dockHeightPx: 0,
   });
 
-  // The gate must compare against what the transcript has actually committed,
-  // not against what a measure has merely read: a rAF-deferred measure that
-  // runs in the same frame as a collapse (growth queued the frame before,
-  // collapse committed by a discrete event in between) would otherwise lower
-  // the baseline before its state ever commits, disarming the sync gate for
-  // exactly the frame it protects. Advancing the ref in a layout effect keyed
-  // on the committed metrics keeps it truthful on both paths — inside a
-  // flushSync it runs within the flush, still pre-paint.
+  // A measure-read alone must never LOWER the gate baseline: a rAF-deferred
+  // measure that runs in the same frame as a collapse (growth queued the
+  // frame before, collapse committed by a discrete event in between) reads
+  // the already-collapsed geometry before its state ever commits, and using
+  // that read as the sole baseline would disarm the sync gate for exactly
+  // the frame it protects. Advancing this ref in a layout effect keyed on
+  // the committed metrics keeps it truthful on both paths — inside a
+  // flushSync it runs within the flush, still pre-paint. (A measure-read may
+  // still RAISE the effective baseline via lastMeasuredStructuralInsetRef —
+  // see the gate.)
   useLayoutEffect(() => {
-    lastCommittedStructuralInsetRef.current =
-      computeChatStableBottomInsetPx(metrics) - metrics.composerSurfaceOffsetTopPx;
+    lastCommittedStructuralInsetRef.current = structuralInsetOf(metrics);
   }, [metrics]);
 
   useLayoutEffect(() => {
@@ -59,11 +81,9 @@ export function useChatDockInset() {
       };
     };
 
-    const structuralInsetOf = (dockMetrics: ReturnType<typeof readDockMetrics>) =>
-      computeChatStableBottomInsetPx(dockMetrics) - dockMetrics.composerSurfaceOffsetTopPx;
-
     const measure = () => {
       const nextMetrics = readDockMetrics();
+      lastMeasuredStructuralInsetRef.current = structuralInsetOf(nextMetrics);
       setMetrics((current) =>
         current.composerSurfaceHeightPx === nextMetrics.composerSurfaceHeightPx
         && current.composerSurfaceOffsetTopPx === nextMetrics.composerSurfaceOffsetTopPx
@@ -116,7 +136,18 @@ export function useChatDockInset() {
       // tax input latency. Note the flush drains ALL pending work at this
       // root (a queued live-tail stream batch included), so its cost scales
       // with the pending tree, not with the dock subtree.
-      if (structuralInsetOf(readDockMetrics()) < lastCommittedStructuralInsetRef.current) {
+      //
+      // The baseline is the max of committed and last-read: a growth measure
+      // whose default-lane commit is still pending under load would leave the
+      // committed baseline stale-low, letting a collapse back to the old
+      // height slip to the deferred path — and the stale tall snapshot would
+      // then commit and drop, the very notch this gate exists to prevent.
+      // Either ref being stale-high only costs an extra sync flush.
+      const shrinkGateBaseline = Math.max(
+        lastCommittedStructuralInsetRef.current,
+        lastMeasuredStructuralInsetRef.current,
+      );
+      if (structuralInsetOf(readDockMetrics()) < shrinkGateBaseline) {
         if (frameId !== null) {
           window.cancelAnimationFrame(frameId);
           frameId = null;
