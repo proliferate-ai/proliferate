@@ -167,6 +167,13 @@ export function SelectedResponseActionMenu({
         loop
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
+        // WKWebView runs the native mouse-down focus fixup even though the
+        // items cancel pointerdown, parking focus outside this portalled menu
+        // mid-press; left alone, the focus-outside close unmounts the menu
+        // before pointerup so no item can ever activate. Outside-click
+        // dismissal is already owned by the transcript's own pointerdown
+        // handling, so the focus-outside path carries no other duty here.
+        onFocusOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => {
           event.preventDefault();
           onEscape();
@@ -177,9 +184,12 @@ export function SelectedResponseActionMenu({
           return (
             <DropdownMenuItem
               key={item.action}
-              // Keeps the window text selection alive: focus must not move on
-              // pointer-down or the selection collapses before `onAction` can
-              // read it.
+              // Keeps focus from moving on pointer-down. WebKit still clears
+              // the window selection natively on menu-item mouse-down despite
+              // the cancel; the selectionchange guard in
+              // chat-transcript-selection-handlers.ts keeps the menu alive
+              // through that so the click can finish (`onAction` reads the
+              // captured text, not the live selection).
               onPointerDown={(event) => event.preventDefault()}
               // Hover is a focus move too: Radix focuses the hovered item on
               // pointer-move and the content on pointer-leave, and WebKit

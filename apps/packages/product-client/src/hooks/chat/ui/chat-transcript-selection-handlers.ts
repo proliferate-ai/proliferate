@@ -68,6 +68,7 @@ interface ChatTranscriptSelectionHandlerArgs {
     selection: SelectedResponseSelection,
     root: HTMLElement,
   ) => boolean;
+  isSelectedResponseMenuHovered: () => boolean;
   setSelectedResponse: (selection: SelectedResponseSelection | null) => void;
   hasSelectedResponse: () => boolean;
   requestSelectedResponseMenuFocus: () => void;
@@ -118,6 +119,7 @@ export function createChatTranscriptSelectionHandlers({
   clampSelectionToRoot: clampSelectionToRootForSelection,
   getSelectedResponse,
   isSelectedResponseVisible,
+  isSelectedResponseMenuHovered,
   setSelectedResponse,
   hasSelectedResponse,
   requestSelectedResponseMenuFocus,
@@ -251,13 +253,20 @@ export function createChatTranscriptSelectionHandlers({
 
   const selectionchange = () => {
     const root = rootRef.current;
-    // Focus moving into the action menu (keyboard invocation focuses the
-    // first item) clears the window selection on WebKit. That loss is a side
-    // effect of using the menu, not the user abandoning it, so the published
-    // selection must survive while the menu owns focus.
+    // WebKit clears the window selection while the user is USING the menu:
+    // keyboard invocation focuses the first item (focus moves collapse the
+    // selection), and pressing an item clears it natively on mouse-down even
+    // though the item cancels the pointerdown — the unmount then wins the
+    // race against pointerup, so the click never activates anything. Either
+    // loss is a side effect of operating the menu, not the user abandoning
+    // it, so the published selection survives while the menu owns focus or
+    // sits under the pointer.
     if (
       hasSelectedResponse()
-      && getTargetFactsForEvent(getActiveElement(), root).contextualActions
+      && (
+        getTargetFactsForEvent(getActiveElement(), root).contextualActions
+        || isSelectedResponseMenuHovered()
+      )
     ) {
       return;
     }

@@ -140,6 +140,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       clampSelectionToRoot: vi.fn(),
       getSelectedResponse: () => null,
       isSelectedResponseVisible: () => true,
+      isSelectedResponseMenuHovered: () => false,
       setSelectedResponse: vi.fn(),
       hasSelectedResponse: () => false,
       requestSelectedResponseMenuFocus: vi.fn(),
@@ -195,6 +196,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       clampSelectionToRoot: vi.fn(),
       getSelectedResponse: () => null,
       isSelectedResponseVisible: () => true,
+      isSelectedResponseMenuHovered: () => false,
       setSelectedResponse: vi.fn(),
       hasSelectedResponse: () => false,
       requestSelectedResponseMenuFocus: vi.fn(),
@@ -247,6 +249,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       clampSelectionToRoot,
       getSelectedResponse: () => null,
       isSelectedResponseVisible: () => true,
+      isSelectedResponseMenuHovered: () => false,
       setSelectedResponse: vi.fn(),
       hasSelectedResponse: () => false,
       requestSelectedResponseMenuFocus: vi.fn(),
@@ -311,6 +314,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       clampSelectionToRoot: vi.fn(),
       getSelectedResponse: () => selectedResponse,
       isSelectedResponseVisible: () => isSelectedResponseVisible,
+      isSelectedResponseMenuHovered: () => false,
       setSelectedResponse: (value) => {
         hasSelectedResponse = value !== null;
         setSelectedResponse(value);
@@ -368,6 +372,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       clampSelectionToRoot: vi.fn(),
       getSelectedResponse: () => null,
       isSelectedResponseVisible: () => true,
+      isSelectedResponseMenuHovered: () => false,
       setSelectedResponse: vi.fn(),
       hasSelectedResponse: () => true,
       requestSelectedResponseMenuFocus,
@@ -433,6 +438,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       clampSelectionToRoot: vi.fn(),
       getSelectedResponse: () => selectedResponse,
       isSelectedResponseVisible: () => true,
+      isSelectedResponseMenuHovered: () => false,
       setSelectedResponse,
       hasSelectedResponse: () => true,
       requestSelectedResponseMenuFocus: vi.fn(),
@@ -447,10 +453,11 @@ describe("createChatTranscriptSelectionHandlers", () => {
     expect(setSelectedResponse).toHaveBeenLastCalledWith(null);
   });
 
-  it("keeps the published selection while the menu owns focus and the range is lost", () => {
+  it("keeps the published selection while the menu owns focus or the pointer and the range is lost", () => {
     const root = {} as HTMLElement;
     const menuTarget = {} as EventTarget;
     let activeElement: EventTarget = menuTarget;
+    let menuHovered = false;
     const setSelectedResponse = vi.fn();
     const handlers = createChatTranscriptSelectionHandlers({
       rootRef: { current: root },
@@ -474,6 +481,7 @@ describe("createChatTranscriptSelectionHandlers", () => {
       clampSelectionToRoot: vi.fn(),
       getSelectedResponse: () => null,
       isSelectedResponseVisible: () => true,
+      isSelectedResponseMenuHovered: () => menuHovered,
       setSelectedResponse,
       hasSelectedResponse: () => true,
       requestSelectedResponseMenuFocus: vi.fn(),
@@ -485,8 +493,18 @@ describe("createChatTranscriptSelectionHandlers", () => {
     handlers.selectionchange();
     expect(setSelectedResponse).not.toHaveBeenCalled();
 
-    // Once focus is back in the document the same empty selection dismisses.
+    // WebKit also clears it natively on menu-item mouse-down (the cancelled
+    // pointerdown does not stop it); while the pointer is over the menu the
+    // loss must not dismiss either, or the unmount races the pointerup and
+    // the click never activates an item.
     activeElement = root;
+    menuHovered = true;
+    handlers.selectionchange();
+    expect(setSelectedResponse).not.toHaveBeenCalled();
+
+    // Once focus and pointer are back in the document the same empty
+    // selection dismisses.
+    menuHovered = false;
     handlers.selectionchange();
     expect(setSelectedResponse).toHaveBeenLastCalledWith(null);
   });

@@ -180,6 +180,25 @@ describe("SelectedResponseActionMenu", () => {
     }
   });
 
+  it("stays open when focus lands outside the menu", async () => {
+    const onDismiss = vi.fn();
+    renderMenu({ onDismiss });
+    await screen.findAllByRole("menuitem");
+
+    // WKWebView's native mouse-down focus fixup parks focus outside the
+    // portalled menu mid-press (the cancelled pointerdown does not stop it).
+    // The focus-outside close must be prevented or the menu unmounts before
+    // pointerup and no item can ever activate.
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    await Promise.resolve();
+
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(screen.queryAllByRole("menuitem")).toHaveLength(3);
+    outside.remove();
+  });
+
   it("keeps the dismissal-suppression hook reachable from every item", async () => {
     renderMenu();
     const items = await screen.findAllByRole("menuitem");
