@@ -159,6 +159,10 @@ PRODUCT_CLIENT_DOMAIN_FIXTURE_IMPORTS = {
         "../../../../../../fixtures/contracts/workflow-definition/minimal.json",
     ): "fixtures/contracts/workflow-definition/minimal.json",
     (
+        "workflows/definition.test.ts",
+        "../../../../../../fixtures/contracts/workflow-definition/v2-full.json",
+    ): "fixtures/contracts/workflow-definition/v2-full.json",
+    (
         "chats/transcript/transcript-presentation.test.ts",
         "../../../../../../../fixtures/contracts/native-subagent-transcript/claude.json",
     ): "fixtures/contracts/native-subagent-transcript/claude.json",
@@ -695,7 +699,7 @@ def find_product_client_domain_violations(path: Path) -> list[Violation]:
                         statement.lineno,
                         (
                             "ProductClient domain relative imports must stay within "
-                            "src/domain; only the four named contract fixtures may escape"
+                            "src/domain; only the five named contract fixtures may escape"
                         ),
                     )
                 )
