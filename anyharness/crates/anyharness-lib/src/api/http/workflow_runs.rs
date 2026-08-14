@@ -391,7 +391,7 @@ pub async fn put_workflow_run(
         }
     }
 
-    {
+    let doc_count = {
         let planned_docs = plan_context_docs(&snapshot, &chain);
         let doc_count = planned_docs.len();
         let templates = snapshot.definition.doc_templates.clone();
@@ -411,14 +411,8 @@ pub async fn put_workflow_run(
                 "context materialization failed; see runtime logs",
             ));
         }
-        tracing::info!(
-            target: WORKFLOW_WORKSPACE_MATERIALIZED_TRACING_TARGET,
-            run_id = %run_id,
-            workspace_id = %placed.workspace.id,
-            doc_count = doc_count,
-            "workflow run workspace materialized",
-        );
-    }
+        doc_count
+    };
 
     // One transaction: run + node + doc rows. A racing PUT of the same run id
     // loses gracefully — `created: false` — and answers the replay 200.
@@ -460,6 +454,16 @@ pub async fn put_workflow_run(
         }
     };
 
+    // Emitted only after the insert transaction commits, so a workspace that
+    // loses the occupancy race and gets compensated away never reports a
+    // materialization it no longer has.
+    tracing::info!(
+        target: WORKFLOW_WORKSPACE_MATERIALIZED_TRACING_TARGET,
+        run_id = %run_id,
+        workspace_id = %placed.workspace.id,
+        doc_count = doc_count,
+        "workflow run workspace materialized",
+    );
     tracing::info!(
         target: WORKFLOW_RUN_ACCEPTED_TRACING_TARGET,
         run_id = %run_id,

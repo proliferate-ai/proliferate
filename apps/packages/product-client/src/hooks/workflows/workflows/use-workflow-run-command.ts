@@ -4,12 +4,21 @@ import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-vie
 import { recordRendererDiagnostic } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 import { showToast, toastError } from "#product/primitives/utils/show-toast";
 
-/** Stable class from the error's shape (problem code or name), never its text. */
+/**
+ * Stable class from the error's shape (problem code or name), never its text,
+ * lowercased into the renderer diagnostic classification charset (the port's
+ * prevalidator drops the whole record on a value outside
+ * `/^[a-z0-9][a-z0-9._:-]*$/`).
+ */
 function classifyCommandError(error: unknown): string {
-  if (error instanceof AnyHarnessError) {
-    return error.problem.code;
-  }
-  return error instanceof Error ? error.name : "unknown";
+  const raw =
+    error instanceof AnyHarnessError && error.problem.code
+      ? error.problem.code
+      : error instanceof Error
+        ? error.name
+        : "unknown";
+  const normalized = raw.toLowerCase().replace(/[^a-z0-9._:-]/g, "_");
+  return /^[a-z0-9]/.test(normalized) ? normalized : "unknown";
 }
 
 /**
@@ -64,7 +73,7 @@ export function useWorkflowRunCommand({
           kind: "message",
           privacy: "operational",
           correlation: { workflowId: runId },
-          errorClassification: "WORKFLOW_TRANSITION_ILLEGAL",
+          errorClassification: "workflow_transition_illegal",
         });
         // The control raced the run: say so, refresh, and never let the
         // rejection reach the component that rendered the control.

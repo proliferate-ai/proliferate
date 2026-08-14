@@ -96,13 +96,19 @@ export function useWorkflowTriggerActions({
         severity: "error",
         kind: "message",
         privacy: "operational",
+        correlation: failure
+          ? { workflowId: failure.ids.runId }
+          : undefined,
         fields: {
           stage: diagnosticField(failure?.stage ?? "unknown", "operational"),
         },
+        // Lowercase into the prevalidator's classification charset; a value
+        // outside it drops the whole record.
         errorClassification: failure
           ? `trigger_${failure.stage}`
           : caught instanceof Error
-            ? caught.name
+            ? (caught.name.toLowerCase().replace(/[^a-z0-9._:-]/g, "_")
+              || "unknown")
             : "unknown",
       });
       retry.current = failure ? { identityKey, ids: failure.ids } : null;
