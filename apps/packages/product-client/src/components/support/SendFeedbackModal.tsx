@@ -61,13 +61,12 @@ export function SendFeedbackModal({ onClose }: { onClose: () => void }) {
         <section className="space-y-2">
           <Textarea
             id="support-feedback-message"
-            variant="code"
             autoFocus
             data-telemetry-mask
             value={message}
             onChange={(event) => setMessage(event.target.value)}
             placeholder="What happened?"
-            className="min-h-[120px]"
+            className="min-h-[120px] resize-y"
           />
         </section>
 

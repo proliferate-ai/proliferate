@@ -13,6 +13,7 @@ function resetStore() {
     activeMatchId: null,
     unitsById: {},
     nextUnitOrder: 0,
+    surfaceAvailability: { file: false, review: false },
   });
 }
 
@@ -137,5 +138,48 @@ describe("content search store", () => {
     expect(selectVisibleContentSearchMatchIds(useContentSearchStore.getState())).toEqual([
       "file-source:0",
     ]);
+  });
+
+  it("filters visible matches for the review surface", () => {
+    resetStore();
+    useContentSearchStore.getState().setQuery("foo");
+    useContentSearchStore.getState().registerUnit({
+      unitId: "review-diff",
+      surface: "review",
+      query: "foo",
+      matchIds: ["review-diff:0"],
+    });
+    useContentSearchStore.getState().registerUnit({
+      unitId: "chat-row",
+      surface: "chat",
+      query: "foo",
+      matchIds: ["chat-row:0"],
+    });
+
+    useContentSearchStore.getState().openSearch("review");
+    expect(useContentSearchStore.getState().surface).toBe("review");
+    expect(selectVisibleContentSearchMatchIds(useContentSearchStore.getState())).toEqual([
+      "review-diff:0",
+    ]);
+  });
+
+  it("auto-closes when the active surface goes unavailable", () => {
+    resetStore();
+    useContentSearchStore.getState().setSurfaceAvailability("review", true);
+    useContentSearchStore.getState().openSearch("review");
+    expect(useContentSearchStore.getState().open).toBe(true);
+
+    useContentSearchStore.getState().setSurfaceAvailability("review", false);
+    expect(useContentSearchStore.getState().open).toBe(false);
+  });
+
+  it("leaves an open search alone when a different surface's availability changes", () => {
+    resetStore();
+    useContentSearchStore.getState().openSearch("chat");
+    useContentSearchStore.getState().setSurfaceAvailability("file", true);
+    expect(useContentSearchStore.getState().open).toBe(true);
+
+    useContentSearchStore.getState().setSurfaceAvailability("file", false);
+    expect(useContentSearchStore.getState().open).toBe(true);
   });
 });

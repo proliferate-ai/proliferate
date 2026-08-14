@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { APP_ROUTES } from "#product/config/app-routes";
+import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
 import { useWebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
@@ -22,15 +22,17 @@ export type AppNavigationCommandActions = Pick<
 
 // Owns top-level app navigation/support commands shared by shortcuts and palette actions.
 export function useAppNavigationCommandActions(): AppNavigationCommandActions {
-  const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
   const { openExternal } = useProductHost().links;
   const webApp = useWebAppTarget();
   const { goToTopLevelRoute } = useWorkspaceNavigationWorkflow();
 
+  // navigateApp instead of useNavigate: these are callback-only commands, and
+  // useNavigate would subscribe every command surface (and the lifecycle root
+  // composing them) to each location change (PRO-170, PRO-182).
   const openSettings = useCallback(() => {
-    navigate("/settings?section=account");
-  }, [navigate]);
+    navigateApp("/settings?section=account");
+  }, []);
   const openShortcutsDialog = useKeyboardShortcutsDialogStore((state) => state.setOpen);
   const showKeyboardShortcuts = useCallback(() => {
     openShortcutsDialog(true);

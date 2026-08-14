@@ -416,9 +416,7 @@ async def test_desktop_github_login_is_not_beta_gated(
         follow_redirects=False,
     )
 
-    assert callback.status_code == 302
-    redirect = urlparse(callback.headers["location"])
-    assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == (
-        "proliferate://auth/callback"
-    )
-    assert parse_qs(redirect.query)["state"] == ["desktop-beta-bypass-state"]
+    assert callback.status_code == 200
+    assert "GitHub sign-in done" in callback.text
+    assert "proliferate://auth/callback?code=" in callback.text
+    assert "state=desktop-beta-bypass-state" in callback.text

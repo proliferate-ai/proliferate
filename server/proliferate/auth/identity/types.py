@@ -82,6 +82,13 @@ class AuthChallengeSnapshot:
 
 
 @dataclass(frozen=True)
+class AuthCallbackRedirect:
+    url: str
+    surface: str
+    error: str | None
+
+
+@dataclass(frozen=True)
 class AuthSession:
     access_token: str
     refresh_token: str

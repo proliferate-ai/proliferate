@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useState,
   type ReactNode,
   type Ref,
@@ -23,13 +24,13 @@ import {
   PopoverButton,
 } from "#product/primitives/PopoverButton";
 import { PaneOptionsMenuSeparator } from "#product/components/workspace/pane/PaneOptionsMenu";
-import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
 import {
   useFileViewerNativeContextMenu,
   useFileViewerNativeMenu,
   type FileViewerNativeMenuActions,
 } from "#product/hooks/workspaces/ui/files/use-file-viewer-native-menu";
 import { useWorkspacePath } from "#product/providers/WorkspacePathProvider";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
 
 export function FileViewerFrame({
   rootRef,
@@ -70,6 +71,12 @@ export function FileViewerFrame({
   onBrowsePath: (path: string) => void;
   children: ReactNode;
 }) {
+  const setSurfaceAvailability = useContentSearchStore((state) => state.setSurfaceAvailability);
+  useEffect(() => {
+    setSurfaceAvailability("file", true);
+    return () => setSurfaceAvailability("file", false);
+  }, [setSurfaceAvailability]);
+
   return (
     <div
       ref={rootRef}
@@ -117,7 +124,6 @@ export function FileViewerFrame({
           </FileViewerToolbarButton>
         </div>
       </div>
-      <SessionContentSearchOverlay enabled surface="file" />
       <FileViewerContentContextMenu
         canRenderRichPreview={canRenderRichPreview}
         richPreviewEnabled={richPreviewEnabled}
