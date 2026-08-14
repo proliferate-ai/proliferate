@@ -21076,7 +21076,8 @@
         "type": "string",
         "enum": [
           "active",
-          "retired"
+          "retired",
+          "archived"
         ]
       },
       "WorkspaceMaterializationOutcome": {

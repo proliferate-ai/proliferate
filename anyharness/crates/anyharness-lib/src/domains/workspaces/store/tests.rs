@@ -365,6 +365,101 @@ fn lifecycle_cleanup_update_preserves_workspace_and_persists_failure_detail() {
 }
 
 #[test]
+fn unknown_lifecycle_value_does_not_brick_listings() {
+    let (db, store) = store_with_repo_root();
+
+    let corrupted = workspace_record(
+        "workspace-corrupted",
+        WorkspaceKind::Worktree,
+        "/tmp/corrupted",
+    );
+    let active = workspace_record("workspace-active", WorkspaceKind::Worktree, "/tmp/active");
+    store.insert(&corrupted).expect("insert corrupted workspace");
+    store.insert(&active).expect("insert active workspace");
+
+    db.with_conn(|conn| {
+        conn.execute("PRAGMA ignore_check_constraints = ON", [])?;
+        conn.execute(
+            "UPDATE workspaces SET lifecycle_state = 'future_state' WHERE id = ?1",
+            [corrupted.id.as_str()],
+        )?;
+        Ok(())
+    })
+    .expect("corrupt lifecycle_state to a value neither binary knows");
+
+    let surfaces = store
+        .list_execution_surfaces()
+        .expect("an unknown lifecycle_state must not brick the whole listing");
+    assert_eq!(surfaces.len(), 2);
+
+    let corrupted_row = surfaces
+        .iter()
+        .find(|workspace| workspace.id == corrupted.id)
+        .expect("corrupted workspace is still returned by the listing");
+    assert_eq!(
+        corrupted_row.lifecycle_state,
+        WorkspaceLifecycleState::Archived
+    );
+
+    let active_row = surfaces
+        .iter()
+        .find(|workspace| workspace.id == active.id)
+        .expect("untouched workspace is still returned by the listing");
+    assert_eq!(active_row.lifecycle_state, WorkspaceLifecycleState::Active);
+
+    let active_only = store
+        .list_active_by_repo_root_id("repo-root-1")
+        .expect("list active repo-root workspaces");
+    assert_eq!(
+        active_only
+            .iter()
+            .map(|workspace| workspace.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![active.id.as_str()]
+    );
+}
+
+#[test]
+fn unknown_lifecycle_value_survives_unrelated_mutation() {
+    let (db, store) = store_with_repo_root();
+
+    let corrupted = workspace_record(
+        "workspace-corrupted",
+        WorkspaceKind::Worktree,
+        "/tmp/corrupted",
+    );
+    store.insert(&corrupted).expect("insert corrupted workspace");
+
+    db.with_conn(|conn| {
+        conn.execute("PRAGMA ignore_check_constraints = ON", [])?;
+        conn.execute(
+            "UPDATE workspaces SET lifecycle_state = 'future_state' WHERE id = ?1",
+            [corrupted.id.as_str()],
+        )?;
+        Ok(())
+    })
+    .expect("corrupt lifecycle_state to a value neither binary knows");
+
+    store
+        .update_display_name(&corrupted.id, Some("renamed"), "2026-04-29T12:00:01Z")
+        .expect("update display name");
+
+    let raw_lifecycle_state: String = db
+        .with_conn(|conn| {
+            conn.query_row(
+                "SELECT lifecycle_state FROM workspaces WHERE id = ?1",
+                [corrupted.id.as_str()],
+                |row| row.get(0),
+            )
+        })
+        .expect("read raw lifecycle_state");
+
+    // Read-tolerant, write-never: the unrelated mutation must not have
+    // normalized the unknown value to the literal string "archived".
+    assert_eq!(raw_lifecycle_state, "future_state");
+}
+
+#[test]
 fn delete_workspace_removes_workspace_row() {
     let (_db, store) = store_with_repo_root();
 

@@ -170,6 +170,7 @@ pub(super) fn workspace_lifecycle_to_contract(
     match value {
         WorkspaceLifecycleState::Active => ContractWorkspaceLifecycleState::Active,
         WorkspaceLifecycleState::Retired => ContractWorkspaceLifecycleState::Retired,
+        WorkspaceLifecycleState::Archived => ContractWorkspaceLifecycleState::Archived,
     }
 }
 

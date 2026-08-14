@@ -292,6 +292,7 @@ fn workspace_lifecycle_state_to_contract(
     match state {
         WorkspaceLifecycleState::Active => ContractWorkspaceLifecycleState::Active,
         WorkspaceLifecycleState::Retired => ContractWorkspaceLifecycleState::Retired,
+        WorkspaceLifecycleState::Archived => ContractWorkspaceLifecycleState::Archived,
     }
 }
 

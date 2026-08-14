@@ -5456,7 +5456,7 @@ export interface components {
         /** @enum {string} */
         WorkspaceKind: "worktree" | "local";
         /** @enum {string} */
-        WorkspaceLifecycleState: "active" | "retired";
+        WorkspaceLifecycleState: "active" | "retired" | "archived";
         /** @enum {string} */
         WorkspaceMaterializationOutcome: "created" | "adopted" | "reused";
         WorkspaceMobilityArchive: {
