@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   buildHeaderLiveVisibilityCandidates,
   collectHierarchyChildren,
+  filterPaneOnlyHeaderVisibility,
 } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 import { buildGroupedChatTabs } from "#product/lib/domain/workspaces/tabs/grouping";
 import {
@@ -46,6 +47,19 @@ export function useWorkspaceHeaderTabsVisibility({
     }, () => collectHierarchyChildren(hierarchy.childrenByParentSessionId)),
     [hierarchy.childrenByParentSessionId],
   );
+  const paneOnlyVisibility = useMemo(() => filterPaneOnlyHeaderVisibility({
+    activeSessionId,
+    knownSessionIds,
+    hierarchyVisibilityCandidates: hierarchyChildren.visibilityCandidates,
+    rowsBySessionId: hierarchyChildren.rowsBySessionId,
+    paneOnlySubagentSessionIds: hierarchy.paneOnlySubagentSessionIds,
+  }), [
+    activeSessionId,
+    hierarchy.paneOnlySubagentSessionIds,
+    hierarchyChildren.rowsBySessionId,
+    hierarchyChildren.visibilityCandidates,
+    knownSessionIds,
+  ]);
 
   const liveVisibilityCandidates = useMemo<ChatVisibilityCandidate[]>(
     () => measureDebugComputation({
@@ -54,11 +68,14 @@ export function useWorkspaceHeaderTabsVisibility({
       keys: ["knownSessionIds", "hierarchy.childToParent", "hierarchyChildren.visibilityCandidates"],
       count: (candidates) => candidates.length,
     }, () => buildHeaderLiveVisibilityCandidates({
-      knownSessionIds,
+      knownSessionIds: paneOnlyVisibility.knownSessionIds,
       childToParent: hierarchy.childToParent,
-      hierarchyVisibilityCandidates: hierarchyChildren.visibilityCandidates,
+      hierarchyVisibilityCandidates: paneOnlyVisibility.hierarchyVisibilityCandidates,
     })),
-    [hierarchy.childToParent, hierarchyChildren.visibilityCandidates, knownSessionIds],
+    [
+      hierarchy.childToParent,
+      paneOnlyVisibility,
+    ],
   );
   const liveChatSessionIds = useStableStringArray(useMemo(
     () => liveVisibilityCandidates.map((candidate) => candidate.sessionId),
@@ -66,9 +83,18 @@ export function useWorkspaceHeaderTabsVisibility({
   ));
   const persistedVisibleIdsForResolution = useMemo(
     () => persistedVisibleIds?.filter((sessionId) =>
-      sessionId === activeSessionId || !hierarchyChildren.rowsBySessionId.has(sessionId)
+      !paneOnlyVisibility.paneOnlySessionIds.has(sessionId)
+      && (
+        sessionId === paneOnlyVisibility.activeSessionId
+        || !hierarchyChildren.rowsBySessionId.has(sessionId)
+      )
     ),
-    [activeSessionId, hierarchyChildren.rowsBySessionId, persistedVisibleIds],
+    [
+      hierarchyChildren.rowsBySessionId,
+      paneOnlyVisibility.activeSessionId,
+      paneOnlyVisibility.paneOnlySessionIds,
+      persistedVisibleIds,
+    ],
   );
 
   const visibleResolution = useMemo(
@@ -77,11 +103,11 @@ export function useWorkspaceHeaderTabsVisibility({
       liveSessions: liveVisibilityCandidates,
       persistedVisibleIds: persistedVisibleIdsForResolution,
       recentlyHiddenIds: [...recentlyHiddenIds],
-      activeSessionId,
+      activeSessionId: paneOnlyVisibility.activeSessionId,
     }),
     [
-      activeSessionId,
       liveVisibilityCandidates,
+      paneOnlyVisibility.activeSessionId,
       persistedVisibleIdsForResolution,
       recentlyHiddenIds,
       workspaceSessionsLoaded,

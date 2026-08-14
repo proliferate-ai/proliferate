@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
     MobilityPendingConfigChangeRecord, MobilityPendingPromptRecord, MobilityPromptAttachmentRecord,
-    MobilitySessionEventRecord, MobilitySessionLinkCompletionRecord, MobilitySessionLinkRecord,
+    MobilitySessionEventRecord, MobilitySessionLinkCompletionDeliveryRecord,
+    MobilitySessionLinkCompletionRecord, MobilitySessionLinkRecord,
     MobilitySessionLinkWakeScheduleRecord, MobilitySessionLiveConfigSnapshotRecord,
     MobilitySessionRawNotificationRecord, MobilitySessionRecord, WorkspaceMobilityArchive,
     WorkspaceMobilityFileEntry, WorkspaceMobilitySessionBundle,
@@ -17,6 +18,7 @@ use crate::domains::mobility::model::{
 };
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::links::completions::LinkWakeScheduleRecord;
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
@@ -25,9 +27,10 @@ use crate::domains::sessions::model::{
     PromptAttachmentKind, PromptAttachmentRecord, PromptAttachmentState, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
 };
-use crate::domains::sessions::subagents::model::{
-    SubagentCompletionRecord, SubagentWakeScheduleRecord,
+use crate::domains::sessions::subagents::delivery::{
+    CompletionDeliveryRecord, CompletionDeliveryState,
 };
+use crate::domains::sessions::subagents::model::SubagentCompletionRecord;
 
 pub(super) fn from_contract_archive(
     archive: WorkspaceMobilityArchive,
@@ -60,6 +63,11 @@ pub(super) fn from_contract_archive(
             .session_link_completions
             .into_iter()
             .map(from_contract_session_link_completion)
+            .collect::<Result<Vec<_>, _>>()?,
+        session_link_completion_deliveries: archive
+            .session_link_completion_deliveries
+            .into_iter()
+            .map(from_contract_completion_delivery)
             .collect::<Result<Vec<_>, _>>()?,
         session_link_wake_schedules: archive
             .session_link_wake_schedules
@@ -197,7 +205,7 @@ fn from_contract_session_record(
     }
 }
 
-fn from_contract_session_link(
+pub(super) fn from_contract_session_link(
     record: MobilitySessionLinkRecord,
 ) -> Result<SessionLinkRecord, ApiError> {
     Ok(SessionLinkRecord {
@@ -216,6 +224,7 @@ fn from_contract_session_link(
         created_by_turn_id: record.created_by_turn_id,
         created_by_tool_call_id: record.created_by_tool_call_id,
         created_at: record.created_at,
+        subagent_closed_at: record.subagent_closed_at,
         closed_at: record.closed_at,
     })
 }
@@ -238,9 +247,52 @@ fn from_contract_session_link_completion(
 
 fn from_contract_session_link_wake_schedule(
     record: MobilitySessionLinkWakeScheduleRecord,
-) -> Result<SubagentWakeScheduleRecord, ApiError> {
-    Ok(SubagentWakeScheduleRecord {
+) -> Result<LinkWakeScheduleRecord, ApiError> {
+    Ok(LinkWakeScheduleRecord {
         session_link_id: record.session_link_id,
+    })
+}
+
+fn from_contract_completion_delivery(
+    record: MobilitySessionLinkCompletionDeliveryRecord,
+) -> Result<CompletionDeliveryRecord, ApiError> {
+    Ok(CompletionDeliveryRecord {
+        delivery_id: record.delivery_id,
+        completion_id: record.completion_id,
+        session_link_id: record.session_link_id,
+        parent_session_id: record.parent_session_id,
+        child_session_id: record.child_session_id,
+        subagent_public_id: record.subagent_public_id,
+        label: record.label,
+        child_turn_id: record.child_turn_id,
+        child_last_event_seq: record.child_last_event_seq,
+        outcome: parse_mobility_completion_outcome(&record.outcome)?,
+        assistant_text: record.assistant_text,
+        notification_text: record.notification_text,
+        state: match record.state.as_str() {
+            "pending" => CompletionDeliveryState::Pending,
+            "enqueued" => CompletionDeliveryState::Enqueued,
+            "delivered" => CompletionDeliveryState::Delivered,
+            "abandoned" => CompletionDeliveryState::Abandoned,
+            "failed" => CompletionDeliveryState::Failed,
+            other => {
+                return Err(ApiError::bad_request(
+                    format!("Invalid completion delivery state: {other}"),
+                    "MOBILITY_INVALID_ARCHIVE",
+                ))
+            }
+        },
+        parent_prompt_seq: record.parent_prompt_seq,
+        parent_turn_id: record.parent_turn_id,
+        attempt_count: record.attempt_count,
+        next_attempt_at: record.next_attempt_at,
+        lease_token: None,
+        lease_expires_at: None,
+        last_error_code: record.last_error_code,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+        enqueued_at: record.enqueued_at,
+        delivered_at: record.delivered_at,
     })
 }
 
@@ -291,7 +343,7 @@ fn from_contract_pending_prompt(
         prompt_id: record.prompt_id,
         text: record.text,
         blocks_json: record.blocks_json,
-        provenance_json: None,
+        provenance_json: record.provenance_json,
         queued_at: record.queued_at,
     }
 }

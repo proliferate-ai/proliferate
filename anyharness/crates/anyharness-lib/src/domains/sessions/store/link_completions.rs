@@ -320,7 +320,7 @@ impl LinkCompletionStore {
     }
 }
 
-fn map_completion(row: &rusqlite::Row<'_>) -> rusqlite::Result<LinkCompletionRecord> {
+pub(super) fn map_completion(row: &rusqlite::Row<'_>) -> rusqlite::Result<LinkCompletionRecord> {
     let outcome: String = row.get("outcome")?;
     Ok(LinkCompletionRecord {
         completion_id: row.get("completion_id")?,

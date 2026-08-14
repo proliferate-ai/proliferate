@@ -174,6 +174,10 @@ fn map_create_worktree_error(error: CreateWorktreeWorkflowError) -> ApiError {
         CreateWorktreeWorkflowError::CreateTaskFailed(error) => {
             ApiError::internal(format!("worktree task failed: {error}"))
         }
+        CreateWorktreeWorkflowError::NameConflict(_) => ApiError::conflict(
+            "The requested worktree branch or path is already in use.",
+            "WORKTREE_NAME_CONFLICT",
+        ),
         CreateWorktreeWorkflowError::Create(error) => {
             ApiError::bad_request(error.to_string(), "WORKTREE_CREATE_FAILED")
         }

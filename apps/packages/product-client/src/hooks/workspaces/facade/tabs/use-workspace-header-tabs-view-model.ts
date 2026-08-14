@@ -1,10 +1,6 @@
 import { useMemo } from "react";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
-import { useWorkspaceHeaderSubagentHierarchy } from "#product/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy";
-import {
-  buildKnownHeaderSessions,
-  type KnownHeaderSession,
-} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+import { useWorkspaceHeaderTabsKnownSessions } from "#product/hooks/workspaces/facade/tabs/use-workspace-header-tabs-known-sessions";
 import {
   buildHeaderDisplayShellRows,
   buildHeaderChatTabs,
@@ -36,10 +32,6 @@ import { useWorkspaceHeaderTabsWorkspaceState } from "#product/hooks/workspaces/
 import { useWorkspaceHeaderTabsDebugLogging } from "#product/hooks/workspaces/lifecycle/use-workspace-header-tabs-debug-logging";
 import { useWorkspaceHeaderTabsPreferences } from "#product/hooks/workspaces/facade/tabs/use-workspace-header-tabs-preferences";
 import { useWorkspaceHeaderTabsVisibility } from "#product/hooks/workspaces/facade/tabs/use-workspace-header-tabs-visibility";
-import {
-  filterReplacedSessionIds,
-  filterReplacedSessionTombstones,
-} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function useWorkspaceHeaderTabsViewModel() {
   const {
@@ -96,52 +88,19 @@ export function useWorkspaceHeaderTabsViewModel() {
     workspaceUiKey,
   });
 
-  const knownSessions = useMemo<Map<string, KnownHeaderSession>>(() =>
-    measureDebugComputation({
-      category: "header_tabs.derive",
-      label: "known_sessions",
-      keys: [
-        "liveSlots",
-        "optimisticHeaderSessionIds",
-        "workspaceSessionsQuery.data",
-        "selectedWorkspaceId",
-      ],
-      count: (map) => map.size,
-    }, () => {
-      // Resolve tombstones inside the live-slot memo. Beginning a replacement
-      // removes the old slot while intentionally leaving the runtime query
-      // cache untouched for rollback; the liveSlots dependency is therefore
-      // the render signal that hides the retired cached header row immediately.
-      const visibleWorkspaceSessions = selectedWorkspaceId
-        ? filterReplacedSessionTombstones(
-          selectedWorkspaceId,
-          workspaceSessionsQuery.data,
-        )
-        : workspaceSessionsQuery.data;
-      const visibleOptimisticSessionIds = selectedWorkspaceId
-        ? filterReplacedSessionIds(selectedWorkspaceId, optimisticHeaderSessionIds)
-        : optimisticHeaderSessionIds;
-      return buildKnownHeaderSessions({
-        optimisticSessionIds: visibleOptimisticSessionIds,
-        sessions: visibleWorkspaceSessions,
-        selectedWorkspaceId,
-        clientSessionIdByMaterializedSessionId,
-        liveSlots,
-      });
-    }), [
-      clientSessionIdByMaterializedSessionId,
-      liveSlots,
-      optimisticHeaderSessionIds,
-      selectedWorkspaceId,
-      workspaceSessionsQuery.data,
-    ]);
-  const knownSessionIds = useStableStringArray(
-    useMemo(() => Array.from(knownSessions.keys()), [knownSessions]),
-  );
-  const hierarchy = useWorkspaceHeaderSubagentHierarchy({
-    prioritySessionIds: hierarchyPrioritySessionIds,
-    workspaceId: selectedWorkspaceId,
-    sessionIds: knownSessionIds,
+  const {
+    knownSessions,
+    hierarchy,
+    headerHierarchy,
+    headerKnownSessionIds,
+    paneOnlySubagentSessionIds,
+  } = useWorkspaceHeaderTabsKnownSessions({
+    clientSessionIdByMaterializedSessionId,
+    hierarchyPrioritySessionIds,
+    liveSlots,
+    optimisticHeaderSessionIds,
+    selectedWorkspaceId,
+    workspaceSessionsData: workspaceSessionsQuery.data,
   });
   const {
     displayManualGroups,
@@ -154,8 +113,8 @@ export function useWorkspaceHeaderTabsViewModel() {
     visibleChatSessionIds,
   } = useWorkspaceHeaderTabsVisibility({
     activeSessionId,
-    hierarchy,
-    knownSessionIds,
+    hierarchy: headerHierarchy,
+    knownSessionIds: headerKnownSessionIds,
     persistedManualGroups,
     persistedVisibleIds,
     recentlyHiddenIds,
@@ -271,7 +230,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     activeSessionId,
     childToParent: hierarchy.childToParent,
     childrenByParentSessionId: hierarchy.childrenByParentSessionId,
-    knownSessionIds,
+    knownSessionIds: headerKnownSessionIds,
     resolvedHierarchySessionIds: hierarchy.resolvedSessionIds,
   });
 
@@ -290,8 +249,18 @@ export function useWorkspaceHeaderTabsViewModel() {
     }, () => buildHeaderClosedChatTabs({
       highlightedChatSessionId,
       rowsBySessionId: hierarchyChildren.rowsBySessionId,
-      knownSessions: knownSessions.values(),
-      recentlyHiddenIds,
+      knownSessions: Array.from(knownSessions.values()).filter((known) =>
+        !paneOnlySubagentSessionIds.has(
+          known.kind === "slot"
+            ? known.slot.sessionId
+            : known.kind === "session"
+              ? known.clientSessionId ?? known.session.id
+              : known.sessionId,
+        )
+      ),
+      recentlyHiddenIds: recentlyHiddenIds.filter(
+        (sessionId) => !paneOnlySubagentSessionIds.has(sessionId),
+      ),
       visibleChatSessionIds,
       sessionLastInteracted,
       sessionLastViewedAt,
@@ -300,6 +269,7 @@ export function useWorkspaceHeaderTabsViewModel() {
       highlightedChatSessionId,
       hierarchyChildren.rowsBySessionId,
       knownSessions,
+      paneOnlySubagentSessionIds,
       recentlyHiddenIds,
       sessionLastInteracted,
       sessionLastViewedAt,
@@ -314,7 +284,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     activeShellTabKey,
     closedChatTabsCount: closedChatTabs.length,
     displayShellRowsCount: displayShellRows.length,
-    knownSessionIds,
+    knownSessionIds: headerKnownSessionIds,
     liveSlots,
     materializedWorkspaceId,
     orderedShellTabKeys,

@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PromptCapabilities } from "@anyharness/sdk";
 import {
-  isTextFileCandidate,
+  droppedPathsMatchFiles,
+  partitionDroppedPathCandidates,
   pasteAttachmentName,
-  PROMPT_IMAGE_MAX_BYTES,
+  PROMPT_FOLDER_MIME_TYPE,
   PROMPT_TEXT_RESOURCE_MAX_BYTES,
+  promptUploadKind,
   shouldCreatePasteAttachment,
+  type DroppedPathCandidate,
+  type LocalRefCandidate,
   type PromptAttachmentDescriptor,
 } from "#product/domain/chats/composer/prompt-attachment-rules";
 import {
@@ -15,7 +19,8 @@ import {
 
 interface AttachmentEntry {
   descriptor: PromptAttachmentDescriptor;
-  file: File;
+  /** Null for local_ref attachments, which attach by path instead of bytes. */
+  file: File | null;
 }
 
 const MAX_PROMPT_ATTACHMENTS = 10;
@@ -24,6 +29,12 @@ export interface PromptAttachmentLifetimeOptions {
   onBeforeReleaseAttachments?: (
     attachments: readonly PromptAttachmentDescriptor[],
   ) => void;
+  /**
+   * Host resolver recovering absolute local paths for the drag session that
+   * just dropped. Null when paths are unavailable (web host, cloud
+   * workspaces), which keeps drops on the byte-based `addFiles` behavior.
+   */
+  resolveDroppedPaths?: (() => Promise<DroppedPathCandidate[]>) | null;
 }
 
 function createAttachmentId(): string {
@@ -48,10 +59,12 @@ export function usePromptAttachments(
   const onBeforeReleaseAttachmentsRef = useRef(
     lifetimeOptions.onBeforeReleaseAttachments,
   );
+  const resolveDroppedPathsRef = useRef(lifetimeOptions.resolveDroppedPaths);
 
   useEffect(() => {
     onBeforeReleaseAttachmentsRef.current = lifetimeOptions.onBeforeReleaseAttachments;
-  }, [lifetimeOptions.onBeforeReleaseAttachments]);
+    resolveDroppedPathsRef.current = lifetimeOptions.resolveDroppedPaths;
+  }, [lifetimeOptions.onBeforeReleaseAttachments, lifetimeOptions.resolveDroppedPaths]);
 
   const releaseEntries = useCallback((released: readonly AttachmentEntry[]) => {
     if (released.length === 0) {
@@ -65,13 +78,22 @@ export function usePromptAttachments(
     }
   }, []);
 
-  useEffect(() => () => {
+  // Bumped when the attachment scope ends (workspace switch or unmount) so
+  // in-flight dropped-path resolutions from the old scope discard their
+  // results instead of attaching into the new one. Layout effects run
+  // synchronously inside the commit, so no promise continuation can observe
+  // the new scope before the generation advances.
+  const dropScopeGenerationRef = useRef(0);
+
+  useLayoutEffect(() => () => {
+    dropScopeGenerationRef.current += 1;
     const outgoing = entriesRef.current;
     entriesRef.current = [];
     releaseEntries(outgoing);
   }, [releaseEntries]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    dropScopeGenerationRef.current += 1;
     if (entriesRef.current.length === 0) {
       return;
     }
@@ -94,44 +116,24 @@ export function usePromptAttachments(
         break;
       }
 
-      if (file.type.startsWith("image/")) {
-        if (!canAttachImages || file.size > PROMPT_IMAGE_MAX_BYTES) {
-          continue;
-        }
-        next.push({
-          file,
-          descriptor: {
-            id: createAttachmentId(),
-            name: file.name || "image",
-            mimeType: file.type || "image/png",
-            size: file.size,
-            kind: "image",
-            source: "upload",
-            objectUrl: URL.createObjectURL(file),
-          },
-        });
-        remainingSlots -= 1;
+      const uploadKind = promptUploadKind(file, { canAttachImages, canAttachEmbeddedContext });
+      if (!uploadKind) {
         continue;
       }
-
-      if (canAttachEmbeddedContext && isTextFileCandidate(file)) {
-        if (file.size > PROMPT_TEXT_RESOURCE_MAX_BYTES) {
-          continue;
-        }
-        next.push({
-          file,
-          descriptor: {
-            id: createAttachmentId(),
-            name: file.name || "file",
-            mimeType: file.type || "text/plain",
-            size: file.size,
-            kind: "text_resource",
-            source: "upload",
-            objectUrl: URL.createObjectURL(file),
-          },
-        });
-        remainingSlots -= 1;
-      }
+      const isImage = uploadKind === "image";
+      next.push({
+        file,
+        descriptor: {
+          id: createAttachmentId(),
+          name: file.name || (isImage ? "image" : "file"),
+          mimeType: file.type || (isImage ? "image/png" : "text/plain"),
+          size: file.size,
+          kind: uploadKind,
+          source: "upload",
+          objectUrl: URL.createObjectURL(file),
+        },
+      });
+      remainingSlots -= 1;
     }
 
     if (next.length === 0) {
@@ -142,6 +144,80 @@ export function usePromptAttachments(
     entriesRef.current = updated;
     setEntries(updated);
   }, [canAttachEmbeddedContext, canAttachImages]);
+
+  const addLocalRefs = useCallback((refs: readonly LocalRefCandidate[]) => {
+    const next: AttachmentEntry[] = [];
+    const attachedPaths = new Set(
+      entriesRef.current.flatMap((entry) =>
+        entry.descriptor.localPath ? [entry.descriptor.localPath] : []
+      ),
+    );
+    let remainingSlots = Math.max(0, MAX_PROMPT_ATTACHMENTS - entriesRef.current.length);
+    for (const ref of refs) {
+      if (remainingSlots <= 0) {
+        break;
+      }
+      if (attachedPaths.has(ref.path)) {
+        continue;
+      }
+      attachedPaths.add(ref.path);
+      next.push({
+        file: null,
+        descriptor: {
+          id: createAttachmentId(),
+          name: ref.name,
+          mimeType: ref.pathKind === "directory" ? PROMPT_FOLDER_MIME_TYPE : "",
+          size: ref.size ?? 0,
+          kind: "local_ref",
+          source: "upload",
+          objectUrl: null,
+          localPath: ref.path,
+          pathKind: ref.pathKind,
+        },
+      });
+      remainingSlots -= 1;
+    }
+
+    if (next.length === 0) {
+      return;
+    }
+
+    const updated = [...entriesRef.current, ...next].slice(0, MAX_PROMPT_ATTACHMENTS);
+    entriesRef.current = updated;
+    setEntries(updated);
+  }, []);
+
+  const addDroppedFiles = useCallback((files: Iterable<File>) => {
+    const fileList = Array.from(files);
+    const resolveDroppedPaths = resolveDroppedPathsRef.current;
+    if (!resolveDroppedPaths) {
+      addFiles(fileList);
+      return;
+    }
+    const dropScopeGeneration = dropScopeGenerationRef.current;
+    void resolveDroppedPaths()
+      .then((candidates) => {
+        if (dropScopeGeneration !== dropScopeGenerationRef.current) {
+          return;
+        }
+        if (candidates.length === 0 || !droppedPathsMatchFiles(candidates, fileList)) {
+          addFiles(fileList);
+          return;
+        }
+        const { uploadFiles, localRefs } = partitionDroppedPathCandidates(
+          candidates,
+          fileList,
+          { canAttachImages, canAttachEmbeddedContext },
+        );
+        addFiles(uploadFiles);
+        addLocalRefs(localRefs);
+      })
+      .catch(() => {
+        if (dropScopeGeneration === dropScopeGenerationRef.current) {
+          addFiles(fileList);
+        }
+      });
+  }, [addFiles, addLocalRefs, canAttachEmbeddedContext, canAttachImages]);
 
   const addTextPaste = useCallback((text: string): boolean => {
     if (!canAttachEmbeddedContext || !shouldCreatePasteAttachment(text)) {
@@ -214,24 +290,32 @@ export function usePromptAttachments(
     releaseEntries(released);
   }, [releaseEntries]);
 
-  const snapshotForSubmit = useCallback((): PromptAttachmentSnapshot[] => {
-    return entriesRef.current.flatMap((entry) => {
-      const isSupported = entry.descriptor.kind === "image"
-        ? canAttachImages
-        : canAttachEmbeddedContext;
-      return isSupported
-        ? [createPromptAttachmentSnapshot(entry.descriptor, entry.file)]
-        : [];
-    });
+  const isEntrySupported = useCallback((entry: AttachmentEntry): boolean => {
+    switch (entry.descriptor.kind) {
+      case "image":
+        return canAttachImages;
+      case "text_resource":
+        return canAttachEmbeddedContext;
+      case "local_ref":
+        // Path references carry no payload, so no upload capability gates them.
+        return true;
+    }
   }, [canAttachEmbeddedContext, canAttachImages]);
 
-  const hasSupportedAttachments = entries.some((entry) => (
-    entry.descriptor.kind === "image" ? canAttachImages : canAttachEmbeddedContext
-  ));
+  const snapshotForSubmit = useCallback((): PromptAttachmentSnapshot[] => {
+    return entriesRef.current.flatMap((entry) => (
+      isEntrySupported(entry)
+        ? [createPromptAttachmentSnapshot(entry.descriptor, entry.file)]
+        : []
+    ));
+  }, [isEntrySupported]);
+
+  const hasSupportedAttachments = entries.some(isEntrySupported);
 
   return useMemo(() => ({
     attachments: descriptors,
     addFiles,
+    addDroppedFiles,
     addTextPaste,
     removeAttachment,
     clearAttachments,
@@ -240,6 +324,7 @@ export function usePromptAttachments(
     hasAttachments: entries.length > 0,
     hasSupportedAttachments,
   }), [
+    addDroppedFiles,
     addFiles,
     addTextPaste,
     clearAttachments,

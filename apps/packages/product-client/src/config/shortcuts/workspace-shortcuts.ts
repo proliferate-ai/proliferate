@@ -161,6 +161,20 @@ export const WORKSPACE_SHORTCUTS = {
     match: { kind: "digit-key", meta: true, shift: false, alt: false },
     allowInInputs: false,
   },
+  // Registered only while the Settings overlay is mounted, like
+  // settingsSectionByIndex. allowInInputs stays false so Escape keeps its
+  // meaning in text fields (e.g. the worktree-storage draft revert), and the
+  // dispatch policy already skips defaultPrevented events, so an open
+  // dialog/menu consumes Escape without also closing Settings.
+  settingsBack: {
+    id: "settings.back",
+    label: "Esc",
+    nonMacLabel: "Esc",
+    description: "Back to app from settings",
+    owner: "js",
+    match: { kind: "fixed", key: "Escape", meta: false, shift: false, alt: false },
+    allowInInputs: false,
+  },
   workspaceByIndex: {
     id: "workspace.by-index",
     label: "⌘1-9",

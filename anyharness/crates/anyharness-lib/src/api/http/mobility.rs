@@ -134,7 +134,8 @@ pub async fn export_workspace_mobility_archive(
     // admitted-set re-check applies only to the exclusive-lease destruction
     // paths (purge/retire), so the mobility export just retains the permits.
     let _admission =
-        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::Mobility).await?;
+        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::MobilitySnapshot)
+            .await?;
     let _operation = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
@@ -268,7 +269,8 @@ pub async fn destroy_workspace_mobility_source(
     // whole operation) BEFORE the operation lease, preserving the canonical
     // `permit -> operation lease` order.
     let admission =
-        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::Mobility).await?;
+        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::MobilityTeardown)
+            .await?;
     // PR1227-WORKSPACE-FENCE-02: carry the admitted id set into the under-lease
     // re-check; the permits are held until this handler returns.
     let admitted_session_ids = admission.session_ids.clone();

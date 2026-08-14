@@ -10,7 +10,9 @@ import { formatWorkedForDuration } from "#product/domain/chats/transcript/transc
 import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
 import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
-import { useActivePendingInteractionState } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
+import { usePendingInteractionStateForSession } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
+import { useTranscriptSessionId } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import type { SessionViewState } from "#product/domain/sessions/activity";
 
 /**
@@ -292,8 +294,16 @@ function TrailingStatusCrossfade({
 // Reads the composer's primary pending interaction so the transcript marker can
 // name WHAT is awaiting the user (Permission vs Question) rather than a generic
 // "waiting" row. Kept a thin wrapper so the presentation stays pure/testable.
+// The interaction comes from the transcript this marker is rendered inside —
+// the transcript-context session — so an embedded non-active transcript
+// (Agents-pane detail) never shows the main active session's interaction.
+// Outside a transcript context the active session stays the default.
 function ConnectedPendingInteractionMarker(): ReactNode {
-  const { primaryPendingInteraction } = useActivePendingInteractionState();
+  const transcriptSessionId = useTranscriptSessionId();
+  const activeSessionId = useActiveSessionId();
+  const { primaryPendingInteraction } = usePendingInteractionStateForSession(
+    transcriptSessionId ?? activeSessionId,
+  );
   return (
     <PendingInteractionMarkerView
       kind={pendingInteractionMarkerKind(primaryPendingInteraction?.kind)}

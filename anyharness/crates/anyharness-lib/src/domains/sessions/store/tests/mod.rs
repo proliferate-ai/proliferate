@@ -63,6 +63,7 @@ fn fork_link_record(
         created_by_turn_id: None,
         created_by_tool_call_id: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
+        subagent_closed_at: None,
         closed_at: None,
     }
 }

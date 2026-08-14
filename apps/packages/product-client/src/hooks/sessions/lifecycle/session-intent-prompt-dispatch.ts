@@ -3,9 +3,6 @@ import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import type { usePromptSessionMutation } from "@anyharness/sdk-react";
 import {
-  promptAttachmentSnapshotsToBlocks,
-} from "#product/lib/access/browser/prompt-attachment-blocks";
-import {
   failLatencyFlow,
   finishLatencyFlow,
   getLatencyFlowRequestHeaders,
@@ -231,6 +228,12 @@ async function preparePromptBlocks(entry: PromptOutboxEntry) {
   if (entry.attachmentSnapshots.length === 0) {
     return entry.blocks;
   }
+  // Lazy: the attachment block builder (and its base64 file reader) only
+  // matters for prompts that carry attachments, so it stays out of the
+  // boot-time chunk the login route loads.
+  const { promptAttachmentSnapshotsToBlocks } = await import(
+    "#product/lib/access/browser/prompt-attachment-blocks"
+  );
   const planBlocks = entry.blocks.filter((block) => block.type === "plan_reference");
   return [
     ...await promptAttachmentSnapshotsToBlocks(entry.text.trim(), entry.attachmentSnapshots),

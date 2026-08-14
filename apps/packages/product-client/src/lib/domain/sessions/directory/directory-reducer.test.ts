@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 import {
   applyPendingRelationshipHint,
+  markDirectorySessionPromoted,
   putDirectoryEntry,
+  recordDirectoryRelationshipHint,
+  removeDirectoryEntry,
   removeWorkspaceDirectoryEntries,
   type SessionDirectoryReducerState,
 } from "#product/lib/domain/sessions/directory/directory-reducer";
@@ -13,6 +16,8 @@ function emptyState(): SessionDirectoryReducerState {
     clientSessionIdByMaterializedSessionId: {},
     sessionIdsByWorkspaceId: {},
     relationshipHintsBySessionId: {},
+    promotedRootSessionIds: new Set(),
+    promotedRootWorkspaceIdBySessionId: {},
   };
 }
 
@@ -27,6 +32,8 @@ describe("session directory reducer", () => {
           workspaceId: "workspace-a",
         },
       },
+      promotedRootSessionIds: new Set(),
+      promotedRootWorkspaceIdBySessionId: {},
     };
     const entry = createDirectoryEntry({
       sessionId: "session-b",
@@ -93,6 +100,8 @@ describe("session directory reducer", () => {
           workspaceId: "workspace-b",
         },
       },
+      promotedRootSessionIds: new Set(),
+      promotedRootWorkspaceIdBySessionId: {},
     };
 
     const result = removeWorkspaceDirectoryEntries(state, "workspace-a");
@@ -112,5 +121,72 @@ describe("session directory reducer", () => {
         workspaceId: "workspace-b",
       },
     });
+  });
+
+  it("keeps promoted root authority across stale hints and a directory remount", () => {
+    const child = {
+      ...createDirectoryEntry({
+        sessionId: "client-child",
+        materializedSessionId: "durable-child",
+        workspaceId: "workspace-a",
+        agentKind: "proliferate",
+      }),
+      sessionRelationship: {
+        kind: "subagent_child" as const,
+        parentSessionId: "durable-parent",
+        workspaceId: "workspace-a",
+      },
+    };
+    const withChild = putDirectoryEntry(emptyState(), child);
+    const promoted = markDirectorySessionPromoted(
+      withChild,
+      ["durable-child", "client-child"],
+      "workspace-a",
+    );
+
+    expect(promoted.entriesById["client-child"]?.sessionRelationship).toEqual({ kind: "root" });
+    expect([...promoted.promotedRootSessionIds]).toEqual([
+      "durable-child",
+      "client-child",
+    ]);
+    expect(promoted.promotedRootWorkspaceIdBySessionId).toEqual({
+      "durable-child": "workspace-a",
+      "client-child": "workspace-a",
+    });
+
+    const lateClientHint = recordDirectoryRelationshipHint(
+      promoted,
+      "client-child",
+      child.sessionRelationship,
+    );
+    const lateDurableHint = recordDirectoryRelationshipHint(
+      lateClientHint,
+      "durable-child",
+      child.sessionRelationship,
+    );
+    expect(lateDurableHint.entriesById["client-child"]?.sessionRelationship).toEqual({
+      kind: "root",
+    });
+    expect(lateDurableHint.relationshipHintsBySessionId).toEqual({});
+
+    const unmounted = removeDirectoryEntry(lateDurableHint, "client-child");
+    const remounted = putDirectoryEntry(unmounted, child);
+    expect(remounted.entriesById["client-child"]?.sessionRelationship).toEqual({ kind: "root" });
+    expect(remounted.promotedRootSessionIds.has("durable-child")).toBe(true);
+    expect(remounted.promotedRootSessionIds.has("client-child")).toBe(true);
+  });
+
+  it("clears promoted aliases owned by a workspace even before an entry mounts", () => {
+    const promoted = markDirectorySessionPromoted(
+      emptyState(),
+      ["durable-child", "client-child"],
+      "workspace-a",
+    );
+
+    const removed = removeWorkspaceDirectoryEntries(promoted, "workspace-a");
+
+    expect(removed.removedSessionIds).toEqual([]);
+    expect(removed.state.promotedRootSessionIds.size).toBe(0);
+    expect(removed.state.promotedRootWorkspaceIdBySessionId).toEqual({});
   });
 });

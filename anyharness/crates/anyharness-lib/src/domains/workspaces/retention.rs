@@ -561,6 +561,7 @@ impl WorkspaceRetentionService {
                             .to_string(),
                     });
                 }
+                Err(SessionMutationConflict::SubagentOpenRequired) => unreachable!(),
                 Err(SessionMutationConflict::Internal(error)) => return Err(error),
             }
         }
@@ -569,7 +570,6 @@ impl WorkspaceRetentionService {
             session_ids,
         })
     }
-
     /// PR1227-RETENTION-FENCE-01 (FENCE-02/01 analog): under the already-held
     /// exclusive workspace lease, re-enumerate the workspace session set and
     /// return a skip message if either (02) an enumerated session id is absent
