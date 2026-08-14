@@ -423,6 +423,54 @@ pub fn parse_references(prompt: &str) -> Result<Vec<PromptReference>, ReferenceE
     Ok(references)
 }
 
+/// Rewrite every reference in `prompt` through `resolve`, passing all other
+/// text through verbatim. The scan is the same grammar as
+/// [`parse_references`] — keep them in lockstep. A `None` from `resolve`
+/// fails the whole rewrite with the offending reference: validation makes
+/// this unreachable for definition prompts, so hitting it means the rows and
+/// definition disagree.
+pub fn resolve_references(
+    prompt: &str,
+    mut resolve: impl FnMut(&PromptReference) -> Option<String>,
+) -> Result<String, PromptReference> {
+    let mut output = String::with_capacity(prompt.len());
+    let mut i = 0;
+    while let Some(offset) = prompt[i..].find('@') {
+        let at = i + offset;
+        output.push_str(&prompt[i..at]);
+        let rest = &prompt[at + 1..];
+        let (prefix_len, make): (usize, fn(String) -> PromptReference) =
+            if rest.starts_with("input:") {
+                ("input:".len(), PromptReference::Input)
+            } else if rest.starts_with("doc:") {
+                ("doc:".len(), PromptReference::Doc)
+            } else {
+                output.push('@');
+                i = at + 1;
+                continue;
+            };
+        let body = &rest[prefix_len..];
+        let name: String = body
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+            .collect();
+        if name.is_empty() {
+            output.push('@');
+            i = at + 1;
+            continue;
+        }
+        let consumed = at + 1 + prefix_len + name.len();
+        let reference = make(name);
+        match resolve(&reference) {
+            Some(replacement) => output.push_str(&replacement),
+            None => return Err(reference),
+        }
+        i = consumed;
+    }
+    output.push_str(&prompt[i..]);
+    Ok(output)
+}
+
 impl InvocationSnapshot {
     /// Full runtime-side revalidation of a courier-delivered snapshot:
     /// definition validity, argument coverage for required inputs, and no

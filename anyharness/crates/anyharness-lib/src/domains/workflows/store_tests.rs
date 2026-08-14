@@ -1033,6 +1033,43 @@ fn run_detail_projects_run_nodes_and_docs_in_one_read() {
 }
 
 #[test]
+fn register_doc_follows_the_filename_law_and_is_idempotent() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+
+    // Producer-bound doc: NN from the producing node's chain_index.
+    let doc = store
+        .register_doc("run-1", "findings", Some(plan_id.as_str()))
+        .expect("register");
+    assert_eq!(doc.filename, "00-findings.md");
+    assert_eq!(doc.producing_node_row_id.as_deref(), Some(plan_id.as_str()));
+    assert!(!doc.seeded_from_template);
+
+    // Producer-less doc: bare slug.
+    let shared = store
+        .register_doc("run-1", "scratch", None)
+        .expect("register producer-less");
+    assert_eq!(shared.filename, "scratch.md");
+
+    // Idempotent on (run_id, slug): the existing row comes back unchanged.
+    let replay = store
+        .register_doc("run-1", "findings", None)
+        .expect("replay");
+    assert_eq!(replay.id, doc.id);
+    assert_eq!(replay.filename, "00-findings.md");
+
+    // Re-registering a template-seeded slug returns the seeded row.
+    let seeded = store
+        .register_doc("run-1", "plan-doc", None)
+        .expect("seeded replay");
+    assert!(seeded.seeded_from_template);
+    assert_eq!(seeded.filename, "00-plan-doc.md");
+}
+
+#[test]
 fn apply_transition_on_unknown_run_errors() {
     let store = test_store();
     let transition = Transition::CompleteRun {

@@ -604,6 +604,57 @@ impl WorkflowStore {
         })
     }
 
+    /// Register a run-local doc after creation (an ad hoc or discovered
+    /// document). The filename follows the same law as seeded rows: NN from
+    /// the producing node's chain_index, bare `slug.md` without a producer.
+    /// Run-local docs are the one place a producer is optional — template
+    /// seeding always has one (validate() requires producingNodeId).
+    /// Idempotent on (run_id, slug): re-registering returns the existing row.
+    pub fn register_doc(
+        &self,
+        run_id: &str,
+        slug: &str,
+        producing_node_row_id: Option<&str>,
+    ) -> anyhow::Result<WorkflowRunDocRecord> {
+        self.db.with_tx_anyhow(|tx| {
+            let existing = tx
+                .query_row(
+                    "SELECT * FROM workflow_run_docs WHERE run_id = ?1 AND slug = ?2",
+                    params![run_id, slug],
+                    map_doc,
+                )
+                .optional()?;
+            if let Some(doc) = existing {
+                return Ok(doc);
+            }
+            let chain_index: Option<i64> = match producing_node_row_id {
+                Some(node_row_id) => tx.query_row(
+                    "SELECT chain_index FROM workflow_run_nodes WHERE id = ?1 AND run_id = ?2",
+                    params![node_row_id, run_id],
+                    |row| row.get(0),
+                )?,
+                None => None,
+            };
+            let filename = registered_doc_filename(slug, chain_index);
+            let timestamp = now();
+            let id = mint_id();
+            tx.execute(
+                "INSERT INTO workflow_run_docs (
+                    id, run_id, slug, filename, producing_node_row_id,
+                    seeded_from_template, created_at, updated_at
+                 )
+                 VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6)",
+                params![id, run_id, slug, filename, producing_node_row_id, timestamp],
+            )?;
+            tx.query_row(
+                "SELECT * FROM workflow_run_docs WHERE id = ?1",
+                params![id],
+                map_doc,
+            )
+            .map_err(Into::into)
+        })
+    }
+
     fn list_docs_tx(tx: &Connection, run_id: &str) -> anyhow::Result<Vec<WorkflowRunDocRecord>> {
         let mut statement = tx.prepare(
             "SELECT * FROM workflow_run_docs WHERE run_id = ?1 ORDER BY filename, rowid",
@@ -710,6 +761,17 @@ pub fn emit_decision_events(run_id: &str, event: &WorkflowEvent, decision: &Deci
 /// from this one function.
 pub(crate) fn doc_filename(slug: &str, producing_chain_index: i64) -> String {
     format!("{producing_chain_index:02}-{slug}.md")
+}
+
+/// The run-local variant: registered docs may have no producing node (a doc
+/// discovered mid-run), in which case the filename is the bare `slug.md`.
+/// Template-seeded rows never take this branch — validate() requires their
+/// producer. `UNIQUE(run_id, filename)` guards the two laws from colliding.
+fn registered_doc_filename(slug: &str, producing_chain_index: Option<i64>) -> String {
+    match producing_chain_index {
+        Some(index) => doc_filename(slug, index),
+        None => format!("{slug}.md"),
+    }
 }
 
 #[derive(Default)]

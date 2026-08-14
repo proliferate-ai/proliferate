@@ -9,15 +9,23 @@
 
 pub mod definition;
 pub mod invariants;
+pub mod materialize;
 pub mod model;
 pub mod policy;
 pub mod projection;
+pub mod render;
 pub mod store;
 pub mod transition;
 
 #[cfg(test)]
 #[path = "definition_tests.rs"]
 mod definition_tests;
+#[cfg(test)]
+#[path = "materialize_tests.rs"]
+mod materialize_tests;
+#[cfg(test)]
+#[path = "render_tests.rs"]
+mod render_tests;
 #[cfg(test)]
 #[path = "store_tests.rs"]
 mod store_tests;
