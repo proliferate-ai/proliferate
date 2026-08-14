@@ -1180,13 +1180,10 @@ class TestWebMobileProductAuthFlow:
             params={"code": "github-code", "state": oauth_state},
             follow_redirects=False,
         )
-        assert callback.status_code == 302
-        callback_url = urlparse(callback.headers["location"])
-        assert f"{callback_url.scheme}://{callback_url.netloc}{callback_url.path}" == (
-            "proliferate://auth/callback"
-        )
-        callback_query = parse_qs(callback_url.query)
-        assert callback_query["state"] == ["desktop-shared-github-state"]
+        assert callback.status_code == 200
+        assert "GitHub sign-in done" in callback.text
+        assert "proliferate://auth/callback?code=" in callback.text
+        assert "state=desktop-shared-github-state" in callback.text
         schedule_mock.assert_called_once()
         assert schedule_mock.call_args.args[0].email == "desktop-shared-github@example.com"
         schedule_signup_mock.assert_called_once()
@@ -1201,11 +1198,10 @@ class TestWebMobileProductAuthFlow:
         assert "db" in signup_kwargs
 
         token = await client.post(
-            "/auth/desktop/token",
+            "/auth/desktop/poll",
             json={
-                "code": callback_query["code"][0],
+                "state": "desktop-shared-github-state",
                 "code_verifier": verifier,
-                "grant_type": "authorization_code",
             },
         )
         assert token.status_code == 200
@@ -1251,21 +1247,126 @@ class TestWebMobileProductAuthFlow:
             params={"code": "github-code", "state": oauth_state},
             follow_redirects=False,
         )
-        assert callback.status_code == 302
-        callback_query = parse_qs(urlparse(callback.headers["location"]).query)
+        assert callback.status_code == 200
+        assert "GitHub sign-in done" in callback.text
+        assert "proliferate://auth/callback?code=" in callback.text
+        assert "state=desktop-existing-github-state" in callback.text
         schedule_mock.assert_called_once()
         schedule_signup_mock.assert_not_called()
 
         token = await client.post(
-            "/auth/desktop/token",
+            "/auth/desktop/poll",
             json={
-                "code": callback_query["code"][0],
+                "state": "desktop-existing-github-state",
                 "code_verifier": verifier,
-                "grant_type": "authorization_code",
             },
         )
         assert token.status_code == 200
         assert token.json()["user"]["email"] == "desktop-existing-github@example.com"
+
+    @pytest.mark.asyncio
+    async def test_desktop_github_callback_success_launches_deep_link_then_completes_via_poll(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier, challenge = _make_pkce_pair()
+        self._enable_identity_github(monkeypatch, "desktop-launch-github@example.com")
+
+        started = await client.post(
+            "/auth/desktop/github/start",
+            json={
+                "purpose": "login",
+                "clientState": "desktop-launch-github-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "proliferate://auth/callback",
+            },
+        )
+        assert started.status_code == 200
+        oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
+
+        callback = await client.get(
+            "/auth/github/callback",
+            params={"code": "github-code", "state": oauth_state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 200
+        assert "text/html" in callback.headers["content-type"]
+        assert "proliferate://auth/callback?code=" in callback.text
+        assert "window.location.replace" in callback.text
+
+        token = await client.post(
+            "/auth/desktop/poll",
+            json={
+                "state": "desktop-launch-github-state",
+                "code_verifier": verifier,
+            },
+        )
+        assert token.status_code == 200
+        assert token.json()["user"]["email"] == "desktop-launch-github@example.com"
+
+    @pytest.mark.asyncio
+    async def test_desktop_github_callback_provider_error_renders_error_page(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, challenge = _make_pkce_pair()
+        self._enable_identity_github(monkeypatch, "desktop-error-github@example.com")
+
+        started = await client.post(
+            "/auth/desktop/github/start",
+            json={
+                "purpose": "login",
+                "clientState": "desktop-error-github-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "proliferate://auth/callback",
+            },
+        )
+        assert started.status_code == 200
+        oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
+
+        callback = await client.get(
+            "/auth/github/callback",
+            params={"error": "access_denied", "state": oauth_state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 200
+        assert "text/html" in callback.headers["content-type"]
+        assert "proliferate://auth/callback?error=access_denied" in callback.text
+        assert "tone-error" in callback.text
+
+    @pytest.mark.asyncio
+    async def test_web_github_callback_success_stays_a_redirect(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, challenge = _make_pkce_pair()
+        self._enable_identity_github(monkeypatch, "web-stays-redirect@example.com")
+
+        started = await client.post(
+            "/auth/web/github/start",
+            json={
+                "purpose": "login",
+                "clientState": "web-stays-redirect-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "http://localhost:5174/auth/callback",
+            },
+        )
+        assert started.status_code == 200
+        oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
+
+        callback = await client.get(
+            "/auth/github/callback",
+            params={"code": "github-code", "state": oauth_state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 302
+        assert callback.headers["location"].startswith("http://localhost:5174/auth/callback?")
 
     @staticmethod
     def _enable_google(
@@ -2050,18 +2151,16 @@ class TestWebMobileProductAuthFlow:
             params={"code": "google-code", "state": oauth_state},
             follow_redirects=False,
         )
-        assert callback.status_code == 302
-        callback_url = urlparse(callback.headers["location"])
-        assert callback_url.scheme == "proliferate"
-        callback_query = parse_qs(callback_url.query)
-        assert callback_query["state"] == ["desktop-google-client-state"]
+        assert callback.status_code == 200
+        assert "Google sign-in done" in callback.text
+        assert "proliferate://auth/callback?code=" in callback.text
+        assert "state=desktop-google-client-state" in callback.text
 
         linked_session = await client.post(
-            "/auth/desktop/token",
+            "/auth/desktop/poll",
             json={
-                "code": callback_query["code"][0],
+                "state": "desktop-google-client-state",
                 "code_verifier": link_verifier,
-                "grant_type": "authorization_code",
             },
         )
         assert linked_session.status_code == 200

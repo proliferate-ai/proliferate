@@ -300,6 +300,19 @@ desktop auth codes through `/auth/desktop/token`, and handles
 `/auth/desktop/github/authorize` and `/auth/desktop/github/callback` routes are
 compatibility routes and must not be configured as the current callback.
 
+Both provider callback endpoints (`oauth_callback` for
+`/{surface}/{provider}/callback` and `oauth_shared_provider_callback` for
+`/{provider}/callback`) return an HTML handoff page when the challenge's
+stored surface is `desktop`,
+instead of a raw 302, because a system browser cannot render a custom-scheme
+redirect. The page fires the `proliferate://auth/callback` deep link itself
+(`make_desktop_handoff_page` on success, `make_desktop_provider_error_page` on
+a provider error) and gives desktop something to leave in the tab besides a
+blank page. Web and mobile callbacks keep the raw 302 in both cases; mobile
+shares the same `proliferate://auth/callback` string as desktop but relies on
+the OS intercepting the redirect, so the branch is always on the challenge's
+stored `surface`, never on the redirect URI's scheme.
+
 ## Worker actor
 
 `server/cloud/runtime_workers/auth.py::authenticate_worker` authenticates an

@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from fastapi.responses import HTMLResponse
 
+from proliferate.auth.identity.types import AuthProviderName
 from proliferate.lib.product.redirect_callbacks.page import render_redirect_callback_page
+
+_PROVIDER_LABELS: dict[AuthProviderName, str] = {
+    "github": "GitHub",
+    "google": "Google",
+    "apple": "Apple",
+}
 
 
 def make_browser_flow_page(*, title: str, message: str) -> HTMLResponse:
@@ -18,8 +25,11 @@ def make_browser_flow_page(*, title: str, message: str) -> HTMLResponse:
     )
 
 
-def make_desktop_handoff_page(*, deep_link_url: str, launch_deep_link: bool) -> HTMLResponse:
-    title = "GitHub sign-in done"
+def make_desktop_handoff_page(
+    *, provider: AuthProviderName, deep_link_url: str, launch_deep_link: bool
+) -> HTMLResponse:
+    label = _PROVIDER_LABELS[provider]
+    title = f"{label} sign-in done"
     message = (
         "Redirecting to desktop app..."
         if launch_deep_link
@@ -55,5 +65,32 @@ def make_desktop_handoff_page(*, deep_link_url: str, launch_deep_link: bool) -> 
             launch_url=deep_link_url if launch_deep_link else None,
             fallback_message=fallback_message if launch_deep_link else None,
             variant="handoff",
+        )
+    )
+
+
+def make_desktop_provider_error_page(
+    *,
+    provider: AuthProviderName,
+    deep_link_url: str,
+    launch_deep_link: bool,
+    error: str,
+) -> HTMLResponse:
+    label = _PROVIDER_LABELS[provider]
+    title = f"{label} sign-in failed"
+    fallback_message = "If Proliferate did not open automatically, use the button below."
+    return HTMLResponse(
+        render_redirect_callback_page(
+            title=title,
+            status_label="Desktop sign-in",
+            message="Return to Proliferate and try signing in again.",
+            tone="error",
+            detail=f"The provider returned: {error}",
+            action_label="Open Proliferate",
+            action_href=deep_link_url,
+            action_visible=not launch_deep_link,
+            launch_url=deep_link_url if launch_deep_link else None,
+            fallback_message=fallback_message if launch_deep_link else None,
+            variant="default",
         )
     )

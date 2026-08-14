@@ -1,4 +1,7 @@
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+
 import { AuthScreenLayout } from "#product/components/auth/AuthScreenLayout";
+import { describeAuthIssue } from "#product/components/auth/describe-auth-issue";
 import { useGitHubSignIn } from "#product/hooks/auth/workflows/use-github-sign-in";
 import { usePasswordSignIn } from "#product/hooks/auth/workflows/use-password-sign-in";
 import { useSsoSignIn } from "#product/hooks/auth/workflows/use-sso-sign-in";
@@ -43,6 +46,9 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
   const busy = submitting || ssoSubmitting || passwordSubmitting;
   const handleCancelSignIn = ssoSubmitting ? cancelSsoSignIn : cancelSignIn;
 
+  const { auth } = useProductHost();
+  const issue = auth.state.status === "anonymous" ? auth.state.issue : undefined;
+
   return (
     <AuthScreenLayout
       mode={mode}
@@ -50,7 +56,7 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
       onMarkResolved={onMarkResolved}
       submitting={submitting}
       busy={busy}
-      error={error ?? ssoError ?? passwordError}
+      error={error ?? ssoError ?? passwordError ?? (issue ? describeAuthIssue(issue) : null)}
       githubSignInAvailable={signInAvailable}
       githubSignInChecking={signInChecking}
       githubSignInUnavailableDescription={signInUnavailableDescription}
