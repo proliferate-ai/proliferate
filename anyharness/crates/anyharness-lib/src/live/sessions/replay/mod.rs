@@ -416,6 +416,10 @@ async fn handle_non_replay_command(
             let _ = respond_to.send(Ok(()));
             Some(ReplayExitDisposition::Dismiss)
         }
+        SessionCommand::Unload { respond_to } => {
+            let _ = respond_to.send(Ok(()));
+            Some(ReplayExitDisposition::Dismiss)
+        }
         SessionCommand::Close { respond_to } => {
             let _ = respond_to.send(Ok(()));
             Some(ReplayExitDisposition::Close)

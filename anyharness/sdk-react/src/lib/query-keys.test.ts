@@ -6,6 +6,7 @@ import {
   anyHarnessRuntimeHealthKey,
   anyHarnessSessionEventsKey,
   anyHarnessSessionsKey,
+  anyHarnessWorkspaceSubagentsKey,
 } from "./query-keys.js";
 
 describe("sdk-react query keys", () => {
@@ -117,6 +118,16 @@ describe("sdk-react query keys", () => {
       "workspace",
       "workspace-1",
       "sessions",
+    ]);
+  });
+
+  it("keys the workspace subagent roster beneath the workspace scope", () => {
+    expect(anyHarnessWorkspaceSubagentsKey("api:user-1", "workspace-1")).toEqual([
+      "anyharness",
+      "api:user-1",
+      "workspace",
+      "workspace-1",
+      "subagents",
     ]);
   });
 });

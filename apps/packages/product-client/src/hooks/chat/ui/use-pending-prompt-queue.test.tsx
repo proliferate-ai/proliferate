@@ -4,6 +4,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { VisiblePendingPromptEntry } from "#product/hooks/chat/ui/use-queued-prompt-edit";
 import { usePendingPromptQueue } from "#product/hooks/chat/ui/use-pending-prompt-queue";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 const mocks = vi.hoisted(() => ({
   activeSessionId: "session-1" as string | null,
@@ -79,6 +80,17 @@ function prompt(
   };
 }
 
+function agentPrompt(seq: number, sessionId: string): VisiblePendingPromptEntry {
+  return {
+    ...prompt(seq, "Hidden agent update"),
+    promptProvenance: {
+      type: "agentSession",
+      sourceSessionId: sessionId,
+      label: `Agent ${sessionId}`,
+    },
+  };
+}
+
 function deferred(): {
   promise: Promise<void>;
   resolve: () => void;
@@ -104,10 +116,73 @@ describe("usePendingPromptQueue", () => {
     mocks.reorderPendingPrompts.mockReset().mockResolvedValue(undefined);
     mocks.showErrorToast.mockReset();
     mocks.steerPendingPrompt.mockReset().mockResolvedValue(undefined);
+    useSessionTranscriptStore.getState().clearEntries();
+    useSessionTranscriptStore.getState().ensureEntry("session-1");
   });
 
   afterEach(() => {
     cleanup();
+    useSessionTranscriptStore.getState().clearEntries();
+  });
+
+  it("ignores unrelated transcript clones and updates only when link completions change", () => {
+    mocks.pendingPrompts = [{
+      ...prompt(9, "Hidden wake update"),
+      promptProvenance: {
+        type: "subagentWake",
+        sessionLinkId: "link-1",
+        completionId: "completion-1",
+        label: "Schema audit",
+      },
+    }];
+    let renderCount = 0;
+    const rendered = renderHook(() => {
+      renderCount += 1;
+      return usePendingPromptQueue();
+    });
+    const initialRenderCount = renderCount;
+    expect(rendered.result.current.rows[0]?.agents).toEqual([]);
+
+    const before = useSessionTranscriptStore.getState().entriesById["session-1"]!.transcript;
+    act(() => {
+      useSessionTranscriptStore.getState().patchEntry("session-1", {
+        transcript: {
+          ...before,
+          currentModeId: "unrelated-stream-update",
+        },
+      });
+    });
+    expect(renderCount).toBe(initialRenderCount);
+
+    const afterUnrelated = useSessionTranscriptStore.getState()
+      .entriesById["session-1"]!.transcript;
+    act(() => {
+      useSessionTranscriptStore.getState().patchEntry("session-1", {
+        transcript: {
+          ...afterUnrelated,
+          linkCompletionsByCompletionId: {
+            "completion-1": {
+              relation: "subagent",
+              completionId: "completion-1",
+              sessionLinkId: "link-1",
+              parentSessionId: "session-1",
+              childSessionId: "durable-child",
+              childTurnId: "turn-child",
+              childLastEventSeq: 8,
+              outcome: "completed",
+              label: "Schema audit",
+              seq: 9,
+              timestamp: "2026-08-10T00:00:00Z",
+            },
+          },
+        },
+      });
+    });
+
+    expect(renderCount).toBeGreaterThan(initialRenderCount);
+    expect(rendered.result.current.rows[0]?.agents).toEqual([
+      expect.objectContaining({ sessionId: "durable-child", title: "Schema audit" }),
+    ]);
   });
 
   it("sends compare-and-swap orders and keeps duplicate prompt IDs distinct optimistically", async () => {
@@ -250,5 +325,85 @@ describe("usePendingPromptQueue", () => {
     act(() => result.current.onBeginEdit(result.current.rows[0]!));
 
     expect(mocks.beginEdit).toHaveBeenCalledWith({ seq: 7, text: "editable" });
+  });
+
+  it("reorders user rows through the full runtime order without moving hidden agent slots", async () => {
+    const pending = deferred();
+    mocks.reorderPendingPrompts.mockReturnValueOnce(pending.promise);
+    mocks.pendingPrompts = [
+      prompt(1, "user A"),
+      agentPrompt(2, "agent-X"),
+      prompt(3, "user B"),
+      agentPrompt(4, "agent-Y"),
+    ];
+    const { result } = renderHook(() => usePendingPromptQueue());
+
+    expect(result.current.rows.map((row) => row.kind)).toEqual([
+      "plain",
+      "plain",
+      "agent_updates",
+    ]);
+    act(() => result.current.onReorder(0, 1));
+
+    expect(mocks.reorderPendingPrompts).toHaveBeenCalledWith(
+      "session-1",
+      [1, 2, 3, 4],
+      [3, 2, 1, 4],
+    );
+    expect(result.current.rows.map((row) => row.seq)).toEqual([3, 1, 0]);
+
+    await act(async () => pending.resolve());
+  });
+
+  it("preserves review and local slots in optimistic order while keeping agent updates last", async () => {
+    const pending = deferred();
+    mocks.reorderPendingPrompts.mockReturnValueOnce(pending.promise);
+    mocks.pendingPrompts = [
+      prompt(1, "user A"),
+      {
+        ...prompt(2, "Review feedback is ready."),
+        promptProvenance: {
+          type: "reviewFeedback",
+          reviewRunId: "run-1",
+          reviewRoundId: "round-1",
+          feedbackJobId: "job-1",
+        },
+      },
+      prompt(-3, "local outbox"),
+      prompt(4, "user B"),
+      agentPrompt(5, "agent-X"),
+    ];
+    const rendered = renderHook(() => usePendingPromptQueue());
+
+    expect(rendered.result.current.rows.map((row) => row.seq)).toEqual([1, 2, -3, 4, 0]);
+    act(() => rendered.result.current.onReorder(0, 3));
+
+    expect(mocks.reorderPendingPrompts).toHaveBeenCalledWith(
+      "session-1",
+      [1, 2, 4, 5],
+      [4, 2, 1, 5],
+    );
+    expect(rendered.result.current.rows.map((row) => row.seq)).toEqual([4, 2, -3, 1, 0]);
+
+    mocks.pendingPrompts = [
+      prompt(1, "user A"),
+      {
+        ...prompt(2, "Review feedback is ready."),
+        promptProvenance: {
+          type: "reviewFeedback",
+          reviewRunId: "run-1",
+          reviewRoundId: "round-1",
+          feedbackJobId: "job-1",
+        },
+      },
+      prompt(-3, "local outbox"),
+      prompt(4, "user B"),
+      prompt(6, "new user C"),
+      agentPrompt(5, "agent-X"),
+    ];
+    rendered.rerender();
+    expect(rendered.result.current.rows.map((row) => row.seq)).toEqual([4, 2, -3, 1, 6, 0]);
+
+    await act(async () => pending.resolve());
   });
 });

@@ -1244,7 +1244,7 @@ class ShippedAllowlistTest(unittest.TestCase):
             # in-memory health snapshot), but the shape is what the rule watches.
             ("API_STORE_ESCAPE", "api/http/health.rs", 37, "AppState store field"),
             # An inline contract path with no use statement to declare it.
-            ("DOMAIN_CONTRACT_IMPORT", "domains/sessions/store/events.rs", 53,
+            ("DOMAIN_CONTRACT_IMPORT", "domains/sessions/store/events.rs", 75,
              "inline contract path"),
             # A store-holding file named exactly policy.rs.
             ("POLICY_PURITY", "domains/workflows/control/policy.rs", 8,

@@ -28,11 +28,12 @@ export function WorkspaceShellRightPanelToggle({
           open ? "glass-editor-panel-new-tab-menu-trigger" : ""
         }`}
       >
-        <SplitPanel className="icon-control" />
+        <SplitPanel className={`icon-control ${shortcutRevealVisible ? "invisible" : ""}`} />
         {shortcutRevealVisible ? (
           <ShortcutBadge
+            aria-hidden="true"
             label={getShortcutDisplayLabel(SHORTCUTS.toggleRightPanel)}
-            className="pointer-events-none absolute -right-1 -bottom-1 z-raised text-muted-foreground"
+            className="pointer-events-none absolute left-1/2 top-1/2 z-raised -translate-x-1/2 -translate-y-1/2 text-muted-foreground"
           />
         ) : null}
       </IconButton>

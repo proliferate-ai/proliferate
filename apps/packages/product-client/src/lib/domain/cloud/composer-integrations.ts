@@ -96,17 +96,33 @@ export interface ComposerIntegrationHealthDot {
   label: string;
 }
 
+export interface ComposerIntegrationHealthDotOptions {
+  /**
+   * Which surface paints the dot. The composer bans every `--color-warning*`
+   * token — the ban covers its popovers too, since they are the composer
+   * speaking — so on `"composer"` the `needs_reauth` dot steps down to the
+   * neutral foreground ink and the row's own copy carries the urgency. Every
+   * other surface keeps the warning ink.
+   */
+  surface?: "default" | "composer";
+}
+
 /** Status-dot presentation for a connected provider's health verdict. */
 export function composerIntegrationHealthDot(
   health: IntegrationHealthVerdict,
+  { surface = "default" }: ComposerIntegrationHealthDotOptions = {},
 ): ComposerIntegrationHealthDot {
   switch (health) {
     case "ready":
       return { className: "bg-success", label: "Connected" };
     // The ink token, not `bg-warning`: that is a 15%-alpha FILL, so an 8px dot
-    // filled with it is invisible beside its opaque `bg-success` siblings.
+    // filled with it is invisible beside its opaque `bg-success` siblings. In
+    // the composer the ink is banned as well, so the dot goes neutral there.
     case "needs_reauth":
-      return { className: "bg-warning-foreground", label: "Needs re-authentication" };
+      return {
+        className: surface === "composer" ? "bg-foreground" : "bg-warning-foreground",
+        label: "Needs re-authentication",
+      };
     case "error":
       return { className: "bg-destructive", label: "Error" };
     case "needs_auth":

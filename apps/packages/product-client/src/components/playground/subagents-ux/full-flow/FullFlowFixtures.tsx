@@ -25,8 +25,6 @@ export interface FullFlowChild {
   label: string;
   harness: string;
   status: PrototypeAgentStatus;
-  /** Metadata, never a roster state. */
-  wakeScheduled: boolean;
   /** Composed status line ("Working · 4m"); last-turn metadata for Done/Idle. */
   detail: string;
   transcript: FullFlowMessage[];
@@ -102,7 +100,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
               subagentId: "subagent_ff_api-surface-check",
               title: "API Surface Check",
               harnessLabel: "Claude",
-              wakeScheduled: true,
               timestamp: "2026-07-11 14:02",
               prompt: "Inspect the public API surface for contract mismatches against the SDK.",
             },
@@ -113,7 +110,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
               subagentId: "subagent_ff_sdk-types-sync",
               title: "SDK Types Sync",
               harnessLabel: "Codex",
-              wakeScheduled: false,
               timestamp: "2026-07-11 14:02",
               prompt: "Regenerate SDK types and flag any drift from the contract crate.",
             },
@@ -124,7 +120,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
               subagentId: "subagent_ff_flaky-test-hunt",
               title: "Flaky Test Hunt",
               harnessLabel: "Codex",
-              wakeScheduled: false,
               timestamp: "2026-07-11 14:05",
               prompt: "Re-run the desktop vitest suite 10x and isolate any flaky specs.",
             },
@@ -135,7 +130,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
               subagentId: "subagent_ff_changelog-draft",
               title: "Changelog Draft",
               harnessLabel: "Claude",
-              wakeScheduled: true,
               timestamp: "2026-07-11 14:08",
               prompt: "Draft changelog entries for the workspace activity card from the merged PRs.",
             },
@@ -154,7 +148,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
             label: "API Surface Check",
             harness: "Claude",
             status: "running",
-            wakeScheduled: true,
             detail: "Working · 4m",
             transcript: [
               {
@@ -167,7 +160,7 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
               },
               {
                 speaker: "agent",
-                text: "Found one candidate mismatch in create_subagent; verifying against the TS client before reporting.",
+                text: "Found one candidate mismatch in create_agent; verifying against the TS client before reporting.",
               },
             ],
           },
@@ -176,7 +169,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
             label: "SDK Types Sync",
             harness: "Codex",
             status: "running",
-            wakeScheduled: false,
             detail: "Working · 2m",
             transcript: [
               {
@@ -194,7 +186,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
             label: "Flaky Test Hunt",
             harness: "Codex",
             status: "errored",
-            wakeScheduled: false,
             detail: "Failed · tool error",
             transcript: [
               {
@@ -212,7 +203,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
             label: "Changelog Draft",
             harness: "Claude",
             status: "completed",
-            wakeScheduled: false,
             detail: "Done · Drafted 8 entries",
             transcript: [
               {
@@ -249,7 +239,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
               subagentId: "subagent_ff_session-key-rotation",
               title: "Session Key Rotation",
               harnessLabel: "Claude",
-              wakeScheduled: true,
               timestamp: "2026-07-11 11:40",
               prompt: "Implement session key rotation on privilege change plus a 24h schedule.",
             },
@@ -260,7 +249,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
               subagentId: "subagent_ff_bulk-revocation",
               title: "Bulk Revocation Endpoint",
               harnessLabel: "Codex",
-              wakeScheduled: false,
               timestamp: "2026-07-11 11:41",
               prompt: "Add a bulk session revocation endpoint with per-user and global scopes.",
             },
@@ -279,7 +267,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
             label: "Session Key Rotation",
             harness: "Claude",
             status: "idle",
-            wakeScheduled: true,
             detail: "Idle · Completed turn",
             transcript: [
               {
@@ -297,7 +284,6 @@ export function buildFullFlowWorkspace(): FullFlowWorkspace {
             label: "Bulk Revocation Endpoint",
             harness: "Codex",
             status: "completed",
-            wakeScheduled: false,
             detail: "Done · Endpoint + audit events",
             transcript: [
               {

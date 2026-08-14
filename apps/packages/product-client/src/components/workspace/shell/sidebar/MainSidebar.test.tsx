@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
+import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { useSupportModalStore } from "#product/stores/support/support-modal-store";
 
 const releaseNoticeState = vi.hoisted(() => ({
@@ -34,6 +35,7 @@ const sidebarActionMocks = vi.hoisted(() => ({
 
 const workspaceSidebarState = vi.hoisted(() => ({
   groups: [] as Array<{ sourceRoot: string; items: Array<{ active: boolean }> }>,
+  pinnedItems: [] as unknown[],
   selectedWorkspaceId: null,
   selectedLogicalWorkspaceId: null,
   cleanupAttentionWorkspaces: [],
@@ -130,6 +132,7 @@ vi.mock("#product/primitives/patterns/AutoHideScrollArea", () => ({
 }));
 
 vi.mock("#product/primitives/PopoverButton", () => ({
+  POPOVER_SURFACE_CLASS: "",
   PopoverButton: ({
     children,
     trigger,
@@ -158,6 +161,7 @@ vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
 
 const productHostState = vi.hoisted(() => ({
   desktop: null as object | null,
+  clipboard: { writeText: () => Promise.resolve() },
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
@@ -233,6 +237,8 @@ const workspaceUiState = vi.hoisted(() => ({
   sidebarOpen: true,
   unarchiveWorkspace: vi.fn(),
   unarchiveWorkspaces: vi.fn(),
+  pinWorkspace: vi.fn(),
+  unpinWorkspace: vi.fn(),
   workspaceTypes: ["local", "worktree", "cloud"],
   toggleSidebarWorkspaceType: vi.fn(),
   repositoriesCollapsed: false,
@@ -308,7 +314,40 @@ afterEach(() => {
   productHostState.desktop = null;
   workspaceUiState.sidebarOpen = true;
   workspaceSidebarState.groups = [];
+  workspaceSidebarState.pinnedItems = [];
 });
+
+function makePinnedItemState(overrides: Partial<SidebarWorkspaceItemState> = {}): SidebarWorkspaceItemState {
+  return {
+    id: "ws-pinned",
+    localWorkspaceId: null,
+    cloudWorkspaceId: null,
+    name: "Pinned workspace",
+    defaultName: "Pinned workspace",
+    hasDisplayNameOverride: false,
+    renameSupported: false,
+    subtitle: null,
+    active: false,
+    archived: false,
+    pinnedIds: ["ws-pinned"],
+    variant: "worktree",
+    statusIndicator: null,
+    lastInteracted: null,
+    needsReview: false,
+    workspaceLocationCopyLabel: null,
+    workspaceLocationCopyValue: null,
+    workspaceLocationCopyToastLabel: null,
+    branchName: null,
+    sessionCount: null,
+    gitStatus: null,
+    availabilityCommands: [],
+    cloudWorkspaceIdForActions: null,
+    linkedMaterializationId: null,
+    repoOwner: null,
+    repoName: null,
+    ...overrides,
+  };
+}
 
 function renderMainSidebar() {
   return render(
@@ -442,5 +481,35 @@ describe("MainSidebar release notice", () => {
 
     expect(releaseNoticeState.dismissNotice).toHaveBeenCalledTimes(1);
     expect(releaseNoticeState.openChangelog).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("MainSidebar pinned section", () => {
+  it("hides the Pinned section while nothing is pinned", () => {
+    renderMainSidebar();
+
+    expect(screen.queryByText("Pinned")).toBeNull();
+  });
+
+  it("renders pinned workspaces above the Repositories section", () => {
+    workspaceSidebarState.pinnedItems = [makePinnedItemState()];
+
+    renderMainSidebar();
+
+    const header = screen.getByText("Pinned");
+    const repositoriesHeader = screen.getByText("Repositories");
+    expect(screen.getByText("Pinned workspace")).not.toBeNull();
+    expect(
+      header.compareDocumentPosition(repositoriesHeader) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("selects a workspace from the pinned section", () => {
+    workspaceSidebarState.pinnedItems = [makePinnedItemState()];
+
+    renderMainSidebar();
+    fireEvent.click(screen.getByText("Pinned workspace"));
+
+    expect(sidebarActionMocks.handleSelectWorkspace).toHaveBeenCalledWith("ws-pinned");
   });
 });

@@ -40,6 +40,8 @@ pub mod sessions_pending;
 pub mod sessions_prompt;
 pub mod sessions_resume;
 pub mod subagents;
+mod subagents_contract;
+mod subagents_errors;
 pub mod terminals;
 pub mod workflow_runs;
 mod workflow_runs_contract;

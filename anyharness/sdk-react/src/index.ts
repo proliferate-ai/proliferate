@@ -63,6 +63,7 @@ export {
   anyHarnessSessionLiveConfigKey,
   anyHarnessSessionEventsKey,
   anyHarnessSessionSubagentsKey,
+  anyHarnessWorkspaceSubagentsKey,
   anyHarnessSessionReviewsKey,
   anyHarnessPlansKey,
   anyHarnessPlanKey,
@@ -144,6 +145,7 @@ export {
 export {
   useRuntimeWorkspacesQuery,
   useWorkspaceQuery,
+  useWorkspaceSubagentsQuery,
   useDetectProjectSetupQuery,
   useSetupStatusQuery,
   useRerunSetupMutation,
@@ -168,13 +170,17 @@ export {
   useRunWorktreeRetentionMutation,
 } from "./hooks/worktrees.js";
 export {
+  useSessionSubagentsQuery,
+  useCloseSubagentMutation,
+  useOpenSubagentMutation,
+  usePromoteSubagentMutation,
+} from "./hooks/subagents.js";
+export {
   useWorkspaceSessionsQuery,
   useSessionQuery,
   useFetchSessionMutation,
   useSessionLiveConfigQuery,
   useSessionEventsQuery,
-  useSessionSubagentsQuery,
-  useScheduleSubagentWakeMutation,
   useCreateSessionMutation,
   useSetSessionConfigOptionMutation,
   usePromptSessionMutation,

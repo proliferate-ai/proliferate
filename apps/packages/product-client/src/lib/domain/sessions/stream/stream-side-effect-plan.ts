@@ -9,9 +9,11 @@ import type {
   PendingSessionConfigChanges,
 } from "#product/domain/sessions/pending-config";
 import {
-  parseSubagentLaunchResult,
-  resolveSubagentLaunchDisplay,
-} from "#product/domain/chats/subagents/subagent-launch";
+  resolveAgentOperationsTool,
+} from "#product/domain/chats/tools/agent-operations-tool-presentation";
+import {
+  deriveAuthoritativeAgentOperation,
+} from "#product/lib/domain/sessions/agent-operations-authority";
 
 export interface ReconciledStreamConfigIntent {
   liveConfig: SessionLiveConfigSnapshot;
@@ -59,6 +61,11 @@ export type PlannedStreamEventEffect =
     workspaceId: string | null;
     parentSessionId: string | null;
     sessionLinkId?: string | null;
+  }
+  | {
+    kind: "mark_session_promoted";
+    durableSessionId: string;
+    workspaceId: string | null;
   };
 
 export type OrderedStreamSideEffect =
@@ -200,33 +207,57 @@ export function planBatchedStreamSideEffects(input: {
     }
     if (event.type === "item_completed" && envelope.itemId) {
       const item = input.transcript.itemsById[envelope.itemId];
-      if (item?.kind === "tool_call" && isSubagentMcpMutation(item)) {
-        if (isSubagentMcpCreateMutation(item)) {
-          const launchResult = parseSubagentLaunchResult(item);
-          const display = resolveSubagentLaunchDisplay(item);
-          if (launchResult?.childSessionId) {
-            eventEffects.push({
-              kind: "record_session_relationship_hint",
-              sessionId: launchResult.childSessionId,
-              relationship: {
-                kind: "subagent_child",
-                parentSessionId: input.sessionId,
-                sessionLinkId: launchResult.sessionLinkId,
-                relation: "subagent",
-                workspaceId: input.workspaceId,
-              },
-            });
-            eventEffects.push({
-              kind: "mount_subagent_child_session",
-              childSessionId: launchResult.childSessionId,
-              label: display.title,
-              workspaceId: input.workspaceId,
-              parentSessionId: input.sessionId,
-              sessionLinkId: launchResult.sessionLinkId,
-            });
-          }
-        }
+      const agentOperation = item?.kind === "tool_call" && item.status === "completed"
+        ? deriveAuthoritativeAgentOperation(item, input.sessionId, input.workspaceId)
+        : null;
+      const agentOperationClassification = item?.kind === "tool_call"
+        && item.status === "completed"
+        ? resolveAgentOperationsTool(item)
+        : null;
+      if (
+        agentOperationClassification?.action === "create_agent"
+        || agentOperationClassification?.action === "promote_subagent"
+      ) {
+        // Even a completed result whose AgentView is malformed cannot grant
+        // local authority, but the server roster may still have converged.
         invalidateSessionSubagents = true;
+      }
+      if (
+        agentOperation?.action === "create_agent"
+        && agentOperation.agent?.role === "subagent"
+        && agentOperation.agent.sessionId
+      ) {
+        const childSessionId = agentOperation.agent.sessionId;
+        const workspaceId = agentOperation.agent.workspaceId ?? input.workspaceId;
+        const parentSessionId = agentOperation.agent.parentSessionId ?? input.sessionId;
+        eventEffects.push({
+          kind: "record_session_relationship_hint",
+          sessionId: childSessionId,
+          relationship: {
+            kind: "subagent_child",
+            parentSessionId,
+            relation: "subagent",
+            workspaceId,
+          },
+        });
+        eventEffects.push({
+          kind: "mount_subagent_child_session",
+          childSessionId,
+          label: agentOperation.agent.title,
+          workspaceId,
+          parentSessionId,
+        });
+      }
+      if (
+        agentOperation?.action === "promote_subagent"
+        && agentOperation.agent?.role === "ordinary"
+        && agentOperation.agent.sessionId
+      ) {
+        eventEffects.push({
+          kind: "mark_session_promoted",
+          durableSessionId: agentOperation.agent.sessionId,
+          workspaceId: agentOperation.agent.workspaceId ?? input.workspaceId,
+        });
       }
       if (
         item?.kind === "tool_call"
@@ -273,18 +304,6 @@ function appendOrderedEffect(
     return;
   }
   effects.push(effect);
-}
-
-function isSubagentMcpMutation(item: ToolCallItem): boolean {
-  const nativeToolName = item.nativeToolName?.trim().toLowerCase();
-  return nativeToolName === "mcp__subagents__create_subagent"
-    || nativeToolName === "mcp__subagents__send_subagent_message"
-    || nativeToolName === "mcp__subagents__schedule_subagent_wake"
-    || nativeToolName === "mcp__subagents__close_subagent";
-}
-
-function isSubagentMcpCreateMutation(item: ToolCallItem): boolean {
-  return item.nativeToolName?.trim().toLowerCase() === "mcp__subagents__create_subagent";
 }
 
 function isCoworkCodingCreateMcpMutation(item: ToolCallItem): boolean {

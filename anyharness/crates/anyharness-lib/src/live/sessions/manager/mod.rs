@@ -55,6 +55,32 @@ impl From<BrokerResolveInteractionError> for RevealMcpElicitationUrlError {
 }
 
 impl LiveSessionManager {
+    #[cfg(test)]
+    pub(crate) async fn register_handle_for_test(&self, handle: Arc<LiveSessionHandle>) {
+        self.live_sessions
+            .write()
+            .await
+            .insert(handle.session_id.clone(), handle);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn insert_unavailable_session_for_test(&self, session_id: &str) {
+        let (command_tx, command_rx) = tokio::sync::mpsc::channel(1);
+        drop(command_rx);
+        let (event_tx, _) = tokio::sync::broadcast::channel(1);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some(format!("native-{session_id}")),
+            anyharness_contract::v1::SessionExecutionPhase::Idle,
+        ));
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle);
+    }
+
     pub fn new(caps: ActorCapabilities) -> Self {
         let interaction_broker = Arc::new(InteractionRendezvous::new());
         Self {
@@ -81,6 +107,21 @@ impl LiveSessionManager {
         sessions.get(session_id).cloned()
     }
 
+    /// Run one synchronous recovery action only while no live actor owns the
+    /// session. Holding the same map lock used by startup makes the absence
+    /// check and action indivisible with respect to actor installation.
+    pub(crate) async fn run_if_session_absent<T>(
+        &self,
+        session_id: &str,
+        action: impl FnOnce() -> T,
+    ) -> Option<T> {
+        let sessions = self.live_sessions.write().await;
+        if sessions.contains_key(session_id) {
+            return None;
+        }
+        Some(action())
+    }
+
     /// Returns only a handle whose actor startup completed. Callers that must
     /// join an in-progress startup should fall through to `start_session`,
     /// which waits on the shared readiness channel.
@@ -94,6 +135,54 @@ impl LiveSessionManager {
         let mut sessions = self.live_sessions.write().await;
         sessions.remove(session_id);
         self.pending_startups.write().await.remove(session_id);
+    }
+
+    /// Retire one actor without changing the durable session lifecycle. The
+    /// actor itself bounds ACP cancellation and finalizes any partial turn;
+    /// this method waits for the exact registered handle to leave the live
+    /// map so a subsequent resume cannot race actor retirement.
+    pub(crate) async fn unload_session_nonterminal(&self, session_id: &str) -> anyhow::Result<()> {
+        #[cfg(not(test))]
+        const UNLOAD_EXIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+        #[cfg(test)]
+        const UNLOAD_EXIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+        let Some(handle) = self.get_handle(session_id).await else {
+            return Ok(());
+        };
+
+        tokio::time::timeout(UNLOAD_EXIT_TIMEOUT, async {
+            if let Err(error) = handle.unload_nonterminal().await {
+                // A dead command channel means this exact actor is already
+                // unavailable. Remove only its stale map entry; never evict a
+                // newer actor that might have been installed concurrently.
+                let mut sessions = self.live_sessions.write().await;
+                if matches!(sessions.get(session_id), Some(current) if Arc::ptr_eq(current, &handle))
+                {
+                    sessions.remove(session_id);
+                }
+                tracing::debug!(session_id, error = %error, "non-terminal unload found unavailable actor");
+                return;
+            }
+
+            loop {
+                let retired = {
+                    let sessions = self.live_sessions.read().await;
+                    !matches!(sessions.get(session_id), Some(current) if Arc::ptr_eq(current, &handle))
+                };
+                if retired {
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "non-terminal actor unload timed out after {}s",
+                UNLOAD_EXIT_TIMEOUT.as_secs()
+            )
+        })
     }
 
     /// Synchronous variant for mobility install/export code that runs inside a
@@ -155,7 +244,147 @@ pub(crate) struct ScriptedSessionSpec {
 }
 
 #[cfg(test)]
+pub(crate) struct ObservedPrompt {
+    pub(crate) prompt_id: Option<String>,
+    pub(crate) payload: crate::domains::sessions::prompt::PromptPayload,
+    pub(crate) from_queue_seq: Option<i64>,
+}
+
+#[cfg(test)]
 impl LiveSessionManager {
+    pub(crate) async fn insert_prompt_observer_for_test(
+        &self,
+        session_id: &str,
+    ) -> tokio::sync::mpsc::UnboundedReceiver<ObservedPrompt> {
+        self.insert_prompt_observer_with_phase_for_test(
+            session_id,
+            anyharness_contract::v1::SessionExecutionPhase::Running,
+        )
+        .await
+    }
+
+    pub(crate) async fn insert_prompt_observer_with_phase_for_test(
+        &self,
+        session_id: &str,
+        phase: anyharness_contract::v1::SessionExecutionPhase,
+    ) -> tokio::sync::mpsc::UnboundedReceiver<ObservedPrompt> {
+        use crate::live::sessions::actor::command::{PromptAcceptance, SessionCommand};
+
+        let (command_tx, mut command_rx) = tokio::sync::mpsc::channel(1);
+        let (event_tx, _) = tokio::sync::broadcast::channel(1);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some(format!("native-{session_id}")),
+            phase,
+        ));
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle);
+        let (seen_tx, seen_rx) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                if let SessionCommand::Prompt {
+                    payload,
+                    prompt_id,
+                    from_queue_seq,
+                    respond_to,
+                } = command
+                {
+                    let _ = seen_tx.send(ObservedPrompt {
+                        prompt_id,
+                        payload,
+                        from_queue_seq,
+                    });
+                    let acceptance = match from_queue_seq {
+                        Some(seq) => PromptAcceptance::Queued { seq },
+                        None => PromptAcceptance::Started {
+                            turn_id: "observed-turn".into(),
+                        },
+                    };
+                    let _ = respond_to.send(Ok(acceptance));
+                }
+            }
+        });
+        seen_rx
+    }
+
+    /// Register a ready handle whose command consumer accepts one prompt into
+    /// the real mailbox and then drops its reply sender. This exercises the
+    /// ambiguous post-send `ResponseDropped` path without pretending the actor
+    /// was unavailable before command acceptance.
+    pub(crate) async fn insert_prompt_response_dropper_for_test(
+        &self,
+        session_id: &str,
+    ) -> tokio::sync::mpsc::UnboundedReceiver<ObservedPrompt> {
+        use crate::live::sessions::actor::command::SessionCommand;
+
+        let (command_tx, mut command_rx) = tokio::sync::mpsc::channel(1);
+        let (event_tx, _) = tokio::sync::broadcast::channel(1);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some(format!("native-{session_id}")),
+            anyharness_contract::v1::SessionExecutionPhase::Idle,
+        ));
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle);
+        let (seen_tx, seen_rx) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            if let Some(SessionCommand::Prompt {
+                payload,
+                prompt_id,
+                from_queue_seq,
+                respond_to,
+            }) = command_rx.recv().await
+            {
+                let observed = ObservedPrompt {
+                    prompt_id,
+                    payload,
+                    from_queue_seq,
+                };
+                drop(respond_to);
+                let _ = seen_tx.send(observed);
+            }
+        });
+        seen_rx
+    }
+
+    pub(crate) async fn insert_cancel_observer_for_test(
+        &self,
+        session_id: &str,
+    ) -> tokio::sync::mpsc::UnboundedReceiver<()> {
+        use crate::live::sessions::actor::command::SessionCommand;
+
+        let (command_tx, mut command_rx) = tokio::sync::mpsc::channel(1);
+        let (event_tx, _) = tokio::sync::broadcast::channel(1);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some(format!("native-{session_id}")),
+            anyharness_contract::v1::SessionExecutionPhase::Running,
+        ));
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle);
+        let (seen_tx, seen_rx) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                if matches!(command, SessionCommand::Cancel) {
+                    let _ = seen_tx.send(());
+                }
+            }
+        });
+        seen_rx
+    }
+
     pub(crate) async fn insert_pending_startup_for_test(
         &self,
         session_id: &str,

@@ -58,6 +58,70 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
     expect(items).toMatchObject([{ id: "unarchive", label: "Unarchive" }]);
   });
 
+  it("offers pin between rename and archive for an unpinned workspace", () => {
+    const items = buildWorkspaceSidebarNativeContextMenuItems({
+      canRename: true,
+      canCopyWorkspaceLocation: false,
+      copyWorkspaceLocationLabel: "Copy workspace path",
+      canCopyBranchName: false,
+      branchName: null,
+      canOpenPullRequest: false,
+      pullRequestNumber: null,
+      archived: false,
+      canArchive: true,
+      canUnarchive: false,
+      pinned: false,
+      canPin: true,
+      canUnpin: false,
+      canMarkDone: false,
+      onRename: () => {},
+      onCopyWorkspaceLocation: () => {},
+      onCopyBranchName: () => {},
+      onOpenPullRequest: () => {},
+      onArchive: () => {},
+      onUnarchive: () => {},
+      onPin: () => {},
+      onUnpin: () => {},
+      onMarkDone: () => {},
+    });
+
+    expect(items).toMatchObject([
+      { id: "rename", label: "Rename" },
+      { id: "pin", label: "Pin" },
+      { id: "archive", label: "Archive..." },
+    ]);
+  });
+
+  it("offers unpin for a pinned workspace", () => {
+    const items = buildWorkspaceSidebarNativeContextMenuItems({
+      canRename: false,
+      canCopyWorkspaceLocation: false,
+      copyWorkspaceLocationLabel: "Copy workspace path",
+      canCopyBranchName: false,
+      branchName: null,
+      canOpenPullRequest: false,
+      pullRequestNumber: null,
+      archived: false,
+      canArchive: false,
+      canUnarchive: false,
+      pinned: true,
+      canPin: false,
+      canUnpin: true,
+      canMarkDone: false,
+      onRename: () => {},
+      onCopyWorkspaceLocation: () => {},
+      onCopyBranchName: () => {},
+      onOpenPullRequest: () => {},
+      onArchive: () => {},
+      onUnarchive: () => {},
+      onPin: () => {},
+      onUnpin: () => {},
+      onMarkDone: () => {},
+    });
+
+    expect(items).toMatchObject([{ id: "unpin", label: "Unpin" }]);
+  });
+
   it("keeps archive with workspace actions and delete in the final destructive group", () => {
     const items = buildWorkspaceSidebarNativeContextMenuItems({
       canRename: false,
