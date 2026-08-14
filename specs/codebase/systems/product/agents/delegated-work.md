@@ -93,7 +93,7 @@ needs_attention
 failed
 running
 queued
-wake_scheduled
+wake_scheduled (Cowork only)
 finished
 closed
 ```
@@ -119,7 +119,7 @@ needs_attention: attention accent
 failed: destructive accent
 running: active accent, subtle motion only when already established locally
 queued: muted active
-wake_scheduled: muted/neutral with explicit label
+wake_scheduled: Cowork-only, muted/neutral with explicit label
 finished: neutral
 closed: hidden by default
 ```
@@ -133,8 +133,10 @@ Composer visibility:
 - `parent_revising` keeps the delegated-work item visible but must not disable
   normal parent chat input.
 
-Avoid using one word for both action and state. For example, state is
-`Wake scheduled`; action is `Notify me` or `Wake parent`.
+Avoid using one word for both action and state. On Cowork-owned surfaces,
+state is `Wake scheduled`; the corresponding action is `Notify me` or
+`Wake parent`. Delegated-agent surfaces do not expose one-shot wake actions or
+state.
 
 ## Surfaces
 
@@ -180,8 +182,8 @@ The durable runtime roster is the source of truth. The overview reads the
 workspace roster, while cluster/detail routes also read the selected parent's
 session roster. The client preserves server order and uses the server's
 `status.presentation` verdict directly; it does not reconstruct membership or
-presentation from open tabs, transcript receipts, execution status, or wake
-state. A settled focused roster may repair a stale route before a slower
+presentation from open tabs, transcript receipts, or execution status. A
+settled focused roster may repair a stale route before a slower
 workspace-wide refresh finishes, but a loading or failed query must not make a
 parent or child disappear.
 
@@ -266,7 +268,7 @@ Examples:
 
 ```text
 API Surface Check agent created
-Running - Claude - Wake scheduled
+Running - Claude
 Open agent session
 
 Security Review agent created
@@ -293,39 +295,50 @@ Rules:
 
 ## Tab Strip
 
-Tabs carry lightweight delegated-work presence.
+Same-workspace subagents are Agents-pane-only until promotion. They never
+appear as main chat tabs, attached tabs, or entries in the closed-tabs menu.
+Opening a subagent receipt, composer row, or roster row changes only the
+independent right-pane route; it does not change the active main chat tab.
+Promote preserves the durable session and transcript, removes the relationship,
+and opens that same session as an ordinary top-level chat tab.
 
-Target delegated-agent tab shape:
+Review and Cowork child sessions remain real attached chat tabs because their
+owned workflows require a full main-chat surface. Their target shape is:
 
 ```text
-[X] Main session  [X] robot Mary  [other tabs]
+[X] Main session  [X] reviewer Mary  [other tabs]
 ```
 
 Rules:
 
 - The close `X` lives on the left side of the tab.
-- A delegated-agent tab uses a robot icon colored by the agent's deterministic
+- An attached review/Cowork tab uses an icon colored by the agent's deterministic
   semantic identity token. The text remains normal tab text color.
-- A delegated-agent tab label is only the generated agent name. The full
+- Its label is only the generated agent name. The full
   `GeneratedName (title ID)` identity stays in the hover card and transcript
   receipts.
 - Running, attention, and error states use a status ring/badge around or beside
-  the robot. Status must remain visible and must not replace the robot icon.
+  the icon. Status must remain visible and must not replace the identity.
 - The parent tab is the anchor. It is not itself a member of the delegated
   agent group.
-- Open delegated-agent tabs appear immediately to the right of the parent tab
-  and remain contiguous with sibling delegated-agent tabs for that parent.
-- Delegated-agent tabs are shorter by default than normal chat tabs.
-- Hover on a delegated-agent tab shows origin, parent/source context, and
+- Open review/Cowork child tabs appear immediately to the right of the parent
+  tab and remain contiguous with sibling attached tabs for that parent.
+- Attached child tabs are shorter by default than normal chat tabs.
+- Hover shows origin, parent/source context, and
   status.
-- Closing a delegated-agent tab hides the tab only. It does not delete the
+- Closing an attached child tab hides the tab only. It does not delete the
   delegated item or end active work.
+- Cowork child tabs carry their managed `workspaceId`, relationship source,
+  and link handle through the view model. Selecting one opens that session in
+  the managed Cowork workspace, not in the parent's current workspace.
+- Existing manual tab grouping stays supported, but an attached child run is a
+  sibling anchored after the parent, not a group that contains the parent.
 
 Example hover:
 
 ```text
 Mary (API Surface Check abc123)
-Subagent
+Code review
 Parent: Main session
 Running
 ```
@@ -333,33 +346,6 @@ Running
 Review runs are logical delegated-work items. Reviewer sessions remain real
 chat tabs, and each reviewer tab uses its own generated identity. Review
 `kind: code` maps to `code_review`; review `kind: plan` maps to `plan_review`.
-
-### Attached Agent Tabs
-
-When the user opens a delegated agent, its chat tab appears immediately to the
-right of the parent session tab, inside the parent's attached-agent run.
-
-Target expanded shape:
-
-```text
-[X] Main session  [X] robot Mary  [X] robot Nina
-```
-
-Rules:
-
-- Opening any delegated agent inserts or moves that tab next to its parent.
-- All open delegated-agent tabs for the same parent remain contiguous.
-- The parent remains the left anchor and is not visually grouped inside the
-  delegated-agent run.
-- Cowork child tabs must carry their managed `workspaceId`, relationship
-  source, and link handle through the tab view model. Selecting a cowork child
-  tab opens that session in the managed cowork workspace, not in the parent's
-  current workspace.
-- Existing tab grouping stays supported, but the child-agent group is a sibling
-  attached to the parent, not a group that contains the parent.
-- Reordering normal tabs must not separate open delegated-agent tabs from their
-  parent unless the user explicitly detaches them through a future advanced
-  action.
 
 ## Composer Agents Popover
 
@@ -372,7 +358,6 @@ Sections:
 Needs attention
 Running
 Queued
-Wake scheduled
 ```
 
 Kinds may be grouped inside sections when needed:
@@ -413,7 +398,6 @@ Primary actions by kind:
 ```text
 subagent
   Open
-  Notify me
   Delete
 
 cowork
@@ -492,12 +476,13 @@ Rules:
   click away.
 - Subagent creation/completion receipts should be concise.
 - Adjacent subagent creation receipts from the same assistant/tool-call cluster
-  group together. Creation receipts do not group with send, wake, status, read,
-  search, close, or generic tool calls.
+  group together. Creation receipts do not group with messaging, lifecycle,
+  configuration, or generic tool calls.
 - Parent messages rendered in a child session show
   `Sent by parent - {parent chat title}`.
-- Wake prompts and queued outbound prompts belong in composer outbound state,
-  not only as silent background state.
+- Queued outbound prompts belong in composer outbound state, not only as silent
+  background state. Automatic completion delivery is represented by the
+  resulting parent notification rather than a delegated-agent wake control.
 - Do not paste long raw child transcripts into parent transcript receipts.
 
 ## Details Surface
@@ -510,11 +495,10 @@ Subagent details:
 API Surface Check
 Status: Completed
 Harness: Claude
-Latest result: Found one SDK mismatch in create_subagent.
+Latest result: Found one SDK mismatch in create_agent.
 
 Actions:
   Open session
-  Notify me
   Send message
   Delete
 ```

@@ -133,7 +133,7 @@ impl SessionRuntime {
         } else {
             self.ensure_live_session_handle(&record, None)
                 .await
-                .map_err(super::startup::map_start_session_error_to_create)?;
+                .map_err(super::startup_errors::map_start_session_error_to_create)?;
             self.session_service
                 .get_session(&record.id)
                 .map_err(CreateAndStartSessionError::Internal)?

@@ -17,15 +17,14 @@ use crate::domains::mobility::model::{
     MobilityPromptAttachmentData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
     WorkspaceMobilityPreflightResult, WorkspaceMobilitySessionBundleData,
 };
+use crate::domains::sessions::links::completions::LinkWakeScheduleRecord;
 use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::model::{
     parse_action_capabilities, PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
 };
 use crate::domains::sessions::subagents::delivery::CompletionDeliveryRecord;
-use crate::domains::sessions::subagents::model::{
-    SubagentCompletionRecord, SubagentWakeScheduleRecord,
-};
+use crate::domains::sessions::subagents::model::SubagentCompletionRecord;
 
 pub(super) fn to_contract_preflight(
     result: WorkspaceMobilityPreflightResult,
@@ -239,7 +238,7 @@ fn to_contract_session_link_completion(
 }
 
 fn to_contract_session_link_wake_schedule(
-    record: SubagentWakeScheduleRecord,
+    record: LinkWakeScheduleRecord,
 ) -> MobilitySessionLinkWakeScheduleRecord {
     MobilitySessionLinkWakeScheduleRecord {
         session_link_id: record.session_link_id,

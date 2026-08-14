@@ -27,9 +27,14 @@ function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
 
 /**
  * Onboarding card (UX spec §10, owner rev 2026-07-01: cards, not rows):
- * side-by-side tile — page-tone surface, 20px radius, hairline ring,
+ * side-by-side tile — page-tone surface, 20px radius, hairline frame,
  * icon row on top with trailing accessories + hover dismiss, then
- * title 13/500 and description 12px muted below.
+ * title 13/500 and description 12px muted below. The ring utilities are
+ * the Web rendering of the frame; on desktop the unlayered
+ * zoom-stable-hairline-frame rule (desktop.css) repaints it at exactly
+ * one physical device pixel (--proliferate-device-px), because WKWebView
+ * drops sub-device-pixel hairlines to zero on individual edges depending
+ * on window zoom, display density, and subpixel position (PRO-117).
  */
 function OnboardingCard({
   icon,
@@ -51,7 +56,7 @@ function OnboardingCard({
   selectLabel: string;
 }) {
   return (
-    <div className="group relative flex min-h-26 min-w-0 flex-col rounded-composer bg-background px-4 py-3 text-left shadow-subtle ring-[0.5px] ring-border-heavy transition-colors hover:bg-hover active:bg-active">
+    <div className="group relative flex min-h-26 min-w-0 flex-col rounded-composer bg-background px-4 py-3 text-left shadow-subtle ring-[0.5px] ring-border-heavy zoom-stable-hairline-frame transition-colors hover:bg-hover active:bg-active">
       {onSelect ? (
         <Button
           type="button"

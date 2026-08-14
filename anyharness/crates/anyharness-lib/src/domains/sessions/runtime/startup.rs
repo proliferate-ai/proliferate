@@ -14,10 +14,9 @@ use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
     assemble_session_mcp_launch, SessionMcpLaunchAssemblyError,
 };
-use crate::domains::sessions::mcp_bindings::crypto::{encrypt_bindings, SessionMcpBindingsError};
-use crate::domains::sessions::mcp_bindings::summaries::{
-    serialize_binding_summaries, SessionMcpSummaryError,
-};
+use crate::domains::sessions::mcp_bindings::crypto::encrypt_bindings;
+use crate::domains::sessions::mcp_bindings::summaries::serialize_binding_summaries;
+use crate::domains::sessions::mcp_bindings::workspace_attachment::WorkspaceMcpAttachmentError;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::handle::LiveSessionHandle;
@@ -27,6 +26,10 @@ use crate::live::sessions::SessionStartupStrategy;
 use super::launch_policy::{
     assemble_session_launch, choose_startup_strategy, session_is_closed, SessionLaunchContext,
     SessionStartupFacts,
+};
+use super::startup_errors::{
+    map_encrypt_bindings_error_to_start, map_mcp_launch_assembly_error_to_start,
+    map_mcp_summary_error_to_start, map_start_session_error_to_create,
 };
 use super::{
     launch_env::build_session_launch_env, CreateAndStartSessionError, EnsureLiveSessionError,
@@ -164,6 +167,9 @@ impl SessionRuntime {
                 StartSessionError::MissingDataKey => EnsureLiveSessionError::MissingDataKey,
                 StartSessionError::RestartRequired(detail) => {
                     EnsureLiveSessionError::RestartRequired(detail)
+                }
+                StartSessionError::WorkspaceMcpAttachmentFailed(error) => {
+                    EnsureLiveSessionError::WorkspaceMcpAttachmentFailed(error)
                 }
                 StartSessionError::RouteAuth(error) => EnsureLiveSessionError::RouteAuth(error),
                 StartSessionError::AgentNotReady {
@@ -435,15 +441,26 @@ impl SessionRuntime {
                 .and_then(|h| h.settings.as_ref());
             resolve_settings_deltas(catalog_settings, persisted_settings, "local")
         };
-        let mcp_launch = assemble_session_mcp_launch(
+        let mcp_launch = match assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,
             &self.product_mcp_launch_catalog,
             &workspace,
             record,
             system_prompt_append,
-        )
-        .map_err(map_mcp_launch_assembly_error_to_start)?;
+        ) {
+            Ok(launch) => launch,
+            Err(SessionMcpLaunchAssemblyError::WorkspaceAttachment(error)) => {
+                let error = match self.clear_workspace_mcp_binding_summary(record) {
+                    Ok(()) => error,
+                    Err(cleanup_error) => {
+                        WorkspaceMcpAttachmentError::summary_cleanup(cleanup_error)
+                    }
+                };
+                return Err(StartSessionError::WorkspaceMcpAttachmentFailed(error));
+            }
+            Err(error) => return Err(map_mcp_launch_assembly_error_to_start(error)),
+        };
         if let Some(summaries_json) = mcp_launch.mcp_binding_summaries_json.clone() {
             self.session_service
                 .store()
@@ -508,108 +525,5 @@ impl SessionRuntime {
         }
 
         Ok((handle, ready.native_session_id))
-    }
-}
-
-pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> anyhow::Error {
-    match error {
-        StartSessionError::WorkspaceNotFound => anyhow::anyhow!("workspace not found for session"),
-        StartSessionError::WorkspaceDirectoryMissing { path } => {
-            anyhow::anyhow!("workspace directory is missing: {path}")
-        }
-        StartSessionError::AgentDescriptorNotFound(agent_kind) => {
-            anyhow::anyhow!("agent descriptor not found: {agent_kind}")
-        }
-        StartSessionError::Closed => anyhow::anyhow!("session is closed"),
-        StartSessionError::MissingDataKey => {
-            anyhow::anyhow!("{}", SessionMcpBindingsError::missing_data_key_detail())
-        }
-        StartSessionError::RestartRequired(detail) => anyhow::anyhow!(detail),
-        StartSessionError::RouteAuth(error) => anyhow::Error::new(error),
-        StartSessionError::AgentNotReady {
-            agent_kind,
-            status,
-            detail,
-        } => match detail {
-            Some(detail) => {
-                anyhow::anyhow!("agent '{agent_kind}' is not ready (status: {status:?}): {detail}")
-            }
-            None => anyhow::anyhow!("agent '{agent_kind}' is not ready (status: {status:?})"),
-        },
-        StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => error,
-    }
-}
-
-fn map_encrypt_bindings_error_to_start(error: SessionMcpBindingsError) -> StartSessionError {
-    match error {
-        SessionMcpBindingsError::MissingDataKey => StartSessionError::MissingDataKey,
-        SessionMcpBindingsError::Encrypt(error) | SessionMcpBindingsError::Decrypt(error) => {
-            StartSessionError::Internal(error)
-        }
-    }
-}
-
-fn map_mcp_summary_error_to_start(error: SessionMcpSummaryError) -> StartSessionError {
-    match error {
-        SessionMcpSummaryError::Invalid(detail) => {
-            StartSessionError::Internal(anyhow::anyhow!(detail))
-        }
-        SessionMcpSummaryError::Serialize(error) => StartSessionError::Internal(error),
-    }
-}
-
-fn map_mcp_launch_assembly_error_to_start(
-    error: SessionMcpLaunchAssemblyError,
-) -> StartSessionError {
-    match error {
-        SessionMcpLaunchAssemblyError::MissingDataKey => StartSessionError::MissingDataKey,
-        SessionMcpLaunchAssemblyError::RestartRequired(detail) => {
-            StartSessionError::RestartRequired(detail)
-        }
-        SessionMcpLaunchAssemblyError::Internal(error) => StartSessionError::Internal(error),
-    }
-}
-
-pub(super) fn map_start_session_error_to_create(
-    error: StartSessionError,
-) -> CreateAndStartSessionError {
-    match error {
-        StartSessionError::WorkspaceNotFound => CreateAndStartSessionError::WorkspaceNotFound,
-        StartSessionError::WorkspaceDirectoryMissing { path } => {
-            CreateAndStartSessionError::WorkspaceDirectoryMissing { path }
-        }
-        StartSessionError::AgentDescriptorNotFound(agent_kind) => {
-            CreateAndStartSessionError::Internal(anyhow::anyhow!(
-                "agent descriptor not found: {agent_kind}"
-            ))
-        }
-        StartSessionError::Closed => {
-            CreateAndStartSessionError::Internal(anyhow::anyhow!("session is closed"))
-        }
-        StartSessionError::MissingDataKey => CreateAndStartSessionError::MissingDataKey,
-        StartSessionError::RestartRequired(detail) => {
-            CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
-        }
-        StartSessionError::RouteAuth(error) => CreateAndStartSessionError::RouteAuth(error),
-        // create_session already gates readiness before this seam runs
-        // (create.rs), so this arm should be unreachable on that path in
-        // practice; mapped for exhaustiveness with the same shape the
-        // create-time gate itself would have produced (Invalid, not a 500),
-        // since a caller reaching this without having already gated is still
-        // a plain launch-readiness rejection, not an internal error.
-        StartSessionError::AgentNotReady {
-            agent_kind,
-            status,
-            detail,
-        } => match detail {
-            Some(detail) => CreateAndStartSessionError::Invalid(format!(
-                "agent '{agent_kind}' is not ready (status: {status:?}): {detail}"
-            )),
-            None => CreateAndStartSessionError::Invalid(format!(
-                "agent '{agent_kind}' is not ready (status: {status:?})"
-            )),
-        },
-        StartSessionError::Internal(error) => CreateAndStartSessionError::Internal(error),
-        StartSessionError::AcpStart(error) => CreateAndStartSessionError::StartFailed(error),
     }
 }

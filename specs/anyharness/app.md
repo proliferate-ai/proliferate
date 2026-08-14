@@ -177,11 +177,9 @@ ProductMcpEndpointRegistry
 `app/` may list product MCP servers:
 
 ```text
+WorkspaceProductMcpServer
 ReviewProductMcpServer
-SubagentProductMcpServer
-WorkspaceNamingProductMcpServer
 CoworkProductMcpServer
-SkillsProductMcpServer
 ```
 
 `app/` must not implement tool behavior, token semantics, or session selection

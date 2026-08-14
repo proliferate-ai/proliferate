@@ -2,7 +2,7 @@
 
 Read [servers.md](../servers.md) first. That spec
 defines the source layout and implementation rules. Files in this folder define
-the initial product MCPs we are standardizing.
+the current product MCPs.
 
 Each definition carries the durable laws of one product MCP:
 
@@ -22,8 +22,8 @@ Cross-cutting standards:
 
 - [prompt-and-skill-policy.md](prompt-and-skill-policy.md)
 
-Current definitions:
+Definitions:
 
-- [subagents.md](subagents.md)
+- [workspace.md](workspace.md) — Workspace and delegated-agent operations
 - [cowork.md](cowork.md)
 - [reviews.md](reviews.md)

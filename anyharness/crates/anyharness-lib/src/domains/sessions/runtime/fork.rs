@@ -8,7 +8,7 @@ use crate::domains::sessions::model::{parse_action_capabilities, SessionRecord};
 use crate::live::sessions::SessionStartupStrategy;
 use crate::live::sessions::{ForkSessionCommandError, LiveSessionCommandError};
 
-use super::startup::map_start_session_error_to_anyhow;
+use super::startup_errors::map_start_session_error_to_anyhow;
 use super::{
     ForkSessionError, ForkSessionOutcome, SessionLifecycleError, SessionRuntime, StartSessionError,
 };
@@ -285,6 +285,9 @@ fn map_start_error_to_fork(error: StartSessionError) -> ForkSessionError {
         StartSessionError::Closed => ForkSessionError::Invalid("session is closed".to_string()),
         StartSessionError::MissingDataKey => ForkSessionError::MissingDataKey,
         StartSessionError::RestartRequired(detail) => ForkSessionError::Invalid(detail),
+        StartSessionError::WorkspaceMcpAttachmentFailed(error) => {
+            ForkSessionError::Internal(anyhow::Error::new(error))
+        }
         StartSessionError::RouteAuth(error) => ForkSessionError::Invalid(error.to_string()),
         StartSessionError::AgentNotReady {
             agent_kind,

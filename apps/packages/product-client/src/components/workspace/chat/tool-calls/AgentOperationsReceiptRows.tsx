@@ -34,12 +34,18 @@ export function AgentOperationsWorkspaceReceipt({
           aria-expanded={detailsExpanded}
           onClick={onToggleDetails}
         >
-          <ProliferateIcon className="icon-compact shrink-0 text-faint [font-size:var(--text-chat)]" />
+          <ProliferateIcon
+            data-agent-operations-product-mark
+            className="icon-compact shrink-0 text-faint [font-size:var(--text-chat)]"
+          />
           <span>{presentation.actionLabel}</span>
         </Button>
       ) : (
         <>
-          <ProliferateIcon className="icon-compact shrink-0 text-faint [font-size:var(--text-chat)]" />
+          <ProliferateIcon
+            data-agent-operations-product-mark
+            className="icon-compact shrink-0 text-faint [font-size:var(--text-chat)]"
+          />
           <span className="shrink-0">{presentation.actionLabel}</span>
         </>
       )}
@@ -106,7 +112,12 @@ export function AgentOperationsLifecycleReceipt({
         <span className="min-w-0 truncate font-medium text-foreground/80">
           {resolvedAgentTitle}
         </span>
-      ) : null}
+      ) : (
+        <ProliferateIcon
+          data-agent-operations-product-mark
+          className="icon-compact shrink-0 text-faint [font-size:var(--text-chat)]"
+        />
+      )}
       {onToggleDetails ? (
         <Button
           type="button"

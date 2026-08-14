@@ -20,8 +20,6 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
       openSubagent: noop,
       openCluster: noop,
       openParent: noop,
-      scheduleWake: noop,
-      isSchedulingWake: false,
     }
     : null;
   const summary = subagents
@@ -48,16 +46,14 @@ function buildPlaygroundSubagentSummary(
   rows: typeof PLAYGROUND_SUBAGENT_STRIP_ROWS,
 ) {
   const workingCount = rows.filter((row) => row.statusLabel === "Working").length;
-  const wakeScheduledCount = rows.filter((row) => row.wakeScheduled).length;
   const failedCount = rows.filter((row) => row.statusLabel === "Failed").length;
   const detailParts = [
     workingCount > 0 ? `${workingCount} working` : null,
-    wakeScheduledCount > 0 ? `${wakeScheduledCount} wake scheduled` : null,
     failedCount > 0 ? `${failedCount} failed` : null,
   ].filter((part): part is string => part !== null);
   return {
     label: `${rows.length} ${rows.length === 1 ? "subagent" : "subagents"}`,
     detail: detailParts.slice(0, 2).join(" · ") || null,
-    active: workingCount > 0 || wakeScheduledCount > 0 || failedCount > 0,
+    active: workingCount > 0 || failedCount > 0,
   };
 }

@@ -19,6 +19,7 @@ from proliferate.auth.identity.store import (
     upsert_provider_grant,
 )
 from proliferate.auth.identity.types import (
+    AuthCallbackRedirect,
     AuthChallengeSnapshot,
     AuthProviderName,
     VerifiedProviderIdentity,
@@ -189,14 +190,15 @@ async def complete_oauth_provider_error_callback(
     surface: str | None,
     state: str,
     error: str,
-) -> str:
+) -> AuthCallbackRedirect:
     challenge = await consume_provider_challenge(
         db,
         state=state,
         provider=provider,
         surface=surface,
     )
-    return append_query(challenge.redirect_uri, error=error, state=challenge.client_state)
+    url = append_query(challenge.redirect_uri, error=error, state=challenge.client_state)
+    return AuthCallbackRedirect(url=url, surface=challenge.surface, error=error)
 
 
 async def consume_provider_challenge(

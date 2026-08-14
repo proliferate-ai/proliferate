@@ -5,7 +5,6 @@ import {
   type SetStateAction,
 } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
-import { useNavigate } from "react-router-dom";
 import { useTerminalActions } from "#product/hooks/terminals/workflows/use-terminal-actions";
 import {
   parseRightPanelHeaderEntryKey,
@@ -29,6 +28,7 @@ import {
   type ViewerTargetKey,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
 import type { WorkspaceFileBuffer } from "#product/stores/editor/workspace-file-buffers-store";
 import { useRightPanelViewerActions } from "#product/hooks/workspaces/workflows/right-panel/use-right-panel-viewer-actions";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
@@ -75,7 +75,6 @@ export function useRightPanelEntryActions({
   clearBuffer,
 }: UseRightPanelEntryActionsOptions) {
   const { createTab, closeTab, renameTab } = useTerminalActions();
-  const navigate = useNavigate();
   const showToast = useToastStore((store) => store.show);
   const showErrorToast = useToastStore((store) => store.showError);
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -337,9 +336,11 @@ export function useRightPanelEntryActions({
     void createTerminal({ activate: true });
   }, [createTerminal]);
 
+  // navigateApp instead of useNavigate: callback-only, so the right panel is
+  // not subscribed to every location change (PRO-170, PRO-182).
   const handleOpenRepoSettings = useCallback(() => {
-    navigate(repoSettingsHref);
-  }, [navigate, repoSettingsHref]);
+    navigateApp(repoSettingsHref);
+  }, [repoSettingsHref]);
 
   return {
     terminalFocusNonce,

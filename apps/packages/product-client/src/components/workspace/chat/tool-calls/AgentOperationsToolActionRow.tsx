@@ -55,27 +55,23 @@ export function AgentOperationsToolActionRow({
   );
   const strictCompletedOperation = callerDurableSessionId
     && item.status === "completed"
-    && presentation.source === "workspace"
     && (presentation.action === "create_agent" || presentation.action === "promote_subagent")
       ? deriveAuthoritativeAgentOperation(item, callerDurableSessionId, currentWorkspaceId)
       : null;
-  const navigationAgent = presentation.source === "workspace"
-    && presentation.action === "create_agent"
+  const navigationAgent = presentation.action === "create_agent"
+    ? item.status === "completed"
+      ? presentation.agent
+      : null
+    : presentation.action === "promote_subagent"
       ? item.status === "completed"
-        ? presentation.agent
-        : null
-      : presentation.source === "workspace"
-        && presentation.action === "promote_subagent"
-        ? item.status === "completed"
-          ? strictCompletedOperation?.agent ?? null
-          : presentation.targetAgentId
-            ? targetAgentFromDurableId(presentation.targetAgentId)
-            : null
-        : presentation.source === "workspace"
-      && (presentation.isRunning || presentation.isFailed)
-      && presentation.targetAgentId
-      ? targetAgentFromDurableId(presentation.targetAgentId)
-      : presentation.agent;
+        ? strictCompletedOperation?.agent ?? null
+        : presentation.targetAgentId
+          ? targetAgentFromDurableId(presentation.targetAgentId)
+          : null
+      : (presentation.isRunning || presentation.isFailed)
+        && presentation.targetAgentId
+        ? targetAgentFromDurableId(presentation.targetAgentId)
+        : presentation.agent;
   const targetSessionId = navigationAgent?.sessionId ?? null;
   const directoryAgent = useSessionDirectoryStore((state) => {
     if (!targetSessionId) {
@@ -121,13 +117,8 @@ export function AgentOperationsToolActionRow({
     || currentRelationship?.kind === "root"
       ? "generic"
       : "linked-child";
-  const legacySendWorkspaceId = presentation.source === "legacy_subagents"
-    && presentation.action === "send_message"
-      ? currentWorkspaceId
-      : null;
   const navigationWorkspaceId = currentRelationshipWorkspaceId
-    ?? navigationAgent?.workspaceId
-    ?? legacySendWorkspaceId;
+    ?? navigationAgent?.workspaceId;
   const navigationSessionId = currentClientSessionId ?? targetSessionId;
   const paneParentCandidate = isDurableSubagentRelationship(currentRelationship)
     ? currentRelationship.parentSessionId
@@ -180,17 +171,13 @@ export function AgentOperationsToolActionRow({
     );
   const usesTranscriptNavigation = Boolean(
     openSession
-    && (
-      isCurrentWorkspace
-      || (legacySendWorkspaceId && !navigationAgent?.workspaceId && !directoryAgent)
-    )
+    && isCurrentWorkspace
     && (canOpenSession?.(navigationSessionId ?? "", openRole) ?? true),
   );
   const hasAuthoritativeNavigation = navigationWorkspaceId !== null
     && Boolean(
       isCurrentWorkspace
       || directoryAgent
-      || legacySendWorkspaceId
       || (navigationAgent?.workspaceId && isProjectedWorkspace),
   );
   const canUseOrdinaryNavigation = Boolean(
