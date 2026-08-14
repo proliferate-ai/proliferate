@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { normalizeContentSearchQuery } from "#product/lib/domain/content-search/content-search";
 
-export type ContentSearchSurface = "chat" | "file";
+export type ContentSearchSurface = "chat" | "file" | "review";
 
 export interface ContentSearchUnitRegistration {
   unitId: string;
@@ -20,6 +20,11 @@ interface ContentSearchUnit {
   orderKey: number | null;
 }
 
+interface ContentSearchSurfaceAvailability {
+  file: boolean;
+  review: boolean;
+}
+
 interface ContentSearchState {
   open: boolean;
   query: string;
@@ -28,6 +33,7 @@ interface ContentSearchState {
   activeMatchId: string | null;
   unitsById: Record<string, ContentSearchUnit>;
   nextUnitOrder: number;
+  surfaceAvailability: ContentSearchSurfaceAvailability;
   openSearch: (surface?: ContentSearchSurface) => void;
   closeSearch: () => void;
   setQuery: (query: string) => void;
@@ -35,6 +41,7 @@ interface ContentSearchState {
   goToPreviousMatch: () => void;
   registerUnit: (registration: ContentSearchUnitRegistration) => void;
   unregisterUnit: (unitId: string) => void;
+  setSurfaceAvailability: (surface: "file" | "review", available: boolean) => void;
 }
 
 export const useContentSearchStore = create<ContentSearchState>((set) => ({
@@ -45,6 +52,7 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
   activeMatchId: null,
   unitsById: {},
   nextUnitOrder: 0,
+  surfaceAvailability: { file: false, review: false },
 
   openSearch: (surface = "chat") => {
     set((state) => resolveActiveMatch({
@@ -122,6 +130,26 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
         ...state,
         unitsById,
       }, state.activeMatchIndex);
+    });
+  },
+
+  setSurfaceAvailability: (surface, available) => {
+    set((state) => {
+      if (state.surfaceAvailability[surface] === available) {
+        return state;
+      }
+
+      const surfaceAvailability = { ...state.surfaceAvailability, [surface]: available };
+      // A surface going unavailable while it's the active open search means
+      // its host unmounted (e.g. the git pane closed) — leaving the pill open
+      // over unrelated content would float a stale, unreachable search, so
+      // auto-close it.
+      const shouldAutoClose = !available && state.surface === surface && state.open;
+      return {
+        ...state,
+        surfaceAvailability,
+        ...(shouldAutoClose ? { open: false } : {}),
+      };
     });
   },
 }));

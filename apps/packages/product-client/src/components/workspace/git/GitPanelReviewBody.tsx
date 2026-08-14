@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { AnyHarnessQueryTimingOptions } from "@anyharness/sdk-react";
 import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import {
@@ -12,6 +13,7 @@ import type {
   GitPanelMode,
   GitPanelSection,
 } from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
 
 interface GitPanelReviewBodyProps {
   changesFilter: GitPanelMode;
@@ -66,6 +68,12 @@ export function GitPanelReviewBody({
   diffTimingOptions,
   measurementOperationId,
 }: GitPanelReviewBodyProps) {
+  const setSurfaceAvailability = useContentSearchStore((state) => state.setSurfaceAvailability);
+  useEffect(() => {
+    setSurfaceAvailability("review", true);
+    return () => setSurfaceAvailability("review", false);
+  }, [setSurfaceAvailability]);
+
   return (
     <div
       id="review-diffs-collapsed"
