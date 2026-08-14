@@ -1,8 +1,8 @@
 /**
- * TEMPORARY launch gate: the entire Workflows gen-2 (schema_version 2)
- * surface — builder, invocations, run views — ships dark until the gen-2
- * ladder's final rung flips WORKFLOWS_V2_DEFAULT to true, as its own isolated
- * commit.
+ * Launch gate for the Workflows gen-2 (schema_version 2) surface — builder,
+ * invocations, run views. WORKFLOWS_V2_DEFAULT is flipped to true by the
+ * ladder's final rung as its own isolated commit; drop or revert that commit
+ * to ship the entire surface dark again.
  *
  * `VITE_WORKFLOWS_V2` is the runtime kill switch for that surface, in any
  * build (there is deliberately no dev-only condition on it): an explicit "1"
@@ -13,7 +13,7 @@
  *
  * Mirrors the temporary-gate style of ./cloud-compute.ts.
  */
-const WORKFLOWS_V2_DEFAULT = false; // flipped to true in the ladder's final rung, as its own isolated commit
+const WORKFLOWS_V2_DEFAULT = true; // the ladder's final rung — revert this commit to ship dark
 
 export interface WorkflowsV2GateInput {
   /** Raw `VITE_WORKFLOWS_V2`. Only "1" and "0" override the default. */
