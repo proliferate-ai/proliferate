@@ -7,6 +7,20 @@
 // proves the UI survives the runtime-plane PUT failing, without asserting
 // anything about a runtime this suite deliberately never boots.
 //
+// The runtime plane shapes the dialog before that PUT, too: the repository
+// picker lists RUNTIME repo roots (GET /v1/repo-roots), not cloud repo
+// configs — placement.repoConfigId is a runtime repo-root id end to end. And
+// the picker's query is gated one seam earlier than the list itself: the app
+// only hands the runtime URL to the query context once the harness
+// connection store turns healthy (ProductProviderRoot readyRuntimeUrl), which
+// requires GET /health to answer (runtime-bootstrap.ts pollUntilHealthy,
+// every 500ms). So this spec controls ALL THREE runtime seams explicitly
+// rather than relying on the runtime's ambient absence: it fulfills /health
+// (otherwise the store never turns healthy and the repo-roots query never
+// fires at all), fulfills the repo-roots list with a fixture root (otherwise
+// the picker stays empty and Start run stays disabled), and aborts the
+// workflow-runs PUT.
+//
 // This file supersedes workflow-runs.spec.ts (T2-WF-1's old collector),
 // which drove gen-1's fully server-managed "Run in Cloud" model (queued /
 // cancel / delivery_status over a durable admission queue) — a different
@@ -47,8 +61,12 @@ const INPUT_VALUE = `PROL-${RUN_ID}`;
 const REPO_OWNER = "t2-wf-trigger";
 const REPO_NAME = `trigger-seam-${RUN_ID}`;
 
-const SAFE_WORKFLOW_ACTION_FALLBACK =
-  "The workflow request could not be completed. Refresh for the latest status.";
+// What the trigger dialog renders when the run-stage PUT fails at the network
+// level: workflow-trigger-failure.ts classifies a run-stage TypeError (what
+// fetch throws when nothing answers) as the runtime being unreachable, so the
+// person is told to reconnect rather than handed a generic sentence.
+const RUNTIME_DISCONNECTED_COPY =
+  "The local runtime is not connected. Reconnect it, then start this run again.";
 
 let workflowId: string;
 let repoConfigId: string;
@@ -90,9 +108,75 @@ test("fires exactly one invocation PUT and survives a failed runtime placement",
   const pageErrors: Error[] = [];
   page.on("pageerror", (error) => pageErrors.push(error));
 
+  // First runtime seam — the connection gate. Bootstrap starts polling
+  // GET /health the moment the authenticated shell mounts, so this route
+  // must exist before sign-in. The body is a complete HealthResponse
+  // (anyharness/sdk types/runtime.ts): confirmRuntimeReady only cares that
+  // the call succeeds, but other shell surfaces read health fields, and a
+  // shape lie here could crash them and trip this spec's pageErrors gate.
+  await page.route(
+    (url) => url.href.startsWith(anyharnessBaseUrl()) && url.pathname === "/health",
+    (route) => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        status: "ok",
+        version: "0.0.0-t2-intent-fixture",
+        runtimeHome: `/tmp/t2-wf-trigger-runtime-${RUN_ID}`,
+        executionStoreId: `t2-wf-trigger-store-${RUN_ID}`,
+        capabilities: { replay: false },
+        agentReconcile: {
+          alreadyInstalled: 0,
+          failed: 0,
+          installed: 0,
+          skipped: 0,
+          status: "completed",
+          currentAgent: null,
+        },
+        agentSeed: {
+          lastAction: "none",
+          ownership: "not_configured",
+          source: "none",
+          repairedArtifactCount: 0,
+          seedOwnedArtifactCount: 0,
+          skippedExistingArtifactCount: 0,
+          seededAgents: [],
+          seedVersion: null,
+          failureKind: null,
+        },
+        resourcePressure: null,
+      }),
+    }),
+  );
+
   await signInThroughUi(page);
   await page.goto(`${webBaseUrl()}/workflows`);
   await expect(page.getByRole("heading", { name: "Workflows", exact: true, level: 1 })).toBeVisible();
+
+  // The dialog's repository picker queries the runtime's repo-root list the
+  // moment it opens; with no runtime in this suite that list would be empty
+  // and Start run would stay disabled. Fulfill the exact list route (child
+  // routes untouched) with one fixture root. It reuses the seeded
+  // repository's id so the spec stays agnostic about whether the control
+  // plane cross-checks the id, while still proving the picker's selected
+  // value is exactly what the courier sends as placement.repoConfigId.
+  const rootSeededAt = new Date().toISOString();
+  await page.route(
+    (url) => url.href.startsWith(anyharnessBaseUrl()) && url.pathname === "/v1/repo-roots",
+    (route) => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([{
+        id: repoConfigId,
+        kind: "external",
+        path: `/work/${REPO_OWNER}/${REPO_NAME}`,
+        displayName: REPO_NAME,
+        defaultBranch: "main",
+        createdAt: rootSeededAt,
+        updatedAt: rootSeededAt,
+      }]),
+    }),
+  );
 
   const row = page.getByRole("button").filter({ hasText: TITLE });
   await expect(row).toBeVisible();
@@ -127,10 +211,11 @@ test("fires exactly one invocation PUT and survives a failed runtime placement",
   // (TIER2_INTENT_SKIP_RUNTIME=1); force its PUT to fail deterministically
   // rather than rely on that ambient absence — a stray local process
   // answering on the same port would otherwise make this flaky on a dev
-  // machine. A plain aborted request carries no `.status`/`.code`, so it
-  // reaches `safeWorkflowActionError`'s generic fallback exactly the way an
-  // actually-unreachable runtime would (see workflow-run-state.ts), without
-  // this spec depending on @anyharness/sdk's error-parsing internals.
+  // machine. An aborted request surfaces as fetch's TypeError, which the
+  // trigger failure classifier (workflow-trigger-failure.ts) maps on the run
+  // stage to the runtime-disconnected sentence — the same rendering an
+  // actually-unreachable runtime gets, without this spec depending on
+  // @anyharness/sdk's error-parsing internals.
   await page.route(
     (url) => url.href.startsWith(`${anyharnessBaseUrl()}/v1/workflow-runs/`),
     (route) => route.abort(),
@@ -142,7 +227,10 @@ test("fires exactly one invocation PUT and survives a failed runtime placement",
   );
   await page.getByRole("button", { name: "Start run", exact: true }).click();
   const invocationResponse = await invocationResponsePromise;
-  expect(invocationResponse.status()).toBe(200);
+  // A fresh invocation id places the run: 201 Created. 200 is the idempotent
+  // replay of an already-placed id (server workflows/api.py returns
+  // 201-if-created else 200), and this spec's RUN_ID is unique per run.
+  expect(invocationResponse.status()).toBe(201);
 
   const invocation = await invocationResponse.json() as {
     schemaVersion: number;
@@ -165,7 +253,7 @@ test("fires exactly one invocation PUT and survives a failed runtime placement",
   // the runtime PUT, which this route forces to fail — the dialog must
   // surface that failure rather than crash, hang, or silently navigate away
   // as if the run had launched.
-  await expect(page.getByText(SAFE_WORKFLOW_ACTION_FALLBACK, { exact: true })).toBeVisible();
+  await expect(page.getByText(RUNTIME_DISCONNECTED_COPY, { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: TITLE, exact: true, level: 2 })).toBeVisible();
   await expect(page.getByRole("button", { name: "Start run", exact: true })).toBeEnabled();
   await expect(page).toHaveURL(`${webBaseUrl()}/workflows`);
