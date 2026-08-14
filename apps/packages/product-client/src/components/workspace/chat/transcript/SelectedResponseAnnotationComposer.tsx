@@ -79,7 +79,7 @@ export function SelectedResponseAnnotationComposer({
         left: anchorRect.left + anchorRect.width / 2,
         transform: "translate(-50%, -100%)",
       }}
-      className="z-50 flex items-center gap-2 rounded-full bg-popover py-1.5 pl-2 pr-3 shadow-popover ring-[0.5px] ring-border"
+      className="z-popover flex items-center gap-2 rounded-full bg-popover py-1.5 pl-2 pr-3 shadow-popover ring-[0.5px] ring-border"
       data-telemetry-mask
     >
       <span
