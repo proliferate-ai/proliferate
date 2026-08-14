@@ -66,6 +66,7 @@ export const SHORTCUT_GROUPS = [
     shortcutKeys: [
       "focusChat",
       "openModelSelector",
+      "cycleReasoningEffort",
       "openTerminal",
       "toggleLeftSidebar",
       "toggleRightPanel",
