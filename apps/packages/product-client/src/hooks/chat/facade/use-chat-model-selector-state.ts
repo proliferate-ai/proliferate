@@ -23,6 +23,7 @@ import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/wor
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 
 // Facade for the composer model selector: derived catalog/readiness state plus
 // the workflow callbacks needed by selector items and launch controls.
@@ -43,7 +44,7 @@ export function useChatModelSelectorState(options?: {
   const scopedLaunchIdentity = suppressActiveSessionState ? null : currentLaunchIdentity;
   const scopedPendingConfigChanges = suppressActiveSessionState ? null : pendingConfigChanges;
   const scopedModelControl = suppressActiveSessionState ? null : modelControl;
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );

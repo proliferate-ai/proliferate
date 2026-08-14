@@ -12,6 +12,7 @@ import {
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 
 const EMPTY_OPEN_TARGETS: ViewerTarget[] = [];
 const EMPTY_BUFFERS_BY_PATH: Record<string, WorkspaceFileBuffer> = {};
@@ -26,7 +27,7 @@ export function useWorkspaceHeaderTabsWorkspaceState() {
   );
 
   const selectedWorkspaceId = useSessionSelectionStore((s) => s.selectedWorkspaceId);
-  const pendingWorkspaceEntry = useSessionSelectionStore((s) => s.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (s) => s.selectedLogicalWorkspaceId,
   );

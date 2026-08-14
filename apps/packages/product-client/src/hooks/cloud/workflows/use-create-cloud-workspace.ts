@@ -22,6 +22,11 @@ import { useCloudWorkspaceConnectionCache } from "#product/hooks/access/cloud/us
 import { useInvalidateCloudBillingState } from "#product/hooks/access/cloud/use-cloud-billing";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useWorkspaceEntryFlow } from "#product/hooks/workspaces/workflows/use-workspace-entry-flow";
+import {
+  getPendingWorkspaceEntry,
+  isAttemptAttended,
+  isAttemptLive,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { ensureRepoGroupExpanded } from "#product/stores/preferences/workspace-ui-store";
@@ -66,11 +71,10 @@ export type CloudWorkspaceEntryResult =
     // superseded by a newer attempt); carries the resolved server message so
     // callers can surface it in a toast instead of a generic string.
     failureMessage?: string;
-  };
-
-function isAttemptCurrent(attemptId: string): boolean {
-  return useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
-}
+  }
+  // The user dismissed the pending workspace: nothing failed, so callers stop
+  // quietly instead of reporting an interruption.
+  | { status: "dismissed" };
 
 function buildRepoTargetFromRequest(
   request: CreateCloudWorkspaceRequest,
@@ -186,10 +190,10 @@ export function useCreateCloudWorkspace() {
 
       if (currentEntry === null) {
         projectedSessionId = beginPendingWorkspace(nextEntry, { initialSession: args.initialSession });
-      } else if (isAttemptCurrent(attemptId)) {
+      } else if (isAttemptLive(attemptId)) {
         setPendingWorkspaceEntry(nextEntry);
       } else {
-        return { status: "interrupted" };
+        return { status: "dismissed" };
       }
       currentEntry = nextEntry;
 
@@ -221,8 +225,8 @@ export function useCreateCloudWorkspace() {
           requestElapsedMs: elapsedMs(requestStartedAt),
           totalElapsedMs: elapsedMs(startedAt),
         });
-        if (!isAttemptCurrent(attemptId)) {
-          return { status: "interrupted" };
+        if (!isAttemptLive(attemptId)) {
+          return { status: "dismissed" };
         }
 
         const workspaceId = cloudWorkspaceSyntheticId(workspace.id);
@@ -236,12 +240,14 @@ export function useCreateCloudWorkspace() {
         setPendingWorkspaceEntry(updatedEntry);
 
         if (workspaceStatus === "ready") {
-          const selectionFinalized = await finalizeSelection(updatedEntry, workspaceId, {
+          // `committed` without `selected` is a background completion: the user
+          // switched away mid-create and the launch finished behind them.
+          const selection = await finalizeSelection(updatedEntry, workspaceId, {
             latencyFlowId: args.latencyFlowId,
             repoGroupKeyToExpand: args.repoGroupKeyToExpand,
           });
-          if (!selectionFinalized) {
-            return { status: "interrupted" };
+          if (!selection.committed) {
+            return { status: "dismissed" };
           }
           return {
             status: "ready",
@@ -255,12 +261,14 @@ export function useCreateCloudWorkspace() {
         if (args.repoGroupKeyToExpand) {
           ensureRepoGroupExpanded(args.repoGroupKeyToExpand);
         }
-        await selectWorkspace(workspaceId, {
-          force: true,
-          preservePending: true,
-          initialActiveSessionId: projectedSessionId,
-          latencyFlowId: args.latencyFlowId,
-        });
+        if (isAttemptAttended(attemptId)) {
+          await selectWorkspace(workspaceId, {
+            force: true,
+            preservePending: true,
+            initialActiveSessionId: projectedSessionId,
+            latencyFlowId: args.latencyFlowId,
+          });
+        }
         logLatency("workspace.cloud_create.awaiting_ready", {
           attemptId,
           workspaceId,
@@ -302,11 +310,8 @@ export function useCreateCloudWorkspace() {
           error,
           "Failed to create cloud workspace.",
         );
-        const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
         failPendingEntry(
-          currentPending?.attemptId === attemptId
-            ? currentPending
-            : currentEntry ?? nextEntry,
+          getPendingWorkspaceEntry(attemptId) ?? currentEntry ?? nextEntry,
           failureMessage,
         );
         return { status: "interrupted", failureMessage };

@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMainScreenState } from "#product/hooks/main/facade/use-main-screen-state";
 import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "#product/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+  type PendingWorkspaceRegistry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 
 const rightPanelState = vi.hoisted(() => ({
   rightPanelState: { activeTab: "files" as const },
@@ -48,11 +52,11 @@ vi.mock("#product/stores/chat/chat-launch-intent-store", () => ({
 
 vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: {
-    pendingWorkspaceEntry: null;
+    pendingWorkspaces: PendingWorkspaceRegistry;
     selectedWorkspaceId: null;
     selectedLogicalWorkspaceId: null;
   }) => unknown) => selector({
-    pendingWorkspaceEntry: null,
+    pendingWorkspaces: EMPTY_PENDING_WORKSPACE_REGISTRY,
     selectedWorkspaceId: null,
     selectedLogicalWorkspaceId: null,
   }),

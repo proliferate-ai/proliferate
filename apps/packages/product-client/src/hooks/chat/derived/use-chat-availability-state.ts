@@ -12,6 +12,7 @@ import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/avai
 import { missingCheckoutCopy } from "#product/copy/workspaces/workspace-availability-copy";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import {
@@ -33,7 +34,7 @@ export function useChatAvailabilityState(options?: {
   };
 }): ChatAvailabilityState {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const storedActiveSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const workspaceSessionRecovery = useSessionSelectionStore(

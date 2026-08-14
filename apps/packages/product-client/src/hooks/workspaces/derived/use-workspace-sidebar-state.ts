@@ -28,6 +28,7 @@ import { useDebouncedWorkspaceCollectionsInvalidation } from "#product/hooks/wor
 import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "#product/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { measureDebugComputation } from "#product/lib/infra/measurement/measurement-port";
@@ -58,7 +59,7 @@ export function useWorkspaceSidebarState({
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const lastViewedSessionErrorAtBySession = useWorkspaceUiStore((state) =>
     state.lastViewedSessionErrorAtBySession
     ?? EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION

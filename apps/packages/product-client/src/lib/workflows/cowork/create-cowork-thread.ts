@@ -32,8 +32,11 @@ export interface CreateCoworkThreadWorkflowDeps {
   elapsedSince(createdAt: number): number;
   logLatency(event: string, fields?: Record<string, unknown>): void;
   getSelectedWorkspaceId(): string | null;
-  getPendingWorkspaceEntry(): PendingWorkspaceEntry | null;
-  isAttemptCurrent(attemptId: string): boolean;
+  getPendingWorkspaceEntry(attemptId: string): PendingWorkspaceEntry | null;
+  /** The attempt has not been dismissed, so the pipeline may keep working. */
+  isAttemptLive(attemptId: string): boolean;
+  /** The user is looking at this attempt, so selection may move. */
+  isAttemptAttended(attemptId: string): boolean;
   setThreadsCollapsed(collapsed: boolean): void;
   beginPendingWorkspace(
     entry: PendingWorkspaceEntry,
@@ -72,11 +75,11 @@ export interface CreateCoworkThreadWorkflowDeps {
   }): void;
   setDraftText(workspaceId: string, text: string): void;
   clearDraft(workspaceId: string): void;
-  setPendingWorkspaceEntry(entry: PendingWorkspaceEntry | null): void;
+  setPendingWorkspaceEntry(entry: PendingWorkspaceEntry): void;
+  clearPendingWorkspaceEntry(attemptId: string): void;
   activateWorkspace(input: {
     logicalWorkspaceId: string | null;
     workspaceId: string;
-    clearPending: boolean;
     initialActiveSessionId: string | null;
   }): void;
   rememberLastViewedSession(workspaceId: string, sessionId: string): void;
@@ -150,7 +153,7 @@ export async function createCoworkThreadWorkflow(
   deps.navigateToWorkspaceShell();
 
   try {
-    if (!deps.isAttemptCurrent(entry.attemptId)) {
+    if (!deps.isAttemptLive(entry.attemptId)) {
       return null;
     }
 
@@ -179,7 +182,7 @@ export async function createCoworkThreadWorkflow(
       totalElapsedMs: deps.elapsedMs(totalStartedAt),
     });
 
-    if (!deps.isAttemptCurrent(entry.attemptId)) {
+    if (!deps.isAttemptLive(entry.attemptId)) {
       return null;
     }
 
@@ -201,7 +204,7 @@ export async function createCoworkThreadWorkflow(
       launchControlValues: input.launchControlValues,
     });
 
-    if (!deps.isAttemptCurrent(entry.attemptId)) {
+    if (!deps.isAttemptLive(entry.attemptId)) {
       return null;
     }
 
@@ -224,12 +227,15 @@ export async function createCoworkThreadWorkflow(
     }
 
     const selectionStartedAt = deps.startLatencyTimer();
-    deps.activateWorkspace({
-      logicalWorkspaceId: null,
-      workspaceId: result.workspace.id,
-      clearPending: false,
-      initialActiveSessionId: activeSessionId,
-    });
+    // Selection is a camera: an unattended thread still materializes, it just
+    // does not pull the user out of the workspace they are looking at.
+    if (deps.isAttemptAttended(entry.attemptId)) {
+      deps.activateWorkspace({
+        logicalWorkspaceId: null,
+        workspaceId: result.workspace.id,
+        initialActiveSessionId: activeSessionId,
+      });
+    }
     deps.rememberLastViewedSession(result.workspace.id, launchedSession.id);
     deps.trackWorkspaceInteraction(result.workspace.id, deps.nowIso());
     deps.markWorkspaceViewed(result.workspace.id);
@@ -261,8 +267,8 @@ export async function createCoworkThreadWorkflow(
       selectionElapsedMs: deps.elapsedMs(selectionStartedAt),
       totalElapsedMs: deps.elapsedMs(totalStartedAt),
     });
-    if (deps.isAttemptCurrent(entry.attemptId)) {
-      deps.setPendingWorkspaceEntry(null);
+    if (deps.isAttemptLive(entry.attemptId)) {
+      deps.clearPendingWorkspaceEntry(entry.attemptId);
     }
     return {
       ...result,
@@ -275,11 +281,8 @@ export async function createCoworkThreadWorkflow(
       errorMessage: message,
       elapsedSincePendingMs: deps.elapsedSince(entry.createdAt),
     });
-    if (deps.isAttemptCurrent(entry.attemptId)) {
-      const currentPending = deps.getPendingWorkspaceEntry();
-      const failedEntry = currentPending?.attemptId === entry.attemptId
-        ? currentPending
-        : entry;
+    if (deps.isAttemptLive(entry.attemptId)) {
+      const failedEntry = deps.getPendingWorkspaceEntry(entry.attemptId) ?? entry;
       deps.setPendingWorkspaceEntry({
         ...failedEntry,
         stage: "failed",

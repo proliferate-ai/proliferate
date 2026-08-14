@@ -55,6 +55,10 @@ vi.mock("#product/stores/sessions/session-selection-store", () => ({
     selector(harnessMocks.state),
 }));
 
+vi.mock("#product/hooks/workspaces/derived/use-pending-workspace-entries", () => ({
+  useAttendedPendingWorkspaceEntry: () => harnessMocks.state.pendingWorkspaceEntry,
+}));
+
 vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: selectionMocks.selectWorkspace,

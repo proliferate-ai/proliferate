@@ -91,10 +91,12 @@ export function useHomeNextLaunchPromptActions() {
     promptId: string;
     launchIntentId: string;
     waitUntil?: Promise<unknown>;
+    /** Routes the prompt to this attempt's projected session, attended or not. */
+    attemptId?: string | null;
   }): Promise<string | null> => {
     const projected = input.waitUntil
-      ? await waitForProjectedPendingWorkspaceSession(input.waitUntil)
-      : resolveProjectedPendingWorkspaceSession();
+      ? await waitForProjectedPendingWorkspaceSession(input.waitUntil, input.attemptId)
+      : resolveProjectedPendingWorkspaceSession(input.attemptId);
     if (!projected) {
       return null;
     }

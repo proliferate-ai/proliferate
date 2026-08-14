@@ -30,6 +30,14 @@ import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
 import { buildPendingInitialSession } from "#product/hooks/workspaces/workflows/workspace-entry-action-helpers";
+import {
+  isAttemptAttended,
+  isAttemptLive,
+  patchAttempt,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
+import type {
+  WorkspaceEntryFinalizationResult,
+} from "#product/hooks/workspaces/workflows/workspace-entry-finalization";
 
 interface FinalizeSelectionOptions {
   latencyFlowId?: string | null;
@@ -38,10 +46,6 @@ interface FinalizeSelectionOptions {
 
 interface BeginPendingWorkspaceOptions {
   initialSession?: PendingWorkspaceInitialSession | null;
-}
-
-function isAttemptCurrent(attemptId: string): boolean {
-  return useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
 }
 
 function requestChatInputFocus(): void {
@@ -57,6 +61,9 @@ export function useWorkspaceEntryFlow() {
   );
   const setPendingWorkspaceEntry = useSessionSelectionStore(
     (state) => state.setPendingWorkspaceEntry,
+  );
+  const clearPendingWorkspaceEntry = useSessionSelectionStore(
+    (state) => state.clearPendingWorkspaceEntry,
   );
   const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
@@ -141,13 +148,20 @@ export function useWorkspaceEntryFlow() {
     entry: PendingWorkspaceEntry,
     workspaceId: string,
     options?: FinalizeSelectionOptions,
-  ): Promise<boolean> => {
+  ): Promise<WorkspaceEntryFinalizationResult> => {
     logLatency("workspace.entry.selection.start", {
       attemptId: entry.attemptId,
       source: entry.source,
       workspaceId,
       elapsedSincePendingMs: elapsedSince(entry.createdAt),
     });
+
+    if (!isAttemptLive(entry.attemptId)) {
+      return { committed: false, selected: false };
+    }
+    // Read attention before the force-selection below moves selection onto the
+    // real workspace, which would make every later read look attended.
+    const attended = isAttemptAttended(entry.attemptId);
 
     if (options?.repoGroupKeyToExpand) {
       ensureRepoGroupExpanded(options.repoGroupKeyToExpand);
@@ -166,40 +180,46 @@ export function useWorkspaceEntryFlow() {
       ? currentActiveSessionId
       : null;
 
-    await selectWorkspace(workspaceId, {
-      force: true,
-      preservePending: true,
-      initialActiveSessionId: projectedActiveSessionId,
-      latencyFlowId: options?.latencyFlowId,
-    });
+    if (attended) {
+      await selectWorkspace(workspaceId, {
+        force: true,
+        preservePending: true,
+        initialActiveSessionId: projectedActiveSessionId,
+        latencyFlowId: options?.latencyFlowId,
+      });
+    }
 
-    if (!isAttemptCurrent(entry.attemptId)) {
+    if (!isAttemptLive(entry.attemptId)) {
       logLatency("workspace.entry.selection.stale", {
         attemptId: entry.attemptId,
         source: entry.source,
         workspaceId,
       });
-      return false;
+      return { committed: false, selected: false };
     }
 
     materializePendingWorkspaceSessions(entry, workspaceId);
 
-    setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
-      workspaceId,
-      source: entry.source,
-      receiptClientSessionId: projectedActiveSessionId,
-      setupScript: entry.setupScript,
-      baseBranchName: entry.baseBranchName,
-    }));
-    setPendingWorkspaceEntry(null);
+    if (attended) {
+      setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
+        workspaceId,
+        source: entry.source,
+        receiptClientSessionId: projectedActiveSessionId,
+        setupScript: entry.setupScript,
+        baseBranchName: entry.baseBranchName,
+      }));
+    }
+    clearPendingWorkspaceEntry(entry.attemptId);
     logLatency("workspace.entry.selection.success", {
       attemptId: entry.attemptId,
       source: entry.source,
       workspaceId,
+      attended,
       totalElapsedMs: elapsedSince(entry.createdAt),
     });
-    return true;
+    return { committed: true, selected: attended };
   }, [
+    clearPendingWorkspaceEntry,
     materializePendingWorkspaceSessions,
     selectWorkspace,
     setPendingWorkspaceEntry,
@@ -211,7 +231,7 @@ export function useWorkspaceEntryFlow() {
     errorMessage: string,
     overrides?: Partial<Pick<PendingWorkspaceEntry, "workspaceId" | "request" | "setupScript">>,
   ) => {
-    if (!isAttemptCurrent(entry.attemptId)) {
+    if (!isAttemptLive(entry.attemptId)) {
       return;
     }
 
@@ -222,7 +242,7 @@ export function useWorkspaceEntryFlow() {
       errorMessage,
       elapsedSincePendingMs: elapsedSince(entry.createdAt),
     });
-    setPendingWorkspaceEntry({
+    patchAttempt(entry.attemptId, {
       ...entry,
       stage: "failed",
       errorMessage,
@@ -230,7 +250,7 @@ export function useWorkspaceEntryFlow() {
       request: overrides?.request ?? entry.request,
       setupScript: overrides?.setupScript ?? entry.setupScript,
     });
-  }, [setPendingWorkspaceEntry]);
+  }, []);
 
   const selectWorkspaceWithArrival = useCallback(async (input: {
     workspaceId: string;
@@ -259,7 +279,6 @@ export function useWorkspaceEntryFlow() {
     beginPendingWorkspace,
     failPendingEntry,
     finalizeSelection,
-    isAttemptCurrent,
     selectWorkspaceWithArrival,
   };
 }

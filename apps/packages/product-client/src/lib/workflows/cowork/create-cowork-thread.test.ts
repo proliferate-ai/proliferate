@@ -68,8 +68,11 @@ describe("createCoworkThreadWorkflow", () => {
     const response = coworkThreadResponse();
     const launchDefaults = deferred<Session>();
     let pendingEntry: PendingWorkspaceEntry | null = null;
-    const setPendingWorkspaceEntry = vi.fn((entry: PendingWorkspaceEntry | null) => {
+    const setPendingWorkspaceEntry = vi.fn((entry: PendingWorkspaceEntry) => {
       pendingEntry = entry;
+    });
+    const clearPendingWorkspaceEntry = vi.fn(() => {
+      pendingEntry = null;
     });
     const beginPendingWorkspace = vi.fn<
       CreateCoworkThreadWorkflowDeps["beginPendingWorkspace"]
@@ -86,7 +89,8 @@ describe("createCoworkThreadWorkflow", () => {
       logLatency: vi.fn(),
       getSelectedWorkspaceId: vi.fn(() => null),
       getPendingWorkspaceEntry: vi.fn(() => pendingEntry),
-      isAttemptCurrent: vi.fn(() => true),
+      isAttemptLive: vi.fn(() => true),
+      isAttemptAttended: vi.fn(() => true),
       setThreadsCollapsed: vi.fn(),
       beginPendingWorkspace,
       navigateToWorkspaceShell: vi.fn(),
@@ -98,6 +102,7 @@ describe("createCoworkThreadWorkflow", () => {
       setDraftText: vi.fn(),
       clearDraft: vi.fn(),
       setPendingWorkspaceEntry,
+      clearPendingWorkspaceEntry,
       activateWorkspace: vi.fn(),
       rememberLastViewedSession: vi.fn(),
       trackWorkspaceInteraction: vi.fn(),
@@ -129,7 +134,7 @@ describe("createCoworkThreadWorkflow", () => {
       workspace: { id: "workspace-cowork" },
       projectedSessionId: "projected-session",
     });
-    expect(setPendingWorkspaceEntry).toHaveBeenLastCalledWith(null);
+    expect(clearPendingWorkspaceEntry).toHaveBeenCalledWith("attempt-1");
   });
 });
 
@@ -145,7 +150,8 @@ function resolvedWorkflowDeps(): CreateCoworkThreadWorkflowDeps {
     logLatency: vi.fn(),
     getSelectedWorkspaceId: vi.fn(() => null),
     getPendingWorkspaceEntry: vi.fn(() => null),
-    isAttemptCurrent: vi.fn(() => true),
+    isAttemptLive: vi.fn(() => true),
+    isAttemptAttended: vi.fn(() => true),
     setThreadsCollapsed: vi.fn(),
     beginPendingWorkspace: vi.fn(() => "projected-session"),
     navigateToWorkspaceShell: vi.fn(),
@@ -157,6 +163,7 @@ function resolvedWorkflowDeps(): CreateCoworkThreadWorkflowDeps {
     setDraftText: vi.fn(),
     clearDraft: vi.fn(),
     setPendingWorkspaceEntry: vi.fn(),
+    clearPendingWorkspaceEntry: vi.fn(),
     activateWorkspace: vi.fn(),
     rememberLastViewedSession: vi.fn(),
     trackWorkspaceInteraction: vi.fn(),

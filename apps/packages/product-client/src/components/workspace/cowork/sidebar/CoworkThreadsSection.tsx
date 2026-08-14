@@ -9,6 +9,7 @@ import { useWorkspaceSidebarActivityStates } from "#product/hooks/workspaces/der
 import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { SidebarStatusIndicatorView } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 import { CoworkThreadItem } from "#product/components/workspace/cowork/sidebar/CoworkThreadItem";
@@ -22,7 +23,7 @@ export function CoworkThreadsSection() {
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) =>
     state.selectedLogicalWorkspaceId
   );
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const workspaceActivities = useWorkspaceSidebarActivityStates();
   const { status, isLoading: statusLoading } = useCoworkStatus();
   const { threads, isLoading: threadsLoading } = useCoworkThreads(status?.enabled ?? false);

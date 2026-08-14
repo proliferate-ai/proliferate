@@ -89,12 +89,11 @@ export function useWorkspaceSelection() {
         setSelectedLogicalWorkspaceId,
         setSelectedWorkspace: (
           id: string,
-          opts?: { initialActiveSessionId?: string | null; clearPending?: boolean },
+          opts?: { initialActiveSessionId?: string | null },
         ) => setSelectedWorkspace({
           logicalWorkspaceId: useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
           workspaceId: id,
           initialActiveSessionId: opts?.initialActiveSessionId,
-          clearPending: opts?.clearPending,
         }),
         removeWorkspaceSlots: removeWorkspaceSessionRecordsForWorkspace,
         clearSelection,

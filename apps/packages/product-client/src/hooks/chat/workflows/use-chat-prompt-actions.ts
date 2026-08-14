@@ -13,6 +13,7 @@ import { useSessionSelectionActions } from "#product/hooks/sessions/facade/use-s
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
 import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use-active-session-transcript-state";
 import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
@@ -53,7 +54,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const { getCachedWorkspaceSetupStatus } = useWorkspaceSetupStatusCache();
   const { cancelActiveSession } = useSessionCancelActions();
   const { createSessionWithResolvedConfig } = useSessionCreationActions();

@@ -34,7 +34,7 @@ import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/s
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
-import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "#product/hooks/workspaces/workflows/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-actions";
@@ -101,7 +101,7 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
   } = useRepositories(cloudActive);
   const showToast = useToastStore((state) => state.show);
   const removeCloudRepoEnvironment = useRemoveCloudRepoEnvironment();
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const {
     sidebarOpen,
     workspaceTypes,
