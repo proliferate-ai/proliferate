@@ -27,7 +27,7 @@ export function ReasoningBlock({ content }: ReasoningBlockProps) {
       {content ? (
         <ToolActionDetailsPanel>
           <div
-            className={`overflow-y-auto select-text whitespace-pre-wrap break-words px-3 py-2 text-ui text-foreground ${TOOL_CALL_BODY_MAX_HEIGHT_CLASS}`}
+            className={`overflow-y-auto select-text whitespace-pre-wrap break-words px-3 py-2 text-chat text-foreground ${TOOL_CALL_BODY_MAX_HEIGHT_CLASS}`}
           >
             {content}
           </div>

@@ -19,7 +19,8 @@ describe("ReasoningBlock", () => {
     fireEvent.click(screen.getByRole("button"));
 
     const body = screen.getByText(/Weighing the trade-offs\./);
-    expect(body.className).not.toContain("font-mono");
-    expect(body.className).toContain("text-ui");
+    const classes = body.className.split(" ");
+    expect(classes).not.toContain("font-mono");
+    expect(classes).toContain("text-chat");
   });
 });

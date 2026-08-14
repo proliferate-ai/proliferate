@@ -2,21 +2,33 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SubmitPromptModal } from "#product/components/support/SubmitPromptModal";
+import { SendFeedbackModal } from "#product/components/support/SendFeedbackModal";
 
 vi.mock("#product/hooks/support/facade/use-support-modal-state", () => ({
   useSupportModalState: () => ({
+    attachments: [],
     canSend: false,
     creditConsent: false,
     creditName: "",
+    handleAttachmentDragOver: vi.fn(),
+    handleAttachmentDrop: vi.fn(),
+    handleAttachmentInputChange: vi.fn(),
+    handleAttachmentPaste: vi.fn(),
     handleCancel: vi.fn(),
     handleSend: vi.fn(),
+    includeLogs: false,
     isSubmitting: false,
     message: "",
+    notifyMe: false,
+    removeAttachment: vi.fn(),
     setCreditConsent: vi.fn(),
     setCreditName: vi.fn(),
+    setIncludeLogs: vi.fn(),
     setMessage: vi.fn(),
+    setNotifyMe: vi.fn(),
+    setUrgent: vi.fn(),
     stagingError: null,
+    urgent: false,
   }),
 }));
 
@@ -34,17 +46,16 @@ vi.mock("#product/hooks/support/facade/use-support-outreach-email", () => ({
   }),
 }));
 
-describe("SubmitPromptModal", () => {
+describe("SendFeedbackModal", () => {
   afterEach(() => {
     cleanup();
   });
 
-  // PRO-153: a prompt is prose, not code — the textarea must render in the
-  // product sans stack, never the mono/code treatment.
-  it("renders the prompt textarea as prose, not mono", () => {
-    render(<SubmitPromptModal onClose={vi.fn()} />);
+  // PRO-153: feedback is prose, not code — same ruling as SubmitPromptModal.
+  it("renders the feedback textarea as prose, not mono", () => {
+    render(<SendFeedbackModal onClose={vi.fn()} />);
 
-    const textarea = screen.getByPlaceholderText(/Prompt a coding agent/);
+    const textarea = screen.getByPlaceholderText("What happened?");
     const classes = textarea.className.split(" ");
     expect(classes).not.toContain("font-mono");
     expect(classes).toContain("text-ui");
