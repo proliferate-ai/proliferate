@@ -71,6 +71,7 @@ describe("chat surface", () => {
       activeLaunchIntentId: "launch-1",
       launchIntentSessionId: "session-1",
       activeSessionId: null,
+      selectedWorkspaceId: null,
       hasVisibleSessionContent: false,
     })).toEqual({ kind: "launch-intent", intentId: "launch-1" });
   });
@@ -80,6 +81,7 @@ describe("chat surface", () => {
       activeLaunchIntentId: "launch-1",
       launchIntentSessionId: "session-1",
       activeSessionId: "session-1",
+      selectedWorkspaceId: null,
       hasVisibleSessionContent: true,
     })).toEqual({ kind: "session-transcript", sessionId: "session-1" });
   });
@@ -89,8 +91,29 @@ describe("chat surface", () => {
       activeLaunchIntentId: "launch-1",
       launchIntentSessionId: null,
       activeSessionId: "previous-session",
+      selectedWorkspaceId: null,
       hasVisibleSessionContent: true,
     })).toEqual({ kind: "session-transcript", sessionId: "previous-session" });
+  });
+
+  it("keeps an unrelated session's surface out of the launch intent pane", () => {
+    expect(resolveLaunchIntentSurfaceOverride({
+      activeLaunchIntentId: "launch-1",
+      launchIntentSessionId: "session-1",
+      activeSessionId: "other-session",
+      selectedWorkspaceId: "workspace-2",
+      hasVisibleSessionContent: false,
+    })).toBeNull();
+  });
+
+  it("keeps another selected workspace without sessions out of the launch intent pane", () => {
+    expect(resolveLaunchIntentSurfaceOverride({
+      activeLaunchIntentId: "launch-1",
+      launchIntentSessionId: "session-1",
+      activeSessionId: null,
+      selectedWorkspaceId: "workspace-2",
+      hasVisibleSessionContent: false,
+    })).toBeNull();
   });
 
   it("resolves no workspace when nothing is selected or launching", () => {
@@ -159,6 +182,31 @@ describe("chat surface", () => {
       hasContent: true,
       isEmpty: false,
     }))).toEqual({ kind: "session-transcript", sessionId: "session-1" });
+  });
+
+  it("keeps another workspace's transcript when a launch intent fails elsewhere", () => {
+    // Switching workspaces mid-launch must not block the sessions the user
+    // lands on with the failed intent's retry warning (PRO-230).
+    expect(resolveChatSurfaceState(surfaceInput({
+      selectedWorkspaceId: "workspace-2",
+      activeLaunchIntentId: "launch-1",
+      launchIntentInFlight: false,
+      launchIntentSessionId: "session-1",
+      activeSessionId: "other-session",
+      hasContent: true,
+    }))).toEqual({ kind: "session-transcript", sessionId: "other-session" });
+  });
+
+  it("keeps another workspace's empty session out of the launch intent pane", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      selectedWorkspaceId: "workspace-2",
+      activeLaunchIntentId: "launch-1",
+      launchIntentInFlight: true,
+      launchIntentSessionId: "session-1",
+      activeSessionId: "other-session",
+      hasContent: false,
+      isEmpty: true,
+    }))).toEqual({ kind: "session-empty", sessionId: "other-session" });
   });
 
   it("shows pending session switching for pending session render surfaces", () => {

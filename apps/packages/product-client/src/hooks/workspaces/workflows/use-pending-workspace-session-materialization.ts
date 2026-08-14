@@ -19,6 +19,8 @@ import {
 
 interface PendingWorkspaceSessionMaterializationOptions {
   eventPrefix?: string;
+  /** Materialize without moving the global active session (background completion). */
+  skipSessionActivation?: boolean;
 }
 
 export interface PendingWorkspaceSessionMaterializationResult {
@@ -42,6 +44,7 @@ function materializeProjectedSession(input: {
   createEmptySessionWithResolvedConfig: CreateEmptySessionWithResolvedConfig;
   eventPrefix: string;
   session: SessionRuntimeRecord;
+  skipSessionActivation?: boolean;
   workspaceId: string;
 }): boolean {
   if (input.session.materializedSessionId) {
@@ -62,6 +65,7 @@ function materializeProjectedSession(input: {
     modeId: input.session.modeId ?? undefined,
     reuseInFlightEmptySession: false,
     preserveProjectedSessionOnCreateFailure: true,
+    skipSessionActivation: input.skipSessionActivation,
   }).then((clientSessionId) => {
     logLatency(`${input.eventPrefix}.projected_session_create_completed`, {
       attemptId: input.attemptId ?? null,
@@ -130,6 +134,7 @@ export function usePendingWorkspaceSessionMaterialization() {
         createEmptySessionWithResolvedConfig,
         eventPrefix,
         session,
+        skipSessionActivation: options?.skipSessionActivation,
         workspaceId,
       })) {
         materializationStartCount += 1;

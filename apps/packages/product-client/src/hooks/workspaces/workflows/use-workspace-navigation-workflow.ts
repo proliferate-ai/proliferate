@@ -10,8 +10,10 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
+import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { resetWorkspaceEditorState } from "#product/stores/editor/workspace-editor-state";
 import { markWorkspaceViewed } from "#product/stores/preferences/workspace-ui-store";
+import { getWorkspaceSessionRecords } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
@@ -24,6 +26,9 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 export function useWorkspaceNavigationWorkflow() {
   const deselectWorkspacePreservingSessions = useSessionSelectionStore(
     (state) => state.deselectWorkspacePreservingSessions,
+  );
+  const enterPendingWorkspaceShell = useSessionSelectionStore(
+    (state) => state.enterPendingWorkspaceShell,
   );
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
@@ -60,6 +65,17 @@ export function useWorkspaceNavigationWorkflow() {
     workspaceId: string,
     source: string,
   ) {
+    const pendingEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+    if (pendingEntry && buildPendingWorkspaceUiKey(pendingEntry) === workspaceId) {
+      // A still-creating pending row has no real workspace to select yet;
+      // re-enter its pending shell instead.
+      navigateToWorkspaceShell();
+      enterPendingWorkspaceShell(pendingEntry, {
+        initialActiveSessionId:
+          Object.keys(getWorkspaceSessionRecords(workspaceId))[0] ?? null,
+      });
+      return;
+    }
     const unclaimedCloudWorkspace = logicalWorkspaces.find((workspace) =>
       logicalWorkspaceMatchesId(workspace, workspaceId) &&
       workspace.cloudWorkspace?.visibility === "shared_unclaimed"
@@ -97,6 +113,7 @@ export function useWorkspaceNavigationWorkflow() {
       });
     });
   }, [
+    enterPendingWorkspaceShell,
     logicalWorkspaces,
     navigateToWorkspaceShell,
     openExternal,

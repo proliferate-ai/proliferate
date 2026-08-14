@@ -428,6 +428,32 @@ When the real workspace id is known:
    Do not clear as soon as the real workspace appears in cache. That creates a
    visible gap between the pending projection and the real row.
 
+### Background Completion
+
+Selecting another workspace mid-creation must not abandon the attempt or move
+its sidebar row. An in-flight local/worktree pending entry survives the
+switch (`pendingWorkspaceEntrySurvivesWorkspaceSwitch`): the row keeps the
+slot creation gave it while the create call continues, and clicking the
+deselected row re-enters the pending shell. Cloud and cowork creations keep
+clearing — their pending flows assume selection — and a failed entry clears
+so navigating away still dismisses the receipt.
+
+When the create call succeeds and the attempt's pending shell is no longer
+the selected surface (`shouldFinalizePendingWorkspaceSelection` is false),
+the entry actions skip selection finalization and complete in the background:
+projected sessions are remapped to the created workspace and materialized
+without moving the active session, `workspaceLastInteracted` is stamped with
+the entry's creation time so the real row inherits the pending row's sidebar
+slot instead of re-sorting at completion, and the pending entry is cleared.
+The workspace the user switched to keeps selection and focus, and the queued
+prompt still dispatches once its session materializes.
+
+While a pending entry is preserved under another selected workspace, pending
+state must not leak into that workspace's surfaces: composer availability,
+chat surface arbitration, and right-panel suppression scope the entry with
+`pendingWorkspaceEntryOwnsSelection` (the pending shell itself, or the
+entry's own materialized workspace during handoff).
+
 ## 9. UI Projection Rules
 
 Each surface that normally reads real workspace/session data needs a pending
@@ -449,6 +475,9 @@ projection path.
 - Launch intent may supply launch context only before a projected session
   exists.
 - If session-intent or transcript content exists, content wins over launch copy.
+- A launch intent bound to a session owns only that session's surface. A
+  different active session, or another selected workspace, keeps its own
+  surface — including while the intent holds a failure.
 
 ### Header Tabs
 
@@ -481,6 +510,10 @@ projection path.
 - The pending projection counts the entry's creation time as activity
   (`sortRecency.activityAt = createdAt`), so a new workspace sorts among
   interacted workspaces from the first frame instead of below them.
+- That creation-time slot is the row's home for the whole lifecycle: the row
+  survives workspace switches while the creation is in flight, and background
+  completion stamps the materialized id with the same creation instant, so
+  pending-to-real handoff never re-sorts the row.
 - Before materialization, the row id is `pending-workspace:<attemptId>`.
 - During materialization handoff, if the selected real logical workspace id is
   known and the selected workspace id matches the pending entry's workspace id,

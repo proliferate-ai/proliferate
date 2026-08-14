@@ -62,9 +62,23 @@ export function resolveLaunchIntentSurfaceOverride(args: {
   activeLaunchIntentId: string | null;
   launchIntentSessionId: string | null;
   activeSessionId: string | null;
+  selectedWorkspaceId: string | null;
   hasVisibleSessionContent: boolean;
 }): LaunchIntentSurfaceOverride | null {
   if (!args.activeLaunchIntentId) {
+    return null;
+  }
+
+  // An intent bound to a session owns only that session's surface. Any other
+  // context the user switched to mid-launch — a different active session, or a
+  // selected workspace that is not the launch target — keeps its own surface;
+  // without this, a single failed launch blocks every session in every
+  // workspace (PRO-230).
+  if (
+    args.launchIntentSessionId
+    && args.activeSessionId !== args.launchIntentSessionId
+    && (args.activeSessionId !== null || args.selectedWorkspaceId !== null)
+  ) {
     return null;
   }
 
@@ -123,6 +137,7 @@ export function resolveChatSurfaceState(input: ResolveChatSurfaceStateInput): Ch
     activeLaunchIntentId: input.activeLaunchIntentId,
     launchIntentSessionId: input.launchIntentSessionId,
     activeSessionId: scopedActiveSessionId,
+    selectedWorkspaceId: input.selectedWorkspaceId,
     hasVisibleSessionContent: scopedHasContent,
   });
   if (launchIntentOverride) {

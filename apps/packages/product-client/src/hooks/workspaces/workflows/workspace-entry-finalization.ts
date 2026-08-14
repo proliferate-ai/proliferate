@@ -16,6 +16,7 @@ import {
   startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
+import type { WorkspaceEntryResult } from "#product/hooks/workspaces/workflows/workspace-entry-types";
 
 export interface WorkspaceEntrySelectionDeps {
   expandRepoGroup: (repoGroupKey: string) => void;
@@ -23,10 +24,12 @@ export interface WorkspaceEntrySelectionDeps {
   getSelectionState: () => {
     activeSessionId: string | null;
     pendingWorkspaceEntry: PendingWorkspaceEntry | null;
+    selectedLogicalWorkspaceId: string | null;
   };
   materializePendingWorkspaceSessions: (
     entry: PendingWorkspaceEntry,
     workspaceId: string,
+    options?: { eventPrefix?: string; skipSessionActivation?: boolean },
   ) => void;
   selectWorkspace: (
     workspaceId: string,
@@ -40,7 +43,7 @@ export interface WorkspaceEntrySelectionDeps {
   ) => Promise<void>;
   setPendingWorkspaceEntry: (entry: PendingWorkspaceEntry | null) => void;
   setWorkspaceArrivalEvent: (event: ReturnType<typeof buildWorkspaceArrivalEvent>) => void;
-  trackWorkspaceInteraction: (workspaceId: string) => void;
+  trackWorkspaceInteraction: (workspaceId: string, at?: string) => void;
 }
 
 export async function finalizePendingWorkspaceSelection(
@@ -120,6 +123,64 @@ export async function finalizePendingWorkspaceSelection(
     totalElapsedMs: elapsedSince(input.entry.createdAt),
   });
   return true;
+}
+
+/**
+ * Finalization steals selection into the created workspace, so it is only
+ * legitimate while this attempt's pending shell is still the selected
+ * surface. A cleared or replaced attempt, or a selection the user moved
+ * elsewhere, routes the completion through the background path instead.
+ */
+export function shouldFinalizePendingWorkspaceSelection(
+  entry: PendingWorkspaceEntry,
+  deps: Pick<WorkspaceEntrySelectionDeps, "getSelectionState">,
+): boolean {
+  const selection = deps.getSelectionState();
+  return selection.pendingWorkspaceEntry?.attemptId === entry.attemptId
+    && selection.selectedLogicalWorkspaceId === buildPendingWorkspaceUiKey(entry);
+}
+
+/**
+ * A creation finished while the user was on another workspace. The created
+ * workspace and its queued prompt survive: projected sessions bind to the
+ * real workspace without stealing the selection the user moved to (PRO-230).
+ */
+export function completePendingWorkspaceCreationInBackground(
+  input: {
+    entry: PendingWorkspaceEntry;
+    workspaceId: string;
+    projectedSessionId: string | null;
+  },
+  deps: Pick<
+    WorkspaceEntrySelectionDeps,
+    | "getSelectionState"
+    | "materializePendingWorkspaceSessions"
+    | "setPendingWorkspaceEntry"
+    | "trackWorkspaceInteraction"
+  >,
+): WorkspaceEntryResult {
+  logLatency("workspace.entry.background_completion", {
+    attemptId: input.entry.attemptId,
+    source: input.entry.source,
+    workspaceId: input.workspaceId,
+    projectedSessionId: input.projectedSessionId,
+    elapsedSincePendingMs: elapsedSince(input.entry.createdAt),
+  });
+  deps.materializePendingWorkspaceSessions(input.entry, input.workspaceId, {
+    eventPrefix: "workspace.entry.background",
+    skipSessionActivation: true,
+  });
+  // The sidebar slot the pending row held is keyed by the entry's creation
+  // time; stamping the materialized id with that same instant hands the real
+  // row the same slot instead of re-sorting it at completion.
+  deps.trackWorkspaceInteraction(
+    input.workspaceId,
+    new Date(input.entry.createdAt).toISOString(),
+  );
+  if (deps.getSelectionState().pendingWorkspaceEntry?.attemptId === input.entry.attemptId) {
+    deps.setPendingWorkspaceEntry(null);
+  }
+  return { workspaceId: input.workspaceId, projectedSessionId: input.projectedSessionId };
 }
 
 export function failPendingWorkspaceEntry(

@@ -7,6 +7,7 @@ import {
 } from "#product/lib/domain/chat/surface/chat-surface";
 import { shouldShowCloudWorkspaceStatusScreen } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { pendingWorkspaceEntryOwnsSelection } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use-active-session-transcript-state";
@@ -82,7 +83,8 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     count: (value) => (value.kind ? 1 : 0),
   }, () => resolveChatSurfaceState({
     selectedWorkspaceId,
-    hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
+    hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null
+      && pendingWorkspaceEntryOwnsSelection(pendingWorkspaceEntry, selectedWorkspaceId),
     activeLaunchIntentId: activeLaunchIntent?.id ?? null,
     launchIntentInFlight: activeLaunchIntent ? activeLaunchIntent.failure === null : false,
     launchIntentSessionId:

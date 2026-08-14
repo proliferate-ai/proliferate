@@ -34,6 +34,11 @@ export interface CreateSessionWithResolvedConfigOptions {
   reuseInFlightEmptySession?: boolean;
   preferExistingCompatibleSession?: boolean;
   preserveProjectedSessionOnCreateFailure?: boolean;
+  /**
+   * Background creation (a pending workspace the user has navigated away
+   * from): materialize without moving the global active session.
+   */
+  skipSessionActivation?: boolean;
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
   /**
@@ -63,6 +68,11 @@ export interface CreateEmptySessionWithResolvedConfigOptions {
   subagentsEnabled?: boolean;
   reuseInFlightEmptySession?: boolean;
   preserveProjectedSessionOnCreateFailure?: boolean;
+  /**
+   * Background creation (a pending workspace the user has navigated away
+   * from): materialize without moving the global active session.
+   */
+  skipSessionActivation?: boolean;
   /**
    * When set, the creation workflow immediately hides this unused session
    * after activating the optimistic replacement. Destructive cleanup and

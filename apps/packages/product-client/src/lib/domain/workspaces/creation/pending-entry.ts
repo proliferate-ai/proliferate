@@ -113,6 +113,35 @@ export function isPendingWorkspaceUiKey(value: string | null | undefined): boole
   return typeof value === "string" && value.startsWith("pending-workspace:");
 }
 
+/**
+ * An in-flight local/worktree creation outlives a switch to another
+ * workspace: the sidebar row keeps its slot and the attempt completes in the
+ * background (PRO-230). Cloud and cowork creations still clear — their
+ * pending flows (readiness polling, the cowork threads section) assume the
+ * entry is selected — and a failed entry clears so navigating away keeps
+ * dismissing the failure receipt.
+ */
+export function pendingWorkspaceEntrySurvivesWorkspaceSwitch(
+  entry: PendingWorkspaceEntry,
+): boolean {
+  return entry.stage === "submitting"
+    && (entry.source === "local-created" || entry.source === "worktree-created");
+}
+
+/**
+ * True when the entry owns the current shell surface: the pending shell
+ * itself (no real workspace selected) or the entry's own materialized
+ * workspace during handoff. Surfaces of other selected workspaces must not
+ * project pending state (composer availability, right-panel suppression,
+ * chat surface arbitration).
+ */
+export function pendingWorkspaceEntryOwnsSelection(
+  entry: PendingWorkspaceEntry,
+  selectedWorkspaceId: string | null,
+): boolean {
+  return selectedWorkspaceId === null || selectedWorkspaceId === entry.workspaceId;
+}
+
 export function buildPendingWorkspaceOriginTarget(
   selectedWorkspaceId: string | null,
 ): PendingWorkspaceOriginTarget {

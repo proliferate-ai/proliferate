@@ -161,7 +161,9 @@ export function useSessionCreationActions() {
     });
 
     putSessionRecord(optimisticRecord);
-    activateSession(pendingSessionId);
+    if (options.skipSessionActivation !== true) {
+      activateSession(pendingSessionId);
+    }
     logLatency("session.create.optimistic_record", {
       clientSessionId: pendingSessionId,
       workspaceId,
