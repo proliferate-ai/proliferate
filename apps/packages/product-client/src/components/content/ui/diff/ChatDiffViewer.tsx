@@ -1,6 +1,4 @@
 import {
-  useEffect,
-  useId,
   useMemo,
   useState,
   type CSSProperties,
@@ -20,10 +18,6 @@ import { ChatDiffLineWrapContextMenu } from "#product/components/content/ui/diff
 import { HunkActionPill } from "#product/components/content/ui/diff/HunkActionPill";
 import type { UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
 import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
-import {
-  buildContentSearchLineMatchIds,
-  normalizeContentSearchQuery,
-} from "#product/lib/domain/content-search/content-search";
 import { Button } from "#product/primitives/Button";
 import { chainVerticalWheelScroll } from "#product/primitives/utils/scroll-chain";
 import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "#product/lib/domain/files/diff-parser";
@@ -40,11 +34,8 @@ import {
   type ChatRenderRow,
 } from "#product/hooks/ui/diff/diff-gap-flatten";
 import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
-import {
-  useContentSearchStore,
-  type ContentSearchSurface,
-} from "#product/stores/search/content-search-store";
-import { useChatTranscriptRow } from "#product/components/workspace/chat/transcript/ChatContentSearchContext";
+import type { ContentSearchSurface } from "#product/stores/search/content-search-store";
+import { useDiffContentSearchUnit } from "#product/hooks/ui/diff/use-diff-content-search-unit";
 
 const CHAT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",
@@ -389,45 +380,14 @@ export function ChatDiffViewer({
     () => flattenWithGapExpansion(baseRows, gapStates, fileLines),
     [baseRows, gapStates, fileLines],
   );
-  const activeContentSearchSurface = useContentSearchStore((state) => state.surface);
-  const contentSearchOpen = useContentSearchStore((state) => state.open);
-  const rawContentSearchQuery = useContentSearchStore((state) => state.query);
-  const rawActiveMatchId = useContentSearchStore((state) => state.activeMatchId);
-  const registerContentSearchUnit = useContentSearchStore((state) => state.registerUnit);
-  const unregisterContentSearchUnit = useContentSearchStore((state) => state.unregisterUnit);
-  const chatContentSearchActive =
-    contentSearchOpen && activeContentSearchSurface === contentSearchSurface;
-  const contentSearchQuery = chatContentSearchActive ? rawContentSearchQuery : "";
-  const activeMatchId = chatContentSearchActive ? rawActiveMatchId : null;
-  const fallbackContentSearchUnitId = useId();
-  const contentSearchUnitId = useMemo(
-    () => contentSearchUnitIdProp ?? `diff:${fallbackContentSearchUnitId}:${filePath ?? "inline"}`,
-    [contentSearchUnitIdProp, fallbackContentSearchUnitId, filePath],
-  );
-  // Interleave inline diff matches with the surrounding transcript-row prose
-  // matches: a diff sits just after its row's prose (rowIndex * 2 + 1). Outside
-  // a transcript row (no context) the unit stays unkeyed and sorts last, unless
-  // the caller supplies its own order key (e.g. a review-pane row index).
-  const transcriptRow = useChatTranscriptRow();
-  const contentSearchRowOrderKey = contentSearchOrderKeyProp
-    ?? (transcriptRow ? transcriptRow.rowIndex * 2 + 1 : undefined);
-  const contentSearchMatchIds = useMemo(
-    () => {
-      const normalizedQuery = normalizeContentSearchQuery(contentSearchQuery);
-      if (!normalizedQuery) {
-        return [];
-      }
-
-      return parsed.allCodeLines.flatMap((line, lineIndex) =>
-        buildContentSearchLineMatchIds({
-          idPrefix: `${contentSearchUnitId}:line:${lineIndex}`,
-          tokens: tokens?.[lineIndex] ?? [{ content: line }],
-          query: normalizedQuery,
-        })
-      );
-    },
-    [contentSearchQuery, contentSearchUnitId, parsed.allCodeLines, tokens],
-  );
+  const { contentSearchUnitId, contentSearchQuery, activeMatchId } = useDiffContentSearchUnit({
+    surface: contentSearchSurface,
+    unitId: contentSearchUnitIdProp,
+    orderKey: contentSearchOrderKeyProp,
+    filePath,
+    allCodeLines: parsed.allCodeLines,
+    tokens,
+  });
   const rowCount = Math.max(rows.length, 1);
   const lineNumberDigits = useMemo(() => {
     let maxLineNumber = 0;
@@ -472,26 +432,6 @@ export function ChatDiffViewer({
       event.preventDefault();
     }
   };
-
-  useEffect(() => {
-    registerContentSearchUnit({
-      unitId: contentSearchUnitId,
-      surface: contentSearchSurface,
-      query: contentSearchQuery,
-      matchIds: contentSearchMatchIds,
-      orderKey: contentSearchRowOrderKey,
-    });
-
-    return () => unregisterContentSearchUnit(contentSearchUnitId);
-  }, [
-    contentSearchMatchIds,
-    contentSearchQuery,
-    contentSearchRowOrderKey,
-    contentSearchSurface,
-    contentSearchUnitId,
-    registerContentSearchUnit,
-    unregisterContentSearchUnit,
-  ]);
 
   const viewport = (
     <div
