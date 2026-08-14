@@ -12,6 +12,7 @@ export const CHAT_SELECTED_RESPONSE_ACTIONS = {
   moreDetailsPrompt: "Explain this selected response text in more detail.",
   annotationCommentLabel: "Annotation comment",
   annotationCommentPlaceholder: "Add an optional comment…",
+  annotationCommentSubmit: "Save annotation",
 } as const;
 
 export const CHAT_PROMPT_FEEDBACK = {

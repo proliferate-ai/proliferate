@@ -13,6 +13,7 @@ import {
   type SelectedResponsePendingAnnotation,
 } from "#product/components/workspace/chat/transcript/SelectedResponseActionMenu";
 import { ConnectedSelectedResponseAnnotationComposer } from "#product/components/workspace/chat/transcript/SelectedResponseAnnotationComposer";
+import { ConnectedSelectedResponseAnnotationMarkers } from "#product/components/workspace/chat/transcript/SelectedResponseAnnotationMarkers";
 
 const noop = () => {};
 const NOOP_OUTBOX_ACTIONS: ChatTranscriptOutboxActions = {
@@ -111,6 +112,7 @@ export function ChatTranscriptView({
           onDone={() => setPendingAnnotation(null)}
         />
       ) : null}
+      <ConnectedSelectedResponseAnnotationMarkers rootRef={selectionRootRef} />
     </ChatContentSearchQueryContext.Provider>
   );
 }

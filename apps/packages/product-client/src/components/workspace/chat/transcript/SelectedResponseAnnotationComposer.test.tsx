@@ -64,6 +64,30 @@ describe("SelectedResponseAnnotationComposer", () => {
     expect(onSettle).toHaveBeenCalledExactlyOnceWith("", { focusComposer: true });
   });
 
+  it("commits via the send button with the composer focus handoff", () => {
+    const onSettle = vi.fn();
+    render(
+      <SelectedResponseAnnotationComposer annotation={annotation} onSettle={onSettle} />,
+    );
+    const input = screen.getByLabelText("Annotation comment");
+    const submit = screen.getByLabelText("Save annotation");
+
+    fireEvent.change(input, { target: { value: "from the button" } });
+    // The press must not blur the input first: blur would settle WITHOUT the
+    // composer focus handoff, and the settle guard only lets the first
+    // outcome through.
+    const pointerDown = new window.PointerEvent("pointerdown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    });
+    fireEvent(submit, pointerDown);
+    expect(pointerDown.defaultPrevented).toBe(true);
+    fireEvent.click(submit);
+
+    expect(onSettle).toHaveBeenCalledExactlyOnceWith("from the button", { focusComposer: true });
+  });
+
   it("commits on blur without stealing focus, and settles only once", () => {
     const onSettle = vi.fn();
     render(

@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { CHAT_SELECTED_RESPONSE_ACTIONS } from "#product/copy/chat/chat-copy";
 import type { SelectedResponsePendingAnnotation } from "#product/components/workspace/chat/transcript/SelectedResponseActionMenu";
 import { useSelectedResponseActions } from "#product/hooks/chat/workflows/use-selected-response-actions";
+import { Button } from "#product/primitives/Button";
+import { ArrowUp } from "#product/primitives/icons/core";
 import { Input } from "#product/primitives/Input";
 
 export function ConnectedSelectedResponseAnnotationComposer({
@@ -108,6 +110,20 @@ export function SelectedResponseAnnotationComposer({
         }}
         onBlur={(event) => settle(event.currentTarget.value, { focusComposer: false })}
       />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="size-6 shrink-0 rounded-full bg-special text-special-foreground hover:bg-special hover:text-special-foreground"
+        aria-label={CHAT_SELECTED_RESPONSE_ACTIONS.annotationCommentSubmit}
+        title={CHAT_SELECTED_RESPONSE_ACTIONS.annotationCommentSubmit}
+        // Keeps the input focused through the press so the blur-commit path
+        // (which skips the composer focus handoff) cannot win the race.
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={() => settle(inputRef.current?.value ?? "", { focusComposer: true })}
+      >
+        <ArrowUp aria-hidden="true" className="icon-control" />
+      </Button>
     </div>
   );
 }
