@@ -30,13 +30,7 @@ impl WorkspaceRuntime {
             );
         }
         let repo_root = self.repo_root_for_workspace(workspace)?;
-        let output = GitService::remove_worktree_force(&repo_root.path, &workspace.path)?;
-        if !output.success && worktree.exists() {
-            anyhow::bail!(
-                "failed to remove worktree materialization: {}",
-                output.stderr
-            );
-        }
+        GitService::remove_worktree_force(&repo_root.path, &workspace.path)?;
         Ok(())
     }
     pub fn cleanup_failed_worktree(
@@ -87,10 +81,7 @@ impl WorkspaceRuntime {
     ) -> anyhow::Result<()> {
         let worktree = Path::new(worktree_path);
         if worktree.exists() {
-            let output = GitService::remove_worktree_force(repo_root_path, worktree_path)?;
-            if !output.success && worktree.exists() {
-                fs::remove_dir_all(worktree)?;
-            }
+            GitService::remove_worktree_force(repo_root_path, worktree_path)?;
         }
         GitService::prune_stale_worktrees_if_possible(Path::new(repo_root_path));
 
