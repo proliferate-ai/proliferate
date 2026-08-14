@@ -4,6 +4,7 @@ import type {
 } from "#product/domain/repos/repo-readiness";
 import type { CloudRepoIdentity } from "#product/lib/domain/workspaces/cloud/cloud-repository-intent";
 import type { CloudRepoPickerBlockerView } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
+import { buildGitHubSetupSteps } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-model";
 
 export interface ReadinessBlockerInputs {
   readiness: RepositoryReadiness;
@@ -35,6 +36,12 @@ export interface ReadinessBlockerInputs {
  * vocabulary. Operator/human-access gates (action "none") explain and offer no
  * user-auth CTA; non-privileged members get a copy-request CTA.
  *
+ * Every blocker that a user can act their way out of also carries the 3-step
+ * GitHub setup checklist, so the surface always says how much is left rather
+ * than revealing one prerequisite at a time. The two states no checklist
+ * belongs to keep their existing copy: the operator gate (gate 1) and product
+ * sign-in (gate 2) are not steps of the GitHub setup at all.
+ *
  * Returns null for the in-progress continuation states (gates 9 and 10): the
  * held intent continues automatically, so the host shows progress rather than a
  * blocker.
@@ -50,6 +57,7 @@ export function describeReadinessBlocker(
     case "none":
       return operatorOrHumanBlocker(readiness.gate, input);
     case "sign_in":
+      // Gate 2 predates the GitHub setup entirely — existing copy, no checklist.
       return {
         title: "Sign in to continue",
         description: `Sign in to Proliferate to ${operation}.`,
@@ -60,6 +68,10 @@ export function describeReadinessBlocker(
       return {
         title: "Connect GitHub App",
         description: `Authorize the Proliferate GitHub App to ${operation}.`,
+        steps: buildGitHubSetupSteps({
+          userAuthorized: false,
+          installationInstalled: false,
+        }),
         actionLabel: input.userAuthorization.authorizing ? "Opening GitHub…" : "Connect GitHub App",
         actionLoading: input.userAuthorization.authorizing,
         onAction: input.userAuthorization.authorize,
@@ -69,6 +81,10 @@ export function describeReadinessBlocker(
         title: "Reconnect GitHub App",
         description:
           `Your GitHub App authorization expired. Reconnect it to ${operation}.`,
+        steps: buildGitHubSetupSteps({
+          userAuthorized: false,
+          installationInstalled: false,
+        }),
         actionLabel: input.userAuthorization.authorizing ? "Opening GitHub…" : "Reconnect GitHub App",
         actionLoading: input.userAuthorization.authorizing,
         onAction: input.userAuthorization.authorize,
@@ -78,15 +94,25 @@ export function describeReadinessBlocker(
         title: "Install Proliferate GitHub App",
         description:
           `Install the Proliferate GitHub App for your organization to ${operation}.`,
+        steps: buildGitHubSetupSteps({
+          userAuthorized: true,
+          installationInstalled: false,
+        }),
         actionLabel: input.installation.installing ? "Opening GitHub…" : "Install Proliferate GitHub App",
         actionLoading: input.installation.installing,
         onAction: input.installation.install,
       };
     case "grant_repo_access":
+      // The app is installed but this repository is outside its coverage, so
+      // step 2 ("Install for repository access") is still the current one.
       return {
         title: "Grant repository access",
         description:
           "Update the Proliferate GitHub App installation so it has access to this repository.",
+        steps: buildGitHubSetupSteps({
+          userAuthorized: true,
+          installationInstalled: false,
+        }),
         actionLabel: "Grant repository access",
         onAction: input.installation.openInstallationSettings,
       };
@@ -95,13 +121,24 @@ export function describeReadinessBlocker(
         title: "Ask an admin",
         description:
           "You don't have permission to install or grant access to the Proliferate GitHub App. Copy a request to send to an organization admin.",
+        steps: buildGitHubSetupSteps({
+          userAuthorized: true,
+          installationInstalled: false,
+          canManageInstallation: false,
+        }),
         actionLabel: "Copy request",
         onAction: input.onCopyAdminRequest,
       };
     case "retry":
+      // Nothing about the GitHub setup is known yet — the query that would have
+      // said so is the thing that failed — so the checklist opens at step 1.
       return {
         title: "Couldn't check GitHub access",
         description: "GitHub App access for this repository could not be checked. Try again.",
+        steps: buildGitHubSetupSteps({
+          userAuthorized: false,
+          installationInstalled: false,
+        }),
         actionLabel: "Retry",
         onAction: input.onRetryAuthority,
       };
@@ -122,11 +159,17 @@ function operatorOrHumanBlocker(
     return null;
   }
   // Gate 8 = human GitHub repository access (repaired on GitHub, not here).
+  // Authorization and installation are both behind the user, so the checklist
+  // shows two completed steps and parks on "Choose a repository".
   if (gate === 8) {
     return {
       title: "No access to this repository",
       description:
         "Your GitHub user does not have access to this repository. Ask a repository admin on GitHub to grant you access.",
+      steps: buildGitHubSetupSteps({
+        userAuthorized: true,
+        installationInstalled: true,
+      }),
       actionLabel: null,
       onAction: null,
     };
