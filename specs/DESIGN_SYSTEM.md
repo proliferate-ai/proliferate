@@ -880,14 +880,16 @@ module is the styled call-site entry point most consumers use.
 
 **`DropdownMenu` status.** `DropdownMenu.tsx` is a legacy menu system living
 alongside the sanctioned `PopoverButton`/`PopoverMenuItem` pair, not a second
-tier. Five files import it directly:
-[WorkspaceItemMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/sidebar/WorkspaceItemMenu.tsx),
+tier. Four files import it directly:
 [RightPanelNewTabMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/right-panel/RightPanelNewTabMenu.tsx),
 [WorkspaceActionsMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/topbar/WorkspaceActionsMenu.tsx)
-(all `product-client`), and
+(both `product-client`), and
 [ProposedPlanCard.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx), and
 [SelectedResponseActionMenu.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/SelectedResponseActionMenu.tsx)
-(both `product-client`; the latter replaced chat's hand-rolled `role="menu"` machine). Migrating them onto `PopoverButton`/`PopoverMenuItem` waits
+(both `product-client`; the latter replaced chat's hand-rolled `role="menu"` machine). A fifth consumer,
+`WorkspaceItemMenu.tsx`, was deleted when the archiving-workspaces train's R7 rung
+folded the workspace sidebar's three-dot menu into the row's hover-action slot
+plus its existing context menus. Migrating the remaining four onto `PopoverButton`/`PopoverMenuItem` waits
 on parity: Radix's dropdown-menu primitive provides roving-tabindex arrow-key
 navigation, typeahead, and managed focus-return-to-trigger that
 `PopoverButton`/`PopoverMenuItem` do not implement today. Behavior parity is an

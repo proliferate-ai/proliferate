@@ -256,6 +256,7 @@
     "apps/packages/product-client/src/components/settings/panes/OrganizationModelPolicyPane.tsx|violationRows": 1,
     "apps/packages/product-client/src/components/settings/panes/SettingsScaffoldPane.tsx|copy.rows": 1,
     "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAuthApiKeyDetails.tsx|editor.editorState.rows": 1,
+    "apps/packages/product-client/src/components/settings/panes/archived/ArchivedWorkspacesPane.tsx|workspaces": 1,
     "apps/packages/product-client/src/components/settings/panes/organization/OrganizationMembersList.tsx|rows": 1,
     "apps/packages/product-client/src/components/workflows/WorkflowRunList.tsx|runs": 1,
     "apps/packages/product-client/src/components/workspace/chat/input/delegated-work/AgentsPopoverSubagentSection.tsx|subagents.rows": 1,

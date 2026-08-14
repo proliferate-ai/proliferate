@@ -29,7 +29,7 @@ describe("AnyHarness workspace list access", () => {
   it("forwards request options as options, never as the lifecycle filter", async () => {
     const signal = new AbortController().signal;
 
-    await listRuntimeWorkspaces({ runtimeUrl: "http://runtime" }, { signal });
+    await listRuntimeWorkspaces({ runtimeUrl: "http://runtime" }, undefined, { signal });
 
     expect(clientMocks.workspacesList).toHaveBeenCalledWith(undefined, { signal });
   });

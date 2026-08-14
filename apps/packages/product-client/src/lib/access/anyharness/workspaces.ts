@@ -1,8 +1,11 @@
 import type {
   AnyHarnessRequestOptions,
+  ArchiveWorkspaceRequest,
   CreateWorkspaceRequest,
   CreateWorktreeWorkspaceRequest,
+  UnarchiveWorkspaceRequest,
   UpdateWorkspaceDisplayNameRequest,
+  WorkspaceLifecycleFilter,
 } from "@anyharness/sdk";
 import {
   getAnyHarnessClient,
@@ -13,15 +16,34 @@ import {
 type WorkspaceConnection = AnyHarnessClientConnection | AnyHarnessResolvedConnection;
 
 /**
- * The active workspace list. The lifecycle filter is left unset so the server's
- * `active` default applies, which is exactly what this call meant before
- * archiving shipped.
+ * The workspace list. Omit `lifecycle` for the route's `active` default (the
+ * collections query's universe); the archived page passes `"archived"`
+ * explicitly. The lifecycle filter is a positional SDK parameter, not part of
+ * `AnyHarnessRequestOptions` — keeping it a separate argument here (rather
+ * than folding it into `request`) matches the generated client's shape.
  */
 export function listRuntimeWorkspaces(
   connection: AnyHarnessClientConnection,
+  lifecycle?: WorkspaceLifecycleFilter,
   request?: AnyHarnessRequestOptions,
 ) {
-  return getAnyHarnessClient(connection).workspaces.list(undefined, request);
+  return getAnyHarnessClient(connection).workspaces.list(lifecycle, request);
+}
+
+export function archiveWorkspace(
+  connection: WorkspaceConnection,
+  workspaceId: string,
+  request?: ArchiveWorkspaceRequest,
+) {
+  return getAnyHarnessClient(connection).workspaces.archive(workspaceId, request);
+}
+
+export function unarchiveWorkspace(
+  connection: WorkspaceConnection,
+  workspaceId: string,
+  request?: UnarchiveWorkspaceRequest,
+) {
+  return getAnyHarnessClient(connection).workspaces.unarchive(workspaceId, request);
 }
 
 export function listRepoRoots(

@@ -26,7 +26,7 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
 
     expect(items).toMatchObject([
       { id: "rename", label: "Rename" },
-      { id: "archive", label: "Archive..." },
+      { id: "archive", label: "Archive" },
       { id: "copy-workspace-location", label: "Copy workspace path", accelerator: "CmdOrCtrl+Shift+C" },
       { kind: "separator" },
       { id: "copy-branch-name", label: "Copy branch name", accelerator: "CmdOrCtrl+Alt+C" },
@@ -88,7 +88,7 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
     expect(items).toMatchObject([
       { id: "rename", label: "Rename" },
       { id: "pin", label: "Pin" },
-      { id: "archive", label: "Archive..." },
+      { id: "archive", label: "Archive" },
     ]);
   });
 
@@ -145,7 +145,7 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
     });
 
     expect(items).toMatchObject([
-      { id: "archive", label: "Archive..." },
+      { id: "archive", label: "Archive" },
       { kind: "separator" },
       { id: "mark-done", label: "Delete workspace..." },
     ]);

@@ -14,6 +14,9 @@ import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { isWorkspaceArchivedRefusal } from "#product/lib/domain/workspaces/archived/workspace-archived-refusal";
 
 interface UseRunWorkspaceCommandArgs {
   selectedWorkspaceId: string | null;
@@ -40,6 +43,8 @@ export function useRunWorkspaceCommand({
   const showErrorToast = useToastStore((state) => state.showError);
   const { createRunTab } = useTerminalActions();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const [isLaunching, setIsLaunching] = useState(false);
   // Ref guards same-tick re-entry; state drives the header button spinner.
   const isLaunchingRef = useRef(false);
@@ -166,6 +171,12 @@ export function useRunWorkspaceCommand({
       const terminalId = await createRunTab(workspaceId, runCommand);
       openTerminalPanel(terminalId);
     } catch (error) {
+      // WORKSPACE_ARCHIVED (§3.11): the server is correct, only the client
+      // was stale — refresh the listing and raise no failure toast.
+      if (isWorkspaceArchivedRefusal(error)) {
+        void invalidateWorkspaceCollections();
+        return;
+      }
       // Names the command that did not run: it comes from repo settings, so the
       // user may not have it memorized, and knowing which one failed is what
       // tells them whether to fix the config or just try again.
@@ -182,6 +193,7 @@ export function useRunWorkspaceCommand({
   }, [
     createRunTab,
     getWorkspaceRuntimeBlockReason,
+    invalidateWorkspaceCollections,
     isCloudWorkspace,
     isRuntimeReady,
     openTerminalPanel,

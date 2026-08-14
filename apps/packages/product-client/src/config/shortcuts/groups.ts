@@ -40,6 +40,7 @@ export const SHORTCUT_GROUPS = [
       "workspaceByIndex",
       "previousWorkspace",
       "nextWorkspace",
+      "archiveWorkspace",
     ],
   },
   {

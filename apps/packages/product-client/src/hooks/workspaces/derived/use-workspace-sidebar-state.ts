@@ -10,7 +10,6 @@ import {
   resolveSidebarEmptyState,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-groups";
 import { collectPinnedSidebarItems } from "#product/lib/domain/workspaces/sidebar/sidebar-pinned";
-import { logicalWorkspaceRelatedIds } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import type {
   SidebarEmptyState,
   SidebarGroupState,
@@ -43,7 +42,6 @@ interface WorkspaceSidebarState {
   /** Pinned workspaces' items in pin order, for the sidebar Pinned section. */
   pinnedItems: SidebarWorkspaceItemState[];
   workspaceActivities: Record<string, SidebarSessionActivityState>;
-  archivedCount: number;
   selectedWorkspaceId: string | null;
   selectedLogicalWorkspaceId: string | null;
   gitStatus: GitStatusSnapshot | undefined;
@@ -105,7 +103,6 @@ export function useWorkspaceSidebarState({
   });
 
   const {
-    archivedWorkspaceIds,
     pinnedWorkspaceIds,
     hiddenRepoRootIds,
     lastViewedAt,
@@ -114,7 +111,6 @@ export function useWorkspaceSidebarState({
     workspaceLastInteracted,
     workspaceTypes,
   } = useWorkspaceUiStore(useShallow((state) => ({
-    archivedWorkspaceIds: state.archivedWorkspaceIds,
     pinnedWorkspaceIds: state.pinnedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     lastViewedAt: state.lastViewedAt,
@@ -143,10 +139,6 @@ export function useWorkspaceSidebarState({
     }
     return ids;
   }));
-  const archivedSet = useMemo(
-    () => new Set(archivedWorkspaceIds),
-    [archivedWorkspaceIds],
-  );
   const pinnedSet = useMemo(
     () => new Set(pinnedWorkspaceIds),
     [pinnedWorkspaceIds],
@@ -156,12 +148,6 @@ export function useWorkspaceSidebarState({
     [hiddenRepoRootIds],
   );
 
-  const archivedCount = useMemo(
-    () => logicalWorkspaces.filter((entry) =>
-      logicalWorkspaceRelatedIds(entry).some((id) => archivedSet.has(id))
-    ).length,
-    [archivedSet, logicalWorkspaces],
-  );
   const pendingPromptCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const launch of Object.values(deferredLaunchesById)) {
@@ -191,7 +177,6 @@ export function useWorkspaceSidebarState({
       logicalWorkspaces,
       showArchived,
       workspaceTypes,
-      archivedSet,
       pinnedSet,
       hiddenRepoRootIds: hiddenRepoRootSet,
       selectedLogicalWorkspaceId,
@@ -211,7 +196,6 @@ export function useWorkspaceSidebarState({
       desktopInstallId,
     })), [
     activeSessionTitle,
-    archivedSet,
     desktopInstallId,
     gitStatus,
     gitStatusesByLogicalId,
@@ -244,7 +228,6 @@ export function useWorkspaceSidebarState({
     groups,
     pinnedItems,
     workspaceActivities,
-    archivedCount,
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,
     gitStatus,

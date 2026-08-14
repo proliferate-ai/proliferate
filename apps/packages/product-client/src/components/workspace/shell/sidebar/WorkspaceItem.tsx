@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { Archive } from "#product/primitives/icons/core";
+import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 import { useWorkspaceSidebarNativeContextMenu } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 import type {
   SidebarIndicatorAction,
@@ -14,7 +16,6 @@ import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-stat
 import { WorkspaceItemContextMenu } from "#product/components/workspace/shell/sidebar/WorkspaceItemContextMenu";
 import { resolveWorkspaceItemTrailingCells } from "#product/components/workspace/shell/sidebar/WorkspaceItemTrailing";
 import { useWorkspacePeek } from "#product/components/workspace/shell/sidebar/WorkspacePeekCard";
-import { WorkspaceItemMenu } from "#product/components/workspace/shell/sidebar/WorkspaceItemMenu";
 import { WorkspaceRenamePopover } from "#product/components/workspace/shell/sidebar/WorkspaceRenamePopover";
 import { ProductSidebarWorkspaceRow } from "#product/components/workspace/shell/sidebar/ProductSidebarRepositories";
 
@@ -115,7 +116,6 @@ export function WorkspaceItem({
   onCopyBranchName,
   onRename,
 }: WorkspaceItemProps) {
-  const hasArchiveAction = !!(onArchive || onUnarchive);
   const [renameOpen, setRenameOpen] = useState(false);
   const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
   const handleRenameCommand = () => setRenameOpen(true);
@@ -147,7 +147,7 @@ export function WorkspaceItem({
   const handleOpenPullRequestCommand = pullRequestUrl && onOpenPullRequest
     ? () => onOpenPullRequest(pullRequestUrl)
     : undefined;
-  const { onContextMenuCapture, showNativeMenu } = useWorkspaceSidebarNativeContextMenu({
+  const { onContextMenuCapture } = useWorkspaceSidebarNativeContextMenu({
     canRename: !!onRename,
     canCopyWorkspaceLocation: !!onCopyWorkspaceLocation,
     copyWorkspaceLocationLabel: workspaceLocationCopyLabel ?? "Copy workspace location",
@@ -174,39 +174,21 @@ export function WorkspaceItem({
     availabilityCommands,
     onAvailabilityCommand,
   });
-  const hasMenuActions = hasArchiveAction
-    || !!onPin
-    || !!onUnpin
-    || !!onRename
-    || !!onCopyWorkspaceLocation
-    || !!onCopyBranchName
-    || !!onMarkDone
-    || !!branchName
-    || !!handleOpenPullRequestCommand
-    || availabilityCommands.length > 0;
-
-  const workspaceMenu = hasMenuActions ? (
-    <WorkspaceItemMenu
-      archived={archived}
-      pinned={pinned}
-      branchName={branchName}
-      workspaceLocationCopyLabel={workspaceLocationCopyLabel}
-      pullRequestNumber={pullRequestNumber}
-      onShowNativeMenu={showNativeMenu}
-      onOpenPullRequest={handleOpenPullRequestCommand}
-      onRename={onRename ? handleRenameCommand : undefined}
-      onArchive={onArchive ? handleArchiveCommand : undefined}
-      onUnarchive={onUnarchive ? handleUnarchiveCommand : undefined}
-      onPin={onPin ? handlePinCommand : undefined}
-      onUnpin={onUnpin ? handleUnpinCommand : undefined}
-      onCopyWorkspaceLocation={
-        onCopyWorkspaceLocation ? handleCopyWorkspaceLocationCommand : undefined
-      }
-      onCopyBranchName={onCopyBranchName ? handleCopyBranchNameCommand : undefined}
-      onMarkDone={onMarkDone ? handleMarkDoneCommand : undefined}
-      availabilityCommands={availabilityCommands}
-      onAvailabilityCommand={onAvailabilityCommand}
-    />
+  // Archive rides the row's hover-action slot directly (no three-dot menu):
+  // every other action the old menu carried is already on the DOM context
+  // menu below and the native menu (`useWorkspaceSidebarNativeContextMenu`).
+  // Not offered on an already-archived (cloud) entry — that row's exit is
+  // Unarchive, reachable from either context menu.
+  const archiveHoverAction = onArchive && !archived ? (
+    <SidebarActionButton
+      title="Archive workspace (⌘⇧A)"
+      onClick={(event) => {
+        event.stopPropagation();
+        handleArchiveCommand();
+      }}
+    >
+      <Archive />
+    </SidebarActionButton>
   ) : null;
 
   const { onPointerEnter, onPointerLeave, peekCard } = useWorkspacePeek({
@@ -227,7 +209,7 @@ export function WorkspaceItem({
       unreadDot={needsReview}
       shortcutLabel={shortcutLabel}
       shortcutRevealVisible={shortcutRevealVisible}
-      hoverAction={workspaceMenu}
+      hoverAction={archiveHoverAction}
       onSelect={onSelect}
       onContextMenuCapture={onContextMenuCapture}
       onPointerEnter={(event) => {

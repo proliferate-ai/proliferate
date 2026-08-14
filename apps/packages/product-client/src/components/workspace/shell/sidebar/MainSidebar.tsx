@@ -2,7 +2,6 @@ import { memo, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { useRemoveCloudRepoEnvironment, useRepositories } from "@proliferate/cloud-sdk-react";
-import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
 import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
@@ -23,6 +22,7 @@ import { buildConfiguredCloudRepoKeys } from "#product/lib/domain/workspaces/clo
 import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 import { titleForStartBlockReason } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
+import { ARCHIVE_TOAST_COPY } from "#product/copy/workspaces/archive-toast-copy";
 import { APP_ROUTES } from "#product/config/app-routes";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
@@ -38,18 +38,23 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "#product/hooks/workspaces/workflows/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-actions";
-import { useWorkspaceSidebarArchiveActions } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-archive-actions";
+import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useSidebarRepoGroupState } from "#product/hooks/workspaces/facade/use-sidebar-repo-group-state";
 import { useWorkspaceSidebarState } from "#product/hooks/workspaces/derived/use-workspace-sidebar-state";
 import { useSessionActivityReconciler } from "#product/hooks/sessions/lifecycle/use-session-activity-reconciler";
+import { useWorkspaceArchiveActionsContext } from "#product/providers/WorkspaceArchiveActionsProvider";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { UnarchiveScenarioDialog } from "#product/components/settings/panes/archived/UnarchiveScenarioDialog";
 import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
 } from "#product/lib/domain/settings/navigation";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import { buildShortcutRangeLabelById } from "#product/lib/domain/shortcuts/presentation";
 import { startMeasurementOperation } from "#product/lib/infra/measurement/measurement-port";
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import { useReleaseNotice } from "#product/hooks/updates/facade/use-release-notice";
 import { useRepositoryHeaderNewChat } from "#product/hooks/workspaces/ui/use-repository-header-new-chat";
 
@@ -57,6 +62,24 @@ import { useRepositoryHeaderNewChat } from "#product/hooks/workspaces/ui/use-rep
 // than on every render of the sidebar.
 const NEW_CHAT_SHORTCUT_LABEL = getShortcutDisplayLabel(SHORTCUTS.newDefault);
 
+interface SidebarArchiveTarget {
+  /**
+   * The sidebar item's LOGICAL id (`remote:github:org:repo:branch`). It is a
+   * UI-space key only: selection comparisons against
+   * `selectedLogicalWorkspaceId` live here, and nothing else does.
+   */
+  logicalWorkspaceId: string;
+  /**
+   * The runtime workspace UUID. This — never the logical id — is what the
+   * runtime archive/unarchive verbs address, what the optimistic-hide set is
+   * keyed by, and what the pending reconciler polls (`lifecycle=all` returns
+   * runtime records). Null when the row has no local materialization (a
+   * cloud-only row, or a pending projection not yet on the runtime).
+   */
+  runtimeWorkspaceId: string | null;
+  cloudWorkspaceId: string | null;
+  name: string;
+}
 
 export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }: { showRightBorder?: boolean }) {
   useDebugRenderCount("workspace-sidebar");
@@ -76,6 +99,7 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     data: repoConfigs,
     isPending: isRepoConfigsPending,
   } = useRepositories(cloudActive);
+  const showToast = useToastStore((state) => state.show);
   const removeCloudRepoEnvironment = useRemoveCloudRepoEnvironment();
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {
@@ -92,8 +116,8 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     setRepositoriesCollapsed: state.setRepositoriesCollapsed,
   })));
   const {
-    groups,
-    pinnedItems,
+    groups: sidebarGroups,
+    pinnedItems: sidebarPinnedItems,
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,
     emptyState,
@@ -105,17 +129,49 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
   const navigate = useNavigate();
   const location = useLocation();
   const {
-    archiveConfirmation,
-    closeArchiveConfirmation,
-    confirmArchiveWorkspace,
-    handleArchiveWorkspace,
-    handleUnarchiveWorkspace,
-  } = useWorkspaceSidebarArchiveActions({
-    groups,
-    selectedWorkspaceId,
-    selectedLogicalWorkspaceId,
-    onLeaveWorkspace: actions.handleGoHome,
-  });
+    archiveCloudWorkspace: archiveCloudWorkspaceRequest,
+    restoreCloudWorkspace: restoreCloudWorkspaceRequest,
+  } = useCloudWorkspaceActions();
+  const {
+    archive: archiveWorkspaceLocal,
+    unarchive: unarchiveWorkspaceLocal,
+    optimisticallyArchivedIds,
+    scenario: unarchiveScenario,
+    dismissScenario: dismissUnarchiveScenario,
+  } = useWorkspaceArchiveActionsContext();
+
+  // The optimistic-hide set: a row with an archive POST in flight (or
+  // genuinely unknown, mid-timeout) is filtered out here rather than in
+  // `useWorkspaceSidebarState` — the lifecycle-filtered queries stay the
+  // single source of truth for which workspaces exist; this is purely a
+  // client-local "don't paint this row while its outcome is unsettled".
+  // The set is keyed by the id that was handed to `archive()` — the RUNTIME
+  // workspace id, which is also what the pending reconciler settles against.
+  // A row is matched on either id space so the hide holds whichever key the
+  // caller used (a cloud row is archived by its cloud id, a local row by its
+  // runtime UUID).
+  const optimisticallyVisible = useCallback(
+    (item: SidebarWorkspaceItemState) => !optimisticallyArchivedIds.has(item.id)
+      && !(item.localWorkspaceId !== null && optimisticallyArchivedIds.has(item.localWorkspaceId)),
+    [optimisticallyArchivedIds],
+  );
+  const groups = useMemo(() => {
+    if (optimisticallyArchivedIds.size === 0) {
+      return sidebarGroups;
+    }
+    return sidebarGroups.map((group) => ({
+      ...group,
+      items: group.items.filter(optimisticallyVisible),
+    }));
+  }, [optimisticallyArchivedIds, optimisticallyVisible, sidebarGroups]);
+  // The Pinned section is a flattened view of the same rows, so the in-flight
+  // hide must reach it too or the archived row lingers there.
+  const pinnedItems = useMemo(() => {
+    if (optimisticallyArchivedIds.size === 0) {
+      return sidebarPinnedItems;
+    }
+    return sidebarPinnedItems.filter(optimisticallyVisible);
+  }, [optimisticallyArchivedIds, optimisticallyVisible, sidebarPinnedItems]);
 
   const isOnHome = location.pathname === APP_ROUTES.home;
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
@@ -177,6 +233,115 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     hideRepoRoot,
     removeCloudRepoEnvironment,
   ]);
+
+  // Callers reach this with whichever id their surface holds: the row actions
+  // and ⌘⇧A pass the logical item id, while a re-entrant path (the 409
+  // scenario dialog, Undo) carries the runtime id the verb was posted with.
+  // Match on both so the resolved target is complete either way.
+  const resolveArchiveTargetForSidebarItem = useCallback((
+    workspaceId: string,
+  ): SidebarArchiveTarget => {
+    for (const group of groups) {
+      const item = group.items.find((candidate) =>
+        candidate.id === workspaceId || candidate.localWorkspaceId === workspaceId);
+      if (item) {
+        return {
+          logicalWorkspaceId: item.id,
+          runtimeWorkspaceId: item.localWorkspaceId,
+          cloudWorkspaceId: item.cloudWorkspaceId,
+          name: item.name,
+        };
+      }
+    }
+    return {
+      logicalWorkspaceId: workspaceId,
+      runtimeWorkspaceId: null,
+      cloudWorkspaceId: null,
+      name: "this workspace",
+    };
+  }, [groups]);
+
+  // Archive is instant — no confirmation dialog. Selection handoff happens
+  // BEFORE the archive POST resolves: waiting for the response would leave
+  // the user staring at a workspace that is being torn down.
+  const handleArchiveWorkspace = useCallback((workspaceId: string) => {
+    const target = resolveArchiveTargetForSidebarItem(workspaceId);
+    const { cloudWorkspaceId, runtimeWorkspaceId } = target;
+    // Nothing on the runtime to archive: a row projected before its workspace
+    // materialized. Refuse rather than post the logical id, which the runtime
+    // can only answer with 404 WORKSPACE_NOT_FOUND — and refuse BEFORE the
+    // selection handoff, so a doomed request never also moves the user.
+    if (!cloudWorkspaceId && !runtimeWorkspaceId) {
+      showToast(ARCHIVE_TOAST_COPY.archiveFailedTitle(target.name));
+      return;
+    }
+    // Each comparison stays in its own id space: `selectedLogicalWorkspaceId`
+    // holds the logical id, `selectedWorkspaceId` the runtime workspace id
+    // (or a cloud row's synthetic id).
+    const shouldLeaveWorkspace = selectedLogicalWorkspaceId === target.logicalWorkspaceId
+      || (runtimeWorkspaceId !== null && selectedWorkspaceId === runtimeWorkspaceId)
+      || (
+        cloudWorkspaceId
+        ? selectedWorkspaceId === cloudWorkspaceSyntheticId(cloudWorkspaceId)
+        : false
+      );
+    if (shouldLeaveWorkspace) {
+      actions.handleGoHome();
+    }
+    if (cloudWorkspaceId) {
+      void archiveCloudWorkspaceRequest(cloudWorkspaceId)
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : "Failed to archive workspace.";
+          showToast(message);
+        });
+      return;
+    }
+    if (runtimeWorkspaceId) {
+      archiveWorkspaceLocal(runtimeWorkspaceId, target.name, shouldLeaveWorkspace);
+    }
+  }, [
+    actions,
+    archiveCloudWorkspaceRequest,
+    archiveWorkspaceLocal,
+    resolveArchiveTargetForSidebarItem,
+    selectedLogicalWorkspaceId,
+    selectedWorkspaceId,
+    showToast,
+  ]);
+
+  const handleUnarchiveWorkspace = useCallback((workspaceId: string) => {
+    const target = resolveArchiveTargetForSidebarItem(workspaceId);
+    const { cloudWorkspaceId, runtimeWorkspaceId } = target;
+    if (cloudWorkspaceId) {
+      void restoreCloudWorkspaceRequest(cloudWorkspaceId).catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to restore workspace.";
+        showToast(message);
+      });
+      return;
+    }
+    // Same id-space rule as archive: /unarchive addresses the runtime id.
+    if (!runtimeWorkspaceId) {
+      showToast(ARCHIVE_TOAST_COPY.unarchiveFailedTitle(target.name));
+      return;
+    }
+    unarchiveWorkspaceLocal(runtimeWorkspaceId, target.name);
+  }, [
+    resolveArchiveTargetForSidebarItem,
+    restoreCloudWorkspaceRequest,
+    showToast,
+    unarchiveWorkspaceLocal,
+  ]);
+
+  // ⌘⇧A, scoped to whichever workspace the sidebar currently has selected.
+  // Returning `false` when nothing is selected declines the shortcut and
+  // leaves browser behavior intact, per the handler contract.
+  useShortcutHandler("workspace.archive", () => {
+    const targetId = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+    if (!targetId) {
+      return false;
+    }
+    handleArchiveWorkspace(targetId);
+  });
 
   const handleOpenRepoSettings = useCallback((sourceRoot: string) => {
     navigate(buildSettingsHref({ section: "environments", repo: sourceRoot }));
@@ -342,13 +507,13 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
           {isDesktopHost ? <CoworkThreadsSection /> : null}
         </ProductSidebarScrollableContent>
         </ProductSidebarBody>
-        <ConfirmationDialog
-          open={archiveConfirmation !== null}
-          title="Archive workspace?"
-          description={`Move ${archiveConfirmation?.name ?? "this workspace"} out of the main sidebar. It will remain available in Settings -> Archived chats, and safe worktree cleanup may run in the background.`}
-          confirmLabel="Archive"
-          onClose={closeArchiveConfirmation}
-          onConfirm={confirmArchiveWorkspace}
+        <UnarchiveScenarioDialog
+          state={unarchiveScenario}
+          onCancel={dismissUnarchiveScenario}
+          onConfirm={(workspaceId, answer) => {
+            const name = resolveArchiveTargetForSidebarItem(workspaceId).name;
+            unarchiveWorkspaceLocal(workspaceId, name, answer);
+          }}
         />
       </ProductSidebarFrame>
     </DebugProfiler>

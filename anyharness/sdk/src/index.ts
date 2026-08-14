@@ -181,6 +181,20 @@ export type {
   WorkspaceRetireBlocker,
   WorkspacePurgeOutcome,
   WorkspacePurgeResponse,
+  WorkspaceLifecycleFilter,
+  ArchiveWorkspaceRequest,
+  WorkspaceArchiveNoticeKind,
+  WorkspaceArchiveNotice,
+  ArchiveWorkspaceResponse,
+  WorkspaceUnarchiveBranchStrategy,
+  UnarchiveWorkspaceRequest,
+  WorkspaceUnarchiveNoticeKind,
+  WorkspaceUnarchiveNotice,
+  UnarchiveWorkspaceResponse,
+  WorkspaceUnarchiveScenario,
+  WorkspaceUnarchiveStrategy,
+  WorkspaceUnarchiveScenarioBody,
+  WorkspaceGitLockedBody,
 } from "./types/workspaces.js";
 
 export type {

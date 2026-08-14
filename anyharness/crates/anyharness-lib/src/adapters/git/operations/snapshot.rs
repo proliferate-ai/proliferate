@@ -211,17 +211,28 @@ fn capture_work_tree(
     index_tree: &str,
 ) -> Result<(String, Vec<SnapshotNotice>, PathBuf), SnapshotError> {
     let temp_index = std::env::temp_dir().join(format!("anyharness-snapshot-index-{}", uuid::Uuid::new_v4()));
-    let seed = Command::new("git")
-        .current_dir(workspace_path)
-        .env("GIT_INDEX_FILE", &temp_index)
-        .args(["read-tree", index_tree])
-        .output()
-        .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git read-tree failed to run: {error}")))?;
-    if !seed.status.success() {
-        return Err(SnapshotError::Internal(anyhow::anyhow!(
-            "git read-tree failed: {}",
-            String::from_utf8_lossy(&seed.stderr).trim()
-        )));
+    // Seed by COPYING the real index when one exists: the copy carries git's
+    // stat cache, so the `git add -A` below only re-hashes paths whose stat
+    // data actually changed. A `read-tree` seed is tree-identical (index_tree
+    // was just written from this same index) but stat-empty, which forces a
+    // full re-hash of every tracked file — seconds on a large worktree.
+    let real_index = resolve_worktree_git_path(workspace_path, "index");
+    let seeded_by_copy = real_index
+        .as_deref()
+        .is_some_and(|index| std::fs::copy(index, &temp_index).is_ok());
+    if !seeded_by_copy {
+        let seed = Command::new("git")
+            .current_dir(workspace_path)
+            .env("GIT_INDEX_FILE", &temp_index)
+            .args(["read-tree", index_tree])
+            .output()
+            .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git read-tree failed to run: {error}")))?;
+        if !seed.status.success() {
+            return Err(SnapshotError::Internal(anyhow::anyhow!(
+                "git read-tree failed: {}",
+                String::from_utf8_lossy(&seed.stderr).trim()
+            )));
+        }
     }
 
     let add = Command::new("git")

@@ -21,7 +21,6 @@ const harnessState = vi.hoisted(() => ({
   workspaceActivities: {} as Record<string, string>,
   workspaceUi: {
     _hydrated: true,
-    archivedWorkspaceIds: [] as string[],
     hiddenRepoRootIds: [] as string[],
     lastViewedAt: {} as Record<string, string>,
     lastViewedSessionErrorAtBySession: {} as Record<string, string>,
@@ -84,7 +83,6 @@ describe("useWorkspaceActivityIndicator", () => {
     harnessState.workspaceActivities = {};
     harnessState.workspaceUi = {
       _hydrated: true,
-      archivedWorkspaceIds: [],
       hiddenRepoRootIds: [],
       lastViewedAt: {},
       lastViewedSessionErrorAtBySession: {},
