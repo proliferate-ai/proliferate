@@ -25,6 +25,7 @@ export {
   INPUT_NAME_PATTERN,
   NODE_ID_PATTERN,
   collectPromptReferences,
+  describeMalformedReference,
   parsePromptTokens,
 } from "./definition-v2-references";
 export type {

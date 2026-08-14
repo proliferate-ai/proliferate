@@ -8,6 +8,7 @@ import type {
 } from "@proliferate/cloud-sdk";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { orderedNodes } from "#product/domain/workflows/definition-v2";
+import { normalizeDocSlugInput } from "#product/lib/domain/workflows/workflow-builder-validation";
 
 /**
  * The gen-2 builder's draft shape and every pure operation on it: seeding,
@@ -26,6 +27,12 @@ import { orderedNodes } from "#product/domain/workflows/definition-v2";
 export interface WorkflowBuilderDraft {
   title: string;
   description: string;
+  /**
+   * The RUNTIME repo-root id a run starts in unless the trigger dialog is told
+   * otherwise; `""` = no default. Held as a string rather than `string | null`
+   * because it is bound to a `Select` whose empty option is `""`.
+   */
+  defaultRepoConfigId: string;
   nodes: WorkflowNodeV2[];
   inputs: WorkflowInputV2[];
   docTemplates: WorkflowDocTemplateV2[];
@@ -34,6 +41,7 @@ export interface WorkflowBuilderDraft {
 export interface WorkflowBuilderActions {
   setTitle: (title: string) => void;
   setDescription: (description: string) => void;
+  setDefaultRepoConfigId: (repoConfigId: string) => void;
   addNode: () => void;
   removeNode: (nodeId: string) => void;
   updateNode: (nodeId: string, patch: Partial<Omit<WorkflowNodeV2, "id">>) => void;
@@ -96,12 +104,17 @@ export function blankWorkflowBuilderDraft(): WorkflowBuilderDraft {
   return {
     title: "",
     description: "",
+    defaultRepoConfigId: "",
     nodes: [{ id: "step-1", type: "agent", title: "", prompt: "" }],
     inputs: [],
     docTemplates: [],
   };
 }
 
+/**
+ * Starter templates carry no repository: repo-root ids are runtime-local, so a
+ * seeded default would name a repository that exists on nobody else's machine.
+ */
 export function draftFromTemplate(
   template: WorkflowStarterTemplateV2 | null | undefined,
 ): WorkflowBuilderDraft {
@@ -111,6 +124,7 @@ export function draftFromTemplate(
   return {
     title: template.title,
     description: template.description,
+    defaultRepoConfigId: "",
     ...draftPartsFromDefinition(template.definition),
   };
 }
@@ -119,6 +133,7 @@ export function draftFromRecord(record: WorkflowDefinitionRecordV2): WorkflowBui
   return {
     title: record.title,
     description: record.description ?? "",
+    defaultRepoConfigId: record.defaultRepoConfigId ?? "",
     ...draftPartsFromDefinition(record.definition),
   };
 }
@@ -133,6 +148,7 @@ export function serializeDraft(draft: WorkflowBuilderDraft): string {
   return JSON.stringify({
     title: draft.title,
     description: draft.description,
+    defaultRepoConfigId: draft.defaultRepoConfigId,
     nodes: draft.nodes.map((node) => [
       node.id,
       node.type,
@@ -154,6 +170,8 @@ export function workflowBuilderActions(
   return {
     setTitle: (title) => editDraft((draft) => ({ ...draft, title })),
     setDescription: (description) => editDraft((draft) => ({ ...draft, description })),
+    setDefaultRepoConfigId: (defaultRepoConfigId) =>
+      editDraft((draft) => ({ ...draft, defaultRepoConfigId })),
     addNode: () => editDraft((draft) => ({
       ...draft,
       nodes: [...draft.nodes, {
@@ -211,10 +229,23 @@ export function workflowBuilderActions(
     updateDocTemplate: (index, patch) => editDraft((draft) => ({
       ...draft,
       docTemplates: draft.docTemplates.map((doc, candidate) =>
-        candidate === index ? { ...doc, ...patch } : doc
+        candidate === index ? { ...doc, ...normalizeDocTemplatePatch(patch) } : doc
       ),
     })),
   };
+}
+
+/**
+ * Slug normalization happens on the way into the draft, not in the field, so
+ * every writer (the panel, a future paste handler) lands the same value the
+ * grammar will be checked against.
+ */
+function normalizeDocTemplatePatch(
+  patch: Partial<WorkflowDocTemplateV2>,
+): Partial<WorkflowDocTemplateV2> {
+  return patch.slug === undefined
+    ? patch
+    : { ...patch, slug: normalizeDocSlugInput(patch.slug) };
 }
 
 function moveNode(

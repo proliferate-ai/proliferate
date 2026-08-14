@@ -51,6 +51,11 @@ export interface BootOptions {
    * flip any posture — telemetry mode, billing mode, E2B config, debug —
    * for a dedicated ephemeral boot without duplicating this whole function. */
   extraServerEnv?: NodeJS.ProcessEnv;
+  /** Extra/overriding env for the desktop web (Vite) process, applied last —
+   * the seam for `VITE_*` frontend posture a scenario needs, including launch
+   * flags (`VITE_WORKFLOWS_V2`). Vite exposes prefixed vars from the process
+   * env, so these reach `import.meta.env` in the served bundle. */
+  extraDesktopEnv?: NodeJS.ProcessEnv;
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -441,6 +446,9 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
       VITE_REQUIRE_AUTH: "true",
     };
     delete desktopEnv.VITE_DEV_DISABLE_AUTH;
+    if (options.extraDesktopEnv) {
+      Object.assign(desktopEnv, options.extraDesktopEnv);
+    }
     spawnTracked(
       children,
       "pnpm",

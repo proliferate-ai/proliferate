@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import type { RepoRoot } from "@anyharness/sdk";
 import { useRepoRootsQuery } from "@anyharness/sdk-react";
 import type {
   WorkflowArgumentsV2,
@@ -12,6 +11,7 @@ import {
   useWorkflowTriggerActions,
   type WorkflowTriggerLaunch,
 } from "#product/hooks/workflows/workflows/use-workflow-trigger-actions";
+import { workflowRepoRootOptions } from "#product/lib/domain/workflows/workflow-repo-root-options";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
@@ -41,11 +41,6 @@ interface TriggerFormState {
   mode: WorkflowPlacementModeV2;
 }
 
-interface TriggerRepositoryOption {
-  id: string;
-  label: string;
-}
-
 /**
  * The gen-2 "run this workflow" dialog: one field per declared input, where
  * the run should be placed, and a Confirm that hands the whole thing to the
@@ -71,7 +66,7 @@ export function WorkflowTriggerDialog({
   // only return once an explicit cloud-to-runtime mapping exists.
   const repoRootsQuery = useRepoRootsQuery({ enabled: open });
   const repositories = useMemo(
-    () => repoRootOptions(repoRootsQuery.data ?? []),
+    () => workflowRepoRootOptions(repoRootsQuery.data ?? []),
     [repoRootsQuery.data],
   );
 
@@ -264,19 +259,4 @@ function collectArguments(
     argumentsValue[input.name] = values[input.name]?.trim() ?? "";
   }
   return argumentsValue;
-}
-
-/**
- * `displayName` and the remote fields are optional on the wire, so the label
- * falls back the way the settings repository list falls back before showing a
- * raw id.
- */
-function repoRootOptions(repoRoots: readonly RepoRoot[]): TriggerRepositoryOption[] {
-  return repoRoots.map((repoRoot) => ({
-    id: repoRoot.id,
-    label: repoRoot.displayName?.trim()
-      || repoRoot.remoteRepoName?.trim()
-      || repoRoot.path.split("/").filter(Boolean).pop()
-      || repoRoot.id,
-  }));
 }

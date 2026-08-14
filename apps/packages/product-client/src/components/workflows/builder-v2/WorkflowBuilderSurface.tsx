@@ -1,21 +1,20 @@
 import { useMemo } from "react";
+import { useRepoRootsQuery } from "@anyharness/sdk-react";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useWorkflowBuilder } from "#product/hooks/workflows/facade/use-workflow-builder";
 import { workflowBuilderHarnessOptions } from "#product/lib/domain/workflows/workflow-builder-authoring";
+import { workflowRepoRootOptions } from "#product/lib/domain/workflows/workflow-repo-root-options";
+import { WorkflowBuilderDetailsCard } from "#product/components/workflows/builder-v2/WorkflowBuilderDetailsCard";
 import { WorkflowBuilderDocsPanel } from "#product/components/workflows/builder-v2/WorkflowBuilderDocsPanel";
 import { WorkflowBuilderInputsPanel } from "#product/components/workflows/builder-v2/WorkflowBuilderInputsPanel";
 import { WorkflowBuilderNodeCard } from "#product/components/workflows/builder-v2/WorkflowBuilderNodeCard";
 import { WorkflowResourceState } from "#product/components/workflows/WorkflowResourceState";
 import { Button } from "#product/primitives/Button";
 import { Plus } from "#product/primitives/icons/core";
-import { Input } from "#product/primitives/Input";
-import { Label } from "#product/primitives/Label";
-import { Card } from "#product/primitives/patterns/Card";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
-import { Textarea } from "#product/primitives/Textarea";
 
 export interface WorkflowBuilderSurfaceProps {
   /** `null` = a new workflow, blank or seeded from `template`. */
@@ -43,7 +42,26 @@ export function WorkflowBuilderSurface({
   onSaved,
   onBack,
 }: WorkflowBuilderSurfaceProps) {
-  const builder = useWorkflowBuilder({ definitionId, template, authCacheScope });
+  // Runtime repo roots, the same source `WorkflowTriggerDialog` picks a run's
+  // repository from. No `enabled` gate: unlike the dialog's `open`, this surface
+  // is only mounted while a workflow is being edited, and the query already
+  // disables itself when no runtime is connected.
+  const repoRootsQuery = useRepoRootsQuery();
+  const repositories = useMemo(
+    () => workflowRepoRootOptions(repoRootsQuery.data ?? []),
+    [repoRootsQuery.data],
+  );
+  // `null` while the list is unknown: an id cannot be confirmed against a list
+  // that has not arrived, and confirming it is what the save gate needs.
+  const availableRepoRootIds = repoRootsQuery.data
+    ? repoRootsQuery.data.map((repoRoot) => repoRoot.id)
+    : null;
+  const builder = useWorkflowBuilder({
+    definitionId,
+    template,
+    authCacheScope,
+    availableRepoRootIds,
+  });
   const registriesQuery = useCloudLaunchModelRegistries();
   const harnesses = useMemo(
     () => workflowBuilderHarnessOptions(registriesQuery.data),
@@ -126,42 +144,24 @@ export function WorkflowBuilderSurface({
             {WORKFLOW_BUILDER_COPY.catalogUnavailable}
           </NoticeBanner>
         ) : null}
+        {repoRootsQuery.isError ? (
+          <NoticeBanner tone="warning">
+            {WORKFLOW_BUILDER_COPY.repositoriesLoadFailed}
+          </NoticeBanner>
+        ) : null}
 
-        <Card as="section" surface="opaque" className="p-4">
-          <h2 className="text-heading font-medium text-foreground">
-            {WORKFLOW_BUILDER_COPY.detailsHeading}
-          </h2>
-          <div className="mt-3">
-            <Label htmlFor="workflow-builder-title">
-              {WORKFLOW_BUILDER_COPY.titleLabel}
-            </Label>
-            <Input
-              id="workflow-builder-title"
-              value={draft.title}
-              disabled={builder.saving}
-              placeholder={WORKFLOW_BUILDER_COPY.titlePlaceholder}
-              onChange={(event) => actions.setTitle(event.currentTarget.value)}
-            />
-            {draft.title.trim().length === 0 ? (
-              <p className="mt-1 text-ui-sm text-muted-foreground">
-                {WORKFLOW_BUILDER_COPY.titleRequiredHint}
-              </p>
-            ) : null}
-          </div>
-          <div className="mt-3">
-            <Label htmlFor="workflow-builder-description">
-              {WORKFLOW_BUILDER_COPY.descriptionLabel}
-            </Label>
-            <Textarea
-              id="workflow-builder-description"
-              value={draft.description}
-              rows={2}
-              disabled={builder.saving}
-              placeholder={WORKFLOW_BUILDER_COPY.descriptionPlaceholder}
-              onChange={(event) => actions.setDescription(event.currentTarget.value)}
-            />
-          </div>
-        </Card>
+        <WorkflowBuilderDetailsCard
+          title={draft.title}
+          description={draft.description}
+          defaultRepoConfigId={draft.defaultRepoConfigId}
+          repositories={repositories}
+          repositoriesLoading={repoRootsQuery.isLoading}
+          repoDefaultUnavailable={builder.repoDefaultUnavailable}
+          disabled={builder.saving}
+          onTitleChange={actions.setTitle}
+          onDescriptionChange={actions.setDescription}
+          onDefaultRepoConfigIdChange={actions.setDefaultRepoConfigId}
+        />
 
         <section className="space-y-3">
           <h2 className="text-heading font-medium text-foreground">
@@ -198,6 +198,7 @@ export function WorkflowBuilderSurface({
 
         <WorkflowBuilderInputsPanel
           inputs={draft.inputs}
+          issues={issues}
           disabled={builder.saving}
           onAdd={actions.addInput}
           onRemove={actions.removeInput}

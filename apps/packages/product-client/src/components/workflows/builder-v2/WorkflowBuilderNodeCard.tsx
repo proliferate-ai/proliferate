@@ -1,10 +1,10 @@
 import type { WorkflowNodeTypeV2, WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
-import type { DefinitionV2Issue } from "#product/domain/workflows/definition-v2";
 import {
   workflowBuilderModelOptions,
   type WorkflowBuilderHarnessOption,
 } from "#product/lib/domain/workflows/workflow-builder-authoring";
+import type { WorkflowBuilderIssue } from "#product/lib/domain/workflows/workflow-builder-validation";
 import { WorkflowBuilderPromptField } from "#product/components/workflows/builder-v2/WorkflowBuilderPromptField";
 import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
@@ -22,7 +22,7 @@ export interface WorkflowBuilderNodeCardProps {
   nodeCount: number;
   harnesses: readonly WorkflowBuilderHarnessOption[];
   /** Validator issues already narrowed to this node. */
-  issues: readonly DefinitionV2Issue[];
+  issues: readonly WorkflowBuilderIssue[];
   inputNames: ReadonlySet<string>;
   docSlugs: ReadonlySet<string>;
   disabled: boolean;
@@ -53,7 +53,14 @@ export function WorkflowBuilderNodeCard({
 }: WorkflowBuilderNodeCardProps) {
   const fieldPrefix = `workflow-builder-node-${node.id}`;
   const promptInvalid = issues.some((issue) =>
-    issue.code === "unknown_input_ref" || issue.code === "unknown_doc_ref");
+    issue.code === "unknown_input_ref"
+    || issue.code === "unknown_doc_ref"
+    || issue.code === "malformed_reference");
+  // Ids are minted, never typed, so the only way to reach an id error is to
+  // open a definition authored elsewhere. The badge IS the id's field, so the
+  // error is marked on it rather than only in the card's issue list.
+  const nodeIdInvalid = issues.some((issue) =>
+    issue.code === "invalid_node_id" || issue.code === "duplicate_node_id");
 
   return (
     <Card as="section" surface="opaque" className="p-4">
@@ -62,7 +69,13 @@ export function WorkflowBuilderNodeCard({
           <h3 className="text-body-emphasis font-medium text-foreground">
             {WORKFLOW_BUILDER_COPY.stepHeading(position)}
           </h3>
-          <Badge size="micro" tone="neutral">{node.id}</Badge>
+          <Badge
+            size="micro"
+            tone={nodeIdInvalid ? "destructive" : "neutral"}
+            data-invalid={nodeIdInvalid ? "true" : undefined}
+          >
+            {node.id}
+          </Badge>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button

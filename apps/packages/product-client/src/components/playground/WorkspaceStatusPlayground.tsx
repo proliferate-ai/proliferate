@@ -324,6 +324,9 @@ function FullSidebarPane() {
         <div className="flex min-h-0 flex-col px-2">
           <SidebarScrollingNavigation
             workspacesActive={false}
+            // The playground exists to review the chrome itself, so it renders
+            // every row regardless of the workflows_v2 launch gate.
+            showWorkflows
             workflowsActive={false}
             supportActive={false}
             onGoWorkspaces={() => {}}

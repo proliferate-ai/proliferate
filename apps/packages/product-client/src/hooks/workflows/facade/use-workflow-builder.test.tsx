@@ -162,6 +162,9 @@ describe("useWorkflowBuilder save mapping", () => {
     expect(mocks.create).toHaveBeenCalledWith({
       title: "Issue triage",
       description: "",
+      // Sent explicitly rather than omitted: a workflow with no default asks
+      // for a repository at launch instead.
+      defaultRepoConfigId: null,
       definition: {
         schemaVersion: 2,
         nodes: [{ id: "step-1", type: "agent", title: "", prompt: "" }],
@@ -235,6 +238,142 @@ describe("useWorkflowBuilder save mapping", () => {
   });
 });
 
+describe("useWorkflowBuilder declaration grammar gating", () => {
+  it("makes no write while a declared input name breaks the wire grammar", async () => {
+    const { result } = renderBuilder();
+
+    act(() => {
+      result.current.actions.setTitle("Issue triage");
+      result.current.actions.addInput();
+    });
+    act(() => {
+      result.current.actions.updateInput(0, { name: "my input" });
+    });
+
+    expect(result.current.issues.map((issue) => issue.code)).toEqual(["invalid_input_name"]);
+    expect(result.current.canSave).toBe(false);
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("writes once the name matches the grammar (negative control for the gate)", async () => {
+    const { result } = renderBuilder();
+
+    act(() => {
+      result.current.actions.setTitle("Issue triage");
+      result.current.actions.addInput();
+    });
+    // The name is the ONLY difference from the test above.
+    act(() => {
+      result.current.actions.updateInput(0, { name: "my_input" });
+    });
+
+    expect(result.current.issues).toEqual([]);
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("lowercases a doc slug as it is typed without rewriting an unrescuable one", () => {
+    const { result } = renderBuilder();
+
+    act(() => {
+      result.current.actions.setTitle("Issue triage");
+      result.current.actions.addDocTemplate();
+    });
+    act(() => {
+      result.current.actions.updateDocTemplate(0, { slug: " Research-Findings " });
+    });
+
+    expect(result.current.draft.docTemplates[0].slug).toBe("research-findings");
+    expect(result.current.issues).toEqual([]);
+
+    act(() => {
+      result.current.actions.updateDocTemplate(0, { slug: "My_Doc" });
+    });
+
+    expect(result.current.draft.docTemplates[0].slug).toBe("my_doc");
+    expect(result.current.issues.map((issue) => issue.code)).toEqual(["invalid_doc_slug"]);
+    expect(result.current.canSave).toBe(false);
+  });
+});
+
+describe("useWorkflowBuilder default repository", () => {
+  it("carries a picked runtime repo root into the saved default", async () => {
+    const { result } = renderBuilder();
+
+    act(() => {
+      result.current.actions.setTitle("Issue triage");
+      result.current.actions.setDefaultRepoConfigId("repo-2");
+    });
+
+    expect(result.current.repoDefaultUnavailable).toBe(false);
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(mocks.create.mock.calls[0][0].defaultRepoConfigId).toBe("repo-2");
+  });
+
+  it("refuses to save a stored default the runtime does not list", async () => {
+    mocks.detailQuery.data = savedRecord();
+    const { result } = renderBuilder({
+      definitionId: "wf-1",
+      availableRepoRootIds: ["repo-2"],
+    });
+
+    act(() => {
+      result.current.actions.setTitle("Renamed");
+    });
+
+    // The definition itself is valid — only the repository is unknown here.
+    expect(result.current.issues).toEqual([]);
+    expect(result.current.repoDefaultUnavailable).toBe(true);
+    expect(result.current.canSave).toBe(false);
+
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(mocks.update).not.toHaveBeenCalled();
+
+    // Negative control: picking a listed root is the only change.
+    act(() => {
+      result.current.actions.setDefaultRepoConfigId("repo-2");
+    });
+    expect(result.current.canSave).toBe(true);
+
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(mocks.update.mock.calls[0][0].body.defaultRepoConfigId).toBe("repo-2");
+  });
+
+  it("holds a save while the runtime's list is unknown, but not a draft with no default", () => {
+    mocks.detailQuery.data = savedRecord();
+    const stored = renderBuilder({ definitionId: "wf-1", availableRepoRootIds: null });
+
+    act(() => {
+      stored.result.current.actions.setTitle("Renamed");
+    });
+    expect(stored.result.current.canSave).toBe(false);
+
+    // A workflow that names no repository is unaffected by an unreachable
+    // runtime: there is no id to confirm, and the run picks one at launch.
+    mocks.detailQuery.data = undefined;
+    const fresh = renderBuilder({ availableRepoRootIds: null });
+    act(() => {
+      fresh.result.current.actions.setTitle("Issue triage");
+    });
+    expect(fresh.result.current.canSave).toBe(true);
+  });
+});
+
 describe("useWorkflowBuilder draft edits", () => {
   it("mints ids that never collide with a sibling", () => {
     expect(nextNodeId([{ id: "step-1", type: "agent", title: "", prompt: "" }]))
@@ -261,14 +400,22 @@ describe("useWorkflowBuilder draft edits", () => {
   });
 });
 
+/**
+ * `availableRepoRootIds` defaults to the ids the fixtures use, so a test only
+ * passes it when the runtime's list is what it is testing.
+ */
 function renderBuilder(args: {
   definitionId?: string | null;
   template?: (typeof WORKFLOW_STARTER_TEMPLATES_V2)[number] | null;
+  availableRepoRootIds?: readonly string[] | null;
 } = {}) {
   return renderHook(() => useWorkflowBuilder({
     definitionId: args.definitionId ?? null,
     template: args.template ?? null,
     authCacheScope: "user-1",
+    availableRepoRootIds: args.availableRepoRootIds === undefined
+      ? ["repo-1", "repo-2"]
+      : args.availableRepoRootIds,
   }));
 }
 

@@ -1,6 +1,10 @@
 import { useMemo } from "react";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
-import { parsePromptTokens, type PromptToken } from "#product/domain/workflows/definition-v2";
+import {
+  describeMalformedReference,
+  parsePromptTokens,
+  type PromptToken,
+} from "#product/domain/workflows/definition-v2";
 import { Badge } from "#product/primitives/Badge";
 import { Label } from "#product/primitives/Label";
 import { Textarea } from "#product/primitives/Textarea";
@@ -29,7 +33,9 @@ export interface WorkflowBuilderPromptFieldProps {
  *
  * It only appears once the prompt actually references something — a prompt
  * with no tokens has nothing to preview, and an empty mirror of every prompt
- * would double the height of every card for nothing.
+ * would double the height of every card for nothing. A malformed reference
+ * counts as a reference: `@doc:plan.md` is exactly the case the preview exists
+ * to show, so it opens the preview and chips as invalid.
  */
 export function WorkflowBuilderPromptField({
   fieldId,
@@ -90,6 +96,26 @@ function PromptTokenPart({
 }) {
   if (token.kind === "text") {
     return <>{token.text}</>;
+  }
+  // Malformed is its own state, not "unresolved": the reference cannot be made
+  // to resolve by declaring anything, because the planes that substitute
+  // references would not recognize it. Same destructive chip, and the reason
+  // comes from the grammar module so the wording matches the save-gate message.
+  if (token.kind === "malformed") {
+    return (
+      <Badge
+        size="micro"
+        tone="destructive"
+        title={WORKFLOW_BUILDER_COPY.malformedReferenceHint(
+          token.raw,
+          describeMalformedReference(token),
+        )}
+        data-resolved="false"
+        data-malformed="true"
+      >
+        {token.raw}
+      </Badge>
+    );
   }
   const resolved = token.kind === "input"
     ? inputNames.has(token.name)

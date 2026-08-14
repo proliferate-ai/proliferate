@@ -20,6 +20,11 @@ export const WORKFLOW_MAIN_COPY = {
 
   emptyTitle: "No workflows yet",
   emptyDescription: "Start from a template or build one from a blank chain.",
+  // A visible legacy group below contradicts "no workflows yet", so the empty
+  // state says what is actually empty.
+  emptyWithLegacyTitle: "Nothing rebuilt yet",
+  emptyWithLegacyDescription:
+    "Your earlier workflows are listed below as legacy. Start from a template or a blank chain to rebuild one.",
   useTemplateLabel: "Use template",
   startBlankLabel: "Start blank",
 
@@ -27,6 +32,12 @@ export const WORKFLOW_MAIN_COPY = {
   editLabel: (title: string) => `Edit ${title}`,
   rowActionsLabel: (title: string) => `${title} actions`,
   deleteItemLabel: "Delete...",
+
+  legacyGroupTitle: "Legacy",
+  legacyGroupDescription:
+    "Saved before workflows were rebuilt. These cannot be opened or run here — rebuild the ones you still want, then delete them.",
+  legacyBadgeLabel: "v1",
+  legacyDeleteLabel: (title: string) => `Delete ${title}`,
 
   deleteConfirmTitle: "Delete this workflow?",
   deleteConfirmDescription: (title: string) =>

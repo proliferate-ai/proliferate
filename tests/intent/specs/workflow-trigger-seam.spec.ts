@@ -20,10 +20,11 @@
 //
 // Flag: workflows_v2 (lib/domain/capabilities/workflows-v2.ts) defaults to
 // `false` today and flips to `true` in this ladder's final rung, its own
-// isolated commit later in this same PR; there is no env/flag override in
-// this suite's boot stack, so — same reasoning as workflow-definitions.spec.ts
-// — this file is authored against the flag-ON UI on the assumption CI only
-// runs it after that commit lands.
+// isolated commit later in this same PR. Same as workflow-definitions.spec.ts,
+// this file asserts the flag-ON UI without depending on that rung: the boot
+// harness serves the desktop web with `VITE_WORKFLOWS_V2=1`
+// (stack/global-setup.ts's `extraDesktopEnv`), which forces the gate on
+// whatever the compiled-in default is.
 
 import { expect, test, type Page } from "@playwright/test";
 import {

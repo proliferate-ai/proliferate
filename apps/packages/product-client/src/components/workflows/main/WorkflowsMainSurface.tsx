@@ -9,12 +9,14 @@ import {
 } from "#product/hooks/access/cloud/workflows/use-workflow-definitions-v2-access";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import {
+  selectWorkflowLegacyDefinitionRows,
   selectWorkflowV2DefinitionRows,
   type WorkflowMainListItem,
 } from "#product/domain/workflows/main-view-model";
 import { WorkflowMainDefinitionRow } from "#product/components/workflows/main/WorkflowMainDefinitionRow";
 import { WorkflowMainDeleteDialog } from "#product/components/workflows/main/WorkflowMainDeleteDialog";
 import { WorkflowMainEmptyState } from "#product/components/workflows/main/WorkflowMainEmptyState";
+import { WorkflowMainLegacyGroup } from "#product/components/workflows/main/WorkflowMainLegacyGroup";
 import { WorkflowMainNewMenu } from "#product/components/workflows/main/WorkflowMainNewMenu";
 import { WorkflowTriggerDialog } from "#product/components/workflows/trigger/WorkflowTriggerDialog";
 import type { WorkflowTriggerLaunch } from "#product/hooks/workflows/workflows/use-workflow-trigger-actions";
@@ -36,10 +38,16 @@ export interface WorkflowsMainSurfaceProps {
  * template), and the Run/Edit/Delete row actions.
  *
  * Split at the row (`WorkflowMainDefinitionRow`), the empty state
- * (`WorkflowMainEmptyState`) and the "new workflow" menu
+ * (`WorkflowMainEmptyState`), the legacy group
+ * (`WorkflowMainLegacyGroup`) and the "new workflow" menu
  * (`WorkflowMainNewMenu`) so this file stays the orchestrator: it owns the
  * list query, the run-record fetch a Run click needs, the delete mutation,
  * and nothing about how any one piece paints.
+ *
+ * The shared list route returns gen-1 rows alongside gen-2 ones. They cannot
+ * open in the v2 builder, so they get their own delete-only group rather than
+ * being filtered away — a definition the user saved must not disappear with
+ * nothing on screen accounting for it.
  */
 export function WorkflowsMainSurface({
   authCacheScope,
@@ -112,7 +120,9 @@ export function WorkflowsMainSurface({
     );
   }
 
-  const items = selectWorkflowV2DefinitionRows(listQuery.data?.workflows ?? []);
+  const rows = listQuery.data?.workflows ?? [];
+  const items = selectWorkflowV2DefinitionRows(rows);
+  const legacyItems = selectWorkflowLegacyDefinitionRows(rows);
   const runningRecord: WorkflowDefinitionRecordV2 | undefined =
     runningId !== null && runQuery.data?.id === runningId ? runQuery.data : undefined;
 
@@ -125,7 +135,7 @@ export function WorkflowsMainSurface({
       telemetryBlocked
     >
       {items.length === 0 ? (
-        <WorkflowMainEmptyState onNew={onNew} />
+        <WorkflowMainEmptyState onNew={onNew} legacyPresent={legacyItems.length > 0} />
       ) : (
         <Card surface="opaque" className="flex flex-col gap-0.5 p-2">
           {items.map((item) => (
@@ -143,6 +153,16 @@ export function WorkflowsMainSurface({
           ))}
         </Card>
       )}
+
+      {legacyItems.length > 0 ? (
+        <WorkflowMainLegacyGroup
+          items={legacyItems}
+          onDelete={(item) => {
+            setDeleteError(null);
+            setDeleteTarget(item);
+          }}
+        />
+      ) : null}
 
       {runningRecord ? (
         <WorkflowTriggerDialog

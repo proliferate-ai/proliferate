@@ -7,9 +7,9 @@ import {
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { workflowWriteErrorMessage } from "#product/domain/workflows/definition";
 import {
-  validateDefinitionV2,
-  type DefinitionV2Issue,
-} from "#product/domain/workflows/definition-v2";
+  workflowBuilderIssues,
+  type WorkflowBuilderIssue,
+} from "#product/lib/domain/workflows/workflow-builder-validation";
 import {
   draftFromRecord,
   draftFromTemplate,
@@ -34,13 +34,18 @@ export interface WorkflowBuilderModel {
   draft: WorkflowBuilderDraft;
   /** Exactly what a save would send: card order rendered as a linear edge list. */
   definition: WorkflowDefinitionV2;
-  issues: DefinitionV2Issue[];
+  issues: WorkflowBuilderIssue[];
   /** The persisted record behind the draft; `null` until a new workflow is created. */
   record: WorkflowDefinitionRecordV2 | null;
   dirty: boolean;
   saving: boolean;
   saved: boolean;
   canSave: boolean;
+  /**
+   * The draft names a repository the runtime does not list. The picker keeps
+   * showing it so nothing is misreported, and the save gate refuses it.
+   */
+  repoDefaultUnavailable: boolean;
   error: string | null;
   reload: () => void;
   actions: WorkflowBuilderActions;
@@ -52,6 +57,13 @@ export interface UseWorkflowBuilderArgs {
   definitionId: string | null;
   template?: WorkflowStarterTemplateV2 | null;
   authCacheScope: string;
+  /**
+   * Repo-root ids the RUNTIME currently lists, or `null` while that list is
+   * unknown (still loading, or the runtime is unreachable). Passed in rather
+   * than queried here: the runtime plane is the surface's dependency, and the
+   * gate below is the only thing this hook needs from it.
+   */
+  availableRepoRootIds: readonly string[] | null;
 }
 
 /**
@@ -68,6 +80,7 @@ export function useWorkflowBuilder({
   definitionId,
   template = null,
   authCacheScope,
+  availableRepoRootIds,
 }: UseWorkflowBuilderArgs): WorkflowBuilderModel {
   const detailQuery = useWorkflowDefinitionV2Access(definitionId, authCacheScope);
   const {
@@ -116,9 +129,10 @@ export function useWorkflowBuilder({
   }, [definitionId, loadedRecord, template]);
 
   const definition = useMemo(() => draftToDefinition(state.draft), [state.draft]);
-  // The builder's validation IS the shared validator; every rule the cards
-  // display comes from here and nowhere else.
-  const issues = useMemo(() => validateDefinitionV2(definition), [definition]);
+  // The builder's validation IS the shared validator plus the shared grammar
+  // patterns it leaves to the wire models; every rule the cards display comes
+  // from `workflowBuilderIssues` and nowhere else.
+  const issues = useMemo(() => workflowBuilderIssues(definition), [definition]);
 
   const editDraft = useCallback((
     edit: (draft: WorkflowBuilderDraft) => WorkflowBuilderDraft,
@@ -142,19 +156,34 @@ export function useWorkflowBuilder({
   // required wire field, so an untitled draft is refused here rather than at
   // the server.
   const titled = state.draft.title.trim().length > 0;
-  const canSave = issues.length === 0 && titled && !saving && (dirty || record === null);
+  // Also not a definition rule, and also refused here rather than at the
+  // server: the default repository is a runtime repo-root id, and persisting
+  // one this runtime does not list would save a default the trigger dialog
+  // refuses to launch. A draft with NO default is savable — the dialog asks for
+  // a repository at launch time — so an unreachable runtime only blocks the
+  // workflows that already name one.
+  const repoDefaultUnavailable = state.draft.defaultRepoConfigId.length > 0
+    && (availableRepoRootIds === null
+      || !availableRepoRootIds.includes(state.draft.defaultRepoConfigId));
+  const savableNow = issues.length === 0 && titled && !repoDefaultUnavailable;
+  const canSave = savableNow && !saving && (dirty || record === null);
 
   const inFlight = useRef(false);
   const save = useCallback(async (): Promise<WorkflowDefinitionRecordV2 | null> => {
     // The hard gate: an invalid definition makes no request at all, so a
     // failed save is always the server's answer and never the UI's.
-    if (issues.length > 0 || !titled || inFlight.current) {
+    if (!savableNow || inFlight.current) {
       return null;
     }
     inFlight.current = true;
     setState((previous) => ({ ...previous, status: "saving", error: null }));
     const title = state.draft.title.trim();
     const description = state.draft.description.trim();
+    // Always sent, on create as well as on the full-document PUT: the picker's
+    // empty option means "no default", which is `null` on the wire, and
+    // omitting the field on an update would instead preserve whatever was
+    // stored.
+    const defaultRepoConfigId = state.draft.defaultRepoConfigId.trim() || null;
     try {
       const saved = record
         ? await updateWorkflowDefinitionV2({
@@ -162,15 +191,17 @@ export function useWorkflowBuilder({
           body: {
             title,
             description,
-            // Carried through rather than dropped: the builder has no
-            // repository picker, and omitting the field on a full-document
-            // PUT would silently clear the default the trigger dialog reads.
-            defaultRepoConfigId: record.defaultRepoConfigId,
+            defaultRepoConfigId,
             definition,
             expectedRevision: record.revision,
           },
         })
-        : await createWorkflowDefinitionV2({ title, description, definition });
+        : await createWorkflowDefinitionV2({
+          title,
+          description,
+          defaultRepoConfigId,
+          definition,
+        });
       setSavedRecord(saved);
       setState((previous) => ({
         ...previous,
@@ -192,10 +223,9 @@ export function useWorkflowBuilder({
   }, [
     createWorkflowDefinitionV2,
     definition,
-    issues,
     record,
+    savableNow,
     state.draft,
-    titled,
     updateWorkflowDefinitionV2,
   ]);
 
@@ -218,6 +248,7 @@ export function useWorkflowBuilder({
     saving,
     saved: state.status === "saved" && !dirty,
     canSave,
+    repoDefaultUnavailable,
     error: state.error,
     reload,
     actions,

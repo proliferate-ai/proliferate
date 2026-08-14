@@ -31,6 +31,16 @@ export const WORKFLOW_BUILDER_COPY = {
   titleRequiredHint: "A title is required before this workflow can be saved.",
   descriptionLabel: "Description",
   descriptionPlaceholder: "What this workflow does and when to run it.",
+  defaultRepositoryLabel: "Default repository",
+  defaultRepositoryPlaceholder: "Ask at launch",
+  defaultRepositoryHelp:
+    "Where runs of this workflow start. Leave it unset and each run picks a repository instead.",
+  defaultRepositoryUnavailableOption: (repoRootId: string) =>
+    `Saved repository unavailable (${repoRootId})`,
+  defaultRepositoryUnavailableHint:
+    "This workflow's saved repository is not one this runtime lists. Pick a listed repository, or clear it, before saving.",
+  repositoriesLoadFailed:
+    "Repositories could not be loaded from the runtime. Reconnect to change this workflow's default repository.",
 
   issuesBanner: (count: number, firstMessage: string) =>
     `Fix ${count} ${count === 1 ? "issue" : "issues"} before saving. ${firstMessage}`,
@@ -63,6 +73,9 @@ export const WORKFLOW_BUILDER_COPY = {
   promptPreviewLabel: "Prompt preview",
   resolvedReferenceHint: (raw: string) => `${raw} is declared`,
   unresolvedReferenceHint: (raw: string) => `${raw} is not declared yet`,
+  /** `reason` is `describeMalformedReference`'s fragment, so the grammar is stated once. */
+  malformedReferenceHint: (raw: string, reason: string) =>
+    `${raw} is not a valid reference: ${reason}`,
 
   inputsHeading: "Inputs",
   inputsDescription: "Values supplied when a run starts. Prompts read them as @input:name.",

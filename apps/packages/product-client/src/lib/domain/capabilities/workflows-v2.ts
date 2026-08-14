@@ -1,39 +1,26 @@
 /**
  * TEMPORARY launch gate: the entire Workflows gen-2 (schema_version 2)
- * surface — builder, invocations, run views — is disabled by default while
- * the gen-2 ladder lands. Dev builds can opt in locally via
- * `VITE_WORKFLOWS_V2` to build/verify the surface ahead of launch.
+ * surface — builder, invocations, run views — ships dark until the gen-2
+ * ladder's final rung flips WORKFLOWS_V2_DEFAULT to true, as its own isolated
+ * commit.
  *
- * Flip WORKFLOWS_V2_DEFAULT to true in the ladder's final rung, as its own
- * isolated commit, to make gen-2 the default experience everywhere.
+ * `VITE_WORKFLOWS_V2` is the runtime kill switch for that surface, in any
+ * build (there is deliberately no dev-only condition on it): an explicit "1"
+ * forces gen-2 on even while the default is off, and an explicit "0" forces
+ * it off even after the default flips on — which is the point, since "0" is
+ * how the surface gets turned back off without cutting a release. Every other
+ * value, including unset and empty, defers to WORKFLOWS_V2_DEFAULT.
  *
  * Mirrors the temporary-gate style of ./cloud-compute.ts.
  */
 const WORKFLOWS_V2_DEFAULT = false; // flipped to true in the ladder's final rung, as its own isolated commit
 
-// Mirrors lib/domain/auth/auth-mode.ts's local envFlagEnabled. The canonical
-// implementation lives behind lib/infra/measurement/measurement-port.ts's
-// debug-utils sink indirection (a port built for pluggable measurement
-// engines); importing that here for one truthy/falsy string check would pull
-// an infra-layer dependency-injection seam into a domain-layer capability
-// gate, so it is replicated locally instead — same call auth-mode.ts already
-// made.
-function envFlagEnabled(value: string | undefined, defaultValue: boolean): boolean {
-  if (!value) {
-    return defaultValue;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) {
-    return defaultValue;
-  }
-
-  return !["0", "false", "off", "no"].includes(normalized);
-}
-
 export interface WorkflowsV2GateInput {
-  dev: boolean;
+  /** Raw `VITE_WORKFLOWS_V2`. Only "1" and "0" override the default. */
   viteWorkflowsV2?: string;
+  /** The compiled-in default. Injectable so the gate can be covered against
+   * both postures without editing WORKFLOWS_V2_DEFAULT. */
+  defaultEnabled?: boolean;
 }
 
 /**
@@ -41,13 +28,18 @@ export interface WorkflowsV2GateInput {
  * is awkward to stub per-test, so the gate logic itself is plain and the
  * `import.meta.env` read lives only in the thin wrapper below.
  */
-export function resolveWorkflowsV2Enabled(input: WorkflowsV2GateInput): boolean {
-  return WORKFLOWS_V2_DEFAULT || (input.dev && envFlagEnabled(input.viteWorkflowsV2, false));
+export function resolveWorkflowsV2Enabled(input: WorkflowsV2GateInput = {}): boolean {
+  const override = input.viteWorkflowsV2?.trim();
+  if (override === "1") {
+    return true;
+  }
+  if (override === "0") {
+    return false;
+  }
+
+  return input.defaultEnabled ?? WORKFLOWS_V2_DEFAULT;
 }
 
 export function isWorkflowsV2Enabled(): boolean {
-  return resolveWorkflowsV2Enabled({
-    dev: import.meta.env.DEV,
-    viteWorkflowsV2: import.meta.env.VITE_WORKFLOWS_V2,
-  });
+  return resolveWorkflowsV2Enabled({ viteWorkflowsV2: import.meta.env.VITE_WORKFLOWS_V2 });
 }

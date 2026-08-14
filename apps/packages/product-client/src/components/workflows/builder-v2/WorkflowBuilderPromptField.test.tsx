@@ -46,6 +46,33 @@ describe("WorkflowBuilderPromptField", () => {
     expect(chipState("@doc:report")).toBe("true");
   });
 
+  it("chips a malformed reference as invalid and says why", () => {
+    renderField({
+      // `plan.md` is the case the grammar exists for: prefix-matching `plan`
+      // out of it would silently reference a different document.
+      value: "Read @doc:plan.md and @INPUT:goal.",
+      inputNames: ["goal"],
+      docSlugs: ["plan"],
+    });
+
+    expect(chipState("@doc:plan.md")).toBe("false");
+    expect(screen.getByText("@doc:plan.md").getAttribute("data-malformed")).toBe("true");
+    expect(screen.getByText("@doc:plan.md").getAttribute("title"))
+      .toBe("@doc:plan.md is not a valid reference: doc slug “plan.md” must be lowercase "
+        + "kebab-case: letters and digits joined by single dashes");
+    // A declared input spelled with the wrong sigil case is malformed too, not
+    // resolved: the planes that substitute references only know `@input:`.
+    expect(screen.getByText("@INPUT:goal").getAttribute("data-malformed")).toBe("true");
+  });
+
+  it("marks a valid reference as resolved, not malformed", () => {
+    // Negative control for the chip above: same prompt shape, well-formed slug.
+    renderField({ value: "Read @doc:plan.", inputNames: [], docSlugs: ["plan"] });
+
+    expect(chipState("@doc:plan")).toBe("true");
+    expect(screen.getByText("@doc:plan").getAttribute("data-malformed")).toBeNull();
+  });
+
   it("keeps the prose between chips so the preview mirrors the prompt", () => {
     renderField({
       value: "Investigate @input:goal now.",

@@ -1,6 +1,6 @@
 import type { WorkflowDocTemplateV2, WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
-import type { DefinitionV2Issue } from "#product/domain/workflows/definition-v2";
+import type { WorkflowBuilderIssue } from "#product/lib/domain/workflows/workflow-builder-validation";
 import { Button } from "#product/primitives/Button";
 import { Plus, Trash } from "#product/primitives/icons/core";
 import { Input } from "#product/primitives/Input";
@@ -14,8 +14,8 @@ export interface WorkflowBuilderDocsPanelProps {
   docTemplates: readonly WorkflowDocTemplateV2[];
   /** Chain-ordered nodes; the producing-node select offers exactly these. */
   nodes: readonly WorkflowNodeV2[];
-  /** Validator issues carrying a doc slug or producing-node id in `ref`. */
-  issues: readonly DefinitionV2Issue[];
+  /** Every issue; rows select their own by slug, producing-node id or index. */
+  issues: readonly WorkflowBuilderIssue[];
   disabled: boolean;
   onAdd: () => void;
   onRemove: (index: number) => void;
@@ -74,7 +74,7 @@ export function WorkflowBuilderDocsPanel({
               doc={doc}
               index={index}
               nodes={nodes}
-              issues={issuesForDoc(issues, doc)}
+              issues={issuesForDoc(issues, doc, index)}
               disabled={disabled}
               onRemove={() => onRemove(index)}
               onChange={(patch) => onChange(index, patch)}
@@ -98,7 +98,7 @@ function WorkflowBuilderDocRow({
   doc: WorkflowDocTemplateV2;
   index: number;
   nodes: readonly WorkflowNodeV2[];
-  issues: readonly DefinitionV2Issue[];
+  issues: readonly WorkflowBuilderIssue[];
   disabled: boolean;
   onRemove: () => void;
   onChange: (patch: Partial<WorkflowDocTemplateV2>) => void;
@@ -119,10 +119,14 @@ function WorkflowBuilderDocRow({
             id={`${fieldPrefix}-slug`}
             value={doc.slug}
             disabled={disabled}
-            aria-invalid={issues.some((issue) => issue.code === "duplicate_doc_slug")
+            aria-invalid={issues.some((issue) =>
+              issue.code === "duplicate_doc_slug" || issue.code === "invalid_doc_slug")
               ? "true"
               : undefined}
             placeholder={WORKFLOW_BUILDER_COPY.docSlugPlaceholder}
+            // The draft normalizes what the grammar can only ever reject —
+            // case and surrounding whitespace — so the field shows the value
+            // that will be saved and checked.
             onChange={(event) => onChange({ slug: event.currentTarget.value })}
           />
         </div>
@@ -188,16 +192,19 @@ function WorkflowBuilderDocRow({
 }
 
 /**
- * Issues that belong on this row. Both codes carry their subject in `ref`:
- * `duplicate_doc_slug` the slug, `unknown_producing_node` the missing node id
- * — matched on the row's own values rather than on position, because the
- * validator never reports an index.
+ * Issues that belong on this row. `duplicate_doc_slug` and
+ * `unknown_producing_node` carry their subject in `ref` and are matched on the
+ * row's own values, because the validator reports no index for either;
+ * `invalid_doc_slug` is positional, since a blank slug would otherwise match
+ * every blank row.
  */
 function issuesForDoc(
-  issues: readonly DefinitionV2Issue[],
+  issues: readonly WorkflowBuilderIssue[],
   doc: WorkflowDocTemplateV2,
-): DefinitionV2Issue[] {
+  index: number,
+): WorkflowBuilderIssue[] {
   return issues.filter((issue) =>
     (issue.code === "duplicate_doc_slug" && issue.ref === doc.slug)
-    || (issue.code === "unknown_producing_node" && issue.ref === doc.producingNodeId));
+    || (issue.code === "unknown_producing_node" && issue.ref === doc.producingNodeId)
+    || (issue.code === "invalid_doc_slug" && issue.index === index));
 }

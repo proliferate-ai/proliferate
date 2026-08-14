@@ -21,14 +21,12 @@
 // asserted `null` throughout rather than seeded.
 //
 // Flag: workflows_v2 (lib/domain/capabilities/workflows-v2.ts) defaults to
-// `false` today and flips to `true` in this ladder's final rung, landed as
-// its own isolated commit later in this same PR. No sibling spec in this
-// suite toggles a frontend capability flag (grepped tests/intent for an
-// env/flag convention; none exists), and `bootStack`'s desktop env has no
-// override seam for it either — this spec is therefore authored against the
-// flag-ON UI on the assumption that CI only runs it after that final commit
-// lands, per the PR's own sequencing. See this file's report for the
-// contradiction if that assumption is ever wrong.
+// `false` today and flips to `true` in this ladder's final rung, landed as its
+// own isolated commit later in this same PR. This spec asserts the flag-ON UI
+// and does not wait for that rung: the boot harness serves the desktop web
+// with `VITE_WORKFLOWS_V2=1` (stack/global-setup.ts's `extraDesktopEnv`),
+// which forces the gate on in either direction, so this file passes before and
+// after the default flips.
 
 import { expect, test, type Page } from "@playwright/test";
 import {
