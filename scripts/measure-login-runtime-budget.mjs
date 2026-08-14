@@ -83,7 +83,14 @@ const DIST = join(REPO_ROOT, "apps", "web", "dist");
 // deps-bump residual). Posthog 1.386.8 pin recovered most weight but PR #1677's
 // 30-package bump had small residual contributors (~500 B). Honest fix = cap raise
 // to 490000 B (pre-bump CI was 481979 B, leaving only 3 KB headroom).
-const CAPS = { js: 490000, css: 66000 };
+//
+// Raised to 500000 B on 2026-08-13 (founder decision, this PR). The diagnostic
+// snapshot consent surface put /login at 495612 B, 5612 B over. The weight is
+// support-modal code that most users never open, so the standing intent is to
+// lazy-load it out of the first-load graph and lower this cap again; the raise
+// is the unblock, not the fix. main and PRs 6-7 of this train measure clean, so
+// this PR is the whole delta.
+const CAPS = { js: 500000, css: 66000 };
 // Baseline requests zero of these on /login; any byte is a fail-closed
 // regression (login/callback must not eagerly load fonts/images/audio).
 const ZERO_KINDS = ["font", "image", "audio"];
