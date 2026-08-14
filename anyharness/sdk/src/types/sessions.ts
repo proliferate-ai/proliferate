@@ -1,4 +1,5 @@
 import type { components } from "../generated/openapi.js";
+import type { AnyHarnessRequestOptions } from "../client/core.js";
 
 type GeneratedNormalizedSessionControls =
   components["schemas"]["NormalizedSessionControls"];
@@ -29,6 +30,14 @@ export type Session = Omit<GeneratedSession, "liveConfig"> & {
   liveConfig?: SessionLiveConfigSnapshot | null;
   actionCapabilities: SessionActionCapabilities;
 };
+export type AnyHarnessBoundedWindowMetaV1 =
+  components["schemas"]["AnyHarnessBoundedWindowMetaV1"];
+export type AnyHarnessSessionSupportWindowV1 =
+  components["schemas"]["AnyHarnessSessionSupportWindowV1"];
+export type AnyHarnessEventSupportWindowV1 =
+  components["schemas"]["AnyHarnessEventSupportWindowV1"];
+export type AnyHarnessRawNotificationSupportWindowV1 =
+  components["schemas"]["AnyHarnessRawNotificationSupportWindowV1"];
 export type CreateSessionRequest = components["schemas"]["CreateSessionRequest"];
 export type SessionMcpEnvVar = components["schemas"]["SessionMcpEnvVar"];
 export type SessionMcpHeader = components["schemas"]["SessionMcpHeader"];
@@ -138,18 +147,6 @@ export type SubagentStatus = components["schemas"]["SubagentStatus"];
 export type ActivityUsage = components["schemas"]["ActivityUsage"];
 export type FeedRef = components["schemas"]["FeedRef"];
 export type FeedKind = components["schemas"]["FeedKind"];
-export type SessionSubagentsResponse =
-  components["schemas"]["SessionSubagentsResponse"];
-export type ScheduleSubagentWakeRequest =
-  components["schemas"]["ScheduleSubagentWakeRequest"];
-export type ScheduleSubagentWakeResponse =
-  components["schemas"]["ScheduleSubagentWakeResponse"];
-export type ParentSubagentLinkSummary =
-  components["schemas"]["ParentSubagentLinkSummary"];
-export type ChildSubagentSummary =
-  components["schemas"]["ChildSubagentSummary"];
-export type SubagentCompletionSummary =
-  components["schemas"]["SubagentCompletionSummary"];
 export type InteractionDecision = components["schemas"]["InteractionDecision"];
 export type ResolveInteractionRequest =
   components["schemas"]["ResolveInteractionRequest"];
@@ -162,6 +159,32 @@ export interface ListSessionEventsOptions {
   limit?: number;
   oldestFirst?: boolean;
   turnLimit?: number;
+}
+
+export type ListSupportSessionWindowOptions =
+  | {
+      mode: "exact";
+      sessionId: string;
+      updatedAtTo: string;
+      limit: 1;
+      maxResponseBytes: 1_048_576;
+      request: AnyHarnessRequestOptions;
+    }
+  | {
+      mode: "recent";
+      updatedAtFrom: string;
+      updatedAtTo: string;
+      limit: 1 | 2 | 3;
+      maxResponseBytes: 1_048_576;
+      request: AnyHarnessRequestOptions;
+    };
+
+export interface ListSupportEvidenceWindowOptions {
+  timestampFrom: string;
+  timestampTo: string;
+  limit: number;
+  maxResponseBytes: number;
+  request: AnyHarnessRequestOptions;
 }
 
 export function normalizeSessionControls(

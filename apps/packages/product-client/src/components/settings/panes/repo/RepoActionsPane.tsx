@@ -10,6 +10,7 @@ import { SettingsSection } from "#product/primitives/patterns/settings/SettingsS
 import { Checkbox } from "#product/primitives/Checkbox";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
+import { Switch } from "#product/primitives/Switch";
 import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import { RunCommandHelp } from "#product/components/settings/shared/RunCommandHelp";
 import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
@@ -28,6 +29,7 @@ import {
 } from "#product/components/settings/panes/repo/RepoScopeStates";
 
 const SCRIPT_PLACEHOLDER = "pnpm install\npnpm prisma generate";
+const ARCHIVE_SCRIPT_PLACEHOLDER = "pnpm run build:clean\npnpm run export-state";
 const RUN_COMMAND_INPUT_CLASS = "h-8 w-full rounded-lg px-2.5 font-mono text-ui-sm";
 
 /**
@@ -35,10 +37,10 @@ const RUN_COMMAND_INPUT_CLASS = "h-8 w-full rounded-lg px-2.5 font-mono text-ui-
  * the picked Cloud|Local context.
  *
  * HONEST OMISSIONS vs the design-system bench (no backing API anywhere):
- * the ARCHIVE SCRIPT section (no such field exists on any endpoint) and the
- * setup-script attached-file chips (there is no attach-files-to-script API —
- * cloud secret files belong to the Environment page). The bench's RUN SCRIPT
- * renders as "Run command" because the API field is a single-line command.
+ * the setup-script attached-file chips (there is no attach-files-to-script
+ * API — cloud secret files belong to the Environment page). The bench's RUN
+ * SCRIPT renders as "Run command" because the API field is a single-line
+ * command.
  */
 export function RepoActionsPane({
   repository,
@@ -170,6 +172,10 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
     setSetupDraft,
     runCommandDraft,
     setRunCommandDraft,
+    archiveScriptDraft,
+    setArchiveScriptDraft,
+    rerunSetupOnUnarchiveDraft,
+    setRerunSetupOnUnarchiveDraft,
     canSave,
     canRevert,
     save,
@@ -234,6 +240,31 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
             )}
           </SettingsRow>
         ) : null}
+      </SettingsSection>
+      <SettingsSection
+        title="Archive script"
+        description="Runs in phase 2 while the worktree still exists. Failure is non-fatal."
+        surface="plain"
+      >
+        <ScriptBlock
+          ariaLabel="Local archive script"
+          fileLabel="archive.sh"
+          value={archiveScriptDraft}
+          placeholder={ARCHIVE_SCRIPT_PLACEHOLDER}
+          onChange={setArchiveScriptDraft}
+          className="w-full"
+        />
+      </SettingsSection>
+      <SettingsSection title="Unarchive">
+        <SettingsRow
+          label="Run setup script on unarchive"
+          description="Reruns the setup script above when this workspace is restored."
+        >
+          <Switch
+            checked={rerunSetupOnUnarchiveDraft}
+            onChange={setRerunSetupOnUnarchiveDraft}
+          />
+        </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Run command">
         <div className="space-y-2 px-3.5 py-4">

@@ -15,7 +15,8 @@ export const MAX_LAYOUT_READ_REPORTS = 40;
 export const MAX_LAYOUT_READ_STACK_CAPTURE_COUNT = 80;
 export const SLOW_LAYOUT_READ_THRESHOLD_MS = 12;
 export const LAYOUT_READ_TOTAL_MILESTONES = new Set([1, 5, 10, 25, 50, 100, 250, 500, 1_000]);
-export const INTERNAL_LOG_RENDERER_EVENT_URL = "ipc://localhost/log_renderer_event";
+export const INTERNAL_RENDERER_DIAGNOSTICS_INGEST_URL =
+  "ipc://localhost/ingest_renderer_diagnostics";
 export const NOISY_BOOT_LABEL_PREFIXES = ["app_runtime.render.", "fetch.", "performance.measure."];
 
 export interface BootDiagnosticEvent {

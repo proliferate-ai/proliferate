@@ -5,13 +5,18 @@ import type {
 import { resolveSessionStatus } from "#product/domain/sessions/activity";
 import {
   finishOrCancelMeasurementOperation,
+  logLatency,
   markOperationForNextCommit,
   recordMeasurementMetric,
+  recordMeasurementWorkflowStep,
 } from "#product/lib/infra/measurement/measurement-port";
+import { recordSessionHistoryRehydrateFailure } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 import type {
   MeasurementOperationId,
   MeasurementOperationKind,
   MeasurementSurface,
+  MeasurementWorkflowStep,
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
 import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
@@ -37,6 +42,43 @@ export function isSessionHistoryTimeoutAbort(error: unknown): boolean {
   return error instanceof Error
     && error.name === "AbortError"
     && error.message === "Session history request timed out";
+}
+
+// A failed rehydrate reports to three places at once: the renderer diagnostics
+// port, the latency log, and (in dev only) the console. Timeout aborts are
+// expected under slow networks, so they stay out of the console.
+export function reportSessionHistoryRehydrateFailure(input: {
+  error: unknown;
+  sessionId: string;
+  operationId?: MeasurementOperationId | null;
+  afterSeq?: number | null;
+  beforeSeq?: number | null;
+  limit?: number | null;
+  turnLimit?: number | null;
+  timeoutMs?: number | null;
+  elapsedMs: number;
+}): void {
+  const errorName = safeRendererErrorName(input.error);
+  const timeoutAbort = isSessionHistoryTimeoutAbort(input.error);
+  recordSessionHistoryRehydrateFailure({
+    sessionId: input.sessionId,
+    operationId: input.operationId ?? undefined,
+    errorName,
+    timeoutAbort,
+  });
+  if (import.meta.env.DEV && !timeoutAbort) {
+    console.debug("[session-runtime] session history rehydrate failed", input.error);
+  }
+  logLatency("session.history.rehydrate.failed", {
+    sessionId: input.sessionId,
+    afterSeq: input.afterSeq ?? null,
+    beforeSeq: input.beforeSeq ?? null,
+    limit: input.limit ?? null,
+    turnLimit: input.turnLimit ?? null,
+    timeoutMs: input.timeoutMs ?? null,
+    elapsedMs: input.elapsedMs,
+    errorName,
+  });
 }
 
 export function resolveHistoryApplyOperationKind(input: {
@@ -157,4 +199,41 @@ export function recordHistoryStateCounts(
     target: isBefore ? "session.history.items_before" : "session.history.items_after",
     count: Object.keys(transcript.itemsById).length,
   });
+}
+
+export function recordHistoryApplyStepMetrics(
+  operationIds: readonly MeasurementOperationId[],
+  input: {
+    phase: "replay" | "store" | "mount_subagents";
+    startedAt: number;
+    count?: number;
+  },
+): void {
+  for (const operationId of operationIds) {
+    if (input.phase === "replay") {
+      recordMeasurementMetric({
+        type: "reducer",
+        category: "session.events.list",
+        operationId,
+        durationMs: performance.now() - input.startedAt,
+        count: input.count ?? 0,
+      });
+    } else if (input.phase === "store") {
+      recordMeasurementMetric({
+        type: "store",
+        category: "session.events.list",
+        operationId,
+        durationMs: performance.now() - input.startedAt,
+      });
+    }
+    recordMeasurementWorkflowStep({
+      operationId,
+      step: `session.history.${input.phase}` as MeasurementWorkflowStep,
+      startedAt: input.startedAt,
+      ...(input.count !== undefined ? { count: input.count } : {}),
+    });
+    if (input.phase === "mount_subagents") {
+      markSessionApplyForNextCommit(operationId);
+    }
+  }
 }

@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use super::WorkspaceRuntime;
+use crate::adapters::git::operations::worktree_restore::WorktreeRestoreOptions;
 use crate::adapters::git::types::{GitWorktreeRestoreError, GitWorktreeRestoreOutcome};
 use crate::adapters::git::GitService;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord};
@@ -85,10 +86,17 @@ impl WorkspaceRuntime {
             });
         }
 
+        // Legacy option values: the live route's behavior is unchanged by
+        // R2's hardening. `prune_target_registration: false` preserves
+        // today's `RegistrationConflict` refusal on a prunable registration.
         let outcome = GitService::restore_worktree(
             Path::new(&repo_root.path),
             Path::new(&workspace.path),
-            branch,
+            WorktreeRestoreOptions {
+                branch: Some(branch),
+                no_checkout: false,
+                prune_target_registration: false,
+            },
         )?;
         Ok(RestoreWorktreeResult { workspace, outcome })
     }

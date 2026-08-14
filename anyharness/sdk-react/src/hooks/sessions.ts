@@ -27,7 +27,6 @@ import {
   anyHarnessSessionEventsKey,
   anyHarnessSessionKey,
   anyHarnessSessionLiveConfigKey,
-  anyHarnessSessionSubagentsKey,
   anyHarnessSessionsKey,
 } from "../lib/query-keys.js";
 
@@ -178,53 +177,6 @@ export function useSessionEventsQuery(
             request: requestOptionsWithSignal(undefined, signal),
           },
       );
-    },
-  });
-}
-
-export function useSessionSubagentsQuery(
-  sessionId: string | null | undefined,
-  options?: WorkspaceQueryOptions,
-) {
-  const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useAnyHarnessCacheScopeKey();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
-
-  return useQuery({
-    queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, sessionId),
-    enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
-    queryFn: async ({ signal }) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
-      const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.getSubagents(
-        sessionId!,
-        requestOptionsWithSignal(undefined, signal),
-      );
-    },
-  });
-}
-
-export function useScheduleSubagentWakeMutation(options?: { workspaceId?: string | null }) {
-  const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useAnyHarnessCacheScopeKey();
-  const queryClient = useQueryClient();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
-
-  return useMutation({
-    mutationFn: async (input: { sessionId: string; childSessionId: string }) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
-      const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.scheduleSubagentWake(input.sessionId, input.childSessionId);
-    },
-    onSuccess: async (_response, variables) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, variables.sessionId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, variables.childSessionId),
-        }),
-      ]);
     },
   });
 }

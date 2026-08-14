@@ -67,13 +67,11 @@ vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: () => ({
     data: {
       localWorkspaces: [],
-      retiredLocalWorkspaces: [],
-      repoRoots: [],
+        repoRoots: [],
       cloudWorkspaces: [],
       workspaces: [],
       allWorkspaces: [],
-      cleanupAttentionWorkspaces: [],
-    },
+      },
   }),
 }));
 
@@ -247,11 +245,6 @@ function localWorkspace(id: string): Workspace {
     origin: null,
     creatorContext: null,
     lifecycleState: "active",
-    cleanupState: "none",
-    cleanupOperation: null,
-    cleanupErrorMessage: null,
-    cleanupFailedAt: null,
-    cleanupAttemptedAt: null,
     executionSummary: null,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",

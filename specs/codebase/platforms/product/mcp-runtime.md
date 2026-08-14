@@ -39,6 +39,9 @@ domains/reviews/hooks.rs
 domains/sessions/subagents/hooks.rs
 ```
 
+The subagent hook is completion-delivery lifecycle integration; it does not
+inject a Subagents MCP server.
+
 The extension returns launch extras:
 
 - system prompt append text
@@ -53,15 +56,15 @@ Internal Proliferate tool surfaces exposed to agents through HTTP MCP servers.
 Examples:
 
 - cowork artifact/delegation tools
-- subagent tools
+- Workspace agent and delegated-work tools
 - review tools
 
 Current implementation shape:
 
 ```text
+domains/agent_operations/mcp/
 domains/cowork/mcp/
 domains/reviews/mcp/
-domains/sessions/subagents/mcp/
 ```
 
 Product tool behavior stays with the product domain.
@@ -91,9 +94,10 @@ This is part of the live interaction broker, not a product MCP tool server.
 SessionRuntime starts a session
   -> decrypts user MCP bindings unless internal-only policy applies
   -> asks registered SessionExtension implementations for launch extras
+  -> selects and injects registered product MCPs from ProductMcpLaunchCatalog
   -> merges system prompt append values
-  -> persists extension binding summaries
-  -> appends internal MCP servers to user MCP servers
+  -> persists extension and product binding summaries
+  -> combines internal product MCP servers with user MCP servers
   -> passes final MCP server list to the live session actor
 ```
 
@@ -132,6 +136,7 @@ The assembly function owns:
 - applying `InternalOnly` vs user-inherited binding policy
 - decrypting user-supplied MCP bindings
 - collecting launch extras from registered session extensions
+- selecting and injecting registered product MCPs through the launch catalog
 - merging user and product MCP servers in launch order
 - merging and validating binding summaries
 - producing system prompt append text and first-prompt append text
@@ -142,7 +147,7 @@ It does not own:
 
 - JSON-RPC parsing or response formatting
 - capability-token signing
-- product tool behavior such as `create_subagent`, `submit_review_result`, or
+- product tool behavior such as `create_agent`, `submit_review_result`, or
   `create_artifact`
 - live MCP elicitation resolution
 
@@ -242,7 +247,7 @@ Move common scaffolding:
 
 Do not move product behavior:
 
-- `create_subagent`
+- `create_agent`
 - `submit_review_result`
 - `create_artifact`
 - cowork delegation/coding tools

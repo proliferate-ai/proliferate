@@ -346,8 +346,8 @@ domains/cowork/mcp
 domains/reviews/mcp
   review tool behavior
 
-domains/sessions/subagents/mcp
-  subagent tool behavior
+domains/agent_operations/mcp
+  Workspace agent and delegated-work tool behavior
 
 domains/sessions/mcp_bindings
   session MCP selection/injection/assembly

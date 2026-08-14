@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
-import { useLocation, useNavigate } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
 import { useWebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
@@ -17,9 +17,13 @@ import { getWorkspaceSessionRecords } from "#product/stores/sessions/session-rec
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
+// Navigation-only workflow: every consumer calls these inside event handlers,
+// so it reads the URL at call time and navigates through the `navigateApp`
+// handoff instead of `useLocation`/`useNavigate` — in declarative-router mode
+// those subscribe their caller (the sidebar, the lifecycle root, command
+// surfaces) to every location change, re-rendering them on each page switch
+// and Settings section click (PRO-170, PRO-182).
 export function useWorkspaceNavigationWorkflow() {
-  const location = useLocation();
-  const navigate = useNavigate();
   const deselectWorkspacePreservingSessions = useSessionSelectionStore(
     (state) => state.deselectWorkspacePreservingSessions,
   );
@@ -39,20 +43,19 @@ export function useWorkspaceNavigationWorkflow() {
   const showErrorToast = useToastStore((state) => state.showError);
 
   const navigateToWorkspaceShell = useCallback(() => {
-    if (location.pathname !== "/") {
-      navigate("/");
+    if (window.location.pathname !== "/") {
+      navigateApp("/");
     }
-  }, [location.pathname, navigate]);
+  }, []);
 
   const goToTopLevelRoute = useCallback((path: string) => {
     if (selectedWorkspaceId || selectedLogicalWorkspaceId || pendingWorkspaceEntry) {
       deselectWorkspacePreservingSessions();
       resetWorkspaceEditorState();
     }
-    navigate(path);
+    navigateApp(path);
   }, [
     deselectWorkspacePreservingSessions,
-    navigate,
     pendingWorkspaceEntry,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,

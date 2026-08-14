@@ -50,6 +50,11 @@ How runtime code emits diagnostics, regardless of layer:
   that a span is missing. Copy-pasted clusters drift; spans cannot.
 - Log where an error is handled, not at every hop it passes through.
 
+Under a Desktop-bundled supported-macOS `serve` launch, the same `tracing`
+events are additionally captured by the bounded Desktop diagnostics layer
+installed at binary bootstrap (`proliferate-diagnostics-client`); emitting
+code does not change for it, and its absence changes nothing here.
+
 This doctrine now holds on the sessions startup/prompt paths: the former
 `LatencyRequestContext` (once threaded through ~13 signatures across
 api -> domains -> live and relayed via actor config/command fields) is

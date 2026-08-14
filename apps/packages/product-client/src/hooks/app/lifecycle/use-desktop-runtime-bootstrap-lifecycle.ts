@@ -16,11 +16,15 @@ import {
   logStartupDebug,
   startStartupTimer,
 } from "#product/lib/infra/measurement/measurement-port";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 export function useDesktopRuntimeBootstrapLifecycle(
   runtime: DesktopRuntimeBridge,
-  diagnostics: DesktopDiagnosticsBridge,
+  _diagnostics: DesktopDiagnosticsBridge,
   authStatus: AuthState["status"],
 ): void {
   const authReady = authStatus !== "loading";
@@ -32,14 +36,13 @@ export function useDesktopRuntimeBootstrapLifecycle(
 
     const runtimeBootstrapStartedAt = startStartupTimer();
     const controller = new AbortController();
-    recordAppRendererEvent(diagnostics, "app.runtime_bootstrap.start");
+    recordAppRendererEvent("app.runtime_bootstrap.start");
     logStartupDebug("app.runtime_bootstrap.start", { authStatus: "ready" });
     void bootstrapHarnessRuntime(runtime, controller.signal).finally(() => {
       if (controller.signal.aborted) {
         return;
       }
       recordAppRendererEvent(
-        diagnostics,
         "app.runtime_bootstrap.completed",
         elapsedStartupMs(runtimeBootstrapStartedAt),
       );
@@ -52,11 +55,10 @@ export function useDesktopRuntimeBootstrapLifecycle(
       controller.abort();
       useHarnessConnectionStore.getState().resetConnectionState();
     };
-  }, [authReady, diagnostics, runtime]);
+  }, [authReady, runtime]);
 }
 
 function recordAppRendererEvent(
-  diagnostics: DesktopDiagnosticsBridge,
   message: string,
   elapsedMs?: number,
 ): void {
@@ -64,11 +66,13 @@ function recordAppRendererEvent(
     `app_bootstrap.${message}`,
     elapsedMs === undefined ? undefined : { elapsedMs },
   );
-  void diagnostics.logEvent({
-    source: "app_bootstrap",
-    message,
-    elapsedMs,
-  }).catch(() => {
-    // Native logging is diagnostic-only; app startup should never depend on it.
+  recordRendererDiagnostic({
+    name: `renderer.app_bootstrap.${message}`,
+    severity: "info",
+    kind: "milestone",
+    privacy: "operational",
+    fields: elapsedMs === undefined
+      ? undefined
+      : { elapsed_ms: diagnosticField(elapsedMs, "operational") },
   });
 }

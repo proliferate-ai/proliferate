@@ -24,8 +24,11 @@ impl From<RestoreWorktreeError> for ApiError {
             | RestoreWorktreeError::RecordedBranchMissing { .. }) => {
                 ApiError::conflict(error.to_string(), "WORKTREE_RESTORE_INELIGIBLE")
             }
+            // Archived rows come back only through `/unarchive`: a bare
+            // worktree restore would rebuild the directory at the branch tip
+            // and silently strand the snapshot the archive captured.
             error @ RestoreWorktreeError::WorkspaceNotActive { .. } => {
-                ApiError::conflict(error.to_string(), "WORKSPACE_RETIRED")
+                ApiError::conflict(error.to_string(), "WORKSPACE_ARCHIVED")
             }
             error @ RestoreWorktreeError::RepositoryRecordMissing { .. } => ApiError::conflict(
                 error.to_string(),

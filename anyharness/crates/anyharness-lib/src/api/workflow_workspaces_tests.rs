@@ -1,7 +1,7 @@
 //! HTTP-level tests for `PUT/GET /v1/workflow-run-workspaces/{runId}` over an
 //! in-memory `AppState` and the real router (spec
-//! `workflow-workspace-placement`), plus the schema-v2 run-acceptance guard and
-//! the generic-retention exclusion, both against real state.
+//! `workflow-workspace-placement`), plus the schema-v2 run-acceptance guard
+//! against real state.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -391,117 +391,6 @@ async fn placement_put_after_run_acceptance_returns_stable_binding_conflict() {
     }
     let (status, body) = get_workspace(&state, &run_id).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "body: {body}");
-}
-
-#[tokio::test]
-async fn generic_retention_pass_excludes_workflow_creator_context() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
-    let _guard = test_support::set_bearer_token_env(None);
-    let (state, base) = isolated_state();
-
-    // A real source repository.
-    let source = base.join("source");
-    std::fs::create_dir_all(&source).expect("source dir");
-    init_repo(&source);
-    let repo_root = state
-        .workspace_runtime
-        .resolve_repo_root_from_path(source.to_str().expect("utf8"))
-        .expect("repo root");
-
-    // One Workflow-materialized worktree in the managed root, created FIRST so
-    // it is the oldest-activity worktree — the prime retirement candidate if
-    // the exclusion were missing.
-    let run_id = uuid::Uuid::new_v4().to_string();
-    let (status, body) = put_workspace(
-        &state,
-        &run_id,
-        json!({
-            "schemaVersion": 1,
-            "placement": {
-                "kind": "repositoryWorktree",
-                "repoRootId": repo_root.id,
-                "baseRef": "main"
-            }
-        }),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED, "body: {body}");
-    assert_eq!(body["status"], "ready", "body: {body}");
-    let workflow_workspace_id = body["workspaceId"].as_str().expect("id").to_string();
-    let workflow_path = PathBuf::from(
-        state
-            .workspace_runtime
-            .get_workspace(&workflow_workspace_id)
-            .expect("lookup")
-            .expect("workspace")
-            .path,
-    );
-
-    // Eleven ORDINARY worktrees in the managed root. With the minimum policy of
-    // 10, exactly one eligible worktree is beyond the keep budget.
-    let managed_root = base.join("worktrees");
-    let mut ordinary_ids = Vec::new();
-    for index in 0..11 {
-        let control_path = managed_root.join(format!("control-worktree-{index}"));
-        let control = state
-            .workspace_runtime
-            .create_worktree(
-                &repo_root.id,
-                control_path.to_str().expect("utf8"),
-                &format!("control-branch-{index}"),
-                Some("main"),
-                None,
-            )
-            .expect("control worktree");
-        ordinary_ids.push(control.workspace.id);
-    }
-
-    state
-        .workspace_retention_service
-        .update_policy(10)
-        .expect("policy");
-    let result = state
-        .workspace_retention_service
-        .run_pass(None)
-        .await
-        .expect("retention pass");
-
-    // The pass ran and retired exactly one ORDINARY worktree (the oldest
-    // eligible one) — the excluded workflow worktree did not consume a slot and
-    // was not the candidate despite being the oldest of all.
-    assert!(
-        result.rows.iter().any(|row| {
-            ordinary_ids.contains(&row.workspace_id)
-                && matches!(
-                    row.outcome,
-                    anyharness_contract::v1::WorktreeRetentionRowOutcome::Retired
-                )
-        }),
-        "no ordinary worktree was retired: {:?}",
-        result.rows
-    );
-    // ...while the Workflow-created workspace was never even considered.
-    assert!(
-        result
-            .rows
-            .iter()
-            .all(|row| row.workspace_id != workflow_workspace_id),
-        "workflow workspace appeared in the retention pass: {:?}",
-        result.rows
-    );
-    let survivor = state
-        .workspace_runtime
-        .get_workspace(&workflow_workspace_id)
-        .expect("lookup")
-        .expect("workflow workspace row survives");
-    assert_eq!(
-        survivor.lifecycle_state,
-        crate::domains::workspaces::model::WorkspaceLifecycleState::Active
-    );
-    assert!(workflow_path.is_dir(), "workflow artifact was pruned");
 }
 
 #[test]

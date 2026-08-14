@@ -98,7 +98,7 @@ export const GlobalHeader = memo(function GlobalHeader({
   return (
     <DebugProfiler id="global-header">
       <div
-        className="flex h-full min-w-0 flex-1 items-center gap-1 pr-2"
+        className="flex h-full min-w-0 flex-1 items-center gap-1 pr-2 transition-[padding-left] ease-out-cubic [transition-duration:var(--workspace-left-geometry-duration)]"
         style={{
           paddingLeft: "max(8px, calc(var(--workspace-left-header-dwell) - var(--workspace-left-width)))",
         }}
@@ -123,7 +123,7 @@ export const GlobalHeader = memo(function GlobalHeader({
 
         <DebugProfiler id="global-header-actions">
           <div
-            className="flex shrink-0 items-center gap-1.5"
+            className="flex shrink-0 items-center gap-1.5 transition-[padding-right] ease-out-cubic [transition-duration:var(--workspace-right-geometry-duration)]"
             style={{
               paddingRight: "max(0px, calc(36px - var(--workspace-right-width)))",
             }}

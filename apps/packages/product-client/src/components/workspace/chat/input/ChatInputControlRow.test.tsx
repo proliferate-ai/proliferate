@@ -17,6 +17,15 @@ vi.mock("#product/stores/activity/goal-bar-store", () => ({
 vi.mock("#product/hooks/cloud/derived/use-composer-integrations-state", () => ({
   useComposerIntegrationsState: () => ({ mode: "hidden", connectedCount: 0, providers: [], reauthLabel: null }),
 }));
+vi.mock("#product/hooks/workspaces/facade/use-runtime-pressure-control-state", () => ({
+  useRuntimePressureControlState: () => ({
+    visible: false,
+    indicator: null,
+    targets: [],
+    isDiscovering: false,
+    actions: {},
+  }),
+}));
 Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
   configurable: true,
   value: vi.fn(),
@@ -140,12 +149,13 @@ describe("ChatInputControlRow", () => {
     expect(screen.getByText("Opus 4.1")).toBeTruthy();
   });
 
-  it("renders effort bars control", () => {
+  it("renders the effort stepper as a six-bar ladder", () => {
     renderControlRow();
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
     expect(reasoning.getAttribute("title")?.startsWith("Reasoning: Medium")).toBe(true);
-    expect(reasoning.className).toContain("gap-0.5");
-    expect(reasoning.querySelector("[data-level-bars-icon]")).not.toBeNull();
+    expect(reasoning.className).toContain("h-6");
+    const ladder = reasoning.querySelector("[data-reasoning-effort-ladder]");
+    expect(ladder?.querySelectorAll("rect").length).toBe(6);
     expect(screen.getByText("Medium").className).not.toContain("sr-only");
   });
 
@@ -156,26 +166,30 @@ describe("ChatInputControlRow", () => {
 
     renderControlRow({ sessionConfigControls: controls });
 
+    // The ladder is the trigger's only glyph: a pending clock beside it would
+    // be a second svg inside the stepper's tooltip wrapper.
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
-    expect(reasoning.parentElement?.querySelector("svg")).toBeNull();
+    expect(reasoning.closest("span")?.querySelectorAll("svg").length).toBe(1);
   });
 
-  it("renders working mode as plain text with no disclosure chevron", () => {
+  it("renders working mode as an icon-only badge with no word at any width", () => {
     renderControlRow();
     const mode = screen.getByRole("button", { name: "Mode: Default" });
-    expect(screen.getByText("Default")).toBeTruthy();
-    expect(mode.querySelector("svg")).toBeNull();
+    expect(mode.querySelector("svg")).not.toBeNull();
+    // The badge paints no word at all; the mode name survives only as the
+    // aria-label the getByRole query above matched.
+    expect(mode.textContent).toBe("");
+    expect(mode.getAttribute("aria-label")).toContain("Default");
   });
 
-  it("does not imply disclosure for a non-settable working mode", () => {
+  it("disables the mode badge for a non-settable working mode", () => {
     const controls = createControls();
     const modeControl = controls.find((control) => control.key === "collaboration_mode")!;
     modeControl.settable = false;
     renderControlRow({ sessionConfigControls: controls });
 
-    const mode = screen.getByRole("button", { name: "Default" });
-    expect(mode).toHaveProperty("disabled", true);
-    expect(mode.querySelector("svg")).toBeNull();
+    expect(screen.getByRole("button", { name: "Mode: Default" }))
+      .toHaveProperty("disabled", true);
   });
 
   it("caps the model pill by its wrapper so it cannot paint over the mode pill", () => {
@@ -202,65 +216,60 @@ describe("ChatInputControlRow", () => {
     expect(mode.querySelector(".ml-auto")).toBeNull();
   });
 
-  it("keeps the queued clock in the mode pill's trailing slot", () => {
+  it("keeps the queued clock beside the mode badge", () => {
     const controls = createControls();
     controls[0] = { ...controls[0], pendingState: "queued" };
     renderControlRow({ sessionConfigControls: controls });
 
+    // The badge is icon-only, so the clock is its sibling rather than a
+    // trailing slot inside the pill (which would push the glyph off-center).
     const mode = screen.getByRole("button", { name: "Mode: Default" });
-    expect(mode.querySelector(".ml-auto svg")).not.toBeNull();
+    expect(mode.querySelector(".ml-auto")).toBeNull();
+    expect(mode.nextElementSibling?.tagName.toLowerCase()).toBe("svg");
   });
 
-  it("swaps an icon-configured working mode's word for its icon under the compact tier", () => {
+  it("steps the working mode to the next value on click", () => {
     const controls = createControls();
-    controls[0] = {
-      ...controls[0],
-      key: "mode",
-      options: [
-        { value: "bypassPermissions", label: "Bypass", selected: true },
-        { value: "plan", label: "Plan", selected: false },
-      ],
-    };
+    const modeControl = controls.find((control) => control.key === "collaboration_mode")!;
     renderControlRow({ sessionConfigControls: controls });
 
-    const mode = screen.getByRole("button", { name: "Mode: Bypass" });
-    // One button, CSS-swapped: the icon renders only under the compact
-    // container tier, the word hides there, and the pill stops shrinking so
-    // the icon can never be squeezed into its neighbors.
-    const iconWrapper = mode.querySelector("svg")?.parentElement;
-    expect(iconWrapper?.className).toContain("hidden");
-    expect(iconWrapper?.className).toContain("@max-[32rem]:flex");
-    const label = screen.getByText("Bypass");
-    expect(label.closest('[class*="@max-[32rem]:hidden"]')).not.toBeNull();
-    expect(mode.className).toContain("@max-[32rem]:shrink-0");
+    const mode = screen.getByRole("button", { name: "Mode: Default" });
+    expect(mode.getAttribute("data-session-mode-next")).toBe("plan");
+    fireEvent.click(mode);
+    expect(modeControl.onSelect).toHaveBeenCalledWith("plan");
   });
 
-  it("hides the reasoning level word under the compact tier, keeping the bars", () => {
+  it("hides the reasoning level word under the compact tier, keeping the ladder", () => {
     renderControlRow();
 
     const label = screen.getByText("Medium");
     expect(label.closest('[class*="@max-[32rem]:hidden"]')).not.toBeNull();
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
     expect(
-      reasoning.querySelector("[data-level-bars-icon]")
+      reasoning.querySelector("[data-reasoning-effort-ladder]")
         ?.closest('[class*="@max-[32rem]:hidden"]'),
     ).toBeNull();
   });
 
-  it("orders model, working mode, reasoning bars, and fast mode in the visible row", () => {
+  it("orders model, fast mode, reasoning stepper, and mode badge in the visible row", () => {
     renderControlRow();
 
     const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
+    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
     const mode = screen.getByRole("button", { name: "Mode: Default" });
-    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
 
-    expect(model.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(model.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(mode.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(fast.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(reasoning.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(reasoning.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
+  });
+
+  it("renders no integrations control while every integration is healthy", () => {
+    renderControlRow();
+    expect(screen.queryByRole("button", { name: /integrations/i })).toBeNull();
   });
 
   it("renders plus button for file attach", () => {
@@ -274,10 +283,9 @@ describe("ChatInputControlRow", () => {
 
     const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
     const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
-    const integrations = screen.getByRole("button", { name: /connected integrations/i });
     const send = screen.getByRole("button", { name: /Send/ });
 
-    for (const control of [model, fast, integrations, send]) {
+    for (const control of [model, fast, send]) {
       expect(control.querySelector("svg")?.className.baseVal).toContain("icon-control");
     }
   });

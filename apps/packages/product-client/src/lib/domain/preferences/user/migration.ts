@@ -148,6 +148,11 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     changed = true;
   }
 
+  if (typeof next.deleteBranchOnArchive !== "boolean") {
+    next.deleteBranchOnArchive = PERSISTED_RECORD_BACKFILL.deleteBranchOnArchive;
+    changed = true;
+  }
+
   if (typeof next.autoUpdateEnabled !== "boolean") {
     next.autoUpdateEnabled = PERSISTED_RECORD_BACKFILL.autoUpdateEnabled;
     changed = true;

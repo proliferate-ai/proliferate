@@ -1,6 +1,5 @@
 import type {
   SessionEventEnvelope,
-  TranscriptState,
 } from "@anyharness/sdk";
 import type {
   SessionChildRelationship,
@@ -14,12 +13,10 @@ import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   finishOrCancelMeasurementOperation,
-  markOperationForNextCommit,
   recordMeasurementMetric,
   startMeasurementOperation,
 } from "#product/lib/infra/measurement/measurement-port";
 import type {
-  MeasurementOperationId,
   MeasurementSurface,
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { uniqueMeasurementOperationIds } from "#product/lib/infra/measurement/measurement-port";
@@ -31,10 +28,6 @@ import {
 import {
   sessionIntentsForSession,
 } from "#product/domain/sessions/intents/session-intent-state";
-import {
-  reconcilePendingConfigChanges,
-  type PendingSessionConfigChanges,
-} from "#product/domain/sessions/pending-config";
 import { buildSessionStreamBatchPatch } from "#product/lib/domain/sessions/stream-patch";
 import { shouldClearOptimisticPendingPromptForEnvelope } from "#product/domain/chats/pending-prompts/pending-prompts";
 import {
@@ -47,16 +40,24 @@ import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-bat
 import { activityFromTranscript } from "#product/lib/domain/sessions/directory/directory-activity";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
-import { getSessionRecord } from "#product/stores/sessions/session-records";
+import {
+  getMaterializedSessionId,
+  getSessionRecord,
+} from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import type {
-  BatchConfigReconcileResult,
   SessionStreamFlushControllerOptions,
   SessionStreamFlushFactoryDeps,
 } from "#product/hooks/sessions/lifecycle/session-stream-flush-types";
+import {
+  markSessionApplyForNextCommit,
+  maxEnvelopeSeq,
+  reconcileBatchPendingConfigChanges,
+  recordStreamStateCounts,
+} from "#product/hooks/sessions/lifecycle/session-stream-flush-helpers";
 
 const SESSION_STREAM_EVENT_BATCH_IDLE_MS = 350;
 const SESSION_STREAM_EVENT_BATCH_MAX_DURATION_MS = 5_000;
@@ -272,7 +273,7 @@ export function applySessionStreamFlushBatch(
       durationMs: performance.now() - storeStartedAt,
     });
     recordStreamStateCounts(operationId, "after", result.state.events, result.state.transcript);
-    markSessionApplyForNextCommit(operationId);
+    markSessionApplyForNextCommit(operationId, SESSION_APPLY_MEASUREMENT_SURFACES);
   }
   useSessionIngestStore.getState().applyStreamProgress(input.sessionId, {
     lastAppliedSeq: result.state.transcript.lastSeq,
@@ -282,6 +283,7 @@ export function applySessionStreamFlushBatch(
 
   applyBatchedStreamSideEffects({
     ...input,
+    materializedSessionId: getMaterializedSessionId(input.sessionId) ?? input.sessionId,
     runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
     workspaceId: slotState.workspaceId,
     agentKind: slotState.agentKind,
@@ -294,6 +296,12 @@ export function applySessionStreamFlushBatch(
       relationship: SessionChildRelationship,
     ) => {
       useSessionDirectoryStore.getState().recordRelationshipHint(sessionId, relationship);
+    },
+    resolveClientSessionId: (materializedSessionId: string): string | null =>
+      useSessionDirectoryStore.getState()
+        .clientSessionIdByMaterializedSessionId[materializedSessionId] ?? null,
+    markSessionPromoted: (sessionIds: readonly string[], workspaceId: string | null) => {
+      useSessionDirectoryStore.getState().markSessionPromoted(sessionIds, workspaceId);
     },
     getSessionRelationship: (sessionId: string): SessionRelationship | null =>
       useSessionDirectoryStore.getState().entriesById[sessionId]?.sessionRelationship ?? null,
@@ -322,80 +330,4 @@ export function applySessionStreamFlushBatch(
 
 function markWorkspaceViewedAtFromStream(workspaceKey: string, timestamp: string) {
   streamWorkspaceViewedThrottle.record(workspaceKey, timestamp);
-}
-
-function reconcileBatchPendingConfigChanges(
-  envelopes: readonly SessionEventEnvelope[],
-  pendingConfigChanges: PendingSessionConfigChanges,
-): BatchConfigReconcileResult {
-  let nextPendingConfigChanges = pendingConfigChanges;
-  const reconciledIntents: BatchConfigReconcileResult["reconciledIntents"] = [];
-  for (const envelope of envelopes) {
-    if (envelope.event.type !== "config_option_update") {
-      continue;
-    }
-    const reconcileResult = reconcilePendingConfigChanges(
-      envelope.event.liveConfig,
-      nextPendingConfigChanges,
-    );
-    nextPendingConfigChanges = reconcileResult.pendingConfigChanges;
-    if (reconcileResult.reconciledChanges.length > 0) {
-      reconciledIntents.push({
-        liveConfig: envelope.event.liveConfig,
-        reconciledChanges: reconcileResult.reconciledChanges,
-      });
-    }
-  }
-  return {
-    pendingConfigChanges: nextPendingConfigChanges,
-    reconciledIntents,
-  };
-}
-
-function recordStreamStateCounts(
-  operationId: MeasurementOperationId | null | undefined,
-  phase: "before" | "after",
-  events: readonly SessionEventEnvelope[],
-  transcript: TranscriptState,
-): void {
-  if (!operationId) {
-    return;
-  }
-  const isBefore = phase === "before";
-  recordMeasurementMetric({
-    type: "state_count",
-    operationId,
-    target: isBefore ? "session.stream.events_before" : "session.stream.events_after",
-    count: events.length,
-  });
-  recordMeasurementMetric({
-    type: "state_count",
-    operationId,
-    target: isBefore ? "session.stream.turns_before" : "session.stream.turns_after",
-    count: transcript.turnOrder.length,
-  });
-  recordMeasurementMetric({
-    type: "state_count",
-    operationId,
-    target: isBefore ? "session.stream.items_before" : "session.stream.items_after",
-    count: Object.keys(transcript.itemsById).length,
-  });
-}
-
-function markSessionApplyForNextCommit(operationId: MeasurementOperationId | null | undefined): void {
-  if (!operationId) {
-    return;
-  }
-  markOperationForNextCommit(operationId, SESSION_APPLY_MEASUREMENT_SURFACES);
-}
-
-function maxEnvelopeSeq(
-  envelopes: readonly SessionEventEnvelope[],
-  fallbackSeq: number,
-): number {
-  let maxSeq = fallbackSeq;
-  for (const envelope of envelopes) {
-    maxSeq = Math.max(maxSeq, envelope.seq);
-  }
-  return maxSeq;
 }

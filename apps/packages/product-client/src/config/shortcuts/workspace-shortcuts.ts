@@ -161,6 +161,20 @@ export const WORKSPACE_SHORTCUTS = {
     match: { kind: "digit-key", meta: true, shift: false, alt: false },
     allowInInputs: false,
   },
+  // Registered only while the Settings overlay is mounted, like
+  // settingsSectionByIndex. allowInInputs stays false so Escape keeps its
+  // meaning in text fields (e.g. the worktree-storage draft revert), and the
+  // dispatch policy already skips defaultPrevented events, so an open
+  // dialog/menu consumes Escape without also closing Settings.
+  settingsBack: {
+    id: "settings.back",
+    label: "Esc",
+    nonMacLabel: "Esc",
+    description: "Back to app from settings",
+    owner: "js",
+    match: { kind: "fixed", key: "Escape", meta: false, shift: false, alt: false },
+    allowInInputs: false,
+  },
   workspaceByIndex: {
     id: "workspace.by-index",
     label: "⌘1-9",
@@ -241,6 +255,16 @@ export const WORKSPACE_SHORTCUTS = {
     nonMacMatch: { kind: "fixed-code", code: "KeyM", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
+  cycleReasoningEffort: {
+    id: "workspace.cycle-reasoning-effort",
+    label: "⌃⇧E",
+    nonMacLabel: "Ctrl+Shift+E",
+    description: "Cycle reasoning effort",
+    owner: "js",
+    match: { kind: "fixed-code", code: "KeyE", meta: false, ctrl: true, shift: true, alt: false },
+    nonMacMatch: { kind: "fixed-code", code: "KeyE", meta: true, shift: true, alt: false },
+    allowInInputs: true,
+  },
   openTerminal: {
     id: "workspace.open-terminal",
     label: "⌘J",
@@ -311,6 +335,15 @@ export const WORKSPACE_SHORTCUTS = {
     description: "Rename current chat",
     owner: "js",
     match: { kind: "fixed", key: "r", meta: true, shift: false, alt: true },
+    allowInInputs: true,
+  },
+  archiveWorkspace: {
+    id: "workspace.archive",
+    label: "⌘⇧A",
+    nonMacLabel: "Ctrl+Shift+A",
+    description: "Archive workspace",
+    owner: "js",
+    match: { kind: "fixed-code", code: "KeyA", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
 } as const satisfies Record<string, ShortcutDef>;

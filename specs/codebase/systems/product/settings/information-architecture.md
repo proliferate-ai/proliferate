@@ -201,6 +201,13 @@ Repo      environments, compute ("Personal compute")
 Agents    agent-defaults, agent-authentication
 ```
 
+> Shipped correction: `worktrees` ("Pruning") was removed from the User
+> scope — cleanup no longer has a dedicated pane. `archived-workspaces`
+> ("Archived workspaces") took its slot instead: the real list of archived
+> workspaces, backed by the runtime's `lifecycle=archived` filter, superseding
+> the speculative `archived-chats` (tbr) row above, which was never built.
+> ([navigation-presentation.ts](../../../../../apps/packages/product-client/src/lib/domain/settings/navigation-presentation.ts)).
+
 > Shipped correction: the Agents scope is per-harness pages plus the key
 > pool — `agent-claude`, `agent-codex`, `agent-opencode`, `agent-grok`,
 > `agent-api-keys`
@@ -230,8 +237,11 @@ SETTINGS_CONTENT_SECTIONS = [
 > ([config/settings.ts](../../../../../apps/packages/product-client/src/config/settings.ts))
 > carries `agent-claude`/`agent-codex`/`agent-opencode`/`agent-grok`/
 > `agent-api-keys` instead of `agent-authentication`/`agent-defaults`,
-> plus `integrations`, `repo-actions`, and `repo-environment`; `keyboard`,
-> `archived-chats`, and `compute` were removed.
+> plus `integrations`, `repo-actions`, `repo-environment`, and
+> `archived-workspaces`; `keyboard`, `worktrees`, `archived-chats`, and
+> `compute` were removed. `archived-workspaces` is the real archived-list
+> page (§3 in the archiving-workspaces train's R7 delivery spec), not the
+> speculative `archived-chats` row it replaced.
 
 **Shortcuts**: Cmd-digit section shortcuts are per-scope.
 `SETTINGS_SHORTCUT_SECTION_ORDER` is filtered to the sections visible in
@@ -535,6 +545,11 @@ User
   worktrees                WorktreesPane                  "Pruning" — all-environment
                                                            worktree cleanup
   archived-chats           ArchivedChatsPane              hidden chats (tbr)
+  (shipped: `worktrees`/`WorktreesPane` removed; `archived-workspaces` /
+   `ArchivedWorkspacesPane` took the slot — the real archived-workspaces
+   list, sort, search, per-row unarchive/delete, and Delete all, backed by
+   the runtime's `lifecycle=archived` filter. It supersedes the speculative
+   `archived-chats` row above, which was never built.)
 
 Org (all adminOnly)
   organization             OrganizationPane               org profile
@@ -597,8 +612,9 @@ SETTINGS_CONTENT_SECTIONS = [
 > ([config/settings.ts](../../../../../apps/packages/product-client/src/config/settings.ts))
 > carries `agent-claude`/`agent-codex`/`agent-opencode`/`agent-grok`/
 > `agent-api-keys` instead of `agent-authentication`/`agent-defaults`,
-> plus `integrations`, `repo-actions`, and `repo-environment`; `keyboard`,
-> `archived-chats`, and `compute` were removed.
+> plus `integrations`, `repo-actions`, `repo-environment`, and
+> `archived-workspaces`; `keyboard`, `worktrees`, `archived-chats`, and
+> `compute` were removed.
 
 Renamed ids:
 
@@ -621,12 +637,17 @@ Legacy id:
 > per-harness panes plus the `agent-api-keys` pool; the `cloud` redirect is
 > focus-dependent (repo focus → `environments`, billing focus → `billing`).
 
-Preserved id:
+Preserved id (superseded):
 
 ```text
 "worktrees"     Remains a top-level Workspaces section because cleanup spans
                 all environments.
 ```
+
+> Shipped correction: `worktrees` did not stay preserved. The runtime's
+> `lifecycle` filter replaced client-side worktree cleanup as the truth
+> about which workspaces exist, so the dedicated "Pruning" pane had nothing
+> left to own and was removed; `archived-workspaces` took its nav slot.
 
 The `?section=<id>` URL scheme is preserved. Old urls that point at
 `?section=repo` or `?section=cloudRepo` redirect to
@@ -656,6 +677,8 @@ User
   worktrees                 spec 03   "Pruning" — all-environment worktree
                                        cleanup
   archived-chats            spec 03   hidden chats (tbr)
+  (shipped: `worktrees` removed; `archived-workspaces` — the archiving-
+   workspaces train's R7 delivery spec — took the slot instead)
 
 Org
   organization              spec 03 + 05  org profile, billing cross-link
@@ -1183,6 +1206,8 @@ apps/packages/product-client/src/lib/domain/telemetry/events.ts
 2. `SETTINGS_CONTENT_SECTIONS` is the new id list. Old ids `repo`,
    `cloud`, and `cloudRepo` keep redirecting to their supported homes.
    `worktrees` remains a first-class User section ("Pruning").
+   (shipped: `worktrees` was removed instead; `archived-workspaces`
+   ("Archived workspaces") is the first-class User section that replaced it.)
 3. `SettingsScaffoldPane.tsx` renders the scaffolded pages listed in §4.2.
    Scaffolded pages establish route, placement, title, and ownership copy only.
 4. Admin rows are marked `adminOnly`; non-admin users do not see those rows.
@@ -1228,6 +1253,8 @@ apps/packages/product-client/src/components/settings/screen/SettingsScreen.test.
   - ?section=cloud redirects to ?section=agent-authentication
     (shipped: focus-dependent, see 5.7 correction)
   - ?section=worktrees resolves to Pruning (User scope)
+    (shipped: `worktrees` no longer resolves anywhere; `?section=archived-workspaces`
+    resolves to "Archived workspaces" (User scope) instead)
 
 apps/packages/product-client/src/hooks/access/cloud/organizations/use-is-admin.test.ts
   - returns role from useOrganizationMembers

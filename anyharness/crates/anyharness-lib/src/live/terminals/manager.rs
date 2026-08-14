@@ -14,8 +14,12 @@ use crate::domains::terminals::service::{
     new_command_run_record, validate_env_vars, TerminalCommandService,
 };
 use crate::domains::terminals::store::TerminalStore;
+use crate::process_kill::PlaneKills;
 
-use super::command_runs::{run_setup_process, set_terminal_output_suppressed, ActiveSetupTask};
+use super::command_runs::{
+    close_all_for_workspace, kill_active_run_for_workspace, run_blocking_command_for_workspace,
+    run_setup_process, set_terminal_output_suppressed, ActiveSetupTask,
+};
 use super::driver;
 use super::driver::detect_posix_shell;
 use super::handle::{TerminalHandle, TerminalOutputRegistry, TerminalRegistry};
@@ -244,8 +248,10 @@ impl TerminalService {
         let task_record = record.clone();
         let task_workspace_id = workspace_id_owned.clone();
         let task_command_run_id = command_run_id.clone();
+        let pgid = Arc::new(std::sync::atomic::AtomicI32::new(0));
+        let task_pgid = pgid.clone();
         let handle = tokio::spawn(async move {
-            run_setup_process(
+            let _ = run_setup_process(
                 command_service,
                 terminals,
                 hubs,
@@ -255,6 +261,7 @@ impl TerminalService {
                 command,
                 env_vars,
                 timeout,
+                task_pgid,
             )
             .await;
             let mut tasks = active_setup_tasks.lock().await;
@@ -271,10 +278,78 @@ impl TerminalService {
             ActiveSetupTask {
                 command_run_id,
                 abort_handle: handle.abort_handle(),
+                pgid,
             },
         );
 
         Ok(record)
+    }
+
+    /// Kill whatever setup or archive-script run is active for
+    /// `workspace_id` and await its confirmed death. See
+    /// `command_runs::workspace_stop::kill_active_run_for_workspace` for the
+    /// mechanism; this is a thin delegation kept as a method so callers
+    /// outside `live::terminals` never need to name the free function.
+    pub async fn kill_active_run_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<PlaneKills> {
+        kill_active_run_for_workspace(
+            &self.active_setup_tasks,
+            &self.command_service,
+            workspace_id,
+        )
+        .await
+    }
+
+    /// The archive-script mechanism (R3's await-to-exit mode). See
+    /// `command_runs::workspace_stop::run_blocking_command_for_workspace`
+    /// for the mechanism (reused spawn/stream/timeout, `TerminalPurpose::Run`,
+    /// never `set_latest_setup_run`, cancel/detach-safe).
+    pub async fn run_blocking_command_for_workspace(
+        &self,
+        workspace_id: &str,
+        workspace_path: &str,
+        command: String,
+        env_vars: Vec<(String, String)>,
+    ) -> anyhow::Result<std::process::ExitStatus> {
+        run_blocking_command_for_workspace(
+            &self.terminals,
+            &self.output_hubs,
+            &self.command_service,
+            &self.active_setup_tasks,
+            workspace_id,
+            workspace_path,
+            command,
+            env_vars,
+        )
+        .await
+    }
+
+    /// Test-only seam: identical to [`Self::run_blocking_command_for_workspace`]
+    /// but with the 300s `DEFAULT_SETUP_TIMEOUT` replaced by an injected
+    /// `timeout`, so a test can force the timeout arm without waiting 300s.
+    #[cfg(test)]
+    pub async fn run_blocking_command_for_workspace_with_timeout(
+        &self,
+        workspace_id: &str,
+        workspace_path: &str,
+        command: String,
+        env_vars: Vec<(String, String)>,
+        timeout: Duration,
+    ) -> anyhow::Result<std::process::ExitStatus> {
+        super::command_runs::run_blocking_command_for_workspace_with_timeout(
+            &self.terminals,
+            &self.output_hubs,
+            &self.command_service,
+            &self.active_setup_tasks,
+            workspace_id,
+            workspace_path,
+            command,
+            env_vars,
+            timeout,
+        )
+        .await
     }
 
     pub async fn rerun_setup_command(
@@ -348,6 +423,19 @@ impl TerminalService {
 
     pub fn close_terminal_blocking(&self, terminal_id: &str) -> anyhow::Result<()> {
         tokio::runtime::Handle::current().block_on(self.close_terminal(terminal_id))
+    }
+
+    /// Close every terminal in `workspace_id`. See
+    /// `command_runs::workspace_stop::close_all_for_workspace` for the
+    /// mechanism (registry walk, session-wide kill, interrupted-run marking).
+    pub async fn close_all_for_workspace(&self, workspace_id: &str) -> anyhow::Result<PlaneKills> {
+        close_all_for_workspace(
+            &self.terminals,
+            &self.output_hubs,
+            &self.command_service,
+            workspace_id,
+        )
+        .await
     }
 
     pub async fn subscribe_output(

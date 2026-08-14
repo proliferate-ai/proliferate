@@ -10,6 +10,7 @@ import {
 } from "#product/lib/domain/sessions/creation/create-session-error";
 import { pickLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
 import { resolveSessionCreationModeId } from "#product/lib/domain/sessions/creation/mode";
+import { isWorkspaceArchivedRefusal } from "#product/lib/domain/workspaces/archived/workspace-archived-refusal";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import {
@@ -242,6 +243,12 @@ export function useSessionCreationActions() {
         // gate reflect the real state.
         void invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
       }
+      if (isWorkspaceArchivedRefusal(error)) {
+        // The uniform WORKSPACE_ARCHIVED rule (§3.11): the server is correct,
+        // only the client was stale — refresh the listing so the row moves
+        // out of active lists, and raise no failure toast for this case.
+        void invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
+      }
       cleanupSessionCreationFailure({
         agentKind: options.agentKind,
         currentOwnedSessionId,
@@ -381,7 +388,9 @@ export function useSessionCreationActions() {
       void createPromise.catch((error) => {
         cleanupCreateFailure(error);
         // The missing-worktree composer panel owns that condition — no toast.
-        if (!isWorkspaceDirectoryMissingError(error)) {
+        // WORKSPACE_ARCHIVED is the same "server is right, client was stale"
+        // shape — no toast there either.
+        if (!isWorkspaceDirectoryMissingError(error) && !isWorkspaceArchivedRefusal(error)) {
           // This path had a prompt, so the thing the user lost is the message,
           // not just the chat — say which, and where the draft went. No retry:
           // the composer still holds the text, and re-sending from a toast

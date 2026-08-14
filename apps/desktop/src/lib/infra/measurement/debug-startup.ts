@@ -39,16 +39,17 @@ export function elapsedStartupMs(startedAt: number): number {
 }
 
 export function summarizeStartupError(error: unknown): Record<string, unknown> {
-  if (error instanceof Error) {
+  if (typeof error === "string") {
+    return { errorValue: error };
+  }
+  if (typeof error === "object" && error !== null) {
+    const name = safeRendererErrorName(error);
     return {
-      errorName: error.name,
-      errorMessage: error.message,
+      errorName: name === "unknown_error" ? "UnknownError" : name,
+      errorMessage: safeRendererErrorMessage(error),
     };
   }
-
-  return {
-    errorValue: String(error),
-  };
+  return { errorValue: `[${typeof error}]` };
 }
 
 export function logStartupDebug(
@@ -59,6 +60,18 @@ export function logStartupDebug(
     return;
   }
 
+  const name = rendererDiagnosticName("renderer.startup_debug", event);
+  if (name !== null) {
+    recordRendererDiagnostic({
+      name,
+      severity: "debug",
+      kind: "log",
+      privacy: fields === undefined ? "operational" : "sensitive",
+      fields: rendererDiagnosticFields(fields, "sensitive"),
+      correlation: rendererDiagnosticCorrelation(fields),
+    });
+  }
+
   if (fields) {
     console.info(`[startup-debug] ${event}`, fields);
     return;
@@ -66,3 +79,13 @@ export function logStartupDebug(
 
   console.info(`[startup-debug] ${event}`);
 }
+import {
+  safeRendererErrorMessage,
+  safeRendererErrorName,
+} from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostic-values";
+import { recordRendererDiagnostic } from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostics-port";
+import {
+  rendererDiagnosticCorrelation,
+  rendererDiagnosticFields,
+  rendererDiagnosticName,
+} from "@/lib/infra/diagnostics/renderer-diagnostic-callsite";

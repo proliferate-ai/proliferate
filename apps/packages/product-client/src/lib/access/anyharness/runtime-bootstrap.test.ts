@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const mocks = vi.hoisted(() => ({
   getHealth: vi.fn(),
+  rendererDiagnostic: vi.fn(),
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
@@ -28,8 +33,10 @@ function makeRuntime(): DesktopRuntimeBridge {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  setRendererDiagnosticsSink({ emit: mocks.rendererDiagnostic });
   useHarnessConnectionStore.setState({
     runtimeUrl: "",
+    runtimeUrlSource: "default_fallback",
     connectionState: "connecting",
     error: null,
   });
@@ -37,6 +44,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  resetRendererDiagnosticsSinkForTest();
 });
 
 describe("bootstrapHarnessRuntime", () => {
@@ -53,6 +61,7 @@ describe("bootstrapHarnessRuntime", () => {
     expect(runtime.getConnection).toHaveBeenCalledTimes(1);
     expect(useHarnessConnectionStore.getState()).toMatchObject({
       runtimeUrl: "http://127.0.0.1:9001",
+      runtimeUrlSource: "native_capture",
       connectionState: "healthy",
       error: null,
     });
@@ -80,6 +89,7 @@ describe("bootstrapHarnessRuntime", () => {
     expect(runtime.getConnection).toHaveBeenCalledTimes(2);
     expect(useHarnessConnectionStore.getState()).toMatchObject({
       runtimeUrl: "http://127.0.0.1:9002",
+      runtimeUrlSource: "native_capture",
       connectionState: "healthy",
       error: null,
     });
@@ -112,8 +122,11 @@ describe("bootstrapHarnessRuntime", () => {
     await vi.advanceTimersByTimeAsync(500);
     await bootstrap;
 
+    // The dev fallback is not a natively captured runtime. Consented support
+    // snapshots refuse it, so the provenance has to say so.
     expect(useHarnessConnectionStore.getState()).toMatchObject({
       runtimeUrl: DEFAULT_RUNTIME_URL,
+      runtimeUrlSource: "default_fallback",
       connectionState: "healthy",
       error: null,
     });
@@ -135,6 +148,12 @@ describe("bootstrapHarnessRuntime", () => {
       connectionState: "failed",
       error: "Runtime did not become healthy in time.",
     });
+    expect(mocks.rendererDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "renderer.runtime.health_poll_exhausted",
+        errorClassification: "runtime_health_poll_exhausted",
+      }),
+    );
   });
 
   it("stops polling without publishing new state when its lifecycle is cancelled", async () => {

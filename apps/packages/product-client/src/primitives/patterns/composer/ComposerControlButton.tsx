@@ -9,6 +9,13 @@ interface ComposerControlButtonProps extends Omit<ButtonHTMLAttributes<HTMLButto
   active?: boolean;
   iconOnly?: boolean;
   /**
+   * Control tier. `compact` is the composer's own 24px chip grammar (labeled
+   * chips: Fast, the effort stepper, the goal button); `default` stays the
+   * 28px pill every other surface — and the composer's own model pill and
+   * icon-only utilities — already draws.
+   */
+  size?: "default" | "compact";
+  /**
    * Two-tone value hierarchy: renders the label (the pill's value text) in the
    * active control color while icon, detail, and trailing affordances stay in
    * the muted control colors.
@@ -33,6 +40,7 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     trailing,
     active = false,
     iconOnly = false,
+    size = "default",
     emphasizeLabel = false,
     labelClassName = "",
     detailClassName = "",
@@ -52,18 +60,30 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     // Press was previously absent entirely, so the control had no down-state
     // at all.
     const baseClassName = `cursor-pointer disabled:cursor-default gap-1 rounded-full border border-transparent bg-transparent transition-colors hover:bg-hover hover:text-current active:bg-active focus:outline-none data-[state=open]:bg-hover ${classes}`;
-    // Icon-only controls are a 28px square *floor*, not a fixed box: a
-    // wide-glyph icon (e.g. a long level-bar ladder) grows the pill instead of
-    // being squeezed inside it. Single-glyph icons are narrower than the floor,
-    // so they still render as the same square they always did.
-    const buttonClassName = iconOnly
-      ? `h-7 min-w-7 shrink-0 !justify-center px-1 ${baseClassName} ${className}`
-      : `h-7 min-w-0 max-w-full !justify-start px-1.5 py-0 text-left text-ui ${baseClassName} ${className}`;
-    const iconOnlyLabel = typeof label === "string"
-      ? label
-      : typeof props["aria-label"] === "string"
-        ? props["aria-label"]
-        : "Composer control";
+    // Icon-only controls are a square *floor*, not a fixed box: a wide-glyph
+    // icon (e.g. a long level-bar ladder) grows the pill instead of being
+    // squeezed inside it. Single-glyph icons are narrower than the floor, so
+    // they still render as the same square they always did.
+    const compact = size === "compact";
+    // 9px inset is the ruled 24px-chip metric from the composer handoff
+    // (COMPONENT-LEDGER "compact control"); deliberately off the 4px scale — a
+    // scale key would change the ruled chip width.
+    const compactLabeledClassName =
+      "h-6 min-w-0 max-w-full !justify-start px-[9px] py-0 text-left text-ui font-control";
+    const sizeClassName = iconOnly
+      ? compact
+        ? "h-6 min-w-6 shrink-0 !justify-center px-1"
+        : "h-7 min-w-7 shrink-0 !justify-center px-1"
+      : compact
+        ? compactLabeledClassName
+        : "h-7 min-w-0 max-w-full !justify-start px-1.5 py-0 text-left text-ui";
+    const buttonClassName = `${sizeClassName} ${baseClassName} ${className}`;
+    // An explicit aria-label already IS the accessible name, so the sr-only
+    // span would only duplicate it. It is rendered solely as the fallback that
+    // gives an icon-only control a name when the caller supplied none.
+    const hasAriaLabel = typeof props["aria-label"] === "string"
+      && props["aria-label"].trim().length > 0;
+    const iconOnlyLabel = typeof label === "string" ? label : "Composer control";
 
     return (
       <Button
@@ -79,7 +99,7 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
             items-center actually center them. */}
         {icon && <span className={`flex shrink-0 items-center ${iconWrapperClassName}`}>{icon}</span>}
         {iconOnly ? (
-          <span className="sr-only">{iconOnlyLabel}</span>
+          hasAriaLabel ? null : <span className="sr-only">{iconOnlyLabel}</span>
         ) : (
           <span className={`flex min-w-0 items-center gap-1 ${labelWrapperClassName}`}>
             <span

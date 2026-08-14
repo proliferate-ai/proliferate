@@ -11,6 +11,15 @@ use crate::live::sessions::AgentExtMethodError;
 pub(in crate::live::sessions::actor) const STARTUP_QUEUE_DRAIN_GRACE: std::time::Duration =
     std::time::Duration::from_millis(50);
 
+/// How long the exit sequence waits to reap the agent child before giving up
+/// on it. Sized to sit strictly ABOVE the escalation it runs beside (a 5s
+/// TERM grace plus a 10s confirmation budget in `process_kill`), so it can
+/// only ever expire on a child that survived a delivered SIGKILL - a D-state
+/// process, or a group signal that reached nothing. Killing the wait is not
+/// killing the process; it is refusing to trade the actor's whole remaining
+/// lifetime for a reap that is not coming.
+const REAP_BUDGET: std::time::Duration = std::time::Duration::from_secs(20);
+
 pub(in crate::live::sessions::actor) enum IdleWork {
     Command(Option<SessionCommand>),
     DrainQueuedPrompt,
@@ -38,6 +47,10 @@ pub(in crate::live::sessions::actor) async fn select_idle_work(
 }
 
 impl SessionActor {
+    pub(in crate::live::sessions::actor) async fn event_mutations_admitted(&self) -> bool {
+        self.event_sink.lock().await.event_mutations_admitted()
+    }
+
     /// Drives the actor to completion: the idle loop, then the established
     /// exit sequence (background-work shutdown, exit finalization, busy
     /// release, process drop) exactly as before.
@@ -54,11 +67,79 @@ impl SessionActor {
                 &mut background_work_rx,
             )
             .await;
+        // Close the mailbox the INSTANT the loop decides to exit, before any
+        // of the exit sequence below runs. Everything after this point -
+        // interaction cleanup, the disposition write, and above all the kill
+        // escalation and reap - takes real time, and while the receiver is
+        // still alive every one of those seconds is a window in which a
+        // `dismiss` or a `stop_and_await` lands in a mailbox NO ONE WILL EVER
+        // READ AGAIN and then waits on a oneshot no one will ever answer.
+        //
+        // Dropping the receiver converts that indefinite wait into an
+        // immediate answer, which is the property the whole re-entry contract
+        // rests on: a send into a closed channel fails at once
+        // (`ActorUnavailable`), and any command already sitting in the buffer
+        // has its responder dropped with it (`ResponseDropped`). Both read as
+        // "this actor is gone" - which is the truth - so an interrupted
+        // archive's re-POST, and a plain dismiss, converge instead of hanging.
+        // The stop responder this actor still owes is NOT in the mailbox; it
+        // was moved onto `pending_stop_response` and is answered below.
+        drop(command_rx);
         self.background_work_registry.shutdown();
         self.finalize_exit(exit_reason).await;
         self.handle.finish_prompt();
-        drop(self.child);
+        if let Some(respond_to) = self.pending_stop_response.take() {
+            let kills = self.kill_process_group_and_reap().await;
+            let _ = respond_to.send(Ok(kills));
+        } else {
+            drop(self.child);
+        }
         Ok(())
+    }
+
+    /// TERM the agent's process group, KILL it after a 5s grace if it
+    /// ignored the TERM, and await BOTH the group escalation's confirmation
+    /// and this actor's own reap of `self.child` (an owned child left
+    /// unreaped is a zombie, invisible to "kill(pid, 0)" but still occupying
+    /// a slot the group enumeration would otherwise wait on forever).
+    /// Returns the `(total, git)` census taken before signaling; `(0, 0)`
+    /// means the group was already empty.
+    async fn kill_process_group_and_reap(&mut self) -> (usize, usize) {
+        let Some(pid) = self.child.id() else {
+            return (0, 0);
+        };
+        // `spawn_agent_process` gives the child its own process group via
+        // `process_group(0)`, which makes the child's own pid the pgid.
+        let pgid = pid as i32;
+        let (kills, wait_result) = tokio::join!(
+            crate::process_kill::kill_group_and_await(pgid),
+            tokio::time::timeout(REAP_BUDGET, self.child.wait())
+        );
+        match wait_result {
+            Ok(Ok(_status)) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    error = %error,
+                    "failed to reap agent process after workspace stop"
+                );
+            }
+            Err(_elapsed) => {
+                // The escalation ran and the child still did not die. Report
+                // it and let the actor finish: an unbounded wait here is the
+                // one await in the exit sequence that can never resolve, and
+                // an actor that never returns from `run()` never runs its
+                // `on_exit` hook, so its handle stays in the live-session map
+                // forever, advertising a session that is not there.
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    pid = pid,
+                    budget_secs = REAP_BUDGET.as_secs(),
+                    "agent process outlived the reap budget; abandoning the wait"
+                );
+            }
+        }
+        kills
     }
 
     /// The idle select loop. Every arm is one method call; a returned
@@ -76,6 +157,14 @@ impl SessionActor {
         let startup_drain_deadline = tokio::time::Instant::now() + STARTUP_QUEUE_DRAIN_GRACE;
         let mut startup_drain_grace = true;
         loop {
+            // A failed engine-terminal transaction is the actor's global
+            // quiescence boundary. Check under the sink lock before even
+            // reading the durable queue: every command/background path below
+            // may change state before it renders an event, so allowing one to
+            // start would make the frozen terminal sequence unrecoverable.
+            if !self.event_mutations_admitted().await {
+                return ActorExitDisposition::Unload;
+            }
             // Durable queue drain is an idle, low-priority action. A queue
             // mutation already accepted into the actor mailbox wins this
             // boundary, so startup and turn completion cannot capture and run
@@ -148,6 +237,12 @@ impl SessionActor {
         notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
         background_work_rx: &mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
     ) -> Option<ActorExitDisposition> {
+        // Repeat the sink-locked admission at the command entry. The loop
+        // check owns normal ordering; this local gate pins the invariant for
+        // every command that performs durable/live work before rendering.
+        if !self.event_mutations_admitted().await {
+            return Some(ActorExitDisposition::Unload);
+        }
         match cmd {
             SessionCommand::Prompt {
                 payload,
@@ -216,7 +311,9 @@ impl SessionActor {
                 None
             }
             SessionCommand::RunDomainOp { op, respond_to } => {
-                let result = self.run_domain_op_cmd(op).await;
+                let Some(result) = self.run_domain_op_cmd(op).await else {
+                    return Some(ActorExitDisposition::Unload);
+                };
                 let _ = respond_to.send(result);
                 None
             }
@@ -270,6 +367,23 @@ impl SessionActor {
                 self.resolve_pending_interactions(Resolution::Dismissed)
                     .await;
                 let _ = respond_to.send(Ok(()));
+                Some(ActorExitDisposition::Dismiss)
+            }
+            SessionCommand::Unload { respond_to } => {
+                self.resolve_pending_interactions(Resolution::Cancelled)
+                    .await;
+                let _ = respond_to.send(Ok(()));
+                Some(ActorExitDisposition::Unload)
+            }
+            SessionCommand::Stop { respond_to } => {
+                self.resolve_pending_interactions(Resolution::Dismissed)
+                    .await;
+                // Reused disposition (spec R3-B): the stop detaches the
+                // actor exactly like Dismiss. The responder fires from
+                // `run()`'s exit sequence AFTER the kill escalation confirms
+                // death, never here — a Dismiss-shaped early reply would
+                // prove nothing about the process.
+                self.pending_stop_response = Some(respond_to);
                 Some(ActorExitDisposition::Dismiss)
             }
             SessionCommand::Close { respond_to } => {

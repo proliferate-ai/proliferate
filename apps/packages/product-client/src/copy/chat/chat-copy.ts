@@ -9,9 +9,12 @@ export const CHAT_SELECTED_RESPONSE_ACTIONS = {
   menuLabel: "Selected response actions",
   addToChat: "Add to chat",
   moreDetails: "More details",
-  askInSideChat: "Ask in side chat",
   moreDetailsPrompt: "Explain this selected response text in more detail.",
-  sideChatPrompt: "Help me understand this selected response text.",
+  annotationCommentLabel: "Annotation comment",
+  annotationCommentPlaceholder: "Add an optional comment…",
+  annotationNoComment: "No comment",
+  annotationRemoveLabel: "Remove annotation",
+  annotationCommentSubmit: "Save annotation",
 } as const;
 
 export const CHAT_PROMPT_FEEDBACK = {

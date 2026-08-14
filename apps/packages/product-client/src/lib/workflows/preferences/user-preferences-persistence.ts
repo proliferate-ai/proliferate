@@ -118,6 +118,7 @@ async function readLegacyUserPreferences(
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
     worktreeAutoDeleteLimit: defaults.worktreeAutoDeleteLimit,
     pasteAttachmentsEnabled: defaults.pasteAttachmentsEnabled,
+    deleteBranchOnArchive: defaults.deleteBranchOnArchive,
     reviewDefaultsByKind: defaults.reviewDefaultsByKind,
     reviewPersonalitiesByKind: defaults.reviewPersonalitiesByKind,
   };

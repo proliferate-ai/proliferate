@@ -64,7 +64,10 @@ export const ChromeTab = forwardRef<HTMLDivElement, ChromeTabProps>(
   }, ref) {
     const contentWidth = Math.max(0, width);
     const isSmall = contentWidth < 84;
-    const showBadge = !isSmall;
+    // The status badge outlives the small threshold: narrow panes are exactly
+    // where the in-progress indicator matters (PRO-226). It yields only when
+    // the tab can no longer hold the icon plus an ellipsized label.
+    const showBadge = contentWidth >= 60;
     const showStatus = showBadge && badge != null;
     const showShortcut = Boolean(shortcutLabel) && shortcutRevealVisible && !isSmall;
 

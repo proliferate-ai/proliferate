@@ -1232,19 +1232,28 @@ class ShippedAllowlistTest(unittest.TestCase):
             # now the only two real DOMAIN_SQL_OUTSIDE_STORE offenders left in
             # the repo, both engine-invisible cfg(test) boundaries later PRs
             # still own.
+            # 159 -> 156: R5 dropped the now-dead SessionDeleteWorkflow argument
+            # from this fixture's WorkspaceDeleteWorkflow construction, which
+            # sits above the anchor. Same offender, same rule.
             ("DOMAIN_SQL_OUTSIDE_STORE",
-             "domains/workflows/workspace_materialization/test_support.rs", 159,
+             "domains/workflows/workspace_materialization/test_support.rs", 156,
              "format!-built SELECT COUNT(*) head"),
             # A DROP TABLE line, inside a cfg(test) mod the engine cannot see
-            # past — the checker still flags the line itself.
-            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/workspaces/access_gate.rs", 324,
+            # past — the checker still flags the line itself. Carried forward
+            # 324 -> 332 as the archiving rungs grew the file above it (R1's
+            # retired-arm absorption, R4's WorkspaceArchived rename and its
+            # archived-row admission tests); the offender and the rule that
+            # sees it are unchanged. The anchor differs per rung because later
+            # rungs edit the file, so each rung's branch pins its own value and
+            # the restack takes each rung's own number on the one-line conflict.
+            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/workspaces/access_gate.rs", 332,
              "DROP TABLE line"),
             # A `state.*_store` field access, which carries no store type on the
             # line for the import pass to see. This particular one is benign (an
             # in-memory health snapshot), but the shape is what the rule watches.
             ("API_STORE_ESCAPE", "api/http/health.rs", 37, "AppState store field"),
             # An inline contract path with no use statement to declare it.
-            ("DOMAIN_CONTRACT_IMPORT", "domains/sessions/store/events.rs", 53,
+            ("DOMAIN_CONTRACT_IMPORT", "domains/sessions/store/events.rs", 75,
              "inline contract path"),
             # A store-holding file named exactly policy.rs.
             ("POLICY_PURITY", "domains/workflows/control/policy.rs", 8,

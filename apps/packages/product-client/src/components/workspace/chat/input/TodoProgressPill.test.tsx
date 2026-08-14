@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlanEntry } from "@anyharness/sdk";
 import { TodoProgressPill } from "./TodoProgressPill";
@@ -38,6 +38,14 @@ function plan(completedCount: number, total: number): { entries: PlanEntry[] } {
 
 function pill() {
   return screen.queryByText(/Step \d+\/\d+/);
+}
+
+function pillSurface() {
+  return document.querySelector<HTMLElement>("[data-todo-progress-pill]");
+}
+
+function checklistCard() {
+  return document.querySelector<HTMLElement>("[data-todo-progress-card]");
 }
 
 beforeEach(() => {
@@ -99,6 +107,56 @@ describe("TodoProgressPill", () => {
     mocks.tracker = plan(5, 9);
     rerender(<TodoProgressPill />);
     expect(pill()).toBeNull();
+  });
+
+  it("keeps the hover-pinned checklist mounted, in place, through step advances", () => {
+    mocks.tracker = plan(1, 5);
+    const { rerender } = render(<TodoProgressPill />);
+    mocks.tracker = plan(2, 5);
+    rerender(<TodoProgressPill />);
+    expect(pill()).not.toBeNull();
+
+    fireEvent.mouseEnter(pillSurface()!);
+    const cardBefore = checklistCard();
+    expect(cardBefore).not.toBeNull();
+    expect(cardBefore!.querySelectorAll("[data-loading-spinner]")).toHaveLength(1);
+
+    // A step advancing while the pointer is on the pill/checklist must not
+    // unpin: the card stays the same mounted node (so the in-progress
+    // spinner's rotation never restarts) and its rows update in place.
+    mocks.tracker = plan(3, 5);
+    rerender(<TodoProgressPill />);
+    const cardAfter = checklistCard();
+    expect(cardAfter).not.toBeNull();
+    expect(cardAfter!.isSameNode(cardBefore)).toBe(true);
+    expect(cardAfter!.querySelectorAll("[data-loading-spinner]")).toHaveLength(1);
+
+    // No fade/hide may be scheduled by the hovered advance: well past the
+    // step linger window, pill and checklist are still up at full opacity.
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(checklistCard()).not.toBeNull();
+    expect(pill()).not.toBeNull();
+  });
+
+  it("fades on the hover schedule after leaving a checklist that advanced while pinned", () => {
+    mocks.tracker = plan(1, 4);
+    const { rerender } = render(<TodoProgressPill />);
+    mocks.tracker = plan(2, 4);
+    rerender(<TodoProgressPill />);
+
+    fireEvent.mouseEnter(pillSurface()!);
+    mocks.tracker = plan(3, 4);
+    rerender(<TodoProgressPill />);
+    expect(checklistCard()).not.toBeNull();
+
+    fireEvent.mouseLeave(pillSurface()!);
+    act(() => {
+      vi.advanceTimersByTime(1800);
+    });
+    expect(pill()).toBeNull();
+    expect(checklistCard()).toBeNull();
   });
 
   it("unmounts at fade start under reduced motion instead of lingering at opacity 0", () => {

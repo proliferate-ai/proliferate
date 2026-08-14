@@ -20,7 +20,15 @@ interface ChatInputState {
   setDraftText: (workspaceId: string, value: string) => void;
   appendDraftText: (workspaceId: string, value: string) => void;
   clearDraft: (workspaceId: string) => void;
-  addSelectedResponseContext: (workspaceId: string, text: string) => void;
+  addSelectedResponseContext: (
+    workspaceId: string,
+    text: string,
+  ) => { id: string; ordinal: number } | null;
+  setSelectedResponseContextComment: (
+    workspaceId: string,
+    id: string,
+    comment: string,
+  ) => void;
   removeSelectedResponseContext: (workspaceId: string, id: string) => void;
   clearSelectedResponseContexts: (workspaceId: string, ids?: readonly string[]) => void;
   setEditDraft: (sessionId: string, value: string) => void;
@@ -94,22 +102,39 @@ export const useChatInputStore = create<ChatInputState>((set) => ({
     };
   }),
 
-  addSelectedResponseContext: (workspaceId, text) => set((state) => {
+  addSelectedResponseContext: (workspaceId, text) => {
     if (text.trim().length === 0) {
+      return null;
+    }
+    selectedResponseContextSequence += 1;
+    const id = `selected-response:${Date.now()}:${selectedResponseContextSequence.toString(36)}`;
+    let ordinal = 0;
+    set((state) => {
+      const current = state.selectedResponseContextsByWorkspaceId[workspaceId] ?? [];
+      ordinal = current.length + 1;
+      return {
+        selectedResponseContextsByWorkspaceId: {
+          ...state.selectedResponseContextsByWorkspaceId,
+          [workspaceId]: [...current, { id, text }],
+        },
+      };
+    });
+    return { id, ordinal };
+  },
+
+  setSelectedResponseContextComment: (workspaceId, id, comment) => set((state) => {
+    const current = state.selectedResponseContextsByWorkspaceId[workspaceId] ?? [];
+    const index = current.findIndex((context) => context.id === id);
+    if (index === -1) {
       return state;
     }
-    const current = state.selectedResponseContextsByWorkspaceId[workspaceId] ?? [];
-    selectedResponseContextSequence += 1;
+    const trimmed = comment.trim();
+    const next = [...current];
+    next[index] = { ...next[index]!, comment: trimmed || undefined };
     return {
       selectedResponseContextsByWorkspaceId: {
         ...state.selectedResponseContextsByWorkspaceId,
-        [workspaceId]: [
-          ...current,
-          {
-            id: `selected-response:${Date.now()}:${selectedResponseContextSequence.toString(36)}`,
-            text,
-          },
-        ],
+        [workspaceId]: next,
       },
     };
   }),

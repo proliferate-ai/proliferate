@@ -21,9 +21,15 @@ vi.mock("#product/primitives/icons/platform", () => ({
 }));
 
 vi.mock("#product/primitives/icons/workspace", () => ({
-  FolderClosed: () => <span data-icon="folder-closed" />,
-  FolderFilled: () => <span data-icon="folder-filled" />,
-  FolderRemote: () => <span data-icon="folder-remote" />,
+  FolderClosed: ({ className }: { className?: string }) => (
+    <span data-icon="folder-closed" className={className} />
+  ),
+  FolderFilled: ({ className }: { className?: string }) => (
+    <span data-icon="folder-filled" className={className} />
+  ),
+  FolderRemote: ({ className }: { className?: string }) => (
+    <span data-icon="folder-remote" className={className} />
+  ),
 }));
 
 vi.mock("#product/primitives/PopoverButton", () => ({
@@ -205,6 +211,29 @@ describe("RepoGroup", () => {
 
     expect(document.querySelector('[data-icon="folder-remote"]')).toBeTruthy();
   });
+
+  it.each([
+    ["local_cloud", "folder-remote"],
+    ["local", "folder-filled"],
+  ] as const)(
+    "renders the %s repository folder glyph at the leading paired tier",
+    (environmentKind, icon) => {
+      render(
+        <RepoGroup
+          name="Repo A"
+          collapsed={false}
+          environmentKind={environmentKind}
+          onToggleCollapsed={vi.fn()}
+        >
+          <div>Workspace A</div>
+        </RepoGroup>,
+      );
+
+      const glyph = document.querySelector(`[data-icon="${icon}"]`);
+      expect(glyph?.className).toContain("icon-paired");
+      expect(glyph?.className).not.toContain("icon-indicator");
+    },
+  );
 
   it("keeps the current local folder glyph unchanged on hover", () => {
     const { rerender } = render(

@@ -1,10 +1,15 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSummary } from "@anyharness/sdk";
 import { useFirstRunAuthAdoption } from "#product/hooks/agents/lifecycle/use-first-run-auth-adoption";
 import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+  type RendererDiagnosticInput,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const state = vi.hoisted(() => ({
   cloudActive: true,
@@ -20,6 +25,7 @@ const state = vi.hoisted(() => ({
   reconcileStatus: "completed" as string,
 }));
 const putMutate = vi.hoisted(() => vi.fn());
+let diagnostics: RendererDiagnosticInput[] = [];
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentGatewayCapabilities: () => state.capabilities,
@@ -69,7 +75,13 @@ async function waitForDecision() {
   });
 }
 
+beforeEach(() => {
+  diagnostics = [];
+  setRendererDiagnosticsSink({ emit: (input) => diagnostics.push(input) });
+});
+
 afterEach(() => {
+  resetRendererDiagnosticsSinkForTest();
   cleanup();
   vi.clearAllMocks();
   useAuthSetupOnboardingStore.getState().resetForTests();
@@ -117,6 +129,20 @@ describe("useFirstRunAuthAdoption", () => {
       { harnessKind: "claude", surface: "local", body: GATEWAY_BODY },
       expect.anything(),
     );
+  });
+
+  it("records a failed first-run adoption through the renderer sink", async () => {
+    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitFor(() => expect(putMutate).toHaveBeenCalledTimes(1));
+
+    const options = putMutate.mock.calls[0]?.[1] as { onError(error: unknown): void };
+    options.onError(new TypeError("adoption failed"));
+
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      name: "renderer.agent_auth.first_run_adoption_failed",
+      errorClassification: "first_run_adoption_failed",
+    }));
   });
 
   it("does nothing when nothing is detected and the gateway is disabled", async () => {

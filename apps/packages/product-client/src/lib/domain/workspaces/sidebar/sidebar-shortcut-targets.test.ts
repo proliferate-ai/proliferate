@@ -90,14 +90,13 @@ describe("visibleSidebarShortcutTargetIds", () => {
           repoKey: "/tmp/repo-a",
           repoName: "repo-a",
         }),
-        makeLocalLogicalWorkspace({
+        makeCloudLogicalWorkspace({
           id: "archived-selected",
           repoKey: "/tmp/repo-a",
           repoName: "repo-a",
-          kind: "worktree",
+          productLifecycle: "archived",
         }),
       ],
-      archivedIds: ["archived-selected"],
       selectedLogicalWorkspaceId: "archived-selected",
     });
 

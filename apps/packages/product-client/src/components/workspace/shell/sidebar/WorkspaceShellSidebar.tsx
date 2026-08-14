@@ -77,7 +77,7 @@ export function WorkspaceShellSidebar({
       </div>
 
       <div
-        className={`relative shrink-0 ${
+        className={`relative shrink-0 transition-[width] ease-out-cubic [transition-duration:var(--workspace-left-geometry-duration)] ${
           open || toggleClosing
             ? "isolate overflow-hidden"
             : "pointer-events-none z-overlay"
@@ -119,7 +119,7 @@ export function WorkspaceShellSidebar({
       {showAnimatedDivider ? (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 z-raised w-px bg-border"
+          className="pointer-events-none absolute inset-y-0 z-raised w-px bg-border transition-[left] ease-out-cubic [transition-duration:var(--workspace-left-geometry-duration)]"
           style={{ left: "max(-1px, calc(var(--workspace-left-width) - 1px))" }}
           data-workspace-left-divider
         />

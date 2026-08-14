@@ -39,11 +39,14 @@ export function SidebarNavRow({
       {...props}
     >
       {/* The icon carries the row ink, not a dimmer tier, and scales with
-          the label (~1.15em icon-to-text).
+          the label (1.23em icon-to-text — a 16px glyph beside 13px row text).
           The well matches the icon exactly — a fixed w-4 well leaves more
           slack around smaller icons, silently widening the icon→label gap on
-          smaller-text surfaces (settings) vs the main sidebar. */}
-      <div className="flex w-[var(--icon-paired)] shrink-0 items-center justify-center text-current [&>svg]:icon-indicator [&>svg]:shrink-0">
+          smaller-text surfaces (settings) vs the main sidebar. The glyph size
+          is spelled as the same `[&>svg]` compound selector as the well's own
+          width, so it reaches the child SVG rather than losing to whatever
+          size class the caller put there. */}
+      <div className="flex w-[var(--icon-paired)] shrink-0 items-center justify-center text-current [&>svg]:icon-paired [&>svg]:shrink-0">
         {icon}
       </div>
       <div className="flex min-w-0 flex-1 items-center text-current">

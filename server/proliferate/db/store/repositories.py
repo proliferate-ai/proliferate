@@ -29,6 +29,8 @@ class RepoEnvironmentValue:
     default_branch: str | None
     setup_script: str
     run_command: str
+    archive_script: str
+    rerun_setup_on_unarchive: bool
     created_at: datetime
     updated_at: datetime
 
@@ -65,6 +67,8 @@ def _environment_value(row: RepoEnvironment, repo: RepoConfig) -> RepoEnvironmen
         default_branch=row.default_branch,
         setup_script=row.setup_script,
         run_command=row.run_command,
+        archive_script=row.archive_script,
+        rerun_setup_on_unarchive=row.rerun_setup_on_unarchive,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -358,6 +362,8 @@ async def _upsert_environment(
     default_branch: str | None,
     setup_script: str,
     run_command: str,
+    archive_script: str | None = None,
+    rerun_setup_on_unarchive: bool | None = None,
 ) -> RepoEnvironment:
     predicates = [
         RepoEnvironment.repo_config_id == repo.id,
@@ -388,6 +394,10 @@ async def _upsert_environment(
             created_at=now,
             updated_at=now,
         )
+        if archive_script is not None:
+            row.archive_script = archive_script
+        if rerun_setup_on_unarchive is not None:
+            row.rerun_setup_on_unarchive = rerun_setup_on_unarchive
         db.add(row)
     else:
         row.desktop_install_id = desktop_install_id
@@ -395,6 +405,10 @@ async def _upsert_environment(
         row.default_branch = normalized_default_branch
         row.setup_script = setup_script
         row.run_command = run_command
+        if archive_script is not None:
+            row.archive_script = archive_script
+        if rerun_setup_on_unarchive is not None:
+            row.rerun_setup_on_unarchive = rerun_setup_on_unarchive
         row.updated_at = now
     repo.updated_at = now
     await db.flush()
@@ -413,6 +427,8 @@ async def upsert_local_repo_environment(
     default_branch: str | None,
     setup_script: str,
     run_command: str,
+    archive_script: str | None = None,
+    rerun_setup_on_unarchive: bool | None = None,
 ) -> RepoEnvironmentValue:
     repo = await _ensure_repo_config(
         db,
@@ -430,6 +446,8 @@ async def upsert_local_repo_environment(
         default_branch=default_branch,
         setup_script=setup_script,
         run_command=run_command,
+        archive_script=archive_script,
+        rerun_setup_on_unarchive=rerun_setup_on_unarchive,
     )
     return _environment_value(environment, repo)
 
@@ -444,6 +462,8 @@ async def upsert_cloud_repo_environment(
     default_branch: str | None,
     setup_script: str,
     run_command: str,
+    archive_script: str | None = None,
+    rerun_setup_on_unarchive: bool | None = None,
 ) -> RepoEnvironmentValue:
     repo = await _ensure_repo_config(
         db,
@@ -461,5 +481,7 @@ async def upsert_cloud_repo_environment(
         default_branch=default_branch,
         setup_script=setup_script,
         run_command=run_command,
+        archive_script=archive_script,
+        rerun_setup_on_unarchive=rerun_setup_on_unarchive,
     )
     return _environment_value(environment, repo)

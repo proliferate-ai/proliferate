@@ -1,4 +1,6 @@
 import type {
+  ArchiveWorkspaceRequest,
+  ArchiveWorkspaceResponse,
   CreateWorkspaceRequest,
   CreateWorktreeWorkspaceRequest,
   CreateWorktreeWorkspaceResponse,
@@ -8,13 +10,14 @@ import type {
   ResolveWorkspaceResponse,
   RestoreWorktreeWorkspaceResponse,
   StartWorkspaceSetupRequest,
+  UnarchiveWorkspaceRequest,
+  UnarchiveWorkspaceResponse,
   UpdateWorkspaceDisplayNameRequest,
   Workspace,
-  WorkspacePurgePreflightResponse,
+  WorkspaceLifecycleFilter,
   WorkspacePurgeResponse,
-  WorkspaceRetirePreflightResponse,
-  WorkspaceRetireResponse,
 } from "../types/workspaces.js";
+import type { WorkspaceSubagentsResponse } from "../types/subagents.js";
 import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
 
 export class WorkspacesClient {
@@ -58,10 +61,55 @@ export class WorkspacesClient {
     );
   }
 
-  async list(options?: AnyHarnessRequestOptions): Promise<Workspace[]> {
+  /**
+   * The workspace list. Defaults to `active` on the server, so an old client
+   * keeps seeing exactly what it saw before archiving shipped; pass `archived`
+   * or `all` to widen it.
+   */
+  async list(
+    lifecycle?: WorkspaceLifecycleFilter,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Workspace[]> {
+    const query = lifecycle === undefined
+      ? ""
+      : `?lifecycle=${encodeURIComponent(lifecycle)}`;
     return this.transport.get<Workspace[]>(
-      "/v1/workspaces",
+      `/v1/workspaces${query}`,
       withTimingCategory(options, "workspace.list"),
+    );
+  }
+
+  /**
+   * Archive a workspace. Resolves at the row flip — the archive script, the
+   * worktree removal, and the branch delete all run detached afterwards and
+   * cannot change this answer.
+   */
+  async archive(
+    workspaceId: string,
+    input?: ArchiveWorkspaceRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<ArchiveWorkspaceResponse> {
+    return this.transport.post<ArchiveWorkspaceResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/archive`,
+      input ?? {},
+      withTimingCategory(options, "workspace.archive"),
+    );
+  }
+
+  /**
+   * Unarchive a workspace. An ambiguous restore answers 409
+   * `WORKSPACE_UNARCHIVE_SCENARIO`, whose `extra` carries the scenario body and
+   * the `strategies` the caller may answer with in `branchStrategy`/`overwrite`.
+   */
+  async unarchive(
+    workspaceId: string,
+    input?: UnarchiveWorkspaceRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<UnarchiveWorkspaceResponse> {
+    return this.transport.post<UnarchiveWorkspaceResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/unarchive`,
+      input ?? {},
+      withTimingCategory(options, "workspace.unarchive"),
     );
   }
 
@@ -69,6 +117,16 @@ export class WorkspacesClient {
     return this.transport.get<Workspace>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}`,
       withTimingCategory(options, "workspace.get"),
+    );
+  }
+
+  async listSubagents(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspaceSubagentsResponse> {
+    return this.transport.get<WorkspaceSubagentsResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/subagents`,
+      options,
     );
   }
 
@@ -127,48 +185,6 @@ export class WorkspacesClient {
     );
   }
 
-  async retirePreflight(
-    workspaceId: string,
-    options?: AnyHarnessRequestOptions,
-  ): Promise<WorkspaceRetirePreflightResponse> {
-    return this.transport.get<WorkspaceRetirePreflightResponse>(
-      `/v1/workspaces/${encodeURIComponent(workspaceId)}/retire/preflight`,
-      withTimingCategory(options, "workspace.retire.preflight"),
-    );
-  }
-
-  async retire(
-    workspaceId: string,
-    options?: AnyHarnessRequestOptions,
-  ): Promise<WorkspaceRetireResponse> {
-    return this.transport.post<WorkspaceRetireResponse>(
-      `/v1/workspaces/${encodeURIComponent(workspaceId)}/retire`,
-      {},
-      withTimingCategory(options, "workspace.retire"),
-    );
-  }
-
-  async retryRetireCleanup(
-    workspaceId: string,
-    options?: AnyHarnessRequestOptions,
-  ): Promise<WorkspaceRetireResponse> {
-    return this.transport.post<WorkspaceRetireResponse>(
-      `/v1/workspaces/${encodeURIComponent(workspaceId)}/retire/cleanup-retry`,
-      {},
-      withTimingCategory(options, "workspace.retire.cleanup_retry"),
-    );
-  }
-
-  async purgePreflight(
-    workspaceId: string,
-    options?: AnyHarnessRequestOptions,
-  ): Promise<WorkspacePurgePreflightResponse> {
-    return this.transport.get<WorkspacePurgePreflightResponse>(
-      `/v1/workspaces/${encodeURIComponent(workspaceId)}/purge/preflight`,
-      withTimingCategory(options, "workspace.purge.preflight"),
-    );
-  }
-
   async purge(
     workspaceId: string,
     options?: AnyHarnessRequestOptions,
@@ -176,17 +192,6 @@ export class WorkspacesClient {
     return this.transport.deleteJson<WorkspacePurgeResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}`,
       withTimingCategory(options, "workspace.purge"),
-    );
-  }
-
-  async retryPurge(
-    workspaceId: string,
-    options?: AnyHarnessRequestOptions,
-  ): Promise<WorkspacePurgeResponse> {
-    return this.transport.post<WorkspacePurgeResponse>(
-      `/v1/workspaces/${encodeURIComponent(workspaceId)}/purge/retry`,
-      {},
-      withTimingCategory(options, "workspace.purge.retry"),
     );
   }
 }

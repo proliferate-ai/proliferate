@@ -213,7 +213,6 @@ function renderReceiptKey(queryClient: QueryClient) {
 function makeWorkspace(): Workspace {
   return {
     availability: "available",
-    cleanupState: "none",
     createdAt: "2026-08-11T11:59:00.000Z",
     id: WORKSPACE_ID,
     kind: "worktree",

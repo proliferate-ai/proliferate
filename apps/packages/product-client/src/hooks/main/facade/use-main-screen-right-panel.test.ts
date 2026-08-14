@@ -323,3 +323,57 @@ describe("useMainScreenRightPanel drag wiring", () => {
     ).toBe(startWidth);
   });
 });
+
+describe("useMainScreenRightPanel external durable open writes", () => {
+  it("honors a store-level open written while a session override holds the frame closed (PRO-242)", () => {
+    const { result, rerender } = renderRightPanel();
+    // A toggle seeds the session override; closing leaves it at open:false,
+    // which used to shadow every later store-level open write.
+    act(() => {
+      result.current.setRightPanelOpen(true);
+    });
+    act(() => {
+      result.current.setRightPanelOpen(false);
+    });
+    rerender();
+    expect(result.current.rightPanelOpen).toBe(false);
+
+    // A chat file-link click opens the frame through the store, the same
+    // write `openViewerTargetInRightPanel` issues.
+    act(() => {
+      useWorkspaceUiStore.getState().setRightPanelOpenForWorkspace(WORKSPACE_ID, true);
+    });
+    rerender();
+    expect(result.current.rightPanelOpen).toBe(true);
+
+    // The user can still close it afterwards.
+    act(() => {
+      result.current.setRightPanelOpen(false);
+    });
+    rerender();
+    expect(result.current.rightPanelOpen).toBe(false);
+  });
+
+  it("keeps the frame shell-level on workspace switches instead of adopting the next workspace's persisted open", () => {
+    const OTHER_WORKSPACE_ID = "workspace-switch-test";
+    const { result, rerender } = renderHook(
+      ({ workspaceUiKey }: { workspaceUiKey: string }) =>
+        useMainScreenRightPanel({
+          workspaceUiKey,
+          materializedWorkspaceId: workspaceUiKey,
+          isCloudWorkspaceSelected: false,
+          rightPanelSuppressed: false,
+        }),
+      { initialProps: { workspaceUiKey: WORKSPACE_ID } },
+    );
+    act(() => {
+      result.current.setRightPanelOpen(true);
+    });
+    act(() => {
+      useWorkspaceUiStore.getState().setRightPanelOpenForWorkspace(OTHER_WORKSPACE_ID, false);
+    });
+
+    rerender({ workspaceUiKey: OTHER_WORKSPACE_ID });
+    expect(result.current.rightPanelOpen).toBe(true);
+  });
+});

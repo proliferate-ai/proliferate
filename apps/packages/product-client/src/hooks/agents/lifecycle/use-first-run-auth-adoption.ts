@@ -7,6 +7,11 @@ import {
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 /**
  * First-run adoption of the managed gateway into auth selections (spec §9).
@@ -89,6 +94,17 @@ export function useFirstRunAuthAdoption() {
           },
           {
             onError: (error) => {
+              recordRendererDiagnostic({
+                name: "renderer.agent_auth.first_run_adoption_failed",
+                severity: "warn",
+                kind: "message",
+                privacy: "operational",
+                fields: {
+                  harness_kind: diagnosticField(action.harnessKind, "operational"),
+                  error_name: diagnosticField(safeRendererErrorName(error), "operational"),
+                },
+                errorClassification: "first_run_adoption_failed",
+              });
               console.warn(
                 `[agent-auth] first-run adoption failed for ${action.harnessKind}`,
                 error,

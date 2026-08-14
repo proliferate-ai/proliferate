@@ -1,3 +1,10 @@
+import { recordRendererDiagnostic } from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostics-port";
+import {
+  rendererDiagnosticCorrelation,
+  rendererDiagnosticFields,
+  rendererDiagnosticName,
+} from "@/lib/infra/diagnostics/renderer-diagnostic-callsite";
+
 function envFlagEnabled(value: string | undefined, defaultValue: boolean): boolean {
   if (!value) {
     return defaultValue;
@@ -34,6 +41,18 @@ export function logLatency(
 ): void {
   if (!isLatencyDebugLoggingEnabled()) {
     return;
+  }
+
+  const name = rendererDiagnosticName("renderer.latency", event);
+  if (name !== null) {
+    recordRendererDiagnostic({
+      name,
+      severity: "debug",
+      kind: "progress",
+      privacy: fields === undefined ? "operational" : "sensitive",
+      fields: rendererDiagnosticFields(fields, "sensitive"),
+      correlation: rendererDiagnosticCorrelation(fields),
+    });
   }
 
   if (fields) {

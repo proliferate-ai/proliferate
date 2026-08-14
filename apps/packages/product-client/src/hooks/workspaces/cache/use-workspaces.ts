@@ -161,6 +161,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
           fallbackOnNonAbort(
             listRuntimeWorkspaces(
               connection,
+              undefined,
               requestOptionsWithSignal(
                 getMeasurementRequestOptions({ operationId, category: "workspace.list" })
                   ?? undefined,

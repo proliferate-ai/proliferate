@@ -150,6 +150,25 @@ pub struct SessionRecord {
     pub origin: Option<OriginContext>,
 }
 
+/// Domain-owned execution facts for consumers that must not depend on the
+/// public HTTP contract. Actor presence is execution detail, not a durable
+/// session lifecycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionExecutionStatePhase {
+    Starting,
+    Running,
+    AwaitingInteraction,
+    Idle,
+    Errored,
+    Closed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionExecutionState {
+    pub phase: SessionExecutionStatePhase,
+    pub has_live_handle: bool,
+}
+
 impl SessionRecord {
     pub fn to_contract(&self) -> v1::Session {
         self.to_contract_with_details(None, None)
@@ -508,6 +527,20 @@ pub struct SessionEventRecord {
     pub turn_id: Option<String>,
     pub item_id: Option<String>,
     pub payload_json: String,
+}
+
+pub(crate) fn bounded_assistant_text(messages: &[String]) -> Option<String> {
+    let joined = messages.join("\n");
+    let trimmed = joined.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let mut chars = trimmed.chars();
+    let bounded = chars.by_ref().take(4_000).collect();
+    if chars.next().is_some() {
+        return Some(format!("{bounded}..."));
+    }
+    Some(bounded)
 }
 
 #[derive(Debug, Clone)]

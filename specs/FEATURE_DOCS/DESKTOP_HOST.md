@@ -80,14 +80,14 @@ The bridge groups are:
 | Group | Why ProductClient needs it |
 | --- | --- |
 | `runtime` | Discover or restart the local AnyHarness runtime and return its base URL/token connection. |
-| `files` | Pick a local directory, inspect basic path availability, list/open editor/finder/terminal/copy targets, reveal paths, and open terminals. |
+| `files` | Pick a local directory, inspect basic path availability, recover absolute paths for the drag session just dropped onto the webview, list/open editor/finder/terminal/copy targets, reveal paths, and open terminals. |
 | `localCredentials` | Read and update local agent/provider credentials; never Proliferate login credentials. |
 | `nativeUi` | Render native context menus, receive native commands, set running-agent quit protection, update Dock attention, and control WebView zoom. |
 | `updater` | Report updater support/version, check, download with progress, install, and relaunch while preserving the opaque native update handle. |
 | `worker` | Read the install id and ensure or stop the Desktop worker process. |
 | `ssh` | Persist SSH profiles and establish a tunnel that yields a normal AnyHarness connection. |
 | `scratch` | Preserve current local file-backed workspace scratch reads and writes. |
-| `diagnostics` | Write narrow renderer events, collect support bundles, save reports, and stage/read/delete support attachments. |
+| `diagnostics` | Hand an ownership-checked bounded renderer batch to native collector ingest, acknowledge root render-error admission, collect support bundles, save reports, and stage/read/delete support attachments. ProductClient producers use the platform-neutral renderer diagnostics port rather than the bridge directly. |
 
 Repo inspection, git, worktrees, workspaces, sessions, chat, and transcript are
 not bridge operations; they continue through AnyHarness. Product auth,
@@ -102,17 +102,33 @@ actual consumer needs it, and preserve the concrete Desktop behavior and
 return shape at that boundary. The embedded browser is removed, not bridged.
 
 Root render-error reporting is one diagnostics operation with an acknowledged
-result: Desktop resolves success only after its native renderer diagnostic was
-persisted (or an identical event was already persisted inside the host-owned
-dedupe window). ProductClient keeps neutral sending copy until that result,
-reports failure or absence honestly, and contains reporter throws/rejections so
-the recovery surface cannot recursively fail.
+result: Desktop resolves success only after a coherent collector receipt proves
+the indexed record accepted-or-duplicate, or an identical fingerprint has that
+same proof in the preceding three seconds. It is not a persistence, upload,
+fallback, or current-health guarantee. ProductClient keeps neutral sending copy
+until that result, reports failure or absence honestly, and contains reporter
+throws/rejections so the recovery surface cannot recursively fail.
+
+The collector handoff is deliberately narrow: only the main window may submit
+accepted `desktop_renderer`/`renderer` schema-v1.1 records and receive an ingest
+receipt. It does not expose collector health, queries, endpoint, capability, or
+export to the bridge. Desktop owns one filtered, bounded renderer sink; the old
+renderer diagnostics file receives no new writes. An eligible error returned
+directly before authenticated dispatch may retain the already-filtered records
+through the native fallback pipeline while preserving the original error. Once
+dispatch begins, every transport, receipt, replacement, deadline, and protocol
+failure remains a renderer delivery loss and never falls back.
 
 ### Desktop-only product behavior
 
 Raw native startup remains app-owned: Tauri initialization, native window
-setup, sidecar/process startup, operating-system deep-link registration, and
-vendor installation run from the Desktop host.
+setup, diagnostics collector supervision and query brokering, the protected
+child diagnostics bridge carried by owned AnyHarness/Worker launches on
+supported macOS targets, sidecar/process startup, operating-system deep-link
+registration, and vendor installation run from the Desktop host. On supported
+Desktop builds the collector startup barrier resolves before owned AnyHarness
+starts; Worker ensure observes that same barrier. A degraded observability
+path releases product startup.
 
 Product-aware Desktop behavior may live in ProductClient behind the optional
 bridge. It mounts only when a Desktop bridge exists:

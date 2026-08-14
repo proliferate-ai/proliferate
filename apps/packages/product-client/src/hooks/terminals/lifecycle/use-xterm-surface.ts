@@ -13,6 +13,11 @@ import {
   TERMINAL_LINE_HEIGHT,
 } from "#product/lib/domain/terminals/terminal-grid";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 interface UseXtermSurfaceInput {
   visible: boolean;
@@ -77,6 +82,23 @@ export function resolveXtermSurfaceTypography(
     fontSize: overrides.fontSize ?? scale.monacoFontSize,
     lineHeight: overrides.lineHeight ?? TERMINAL_LINE_HEIGHT,
   };
+}
+
+export function recordXtermInitializationFailure(
+  logPrefix: string,
+  error: unknown,
+): void {
+  recordRendererDiagnostic({
+    name: "renderer.terminal.xterm_init_failed",
+    severity: "error",
+    kind: "message",
+    privacy: "operational",
+    fields: {
+      surface: diagnosticField(logPrefix, "operational"),
+      error_name: diagnosticField(safeRendererErrorName(error), "operational"),
+    },
+    errorClassification: "xterm_init_failed",
+  });
 }
 
 export function useXtermSurface({
@@ -181,6 +203,7 @@ export function useXtermSurface({
         term.open(containerRef.current);
         fitAddon.fit();
       } catch (err) {
+        recordXtermInitializationFailure(logPrefix, err);
         console.warn(`[${logPrefix}] xterm init error (likely disposal race):`, err);
         return;
       }

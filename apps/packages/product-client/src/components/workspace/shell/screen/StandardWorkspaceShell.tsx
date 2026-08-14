@@ -19,6 +19,7 @@ import { WorkspaceCommandPalette } from "#product/components/workspace/shell/com
 import { WorkspaceShellRightRail } from "#product/components/workspace/shell/screen/WorkspaceShellRightRail";
 import { WorkspaceShellRightPanelToggle } from "#product/components/workspace/shell/screen/WorkspaceShellRightPanelToggle";
 import { WorkspaceShellSidebar } from "#product/components/workspace/shell/sidebar/WorkspaceShellSidebar";
+import { ContentSearchPill } from "#product/components/workspace/search/ContentSearchPill";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { OfflineIndicator } from "#product/components/app/OfflineIndicator";
 import { useMainScreenState } from "#product/hooks/main/facade/use-main-screen-state";
@@ -104,7 +105,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
       ? rightPanelWidth
       : 0,
     snapLeft: sidebarResizing,
-    snapRight: rightPanelResizing,
     onToggleLeft: actions.onToggleSidebar,
   });
   const chromeClasses = useMemo(
@@ -224,7 +224,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               <WorkspaceShellShortcuts enabled={visible} />
             ) : null}
             <div
-              ref={workspaceGeometry.rootRef}
               // relative: the collapsed sidebar's hover peek is an overlay
               // anchored to this shell box, so it never displaces content.
               className={`standard-workspace-shell relative h-screen flex overflow-hidden ${chromeClasses.root}`}
@@ -237,9 +236,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               } as CSSProperties}
               data-snap-left-geometry={workspaceGeometry.snapLeft ? "true" : "false"}
               data-snap-right-geometry={rightPanelResizing ? "true" : "false"}
-              data-manual-workspace-geometry={
-                workspaceGeometry.usesManualInterpolation ? "true" : "false"
-              }
               data-workspace-shell
               data-workspace-ui-key={selectedLogicalWorkspaceId ?? selectedWorkspaceId ?? ""}
               data-workspace-session-id={activeSessionId ?? ""}
@@ -374,6 +370,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                 />
               </div>
 
+              {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? <ContentSearchPill /> : null}
             </div>
           </WorkspaceHeaderTabsViewModelProvider>
         </WorkspacePathProvider>

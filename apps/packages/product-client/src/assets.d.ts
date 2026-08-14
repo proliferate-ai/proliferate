@@ -43,6 +43,11 @@ declare module "*.mp3" {
   export default src;
 }
 
+declare module "*.wav" {
+  const src: string;
+  export default src;
+}
+
 // Vendored provider marks: `?no-inline` forces Vite to emit a file URL even for
 // small SVGs, so 170+ marks never inline into a JS chunk (login-path budget).
 declare module "*.svg?no-inline" {

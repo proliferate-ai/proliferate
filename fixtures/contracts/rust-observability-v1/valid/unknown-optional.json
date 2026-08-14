@@ -1,0 +1,47 @@
+{
+  "input": {
+    "schema_version": { "major": 1, "minor": 0 },
+    "source_timestamp": "2026-08-10T13:00:00.000Z",
+    "producer_sequence": 1,
+    "producer_boot_id": "boot-renderer-skew-01",
+    "component": "desktop_renderer",
+    "source": "renderer",
+    "release": "2026.08.09",
+    "environment": "customer",
+    "operation_id": "op-unknown-option-01",
+    "parent_operation_id": null,
+    "name": "renderer.future.detail",
+    "severity": "debug",
+    "arguments": [],
+    "record_class": "detailed",
+    "privacy": "operational",
+    "redaction": "none",
+    "detailed": {
+      "kind": "log",
+      "message": "Previous-minor producer with an unknown optional field.",
+      "future_detail_option": true
+    },
+    "future_envelope_option": { "enabled": true }
+  },
+  "canonical": {
+    "schema_version": { "major": 1, "minor": 0 },
+    "source_timestamp": "2026-08-10T13:00:00.000Z",
+    "producer_sequence": 1,
+    "producer_boot_id": "boot-renderer-skew-01",
+    "component": "desktop_renderer",
+    "source": "renderer",
+    "release": "2026.08.09",
+    "environment": "customer",
+    "operation_id": "op-unknown-option-01",
+    "name": "renderer.future.detail",
+    "severity": "debug",
+    "arguments": [],
+    "record_class": "detailed",
+    "privacy": "operational",
+    "redaction": "none",
+    "detailed": {
+      "kind": "log",
+      "message": "Previous-minor producer with an unknown optional field."
+    }
+  }
+}

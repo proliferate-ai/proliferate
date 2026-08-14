@@ -47,11 +47,14 @@ export function GitPanelReviewSections({
   measurementOperationId,
 }: GitPanelReviewSectionsProps) {
   const isComposite = changesFilter === "working_tree_composite";
+  let rowIndex = 0;
   return (
     <div className="flex flex-col gap-0.5">
       {sections.flatMap((section) =>
         section.files.map((file) => {
           const entry = gitReviewEntryForFile(section.scope, file);
+          const contentSearchOrderKey = rowIndex;
+          rowIndex += 1;
           return (
             <GitReviewFileRow
               key={entry.key}
@@ -71,6 +74,7 @@ export function GitPanelReviewSections({
               openFile={openFile}
               diffTimingOptions={diffTimingOptions}
               measurementOperationId={measurementOperationId}
+              contentSearchOrderKey={contentSearchOrderKey}
             />
           );
         })

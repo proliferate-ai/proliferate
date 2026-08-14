@@ -11,15 +11,17 @@ import {
   type SidebarGroupState,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { buildSidebarNewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
-import { visibleSidebarGroupItems } from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
+import {
+  sidebarGroupRowItems,
+  visibleSidebarGroupItems,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
 import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { SkeletonBlock } from "#product/primitives/Skeleton";
-import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
 import { ProductSidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/ProductSidebarShowToggleRow";
-import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
+import { SidebarWorkspaceItems } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceItems";
 import { useCloudRepoActionState } from "#product/hooks/cloud/derived/use-cloud-repo-action-state";
 
 interface SidebarWorkspaceContentProps {
@@ -56,6 +58,8 @@ interface SidebarWorkspaceContentProps {
   shortcutRevealVisible: boolean;
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
+  onPinWorkspace: (workspaceId: string) => void;
+  onUnpinWorkspace: (pinnedIds: string[]) => void;
   onRenameWorkspace: (
     workspaceId: string,
     displayName: string | null,
@@ -112,6 +116,8 @@ export function SidebarWorkspaceContent({
   shortcutRevealVisible,
   onArchiveWorkspace,
   onUnarchiveWorkspace,
+  onPinWorkspace,
+  onUnpinWorkspace,
   onRenameWorkspace,
   onRemoveRepo,
   onOpenRepoSettings,
@@ -121,8 +127,6 @@ export function SidebarWorkspaceContent({
   onSetUpCloudForGroup,
   onAddToThisMac,
 }: SidebarWorkspaceContentProps) {
-  const { copyWorkspaceLocation, copyBranchName } = useWorkspaceCopyActions();
-
   if (isLoading && emptyState === "noWorkspaces") {
     return <SidebarLoadingState />;
   }
@@ -154,14 +158,17 @@ export function SidebarWorkspaceContent({
   }
 
   return groups.map((group, groupIndex) => {
-    const overLimit = group.items.length > SIDEBAR_REPO_GROUP_ITEM_LIMIT;
+    const rowItems = sidebarGroupRowItems(group);
+    const overLimit = rowItems.length > SIDEBAR_REPO_GROUP_ITEM_LIMIT;
     const isShownMore = repoGroupsShownMore.has(group.sourceRoot);
     const visibleItems = visibleSidebarGroupItems({
       group,
       isShownMore,
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
     });
-    const hiddenItemCount = group.items.length - visibleItems.length;
+    // Counted against the group's rendered rows: pinned rows live in the
+    // Pinned section, so they are neither visible here nor "hidden".
+    const hiddenItemCount = rowItems.length - visibleItems.length;
     const toggleLabel: "Show less" | `Show ${number} more` | null =
       overLimit && isShownMore
         ? "Show less"
@@ -245,59 +252,23 @@ export function SidebarWorkspaceContent({
           </p>
         ) : (
           <>
-            {visibleItems.map((item) => (
-              <WorkspaceItem
-                key={item.id}
-                workspaceId={item.id}
-                name={item.name}
-                defaultName={item.defaultName}
-                hasDisplayNameOverride={item.hasDisplayNameOverride}
-                subtitle={item.subtitle}
-                active={item.active}
-                archived={item.archived}
-                variant={item.variant}
-                statusIndicator={item.statusIndicator}
-                branchName={item.branchName}
-                gitStatus={item.gitStatus}
-                needsReview={item.needsReview}
-                shortcutLabel={shortcutLabelByWorkspaceId.get(item.id) ?? null}
-                shortcutRevealVisible={shortcutRevealVisible}
-                onSelect={() => onSelectWorkspace(item.id)}
-                onIndicatorAction={onIndicatorAction}
-                onOpenPullRequest={onOpenPullRequest}
-                workspaceLocationCopyLabel={item.workspaceLocationCopyLabel}
-                onCopyWorkspaceLocation={
-                  item.workspaceLocationCopyValue && item.workspaceLocationCopyToastLabel
-                    ? () => void copyWorkspaceLocation({
-                      value: item.workspaceLocationCopyValue!,
-                      menuLabel: item.workspaceLocationCopyLabel ?? "Copy workspace location",
-                      toastLabel: item.workspaceLocationCopyToastLabel!,
-                      missingLabel: "No workspace location to copy.",
-                    })
-                    : undefined
-                }
-                onCopyBranchName={
-                  item.branchName
-                    ? () => void copyBranchName(item.branchName)
-                    : undefined
-                }
-                onMarkDone={
-                  item.variant === "worktree" && !item.archived && item.localWorkspaceId
-                    ? () => onMarkWorkspaceDone(item.localWorkspaceId!, item.id)
-                    : undefined
-                }
-                availabilityCommands={item.availabilityCommands}
-                onAvailabilityCommand={(kind) => onWorkspaceAvailabilityCommand(item, kind)}
-                onHover={onWorkspaceHover}
-                onArchive={item.archived ? undefined : () => onArchiveWorkspace(item.id)}
-                onUnarchive={item.archived ? () => onUnarchiveWorkspace(item.id) : undefined}
-                onRename={
-                  item.renameSupported
-                    ? (displayName) => onRenameWorkspace(item.id, displayName)
-                    : undefined
-                }
-              />
-            ))}
+            <SidebarWorkspaceItems
+              items={visibleItems}
+              repoName={group.name}
+              shortcutLabelByWorkspaceId={shortcutLabelByWorkspaceId}
+              shortcutRevealVisible={shortcutRevealVisible}
+              onSelectWorkspace={onSelectWorkspace}
+              onIndicatorAction={onIndicatorAction}
+              onOpenPullRequest={onOpenPullRequest}
+              onMarkWorkspaceDone={onMarkWorkspaceDone}
+              onWorkspaceAvailabilityCommand={onWorkspaceAvailabilityCommand}
+              onWorkspaceHover={onWorkspaceHover}
+              onArchiveWorkspace={onArchiveWorkspace}
+              onUnarchiveWorkspace={onUnarchiveWorkspace}
+              onPinWorkspace={onPinWorkspace}
+              onUnpinWorkspace={onUnpinWorkspace}
+              onRenameWorkspace={onRenameWorkspace}
+            />
             {toggleLabel && (
               <ProductSidebarShowToggleRow
                 label={toggleLabel}

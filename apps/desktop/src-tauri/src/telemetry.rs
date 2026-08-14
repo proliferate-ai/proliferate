@@ -1,30 +1,12 @@
-use std::path::PathBuf;
-
-use tracing_subscriber::{
-    filter::{filter_fn, FilterExt},
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-    Layer,
-};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 use crate::{
-    app_config::logs_dir_path,
     desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode},
-    telemetry_file_logging::{
-        create_file_log_sink, is_renderer_diagnostic_event, RendererDiagnosticLog,
-    },
+    diagnostics_collector::producer::TauriDiagnosticsProducer,
 };
 
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
-    _file_log: Option<tracing_appender::non_blocking::WorkerGuard>,
-    renderer_diagnostic_log: RendererDiagnosticLog,
-}
-
-impl TelemetryGuards {
-    pub fn renderer_diagnostic_log(&self) -> RendererDiagnosticLog {
-        self.renderer_diagnostic_log.clone()
-    }
 }
 
 fn baked_env(key: &str) -> Option<&'static str> {
@@ -80,15 +62,7 @@ fn telemetry_mode_tag(mode: DesktopTelemetryMode) -> Option<&'static str> {
     }
 }
 
-fn desktop_native_log_path() -> Result<PathBuf, String> {
-    Ok(logs_dir_path()?.join("desktop-native.log"))
-}
-
-fn renderer_diagnostic_log_path() -> Result<PathBuf, String> {
-    Ok(logs_dir_path()?.join("renderer-diagnostics.log"))
-}
-
-pub fn init() -> TelemetryGuards {
+pub fn init(native_diagnostics: &TauriDiagnosticsProducer) -> TelemetryGuards {
     let telemetry_mode = resolve_desktop_telemetry_mode();
     let dsn = if vendor_sentry_enabled(telemetry_mode) {
         env_value("PROLIFERATE_DESKTOP_SENTRY_DSN")
@@ -119,34 +93,18 @@ pub fn init() -> TelemetryGuards {
         ))
     });
 
-    let file_sink =
-        desktop_native_log_path()
-            .ok()
-            .and_then(|path| match create_file_log_sink(&path) {
-                Ok(sink) => Some(sink),
-                Err(error) => {
-                    eprintln!(
-                        "[desktop-native] file logging disabled for {}: {error}",
-                        path.display()
-                    );
-                    None
-                }
-            });
-
     let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
+    let native_writer = native_diagnostics.make_writer();
 
     tracing_subscriber::registry()
         .with(console_layer)
         .with(sentry_tracing::layer())
-        .with(file_sink.as_ref().map(|sink| {
+        .with(
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)
-                .with_writer(sink.writer.clone())
-                .with_filter(
-                    filter_fn(|metadata| !is_renderer_diagnostic_event(metadata))
-                        .and(env_filter_from_env()),
-                )
-        }))
+                .with_writer(native_writer)
+                .with_filter(env_filter_from_env()),
+        )
         .init();
 
     if telemetry.is_some() {
@@ -159,29 +117,7 @@ pub fn init() -> TelemetryGuards {
         });
     }
 
-    if let Some(sink) = file_sink.as_ref() {
-        tracing::info!(log_path = %sink.path.display(), "Desktop native file logging enabled");
-    }
-
-    let renderer_diagnostic_log = renderer_diagnostic_log_path()
-        .ok()
-        .and_then(|path| match RendererDiagnosticLog::open(path.clone()) {
-            Ok(log) => Some(log),
-            Err(error) => {
-                eprintln!(
-                    "[desktop-native] renderer diagnostic logging disabled for {}: {error}",
-                    path.display()
-                );
-                None
-            }
-        })
-        .unwrap_or_default();
-
-    TelemetryGuards {
-        _sentry: telemetry,
-        _file_log: file_sink.map(|sink| sink.guard),
-        renderer_diagnostic_log,
-    }
+    TelemetryGuards { _sentry: telemetry }
 }
 
 #[cfg(test)]

@@ -93,6 +93,24 @@ describe("chat input store", () => {
     )).toBe("hello");
   });
 
+  it("reports the annotation ordinal on add and attaches comments by id", () => {
+    const store = useChatInputStore.getState();
+    const first = store.addSelectedResponseContext("workspace-1", "first response");
+    const second = store.addSelectedResponseContext("workspace-1", "second response");
+
+    expect(first).toEqual({ id: expect.any(String), ordinal: 1 });
+    expect(second).toEqual({ id: expect.any(String), ordinal: 2 });
+    expect(store.addSelectedResponseContext("workspace-1", "   ")).toBeNull();
+
+    store.setSelectedResponseContextComment("workspace-1", second!.id, "  focus here  ");
+    store.setSelectedResponseContextComment("workspace-1", first!.id, "   ");
+    expect(useChatInputStore.getState().selectedResponseContextsByWorkspaceId["workspace-1"])
+      .toEqual([
+        { id: first!.id, text: "first response", comment: undefined },
+        { id: second!.id, text: "second response", comment: "focus here" },
+      ]);
+  });
+
   it("keeps matching contexts distinct when one is already submitting", () => {
     const store = useChatInputStore.getState();
     store.addSelectedResponseContext("workspace-1", "selected response");

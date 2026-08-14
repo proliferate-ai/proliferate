@@ -144,7 +144,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "General",
       "Appearance",
       "Personal secrets",
-      "Pruning",
       "Support",
       "Desktop updates",
     ];
@@ -154,6 +153,10 @@ describe("SettingsSidebar layout and shortcuts", () => {
       expect(nextIndex).toBeGreaterThan(previousIndex);
       previousIndex = nextIndex;
     }
+
+    // The Pruning section left with the retention pass; R7's Archived
+    // workspaces page takes the freed slot.
+    expect(navText).not.toContain("Pruning");
 
     // Sections from other scopes are not present in the User scope sidebar.
     expect(screen.queryByRole("button", { name: /Organization settings/ })).toBeNull();

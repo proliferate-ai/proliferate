@@ -28,6 +28,8 @@ import {
   getSessionRecord,
   patchSessionRecord,
 } from "#product/stores/sessions/session-records";
+import { recordHotWorkspaceReconcileFailure } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 const EMPTY_WORKSPACES = [] as const;
 const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;
@@ -268,6 +270,12 @@ export function useHotWorkspaceReconcileAction({
       markWorkspaceBootstrappedInSession(logicalWorkspaceId);
       return "completed";
     } catch (error) {
+      recordHotWorkspaceReconcileFailure({
+        operationId: measurementOperationId,
+        workspaceId,
+        sessionId,
+        errorName: safeRendererErrorName(error),
+      });
       if (import.meta.env.DEV) {
         console.debug("[workspace-bootstrap] hot reconcile failed", error);
       }
