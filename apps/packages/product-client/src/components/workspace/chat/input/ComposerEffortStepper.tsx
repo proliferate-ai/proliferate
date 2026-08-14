@@ -1,3 +1,5 @@
+import { useLocation } from "react-router-dom";
+import { APP_ROUTES } from "#product/config/app-routes";
 import { resolveReasoningEffortPresentation } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
 import { resolveSessionControlTooltip } from "#product/lib/domain/chat/session-controls/session-toggle-control";
 import { COMPOSER_COMPACT_HIDDEN_CLASSNAME } from "#product/config/chat-layout";
@@ -5,6 +7,7 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 import { Tooltip } from "#product/primitives/Tooltip";
 import { AnimatedSwapText } from "#product/primitives/AnimatedSwapText";
 import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 
 interface ComposerEffortStepperProps {
   control: LiveSessionControlDescriptor;
@@ -58,6 +61,15 @@ export function ComposerEffortStepper({ control }: ComposerEffortStepperProps) {
       control.onSelect(nextValue);
     }
   };
+
+  // ⌃⇧E steps the same transition as clicking the ladder, dispatched through
+  // the global shortcut registry so it works wherever focus sits — the same
+  // main-screen gate as the model selector's ⌃⇧M.
+  const location = useLocation();
+  useShortcutHandler("workspace.cycle-reasoning-effort", handleStep, {
+    enabled: location.pathname === APP_ROUTES.home && control.settable && canStep,
+    priority: "contextual",
+  });
 
   return (
     <Tooltip content={tooltip} keepOpenOnPress>

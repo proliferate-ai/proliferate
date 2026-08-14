@@ -23,6 +23,9 @@ const state = vi.hoisted(() => ({
   saveCloudEnvironment: vi.fn((_args?: unknown) => Promise.resolve<unknown>(undefined)),
   createCloudWorkspace: vi.fn((..._args: unknown[]) => Promise.resolve()),
   authorityRefetch: vi.fn(() => Promise.resolve({})),
+  showRepoAddedToast: vi.fn(),
+  cloneRepo: vi.fn((..._args: unknown[]) =>
+    Promise.resolve<unknown>({ succeeded: true, sourceRoot: "/Users/dev/src/repo-b" })),
 }));
 
 function repositoriesData() {
@@ -148,13 +151,21 @@ vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
   }),
 }));
 
-// The clone path is exercised elsewhere; here we only need the host to mount, so
-// stub the clone hook (which otherwise pulls in the AnyHarnessRuntime provider).
+// Stub the clone hook (which otherwise pulls in the AnyHarnessRuntime provider).
 vi.mock("#product/hooks/workspaces/workflows/use-clone-repo", () => ({
   useCloneRepo: () => ({
-    cloneRepo: vi.fn(() => Promise.resolve({ succeeded: true, sourceRoot: "/tmp/clone" })),
+    cloneRepo: (...args: unknown[]) => state.cloneRepo(...args),
     isCloning: false,
   }),
+}));
+
+// The receipt itself is tested at its own hook; here we assert WHICH receipt
+// each completion path reports, so keep the real builder and spy on the show.
+vi.mock("#product/hooks/workspaces/ui/use-repo-added-toast", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("#product/hooks/workspaces/ui/use-repo-added-toast")
+  >()),
+  useRepoAddedToast: () => state.showRepoAddedToast,
 }));
 
 vi.mock("#product/lib/domain/settings/github-app-copy", () => ({
@@ -189,6 +200,10 @@ function resetState() {
   state.createCloudWorkspace.mockClear();
   state.createCloudWorkspace.mockImplementation(() => Promise.resolve());
   state.authorityRefetch.mockClear();
+  state.showRepoAddedToast.mockClear();
+  state.cloneRepo.mockClear();
+  state.cloneRepo.mockImplementation(() =>
+    Promise.resolve({ succeeded: true, sourceRoot: "/Users/dev/src/repo-b" }));
 }
 
 describe("CloudRepoActionDialogHost", () => {
@@ -335,6 +350,48 @@ describe("CloudRepoActionDialogHost", () => {
       expect(useCloudRepositoryIntentStore.getState().activeIntent).toBeNull();
     });
     expect(useAddRepoFlowStore.getState().onCompleted).toBeNull();
+  });
+
+  it("reports the Added receipt when a cloud registration lands", async () => {
+    // The flow's own onEnvironmentAdded never runs for a handed-off cloud add,
+    // so this is the ONLY place the user can be told the repository arrived.
+    useAddRepoFlowStore.setState({ open: false, step: { kind: "cloud" }, onCompleted: null });
+
+    render(<CloudRepoActionDialogHost />);
+    act(() => {
+      useCloudRepositoryIntentStore.getState().begin({
+        kind: "add_cloud_repository",
+        repo: setupIntent.repo,
+      });
+    });
+
+    await waitFor(() => {
+      expect(state.showRepoAddedToast).toHaveBeenCalledWith({
+        repoName: "repo-b",
+        sourceRoot: "cloud:proliferate-ai/repo-b",
+        source: "cloud",
+      });
+    });
+  });
+
+  it("reports the Added receipt with the checkout path when a clone lands", async () => {
+    useAddRepoFlowStore.setState({ open: false, step: { kind: "clone" }, onCompleted: null });
+
+    render(<CloudRepoActionDialogHost />);
+    act(() => {
+      useCloudRepositoryIntentStore.getState().begin({
+        kind: "clone_from_github",
+        repo: setupIntent.repo,
+      });
+    });
+
+    await waitFor(() => {
+      expect(state.showRepoAddedToast).toHaveBeenCalledWith({
+        repoName: "repo-b",
+        sourceRoot: "/Users/dev/src/repo-b",
+        source: "local",
+      });
+    });
   });
 
   it("shows progress, not operator copy, while the environment is being configured (S1)", async () => {

@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ComposerEffortStepper } from "#product/components/workspace/chat/input/ComposerEffortStepper";
+import {
+  clearShortcutHandlerRegistryForTests,
+  runShortcutHandler,
+} from "#product/lib/domain/shortcuts/registry";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  clearShortcutHandlerRegistryForTests();
+});
 
 function createEffortControl(
   selectedValue: string,
@@ -29,9 +37,19 @@ function createEffortControl(
   };
 }
 
+// The stepper registers its ⌃⇧E handler against the current route, so every
+// render needs a router; "/" is the main screen where the shortcut is live.
+function renderStepper(control: LiveSessionControlDescriptor, path = "/") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <ComposerEffortStepper control={control} />
+    </MemoryRouter>,
+  );
+}
+
 describe("ComposerEffortStepper", () => {
   it("lights one bar per level on a fixed six-bar ladder", () => {
-    render(<ComposerEffortStepper control={createEffortControl("medium")} />);
+    renderStepper(createEffortControl("medium"));
 
     const ladder = screen
       .getByRole("button", { name: "Reasoning: Medium" })
@@ -42,7 +60,7 @@ describe("ComposerEffortStepper", () => {
 
   it("steps to the next level on click", () => {
     const control = createEffortControl("medium");
-    render(<ComposerEffortStepper control={control} />);
+    renderStepper(control);
 
     fireEvent.click(screen.getByRole("button", { name: "Reasoning: Medium" }));
     expect(control.onSelect).toHaveBeenCalledWith("high");
@@ -50,15 +68,42 @@ describe("ComposerEffortStepper", () => {
 
   it("wraps from the top level back to the bottom", () => {
     const control = createEffortControl("high");
-    render(<ComposerEffortStepper control={control} />);
+    renderStepper(control);
 
     fireEvent.click(screen.getByRole("button", { name: "Reasoning: High" }));
     expect(control.onSelect).toHaveBeenCalledWith("low");
   });
 
+  it("steps the same transition through the cycle-reasoning-effort shortcut", () => {
+    const control = createEffortControl("medium");
+    renderStepper(control);
+
+    expect(runShortcutHandler("workspace.cycle-reasoning-effort", { source: "keyboard" }))
+      .toBe(true);
+    expect(control.onSelect).toHaveBeenCalledWith("high");
+  });
+
+  it("does not register the shortcut away from the main screen", () => {
+    const control = createEffortControl("medium");
+    renderStepper(control, "/settings");
+
+    expect(runShortcutHandler("workspace.cycle-reasoning-effort", { source: "keyboard" }))
+      .toBe(false);
+    expect(control.onSelect).not.toHaveBeenCalled();
+  });
+
+  it("does not register the shortcut when the level is not settable", () => {
+    const control = createEffortControl("medium", { settable: false });
+    renderStepper(control);
+
+    expect(runShortcutHandler("workspace.cycle-reasoning-effort", { source: "keyboard" }))
+      .toBe(false);
+    expect(control.onSelect).not.toHaveBeenCalled();
+  });
+
   it("disables the stepper when the level is not settable", () => {
     const control = createEffortControl("medium", { settable: false });
-    render(<ComposerEffortStepper control={control} />);
+    renderStepper(control);
 
     const trigger = screen.getByRole("button", { name: "Reasoning: Medium" });
     expect(trigger).toHaveProperty("disabled", true);
@@ -72,7 +117,7 @@ describe("ComposerEffortStepper", () => {
     const control = createEffortControl("medium", {
       options: [{ value: "medium", label: "Medium", selected: true }],
     });
-    render(<ComposerEffortStepper control={control} />);
+    renderStepper(control);
 
     const trigger = screen.getByRole("button", { name: "Reasoning: Medium" });
     expect(trigger).toHaveProperty("disabled", true);
@@ -81,14 +126,10 @@ describe("ComposerEffortStepper", () => {
   });
 
   it("carries no tier tone: every level draws the same ink", () => {
-    const { container: low } = render(
-      <ComposerEffortStepper control={createEffortControl("low")} />,
-    );
+    const { container: low } = renderStepper(createEffortControl("low"));
     const lowClass = low.querySelector("button")!.className;
     cleanup();
-    const { container: high } = render(
-      <ComposerEffortStepper control={createEffortControl("high")} />,
-    );
+    const { container: high } = renderStepper(createEffortControl("high"));
     expect(high.querySelector("button")!.className).toBe(lowClass);
   });
 });

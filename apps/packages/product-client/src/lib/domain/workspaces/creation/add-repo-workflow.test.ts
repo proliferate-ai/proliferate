@@ -29,7 +29,7 @@ describe("runAddRepoWorkflow", () => {
     const invalidateWorkspaceCollections = vi.fn().mockResolvedValue(undefined);
     const saveLocalRepoEnvironment = vi.fn();
     const unhideRepoRoot = vi.fn();
-    const openRepoSetupModal = vi.fn();
+    const reportRepoAdded = vi.fn();
 
     await runAddRepoWorkflow({
       path: "/tmp/proliferate",
@@ -39,7 +39,7 @@ describe("runAddRepoWorkflow", () => {
       invalidateWorkspaceCollections,
       saveLocalRepoEnvironment,
       unhideRepoRoot,
-      openRepoSetupModal,
+      reportRepoAdded,
     });
 
     expect(resolveRepoRootFromPath).toHaveBeenCalledWith("/tmp/proliferate");
@@ -54,7 +54,7 @@ describe("runAddRepoWorkflow", () => {
       id: "repo-root-1",
     }));
     expect(unhideRepoRoot).toHaveBeenCalledWith("repo-root-1");
-    expect(openRepoSetupModal).toHaveBeenCalledWith({
+    expect(reportRepoAdded).toHaveBeenCalledWith({
       sourceRoot: "/tmp/proliferate",
       repoName: "proliferate",
     });
@@ -73,7 +73,7 @@ describe("runAddRepoWorkflow", () => {
     const upsertRepoRootInWorkspaceCollections = vi.fn();
     const invalidateWorkspaceCollections = vi.fn().mockResolvedValue(undefined);
     const unhideRepoRoot = vi.fn();
-    const openRepoSetupModal = vi.fn();
+    const reportRepoAdded = vi.fn();
 
     await runAddRepoWorkflow({
       path: "/tmp/existing-repo",
@@ -82,10 +82,10 @@ describe("runAddRepoWorkflow", () => {
       upsertRepoRootInWorkspaceCollections,
       invalidateWorkspaceCollections,
       unhideRepoRoot,
-      openRepoSetupModal,
+      reportRepoAdded,
     });
 
-    expect(openRepoSetupModal).toHaveBeenCalledWith({
+    expect(reportRepoAdded).toHaveBeenCalledWith({
       sourceRoot: "/tmp/existing-repo",
       repoName: "existing-repo",
     });
@@ -99,7 +99,7 @@ describe("runAddRepoWorkflow", () => {
     const upsertRepoRootInWorkspaceCollections = vi.fn();
     const invalidateWorkspaceCollections = vi.fn().mockResolvedValue(undefined);
     const unhideRepoRoot = vi.fn();
-    const openRepoSetupModal = vi.fn();
+    const reportRepoAdded = vi.fn();
 
     await runAddRepoWorkflow({
       path: "/tmp/proliferate",
@@ -113,11 +113,11 @@ describe("runAddRepoWorkflow", () => {
       upsertRepoRootInWorkspaceCollections,
       invalidateWorkspaceCollections,
       unhideRepoRoot,
-      openRepoSetupModal,
+      reportRepoAdded,
     });
 
     expect(upsertRepoRootInWorkspaceCollections).toHaveBeenCalledTimes(1);
-    expect(openRepoSetupModal).toHaveBeenCalledTimes(1);
+    expect(reportRepoAdded).toHaveBeenCalledTimes(1);
   });
 
   it("fails before any mutation when the folder is a different repository", async () => {
@@ -129,7 +129,7 @@ describe("runAddRepoWorkflow", () => {
     const invalidateWorkspaceCollections = vi.fn().mockResolvedValue(undefined);
     const saveLocalRepoEnvironment = vi.fn();
     const unhideRepoRoot = vi.fn();
-    const openRepoSetupModal = vi.fn();
+    const reportRepoAdded = vi.fn();
 
     await expect(
       runAddRepoWorkflow({
@@ -145,7 +145,7 @@ describe("runAddRepoWorkflow", () => {
         invalidateWorkspaceCollections,
         saveLocalRepoEnvironment,
         unhideRepoRoot,
-        openRepoSetupModal,
+        reportRepoAdded,
       }),
     ).rejects.toBeInstanceOf(AddRepoIdentityMismatchError);
 
@@ -154,6 +154,6 @@ describe("runAddRepoWorkflow", () => {
     expect(invalidateWorkspaceCollections).not.toHaveBeenCalled();
     expect(saveLocalRepoEnvironment).not.toHaveBeenCalled();
     expect(unhideRepoRoot).not.toHaveBeenCalled();
-    expect(openRepoSetupModal).not.toHaveBeenCalled();
+    expect(reportRepoAdded).not.toHaveBeenCalled();
   });
 });

@@ -56,7 +56,6 @@ import { startMeasurementOperation } from "#product/lib/infra/measurement/measur
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useReleaseNotice } from "#product/hooks/updates/facade/use-release-notice";
-import { useRepositoryHeaderNewChat } from "#product/hooks/workspaces/ui/use-repository-header-new-chat";
 
 // Platform cannot change at runtime, so the label is resolved once rather
 // than on every render of the sidebar.
@@ -396,7 +395,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     setRepositoriesCollapsed(!repositoriesCollapsed);
   }, [repositoriesCollapsed, setRepositoriesCollapsed]);
   const filtersActive = !isDefaultSidebarWorkspaceTypes(workspaceTypes);
-  const handleStartRepositoryHeaderChat = useRepositoryHeaderNewChat(groups, actions);
   const sidebarShortcutLabelById = useMemo(
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
     [sidebarShortcutTargetIds],
@@ -458,7 +456,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
             workspaceTypes={workspaceTypes}
             onToggleRepositoriesCollapsed={handleToggleRepositoriesCollapsed}
             onToggleWorkspaceType={toggleSidebarWorkspaceType}
-            onNewChat={handleStartRepositoryHeaderChat}
             onAddRepo={actions.handleAddRepo}
           />
 

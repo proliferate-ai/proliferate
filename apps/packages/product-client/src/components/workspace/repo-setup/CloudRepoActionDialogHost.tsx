@@ -1,16 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 import {
-  useCloudClient,
   useGitHubRepoAuthority,
   useRepositories,
   useSaveRepoEnvironment,
   useValidateCloudRepoBranches,
-} from "@proliferate/cloud-sdk-react";
-import {
-  githubAppRootKey,
-  repositoriesKey,
 } from "@proliferate/cloud-sdk-react";
 import { buildMinimalCloudEnvironmentConfigRequest } from "#product/domain/environments/cloud-environments";
 import {
@@ -42,6 +36,7 @@ import { useActiveOrganization } from "#product/hooks/organizations/facade/use-a
 import { isSettingsAdminRole } from "#product/lib/domain/settings/admin-roles";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { useGitHubAppStateInvalidation } from "#product/hooks/workspaces/cache/use-github-app-state-invalidation";
 import { useGitHubAppUserAuthorization } from "#product/hooks/settings/workflows/use-github-app-user-authorization";
 import { useGitHubAppInstallation } from "#product/hooks/settings/workflows/use-github-app-installation";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
@@ -51,7 +46,7 @@ import {
   type CloneRepoAttempt,
 } from "#product/hooks/workspaces/workflows/use-clone-repo";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
-import { useToastStore } from "#product/stores/toast/toast-store";
+import { buildCloudRepoAddedReceipt, useRepoAddedToast } from "#product/hooks/workspaces/ui/use-repo-added-toast";
 import { formatGitRepoId } from "#product/domain/repos/repo-id";
 
 const USER_AUTHORIZATION_RETURN_TO_SOURCE = "github_app_callback";
@@ -70,7 +65,7 @@ export function CloudRepoActionDialogHost() {
   const intent = useCloudRepositoryIntentStore((state) => state.activeIntent);
   const clearIntent = useCloudRepositoryIntentStore((state) => state.clear);
   const closeAddRepoFlow = useAddRepoFlowStore((state) => state.close);
-  const showToast = useToastStore((state) => state.show);
+  const showRepoAddedToast = useRepoAddedToast();
   const { cloneRepo } = useCloneRepo();
   const repo = intent ? repoForCloudRepositoryIntent(intent) : null;
   // Clone depends only on GitHub repository access; managed-Cloud intents depend
@@ -78,8 +73,6 @@ export function CloudRepoActionDialogHost() {
   // App-ready/E2B-disabled deployment clone without a managed-Cloud gate.
   const requirement = intent ? requirementForCloudRepositoryIntent(intent) : "managed_cloud";
 
-  const client = useCloudClient();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const capabilities = useAppCapabilities();
   const authStatus = useProductAuthStatus();
@@ -111,13 +104,12 @@ export function CloudRepoActionDialogHost() {
     ? configuredCloudKeys.has(cloudRepositoryKey(repo.gitOwner, repo.gitRepoName))
     : false;
 
+  const invalidateGitHubAppState = useGitHubAppStateInvalidation();
   const refetchOnReturn = useCallback(() => {
-    // Auth/install/grant callback: invalidate user authorization, installation,
-    // accessible repos, and per-repo authority (all under the GitHub App root),
-    // plus repositories, so the resolver re-runs with fresh state.
-    void queryClient.invalidateQueries({ queryKey: githubAppRootKey(client.baseUrl) });
-    void queryClient.invalidateQueries({ queryKey: repositoriesKey() });
-  }, [client.baseUrl, queryClient]);
+    // Auth/install/grant callback: re-read everything the trip to GitHub can
+    // have changed, so the resolver re-runs with fresh state.
+    void invalidateGitHubAppState();
+  }, [invalidateGitHubAppState]);
 
   const userAuthorization = useGitHubAppUserAuthorization({
     returnTo: host.links.buildReturnUrl({
@@ -208,9 +200,11 @@ export function CloudRepoActionDialogHost() {
     const onCompleted = useAddRepoFlowStore.getState().onCompleted;
     const repoId = formatGitRepoId(target);
     closeAddRepoFlow();
-    showToast(`Added ${repoId}`, "info");
+    // Where a cloud add actually lands is where the receipt belongs: the same
+    // "Added" card a local add produces, not a bare informational line.
+    showRepoAddedToast(buildCloudRepoAddedReceipt(repoId));
     onCompleted?.({ kind: "cloud", repoId });
-  }, [closeAddRepoFlow, showToast]);
+  }, [closeAddRepoFlow, showRepoAddedToast]);
 
   const cloneFromGitHub = useCallback(async (target: CloudRepoIdentity) => {
     if (!intent || intent.kind !== "clone_from_github") {
@@ -236,9 +230,15 @@ export function CloudRepoActionDialogHost() {
     cloneAttemptRef.current = null;
     const onCompleted = useAddRepoFlowStore.getState().onCompleted;
     closeAddRepoFlow();
-    showToast(`Cloned ${formatGitRepoId(target)}`, "info");
+    // A finished clone is a repository on this machine, so it earns exactly the
+    // receipt a local folder add does — checkout path and all.
+    showRepoAddedToast({
+      repoName: target.gitRepoName,
+      sourceRoot: result.sourceRoot,
+      source: "local",
+    });
     onCompleted?.({ kind: "local", sourceRoot: result.sourceRoot });
-  }, [cloneRepo, closeAddRepoFlow, intent, showToast]);
+  }, [cloneRepo, closeAddRepoFlow, intent, showRepoAddedToast]);
 
   // Once every access gate is green, continue the held intent (save env →
   // create). Gate 9 (`set_up_cloud`) is the normal continue point: the resolver

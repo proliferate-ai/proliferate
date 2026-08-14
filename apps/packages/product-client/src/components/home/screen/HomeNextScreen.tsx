@@ -172,7 +172,6 @@ export function HomeNextScreen() {
                         onSelectCowork={() => {
                           patchTargetSelection({ destination: "cowork" });
                         }}
-                        onAddRepository={() => handleHomeAction("add-repository")}
                       />
                       ?
                     </>
@@ -274,7 +273,6 @@ export function HomeNextScreen() {
                   onSelectBranch={(branchName) => {
                     patchTargetSelection({ baseBranchOverride: branchName });
                   }}
-                  onAddRepository={() => handleHomeAction("add-repository")}
                   onConfigureCloud={configureCloud}
                 />
               )}
