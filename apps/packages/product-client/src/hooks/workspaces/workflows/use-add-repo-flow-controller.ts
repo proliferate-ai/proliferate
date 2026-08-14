@@ -97,13 +97,6 @@ export function useAddRepoFlowController({
   const userAuthorization = useGitHubAppUserAuthorizationStatus(open);
   const githubConnected = userAuthorization.data?.connected === true;
 
-  // Parked on GitHub: the departure, the waiting panel and the manual re-check.
-  const {
-    decorateBlocker,
-    returnedFromGitHub,
-    cancelWaiting,
-  } = useGitHubSetupWaiting({ open, canManageInstallation });
-
   // The resolver's repo-independent gates, which take precedence over the
   // picker's own prerequisites (see buildAddRepoPreflightBlockers).
   const preflightBlockers = useMemo(() => buildAddRepoPreflightBlockers({
@@ -207,6 +200,26 @@ export function useAddRepoFlowController({
     onCopyText: host.clipboard.writeText,
     // The clone path never adds a Cloud environment; select is overridden below.
     onEnvironmentAdded: () => {},
+  });
+
+  // What the step the user is ON still has to get past, before the waiting
+  // decoration is applied. The preflight gates come first, exactly as
+  // `resolvePicker` orders them below.
+  const activeBlocker = step.kind === "cloud"
+    ? preflightBlockers.cloud ?? cloudPicker.blocker ?? null
+    : step.kind === "clone"
+      ? preflightBlockers.clone ?? clonePickerBase.blocker ?? null
+      : null;
+
+  // Parked on GitHub: the departure, the waiting panel and the manual re-check.
+  const {
+    decorateBlocker,
+    returnedFromGitHub,
+    cancelWaiting,
+  } = useGitHubSetupWaiting({
+    open,
+    canManageInstallation,
+    blocked: activeBlocker !== null,
   });
 
   const beginCloneForRepoId = useCallback((repoId: string) => {

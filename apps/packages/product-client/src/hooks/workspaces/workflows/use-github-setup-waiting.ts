@@ -11,6 +11,8 @@ export interface GitHubSetupWaitingInput {
   /** Whether the hosting surface is showing the flow at all. */
   open: boolean;
   canManageInstallation: boolean;
+  /** Whether the step the user is on still reports a setup blocker. */
+  blocked: boolean;
 }
 
 export interface GitHubSetupWaitingResult {
@@ -37,6 +39,7 @@ export interface GitHubSetupWaitingResult {
 export function useGitHubSetupWaiting({
   open,
   canManageInstallation,
+  blocked,
 }: GitHubSetupWaitingInput): GitHubSetupWaitingResult {
   const invalidateGitHubAppState = useGitHubAppStateInvalidation();
   const [waitingStep, setWaitingStep] = useState<GitHubWaitingStep | null>(null);
@@ -50,6 +53,17 @@ export function useGitHubSetupWaiting({
       setReturnedFromGitHub(false);
     }
   }, [open]);
+
+  // The step has nothing left to block on, so the trip is over however it
+  // ended — the manual re-check, a background refetch, or a window-focus
+  // refetch. Drop the parked waiting step, or it resurrects on a LATER blocker
+  // (a different gate, a different repo) as a panel about a trip already made.
+  useEffect(() => {
+    if (!blocked && waitingStep) {
+      setWaitingStep(null);
+      setChecking(false);
+    }
+  }, [blocked, waitingStep]);
 
   const checkAgain = useCallback(() => {
     setChecking(true);
@@ -99,6 +113,12 @@ export function useGitHubSetupWaiting({
       onAction: () => {
         action();
         setWaitingStep(nextWaitingStep);
+        // Departure, not the manual re-check, is what earns the arrival
+        // confirmation: a background or window-focus refetch can clear the
+        // blocker without the user ever pressing "Check again", and landing on
+        // a bare repository list with no sign the connection worked is the
+        // exact thing the banner exists to prevent.
+        setReturnedFromGitHub(true);
       },
     };
   }, [

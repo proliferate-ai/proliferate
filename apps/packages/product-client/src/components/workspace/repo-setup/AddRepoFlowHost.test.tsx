@@ -397,6 +397,32 @@ describe("AddRepoFlowHost waiting on GitHub", () => {
     expect(cloudHook.cloudPicker?.connectedBanner).toBeNull();
   });
 
+  it("confirms the connection when a background refetch clears the blocker, with no Check again", async () => {
+    // The user departs for GitHub, finishes there, and comes back to a window
+    // that has already refetched on focus. Nothing was pressed in-app, so a
+    // banner gated on the manual re-check would never fire — and the picker
+    // would look like a bare list that never acknowledged the work.
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.onAction?.();
+    });
+    // The refetch has landed: the picker has no prerequisite left to report.
+    cloudHook.blocker = undefined;
+    act(() => {
+      useAddRepoFlowStore.setState({ step: { kind: "cloud" } });
+    });
+
+    await waitFor(() => {
+      expect(cloudHook.cloudPicker?.connectedBanner)
+        .toBe("GitHub connected. Choose a repository.");
+    });
+    // And the waiting panel is not left parked, ready to resurrect on a later
+    // blocker as a panel about a trip already made.
+    expect(cloudHook.cloudPicker?.blocker?.waiting).toBeUndefined();
+  });
+
   it("confirms the connection on arrival once the re-check clears the blocker", async () => {
     render(<AddRepoFlowHost />);
     openCloudStep();
