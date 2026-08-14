@@ -33,6 +33,32 @@ describe("describeToolCallDisplay", () => {
     });
   });
 
+  it.each([
+    {
+      name: "flat Workspace native call",
+      item: toolCallItem({
+        nativeToolName: "mcp__proliferate_workspace__list_agents",
+      }),
+    },
+    {
+      name: "Codex Workspace envelope",
+      item: toolCallItem({
+        nativeToolName: null,
+        rawInput: {
+          server: "workspace",
+          tool: "list_agents",
+          arguments: {},
+        },
+      }),
+    },
+  ])("uses the Proliferate icon for a $name", ({ item }) => {
+    expect(describeToolCallDisplay(item, item.nativeToolName ?? "Tool call")).toEqual({
+      label: "List agents",
+      hint: "Workspace",
+      iconKey: "proliferate",
+    });
+  });
+
   it("formats proliferate skills MCP tool calls", () => {
     expect(describeToolCallDisplay(
       toolCallItem({

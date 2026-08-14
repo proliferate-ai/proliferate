@@ -236,8 +236,8 @@ fn pending_prompt_has_exact_text(record: &PendingPromptRecord, expected: &str) -
         return false;
     }
     let Some(blocks_json) = record.blocks_json.as_deref() else {
-        // The pending-prompt store deliberately omits blocks_json for one text
-        // block; `text` is that block's durable representation.
+        // The pending-prompt store deliberately omits blocks_json when one
+        // text block is losslessly represented by `text`.
         return true;
     };
     let Ok(blocks) = serde_json::from_str::<Vec<StoredPromptBlock>>(blocks_json) else {

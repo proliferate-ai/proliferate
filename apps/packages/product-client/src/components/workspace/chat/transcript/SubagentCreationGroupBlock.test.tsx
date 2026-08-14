@@ -9,6 +9,7 @@ import { createTranscriptState } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SubagentCreationGroupBlock } from "#product/components/workspace/chat/transcript/SubagentCreationGroupBlock";
 import {
+  codexWorkspaceEnvelope,
   SpawnMotionFixture,
   transcriptWithCreates,
   workspaceCreateAgent,
@@ -78,7 +79,9 @@ describe("SubagentCreationGroupBlock", () => {
   it("adds durable identity chips progressively while preserving the run", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
-      "create-1": workspaceCreateAgent("create-1", "session-child-1", "Schema audit"),
+      "create-1": codexWorkspaceEnvelope(
+        workspaceCreateAgent("create-1", "session-child-1", "Schema audit"),
+      ),
       "create-2": workspaceCreateAgent("create-2", null, "Test audit", "in_progress"),
     };
 
@@ -88,7 +91,7 @@ describe("SubagentCreationGroupBlock", () => {
 
     expect(container.querySelectorAll("[data-agent-identity-chip]")).toHaveLength(1);
     expect(screen.getByText("Schema audit")).toBeTruthy();
-    expect(screen.getByText("started working")).toBeTruthy();
+    expect(screen.getByText("started working · starting")).toBeTruthy();
 
     transcript.itemsById["create-2"] = workspaceCreateAgent(
       "create-2",
@@ -180,7 +183,7 @@ describe("SubagentCreationGroupBlock", () => {
     expect(section).not.toContain("margin:");
   });
 
-  it("does not mint a provisional glyph before durable session identity arrives", () => {
+  it("uses the product mark without minting a provisional glyph before identity arrives", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       "create-1": workspaceCreateAgent("create-1", null, "Schema audit", "in_progress"),
@@ -190,7 +193,9 @@ describe("SubagentCreationGroupBlock", () => {
       <SubagentCreationGroupBlock itemIds={["create-1"]} transcript={transcript} />,
     );
 
-    expect(container.innerHTML).toBe("");
+    expect(container.querySelector("[data-agent-operations-product-mark]")).toBeTruthy();
+    expect(container.querySelector("[data-agent-identity-chip]")).toBeNull();
+    expect(screen.getByText("starting")).toBeTruthy();
   });
 
   it("shows a failed spawn without inventing identity", () => {
@@ -205,6 +210,7 @@ describe("SubagentCreationGroupBlock", () => {
 
     expect(container.querySelector("[data-subagent-spawn-failed]")?.textContent)
       .toBe("Schema audit");
+    expect(container.querySelector("[data-agent-operations-product-mark]")).toBeTruthy();
     expect(container.querySelector("[data-agent-identity-chip]")).toBeNull();
     expect(screen.getByText("failed to start")).toBeTruthy();
   });

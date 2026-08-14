@@ -18,8 +18,8 @@ import { SkillsToolResultRow } from "#product/components/workspace/chat/tool-cal
 import { AgentOperationsToolActionRow } from "#product/components/workspace/chat/tool-calls/AgentOperationsToolActionRow";
 import { useOpenCoworkCodingSession } from "#product/hooks/cowork/workflows/use-open-cowork-coding-session";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { deriveLegacySubagentAgentOperationsReceipt } from "#product/domain/chats/subagents/subagent-tool-presentation";
 import {
+  deriveAgentOperationsReadTarget,
   deriveAgentOperationsReceiptPresentation,
   isAgentOperationsReadAction,
   readAgentOperationsStructuredOutput,
@@ -29,6 +29,8 @@ import { describeToolCallDisplay } from "#product/domain/chats/tools/tool-call-d
 import { normalizeToolResultText } from "#product/domain/chats/tools/tool-result-text";
 import { CHAT_VISIBLE_FILE_CHANGE_LIMIT } from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import { ToolKindIcon } from "#product/components/workspace/chat/transcript/TranscriptToolKindIcon";
+import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGlyph";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 
 export function TranscriptToolCallItemBlock({
   item,
@@ -96,9 +98,20 @@ export function TranscriptToolCallItemBlock({
   const rows: React.ReactNode[] = [];
   const status = mapStatus(item.status);
   const skillsToolResult = deriveSkillsToolResultPresentation(item, normalizedResultText);
-  const agentOperationsReceipt =
-    deriveAgentOperationsReceiptPresentation(item)
-    ?? deriveLegacySubagentAgentOperationsReceipt(item);
+  const agentOperationsReceipt = deriveAgentOperationsReceiptPresentation(item);
+  const agentOperationsReadTarget = deriveAgentOperationsReadTarget(item);
+  const fallbackIcon = agentOperationsReadTarget?.sessionId
+    ? (
+      <AgentIdentityGlyph
+        identity={buildDelegatedAgentIdentity({
+          id: agentOperationsReadTarget.sessionId,
+          title: agentOperationsReadTarget.title ?? "Agent",
+          sessionId: agentOperationsReadTarget.sessionId,
+        })}
+        dimension={16}
+      />
+    )
+    : <ToolKindIcon iconKey={fallbackDisplay.iconKey} />;
   const agentOperationsResultText = agentOperationsReceipt
     ? normalizedResultText || formatStructuredToolOutput(readAgentOperationsStructuredOutput(item))
     : null;
@@ -230,7 +243,7 @@ export function TranscriptToolCallItemBlock({
     rows.push(
         <GenericToolResultRow
           key="result"
-          icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
+          icon={fallbackIcon}
           label={fallbackDisplay.label}
           status={status}
         hint={fallbackDisplay.hint}
@@ -243,7 +256,7 @@ export function TranscriptToolCallItemBlock({
     rows.push(
         <GenericToolResultRow
           key="tool"
-          icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
+          icon={fallbackIcon}
           label={fallbackDisplay.label}
           status={status}
         hint={fallbackDisplay.hint}

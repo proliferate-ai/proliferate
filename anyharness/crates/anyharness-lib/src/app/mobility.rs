@@ -11,9 +11,11 @@ use crate::domains::mobility::runtime::MobilityRuntime;
 use crate::domains::mobility::service::MobilityService;
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::reviews::store::ReviewStore;
+use crate::domains::sessions::links::completions::LinkCompletionStore;
+use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
-use crate::domains::sessions::subagents::service::SubagentService;
+use crate::domains::sessions::store::completion_deliveries::CompletionDeliveryStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::terminals::TerminalService;
@@ -25,7 +27,7 @@ pub(super) struct MobilityWiringDeps {
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
-    pub subagent_service: Arc<SubagentService>,
+    pub session_link_service: Arc<SessionLinkService>,
     pub workspace_access_gate: Arc<WorkspaceAccessGate>,
     pub terminal_service: Arc<TerminalService>,
 }
@@ -45,7 +47,9 @@ pub(super) fn wire_mobility(deps: MobilityWiringDeps) -> Arc<MobilityRuntime> {
         deps.workspace_runtime,
         deps.session_service,
         deps.session_runtime,
-        deps.subagent_service,
+        deps.session_link_service,
+        LinkCompletionStore::new(deps.db.clone()),
+        CompletionDeliveryStore::new(deps.db.clone()),
         ReviewStore::new(deps.db),
         deps.workspace_access_gate,
         deps.terminal_service,

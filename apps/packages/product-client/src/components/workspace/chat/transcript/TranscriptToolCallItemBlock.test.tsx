@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
-
 import { createElement } from "react";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { reduceEvents, type SessionEventEnvelope, type ToolCallItem } from "@anyharness/sdk";
+import { reduceEvents, type ToolCallItem } from "@anyharness/sdk";
 import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 import { TranscriptContextProviders } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { TranscriptToolCallItemBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock";
@@ -14,13 +13,15 @@ import {
   renderWithProductHostToStaticMarkup as renderToStaticMarkup,
   TestResizeObserver,
   workspaceTool,
+  type AgentOperationsTranscriptFixture,
 } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock.test-fixtures";
+import fixtureJson from "../../../../../../../../fixtures/contracts/agent-operations-transcript/v1.json";
 import { delegatedWorkVisualIdentity } from "#product/lib/domain/delegated-work/identity";
 import { solidSealGeometry } from "#product/lib/domain/delegated-work/solid-seal";
 import { deriveAgentOperationsReceiptPresentation } from "#product/domain/chats/tools/agent-operations-tool-presentation";
 import { buildTurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
-import agentOperationsTranscriptFixture from "../../../../../../../../fixtures/contracts/agent-operations-transcript/v1.json";
 
+const fixture = fixtureJson as unknown as AgentOperationsTranscriptFixture;
 const mocks = vi.hoisted(() => ({
   selectWorkspace: vi.fn(),
   openWorkspaceSession: vi.fn(),
@@ -185,19 +186,9 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(screen.getByText(/"agents": \[\]/)).toBeTruthy();
     live.unmount();
 
-    const fixture = agentOperationsTranscriptFixture as unknown as {
-      sessionId: string;
-      turnId: string;
-      createIds: string[];
-      sendId: string;
-      readId: string;
-      events: SessionEventEnvelope[];
-    };
     const replay = reduceEvents(fixture.events, fixture.sessionId, { replayMode: true });
     const turn = replay.turnsById[fixture.turnId];
-    if (!turn) {
-      throw new Error(`missing replay turn ${fixture.turnId}`);
-    }
+    if (!turn) throw new Error(`missing replay turn ${fixture.turnId}`);
     expect(buildTurnPresentation(turn, replay).displayBlocks).toEqual([
       {
         kind: "subagent_creations",
@@ -512,68 +503,78 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(screen.queryByText("Created workspace")).toBeNull();
   });
 
-  it("keeps legacy send and Close records on the shared receipt renderer", () => {
-    const legacySend = toolCallItem({
-      semanticKind: "subagent",
-      nativeToolName: "mcp__subagents__send_subagent_message",
-      status: "failed",
-      rawInput: { childSessionId: "legacy-session", label: "Legacy audit", message: "Exact" },
-      rawOutput: { childSessionId: "legacy-session", label: "Legacy audit" },
+  it("renders a production-shaped Codex ordinary create with its deterministic glyph", () => {
+    const created = agentView({
+      identity: { runtimeId: "runtime-1", sessionId: "ordinary-created" },
+      role: "ordinary",
+      parent: null,
+      title: "Ordinary reviewer",
     });
-    const { unmount } = render(
-      <TranscriptToolCallItemBlock item={legacySend} workspaceId="workspace-1" onOpenArtifact={() => {}} />,
+    const item = workspaceTool("create_agent", {
+      nativeToolName: null,
+      rawInput: {
+        server: "workspace",
+        tool: "create_agent",
+        arguments: { workspaceId: "workspace-1", kind: "ordinary" },
+      },
+      rawOutput: {
+        content: [{ type: "text", text: JSON.stringify(created) }],
+        isError: false,
+        structuredContent: created,
+      },
+    });
+
+    const { container } = render(
+      <TranscriptToolCallItemBlock item={item} workspaceId="workspace-1" onOpenArtifact={() => {}} />,
     );
 
-    expect(screen.getByText("message failed")).toBeTruthy();
-    expect(screen.queryByText("messaged")).toBeNull();
-    unmount();
-
-    const legacyClose = toolCallItem({
-      semanticKind: "subagent",
-      nativeToolName: "mcp__subagents__close_subagent",
-      status: "failed",
-      rawInput: { childSessionId: "legacy-session", label: "Legacy audit" },
-      rawOutput: { childSessionId: "legacy-session", label: "Legacy audit" },
-    });
-    render(
-      <TranscriptToolCallItemBlock item={legacyClose} workspaceId="workspace-1" onOpenArtifact={() => {}} />,
-    );
-
-    expect(screen.getByText("failed to close")).toBeTruthy();
-    expect(screen.queryByText("closed")).toBeNull();
+    expect(container.querySelector("[data-agent-identity-chip] svg")).toBeTruthy();
+    expect(container.querySelector("[data-agent-operations-product-mark]")).toBeNull();
+    expect(screen.getByText("Ordinary reviewer")).toBeTruthy();
+    expect(screen.getByText("created")).toBeTruthy();
   });
 
-  it("keeps ordinary navigation for an explicit non-subagent linked relationship", () => {
-    mocks.directoryRelationshipHints["legacy-session"] = {
-      kind: "linked_child",
-      parentSessionId: "parent-session",
-      relation: "cowork_coding_session",
-      workspaceId: "workspace-current",
-    };
-    const legacySend = toolCallItem({
-      semanticKind: "subagent",
-      nativeToolName: "mcp__subagents__send_subagent_message",
-      status: "completed",
-      rawInput: { childSessionId: "legacy-session", label: "Legacy audit", message: "Exact" },
-      rawOutput: { childSessionId: "legacy-session", label: "Legacy audit" },
+  it("keeps a targeted Workspace read foldable while using the agent glyph", () => {
+    const item = workspaceTool("get_task_output", {
+      rawInput: { agentId: "target-agent", limit: 10 },
+      rawOutput: { messages: [{ role: "assistant", text: "Done" }] },
     });
 
-    const onOpenSession = vi.fn();
-    render(
-      <TranscriptContextProviders sessionId="parent-session" onOpenSession={onOpenSession}>
-        <TranscriptToolCallItemBlock
-          item={legacySend}
-          workspaceId="workspace-current"
-          onOpenArtifact={() => {}}
-        />
-      </TranscriptContextProviders>,
+    const { container } = render(
+      <TranscriptToolCallItemBlock item={item} workspaceId="workspace-1" onOpenArtifact={() => {}} />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /open .*legacy audit/i }));
-    expect(onOpenSession).toHaveBeenCalledWith("legacy-session", "linked-child");
-    expect(mocks.openWorkspaceSession).not.toHaveBeenCalled();
-    expect(mocks.selectWorkspace).not.toHaveBeenCalled();
+    expect(container.querySelector("[data-solid-seal-notch]")).toBeTruthy();
+    expect(container.querySelector("[data-agent-operations-product-mark]")).toBeNull();
+    expect(screen.getByRole("button").getAttribute("aria-expanded")).toBe("false");
   });
+
+  it.each(["in_progress", "failed"] as const)(
+    "renders a %s Codex create with the product mark and no invented identity",
+    (status) => {
+      const item = workspaceTool("create_agent", {
+        status,
+        nativeToolName: null,
+        rawInput: {
+          server: "proliferate_workspace",
+          tool: "create_agent",
+          arguments: { workspaceId: "workspace-1", kind: "ordinary" },
+        },
+        rawOutput: {
+          content: [],
+          isError: status === "failed",
+          structuredContent: agentView(),
+        },
+      });
+
+      const { container } = render(
+        <TranscriptToolCallItemBlock item={item} workspaceId="workspace-1" onOpenArtifact={() => {}} />,
+      );
+
+      expect(container.querySelector("[data-agent-operations-product-mark]")).toBeTruthy();
+      expect(container.querySelector("[data-agent-identity-chip]")).toBeNull();
+    },
+  );
 
   it.each([
     ["create_agent", "created"],

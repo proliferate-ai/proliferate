@@ -110,6 +110,13 @@ impl SessionEventSink {
                     None
                 }
             })
+            .or_else(|| {
+                if self.source_agent_kind == "codex" {
+                    infer_codex_workspace_native_tool_name(payload.raw_input.as_ref())
+                } else {
+                    None
+                }
+            })
             .or_else(|| previous.and_then(|prev| prev.item.native_tool_name.clone()));
         let parent_tool_call_id = meta
             .parent_tool_call_id(&self.source_agent_kind)
@@ -248,4 +255,54 @@ fn extract_tool_kind_from_item(item: &ToolItemState) -> Option<String> {
         ContentPart::ToolCall { tool_kind, .. } => tool_kind.clone(),
         _ => None,
     })
+}
+
+fn infer_codex_workspace_native_tool_name(
+    raw_input: Option<&serde_json::Value>,
+) -> Option<String> {
+    let envelope = raw_input?.as_object()?;
+    if envelope.get("server")?.as_str()? != "proliferate_workspace" {
+        return None;
+    }
+    let tool = envelope.get("tool")?.as_str()?.trim();
+    let _arguments = envelope.get("arguments")?.as_object()?;
+    if tool.is_empty()
+        || !tool
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+    {
+        return None;
+    }
+    Some(format!("mcp__proliferate_workspace__{tool}"))
+}
+
+#[cfg(test)]
+mod codex_workspace_native_tool_name_tests {
+    use serde_json::json;
+
+    use super::infer_codex_workspace_native_tool_name;
+
+    #[test]
+    fn derives_the_current_workspace_native_name_from_the_codex_envelope() {
+        assert_eq!(
+            infer_codex_workspace_native_tool_name(Some(&json!({
+                "server": "proliferate_workspace",
+                "tool": "create_agent",
+                "arguments": {},
+            }))),
+            Some("mcp__proliferate_workspace__create_agent".to_string())
+        );
+    }
+
+    #[test]
+    fn rejects_historical_other_or_malformed_transport_envelopes() {
+        for input in [
+            json!({ "server": "workspace", "tool": "create_agent", "arguments": {} }),
+            json!({ "server": "other", "tool": "create_agent", "arguments": {} }),
+            json!({ "server": "proliferate_workspace", "tool": "create-agent", "arguments": {} }),
+            json!({ "server": "proliferate_workspace", "tool": "create_agent" }),
+        ] {
+            assert_eq!(infer_codex_workspace_native_tool_name(Some(&input)), None);
+        }
+    }
 }

@@ -4,8 +4,10 @@ import {
   AGENT_OPERATIONS_READ_ACTIONS,
   AGENT_OPERATIONS_RECEIPT_ACTIONS,
   classifyAgentOperationsTool,
+  deriveAgentOperationsReadTarget,
   deriveAgentOperationsReceiptPresentation,
   isWorkspaceSubagentCreationAction,
+  resolveAgentOperationsTool,
 } from "./agent-operations-tool-presentation";
 
 const AGENT_VIEW = {
@@ -34,7 +36,7 @@ function item(
     sourceAgentKind: "codex",
     messageId: null,
     title: "Agent operation",
-    nativeToolName: `mcp__workspace__${action}`,
+    nativeToolName: `mcp__proliferate_workspace__${action}`,
     parentToolCallId: null,
     contentParts: [],
     timestamp: "2026-08-10T00:00:00Z",
@@ -54,23 +56,61 @@ function item(
 
 describe("classifyAgentOperationsTool", () => {
   it.each(AGENT_OPERATIONS_READ_ACTIONS)("classifies read operation %s as generic", (action) => {
-    expect(classifyAgentOperationsTool(`mcp__workspace__${action}`)).toEqual({
+    expect(classifyAgentOperationsTool(`mcp__proliferate_workspace__${action}`)).toEqual({
       action,
       presentation: "read",
     });
   });
 
   it.each(AGENT_OPERATIONS_RECEIPT_ACTIONS)("classifies mutation %s as a receipt", (action) => {
-    expect(classifyAgentOperationsTool(`mcp__workspace__${action}`)).toEqual({
+    expect(classifyAgentOperationsTool(`mcp__proliferate_workspace__${action}`)).toEqual({
       action,
       presentation: "receipt",
     });
   });
 
   it("rejects unknown owners, unknown operations, and lookalike suffixes", () => {
-    expect(classifyAgentOperationsTool("mcp__subagents__create_agent")).toBeNull();
-    expect(classifyAgentOperationsTool("mcp__workspace__wake_agent")).toBeNull();
-    expect(classifyAgentOperationsTool("mcp__workspace__create_agent_extra")).toBeNull();
+    expect(classifyAgentOperationsTool("mcp__subagents__create_subagent")).toBeNull();
+    expect(classifyAgentOperationsTool("mcp__workspace__create_agent")).toBeNull();
+    expect(classifyAgentOperationsTool("mcp__proliferate_workspace__wake_agent")).toBeNull();
+    expect(
+      classifyAgentOperationsTool("mcp__proliferate_workspace__create_agent_extra"),
+    ).toBeNull();
+  });
+
+  it.each(["proliferate_workspace", "workspace"])(
+    "classifies a trusted %s Codex MCP envelope without restoring a native alias",
+    (server) => {
+      const envelopeItem = item("create_agent", {
+        nativeToolName: null,
+        rawInput: {
+          server,
+          tool: "create_agent",
+          arguments: { workspaceId: "workspace-1", kind: "ordinary" },
+        },
+      });
+
+      expect(resolveAgentOperationsTool(envelopeItem)).toEqual({
+        action: "create_agent",
+        presentation: "receipt",
+      });
+      expect(classifyAgentOperationsTool("mcp__workspace__create_agent")).toBeNull();
+    },
+  );
+
+  it("rejects untrusted or malformed Codex MCP envelopes", () => {
+    expect(resolveAgentOperationsTool(item("create_agent", {
+      nativeToolName: null,
+      rawInput: {
+        server: "other",
+        tool: "create_agent",
+        arguments: { workspaceId: "workspace-1", kind: "ordinary" },
+      },
+    }))).toBeNull();
+    expect(resolveAgentOperationsTool(item("create_agent", {
+      nativeToolName: null,
+      rawInput: { server: "workspace", tool: "create_agent" },
+    }))).toBeNull();
   });
 });
 
@@ -195,6 +235,84 @@ describe("deriveAgentOperationsReceiptPresentation", () => {
         creationMode: "worktree",
       },
       detailLabel: "proliferate · worktree from agent-ops",
+    });
+  });
+
+  it("unwraps production-shaped Codex arguments and structured output", () => {
+    const ordinaryAgent = {
+      ...AGENT_VIEW,
+      role: "ordinary",
+      parent: null,
+      title: "Ordinary reviewer",
+    };
+    expect(deriveAgentOperationsReceiptPresentation(item("create_agent", {
+      nativeToolName: null,
+      rawInput: {
+        server: "workspace",
+        tool: "create_agent",
+        arguments: { workspaceId: "workspace-1", kind: "ordinary" },
+      },
+      rawOutput: {
+        content: [{ type: "text", text: JSON.stringify(ordinaryAgent) }],
+        isError: false,
+        structuredContent: ordinaryAgent,
+      },
+    }))).toMatchObject({
+      action: "create_agent",
+      agent: {
+        sessionId: "session-1",
+        title: "Ordinary reviewer",
+        role: "ordinary",
+      },
+    });
+  });
+
+  it.each(["in_progress", "failed"] as const)(
+    "does not mint create identity from a %s Codex result",
+    (status) => {
+      expect(deriveAgentOperationsReceiptPresentation(item("create_agent", {
+        status,
+        nativeToolName: null,
+        rawInput: {
+          server: "proliferate_workspace",
+          tool: "create_agent",
+          arguments: { workspaceId: "workspace-1", kind: "subagent", task: "Review" },
+        },
+        rawOutput: {
+          content: [],
+          isError: status === "failed",
+          structuredContent: AGENT_VIEW,
+        },
+      }))?.agent).toBeNull();
+    },
+  );
+
+  it("unwraps a production-shaped Codex create_workspace result", () => {
+    const workspace = {
+      identity: { runtimeId: "runtime-1", workspaceId: "workspace-2" },
+      displayName: "Envelope workspace",
+      repositoryName: "proliferate",
+      currentBranch: "main",
+    };
+    expect(deriveAgentOperationsReceiptPresentation(item("create_workspace", {
+      nativeToolName: null,
+      rawInput: {
+        server: "proliferate_workspace",
+        tool: "create_workspace",
+        arguments: {
+          repositoryId: "repo-1",
+          creationMode: "worktree",
+          branch: "main",
+        },
+      },
+      rawOutput: {
+        content: [],
+        isError: false,
+        structuredContent: { workspace, creationMode: "worktree" },
+      },
+    }))).toMatchObject({
+      action: "create_workspace",
+      workspace: { workspaceId: "workspace-2", displayName: "Envelope workspace" },
     });
   });
 
@@ -338,6 +456,28 @@ describe("deriveAgentOperationsReceiptPresentation", () => {
   });
 });
 
+describe("deriveAgentOperationsReadTarget", () => {
+  it.each(["get_agent", "list_agent_config_options", "get_task_output"] as const)(
+    "uses the durable agentId for targeted read %s",
+    (action) => {
+      expect(deriveAgentOperationsReadTarget(item(action, {
+        rawInput: { agentId: "target-agent" },
+        rawOutput: action === "get_agent"
+          ? {
+            ...AGENT_VIEW,
+            identity: { runtimeId: "runtime-1", sessionId: "target-agent" },
+            title: "Target agent",
+          }
+          : null,
+      }))).toMatchObject({ sessionId: "target-agent" });
+    },
+  );
+
+  it("does not attribute workspace-wide reads to an agent", () => {
+    expect(deriveAgentOperationsReadTarget(item("list_agents"))).toBeNull();
+  });
+});
+
 describe("isWorkspaceSubagentCreationAction", () => {
   it("uses rawInput.kind and excludes ordinary agents", () => {
     expect(isWorkspaceSubagentCreationAction(item("create_agent", {
@@ -349,5 +489,16 @@ describe("isWorkspaceSubagentCreationAction", () => {
     expect(isWorkspaceSubagentCreationAction(item("create_agent", {
       rawInput: JSON.stringify({ kind: "subagent" }),
     }))).toBe(false);
+  });
+
+  it("reads kind from a trusted Codex arguments envelope", () => {
+    expect(isWorkspaceSubagentCreationAction(item("create_agent", {
+      nativeToolName: null,
+      rawInput: {
+        server: "workspace",
+        tool: "create_agent",
+        arguments: { workspaceId: "workspace-1", kind: "subagent", task: "Review" },
+      },
+    }))).toBe(true);
   });
 });

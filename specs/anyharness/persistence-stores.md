@@ -72,10 +72,12 @@ Subagent lifecycle provides two additional exemplars. Creation inserts the
 child session and its fanout-capped relationship in one transaction, preventing
 an unlinked child from becoming visible as an ordinary session. Reversible
 Close sets `session_links.subagent_closed_at`, deletes the child's pending
-prompts, and removes its one-shot wake schedule in one transaction. Actor
-cancellation/unload happens only after that transaction returns; no database
-transaction is held across an actor await. Completion-ledger rows and durable
-session history are deliberately not deleted.
+prompts, and defensively removes any retired legacy wake-schedule row for that
+link in one transaction. Delegated-agent runtime behavior does not create or
+read those rows; the shared schedule table remains active only for Cowork.
+Actor cancellation/unload happens only after that transaction returns; no
+database transaction is held across an actor await. Completion-ledger rows and
+durable session history are deliberately not deleted.
 
 Rules:
 

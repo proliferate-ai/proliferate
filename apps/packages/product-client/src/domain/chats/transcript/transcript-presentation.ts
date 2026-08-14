@@ -4,10 +4,9 @@ import type {
   TurnRecord,
 } from "@anyharness/sdk";
 import {
-  deriveLegacySubagentAgentOperationsReceipt,
-  isSubagentCreationAction,
-} from "../subagents/subagent-tool-presentation";
-import { isAgentOperationsReceiptAction } from "../tools/agent-operations-tool-presentation";
+  isAgentOperationsReceiptAction,
+  isWorkspaceSubagentCreationAction,
+} from "../tools/agent-operations-tool-presentation";
 import { isKnownModeSwitchToolCall } from "../tools/mode-switch-display";
 
 export type TurnDisplayBlock =
@@ -80,7 +79,7 @@ export function buildTranscriptDisplayBlocks({
     // Provisioning receipts stay compact. Native subagent calls remain normal
     // transcript items for their whole lifecycle so their nested work is
     // visible during streaming and after durable replay.
-    if (item.kind === "tool_call" && isSubagentCreationAction(item)) {
+    if (item.kind === "tool_call" && isWorkspaceSubagentCreationAction(item)) {
       flushActions();
       pendingSubagentCreationIds.push(itemId);
       continue;
@@ -317,7 +316,6 @@ function isTranscriptReceiptAction(item: TranscriptItem | undefined): boolean {
   return item?.kind === "tool_call"
     && (
       isAgentOperationsReceiptAction(item)
-      || deriveLegacySubagentAgentOperationsReceipt(item) !== null
-      || isSubagentCreationAction(item)
+      || isWorkspaceSubagentCreationAction(item)
     );
 }

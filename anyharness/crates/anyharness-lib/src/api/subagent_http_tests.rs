@@ -4,9 +4,13 @@ use axum::http::Method;
 use crate::api::auth::{user_route_allowed, AuthError, ClaimPermissions, UserClaimAuth};
 use crate::domains::agent_operations::model::ListAgentsInput;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::links::completions::LinkCompletionStore;
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
+use crate::domains::sessions::links::service::SessionLinkService;
+use crate::domains::sessions::links::store::SessionLinkStore;
+use crate::domains::sessions::store::SessionStore;
 use crate::domains::sessions::subagents::model::SubagentCompletionRecord;
 use crate::live::sessions::ScriptedSessionSpec;
 
@@ -83,6 +87,10 @@ async fn workspace_and_parent_rosters_project_only_current_subagents() {
         &other_workspace_child,
         "2026-08-11T02:03:00Z",
     );
+    let link_service = SessionLinkService::new(
+        SessionLinkStore::new(state.db.clone()),
+        SessionStore::new(state.db.clone()),
+    );
     for record in [
         &closed_link,
         &first_link,
@@ -91,18 +99,14 @@ async fn workspace_and_parent_rosters_project_only_current_subagents() {
         &later_link,
         &other_link,
     ] {
-        state
-            .subagent_service
-            .import_link(record)
-            .expect("import link");
+        link_service.import_link(record).expect("import link");
     }
     state
         .session_runtime
         .close_subagent(&earlier_parent, &closed_child)
         .await
         .expect("reversibly close child");
-    state
-        .subagent_service
+    LinkCompletionStore::new(state.db.clone())
         .import_completion(&SubagentCompletionRecord {
             completion_id: "completion-latest".into(),
             session_link_id: first_link.id.clone(),

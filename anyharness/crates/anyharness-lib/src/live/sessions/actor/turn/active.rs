@@ -58,6 +58,7 @@ impl SessionActor {
                 prompt_id = current_prompt_id.as_deref(),
                 "[workspace-latency] session.actor.prompt.received"
             );
+            let draining_queued_prompt = current_queue_seq.is_some();
             let start = match self
                 .begin_prompt_turn(
                     &current_payload,
@@ -68,6 +69,29 @@ impl SessionActor {
             {
                 Ok(started) => started,
                 Err(error) => {
+                    if draining_queued_prompt {
+                        if let PromptAcceptError::ProductContextUnavailable {
+                            incident_id, ..
+                        } = &error
+                        {
+                            let persisted = {
+                                let mut sink = self.event_sink.lock().await;
+                                sink.product_context_unavailable(incident_id.clone())
+                            };
+                            if persisted.is_err() {
+                                tracing::error!(
+                                    session_id = %self.session_id,
+                                    incident_id,
+                                    failure_code = "agent_product_context_receipt_persist_failed",
+                                    "queued product-context failure receipt was not persisted"
+                                );
+                            }
+                            // Retain the durable queue head and retire this
+                            // actor. Only a later explicit activation may
+                            // re-resolve context and retry it.
+                            exit_after_prompt = Some(ActorExitDisposition::Unload);
+                        }
+                    }
                     if let Some(respond_to) = current_respond_to.take() {
                         let _ = respond_to.send(Err(error));
                     }

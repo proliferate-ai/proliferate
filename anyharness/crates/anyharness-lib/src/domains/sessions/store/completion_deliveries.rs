@@ -325,7 +325,6 @@ pub(crate) fn persist_terminal_turn_in_tx(
     let outcome = input.outcome;
     let notification_text = notification_text(
         label.as_deref(),
-        public_id.as_deref(),
         &child_id,
         outcome,
         input.assistant_text.as_deref(),
@@ -463,7 +462,6 @@ fn validate_terminal_retry(
     let outcome = input.outcome;
     let expected_notification = notification_text(
         delivery.label.as_deref(),
-        delivery.subagent_public_id.as_deref(),
         &delivery.child_session_id,
         outcome,
         input.assistant_text.as_deref(),
@@ -549,9 +547,13 @@ fn parse_outcome(value: &str) -> rusqlite::Result<SessionTurnOutcome> {
     }
 }
 
+/// Compose the parent-visible completion notification.
+///
+/// The identifier must be the child session id: that is the `agentId` every
+/// structured Workspace surface reports and the only id `send_message`
+/// resolves. The relationship public id would read back as an unknown agent.
 fn notification_text(
     label: Option<&str>,
-    public_id: Option<&str>,
     child_session_id: &str,
     outcome: SessionTurnOutcome,
     assistant_text: Option<&str>,
@@ -563,13 +565,9 @@ fn notification_text(
     };
     let output = assistant_text.unwrap_or("No assistant output was recorded.");
     format!(
-        "Subagent update\nAgent: {} ({})\nOutcome: {}\n\n{output_label}:\n{output}\n\n\
-         Before relying on this summary, use the read/transcript tools with subagent id {} \
-         (child session {child_session_id}) to inspect the full result.",
+        "Subagent update\nAgent: {} ({child_session_id})\nOutcome: {}\n\n{output_label}:\n{output}",
         label.unwrap_or("subagent"),
-        public_id.unwrap_or("unknown"),
-        outcome.as_str(),
-        public_id.unwrap_or("unknown"),
+        outcome.as_str()
     )
 }
 

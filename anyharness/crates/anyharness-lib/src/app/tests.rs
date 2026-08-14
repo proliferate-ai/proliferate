@@ -30,6 +30,21 @@ fn run_git(path: &Path, args: &[&str]) {
     );
 }
 
+fn init_seed_repository(path: &Path) -> PathBuf {
+    fs::create_dir_all(path).expect("create repository path");
+    // Canonicalize so seeded repo-root paths match what the workspace runtime
+    // resolves from git. On macOS `/tmp` is a symlink into `/private/tmp`,
+    // which otherwise hides same-checkout matches that Linux CI sees.
+    let path = path.canonicalize().expect("canonicalize repository path");
+    run_git(&path, &["init", "-b", "main"]);
+    run_git(&path, &["config", "user.email", "workspace@example.com"]);
+    run_git(&path, &["config", "user.name", "Workspace Test"]);
+    fs::write(path.join("README.md"), "seed\n").expect("write repository seed");
+    run_git(&path, &["add", "README.md"]);
+    run_git(&path, &["commit", "-m", "seed"]);
+    path
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn app_state_allows_missing_bearer_token_when_not_required() {
     let _lock = test_support::ENV_MUTEX
@@ -161,7 +176,7 @@ async fn app_state_wires_integration_gateway_extension_to_served_runtime_home() 
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_without_launching_it() {
+async fn app_state_launches_and_serves_workspace_mcp_for_an_eligible_session() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
@@ -172,20 +187,14 @@ async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_witho
         "/tmp/anyharness-workspace-serving-receipt-{}",
         uuid::Uuid::new_v4()
     ));
-    let repository_path = PathBuf::from(format!(
+    let repository_path = init_seed_repository(&PathBuf::from(format!(
         "/tmp/anyharness-workspace-serving-repo-{}",
         uuid::Uuid::new_v4()
-    ));
-    fs::create_dir_all(&repository_path).expect("create repository path");
-    run_git(&repository_path, &["init", "-b", "main"]);
-    run_git(
-        &repository_path,
-        &["config", "user.email", "workspace@example.com"],
-    );
-    run_git(&repository_path, &["config", "user.name", "Workspace Test"]);
-    fs::write(repository_path.join("README.md"), "seed\n").expect("write repository seed");
-    run_git(&repository_path, &["add", "README.md"]);
-    run_git(&repository_path, &["commit", "-m", "seed"]);
+    )));
+    let second_repository_path = init_seed_repository(&PathBuf::from(format!(
+        "/tmp/anyharness-workspace-serving-repo-2-{}",
+        uuid::Uuid::new_v4()
+    )));
     let state = AppState::new(
         runtime_home.clone(),
         "http://127.0.0.1:8457".to_string(),
@@ -200,6 +209,14 @@ async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_witho
         "local",
         &repository_path.to_string_lossy(),
     );
+    // The create probe targets a second repository: workspace-1 is an active
+    // local workspace at the first checkout, and the duplicate-local gate
+    // rejects a second local workspace at a checkout an active one owns.
+    test_support::seed_repo_root(
+        &state.db,
+        "repo-root-2",
+        &second_repository_path.to_string_lossy(),
+    );
     test_support::insert_session_row(
         &SessionStore::new(state.db.clone()),
         "workspace-1",
@@ -211,10 +228,10 @@ async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_witho
         .product_mcp_endpoint_registry
         .get_by_route_slug("workspace")
         .expect("Workspace serving endpoint");
-    assert!(!state
-        .session_runtime
-        .product_mcp_launch_ids()
-        .contains(&"workspace"));
+    assert_eq!(
+        state.session_runtime.product_mcp_launch_ids(),
+        ["workspace", "reviews", "cowork"]
+    );
     let auth = WorkspaceMcpAuth::new(runtime_home.clone());
     let token = auth
         .mint_capability_token("workspace-1", "session-1")
@@ -235,7 +252,7 @@ async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_witho
                 "params": {
                     "name": "create_workspace",
                     "arguments": {
-                        "repositoryId": "repo-root-workspace-1",
+                        "repositoryId": "repo-root-2",
                         "creationMode": "local",
                         "displayName": "Created by agent"
                     }
@@ -402,6 +419,7 @@ async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_witho
         .as_str()
         .contains("/tmp/"));
     let _ = fs::remove_dir_all(repository_path);
+    let _ = fs::remove_dir_all(second_repository_path);
     let _ = fs::remove_dir_all(runtime_home);
 }
 

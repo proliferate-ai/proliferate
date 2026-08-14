@@ -31,6 +31,9 @@ use crate::integrations::mcp::product_server::{
     ProductMcpTokenValidation,
 };
 
+#[path = "tests/tool_contract.rs"]
+mod tool_contract;
+
 struct Sessions(Vec<SessionRecord>);
 
 impl AgentSessionReads for Sessions {
@@ -111,15 +114,20 @@ impl AgentWorkspaceOperations for Workspaces {
     async fn list_workspace_options(
         &self,
     ) -> Result<WorkspaceCreationOptions, WorkspaceOptionsError> {
-        unreachable!()
+        Ok(WorkspaceCreationOptions {
+            repositories: Vec::new(),
+            creation_modes: Vec::new(),
+        })
     }
 
     async fn create_workspace(
         &self,
         _caller_workspace_id: &str,
-        _input: CreateWorkspaceFromOptionsInput,
+        input: CreateWorkspaceFromOptionsInput,
     ) -> Result<CreateWorkspaceFromOptionsResult, WorkspaceOptionsError> {
-        unreachable!()
+        Err(WorkspaceOptionsError::RepositoryNotFound(
+            input.repository_id,
+        ))
     }
 }
 
@@ -333,7 +341,13 @@ async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context(
     .await
     .expect("tools/list dispatch")
     .expect("tools/list response");
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 18);
+    let listed_names = list["result"]["tools"]
+        .as_array()
+        .expect("listed Workspace tools")
+        .iter()
+        .map(|tool| tool["name"].as_str().expect("listed tool name"))
+        .collect::<Vec<_>>();
+    assert_eq!(listed_names, tools::TOOL_NAMES);
 
     let whoami = authenticated_dispatch(
         &server,
@@ -426,6 +440,42 @@ async fn workspace_mcp_denials_are_typed_and_do_not_leak_foreign_subagent_metada
     assert_eq!(
         spoofed["result"]["structuredContent"]["error"]["code"],
         "WORKSPACE_MCP_ARGUMENTS_INVALID"
+    );
+
+    let cross_workspace_subagent = authenticated_dispatch(
+        &server,
+        &p_token,
+        context("workspace-a", "P"),
+        json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_agent",
+                "arguments": {
+                    "workspaceId": "workspace-b",
+                    "kind": "subagent",
+                    "task": "review the target"
+                }
+            }
+        }),
+    )
+    .await
+    .expect("cross-workspace subagent dispatch")
+    .expect("cross-workspace subagent response");
+    assert_eq!(cross_workspace_subagent["result"]["isError"], true);
+    assert_eq!(
+        cross_workspace_subagent["result"]["structuredContent"]["error"],
+        json!({
+            "code": "SUBAGENT_SAME_WORKSPACE_REQUIRED",
+            "message": "Subagents must use the calling agent's workspaceId. Use whoami to get it, or create an ordinary agent for another workspace.",
+        })
+    );
+    assert!(
+        serde_json::to_vec(&cross_workspace_subagent)
+            .expect("serialize denial response")
+            .len()
+            <= 65_536
     );
 }
 

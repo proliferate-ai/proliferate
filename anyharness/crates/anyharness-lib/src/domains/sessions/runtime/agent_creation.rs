@@ -120,8 +120,7 @@ impl SessionRuntime {
     }
 
     /// Atomically make the durable child and its capped same-workspace
-    /// relationship visible. Both workspace and legacy MCP creation use this
-    /// seam while both product surfaces coexist.
+    /// relationship visible before Workspace `create_agent` starts it.
     pub(crate) fn create_durable_subagent_session_and_link(
         &self,
         workspace_id: &str,

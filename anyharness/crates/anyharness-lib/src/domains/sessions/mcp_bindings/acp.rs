@@ -48,8 +48,32 @@ pub fn to_acp_servers(bindings: &[SessionMcpServer]) -> Vec<acp::schema::McpServ
 mod tests {
     use super::*;
     use crate::domains::sessions::mcp_bindings::model::{
-        SessionMcpEnvVar, SessionMcpServer, SessionMcpStdioServer,
+        SessionMcpEnvVar, SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
+        SessionMcpStdioServer,
     };
+
+    #[test]
+    fn to_acp_servers_preserves_workspace_http_namespace_and_route() {
+        let bindings = vec![SessionMcpServer::Http(SessionMcpHttpServer {
+            connection_id: "workspace".to_string(),
+            catalog_entry_id: None,
+            server_name: "proliferate_workspace".to_string(),
+            url: "http://127.0.0.1:4317/v1/workspaces/w/sessions/s/mcp/workspace".to_string(),
+            headers: vec![SessionMcpHeader {
+                name: "x-anyharness-product-mcp-token".to_string(),
+                value: "secret".to_string(),
+            }],
+        })];
+
+        let servers = to_acp_servers(&bindings);
+        let [acp::schema::McpServer::Http(server)] = servers.as_slice() else {
+            panic!("one Workspace HTTP ACP server");
+        };
+
+        assert_eq!(server.name, "proliferate_workspace");
+        assert!(server.url.ends_with("/mcp/workspace"));
+        assert_eq!(server.headers.len(), 1);
+    }
 
     #[test]
     fn to_acp_servers_maps_stdio_transport() {

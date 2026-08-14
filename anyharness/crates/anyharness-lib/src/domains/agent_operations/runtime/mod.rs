@@ -4,6 +4,7 @@ mod error;
 mod messaging;
 mod ordinary;
 mod ports;
+mod product_context;
 mod subagent_lifecycle;
 mod subagent_roster;
 mod target_access;
@@ -279,18 +280,24 @@ impl AgentOperations {
         self.project_agent(&target_agent, Some(&caller_agent)).await
     }
 
+    /// The roster is unpaginated, but it still answers in the `list_agents`
+    /// page shape: MCP `structuredContent` must be a JSON object, and a bare
+    /// array would also make later pagination a breaking change.
     #[tracing::instrument(skip_all, fields(operation = "list_subagents"))]
     pub async fn list_subagents(
         &self,
         caller: &AuthenticatedAgentCaller,
-    ) -> Result<Vec<AgentView>, AgentOperationsError> {
-        Ok(self
-            .session_subagent_roster(caller)
-            .await?
-            .children
-            .into_iter()
-            .map(|entry| entry.agent)
-            .collect())
+    ) -> Result<AgentPage, AgentOperationsError> {
+        Ok(AgentPage {
+            agents: self
+                .session_subagent_roster(caller)
+                .await?
+                .children
+                .into_iter()
+                .map(|entry| entry.agent)
+                .collect(),
+            next_cursor: None,
+        })
     }
 
     pub fn decide_agent_creation(
