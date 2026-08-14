@@ -1,8 +1,12 @@
+// Imported from the scope module directly, not through `launch-intent`: this
+// registry is reachable from the signed-out shell's eager graph, and the
+// re-export would pull the intent view model into the login first-load chunk
+// (PRO-230).
 import {
   launchIntentOwnsShell,
   resolveLaunchIntentScope,
-  type ChatLaunchIntent,
-} from "#product/lib/domain/chat/launch/launch-intent";
+} from "#product/lib/domain/chat/launch/launch-intent-scope";
+import type { ChatLaunchIntent } from "#product/lib/domain/chat/launch/launch-intent";
 
 /**
  * Client-owned launch intents, keyed by intent id. Mirrors the pending-workspace
