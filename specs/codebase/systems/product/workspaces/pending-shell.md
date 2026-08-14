@@ -235,14 +235,11 @@ responses, and queued prompt edit/delete actions.
    place. A launch the user switched away from still materializes its workspace,
    sends its first prompt, and clears its own entry.
 
-   Scope today: local, worktree, and cowork attempts, plus cloud attempts whose
-   workspace is already ready when the create call returns. A cloud attempt that
-   returns still provisioning parks at `awaiting-cloud-ready`, and both drivers
-   that finish it (`use-cloud-workspace-polling` and
-   `use-selected-cloud-runtime-rehydration`) are scoped to the selected
-   workspace, so that attempt resumes only once the user re-attends it.
-   Background completion for provisioning cloud attempts is delivered by the
-   deferred-launch and polling rework, not by this registry.
+   A cloud attempt still provisioning is no exception. `use-cloud-workspace-polling`
+   drives every attempt parked at `awaiting-cloud-ready`, not the selected one,
+   so that workspace becomes ready, materializes, and clears its own entry
+   behind the user, and `use-home-deferred-launch-runner` sends the queued
+   prompt off the same per-attempt readiness.
 
 10. Liveness gates the pipeline; attendance gates presentation.
     Pipeline work (patch the entry, remap and materialize projected sessions,
@@ -782,11 +779,15 @@ Pending failures must preserve enough state to retry or exit cleanly:
   row is found
 - an interrupted empty-session create remains resumable under its original
   client id and runtime UUID until the runtime acknowledges that create
-- a cloud attempt left at `awaiting-cloud-ready` while the user is looking
-  elsewhere is stalled, not failed: it holds its registry entry and its queued
-  prompt, and resumes when the user re-attends the workspace. See the scope
-  note on invariant 9; background completion for this case is not delivered
-  yet
+- a cloud attempt still provisioning while the user is looking elsewhere is
+  stalled, not failed: it holds its registry entry and its queued prompt while
+  polling keeps working on it, and neither one waits on the user re-attending
+  the workspace
+- a cloud provisioning failure the user was not attending lands on the same
+  per-attempt surface as a create-time failure: the entry goes to `failed` and
+  one toast announces it. The deferred launch behind it releases its queued
+  prompt through the launch intent instead of raising a second notice for the
+  same failure
 
 If materialization fails after a projected session exists, do not create a new
 session automatically. The user should see the failed workspace shell and keep
@@ -826,11 +827,17 @@ Minimum coverage by concern:
 - finalization: projected sessions materialize before pending state clears
 - switching away mid-launch: the launch still materializes the workspace, sends
   its first prompt, and clears its own entry, without throwing, force-selecting,
-  firing an arrival event, or changing the active session (covered for the
-  local and worktree paths; the cloud awaiting-ready path is covered when
-  background completion for it lands)
+  firing an arrival event, or changing the active session
 - a per-workspace clear (retire, mark done, cloud delete, or dismissing one
   attempt) leaves every other live attempt in the registry
+- cloud polling: an unattended attempt is polled and finalized, several parked
+  attempts are polled, one tick refreshes at most the batch cap, an attempt
+  that leaves the awaiting state stops being polled, and a failed provision
+  marks that attempt's own entry
+- deferred launch promotion: a launch promotes on its own workspace's
+  readiness, an unattended promotion leaves the active session and the selected
+  workspace untouched, an attended one still activates the created session, and
+  two launches promote independently
 - home launch: initial prompt remains attached to the projected session and
   does not create a second fresh session
 - interrupted empty-session creation: persistence precedes the create request,

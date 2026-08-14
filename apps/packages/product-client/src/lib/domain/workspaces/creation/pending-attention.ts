@@ -11,12 +11,29 @@ export interface PendingWorkspaceAttentionSelection {
   selectedWorkspaceId: string | null;
 }
 
+/** The two ids attention is decided from, so an attempt whose registry entry
+ * has already been cleared can still be asked the question. */
+export interface PendingWorkspaceAttemptIdentity {
+  attemptId: string;
+  workspaceId: string | null;
+}
+
 /**
  * Attention is a camera, not a lifecycle: it says whether the user is looking
  * at this attempt right now. The materialized-id clause covers the handoff
  * window after finalization swapped selection to the real workspace but the
  * pending entry has not been cleared yet.
  */
+export function isPendingWorkspaceAttemptAttended(
+  attempt: PendingWorkspaceAttemptIdentity,
+  selection: PendingWorkspaceAttentionSelection,
+): boolean {
+  if (selection.selectedLogicalWorkspaceId === buildPendingWorkspaceUiKey(attempt)) {
+    return true;
+  }
+  return attempt.workspaceId !== null && selection.selectedWorkspaceId === attempt.workspaceId;
+}
+
 export function isPendingWorkspaceEntryAttended(
   entry: PendingWorkspaceEntry | null | undefined,
   selection: PendingWorkspaceAttentionSelection,
@@ -24,10 +41,7 @@ export function isPendingWorkspaceEntryAttended(
   if (!entry) {
     return false;
   }
-  if (selection.selectedLogicalWorkspaceId === buildPendingWorkspaceUiKey(entry)) {
-    return true;
-  }
-  return entry.workspaceId !== null && selection.selectedWorkspaceId === entry.workspaceId;
+  return isPendingWorkspaceAttemptAttended(entry, selection);
 }
 
 export function resolveAttendedPendingWorkspaceEntry(
