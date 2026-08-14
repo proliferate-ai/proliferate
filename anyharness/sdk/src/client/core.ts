@@ -52,6 +52,8 @@ export type AnyHarnessTimingCategory =
   | "workspace.purge.preflight"
   | "workspace.purge"
   | "workspace.purge.retry"
+  | "workspace.archive"
+  | "workspace.unarchive"
   | "worktree.inventory"
   | "worktree.orphan.prune"
   | "repo_root.list"

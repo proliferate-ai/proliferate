@@ -1,6 +1,14 @@
 import type { ProblemDetails } from "../types/runtime.js";
 
-interface ProblemDetailsFallback {
+/**
+ * RFC 7807 normalization: what the client is willing to believe about an error
+ * body, and what it deliberately refuses to reshape.
+ *
+ * Lifted out of `core.ts` because it is a self-contained decision table, not
+ * transport plumbing — and because `core.ts` is at its line cap.
+ */
+
+export interface ProblemDetailsFallback {
   title: string;
   status: number;
 }
@@ -25,11 +33,20 @@ export function normalizeProblemDetails(
   if (typeof source.instance === "string" || source.instance === null) {
     problem.instance = source.instance;
   }
+  // `extra` is the RFC 7807 extension slot the runtime uses for structured
+  // refusal payloads (the unarchive scenario body, the git-lock file path). It is
+  // passed through UNTOUCHED and unvalidated on purpose: this normalizer's job is
+  // the envelope, and reshaping the payload here would silently drop whichever
+  // key a future refusal adds — the dialog that renders it is the only thing that
+  // knows the shape.
+  if (source.extra !== undefined) {
+    problem.extra = source.extra;
+  }
 
   return problem;
 }
 
-function isJsonObject(value: unknown): value is Record<string, unknown> {
+export function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 

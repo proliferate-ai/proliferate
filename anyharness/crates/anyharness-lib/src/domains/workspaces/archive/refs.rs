@@ -199,6 +199,51 @@ pub fn list_for_repo(repo_root: &Path) -> anyhow::Result<Vec<ArchiveRefEntry>> {
     Ok(entries)
 }
 
+/// Which workspace ids hold `rescue/` names in this repo.
+///
+/// The read side of [`copy_to_rescue`], added because the sweep's orphaned-refs
+/// duty must skip any id holding rescue names ENTIRELY — those refs are the
+/// forensic evidence of a failed post-restore verify, and a duty that reaped
+/// them would delete exactly what a user is being told to look at.
+/// [`list_for_repo`] deliberately filters the rescue family out, so this is a
+/// separate enumeration rather than a flag on that call.
+pub fn rescue_ids_for_repo(repo_root: &Path) -> anyhow::Result<std::collections::BTreeSet<String>> {
+    let output = Command::new("git")
+        .current_dir(repo_root)
+        .args([
+            "for-each-ref",
+            "--format=%(refname)",
+            &format!("{ARCHIVE_REFS_PREFIX}rescue/"),
+        ])
+        .output()
+        .map_err(|error| anyhow::anyhow!("git for-each-ref failed to run: {error}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git for-each-ref failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let mut ids = std::collections::BTreeSet::new();
+    let prefix = format!("{ARCHIVE_REFS_PREFIX}rescue/");
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Some(rest) = line.strip_prefix(&prefix) else {
+            continue;
+        };
+        // `<id>-<sha>/archive-{heads,worktrees,indexes}`: the sha is a fixed-shape
+        // hex suffix, so the id is everything before the LAST hyphen of the
+        // directory component. Workspace ids contain hyphens themselves, which is
+        // why splitting on the first one would be wrong.
+        let Some((directory, _)) = rest.split_once('/') else {
+            continue;
+        };
+        let Some((workspace_id, _sha)) = directory.rsplit_once('-') else {
+            continue;
+        };
+        ids.insert(workspace_id.to_string());
+    }
+    Ok(ids)
+}
+
 fn head_ref(workspace_id: &str) -> String {
     format!("{ARCHIVE_REFS_PREFIX}archive-heads/{workspace_id}")
 }
@@ -276,7 +321,12 @@ fn rev_parse_verify(repo_root: &Path, expr: &str) -> anyhow::Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn verify_one(repo_root: &Path, ref_name: &str, expected_oid: &str, peel: &str) -> anyhow::Result<()> {
+fn verify_one(
+    repo_root: &Path,
+    ref_name: &str,
+    expected_oid: &str,
+    peel: &str,
+) -> anyhow::Result<()> {
     let resolved = show_ref_verify(repo_root, ref_name)
         .ok_or_else(|| anyhow::anyhow!("archive ref {ref_name} does not exist"))?;
     if resolved != expected_oid {
@@ -287,7 +337,9 @@ fn verify_one(repo_root: &Path, ref_name: &str, expected_oid: &str, peel: &str) 
     rev_parse_verify(repo_root, &format!("{resolved}^{{{peel}}}"))
         .map(|_| ())
         .map_err(|_| {
-            anyhow::anyhow!("archive ref {ref_name}'s object {resolved} does not exist ({peel} peel failed)")
+            anyhow::anyhow!(
+                "archive ref {ref_name}'s object {resolved} does not exist ({peel} peel failed)"
+            )
         })
 }
 

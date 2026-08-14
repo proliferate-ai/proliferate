@@ -60,7 +60,10 @@ export function useRuntimeWorkspacesQuery(options?: RuntimeQueryOptions) {
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.workspaces.list(requestOptionsWithSignal(options?.requestOptions, signal));
+      return client.workspaces.list(
+        undefined,
+        requestOptionsWithSignal(options?.requestOptions, signal),
+      );
     },
   });
 }

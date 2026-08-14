@@ -1,8 +1,27 @@
 use super::row::{map_row, WORKSPACE_COLUMNS};
 use super::WorkspaceStore;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceLifecycleState, WorkspaceRecord};
 
 impl WorkspaceStore {
+    /// Execution surfaces filtered to one lifecycle: what `?lifecycle=` answers
+    /// and what the leftover sweep walks. The renamed `idx_workspaces_lifecycle`
+    /// index exists for exactly this query.
+    pub fn list_by_lifecycle(
+        &self,
+        lifecycle_state: WorkspaceLifecycleState,
+    ) -> anyhow::Result<Vec<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(&format!(
+                "SELECT {WORKSPACE_COLUMNS} FROM workspaces
+                 WHERE kind IN ('local', 'worktree')
+                   AND lifecycle_state = ?1
+                 ORDER BY updated_at DESC"
+            ))?;
+            let rows = stmt.query_map([lifecycle_state.as_str()], map_row)?;
+            rows.collect()
+        })
+    }
+
     pub fn list_all(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare(&format!(

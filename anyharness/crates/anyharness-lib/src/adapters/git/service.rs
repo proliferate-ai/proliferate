@@ -8,8 +8,8 @@ use super::operations::snapshot::WorkspaceSnapshot;
 use super::operations::worktree_branch;
 use super::operations::worktree_restore::WorktreeRestoreOptions;
 use super::operations::{
-    branches, clone, commit, commit_all, diff, diff_files, push, revert_patches, scratch,
-    snapshot, snapshot_restore, staging, status, status_summary, worktrees,
+    branches, clone, commit, commit_all, diff, diff_files, push, revert_patches, scratch, snapshot,
+    snapshot_restore, staging, status, status_summary, worktrees,
 };
 use super::types::{
     CommitError, GitBranch, GitBranchDiffFilesResult, GitDiffError, GitDiffResult, GitDiffScope,
@@ -347,5 +347,26 @@ impl GitService {
         sha: &str,
     ) -> anyhow::Result<String> {
         worktree_branch::create_branch_at_sha_uniquified(source_repo_root, desired_branch, sha)
+    }
+
+    /// The tip of `branch_name`, `None` when it does not exist.
+    pub fn branch_tip_sha(repo_root: &Path, branch_name: &str) -> anyhow::Result<Option<String>> {
+        worktree_branch::branch_tip_sha(repo_root, branch_name)
+    }
+
+    /// `git branch -D`. The archive branch-delete step's verb; its two policy
+    /// guards live in the caller.
+    pub fn delete_branch_force(repo_root: &Path, branch_name: &str) -> anyhow::Result<()> {
+        worktree_branch::delete_branch_force(repo_root, branch_name)
+    }
+
+    /// Point HEAD at a branch, working tree and index untouched.
+    pub fn point_head_at_branch(workspace_path: &Path, branch_name: &str) -> anyhow::Result<()> {
+        worktree_branch::point_head_at_branch(workspace_path, branch_name)
+    }
+
+    /// Detach HEAD at a SHA, working tree and index untouched.
+    pub fn detach_head_at_sha(workspace_path: &Path, sha: &str) -> anyhow::Result<()> {
+        worktree_branch::detach_head_at_sha(workspace_path, sha)
     }
 }

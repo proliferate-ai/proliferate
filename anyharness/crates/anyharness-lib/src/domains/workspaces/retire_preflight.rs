@@ -535,7 +535,7 @@ pub fn workspace_access_retire_blocker(error: WorkspaceAccessError) -> Workspace
                 mode.as_str()
             )
         }
-        WorkspaceAccessError::WorkspaceRetired(_) => "Workspace is already retired.".to_string(),
+        WorkspaceAccessError::WorkspaceArchived(_) => "Workspace is already archived.".to_string(),
         WorkspaceAccessError::WorkspaceNotFound(_)
         | WorkspaceAccessError::Unexpected(_)
         | WorkspaceAccessError::SessionNotFound(_)

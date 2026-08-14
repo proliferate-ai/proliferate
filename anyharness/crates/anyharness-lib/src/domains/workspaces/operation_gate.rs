@@ -1,8 +1,22 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
+use std::time::Duration;
 
 use tokio::sync::{Mutex, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
+
+/// How long a user-facing flow waits for the exclusive lease before answering
+/// "something else is in flight". Long enough to pass through the routine short
+/// shared leases (a git-status poll, a file read), short enough that the user
+/// gets an answer rather than a spinner.
+pub const BOUNDED_EXCLUSIVE_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// The one failure of a bounded acquire. A unit struct rather than a message:
+/// there is exactly one reason, and its wire mapping
+/// (`WORKSPACE_OPERATION_IN_FLIGHT`) is the caller's to decide.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("another operation holds this workspace")]
+pub struct WorkspaceOperationGateTimeout;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WorkspaceOperationKind {
@@ -107,6 +121,65 @@ impl WorkspaceOperationGate {
             kind: None,
             state: None,
             _guard: state.lock.clone().write_owned().await,
+        }
+    }
+
+    /// Take the exclusive lease if it is free RIGHT NOW, otherwise give up.
+    ///
+    /// The sweep's acquire, and only the sweep's: background cleanup must never
+    /// queue behind a user operation, and a skipped candidate costs nothing
+    /// because the next tick gets it. Every user-facing flow uses
+    /// [`Self::acquire_exclusive_bounded`] instead, because a raw try here
+    /// would fail spuriously against routine short shared leases like a
+    /// git-status poll.
+    pub async fn try_acquire_exclusive(
+        &self,
+        workspace_id: &str,
+    ) -> Option<WorkspaceExclusiveOperationLease> {
+        let state = self.state_for(workspace_id).await;
+        let guard = state.lock.clone().try_write_owned().ok()?;
+        Some(WorkspaceExclusiveOperationLease {
+            workspace_id: None,
+            kind: None,
+            state: None,
+            _guard: guard,
+        })
+    }
+
+    /// The awaiting exclusive acquire under a short deadline: the archive and
+    /// unarchive flows' acquire.
+    ///
+    /// Awaiting (rather than trying) is what lets it pass through the routine
+    /// short shared leases a live workspace always has in flight; bounding it
+    /// (rather than awaiting forever) is what turns a genuinely busy workspace
+    /// into an honest, immediate `WORKSPACE_OPERATION_IN_FLIGHT` instead of a
+    /// request that hangs for the length of someone else's 300-second script.
+    pub async fn acquire_exclusive_bounded(
+        &self,
+        workspace_id: &str,
+    ) -> Result<WorkspaceExclusiveOperationLease, WorkspaceOperationGateTimeout> {
+        self.acquire_exclusive_bounded_with_timeout(workspace_id, BOUNDED_EXCLUSIVE_TIMEOUT)
+            .await
+    }
+
+    /// [`Self::acquire_exclusive_bounded`] with the deadline supplied, so a
+    /// caller that needs a different bound (or a test that cannot wait the real
+    /// three seconds to observe the trip) has one seam instead of a second
+    /// implementation of the same wait.
+    pub async fn acquire_exclusive_bounded_with_timeout(
+        &self,
+        workspace_id: &str,
+        timeout: Duration,
+    ) -> Result<WorkspaceExclusiveOperationLease, WorkspaceOperationGateTimeout> {
+        let state = self.state_for(workspace_id).await;
+        match tokio::time::timeout(timeout, state.lock.clone().write_owned()).await {
+            Ok(guard) => Ok(WorkspaceExclusiveOperationLease {
+                workspace_id: None,
+                kind: None,
+                state: None,
+                _guard: guard,
+            }),
+            Err(_) => Err(WorkspaceOperationGateTimeout),
         }
     }
 

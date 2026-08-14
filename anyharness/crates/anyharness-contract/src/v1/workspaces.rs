@@ -143,6 +143,20 @@ pub struct Workspace {
     pub cleanup_failed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cleanup_attempted_at: Option<String>,
+    /// When this workspace was archived; the archived settings list orders by
+    /// it. Additive-optional, so a client that predates archiving reads the
+    /// same body it always did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<String>,
+    /// HEAD at snapshot time. `None` on an archived row means "never
+    /// snapshotted" (an absorbed pre-archiving row), which is a different
+    /// restore shape, not a missing value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archived_head_sha: Option<String>,
+    /// The branch HEAD actually held at snapshot time. `None` alongside a
+    /// present `archived_head_sha` is the detached-at-archive marker.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archived_branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_summary: Option<WorkspaceExecutionSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -12,11 +12,16 @@ import {
 
 type WorkspaceConnection = AnyHarnessClientConnection | AnyHarnessResolvedConnection;
 
+/**
+ * The active workspace list. The lifecycle filter is left unset so the server's
+ * `active` default applies, which is exactly what this call meant before
+ * archiving shipped.
+ */
 export function listRuntimeWorkspaces(
   connection: AnyHarnessClientConnection,
   request?: AnyHarnessRequestOptions,
 ) {
-  return getAnyHarnessClient(connection).workspaces.list(request);
+  return getAnyHarnessClient(connection).workspaces.list(undefined, request);
 }
 
 export function listRepoRoots(

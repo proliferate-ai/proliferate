@@ -1236,8 +1236,12 @@ class ShippedAllowlistTest(unittest.TestCase):
              "domains/workflows/workspace_materialization/test_support.rs", 159,
              "format!-built SELECT COUNT(*) head"),
             # A DROP TABLE line, inside a cfg(test) mod the engine cannot see
-            # past — the checker still flags the line itself.
-            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/workspaces/access_gate.rs", 328,
+            # past — the checker still flags the line itself. Carried forward
+            # 324 -> 337 as the archiving rungs grew the file above it (R1's
+            # retired-arm absorption, R4's WorkspaceArchived rename and its
+            # archived-row admission tests); the offender and the rule that
+            # sees it are unchanged.
+            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/workspaces/access_gate.rs", 337,
              "DROP TABLE line"),
             # A `state.*_store` field access, which carries no store type on the
             # line for the import pass to see. This particular one is benign (an

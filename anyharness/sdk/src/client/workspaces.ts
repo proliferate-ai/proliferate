@@ -1,4 +1,6 @@
 import type {
+  ArchiveWorkspaceRequest,
+  ArchiveWorkspaceResponse,
   CreateWorkspaceRequest,
   CreateWorktreeWorkspaceRequest,
   CreateWorktreeWorkspaceResponse,
@@ -8,8 +10,11 @@ import type {
   ResolveWorkspaceResponse,
   RestoreWorktreeWorkspaceResponse,
   StartWorkspaceSetupRequest,
+  UnarchiveWorkspaceRequest,
+  UnarchiveWorkspaceResponse,
   UpdateWorkspaceDisplayNameRequest,
   Workspace,
+  WorkspaceLifecycleFilter,
   WorkspacePurgePreflightResponse,
   WorkspacePurgeResponse,
 } from "../types/workspaces.js";
@@ -57,10 +62,55 @@ export class WorkspacesClient {
     );
   }
 
-  async list(options?: AnyHarnessRequestOptions): Promise<Workspace[]> {
+  /**
+   * The workspace list. Defaults to `active` on the server, so an old client
+   * keeps seeing exactly what it saw before archiving shipped; pass `archived`
+   * or `all` to widen it.
+   */
+  async list(
+    lifecycle?: WorkspaceLifecycleFilter,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Workspace[]> {
+    const query = lifecycle === undefined
+      ? ""
+      : `?lifecycle=${encodeURIComponent(lifecycle)}`;
     return this.transport.get<Workspace[]>(
-      "/v1/workspaces",
+      `/v1/workspaces${query}`,
       withTimingCategory(options, "workspace.list"),
+    );
+  }
+
+  /**
+   * Archive a workspace. Resolves at the row flip — the archive script, the
+   * worktree removal, and the branch delete all run detached afterwards and
+   * cannot change this answer.
+   */
+  async archive(
+    workspaceId: string,
+    input?: ArchiveWorkspaceRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<ArchiveWorkspaceResponse> {
+    return this.transport.post<ArchiveWorkspaceResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/archive`,
+      input ?? {},
+      withTimingCategory(options, "workspace.archive"),
+    );
+  }
+
+  /**
+   * Unarchive a workspace. An ambiguous restore answers 409
+   * `WORKSPACE_UNARCHIVE_SCENARIO`, whose `extra` carries the scenario body and
+   * the `strategies` the caller may answer with in `branchStrategy`/`overwrite`.
+   */
+  async unarchive(
+    workspaceId: string,
+    input?: UnarchiveWorkspaceRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<UnarchiveWorkspaceResponse> {
+    return this.transport.post<UnarchiveWorkspaceResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/unarchive`,
+      input ?? {},
+      withTimingCategory(options, "workspace.unarchive"),
     );
   }
 

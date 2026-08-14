@@ -136,7 +136,9 @@ impl CoworkDelegationService {
         self.validate_parent_can_delegate(parent_session_id)?;
         Ok(self
             .workspace_runtime
-            .list_workspaces()?
+            // Every lifecycle: the block-reason filter below already runs the
+            // access gate, which is what refuses an archived row here.
+            .list_workspaces(None)?
             .into_iter()
             .filter_map(|workspace| {
                 let reason = self.source_workspace_block_reason(&workspace);

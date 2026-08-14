@@ -14,6 +14,8 @@ fn openapi_registers_workspace_and_session_paths() {
         "/v1/workspaces",
         "/v1/workspaces/worktrees",
         "/v1/workspaces/{workspace_id}/worktree/restore",
+        "/v1/workspaces/{workspace_id}/archive",
+        "/v1/workspaces/{workspace_id}/unarchive",
         "/v1/workspaces/{workspace_id}",
         "/v1/workspaces/{workspace_id}/display-name",
         "/v1/workspaces/{workspace_id}/detect-setup",

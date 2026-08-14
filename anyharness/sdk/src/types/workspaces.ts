@@ -49,3 +49,33 @@ export type WorkspacePurgePreflightResponse =
   components["schemas"]["WorkspacePurgePreflightResponse"];
 export type WorkspacePurgeResponse =
   components["schemas"]["WorkspacePurgeResponse"];
+
+// ── archiving (R4) ──
+export type WorkspaceLifecycleFilter =
+  components["schemas"]["WorkspaceLifecycleFilter"];
+export type ArchiveWorkspaceRequest =
+  components["schemas"]["ArchiveWorkspaceRequest"];
+export type WorkspaceArchiveNoticeKind =
+  components["schemas"]["WorkspaceArchiveNoticeKind"];
+export type WorkspaceArchiveNotice =
+  components["schemas"]["WorkspaceArchiveNotice"];
+export type ArchiveWorkspaceResponse =
+  components["schemas"]["ArchiveWorkspaceResponse"];
+export type WorkspaceUnarchiveBranchStrategy =
+  components["schemas"]["WorkspaceUnarchiveBranchStrategy"];
+export type UnarchiveWorkspaceRequest =
+  components["schemas"]["UnarchiveWorkspaceRequest"];
+export type WorkspaceUnarchiveNoticeKind =
+  components["schemas"]["WorkspaceUnarchiveNoticeKind"];
+export type WorkspaceUnarchiveNotice =
+  components["schemas"]["WorkspaceUnarchiveNotice"];
+export type UnarchiveWorkspaceResponse =
+  components["schemas"]["UnarchiveWorkspaceResponse"];
+export type WorkspaceUnarchiveScenario =
+  components["schemas"]["WorkspaceUnarchiveScenario"];
+export type WorkspaceUnarchiveStrategy =
+  components["schemas"]["WorkspaceUnarchiveStrategy"];
+export type WorkspaceUnarchiveScenarioBody =
+  components["schemas"]["WorkspaceUnarchiveScenarioBody"];
+export type WorkspaceGitLockedBody =
+  components["schemas"]["WorkspaceGitLockedBody"];

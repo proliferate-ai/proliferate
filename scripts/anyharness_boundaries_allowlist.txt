@@ -51,7 +51,7 @@ DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/go
 DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 1 strict-mirror loop runtime uses SetSessionLoopRequest to drive the sidecar ext method; contract mapping pending move above the API boundary
 
 # Rule: domains/** reach live/ only via the runtime valve.
-# 10 files, 19 occurrences.
+# 11 files, 20 occurrences.
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs 4 agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/entry.rs 1 inline fully-qualified live probe type in a fn signature; target = agents runtime valve (grid plan PR 6c)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/probe.rs 3 model snapshot calls live session probe directly (3 leaves in one group import); target = agents runtime valve (grid plan PR 6c)
@@ -59,6 +59,7 @@ DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/agents/model_snap
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs 2 plan decision op imports actor command types (Resolution, ResolveInteractionCommandError) via the live::sessions root re-export, not ::model; target = model re-export or plans runtime valve (grid plan PR 6e)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/sessions/execution_summary.rs 1 summary reads LiveSessionExecutionSnapshot from live::sessions::handle, not ::model; target = re-export the snapshot as a model shape (grid plan PR 6d)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 2 access gate holds live terminals directly (1 use-line + 1 re-import inside the inline cfg(test) mod the engine cannot see); target = workspaces runtime valve (grid plan PR 6b)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/archive/quiesce.rs 1 archive quiesce holds live terminals directly, exactly as access_gate.rs and retire_preflight.rs do — the three plane stops are the same live surface; target = workspaces runtime valve (grid plan PR 6b)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 1 retire preflight holds live terminals directly; target = workspaces runtime valve (grid plan PR 6b)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/setup_runtime.rs 1 workspace setup holds live terminals directly; target = workspaces runtime valve (grid plan PR 6b)
 

@@ -1268,6 +1268,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["archive_workspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/cowork/artifacts/{artifact_id}": {
         parameters: {
             query?: never;
@@ -1988,6 +2004,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unarchive_workspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/worktree/restore": {
         parameters: {
             query?: never;
@@ -2335,6 +2367,21 @@ export interface components {
              * @description The persisted document's revision.
              */
             revision: number;
+        };
+        /**
+         * @description `POST /v1/workspaces/{id}/archive` body. Both knobs are resolved by the
+         *     client at click time — the branch-delete host preference and the repo
+         *     environment's archive script — because the runtime stores neither. A
+         *     re-POST that converges an interrupted archive carries the same resolved
+         *     values; it never re-runs the script or the branch delete.
+         */
+        ArchiveWorkspaceRequest: {
+            archiveScript?: string | null;
+            deleteBranch?: boolean | null;
+        };
+        ArchiveWorkspaceResponse: {
+            notices: components["schemas"]["WorkspaceArchiveNotice"][];
+            record: components["schemas"]["Workspace"];
         };
         ArtifactStatus: {
             installed: boolean;
@@ -3791,6 +3838,23 @@ export interface components {
         ProblemDetails: {
             code?: string | null;
             detail?: string | null;
+            /**
+             * @description The one structured extension point typed error bodies ride. Before it
+             *     existed the only place to put a machine-readable payload was `detail`,
+             *     a human sentence — so a client that needed the offending lock `file` or
+             *     the unarchive scenario's `strategies` list had to parse prose. Codes
+             *     that carry a payload document its shape next to their status mapping
+             *     (`api/http/workspaces_lifecycle_errors.rs`); every other code leaves
+             *     this absent, and the field is skip-serializing so no existing body
+             *     changes shape.
+             *
+             *     Declared `Object` because the payload is per-code and deliberately
+             *     unconstrained. utoipa emits that as a bare `{"type":"object"}`, which
+             *     `openapi-typescript` narrows to `Record<string, never>`; the SDK widens
+             *     this one field back to `unknown` in `src/types/runtime.ts` rather than
+             *     carrying a generated type that claims the payload has no keys.
+             */
+            extra?: Record<string, never>;
             instance?: string | null;
             /** Format: int32 */
             status: number;
@@ -4975,6 +5039,21 @@ export interface components {
             /** @enum {string} */
             status: "idle";
         };
+        /**
+         * @description `POST /v1/workspaces/{id}/unarchive` body. `branch_strategy` and
+         *     `overwrite` are the answers to a previous `WORKSPACE_UNARCHIVE_SCENARIO`
+         *     409; a first attempt sends neither.
+         */
+        UnarchiveWorkspaceRequest: {
+            branchStrategy?: null | components["schemas"]["WorkspaceUnarchiveBranchStrategy"];
+            overwrite?: boolean | null;
+            rerunSetup?: boolean | null;
+            setupScript?: string | null;
+        };
+        UnarchiveWorkspaceResponse: {
+            notices: components["schemas"]["WorkspaceUnarchiveNotice"][];
+            record: components["schemas"]["Workspace"];
+        };
         UnstagePatchRequest: {
             /** @description A valid unified diff patch (file headers + hunk) to reverse-apply from the index. */
             patch: string;
@@ -5274,6 +5353,23 @@ export interface components {
          */
         WorkflowWorkspaceStatus: "accepted" | "materializing" | "ready" | "failed";
         Workspace: {
+            /**
+             * @description When this workspace was archived; the archived settings list orders by
+             *     it. Additive-optional, so a client that predates archiving reads the
+             *     same body it always did.
+             */
+            archivedAt?: string | null;
+            /**
+             * @description The branch HEAD actually held at snapshot time. `None` alongside a
+             *     present `archived_head_sha` is the detached-at-archive marker.
+             */
+            archivedBranch?: string | null;
+            /**
+             * @description HEAD at snapshot time. `None` on an archived row means "never
+             *     snapshotted" (an absorbed pre-archiving row), which is a different
+             *     restore shape, not a missing value.
+             */
+            archivedHeadSha?: string | null;
             availability: components["schemas"]["WorkspaceAvailability"];
             cleanupAttemptedAt?: string | null;
             cleanupErrorMessage?: string | null;
@@ -5295,6 +5391,23 @@ export interface components {
             surface: components["schemas"]["WorkspaceSurface"];
             updatedAt: string;
         };
+        /**
+         * @description One archive notice. Every field beyond `kind` is additive-optional so a
+         *     client that predates a notice kind can render the kinds it knows and ignore
+         *     the rest instead of failing to parse the envelope.
+         */
+        WorkspaceArchiveNotice: {
+            kind: components["schemas"]["WorkspaceArchiveNoticeKind"];
+            /** @description The git operation that was aborted, for `aborted_git_operation`. */
+            operation?: string | null;
+            /**
+             * @description The skipped-path list for the `partial_capture_*` kinds and the
+             *     affected paths for the submodule/embedded-repo kinds.
+             */
+            paths?: string[] | null;
+        };
+        /** @enum {string} */
+        WorkspaceArchiveNoticeKind: "dirty_submodule" | "embedded_repo" | "partial_capture_untracked" | "partial_capture_tracked" | "aborted_git_operation";
         /**
          * @description Whether a workspace can currently be operated on. Computed at read time
          *     from the on-disk checkout, so the frontend can detect a deleted checkout on
@@ -5357,8 +5470,22 @@ export interface components {
             name: string;
             path: string;
         };
+        /**
+         * @description The `extra` payload of a `WORKSPACE_GIT_LOCKED` 409: the lock file archive
+         *     could not reap, so the toast can name it.
+         */
+        WorkspaceGitLockedBody: {
+            file: string;
+        };
         /** @enum {string} */
         WorkspaceKind: "worktree" | "local";
+        /**
+         * @description `GET /v1/workspaces?lifecycle=` filter. The default is `active`: the
+         *     sidebar's universe is active workspaces, and the archived list asks for its
+         *     own page explicitly.
+         * @enum {string}
+         */
+        WorkspaceLifecycleFilter: "active" | "archived" | "all";
         /** @enum {string} */
         WorkspaceLifecycleState: "active" | "archived";
         /** @enum {string} */
@@ -5469,6 +5596,43 @@ export interface components {
         };
         /** @enum {string} */
         WorkspaceSurface: "standard" | "cowork";
+        /** @enum {string} */
+        WorkspaceUnarchiveBranchStrategy: "recreate_at_sha" | "restore_detached" | "restore_branch_tip";
+        WorkspaceUnarchiveNotice: {
+            kind: components["schemas"]["WorkspaceUnarchiveNoticeKind"];
+            /**
+             * @description The persisted skipped-path list, re-emitted for the
+             *     `partial_capture_*` kinds.
+             */
+            paths?: string[] | null;
+        };
+        /** @enum {string} */
+        WorkspaceUnarchiveNoticeKind: "no_snapshot" | "history_incomplete" | "head_mismatch" | "partial_capture_untracked" | "partial_capture_tracked";
+        /** @enum {string} */
+        WorkspaceUnarchiveScenario: "branch_diverged" | "checked_out_elsewhere" | "snapshot_lost" | "path_occupied";
+        /**
+         * @description The `extra` payload of a `WORKSPACE_UNARCHIVE_SCENARIO` 409. The dialog
+         *     renders its choices from `strategies`, never from client-side inference:
+         *     only the server knows which of the four answers this row can actually take
+         *     (a live path claim, for instance, refuses `overwrite` whatever the client
+         *     sends).
+         */
+        WorkspaceUnarchiveScenarioBody: {
+            /**
+             * @description The occupant's lifecycle, so the dialog can name an exit that is
+             *     actually available ("archive it first" vs "unarchive or delete it").
+             */
+            occupantLifecycle?: string | null;
+            /**
+             * @description Display name of the workspace row occupying the path, for
+             *     `path_occupied`. Absent when no row claims it.
+             */
+            occupantName?: string | null;
+            scenario: components["schemas"]["WorkspaceUnarchiveScenario"];
+            strategies: components["schemas"]["WorkspaceUnarchiveStrategy"][];
+        };
+        /** @enum {string} */
+        WorkspaceUnarchiveStrategy: "recreate_at_sha" | "restore_detached" | "restore_branch_tip" | "overwrite";
         WorktreeBaseFetch: "fetched" | "noRemote" | {
             failed: {
                 message: string;
@@ -9113,7 +9277,9 @@ export interface operations {
     };
     list_workspaces: {
         parameters: {
-            query?: never;
+            query?: {
+                lifecycle?: components["schemas"]["WorkspaceLifecycleFilter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9294,6 +9460,60 @@ export interface operations {
             };
             /** @description Session execution is controlled by an active workflow run */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    archive_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Archived the workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveWorkspaceResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The workspace cannot be archived right now */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Archiving failed; retryable */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11139,6 +11359,60 @@ export interface operations {
                 };
             };
             /** @description Terminal creation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    unarchive_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnarchiveWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Unarchived the workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnarchiveWorkspaceResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The restore needs a decision, or something else holds the workspace */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The restore failed; retryable */
             500: {
                 headers: {
                     [name: string]: unknown;

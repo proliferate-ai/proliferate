@@ -11,7 +11,7 @@ use axum::{
 };
 use serde::Deserialize;
 
-use super::access::{assert_workspace_mutable, assert_workspace_not_retired, map_access_error};
+use super::access::{assert_workspace_exists, assert_workspace_mutable, map_access_error};
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::plans::model::{
@@ -96,7 +96,7 @@ pub async fn get_plan_document(
             .workspace_operation_gate
             .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
             .await;
-        assert_workspace_not_retired(&state, &workspace_id)?;
+        assert_workspace_exists(&state, &workspace_id)?;
         Some(lease)
     } else {
         None

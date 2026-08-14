@@ -1,3 +1,19 @@
+//! Branch-and-HEAD verbs for worktree-backed workspaces.
+//!
+//! Scope note, recorded rather than left for a reader to discover: R2 shipped
+//! `create_branch_at_sha_uniquified`, and R4's spec says R4 "adds no git verb of
+//! its own". Four verbs below (`branch_tip_sha`, `delete_branch_force`,
+//! `point_head_at_branch`, `detach_head_at_sha`) were nonetheless added in R4,
+//! because the unarchive tier table and the `deleteBranch` knob that the same
+//! spec's Contracts section freezes cannot be expressed without them: the tiers
+//! must distinguish a moved branch from a deleted one, the archive flow must
+//! delete an unmerged branch whose worktree is already gone, and the in-place
+//! restore must re-enter HEAD without a checkout or a `reset --hard` that would
+//! fight the snapshot restore. Each one is a thin, single-command primitive with
+//! its policy in the caller. Flagged as scope drift against that sentence for a
+//! founder ruling: either the sentence is amended, or these four move back into
+//! R2's git rung.
+
 use std::path::Path;
 use std::process::Command;
 
@@ -27,6 +43,79 @@ pub fn create_branch_at_sha_uniquified(
         candidate = format!("{desired_branch}-archived-{suffix}");
     }
     anyhow::bail!("could not find a free branch name for '{desired_branch}'")
+}
+
+/// The tip of `branch_name`, or `None` when the branch does not exist. The
+/// scenario tiers ask this about `archived_branch` to tell "the branch moved"
+/// (diverged: prompt) from "the branch is gone" (recreate: no prompt), so a
+/// missing branch has to be a value, not an error.
+pub fn branch_tip_sha(repo_root: &Path, branch_name: &str) -> anyhow::Result<Option<String>> {
+    if !branch_exists(repo_root, branch_name)? {
+        return Ok(None);
+    }
+    branch_sha(repo_root, branch_name).map(Some)
+}
+
+/// `git branch -D`. Force, because archive's branch delete runs after the
+/// worktree that held the branch is already gone, so git's own merged-check
+/// would refuse a perfectly intentional delete of unmerged archived work. The
+/// two policy guards (never the repo default branch, never a branch checked out
+/// at the repo root) live in the caller, where the workspace row is in scope.
+pub fn delete_branch_force(repo_root: &Path, branch_name: &str) -> anyhow::Result<()> {
+    let output = Command::new("git")
+        .args(["branch", "-D", branch_name])
+        .current_dir(repo_root)
+        .output()
+        .map_err(|error| anyhow::anyhow!("git branch -D failed: {error}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git branch -D {branch_name} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+/// Point `workspace_path`'s HEAD at `branch_name` without touching the working
+/// tree or the index.
+///
+/// The archived state is restored by writing whole trees, so the HEAD-only
+/// re-entry of the in-place tier must not run a checkout or a `reset --hard`:
+/// either one would rewrite files the snapshot restore is about to write (or
+/// already wrote), and `reset --hard` would additionally destroy the ignored
+/// heavy state that restoring in place exists to preserve.
+pub fn point_head_at_branch(workspace_path: &Path, branch_name: &str) -> anyhow::Result<()> {
+    let output = Command::new("git")
+        .args(["symbolic-ref", "HEAD", &format!("refs/heads/{branch_name}")])
+        .current_dir(workspace_path)
+        .output()
+        .map_err(|error| anyhow::anyhow!("git symbolic-ref HEAD failed: {error}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git symbolic-ref HEAD refs/heads/{branch_name} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+/// Detach `workspace_path`'s HEAD at `sha`, working tree and index untouched.
+/// `--no-deref` is what makes this write HEAD ITSELF rather than the branch
+/// HEAD currently points at — without it this would silently force-move the
+/// user's branch.
+pub fn detach_head_at_sha(workspace_path: &Path, sha: &str) -> anyhow::Result<()> {
+    let output = Command::new("git")
+        .args(["update-ref", "--no-deref", "HEAD", sha])
+        .current_dir(workspace_path)
+        .output()
+        .map_err(|error| anyhow::anyhow!("git update-ref HEAD failed: {error}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git update-ref --no-deref HEAD {sha} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(())
 }
 
 fn branch_exists(repo_root: &Path, branch_name: &str) -> anyhow::Result<bool> {
@@ -95,8 +184,8 @@ mod tests {
 
     impl TempDirGuard {
         fn new(prefix: &str) -> Self {
-            let path = std::env::temp_dir()
-                .join(format!("anyharness-{prefix}-{}", uuid::Uuid::new_v4()));
+            let path =
+                std::env::temp_dir().join(format!("anyharness-{prefix}-{}", uuid::Uuid::new_v4()));
             fs::create_dir_all(&path).unwrap();
             Self { path }
         }
@@ -128,12 +217,24 @@ mod tests {
     }
 
     fn run(cwd: &std::path::Path, args: &[&str]) {
-        let output = Command::new("git").args(args).current_dir(cwd).output().unwrap();
-        assert!(output.status.success(), "{:?}", String::from_utf8_lossy(&output.stderr));
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{:?}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     fn stdout(cwd: &std::path::Path, args: &[&str]) -> String {
-        let output = Command::new("git").args(args).current_dir(cwd).output().unwrap();
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .unwrap();
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 
