@@ -62,6 +62,10 @@ async fn concurrent_claim_has_one_winner_and_expired_foreign_lease_recovers_once
                 .expect("bounded concurrent SQLite wait");
             let store = CompletionDeliveryStore::new(db);
             barrier.wait();
+            // Retry on a time budget, not an iteration count: yield_now-style
+            // spinning burns all 1,000 attempts in well under a millisecond on
+            // a busy 2-vCPU CI runner, faster than the winner's write
+            // transaction commits on CI disk.
             let claimed = (0..1_000)
                 .find_map(|_| {
                     match store.claim_next_due(
@@ -71,7 +75,7 @@ async fn concurrent_claim_has_one_winner_and_expired_foreign_lease_recovers_once
                     ) {
                         Ok(claimed) => Some(claimed),
                         Err(error) if sqlite_is_busy(&error) => {
-                            std::thread::yield_now();
+                            std::thread::sleep(std::time::Duration::from_millis(2));
                             None
                         }
                         Err(error) => panic!("concurrent claim: {error:#}"),
