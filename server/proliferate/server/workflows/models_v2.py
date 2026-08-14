@@ -25,6 +25,7 @@ from proliferate.server.workflows.models import (
     WorkflowInvocationScalar,
     WorkflowInvocationWireModel,
     WorkflowWireModel,
+    workflow_definition_response,
 )
 
 NODE_ID_CONSTRAINTS = StringConstraints(
@@ -213,3 +214,11 @@ def workflow_invocation_response_v2(
     value: WorkflowInvocationSnapshot,
 ) -> WorkflowInvocationResponseV2:
     return WorkflowInvocationResponseV2.model_validate(value.invocation_json)
+
+
+def workflow_definition_response_any(
+    value: WorkflowDefinitionSnapshot,
+) -> WorkflowDefinitionResponse | WorkflowDefinitionResponseV2:
+    if value.schema_version == 2:
+        return workflow_definition_response_v2(value)
+    return workflow_definition_response(value)

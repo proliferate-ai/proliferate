@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.db.store.workflow_definitions import WorkflowDefinitionSnapshot
 from proliferate.server.workflows.access import (
     WorkflowDefinitionDependency,
     WorkflowInvocationDependency,
@@ -48,6 +47,7 @@ from proliferate.server.workflows.models_v2 import (
     WorkflowDefinitionUpdateRequestV2,
     WorkflowInvocationCreateRequestV2,
     WorkflowInvocationResponseV2,
+    workflow_definition_response_any,
     workflow_definition_response_v2,
     workflow_invocation_response_v2,
 )
@@ -65,15 +65,6 @@ from proliferate.server.workflows.service_v2 import (
     update_workflow_definition_v2,
 )
 
-
-def _definition_response(
-    value: WorkflowDefinitionSnapshot,
-) -> WorkflowDefinitionResponse | WorkflowDefinitionResponseV2:
-    if value.schema_version == 2:
-        return workflow_definition_response_v2(value)
-    return workflow_definition_response(value)
-
-
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 invocations_router = APIRouter(prefix="/workflow-invocations", tags=["workflow-invocations"])
 
@@ -89,7 +80,7 @@ async def list_workflow_definitions_endpoint(
 ) -> WorkflowDefinitionListAnyResponse:
     values = await list_workflow_definitions(db, user_id=user.id)
     return WorkflowDefinitionListAnyResponse(
-        workflows=[_definition_response(value) for value in values]
+        workflows=[workflow_definition_response_any(value) for value in values]
     )
 
 
@@ -144,7 +135,7 @@ async def get_workflow_run_eligibility_endpoint(
 async def get_workflow_definition_endpoint(
     definition: WorkflowDefinitionDependency,
 ) -> WorkflowDefinitionResponse | WorkflowDefinitionResponseV2:
-    return _definition_response(definition)
+    return workflow_definition_response_any(definition)
 
 
 @router.put(
