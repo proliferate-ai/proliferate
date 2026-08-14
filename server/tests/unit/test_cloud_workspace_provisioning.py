@@ -27,6 +27,8 @@ def _repo_environment() -> RepoEnvironmentValue:
         default_branch="main",
         setup_script="",
         run_command="",
+        archive_script="",
+        rerun_setup_on_unarchive=True,
         created_at=now,
         updated_at=now,
     )

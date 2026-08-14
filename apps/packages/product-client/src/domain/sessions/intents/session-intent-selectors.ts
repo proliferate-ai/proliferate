@@ -345,3 +345,34 @@ function isActivePendingPromptMutationIntent(
     || intent.status === "dispatching"
     || intent.status === "accepted";
 }
+
+/**
+ * Newest prompt-submission stamp, feeding the stick-to-bottom engine's submit
+ * re-pin. Every real submit enqueues a send_prompt intent with a fresh
+ * createdAt (the session-level optimistic prompt covers surfaces that inject
+ * one directly), so the maximum rises exactly once per send. Consumers must
+ * treat only an increase as a submit: delivery or dismissal can remove the
+ * newest entry and lower the maximum.
+ */
+export function lastPromptSubmittedAtMs(
+  entries: readonly PromptOutboxEntry[],
+  optimisticPrompt: PendingPromptEntry | null,
+): number | null {
+  let latest: number | null = null;
+  for (const entry of entries) {
+    const createdAtMs = Date.parse(entry.createdAt);
+    if (!Number.isNaN(createdAtMs) && (latest === null || createdAtMs > latest)) {
+      latest = createdAtMs;
+    }
+  }
+  const optimisticQueuedAtMs = optimisticPrompt
+    ? Date.parse(optimisticPrompt.queuedAt)
+    : Number.NaN;
+  if (
+    !Number.isNaN(optimisticQueuedAtMs)
+    && (latest === null || optimisticQueuedAtMs > latest)
+  ) {
+    latest = optimisticQueuedAtMs;
+  }
+  return latest;
+}

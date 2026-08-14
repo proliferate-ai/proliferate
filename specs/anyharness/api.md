@@ -142,9 +142,25 @@ entirely (`Path(id)` is already the input). The outbound `*_response()`
 constructor always exists — that is where wire stability lives.
 
 If a handler contains product sequencing, move that sequence to the owning
-domain `runtime.rs` or `service.rs`. Migration exception:
-`workspaces_lifecycle.rs` implements the retire/cleanup state machine inline
-(three copies with retention); target is a workspaces lifecycle service.
+domain `runtime.rs` or `service.rs`.
+
+`workspaces_lifecycle.rs` is the archive/unarchive pair, and it is the stanza
+with nothing added: each handler authorizes, maps the request body into the
+domain's own options type, calls one use case on
+`state.workspace_archive_service`, and maps the outcome back. The whole archive
+ordering story — quiesce, capture, the flip, the detached tail — lives in
+`domains/workspaces/archive/`, so neither handler branches on anything. Both
+take an OPTIONAL body so a bare `POST` with no `Content-Type` still converges,
+because the request that matters most (a re-POST that finishes an interrupted
+cleanup) is the one a human is most likely to issue by hand.
+
+Their typed refusals ride `ProblemDetails.extra`, the one structured extension
+slot: `WORKSPACE_UNARCHIVE_SCENARIO` carries the scenario body with its
+`strategies` list, and `WORKSPACE_GIT_LOCKED` carries the offending lock
+`file`. Before `extra` existed, a client needing either had to parse the human
+sentence in `detail`. The SDK passes `extra` through untouched — the code→shape
+table lives next to the status mapping in
+`workspaces_lifecycle_errors.rs`.
 
 ### `sse/**`
 

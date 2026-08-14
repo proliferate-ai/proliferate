@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
+import { setAppNavigate } from "#product/lib/workflows/app/app-navigate-handoff";
 import { WorkspacesPage } from "#product/pages/WorkspacesPage";
 import { AppCommandActionsProvider } from "#product/providers/AppCommandActionsProvider";
 import {
@@ -18,8 +19,7 @@ const mocks = vi.hoisted(() => ({
   createLocalWorkspaceAndEnter: vi.fn(),
   createWorktreeAndEnter: vi.fn(),
   openWorkspaceSession: vi.fn(),
-  retireWorkspace: vi.fn(),
-  retryCleanup: vi.fn(),
+  purgeWorkspace: vi.fn(),
   selectWorkspace: vi.fn(),
   newWorktreeCommand: vi.fn(),
 }));
@@ -82,10 +82,9 @@ vi.mock("#product/hooks/workspaces/workflows/use-workspace-entry-actions", () =>
   }),
 }));
 
-vi.mock("#product/hooks/workspaces/workflows/use-workspace-retire-actions", () => ({
-  useWorkspaceRetireActions: () => ({
-    markDone: mocks.retireWorkspace,
-    retryCleanup: mocks.retryCleanup,
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-purge-actions", () => ({
+  useWorkspacePurgeActions: () => ({
+    markDone: mocks.purgeWorkspace,
   }),
 }));
 
@@ -125,10 +124,22 @@ afterEach(() => {
   cleanup();
 });
 
+// Mirrors AuthenticatedAppHost, which registers the router navigate for
+// callback-only `navigateApp` consumers like goToTopLevelRoute.
+function RegisterAppNavigate() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    setAppNavigate(navigate);
+    return () => setAppNavigate(null);
+  }, [navigate]);
+  return null;
+}
+
 describe("WorkspacesPage creation", () => {
   it("enters Home's repository worktree flow before creating a workspace", async () => {
     render(
       <MemoryRouter initialEntries={["/workspaces"]}>
+        <RegisterAppNavigate />
         <AppCommandActionsProvider value={appCommands()}>
           <Routes>
             <Route path="/workspaces" element={<WorkspacesPage />} />

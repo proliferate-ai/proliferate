@@ -54,23 +54,7 @@ pub enum WorkspaceSurface {
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceLifecycleState {
     Active,
-    Retired,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkspaceCleanupState {
-    None,
-    Pending,
-    Complete,
-    Failed,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkspaceCleanupOperation {
-    Retire,
-    Purge,
+    Archived,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -134,15 +118,20 @@ pub struct Workspace {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     pub lifecycle_state: WorkspaceLifecycleState,
-    pub cleanup_state: WorkspaceCleanupState,
+    /// When this workspace was archived; the archived settings list orders by
+    /// it. Additive-optional, so a client that predates archiving reads the
+    /// same body it always did.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
+    pub archived_at: Option<String>,
+    /// HEAD at snapshot time. `None` on an archived row means "never
+    /// snapshotted" (an absorbed pre-archiving row), which is a different
+    /// restore shape, not a missing value.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_error_message: Option<String>,
+    pub archived_head_sha: Option<String>,
+    /// The branch HEAD actually held at snapshot time. `None` alongside a
+    /// present `archived_head_sha` is the detached-at-archive marker.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_failed_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_attempted_at: Option<String>,
+    pub archived_branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_summary: Option<WorkspaceExecutionSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -195,85 +184,17 @@ pub struct WorkspaceRetireBlocker {
     pub operation: Option<crate::v1::git::GitOperation>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspaceRetirePreflightResponse {
-    pub workspace_id: String,
-    pub workspace_kind: WorkspaceKind,
-    pub lifecycle_state: WorkspaceLifecycleState,
-    pub cleanup_state: WorkspaceCleanupState,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
-    pub can_retire: bool,
-    pub materialized: bool,
-    pub merged_into_base: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub base_ref: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub base_oid: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub head_oid: Option<String>,
-    pub head_matches_base: bool,
-    pub readiness_fingerprint: String,
-    pub blockers: Vec<WorkspaceRetireBlocker>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkspaceRetireOutcome {
-    Retired,
-    AlreadyRetired,
-    Blocked,
-    CleanupFailed,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspaceRetireResponse {
-    pub workspace: Workspace,
-    pub outcome: WorkspaceRetireOutcome,
-    pub preflight: WorkspaceRetirePreflightResponse,
-    pub cleanup_attempted: bool,
-    pub cleanup_succeeded: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_message: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspacePurgePreflightResponse {
-    pub workspace_id: String,
-    pub workspace_kind: WorkspaceKind,
-    pub lifecycle_state: WorkspaceLifecycleState,
-    pub cleanup_state: WorkspaceCleanupState,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
-    pub can_purge: bool,
-    pub materialized: bool,
-    pub blockers: Vec<WorkspaceRetireBlocker>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspacePurgeOutcome {
     Deleted,
-    Blocked,
-    CleanupFailed,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspacePurgeResponse {
     pub outcome: WorkspacePurgeOutcome,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace: Option<Workspace>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preflight: Option<WorkspacePurgePreflightResponse>,
     pub already_deleted: bool,
-    pub cleanup_attempted: bool,
-    pub cleanup_succeeded: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

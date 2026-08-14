@@ -1,4 +1,5 @@
 pub(in crate::live::sessions) mod connection;
+pub(in crate::live::sessions) mod frame_tee;
 pub(in crate::live::sessions) mod inbound;
 pub mod native_session;
 pub mod process;

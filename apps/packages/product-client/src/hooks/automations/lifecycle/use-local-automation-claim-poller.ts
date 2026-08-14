@@ -22,6 +22,8 @@ import {
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { recordAutomationClaimPollFailure } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 const AUTOMATION_LOCAL_EXECUTOR_ID_KEY = "automationLocalExecutorId";
 const LOCAL_EXECUTOR_POLL_MS = 10_000;
@@ -115,7 +117,8 @@ export function useLocalAutomationClaimPoller(args: {
     const loop = () => {
       void tick()
         .catch((error) => {
-          const errorName = error instanceof Error ? error.name : typeof error;
+          const errorName = safeRendererErrorName(error);
+          recordAutomationClaimPollFailure(errorName);
           console.warn("Local automation claim poll failed", { errorName });
         })
         .finally(() => {

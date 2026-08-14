@@ -123,32 +123,11 @@ export function anyHarnessRuntimeWorkspacesKey(
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "workspaces"] as const;
 }
 
-export function anyHarnessWorkspaceRetirePreflightKey(
-  cacheScopeKey: string | null | undefined,
-  workspaceId: string | null | undefined,
-) {
-  return [...anyHarnessWorkspaceKey(cacheScopeKey, workspaceId), "retire", "preflight"] as const;
-}
-
-export function anyHarnessWorkspacePurgePreflightKey(
-  cacheScopeKey: string | null | undefined,
-  workspaceId: string | null | undefined,
-) {
-  return [...anyHarnessWorkspaceKey(cacheScopeKey, workspaceId), "purge", "preflight"] as const;
-}
-
 export function anyHarnessWorktreesInventoryKey(
   runtimeUrl: string | null | undefined,
   cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "worktrees", "inventory"] as const;
-}
-
-export function anyHarnessWorktreesRetentionPolicyKey(
-  runtimeUrl: string | null | undefined,
-  cacheScopeKey: string | null | undefined,
-) {
-  return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "worktrees", "retention-policy"] as const;
 }
 
 export function anyHarnessRepoRootsKey(
@@ -554,8 +533,6 @@ export function anyHarnessWorkspaceQueryKeyRoots(
   return [
     anyHarnessWorkspaceKey(cacheScopeKey, workspaceId),
     anyHarnessWorkspaceMobilityKey(cacheScopeKey, workspaceId),
-    anyHarnessWorkspaceRetirePreflightKey(cacheScopeKey, workspaceId),
-    anyHarnessWorkspacePurgePreflightKey(cacheScopeKey, workspaceId),
     anyHarnessSessionsKey(cacheScopeKey, workspaceId),
     anyHarnessSessionScopeKey(cacheScopeKey, workspaceId),
     anyHarnessPlansKey(cacheScopeKey, workspaceId),

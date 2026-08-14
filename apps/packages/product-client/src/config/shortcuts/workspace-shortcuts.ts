@@ -327,4 +327,13 @@ export const WORKSPACE_SHORTCUTS = {
     match: { kind: "fixed", key: "r", meta: true, shift: false, alt: true },
     allowInInputs: true,
   },
+  archiveWorkspace: {
+    id: "workspace.archive",
+    label: "⌘⇧A",
+    nonMacLabel: "Ctrl+Shift+A",
+    description: "Archive workspace",
+    owner: "js",
+    match: { kind: "fixed-code", code: "KeyA", meta: true, shift: true, alt: false },
+    allowInInputs: true,
+  },
 } as const satisfies Record<string, ShortcutDef>;

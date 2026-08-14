@@ -224,16 +224,13 @@ impl WorkspaceRuntime {
                 "a workspace record already exists for path: {canonical_path}"
             )));
         }
-        if let Some(retired) = self
+        if let Some(archived) = self
             .store
-            .find_retired_incomplete_cleanup_by_path_and_kind(
-                &canonical_path,
-                WorkspaceKind::Worktree,
-            )?
+            .find_archived_by_path_and_kind(&canonical_path, WorkspaceKind::Worktree)?
         {
             return Ok(Some(anyhow::anyhow!(
-                "workspace path still has pending cleanup from retired workspace {}: {}",
-                retired.id,
+                "workspace path is reserved by archived workspace {}: {}",
+                archived.id,
                 canonical_path
             )));
         }

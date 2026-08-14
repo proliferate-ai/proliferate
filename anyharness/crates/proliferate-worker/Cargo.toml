@@ -15,6 +15,7 @@ clap.workspace = true
 dirs.workspace = true
 fs2.workspace = true
 proliferate-runtime-update-protocol.workspace = true
+proliferate-diagnostics-client.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 rusqlite.workspace = true
 serde.workspace = true
@@ -28,6 +29,7 @@ tokio.workspace = true
 toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+proliferate-diagnostics-protocol.workspace = true
 
 [dev-dependencies]
 sentry = { workspace = true, features = ["test"] }

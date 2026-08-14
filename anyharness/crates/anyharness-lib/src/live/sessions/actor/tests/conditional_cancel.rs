@@ -236,6 +236,7 @@ async fn spawn_harness_with_capabilities(
         handle: handle.clone(),
         _acp_shutdown: acp_shutdown,
         child,
+        pending_stop_response: None,
     };
 
     Harness {

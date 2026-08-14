@@ -1,62 +1,74 @@
-import { GitPullRequest } from "#product/primitives/icons/workspace-git";
-import { CircleAlert } from "#product/primitives/icons/status";
+import type { ReactNode } from "react";
+import { Fork } from "#product/primitives/icons/core";
+import { CloudIcon } from "#product/primitives/icons/platform";
+import { GitBranchIcon, GitBranchStatusIcon } from "#product/primitives/icons/workspace-git";
+import { statusDotToneTextClass } from "#product/primitives/StatusDot";
 import { Tooltip } from "#product/primitives/Tooltip";
-import { prStatusCompoundLabel } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
-import type {
-  WorkspaceGitAttention,
-  WorkspaceGitStatus,
-} from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import {
+  SIDEBAR_GIT_IDENTITY_CLOUD_LABEL,
+  SIDEBAR_GIT_IDENTITY_WORKTREE_LABEL,
+  type SidebarWorkspaceGitIdentity,
+} from "#product/lib/domain/workspaces/git-status/sidebar-git-identity";
+
+const IDENTITY_GLYPH_CLASS = "icon-indicator [font-size:var(--text-sidebar-row)]";
 
 interface SidebarWorkspaceGitGlyphProps {
-  status: WorkspaceGitStatus | null;
+  identity: SidebarWorkspaceGitIdentity;
 }
 
 /**
- * Stable PR identity for the sidebar's trailing area. Every row keeps the PR
- * glyph in place: purple when a PR exists, dim when it does not or status is
- * unavailable. Git attention is a separate orange alert so it does not mutate
- * or replace the row's PR identity.
+ * The workspace row's single trailing git-identity glyph.
+ *
+ * Takes the already-resolved identity rather than the raw status: the row
+ * needs the same answer to decide whether the cell exists at all, and
+ * resolving it a second time here invited the two to disagree.
+ *
+ * Git attention is NOT rendered here. Failing checks and requested changes
+ * are already the state dot's colour on an open PR, so repeating them beside
+ * the glyph said the same thing twice; the attention the dot cannot carry is
+ * an alert in the row's status cell instead.
  */
-export function SidebarWorkspaceGitGlyph({ status }: SidebarWorkspaceGitGlyphProps) {
-  const hasPullRequest = Boolean(status?.pr && status.pr.state !== "none");
-  const pullRequestLabel = hasPullRequest
-    ? prStatusCompoundLabel(status) ?? "Pull request"
-    : status?.pr?.state === "none"
-      ? "No pull request"
-      : "Pull request status unavailable";
-  const attentionLabel = gitAttentionLabel(status?.attention ?? "none");
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1">
-      <Tooltip content={pullRequestLabel} className="inline-flex items-center justify-center">
-        <span role="img" aria-label={pullRequestLabel}>
-          <GitPullRequest
-            className={`icon-indicator [font-size:var(--text-sidebar-row)] ${hasPullRequest
-              ? "text-sidebar-status-worktree"
-              : "text-sidebar-muted-foreground/60"
-            }`}
+export function SidebarWorkspaceGitGlyph({ identity }: SidebarWorkspaceGitGlyphProps) {
+  switch (identity.kind) {
+    case "merged_pull_request":
+      return (
+        <IdentityGlyph label={identity.label}>
+          <GitBranchIcon className={`${IDENTITY_GLYPH_CLASS} text-sidebar-status-worktree`} />
+        </IdentityGlyph>
+      );
+    case "pull_request":
+      return (
+        <IdentityGlyph label={identity.label}>
+          <GitBranchStatusIcon
+            className={`${IDENTITY_GLYPH_CLASS} text-sidebar-muted-foreground`}
+            dotClassName={statusDotToneTextClass(identity.tone)}
+            dotFill={identity.fill}
           />
-        </span>
-      </Tooltip>
-      {attentionLabel ? (
-        <Tooltip content={attentionLabel} className="inline-flex items-center justify-center">
-          <span role="img" aria-label={attentionLabel}>
-            <CircleAlert className="icon-indicator text-sidebar-status-waiting [font-size:var(--text-sidebar-row)]" />
-          </span>
-        </Tooltip>
-      ) : null}
-    </span>
-  );
+        </IdentityGlyph>
+      );
+    case "worktree":
+      return (
+        <IdentityGlyph label={SIDEBAR_GIT_IDENTITY_WORKTREE_LABEL}>
+          {/* Horizontal fork: the branch-off reading, rhyming with the
+              Workflows nav glyph rather than inventing a second one. */}
+          <Fork className={`${IDENTITY_GLYPH_CLASS} rotate-90 text-sidebar-muted-foreground`} />
+        </IdentityGlyph>
+      );
+    case "cloud":
+      return (
+        <IdentityGlyph label={SIDEBAR_GIT_IDENTITY_CLOUD_LABEL}>
+          <CloudIcon className={`${IDENTITY_GLYPH_CLASS} text-sidebar-muted-foreground`} />
+        </IdentityGlyph>
+      );
+  }
 }
 
-function gitAttentionLabel(attention: WorkspaceGitAttention): string | null {
-  switch (attention) {
-    case "conflicts":
-      return "Merge conflicts in worktree";
-    case "ci_failing":
-      return "Pull request checks failing";
-    case "changes_requested":
-      return "Pull request changes requested";
-    case "none":
-      return null;
-  }
+function IdentityGlyph({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Tooltip content={label} className="inline-flex items-center justify-center">
+      <span role="img" aria-label={label} className="inline-flex items-center justify-center">
+        {children}
+      </span>
+    </Tooltip>
+  );
 }

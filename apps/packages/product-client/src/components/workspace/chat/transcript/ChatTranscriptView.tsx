@@ -88,7 +88,7 @@ export function ChatTranscriptView({
         isSessionBusy={
           model.sessionViewState === "working" || model.sessionViewState === "needs_input"
         }
-        pendingPromptText={model.visibleOptimisticPrompt?.text ?? null}
+        lastPromptSubmittedAtMs={model.lastPromptSubmittedAtMs}
         onLoadOlderHistory={model.onLoadOlderHistory}
         onScrollSample={onScrollSample}
         renderRow={renderVirtualRow}

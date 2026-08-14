@@ -17,6 +17,7 @@ export type {
   AnyHarnessTimingObserver,
   AnyHarnessTimingScope,
 } from "./client/core.js";
+export { supportWindowResponseBytes } from "./client/support-window-response-bytes.js";
 
 export type {
   HealthResponse,
@@ -153,7 +154,6 @@ export type {
   WorkspaceSurface,
   WorkspaceExecutionPhase,
   WorkspaceExecutionSummary,
-  WorkspaceCleanupOperation,
   OriginKind,
   OriginEntrypoint,
   OriginContext,
@@ -179,12 +179,22 @@ export type {
   WorkspaceRetireBlockerCode,
   WorkspaceRetireBlockerSeverity,
   WorkspaceRetireBlocker,
-  WorkspaceRetireOutcome,
-  WorkspaceRetirePreflightResponse,
-  WorkspaceRetireResponse,
   WorkspacePurgeOutcome,
-  WorkspacePurgePreflightResponse,
   WorkspacePurgeResponse,
+  WorkspaceLifecycleFilter,
+  ArchiveWorkspaceRequest,
+  WorkspaceArchiveNoticeKind,
+  WorkspaceArchiveNotice,
+  ArchiveWorkspaceResponse,
+  WorkspaceUnarchiveBranchStrategy,
+  UnarchiveWorkspaceRequest,
+  WorkspaceUnarchiveNoticeKind,
+  WorkspaceUnarchiveNotice,
+  UnarchiveWorkspaceResponse,
+  WorkspaceUnarchiveScenario,
+  WorkspaceUnarchiveStrategy,
+  WorkspaceUnarchiveScenarioBody,
+  WorkspaceGitLockedBody,
 } from "./types/workspaces.js";
 
 export type {
@@ -197,11 +207,6 @@ export type {
   WorktreeInventoryRow,
   WorktreeInventoryResponse,
   PruneOrphanWorktreeRequest,
-  WorktreeRetentionPolicy,
-  UpdateWorktreeRetentionPolicyRequest,
-  WorktreeRetentionRowOutcome,
-  WorktreeRetentionRunRow,
-  RunWorktreeRetentionResponse,
 } from "./types/worktrees.js";
 
 export type {
@@ -213,6 +218,12 @@ export type {
   SessionExecutionSummary,
   SessionActionCapabilities,
   Session,
+  AnyHarnessBoundedWindowMetaV1,
+  AnyHarnessSessionSupportWindowV1,
+  AnyHarnessEventSupportWindowV1,
+  AnyHarnessRawNotificationSupportWindowV1,
+  ListSupportSessionWindowOptions,
+  ListSupportEvidenceWindowOptions,
   SessionLinkSummary,
   SessionMcpEnvVar,
   RawSessionConfigValue,

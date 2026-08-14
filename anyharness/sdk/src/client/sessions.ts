@@ -9,7 +9,12 @@ import type {
   ForkSessionRequest,
   ForkSessionResponse,
   GetSessionLiveConfigResponse,
+  AnyHarnessEventSupportWindowV1,
+  AnyHarnessRawNotificationSupportWindowV1,
+  AnyHarnessSessionSupportWindowV1,
   ListSessionEventsOptions,
+  ListSupportEvidenceWindowOptions,
+  ListSupportSessionWindowOptions,
   McpElicitationUrlRevealResponse,
   PromptSessionRequest,
   PromptSessionResponse,
@@ -39,6 +44,12 @@ import {
 } from "../types/sessions.js";
 import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
 
+// Loaded on demand, not statically: the support-window validators are ~1.1k
+// lines that only a support-report flow ever reaches, and `SessionsClient` sits
+// in every bundle's entry chunk. A static import puts them on the /login
+// first-load path and blows the runtime budget gate.
+const supportWindows = () => import("./support-windows.js");
+
 export class SessionsClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
@@ -66,6 +77,14 @@ export class SessionsClient {
         withTimingCategory(options, "session.list"),
       )
     ).map(normalizeSession);
+  }
+
+  async listSupportWindow(
+    workspaceId: string,
+    options: ListSupportSessionWindowOptions,
+  ): Promise<AnyHarnessSessionSupportWindowV1> {
+    const { listSupportSessionWindow } = await supportWindows();
+    return listSupportSessionWindow(this.transport, workspaceId, options);
   }
 
   async get(sessionId: string, options?: AnyHarnessRequestOptions): Promise<Session> {
@@ -451,6 +470,14 @@ export class SessionsClient {
     return envelopes.map(normalizeSessionEventEnvelope);
   }
 
+  async listEventsSupportWindow(
+    sessionId: string,
+    options: ListSupportEvidenceWindowOptions,
+  ): Promise<AnyHarnessEventSupportWindowV1> {
+    const { listSupportEventWindow } = await supportWindows();
+    return listSupportEventWindow(this.transport, sessionId, options);
+  }
+
   async listRawNotifications(
     sessionId: string,
     options?: ListSessionEventsOptions,
@@ -463,6 +490,14 @@ export class SessionsClient {
     return this.transport.get<SessionRawNotificationEnvelope[]>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/raw-notifications${query}`,
     );
+  }
+
+  async listRawNotificationsSupportWindow(
+    sessionId: string,
+    options: ListSupportEvidenceWindowOptions,
+  ): Promise<AnyHarnessRawNotificationSupportWindowV1> {
+    const { listSupportRawNotificationWindow } = await supportWindows();
+    return listSupportRawNotificationWindow(this.transport, sessionId, options);
   }
 
   async resolveInteraction(

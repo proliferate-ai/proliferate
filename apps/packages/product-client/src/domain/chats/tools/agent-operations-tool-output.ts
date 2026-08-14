@@ -153,8 +153,8 @@ function projectKnownWorkspace(
   }
   const kind = readString(workspace, "kind") === "worktree" ? "worktree" : "local";
   const surface = readString(workspace, "surface") === "cowork" ? "cowork" : "standard";
-  const lifecycleState = readString(workspace, "lifecycleState") === "retired"
-    ? "retired"
+  const lifecycleState = readString(workspace, "lifecycleState") === "archived"
+    ? "archived"
     : "active";
   return {
     id,
@@ -170,11 +170,6 @@ function projectKnownWorkspace(
     origin: (workspace.origin ?? null) as Workspace["origin"],
     creatorContext: (workspace.creatorContext ?? null) as Workspace["creatorContext"],
     executionSummary: null,
-    cleanupState: "none",
-    cleanupOperation: null,
-    cleanupAttemptedAt: null,
-    cleanupFailedAt: null,
-    cleanupErrorMessage: null,
     createdAt,
     updatedAt,
   };

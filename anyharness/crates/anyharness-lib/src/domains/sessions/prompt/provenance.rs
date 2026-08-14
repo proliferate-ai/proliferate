@@ -66,6 +66,19 @@ pub(crate) enum PromptProvenance {
 }
 
 impl PromptProvenance {
+    /// Stable low-cardinality label for observability. Mirrors the serde
+    /// `kind` tag so a record reads the same as the persisted provenance.
+    pub(crate) fn kind_label(&self) -> &'static str {
+        match self {
+            PromptProvenance::AgentSession { .. } => "agent_session",
+            PromptProvenance::Automation { .. } => "automation",
+            PromptProvenance::SubagentWake { .. } => "subagent_wake",
+            PromptProvenance::LinkWake { .. } => "link_wake",
+            PromptProvenance::ReviewFeedback { .. } => "review_feedback",
+            PromptProvenance::System { .. } => "system",
+        }
+    }
+
     pub(crate) fn to_public(&self) -> Option<PublicPromptProvenance> {
         match self {
             PromptProvenance::AgentSession {

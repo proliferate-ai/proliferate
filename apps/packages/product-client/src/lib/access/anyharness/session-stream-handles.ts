@@ -1,5 +1,10 @@
 import type { SessionStreamHandle } from "@anyharness/sdk";
 import { clearSessionReconnectTimer } from "#product/lib/workflows/sessions/session-reconnect-state";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 export interface ManagedSessionStreamHandle extends SessionStreamHandle {
   flushPendingEvents?: () => void;
@@ -116,11 +121,31 @@ function flushAndCloseHandle(sessionId: string, handle: ManagedSessionStreamHand
   try {
     handle.flushPendingEvents?.();
   } catch (error) {
+    recordSessionStreamFailure("flush_failed", sessionId, error);
     console.error("Failed to flush session stream before close", { sessionId, error });
   }
   try {
     handle.close();
   } catch (error) {
+    recordSessionStreamFailure("close_failed", sessionId, error);
     console.error("Failed to close session stream", { sessionId, error });
   }
+}
+
+function recordSessionStreamFailure(
+  stage: "flush_failed" | "close_failed",
+  sessionId: string,
+  error: unknown,
+): void {
+  recordRendererDiagnostic({
+    name: `renderer.session_stream.${stage}`,
+    severity: "error",
+    kind: "transport",
+    privacy: "operational",
+    correlation: { sessionId },
+    fields: {
+      error_name: diagnosticField(safeRendererErrorName(error), "operational"),
+    },
+    errorClassification: `session_stream_${stage}`,
+  });
 }

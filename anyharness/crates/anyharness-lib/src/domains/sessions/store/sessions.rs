@@ -108,11 +108,6 @@ impl SessionStore {
             .with_conn(|conn| estimate_workspace_storage_bytes_in_tx(conn, workspace_id))
     }
 
-    pub(crate) fn list_workspace_session_activity(&self) -> anyhow::Result<Vec<(String, String)>> {
-        self.db
-            .with_conn(|conn| list_workspace_session_activity_in_tx(conn))
-    }
-
     pub fn list_all(&self) -> anyhow::Result<Vec<SessionRecord>> {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare("SELECT * FROM sessions ORDER BY updated_at DESC")?;
@@ -411,21 +406,6 @@ pub(crate) fn list_session_ids_by_workspace_in_tx(
 ) -> rusqlite::Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT id FROM sessions WHERE workspace_id = ?1")?;
     let rows = stmt.query_map([workspace_id], |row| row.get::<_, String>(0))?;
-    rows.collect()
-}
-
-pub(crate) fn list_workspace_session_activity_in_tx(
-    conn: &rusqlite::Connection,
-) -> rusqlite::Result<Vec<(String, String)>> {
-    let mut stmt = conn.prepare(
-        "SELECT workspace_id,
-                MAX(MAX(COALESCE(last_prompt_at, ''), COALESCE(updated_at, ''))) AS session_at
-           FROM sessions
-          GROUP BY workspace_id",
-    )?;
-    let rows = stmt.query_map([], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-    })?;
     rows.collect()
 }
 

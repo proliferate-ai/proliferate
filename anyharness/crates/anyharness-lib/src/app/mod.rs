@@ -5,7 +5,6 @@ mod mobility;
 mod product_mcp;
 mod sessions;
 mod workflows;
-mod workspaces;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -72,7 +71,10 @@ use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::archive::quiesce::QuiescePlanes;
+use crate::domains::workspaces::archive::WorkspaceArchiveService;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
+use crate::domains::workspaces::deletion::purge::WorkspacePurgeService;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::domains::workspaces::files_runtime::{
     WorkspaceFileProtection, WorkspaceFileProtectionRegistry, WorkspaceFilesRuntime,
@@ -80,16 +82,10 @@ use crate::domains::workspaces::files_runtime::{
 use crate::domains::workspaces::inventory::WorktreeInventoryService;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::options::WorkspaceOptionRuntime;
-use crate::domains::workspaces::purge::WorkspacePurgeService;
 use crate::domains::workspaces::restore_runtime::RestoreWorktreeRuntime;
-use crate::domains::workspaces::retention::WorkspaceRetentionService;
-use crate::domains::workspaces::retire::WorkspaceRetireService;
-use crate::domains::workspaces::retire_preflight::RetirePreflightChecker;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::domains::workspaces::setup_runtime::WorkspaceSetupRuntime;
-use crate::domains::workspaces::store::{
-    WorkspaceAccessStore, WorkspaceStore, WorktreeRetentionPolicyStore,
-};
+use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
 use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::live::sessions::LiveSessionManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
@@ -167,10 +163,8 @@ pub struct AppState {
     pub workspace_access_gate: Arc<WorkspaceAccessGate>,
     pub workspace_operation_gate: Arc<WorkspaceOperationGate>,
     pub checkout_deletion_gate: Arc<CheckoutDeletionGate>,
-    pub retire_preflight_checker: Arc<RetirePreflightChecker>,
     pub workspace_purge_service: Arc<WorkspacePurgeService>,
-    pub workspace_retire_service: Arc<WorkspaceRetireService>,
-    pub workspace_retention_service: Arc<WorkspaceRetentionService>,
+    pub workspace_archive_service: Arc<WorkspaceArchiveService>,
     pub worktree_inventory_service: Arc<WorktreeInventoryService>,
     pub mobility_runtime: Arc<MobilityRuntime>,
     pub materialization_runtime: Arc<MaterializationRuntime>,
@@ -213,7 +207,6 @@ impl AppState {
         );
         let workspace_delete_workflow = WorkspaceDeleteWorkflow::with_participants(
             db.clone(),
-            session_delete_workflow.clone(),
             vec![Arc::new(CoworkDeleteParticipant)],
         );
         let repo_root_service = Arc::new(RepoRootService::new(RepoRootStore::new(db.clone())));
@@ -470,40 +463,46 @@ impl AppState {
         );
         let workflow_run_runtime = workflow_phase_two.run_runtime;
         let workflow_workspace_runtime = workflow_phase_two.workspace_runtime;
-        // Destructive workspace family: shared preflight checker + purge/retire.
-        let destruction =
-            workspaces::wire_workspace_destruction(workspaces::WorkspaceDestructionDeps {
-                db: db.clone(),
-                runtime_home: runtime_home.clone(),
-                workspace_runtime: workspace_runtime.clone(),
-                workspace_access_gate: workspace_access_gate.clone(),
-                workspace_operation_gate: workspace_operation_gate.clone(),
-                checkout_deletion_gate: checkout_deletion_gate.clone(),
-                workspace_delete_workflow: workspace_delete_workflow.clone(),
-                session_runtime: session_runtime.clone(),
-                session_service: session_service.clone(),
-                session_admission: session_admission.clone(),
-                terminal_service: terminal_service.clone(),
-            });
-        let retire_preflight_checker = destruction.preflight_checker;
-        let workspace_purge_service = destruction.purge;
-        let workspace_retire_service = destruction.retire;
-        let workspace_retention_service = Arc::new(WorkspaceRetentionService::new(
-            workspace_runtime.clone(),
+        // Destructive workspace family: the archive orchestrator and the
+        // row-dies-last purge orchestrator, constructed directly here. There
+        // is no wiring family struct left for this pair once the shared
+        // retire preflight checker and the old tombstone purge are gone —
+        // `app/workspaces.rs` died with them (R5).
+        let workspace_archive_service = Arc::new(WorkspaceArchiveService::new(
+            WorkspaceStore::new(db.clone()),
+            RepoRootStore::new(db.clone()),
+            workspace_operation_gate.clone(),
+            QuiescePlanes {
+                setup: workspace_setup_runtime.clone(),
+                sessions: session_runtime.clone(),
+                terminals: terminal_service.clone(),
+            },
+            session_service.clone(),
+            runtime_home.clone(),
+        ));
+        let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
             WorkspaceStore::new(db.clone()),
             SessionStore::new(db.clone()),
-            TerminalStore::new(db.clone()),
-            WorktreeRetentionPolicyStore::new(db.clone()),
-            retire_preflight_checker.clone(),
+            session_delete_workflow.clone(),
+            workspace_setup_runtime.clone(),
+            session_runtime.clone(),
+            terminal_service.clone(),
+            (*repo_root_service).clone(),
             workspace_operation_gate.clone(),
-            checkout_deletion_gate.clone(),
+            workspace_archive_service.clone(),
             session_admission.clone(),
             runtime_home.clone(),
         ));
+        // The leftover sweep's boot pass and its slow periodic tick. Suppressed
+        // under `cfg(test)` for the same reason `automatic_poke_engine` is: a
+        // background pass that removes directories would otherwise land in the
+        // middle of suites that build real worktrees and count what is on disk.
+        // In production boots it runs unconditionally.
+        #[cfg(not(test))]
+        workspace_archive_service.clone().spawn_startup_pass();
         let workspace_worktree_runtime = Arc::new(WorkspaceWorktreeRuntime::new(
             workspace_runtime.clone(),
             workspace_setup_runtime.clone(),
-            workspace_retention_service.clone(),
         ));
         let workspace_option_runtime = Arc::new(WorkspaceOptionRuntime::new(
             repo_root_service.clone(),
@@ -584,8 +583,6 @@ impl AppState {
         // Drive the emulated-loop scheduler (fires only live+idle sessions).
         #[cfg(not(test))]
         loop_scheduler.clone().spawn();
-        #[cfg(not(test))]
-        workspace_retention_service.clone().spawn_startup_pass();
         // Hydrate the bundled agent seed (if pending) and run an installed-only
         // reconcile against the catalog pins — desktop sidecar AND cloud workers,
         // non-blocking + best-effort. See AgentRuntime::spawn_startup_pass.
@@ -631,10 +628,8 @@ impl AppState {
             workspace_access_gate,
             workspace_operation_gate,
             checkout_deletion_gate,
-            retire_preflight_checker,
             workspace_purge_service,
-            workspace_retire_service,
-            workspace_retention_service,
+            workspace_archive_service,
             worktree_inventory_service,
             mobility_runtime,
             materialization_runtime,

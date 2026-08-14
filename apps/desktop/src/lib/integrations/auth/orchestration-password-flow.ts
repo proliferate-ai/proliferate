@@ -7,6 +7,7 @@ import { signInWithDesktopPassword } from "@/lib/integrations/auth/proliferate-a
 import {
   applyAuthenticatedState,
   applyDevBypassState,
+  clearPublishedAuthIssue,
   toError,
   type AuthOrchestrationDeps,
 } from "./orchestration-effects";
@@ -25,6 +26,10 @@ export async function signInWithPassword(
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
+  // A retry after a failed attempt must not leave the previous attempt's
+  // published issue rendered underneath the new one.
+  clearPublishedAuthIssue(deps);
+
   if (isDevAuthBypassed()) {
     applyDevBypassState(deps);
     return {

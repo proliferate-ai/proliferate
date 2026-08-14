@@ -4,6 +4,9 @@ import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { Button } from "#product/primitives/Button";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { useTerminalActions } from "#product/hooks/terminals/workflows/use-terminal-actions";
+import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { isWorkspaceArchivedRefusal } from "#product/lib/domain/workspaces/archived/workspace-archived-refusal";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function TerminalCommandFloatingAction({
@@ -16,6 +19,8 @@ export function TerminalCommandFloatingAction({
   const showErrorToast = useToastStore((state) => state.showError);
   const rerunSetup = useRerunSetupMutation();
   const { rerunCommand } = useTerminalActions();
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const [isRerunning, setIsRerunning] = useState(false);
   const command = terminal.commandRun?.command?.trim() ?? "";
   const isSetup = terminal.purpose === "setup";
@@ -42,6 +47,13 @@ export function TerminalCommandFloatingAction({
             : rerunCommand(terminal.id, workspaceId, command);
           void operation
             .catch((error) => {
+              // WORKSPACE_ARCHIVED (§3.11): the server is correct, only the
+              // client was stale — refresh the listing and raise no failure
+              // toast.
+              if (isWorkspaceArchivedRefusal(error)) {
+                void invalidateWorkspaceCollections();
+                return;
+              }
               const message = error instanceof Error ? error.message : String(error);
               showErrorToast({
                 // Two literal headlines, because the two commands are different

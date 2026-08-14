@@ -98,6 +98,27 @@ export function useMainScreenRightPanel({
   );
   const rightPanelDurableState = rightPanelSessionDurableState
     ?? persistedRightPanelDurableState;
+  // External openers (chat file links, attachment previews) reveal the frame
+  // by writing the durable store (`setRightPanelOpenForWorkspace`). Once a
+  // session override exists those writes would stay invisible behind it, so a
+  // same-workspace change of the persisted open flag folds into the override.
+  // A workspaceUiKey change only re-baselines: the frame stays shell-level
+  // across workspace switches.
+  const persistedOpenBaselineRef = useRef({
+    key: workspaceUiKey,
+    open: persistedRightPanelDurableState.open,
+  });
+  useEffect(() => {
+    const baseline = persistedOpenBaselineRef.current;
+    const open = persistedRightPanelDurableState.open;
+    persistedOpenBaselineRef.current = { key: workspaceUiKey, open };
+    if (baseline.key !== workspaceUiKey || baseline.open === open) {
+      return;
+    }
+    setRightPanelSessionDurableState((session) => (
+      session === null || session.open === open ? session : { ...session, open }
+    ));
+  }, [persistedRightPanelDurableState.open, workspaceUiKey]);
   const rightPanelMaterializedState = materializedWorkspaceId
     ? rightPanelMaterializedByWorkspace[materializedWorkspaceId]
       ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE

@@ -174,6 +174,13 @@ pub(super) fn publish_session_event_strict(
             .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))?;
     }
     *next_seq += 1;
+    tracing::info!(
+        target: "anyharness.session.event_injected",
+        session_id = %session_id,
+        seq = seq,
+        event_type = %record.event_type,
+        "event_sink: injecting runtime event"
+    );
     let _ = event_tx.send(envelope.clone());
     Ok(envelope)
 }

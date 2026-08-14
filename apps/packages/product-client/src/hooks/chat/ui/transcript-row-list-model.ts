@@ -54,7 +54,8 @@ export interface TranscriptRowListBaseProps {
   selectedWorkspaceId: string | null;
   activeSessionId: string;
   isSessionBusy: boolean;
-  pendingPromptText: string | null;
+  /** Epoch ms of the newest prompt submission; drives the engine's submit re-pin. */
+  lastPromptSubmittedAtMs: number | null;
   onLoadOlderHistory: () => void;
   onScrollSample: (sample?: TranscriptScrollSample) => void;
   renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;

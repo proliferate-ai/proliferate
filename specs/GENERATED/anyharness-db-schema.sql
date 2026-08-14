@@ -704,12 +704,11 @@ CREATE TABLE "workspaces" (
             display_name TEXT,
             origin_json TEXT,
             creator_context_json TEXT,
-            lifecycle_state TEXT NOT NULL DEFAULT 'active' CHECK (lifecycle_state IN ('active', 'retired')),
-            cleanup_state TEXT NOT NULL DEFAULT 'none' CHECK (cleanup_state IN ('none', 'pending', 'complete', 'failed')),
-            cleanup_operation TEXT CHECK (cleanup_operation IS NULL OR cleanup_operation IN ('retire', 'purge')),
-            cleanup_error_message TEXT,
-            cleanup_failed_at TEXT,
-            cleanup_attempted_at TEXT,
+            lifecycle_state TEXT NOT NULL DEFAULT 'active' CHECK (lifecycle_state IN ('active', 'archived')),
+            archived_head_sha TEXT,
+            archived_branch TEXT,
+            archived_at TEXT,
+            partial_capture_json TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -939,12 +938,12 @@ CREATE UNIQUE INDEX idx_workflow_runs_active_session_controller
 CREATE INDEX idx_workflow_workspace_materializations_workspace_id
     ON workflow_workspace_materializations(workspace_id);
 
+-- index: idx_workspaces_lifecycle
+CREATE INDEX idx_workspaces_lifecycle
+            ON workspaces(repo_root_id, kind, lifecycle_state, surface);
+
 -- index: idx_workspaces_path
 CREATE INDEX idx_workspaces_path ON workspaces(path);
 
 -- index: idx_workspaces_repo_root_id
 CREATE INDEX idx_workspaces_repo_root_id ON workspaces(repo_root_id);
-
--- index: idx_workspaces_retention
-CREATE INDEX idx_workspaces_retention
-            ON workspaces(repo_root_id, kind, lifecycle_state, surface);

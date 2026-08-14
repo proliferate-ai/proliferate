@@ -1,0 +1,129 @@
+mod artifacts;
+mod byte_allocation;
+mod cancellation;
+mod capture;
+#[cfg(test)]
+mod capture_finalizer_fence_tests;
+mod closing;
+#[cfg(test)]
+mod closing_fence_tests;
+mod control;
+#[cfg(test)]
+mod deadline_race_tests;
+#[cfg(test)]
+mod fake_runtime;
+mod file_accounting;
+#[cfg(test)]
+mod finalizer_fence_tests;
+mod finish;
+#[cfg(test)]
+mod lifecycle_tests;
+pub(crate) mod model;
+mod preparation;
+#[cfg(test)]
+mod preparation_matrix_tests;
+mod runtime;
+mod session_accounting;
+mod session_cross_check;
+mod session_input;
+mod session_values;
+mod state;
+mod submission;
+mod submission_flow;
+#[cfg(test)]
+mod submission_matrix_tests;
+mod terminal;
+#[cfg(test)]
+mod test_support;
+mod watchdog;
+
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
+
+use crate::commands::cloud_worker::SharedCloudWorkerState;
+use crate::diagnostics_collector::producer::TauriDiagnosticsProducer;
+use crate::diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor;
+use crate::sidecar::SharedSidecar;
+
+use super::artifact_store::SupportArtifactStore;
+use runtime::{CoordinatorRuntime, SystemCoordinatorRuntime};
+use state::CoordinatorState;
+
+/// The sole native owner of consented snapshot preparation and submit
+/// lifecycle authority. Construction is fail-closed: an unavailable artifact
+/// store keeps the app booting but cannot become ready.
+pub(crate) struct SupportSnapshotCoordinator {
+    pub(super) state: Mutex<CoordinatorState>,
+    pub(super) store: Option<Arc<SupportArtifactStore>>,
+    pub(super) supervisor: Arc<DiagnosticsCollectorSupervisor>,
+    pub(super) producer: TauriDiagnosticsProducer,
+    pub(super) worker: SharedCloudWorkerState,
+    pub(super) sidecar: SharedSidecar,
+    pub(super) runtime: Arc<dyn CoordinatorRuntime>,
+    pub(super) artifact_gate: Arc<Mutex<()>>,
+    pub(super) shutdown_gate: Arc<Mutex<()>>,
+}
+
+impl SupportSnapshotCoordinator {
+    pub(crate) fn new(
+        supervisor: Arc<DiagnosticsCollectorSupervisor>,
+        producer: TauriDiagnosticsProducer,
+        worker: SharedCloudWorkerState,
+        sidecar: SharedSidecar,
+    ) -> Arc<Self> {
+        Self::with_runtime(
+            supervisor,
+            producer,
+            worker,
+            sidecar,
+            Arc::new(SystemCoordinatorRuntime),
+        )
+    }
+
+    fn with_runtime(
+        supervisor: Arc<DiagnosticsCollectorSupervisor>,
+        producer: TauriDiagnosticsProducer,
+        worker: SharedCloudWorkerState,
+        sidecar: SharedSidecar,
+        runtime: Arc<dyn CoordinatorRuntime>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            state: Mutex::new(CoordinatorState::default()),
+            store: SupportArtifactStore::new().ok().map(Arc::new),
+            supervisor,
+            producer,
+            worker,
+            sidecar,
+            runtime,
+            artifact_gate: Arc::new(Mutex::new(())),
+            shutdown_gate: Arc::new(Mutex::new(())),
+        })
+    }
+
+    #[cfg(test)]
+    fn with_test_parts(
+        supervisor: Arc<DiagnosticsCollectorSupervisor>,
+        producer: TauriDiagnosticsProducer,
+        worker: SharedCloudWorkerState,
+        sidecar: SharedSidecar,
+        store: Option<Arc<SupportArtifactStore>>,
+        runtime: Arc<dyn CoordinatorRuntime>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            state: Mutex::new(CoordinatorState::default()),
+            store,
+            supervisor,
+            producer,
+            worker,
+            sidecar,
+            runtime,
+            artifact_gate: Arc::new(Mutex::new(())),
+            shutdown_gate: Arc::new(Mutex::new(())),
+        })
+    }
+}
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests;

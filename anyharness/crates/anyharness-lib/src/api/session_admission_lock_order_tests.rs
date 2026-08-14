@@ -56,12 +56,6 @@ fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
         ("reviews.rs", "start_code_review", ADMIT, SHARED),
         ("sessions_fork.rs", "fork_session", ADMIT, FORK_LEASE),
         (
-            "workspaces_lifecycle.rs",
-            "retire_workspace",
-            ADMIT_ALL,
-            ".retire(",
-        ),
-        (
             "mobility.rs",
             "export_workspace_mobility_archive",
             ADMIT_ALL,
@@ -76,20 +70,4 @@ fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
     ] {
         assert_admit_before_lease(&format!("src/api/http/{file}"), handler, admit, lease);
     }
-
-    let retire = "src/domains/workspaces/retire.rs";
-    assert_source_order(
-        retire,
-        "retire",
-        ".blocked_if_preflight_refuses(",
-        EXCLUSIVE,
-        "advisory preflight must precede the exclusive lease",
-    );
-    assert_source_order(
-        retire,
-        "retire",
-        EXCLUSIVE,
-        ".reject_if_workflow_controlled(",
-        "exclusive lease must precede the admitted-set re-check",
-    );
 }

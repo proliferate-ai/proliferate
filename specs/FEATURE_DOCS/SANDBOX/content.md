@@ -163,22 +163,16 @@ AnyHarness fetches then requires that exact commit
 `retire_worktree_materialization`
 ([materialization.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/materialization.rs))
 refuses any path outside the canonical managed root, then
-`git worktree remove --force`. It runs paired — workspace delete/archive
-retires the worktree after the row write commits, best-effort — and as
-backstop, the retention pass
-([retention.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs)):
+`git worktree remove --force`. It runs paired only: workspace delete removes
+the worktree after the row write commits, best-effort.
 
-- Keeps the N most-recently-active worktrees per repo root; default 20,
-  bounds 10–100, adjustable at runtime
-  (`PUT /v1/worktrees/retention-policy`).
-- Runs at runtime startup, after every worktree create, and on demand
-  (`POST /v1/worktrees/retention/run`).
-- Every pass is capped — 20 removals, 50 attempts, 200 considered — so no
-  pass can stall the runtime; remaining candidates wait for the next pass.
-- Skips, in order: the workspace being created, workflow-created worktrees
-  (by creator context), paths that no longer exist, paths outside the
-  managed root, and — via retire preflight and session admission fencing —
-  any worktree with an admitted live session.
+There is no longer a backstop retention pass. Automatic pruning was the
+retire lifecycle's sweeper, and both left together when `retired` was
+absorbed into `archived` — the runtime no longer deletes a checkout the user
+did not ask it to delete. A workspace's recorded path stays reserved for its
+lifetime, so creation refuses any path an archived row still claims
+([store/lookups.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/store/lookups.rs),
+`find_archived_by_path_and_kind`).
 
 ## One workspace, two records
 
@@ -450,10 +444,9 @@ apps/packages/product-client/src/
   [test_cloud_workspace_materialization_service.py](../../../server/tests/integration/test_cloud_workspace_materialization_service.py).
 - Exact-ref source verification:
   [test_cloud_workspace_exact_ref_source.py](../../../server/tests/integration/test_cloud_workspace_exact_ref_source.py).
-- Retention and retire fencing:
-  [retention_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retention_tests.rs),
-  [retire_preflight_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight_tests.rs),
-  [deletion_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion_tests.rs).
+- Purge fencing:
+  [purge_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/purge_tests.rs),
+  [deletion/tests/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/mod.rs).
 - Paired workspace-retire proof:
   [test_cloud_workspace_retire_after_commit.py](../../../server/tests/unit/test_cloud_workspace_retire_after_commit.py).
 - Pending, landing with the remaining gap PRs: fetch-on-create

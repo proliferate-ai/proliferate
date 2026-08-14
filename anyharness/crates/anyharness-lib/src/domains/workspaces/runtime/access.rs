@@ -1,34 +1,7 @@
 use super::WorkspaceRuntime;
-use crate::domains::workspaces::model::{
-    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-    WorkspaceRecord,
-};
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
 
 impl WorkspaceRuntime {
-    pub fn set_lifecycle_cleanup_state(
-        &self,
-        workspace_id: &str,
-        lifecycle_state: WorkspaceLifecycleState,
-        cleanup_state: WorkspaceCleanupState,
-        cleanup_operation: Option<WorkspaceCleanupOperation>,
-        cleanup_error_message: Option<&str>,
-        cleanup_failed_at: Option<&str>,
-        cleanup_attempted_at: Option<&str>,
-    ) -> anyhow::Result<Option<WorkspaceRecord>> {
-        let now = chrono::Utc::now().to_rfc3339();
-        self.store.update_lifecycle_cleanup_state(
-            workspace_id,
-            lifecycle_state,
-            cleanup_state,
-            cleanup_operation,
-            cleanup_error_message,
-            cleanup_failed_at,
-            cleanup_attempted_at,
-            &now,
-        )?;
-        self.get_workspace(workspace_id)
-    }
-
     pub fn find_active_workspace_by_path_and_kind(
         &self,
         path: &str,

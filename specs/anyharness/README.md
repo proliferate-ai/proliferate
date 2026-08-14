@@ -6,6 +6,9 @@ Scope:
 - `anyharness/crates/anyharness-credential-discovery/**`
 - `anyharness/crates/anyharness-contract/**`
 - `anyharness/crates/anyharness-lib/**`
+- `anyharness/crates/proliferate-diagnostics-client/**`
+- `anyharness/crates/proliferate-diagnostics-collector/**`
+- `anyharness/crates/proliferate-diagnostics-protocol/**`
 
 Use this doc first to understand AnyHarness ownership. Then read the focused
 guide or spec for the layer or subsystem you are changing.
@@ -113,7 +116,7 @@ The engine depends on capabilities that are not themselves the engine.
 
 ```text
 domains/workspaces
-  workspace identity, paths, materialization, cleanup, retention
+  workspace identity, paths, materialization, archive/unarchive, purge/deletion
 
 domains/agents
   agent catalog, readiness meaning, install/readiness policy
@@ -211,7 +214,8 @@ Guides:
   parameter test, proportionality, and the placement algorithm.
 - [crates.md](crates.md) for crate ownership:
   `anyharness`, `anyharness-contract`, `anyharness-credential-discovery`, and
-  `anyharness-lib`.
+  `anyharness-lib`, plus the Desktop-owned provider-neutral diagnostics
+  protocol, producer-client, and collector crates.
 - [api.md](api.md) for HTTP/SSE/WS handler ownership, contract
   mapping, and transport-boundary rules.
 - [app.md](app.md) for `AppState`, dependency construction,
@@ -299,13 +303,16 @@ which guide to read and where the code belongs.
 | --- | --- | --- | --- |
 | Binary startup, CLI flags, runtime-home selection, command dispatch | `anyharness/crates/anyharness/src/**` | `anyharness` thin binary | [crates.md](crates.md) |
 | Public HTTP/SSE/WS schemas, OpenAPI-visible request/response types | `anyharness-contract/src/v1/**` | `anyharness-contract` | [crates.md](crates.md), [contract.md](contract.md) |
+| Provider-neutral Desktop diagnostics wire types, bounds, and pure validation | `proliferate-diagnostics-protocol/src/v1/**` | `proliferate-diagnostics-protocol` | [crates.md](crates.md), [../OBSERVABILITY.md](../OBSERVABILITY.md) |
+| Standalone loopback diagnostics collection, bounded in-memory state, query/tail/export/health transport, and process resource profiling | `proliferate-diagnostics-collector/src/**` | `proliferate-diagnostics-collector` | [crates.md](crates.md), [../OBSERVABILITY.md](../OBSERVABILITY.md), [collector README](../../anyharness/crates/proliferate-diagnostics-collector/README.md) |
+| Bounded Desktop-owned producer adapter: tracing layer, secret filtering, admission queue/receipts, bridge activation, component fallback files | `proliferate-diagnostics-client/src/**` | `proliferate-diagnostics-client` | [crates.md](crates.md), [../OBSERVABILITY.md](../OBSERVABILITY.md) |
 | Provider credential file discovery or portable credential export/import | `anyharness-credential-discovery/src/**` | `anyharness-credential-discovery` | [crates.md](crates.md) |
 | HTTP handlers, routers, auth headers, SSE/WS transport, OpenAPI wiring | `anyharness-lib/src/api/**` | `api/**` | [api.md](api.md) |
 | AppState, dependency construction, wiring extension implementations, product MCP endpoint registration | `anyharness-lib/src/app/**` | `app/**` | [app.md](app.md) |
 | SQLite engine setup, migrations, DB pool wiring | `anyharness-lib/src/persistence/**` | `persistence/**` | [persistence-database.md](persistence-database.md) |
 | Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/domains/sessions/**` | `domains/sessions/**` | [domains.md](domains.md), [session-engine.md](session-engine.md), [sessions.md](sessions.md) |
 | Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/live/sessions/**`, with remaining ACP helpers in `anyharness-lib/src/integrations/acp/**` | `live/sessions/**` plus `integrations/acp/**` | [live-runtime.md](live-runtime.md), [session-engine.md](session-engine.md), [acp.md](acp.md) |
-| Workspace durable lifecycle, materialization, purge/retire, retention policy | `anyharness-lib/src/domains/workspaces/**` | `domains/workspaces/**` | [domains.md](domains.md), [workspaces.md](workspaces.md) |
+| Workspace durable lifecycle, materialization, archive/unarchive, purge/deletion | `anyharness-lib/src/domains/workspaces/**` | `domains/workspaces/**` | [domains.md](domains.md), [workspaces.md](workspaces.md) |
 | Agent catalog, install, credentials, readiness, supported-agent meaning | `anyharness-lib/src/domains/agents/**` | `domains/agents/**` | [domains.md](domains.md), [../codebase/platforms/product/agent-distribution.md](../codebase/platforms/product/agent-distribution.md), [agents.md](agents.md) |
 | Provider CLI install/probe/path/version mechanics | `anyharness-lib/src/integrations/agent_cli/**`, provider-specific ACP code | `integrations/agent_cli/**` | [integrations.md](integrations.md), [harnesses.md](harnesses.md) |
 | Provider-specific behavior such as Claude/Codex extension support or live controls | `anyharness-lib/src/live/sessions/**`, `anyharness-lib/src/integrations/acp/**`, `specs/anyharness/harnesses/**` | harness doc plus owning live runtime/integration module | [harnesses.md](harnesses.md), provider doc under `harnesses/**` |
@@ -341,6 +348,12 @@ anyharness/crates/
     src/v1/                      # public wire schemas
   anyharness-credential-discovery/
     src/                         # shared provider credential discovery
+  proliferate-diagnostics-protocol/
+    src/v1/                      # contract only; no collector or producer runtime
+  proliferate-diagnostics-client/
+    src/                         # bounded producer adapter for Desktop-owned Rust children
+  proliferate-diagnostics-collector/
+    src/                         # standalone memory-only collector process
   anyharness-lib/
     src/
       api/
@@ -404,6 +417,18 @@ owning layer instead of growing a new global bucket.
 - `anyharness-contract` owns wire schemas only. It must not grow runtime logic.
 - `anyharness-credential-discovery` owns shared provider credential parsing and
   portable auth-file normalization. It must not own runtime orchestration.
+- `proliferate-diagnostics-protocol` owns only the versioned provider-neutral
+  diagnostics wire contract, bounds, and pure validation. It must not own
+  collection, transport, files, processes, export, or product orchestration.
+- `proliferate-diagnostics-client` owns only the bounded local producer
+  adapter linked into Desktop-owned Rust children: tracing capture, secret
+  filtering, the admission queue and receipts, descriptor-possession bridge
+  activation, and per-component fallback files. It must not own collector
+  state, Desktop/Tauri wiring, product behavior, persistence, or replay.
+- `proliferate-diagnostics-collector` owns only the standalone bounded
+  in-memory collector and its loopback process boundary. It must not own
+  Desktop/Tauri wiring, producer queues, AnyHarness runtime behavior, Worker
+  behavior, server/cloud integration, persistence, or export destinations.
 - `anyharness-lib` owns runtime behavior, durable domain rules, live
   orchestration, workspace adapters, and protocol integrations.
 - `api/` is transport. It parses requests, calls the owning domain/runtime, and

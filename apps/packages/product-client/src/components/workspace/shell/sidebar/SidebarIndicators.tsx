@@ -28,7 +28,10 @@ export function SidebarStatusGlyph({
       return <CircleAlert className="icon-compact text-sidebar-status-error [font-size:var(--text-sidebar-row)]" />;
     case "waiting_input":
     case "waiting_plan":
-      return <Clock className="icon-compact text-sidebar-status-waiting [font-size:var(--text-sidebar-row)]" />;
+      // Quiet ink: waiting is a resting state, not an alert. The row still
+      // says why through the indicator's tooltip, and the status inks stay
+      // reserved for the states that genuinely need eyes (error, conflicts).
+      return <Clock className="icon-compact text-sidebar-muted-foreground [font-size:var(--text-sidebar-row)]" />;
     case "iterating":
     case "queued_prompt":
       return (
@@ -39,6 +42,14 @@ export function SidebarStatusGlyph({
           className="text-sidebar-muted-foreground"
         />
       );
+    // Git attention the identity glyph's state dot cannot carry. Conflicts
+    // and requested changes are "this needs you" in the waiting ink; failing
+    // checks are the harder red the error indicators use.
+    case "git_conflicts":
+    case "git_changes_requested":
+      return <CircleAlert className="icon-compact text-sidebar-status-waiting [font-size:var(--text-sidebar-row)]" />;
+    case "git_checks_failing":
+      return <CircleAlert className="icon-compact text-sidebar-status-error [font-size:var(--text-sidebar-row)]" />;
   }
 }
 

@@ -6,6 +6,7 @@ import {
 } from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
 import {
   buildGroups,
+  makeCloudLogicalWorkspace,
   makeLocalLogicalWorkspace,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
@@ -48,11 +49,22 @@ describe("collectPinnedSidebarItems", () => {
   });
 
   it("keeps archived workspaces out of the pinned items", () => {
-    const pinnedIds = ["ws-a", "ws-c"];
+    // A local archived workspace never reaches the sidebar at all (the
+    // lifecycle-filtered list is the source of truth), so the archived row
+    // that can still appear here is a cloud-only entry whose product
+    // lifecycle reports archived.
+    const pinnedIds = ["ws-archived", "ws-c"];
     const groups = buildGroups({
-      logicalWorkspaces: makeWorkspaces(),
+      logicalWorkspaces: [
+        ...makeWorkspaces(),
+        makeCloudLogicalWorkspace({
+          id: "ws-archived",
+          repoKey: "repo-2",
+          repoName: "repo-two",
+          productLifecycle: "archived",
+        }),
+      ],
       pinnedIds,
-      archivedIds: ["ws-a"],
     });
 
     const pinnedItems = collectPinnedSidebarItems(groups, pinnedIds);

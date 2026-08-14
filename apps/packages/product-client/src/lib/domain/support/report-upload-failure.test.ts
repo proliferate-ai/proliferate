@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   describeSupportReportUploadFailure,
   shouldShowSupportReportUploadFailureToast,
+  SupportReportLocalPayloadError,
+  SupportSnapshotArtifactError,
   supportReportRetriesExhausted,
 } from "#product/lib/domain/support/report-upload-failure";
 
@@ -62,7 +64,7 @@ describe("describeSupportReportUploadFailure", () => {
 
   it("does not retry local payload failures that the queue cannot repair", () => {
     const failure = describeSupportReportUploadFailure(
-      new Error("Attachment is too large: screenshot.png"),
+      new SupportReportLocalPayloadError("Attachment is too large: screenshot.png"),
       1,
     );
 
@@ -73,6 +75,17 @@ describe("describeSupportReportUploadFailure", () => {
       toastMessage: "Report is too large or missing attachment data. Try again with fewer files.",
     });
   });
+
+  it.each(["snapshot_missing", "snapshot_mismatch"] as const)(
+    "keeps %s pre-submit and terminal",
+    (code) => {
+      const failure = describeSupportReportUploadFailure(
+        new SupportSnapshotArtifactError(code),
+        1,
+      );
+      expect(failure).toMatchObject({ kind: code, retryable: false, retryDelayMs: null });
+    },
+  );
 
   it("keeps generic transient upload failures retryable", () => {
     const failure = describeSupportReportUploadFailure(new Error("Upload failed with 503."), 2);
@@ -85,27 +98,26 @@ describe("describeSupportReportUploadFailure", () => {
     });
   });
 
-  it("treats a locked upload-target conflict as terminal instead of transient", () => {
+  it("does not fabricate a conflict from message-only prose", () => {
     const failure = describeSupportReportUploadFailure(
       new Error("Support report upload targets already exist for different objects."),
       379,
     );
 
     expect(failure).toMatchObject({
-      kind: "upload_conflict",
-      retryable: false,
-      retryDelayMs: null,
+      kind: "transient",
+      retryable: true,
     });
   });
 
-  it("treats a changed-intent conflict as terminal", () => {
-    const failure = describeSupportReportUploadFailure(
-      new Error("Support report upload targets changed attachment intent."),
-      4,
-    );
-
-    expect(failure.kind).toBe("upload_conflict");
-    expect(failure.retryable).toBe(false);
+  it("does not fabricate changed-intent or storage semantics from prose", () => {
+    for (const message of [
+      "Support report upload targets changed attachment intent.",
+      "Support report upload storage is not configured.",
+      "Attachment is too large: lookalike.png",
+    ]) {
+      expect(describeSupportReportUploadFailure(new Error(message), 4).kind).toBe("transient");
+    }
   });
 
   it("classifies the stable conflict code as terminal regardless of message", () => {
@@ -118,7 +130,7 @@ describe("describeSupportReportUploadFailure", () => {
     expect(failure.retryable).toBe(false);
   });
 
-  it("treats an already-completed report as benign success, not a conflict", () => {
+  it("requires the stable code before treating a report as already completed", () => {
     const byCode = describeSupportReportUploadFailure(
       { message: "reworded", code: "support_report_already_completed" },
       2,
@@ -128,9 +140,32 @@ describe("describeSupportReportUploadFailure", () => {
       2,
     );
 
-    for (const failure of [byCode, byMessage]) {
-      expect(failure.kind).toBe("already_completed");
-      expect(failure.retryable).toBe(false);
+    expect(byCode.kind).toBe("already_completed");
+    expect(byCode.retryable).toBe(false);
+    expect(byMessage.kind).toBe("transient");
+    expect(byMessage.retryable).toBe(true);
+  });
+
+  it("classifies throwing accessors and revoked proxies without invoking traps", () => {
+    const trapped = Object.defineProperties({}, {
+      code: { get: () => { throw new Error("code trap"); } },
+      message: { get: () => { throw new Error("message trap"); } },
+      status: { get: () => { throw new Error("status trap"); } },
+    });
+    const revocable = Proxy.revocable({
+      code: "support_report_already_completed",
+      message: "completed",
+      status: 400,
+    }, {});
+    revocable.revoke();
+
+    for (const hostile of [trapped, revocable.proxy]) {
+      expect(() => describeSupportReportUploadFailure(hostile, 1)).not.toThrow();
+      expect(describeSupportReportUploadFailure(hostile, 1)).toMatchObject({
+        kind: "transient",
+        message: "Report upload failed.",
+        retryable: true,
+      });
     }
   });
 

@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
+use super::access::{assert_workspace_exists, assert_workspace_mutable};
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
@@ -56,7 +56,7 @@ where
     );
     let access_started = Instant::now();
     match access {
-        GitTaskAccess::Read => assert_workspace_not_retired(state, &workspace_id)?,
+        GitTaskAccess::Read => assert_workspace_exists(state, &workspace_id)?,
         GitTaskAccess::Write => assert_workspace_mutable(state, &workspace_id)?,
     }
     tracing::info!(

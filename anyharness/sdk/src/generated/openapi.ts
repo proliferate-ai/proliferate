@@ -788,6 +788,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/events/support-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_session_events_support_window"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/fork": {
         parameters: {
             query?: never;
@@ -988,6 +1004,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_session_raw_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/raw-notifications/support-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_session_raw_notifications_support_window"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1231,6 +1263,22 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["purge_workspace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["archive_workspace"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1796,86 +1844,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_id}/purge/preflight": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["purge_workspace_preflight"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/purge/retry": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["retry_purge_workspace"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/retire": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["retire_workspace"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/retire/cleanup-retry": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["retry_retire_cleanup"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/retire/preflight": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["retire_workspace_preflight"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/workspaces/{workspace_id}/reviews/code": {
         parameters: {
             query?: never;
@@ -1902,6 +1870,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["restore_dismissed_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/sessions/support-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_sessions_support_window"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1988,6 +1972,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unarchive_workspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/worktree/restore": {
         parameters: {
             query?: never;
@@ -2030,38 +2030,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["prune_orphan_worktree"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/worktrees/retention-policy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_worktree_retention_policy"];
-        put: operations["update_worktree_retention_policy"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/worktrees/retention/run": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["run_worktree_retention"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2329,6 +2297,35 @@ export interface components {
             readiness: components["schemas"]["AgentReadinessState"];
             supportsLogin: boolean;
         };
+        /** @enum {string} */
+        AnyHarnessBoundedWindowCompletenessV1: "complete" | "limit_uncertain";
+        AnyHarnessBoundedWindowMetaV1: {
+            completeness: components["schemas"]["AnyHarnessBoundedWindowCompletenessV1"];
+            itemLimit: number;
+            omittedOversizedItems: number;
+            presentationOrder: components["schemas"]["AnyHarnessBoundedWindowPresentationOrderV1"];
+            responseByteLimit: number;
+            returnedItems: number;
+            /** Format: int32 */
+            schemaVersion: number;
+            selection: components["schemas"]["AnyHarnessBoundedWindowSelectionV1"];
+        };
+        /** @enum {string} */
+        AnyHarnessBoundedWindowPresentationOrderV1: "updated_desc_id_asc" | "seq_asc";
+        /** @enum {string} */
+        AnyHarnessBoundedWindowSelectionV1: "newest_matching";
+        AnyHarnessEventSupportWindowV1: {
+            items: components["schemas"]["SessionEventEnvelope"][];
+            window: components["schemas"]["AnyHarnessBoundedWindowMetaV1"];
+        };
+        AnyHarnessRawNotificationSupportWindowV1: {
+            items: components["schemas"]["SessionRawNotificationEnvelope"][];
+            window: components["schemas"]["AnyHarnessBoundedWindowMetaV1"];
+        };
+        AnyHarnessSessionSupportWindowV1: {
+            items: components["schemas"]["Session"][];
+            window: components["schemas"]["AnyHarnessBoundedWindowMetaV1"];
+        };
         /** @description Outcome of pushing an agent-auth state document into the runtime. */
         ApplyAgentAuthStateResponse: {
             /** @description True when the document was persisted to the runtime's state file. */
@@ -2338,6 +2335,21 @@ export interface components {
              * @description The persisted document's revision.
              */
             revision: number;
+        };
+        /**
+         * @description `POST /v1/workspaces/{id}/archive` body. Both knobs are resolved by the
+         *     client at click time — the branch-delete host preference and the repo
+         *     environment's archive script — because the runtime stores neither. A
+         *     re-POST that converges an interrupted archive carries the same resolved
+         *     values; it never re-runs the script or the branch delete.
+         */
+        ArchiveWorkspaceRequest: {
+            archiveScript?: string | null;
+            deleteBranch?: boolean | null;
+        };
+        ArchiveWorkspaceResponse: {
+            notices: components["schemas"]["WorkspaceArchiveNotice"][];
+            record: components["schemas"]["Workspace"];
         };
         ArtifactStatus: {
             installed: boolean;
@@ -3794,6 +3806,23 @@ export interface components {
         ProblemDetails: {
             code?: string | null;
             detail?: string | null;
+            /**
+             * @description The one structured extension point typed error bodies ride. Before it
+             *     existed the only place to put a machine-readable payload was `detail`,
+             *     a human sentence — so a client that needed the offending lock `file` or
+             *     the unarchive scenario's `strategies` list had to parse prose. Codes
+             *     that carry a payload document its shape next to their status mapping
+             *     (`api/http/workspaces_lifecycle_errors.rs`); every other code leaves
+             *     this absent, and the field is skip-serializing so no existing body
+             *     changes shape.
+             *
+             *     Declared `Object` because the payload is per-code and deliberately
+             *     unconstrained. utoipa emits that as a bare `{"type":"object"}`, which
+             *     `openapi-typescript` narrows to `Record<string, never>`; the SDK widens
+             *     this one field back to `unknown` in `src/types/runtime.ts` rather than
+             *     carrying a generated type that claims the payload has no keys.
+             */
+            extra?: Record<string, never>;
             instance?: string | null;
             /** Format: int32 */
             status: number;
@@ -4352,18 +4381,6 @@ export interface components {
             exitCode: number;
             stderr: string;
             stdout: string;
-        };
-        RunWorktreeRetentionResponse: {
-            alreadyRunning: boolean;
-            attemptedCount: number;
-            blockedCount: number;
-            consideredCount: number;
-            failedCount: number;
-            moreEligibleRemaining: boolean;
-            policy: components["schemas"]["WorktreeRetentionPolicy"];
-            retiredCount: number;
-            rows: components["schemas"]["WorktreeRetentionRunRow"][];
-            skippedCount: number;
         };
         RuntimeCapabilities: {
             replay: boolean;
@@ -4990,6 +5007,21 @@ export interface components {
             /** @enum {string} */
             status: "idle";
         };
+        /**
+         * @description `POST /v1/workspaces/{id}/unarchive` body. `branch_strategy` and
+         *     `overwrite` are the answers to a previous `WORKSPACE_UNARCHIVE_SCENARIO`
+         *     409; a first attempt sends neither.
+         */
+        UnarchiveWorkspaceRequest: {
+            branchStrategy?: null | components["schemas"]["WorkspaceUnarchiveBranchStrategy"];
+            overwrite?: boolean | null;
+            rerunSetup?: boolean | null;
+            setupScript?: string | null;
+        };
+        UnarchiveWorkspaceResponse: {
+            notices: components["schemas"]["WorkspaceUnarchiveNotice"][];
+            record: components["schemas"]["Workspace"];
+        };
         UnstagePatchRequest: {
             /** @description A valid unified diff patch (file headers + hunk) to reverse-apply from the index. */
             patch: string;
@@ -5013,10 +5045,6 @@ export interface components {
         UpdateWorkspaceMobilityRuntimeStateRequest: {
             handoffOpId?: string | null;
             mode: components["schemas"]["WorkspaceMobilityRuntimeMode"];
-        };
-        UpdateWorktreeRetentionPolicyRequest: {
-            /** Format: int32 */
-            maxMaterializedWorktreesPerRepo: number;
         };
         UsageUpdatePayload: {
             cost?: unknown;
@@ -5293,12 +5321,24 @@ export interface components {
          */
         WorkflowWorkspaceStatus: "accepted" | "materializing" | "ready" | "failed";
         Workspace: {
+            /**
+             * @description When this workspace was archived; the archived settings list orders by
+             *     it. Additive-optional, so a client that predates archiving reads the
+             *     same body it always did.
+             */
+            archivedAt?: string | null;
+            /**
+             * @description The branch HEAD actually held at snapshot time. `None` alongside a
+             *     present `archived_head_sha` is the detached-at-archive marker.
+             */
+            archivedBranch?: string | null;
+            /**
+             * @description HEAD at snapshot time. `None` on an archived row means "never
+             *     snapshotted" (an absorbed pre-archiving row), which is a different
+             *     restore shape, not a missing value.
+             */
+            archivedHeadSha?: string | null;
             availability: components["schemas"]["WorkspaceAvailability"];
-            cleanupAttemptedAt?: string | null;
-            cleanupErrorMessage?: string | null;
-            cleanupFailedAt?: string | null;
-            cleanupOperation?: null | components["schemas"]["WorkspaceCleanupOperation"];
-            cleanupState: components["schemas"]["WorkspaceCleanupState"];
             createdAt: string;
             creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
             currentBranch?: string | null;
@@ -5315,16 +5355,29 @@ export interface components {
             updatedAt: string;
         };
         /**
+         * @description One archive notice. Every field beyond `kind` is additive-optional so a
+         *     client that predates a notice kind can render the kinds it knows and ignore
+         *     the rest instead of failing to parse the envelope.
+         */
+        WorkspaceArchiveNotice: {
+            kind: components["schemas"]["WorkspaceArchiveNoticeKind"];
+            /** @description The git operation that was aborted, for `aborted_git_operation`. */
+            operation?: string | null;
+            /**
+             * @description The skipped-path list for the `partial_capture_*` kinds and the
+             *     affected paths for the submodule/embedded-repo kinds.
+             */
+            paths?: string[] | null;
+        };
+        /** @enum {string} */
+        WorkspaceArchiveNoticeKind: "dirty_submodule" | "embedded_repo" | "partial_capture_untracked" | "partial_capture_tracked" | "aborted_git_operation";
+        /**
          * @description Whether a workspace can currently be operated on. Computed at read time
          *     from the on-disk checkout, so the frontend can detect a deleted checkout on
          *     workspace load/select rather than only when a session send fails.
          * @enum {string}
          */
         WorkspaceAvailability: "available" | "workspace_directory_missing";
-        /** @enum {string} */
-        WorkspaceCleanupOperation: "retire" | "purge";
-        /** @enum {string} */
-        WorkspaceCleanupState: "none" | "pending" | "complete" | "failed";
         WorkspaceCreatorContext: {
             /** @enum {string} */
             kind: "human";
@@ -5376,10 +5429,24 @@ export interface components {
             name: string;
             path: string;
         };
+        /**
+         * @description The `extra` payload of a `WORKSPACE_GIT_LOCKED` 409: the lock file archive
+         *     could not reap, so the toast can name it.
+         */
+        WorkspaceGitLockedBody: {
+            file: string;
+        };
         /** @enum {string} */
         WorkspaceKind: "worktree" | "local";
+        /**
+         * @description `GET /v1/workspaces?lifecycle=` filter. The default is `active`: the
+         *     sidebar's universe is active workspaces, and the archived list asks for its
+         *     own page explicitly.
+         * @enum {string}
+         */
+        WorkspaceLifecycleFilter: "active" | "archived" | "all";
         /** @enum {string} */
-        WorkspaceLifecycleState: "active" | "retired";
+        WorkspaceLifecycleState: "active" | "archived";
         /** @enum {string} */
         WorkspaceMaterializationOutcome: "created" | "adopted" | "reused";
         WorkspaceMobilityArchive: {
@@ -5446,25 +5513,10 @@ export interface components {
             supported: boolean;
         };
         /** @enum {string} */
-        WorkspacePurgeOutcome: "deleted" | "blocked" | "cleanup_failed";
-        WorkspacePurgePreflightResponse: {
-            blockers: components["schemas"]["WorkspaceRetireBlocker"][];
-            canPurge: boolean;
-            cleanupOperation?: null | components["schemas"]["WorkspaceCleanupOperation"];
-            cleanupState: components["schemas"]["WorkspaceCleanupState"];
-            lifecycleState: components["schemas"]["WorkspaceLifecycleState"];
-            materialized: boolean;
-            workspaceId: string;
-            workspaceKind: components["schemas"]["WorkspaceKind"];
-        };
+        WorkspacePurgeOutcome: "deleted";
         WorkspacePurgeResponse: {
             alreadyDeleted: boolean;
-            cleanupAttempted: boolean;
-            cleanupMessage?: string | null;
-            cleanupSucceeded: boolean;
             outcome: components["schemas"]["WorkspacePurgeOutcome"];
-            preflight?: null | components["schemas"]["WorkspacePurgePreflightResponse"];
-            workspace?: null | components["schemas"]["Workspace"];
         };
         WorkspaceRetireBlocker: {
             code: components["schemas"]["WorkspaceRetireBlockerCode"];
@@ -5482,38 +5534,49 @@ export interface components {
         WorkspaceRetireBlockerCode: "unsupported_workspace" | "workspace_access_blocked" | "dirty_working_tree" | "conflicted_files" | "active_git_operation" | "live_session" | "pending_prompt" | "pending_interaction" | "active_terminal" | "running_command";
         /** @enum {string} */
         WorkspaceRetireBlockerSeverity: "blocking";
-        /** @enum {string} */
-        WorkspaceRetireOutcome: "retired" | "already_retired" | "blocked" | "cleanup_failed";
-        WorkspaceRetirePreflightResponse: {
-            baseOid?: string | null;
-            baseRef?: string | null;
-            blockers: components["schemas"]["WorkspaceRetireBlocker"][];
-            canRetire: boolean;
-            cleanupOperation?: null | components["schemas"]["WorkspaceCleanupOperation"];
-            cleanupState: components["schemas"]["WorkspaceCleanupState"];
-            headMatchesBase: boolean;
-            headOid?: string | null;
-            lifecycleState: components["schemas"]["WorkspaceLifecycleState"];
-            materialized: boolean;
-            mergedIntoBase: boolean;
-            readinessFingerprint: string;
-            workspaceId: string;
-            workspaceKind: components["schemas"]["WorkspaceKind"];
-        };
-        WorkspaceRetireResponse: {
-            cleanupAttempted: boolean;
-            cleanupMessage?: string | null;
-            cleanupSucceeded: boolean;
-            outcome: components["schemas"]["WorkspaceRetireOutcome"];
-            preflight: components["schemas"]["WorkspaceRetirePreflightResponse"];
-            workspace: components["schemas"]["Workspace"];
-        };
         WorkspaceSubagentsResponse: {
             parents: components["schemas"]["SubagentParentRoster"][];
             workspaceId: string;
         };
         /** @enum {string} */
         WorkspaceSurface: "standard" | "cowork";
+        /** @enum {string} */
+        WorkspaceUnarchiveBranchStrategy: "recreate_at_sha" | "restore_detached" | "restore_branch_tip";
+        WorkspaceUnarchiveNotice: {
+            kind: components["schemas"]["WorkspaceUnarchiveNoticeKind"];
+            /**
+             * @description The persisted skipped-path list, re-emitted for the
+             *     `partial_capture_*` kinds.
+             */
+            paths?: string[] | null;
+        };
+        /** @enum {string} */
+        WorkspaceUnarchiveNoticeKind: "no_snapshot" | "history_incomplete" | "head_mismatch" | "partial_capture_untracked" | "partial_capture_tracked";
+        /** @enum {string} */
+        WorkspaceUnarchiveScenario: "branch_diverged" | "checked_out_elsewhere" | "snapshot_lost" | "path_occupied";
+        /**
+         * @description The `extra` payload of a `WORKSPACE_UNARCHIVE_SCENARIO` 409. The dialog
+         *     renders its choices from `strategies`, never from client-side inference:
+         *     only the server knows which of the four answers this row can actually take
+         *     (a live path claim, for instance, refuses `overwrite` whatever the client
+         *     sends).
+         */
+        WorkspaceUnarchiveScenarioBody: {
+            /**
+             * @description The occupant's lifecycle, so the dialog can name an exit that is
+             *     actually available ("archive it first" vs "unarchive or delete it").
+             */
+            occupantLifecycle?: string | null;
+            /**
+             * @description Display name of the workspace row occupying the path, for
+             *     `path_occupied`. Absent when no row claims it.
+             */
+            occupantName?: string | null;
+            scenario: components["schemas"]["WorkspaceUnarchiveScenario"];
+            strategies: components["schemas"]["WorkspaceUnarchiveStrategy"][];
+        };
+        /** @enum {string} */
+        WorkspaceUnarchiveStrategy: "recreate_at_sha" | "restore_detached" | "restore_branch_tip" | "overwrite";
         WorktreeBaseFetch: "fetched" | "noRemote" | {
             failed: {
                 message: string;
@@ -5540,7 +5603,7 @@ export interface components {
             upstreamBranch?: string | null;
         };
         /** @enum {string} */
-        WorktreeInventoryAction: "prune_checkout" | "delete_workspace_history" | "retry_purge" | "delete_orphan_checkout";
+        WorktreeInventoryAction: "prune_checkout" | "delete_workspace_history" | "delete_orphan_checkout";
         WorktreeInventoryResponse: {
             rows: components["schemas"]["WorktreeInventoryRow"][];
         };
@@ -5550,8 +5613,6 @@ export interface components {
             blockers: components["schemas"]["WorkspaceRetireBlocker"][];
             branch?: string | null;
             canonicalPath?: string | null;
-            cleanupOperation?: null | components["schemas"]["WorkspaceCleanupOperation"];
-            cleanupState?: null | components["schemas"]["WorkspaceCleanupState"];
             gitStatus?: null | components["schemas"]["WorktreeGitStatusSummary"];
             id: string;
             managed: boolean;
@@ -5567,8 +5628,6 @@ export interface components {
         WorktreeInventoryState: "associated" | "orphan_checkout" | "missing_checkout" | "conflict";
         WorktreeInventoryWorkspaceSummary: {
             branch?: string | null;
-            cleanupOperation?: null | components["schemas"]["WorkspaceCleanupOperation"];
-            cleanupState: components["schemas"]["WorkspaceCleanupState"];
             displayName?: string | null;
             id: string;
             kind: components["schemas"]["WorkspaceKind"];
@@ -5577,20 +5636,6 @@ export interface components {
         };
         /** @enum {string} */
         WorktreeNameConflictPolicy: "fail" | "suffix_path" | "suffix_path_and_branch";
-        WorktreeRetentionPolicy: {
-            /** Format: int32 */
-            maxMaterializedWorktreesPerRepo: number;
-            updatedAt: string;
-        };
-        /** @enum {string} */
-        WorktreeRetentionRowOutcome: "retired" | "blocked" | "skipped" | "failed";
-        WorktreeRetentionRunRow: {
-            message: string;
-            outcome: components["schemas"]["WorktreeRetentionRowOutcome"];
-            path: string;
-            repoRootId?: string | null;
-            workspaceId: string;
-        };
         WorktreeStorageEstimate: {
             /** Format: int64 */
             sqliteBytes?: number | null;
@@ -7649,6 +7694,56 @@ export interface operations {
             };
         };
     };
+    list_session_events_support_window: {
+        parameters: {
+            query: {
+                /** @description Required UTC RFC3339 inclusive lower timestamp */
+                timestamp_from: string;
+                /** @description Required UTC RFC3339 inclusive upper timestamp, at most 15 minutes after timestamp_from */
+                timestamp_to: string;
+                /** @description Required item limit from 1 through 200 */
+                limit: number;
+                /** @description Required response limit from 16384 through 4194304 bytes */
+                max_response_bytes: number;
+            };
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded newest matching session events in sequence order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnyHarnessEventSupportWindowV1"];
+                };
+            };
+            /** @description Invalid support-window query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     fork_session: {
         parameters: {
             query?: never;
@@ -8434,6 +8529,56 @@ export interface operations {
             };
         };
     };
+    list_session_raw_notifications_support_window: {
+        parameters: {
+            query: {
+                /** @description Required UTC RFC3339 inclusive lower timestamp */
+                timestamp_from: string;
+                /** @description Required UTC RFC3339 inclusive upper timestamp, at most 15 minutes after timestamp_from */
+                timestamp_to: string;
+                /** @description Required item limit from 1 through 100 */
+                limit: number;
+                /** @description Required response limit from 16384 through 2097152 bytes */
+                max_response_bytes: number;
+            };
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded newest matching raw notifications in sequence order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnyHarnessRawNotificationSupportWindowV1"];
+                };
+            };
+            /** @description Invalid support-window query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     resume_session: {
         parameters: {
             query?: never;
@@ -9072,7 +9217,9 @@ export interface operations {
     };
     list_workspaces: {
         parameters: {
-            query?: never;
+            query?: {
+                lifecycle?: components["schemas"]["WorkspaceLifecycleFilter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9253,6 +9400,60 @@ export interface operations {
             };
             /** @description Session execution is controlled by an active workflow run */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    archive_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Archived the workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveWorkspaceResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The workspace cannot be archived right now */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Archiving failed; retryable */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10704,175 +10905,6 @@ export interface operations {
             };
         };
     };
-    purge_workspace_preflight: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Purge preflight */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspacePurgePreflightResponse"];
-                };
-            };
-            /** @description Workspace not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    retry_purge_workspace: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Purge retry result */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspacePurgeResponse"];
-                };
-            };
-            /** @description Workspace not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    retire_workspace: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Retire workspace result */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceRetireResponse"];
-                };
-            };
-            /** @description Workspace not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Session execution is controlled by an active workflow run */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    retry_retire_cleanup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Cleanup retry result */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceRetireResponse"];
-                };
-            };
-            /** @description Workspace not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    retire_workspace_preflight: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Retire preflight */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceRetirePreflightResponse"];
-                };
-            };
-            /** @description Workspace not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     start_code_review: {
         parameters: {
             query?: never;
@@ -10937,6 +10969,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": null | components["schemas"]["Session"];
+                };
+            };
+        };
+    };
+    list_sessions_support_window: {
+        parameters: {
+            query: {
+                /** @description Required exact or recent selection mode */
+                mode: string;
+                /** @description Required only for exact mode */
+                session_id?: string;
+                /** @description Required UTC RFC3339 inclusive lower timestamp only for recent mode */
+                updated_at_from?: string;
+                /** @description Required UTC RFC3339 inclusive upper timestamp */
+                updated_at_to: string;
+                /** @description Required limit: 1 for exact mode, 1 through 3 for recent mode */
+                limit: number;
+                /** @description Required response limit from 16384 through 1048576 bytes */
+                max_response_bytes: number;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded newest matching durable sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnyHarnessSessionSupportWindowV1"];
+                };
+            };
+            /** @description Invalid support-window query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -11168,6 +11245,60 @@ export interface operations {
             };
         };
     };
+    unarchive_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnarchiveWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Unarchived the workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnarchiveWorkspaceResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The restore needs a decision, or something else holds the workspace */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The restore failed; retryable */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     restore_worktree: {
         parameters: {
             query?: never;
@@ -11249,79 +11380,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorktreeInventoryResponse"];
-                };
-            };
-        };
-    };
-    get_worktree_retention_policy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Worktree retention policy */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorktreeRetentionPolicy"];
-                };
-            };
-        };
-    };
-    update_worktree_retention_policy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateWorktreeRetentionPolicyRequest"];
-            };
-        };
-        responses: {
-            /** @description Updated worktree retention policy */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorktreeRetentionPolicy"];
-                };
-            };
-            /** @description Invalid retention policy */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    run_worktree_retention: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Worktree retention run result */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunWorktreeRetentionResponse"];
                 };
             };
         };

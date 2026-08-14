@@ -12,7 +12,7 @@ use axum::{
     Json,
 };
 
-use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
+use super::access::{assert_workspace_exists, assert_workspace_mutable};
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use crate::adapters::hosting::types::{
@@ -67,7 +67,7 @@ where
         .acquire_shared(&workspace_id, operation_kind)
         .await;
     match access {
-        HostingTaskAccess::Read => assert_workspace_not_retired(state, &workspace_id)?,
+        HostingTaskAccess::Read => assert_workspace_exists(state, &workspace_id)?,
         HostingTaskAccess::Write => assert_workspace_mutable(state, &workspace_id)?,
     }
     let workspace_runtime = state.workspace_runtime.clone();

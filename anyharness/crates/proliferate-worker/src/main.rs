@@ -31,7 +31,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let _telemetry = logging::init();
+    let desktop_diagnostics = proliferate_diagnostics_client::take_desktop_activation(
+        proliferate_diagnostics_client::DiagnosticsComponent::DesktopWorker,
+    );
+    let telemetry = logging::init(desktop_diagnostics);
     let result = async {
         let args = Args::parse();
         let config = config::WorkerConfig::load(args.config)?;
@@ -43,6 +46,10 @@ async fn main() -> anyhow::Result<()> {
     if let Err(error) = &result {
         capture_anyhow(error);
     }
+
+    telemetry
+        .shutdown(std::time::Duration::from_millis(500))
+        .await;
 
     result
 }

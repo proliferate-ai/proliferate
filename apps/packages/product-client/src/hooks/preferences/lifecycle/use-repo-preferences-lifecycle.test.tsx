@@ -54,6 +54,8 @@ describe("useRepoPreferencesLifecycle", () => {
         defaultBranch: "main",
         setupScript: "pnpm install",
         runCommand: "",
+        archiveScript: "",
+        rerunSetupOnUnarchive: true,
       },
     });
     expect(setItemSpy).not.toHaveBeenCalled();
@@ -78,6 +80,8 @@ describe("useRepoPreferencesLifecycle", () => {
         defaultBranch: "develop",
         setupScript: "",
         runCommand: "pnpm dev",
+        archiveScript: "",
+        rerunSetupOnUnarchive: true,
       },
     });
   });
@@ -108,6 +112,8 @@ describe("useRepoPreferencesLifecycle", () => {
         defaultBranch: "main",
         setupScript: "pnpm install",
         runCommand: "",
+        archiveScript: "",
+        rerunSetupOnUnarchive: true,
       },
     });
   });

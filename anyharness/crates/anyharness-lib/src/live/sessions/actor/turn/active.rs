@@ -21,6 +21,18 @@ const UNLOAD_CANCEL_GRACE: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const UNLOAD_CANCEL_GRACE: Duration = Duration::from_millis(100);
 
+/// How long an active-turn `Stop` waits for the agent to unwind its turn in
+/// response to the ACP cancel before abandoning the turn outright and letting
+/// `run()`'s exit sequence kill the agent's process group.
+///
+/// The cancel is cooperative and nothing obliges an agent to honor it, so
+/// without this bound `stop_and_await` (and with it `stop_all_for_workspace`
+/// and R4's whole quiesce) would block for as long as the turn lasts. Racing
+/// the cancel against a short bound and then escalating regardless is safe:
+/// the escalation reaps the child either way, and the worst case (bound + the
+/// kill path's 5s grace) still fits R4's 8s `QUIESCE_DEADLINE`.
+const ACTIVE_TURN_STOP_BOUND: Duration = Duration::from_secs(2);
+
 pub(in crate::live::sessions::actor) struct ActivePromptRequest {
     pub payload: PromptPayload,
     pub prompt_id: Option<String>,
@@ -158,8 +170,27 @@ impl SessionActor {
             prompt_pending_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             prompt_pending_interval.tick().await;
 
-            while prompt_result.is_none() {
+            // Armed only by `SessionCommand::Stop`; see
+            // `ACTIVE_TURN_STOP_BOUND`. Same shape as `run.rs`'s
+            // `queue_drain_not_before` arm: an absolute instant plus an `if`
+            // precondition, so the disabled arm costs nothing.
+            let mut stop_bound_at: Option<tokio::time::Instant> = None;
+            let mut abandoned_for_stop = false;
+
+            while prompt_result.is_none() && !abandoned_for_stop {
+                let stop_bound_armed = stop_bound_at.is_some();
+                let stop_bound_deadline =
+                    stop_bound_at.unwrap_or_else(tokio::time::Instant::now);
                 tokio::select! {
+                    _ = tokio::time::sleep_until(stop_bound_deadline), if stop_bound_armed => {
+                        tracing::warn!(
+                            session_id = %self.session_id,
+                            prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
+                            bound_ms = ACTIVE_TURN_STOP_BOUND.as_millis() as u64,
+                            "session.actor.stop.turn_unwind_bound_exceeded"
+                        );
+                        abandoned_for_stop = true;
+                    }
                     _ = prompt_pending_interval.tick() => {
                         let sink_snapshot = {
                             let sink = self.event_sink.lock().await;
@@ -246,6 +277,23 @@ impl SessionActor {
                                 unload_requested = true;
                                 unload_deadline.as_mut().reset(tokio::time::Instant::now() + UNLOAD_CANCEL_GRACE);
                                 exit_after_prompt = Some(ActorExitDisposition::Unload);
+                            }
+                            Some(SessionCommand::Stop { respond_to }) => {
+                                self.resolve_pending_interactions(Resolution::Dismissed).await;
+                                let _ = self.conn
+                                    .send_notification(acp::schema::CancelNotification::new(self.native_session_id.clone()));
+                                // Stored, not sent: `run()`'s exit sequence
+                                // fires this only after the process-group
+                                // kill escalation confirms death.
+                                self.pending_stop_response = Some(respond_to);
+                                exit_after_prompt = Some(ActorExitDisposition::Dismiss);
+                                // Race the cooperative cancel against a short
+                                // bound; an agent that ignores it must not be
+                                // able to hold the stop open for the length
+                                // of its turn.
+                                stop_bound_at = Some(
+                                    tokio::time::Instant::now() + ACTIVE_TURN_STOP_BOUND,
+                                );
                             }
                             Some(SessionCommand::ResolveInteraction { request_id, resolution, respond_to }) => {
                                 let result = self.resolve_interaction(request_id, resolution).await;
@@ -340,6 +388,22 @@ impl SessionActor {
                         }
                     }
                 }
+            }
+
+            if abandoned_for_stop {
+                // The agent never unwound within the bound. Close the turn in
+                // the transcript so it does not hang open forever, then fall
+                // straight through to `run()`'s exit sequence, whose group
+                // escalation reaps the agent process regardless of whether
+                // the cancel was ever honored. `finish_prompt_result` is
+                // deliberately skipped: there is no prompt result, and the
+                // agent it would have reported on is about to be killed.
+                {
+                    let mut sink = self.event_sink.lock().await;
+                    sink.turn_ended(anyharness_contract::v1::StopReason::Cancelled);
+                }
+                self.resume_replay_filter.disable();
+                break 'drain;
             }
 
             let broken_session = if unload_requested {

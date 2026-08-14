@@ -18,6 +18,8 @@
 # max-lines entries.
 
 apps/packages/product-client/src/components/workspace/chat/input/ChatInput.tsx 447 blocked-status composer takeover branch (textarea/control-row swap + focus restore); split on next growth
+apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx 521 connected sidebar host; main's pinned-section split landed alongside R7's lifecycle archive handlers (resolver, instant archive, optimistic-hide over groups+pinned, scenario dialog) in the merge; extraction pending
+apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-archive-actions.ts 464 R7 lifecycle archive/unarchive orchestrator: verb posts, undo toasts, 409 scenario flow, optimistic-hide set with pending reconciliation; grew past 400 with the flicker-regression rider
 apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 425 workspace bootstrap actions + gateway billing-block capture into the status screen (C8); split on next growth
 apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx 525 existing markdown transcript renderer pending split
 # Relocated from apps/desktop/src by the Desktop-product move into product-client
@@ -29,7 +31,7 @@ apps/packages/product-client/src/components/content/ui/diff/SplitDiffViewer.tsx 
 apps/packages/product-client/src/components/content/ui/diff/UnifiedDiffViewer.tsx 414 unified diff viewer pending row-renderer split
 apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx 433 shared ordered-readiness continuation host for Cloud registration and retry-stable local clone; split by intent owner on next growth
 apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the in-memory tombstone model
-apps/packages/product-client/src/hooks/sessions/workflows/use-session-creation-actions.ts 451 session creation orchestrator (+lazy materialization and durable empty-create lifecycle, frozen-input replay, and acknowledgement seam); split deferred
+apps/packages/product-client/src/hooks/sessions/workflows/use-session-creation-actions.ts 452 session creation orchestrator (+lazy materialization and durable empty-create lifecycle, frozen-input replay, and acknowledgement seam); split deferred
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
 apps/packages/product-client/src/host/product-host.ts 420 WDU slice 04 (G2/G4): host contract grew from getAnonymousInstallId + getSandboxGatewayAccessToken and their doc contracts
 apps/packages/product-client/src/components/playground/WorkspaceStatusPlayground.tsx 450 status-card playground fixtures pending scenario-module split (#1202 debt repair)

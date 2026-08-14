@@ -1,31 +1,17 @@
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { DotCellLoader } from "#product/primitives/DotCellLoader";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
 } from "#product/config/chat-layout";
 
-function AssistantMessageSkeleton() {
-  return (
-    <div className="flex max-w-[88%] flex-col gap-2">
-      <div className="h-3 w-24 rounded-md bg-muted/60" />
-      <div className="h-3 w-full rounded-md bg-muted/45" />
-      <div className="h-3 w-[92%] rounded-md bg-muted/45" />
-      <div className="h-3 w-[68%] rounded-md bg-muted/45" />
-    </div>
-  );
-}
-
-function UserMessageSkeleton() {
-  return (
-    <div className="flex justify-end">
-      <div className="flex w-[min(22rem,72%)] flex-col items-end gap-2">
-        <div className="h-3 w-20 rounded-md bg-muted/60" />
-        <div className="h-10 w-full rounded-md bg-muted/45" />
-      </div>
-    </div>
-  );
-}
-
+/**
+ * The chat pane's switch/load wait state: a centered activity cell instead of
+ * fake message skeletons (PRO-182 — a clean loader reads better than a
+ * transient skeleton that content immediately replaces). The delayed
+ * `content-fade-in` keeps sub-200ms switches loader-free so fast paths never
+ * flash it.
+ */
 export function TranscriptSwitchingPlaceholder({
   label = "Loading chat",
 }: {
@@ -40,13 +26,11 @@ export function TranscriptSwitchingPlaceholder({
         data-chat-switching-placeholder
       >
         <div
-          className={`${CHAT_COLUMN_CLASSNAME} flex flex-1 flex-col gap-6 motion-safe:animate-pulse`}
+          className={`${CHAT_COLUMN_CLASSNAME} flex flex-1 flex-col items-center justify-center gap-3 animate-content-fade-in [animation-delay:var(--duration-disclosure)] [animation-fill-mode:backwards]`}
           aria-hidden="true"
         >
-          <UserMessageSkeleton />
-          <AssistantMessageSkeleton />
-          <UserMessageSkeleton />
-          <AssistantMessageSkeleton />
+          <DotCellLoader className="text-muted-foreground" variant="wave" />
+          <p className="text-chat font-medium text-muted-foreground">{label}</p>
         </div>
       </div>
     </DebugProfiler>

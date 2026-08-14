@@ -132,7 +132,6 @@ pub enum SessionMutationKind {
     SubagentWake,
     ReplayAdvance,
     WorkspacePurge,
-    WorkspaceRetire,
     /// Read-consistency fence for a mobility archive snapshot.
     MobilitySnapshot,
     /// Destructive source teardown after a mobility handoff.
@@ -172,7 +171,6 @@ impl SessionMutationKind {
             Self::SubagentWake => "subagent_wake",
             Self::ReplayAdvance => "replay_advance",
             Self::WorkspacePurge => "workspace_purge",
-            Self::WorkspaceRetire => "workspace_retire",
             Self::MobilitySnapshot => "mobility_snapshot",
             Self::MobilityTeardown => "mobility_teardown",
             Self::SubagentClose => "subagent_close",
@@ -333,7 +331,6 @@ impl SessionMutationAdmission {
                 SessionMutationKind::SubagentOpen
                     | SessionMutationKind::SubagentClose
                     | SessionMutationKind::WorkspacePurge
-                    | SessionMutationKind::WorkspaceRetire
                     | SessionMutationKind::MobilitySnapshot
                     | SessionMutationKind::MobilityTeardown
             )

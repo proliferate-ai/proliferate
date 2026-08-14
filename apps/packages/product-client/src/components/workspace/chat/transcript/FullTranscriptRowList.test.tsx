@@ -121,6 +121,70 @@ describe("FullTranscriptRowList", () => {
     expect(viewport.scrollTop).toBe(600);
   });
 
+  it("re-pins to the bottom on prompt submit even if the pin was already lost", () => {
+    const props = makeProps(vi.fn(), 50);
+    const { container, rerender } = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    const button = container.querySelector('[aria-label="Scroll to bottom"]');
+    Object.defineProperty(viewport, "scrollHeight", { value: 1_000, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 0, configurable: true });
+    fireEvent.scroll(viewport, { target: { scrollTop: 400 } });
+    expect(button?.getAttribute("aria-hidden")).toBe("false");
+
+    // A rising submission stamp is an explicit return-to-bottom intent; it
+    // must re-pin even though the user scrolled away and the pin was never
+    // re-earned.
+    rerender(<FullTranscriptRowList {...props} lastPromptSubmittedAtMs={1_000} />);
+
+    expect(viewport.scrollTop).toBe(1_000);
+    expect(button?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("does not re-pin when the newest submission stamp falls (entry left the outbox)", () => {
+    const props = { ...makeProps(vi.fn(), 50), lastPromptSubmittedAtMs: 2_000 };
+    const { container, rerender } = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    const button = container.querySelector('[aria-label="Scroll to bottom"]');
+    Object.defineProperty(viewport, "scrollHeight", { value: 1_000, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 0, configurable: true });
+    fireEvent.scroll(viewport, { target: { scrollTop: 400 } });
+    expect(button?.getAttribute("aria-hidden")).toBe("false");
+
+    // The newest entry leaving the outbox (delivery, dismissal) lowers the
+    // stamp; that is not a submit and must not fight the user's position.
+    rerender(<FullTranscriptRowList {...props} lastPromptSubmittedAtMs={1_000} />);
+    expect(viewport.scrollTop).toBe(400);
+    expect(button?.getAttribute("aria-hidden")).toBe("false");
+
+    // The next real submit raises it past every stamp seen before — re-pin.
+    rerender(<FullTranscriptRowList {...props} lastPromptSubmittedAtMs={3_000} />);
+    expect(viewport.scrollTop).toBe(1_000);
+    expect(button?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("submit re-pins to the soft bottom, preserving the manual-only overlay range", () => {
+    const props = {
+      ...makeProps(vi.fn(), 50),
+      bottomInsetPx: 160,
+      nonDisplacingBottomInsetPx: 160,
+    };
+    const { container, rerender } = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    const button = container.querySelector('[aria-label="Scroll to bottom"]');
+    Object.defineProperty(viewport, "scrollHeight", { value: 1_000, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 0, configurable: true });
+    fireEvent.scroll(viewport, { target: { scrollTop: 400 } });
+    expect(button?.getAttribute("aria-hidden")).toBe("false");
+
+    // Unlike the scroll-to-bottom button, a submit must not consume the
+    // manual-only overlay range: the follow target is the soft bottom above
+    // the dock-slot card (hard bottom 1000 minus the 160px overlay range),
+    // so the stream never slides under the card.
+    rerender(<FullTranscriptRowList {...props} lastPromptSubmittedAtMs={1_000} />);
+    expect(viewport.scrollTop).toBe(840);
+    expect(button?.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("adds manual scroll range for composer cards without moving the transcript", () => {
     const notifyResize = stubCapturingResizeObserver();
     const props = makeProps(vi.fn(), 50);
@@ -247,7 +311,7 @@ function makeProps(
     selectedWorkspaceId: "workspace-1",
     activeSessionId: "session-1",
     isSessionBusy: false,
-    pendingPromptText: null,
+    lastPromptSubmittedAtMs: null,
     onLoadOlderHistory,
     onScrollSample: vi.fn(),
     renderRow: (row: TranscriptVirtualRow) => <div>{row.key}</div>,

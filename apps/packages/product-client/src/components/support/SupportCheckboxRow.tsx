@@ -7,6 +7,12 @@ interface SupportCheckboxRowProps {
   label: string;
   /** Helper line revealed under the row while the box is checked. */
   helper?: string;
+  /**
+   * Keep `helper` visible while unchecked. Required where the helper is a
+   * consent disclosure the user has to read before deciding, not a
+   * confirmation of a choice already made.
+   */
+  persistentHelper?: boolean;
 }
 
 /**
@@ -19,6 +25,7 @@ export function SupportCheckboxRow({
   onCheckedChange,
   label,
   helper,
+  persistentHelper = false,
 }: SupportCheckboxRowProps) {
   return (
     <div>
@@ -29,7 +36,7 @@ export function SupportCheckboxRow({
         />
         <span className="text-ui-sm">{label}</span>
       </Label>
-      {helper && checked ? (
+      {helper && (checked || persistentHelper) ? (
         <p className="mt-0.5 pl-6 text-ui-sm text-muted-foreground">{helper}</p>
       ) : null}
     </div>

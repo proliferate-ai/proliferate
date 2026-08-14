@@ -8,7 +8,7 @@ use crate::adapters::git::GitService;
 use crate::domains::repo_roots::store::RepoRootStore;
 use crate::domains::workspaces::branch_refresh::WorkspaceBranchRefreshCoordinator;
 use crate::domains::sessions::store::SessionStore;
-use crate::domains::workspaces::model::WorkspaceKind;
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceLifecycleState};
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::persistence::Db;
 
@@ -317,13 +317,68 @@ fn list_workspaces_returns_stored_branch_without_inline_git_refresh() {
         .workspace;
 
     run_git(source.path(), ["branch", "-m", "renamed"]);
-    let listed = runtime.list_workspaces().expect("list workspaces");
+    let listed = runtime.list_workspaces(None).expect("list workspaces");
     let listed_workspace = listed
         .iter()
         .find(|record| record.id == workspace.id)
         .expect("listed workspace");
 
     assert_eq!(listed_workspace.current_branch.as_deref(), Some("main"));
+}
+
+/// The `?lifecycle=` filter narrows in the store, not over the returned vector:
+/// this is the query the renamed `idx_workspaces_lifecycle` index exists for.
+/// An archived row must be absent from the `active` listing, present in the
+/// `archived` one, and present in `all` - the third case is the control that
+/// keeps the first two from passing because the row simply vanished.
+#[test]
+fn list_workspaces_narrows_to_the_requested_lifecycle_in_the_store() {
+    let source = TempDirGuard::new("runtime-list-lifecycle-source");
+    let runtime_home = TempDirGuard::new("runtime-list-lifecycle-home");
+    init_repo(source.path());
+
+    let db = Db::open_in_memory().expect("open db");
+    let runtime = make_runtime(&db, runtime_home.path());
+    let active = runtime
+        .create_workspace(&source.path().display().to_string())
+        .expect("create active workspace")
+        .workspace;
+    let archived = runtime
+        .create_workspace(&source.path().display().to_string())
+        .expect("create archived workspace")
+        .workspace;
+    WorkspaceStore::new(db.clone())
+        .mark_archived(
+            &archived.id,
+            Some("deadbeef"),
+            None,
+            "2026-01-01T00:00:00Z",
+            None,
+        )
+        .expect("mark archived");
+
+    let ids = |lifecycle: Option<WorkspaceLifecycleState>| {
+        let mut ids = runtime
+            .list_workspaces(lifecycle)
+            .expect("list workspaces")
+            .into_iter()
+            .map(|record| record.id)
+            .collect::<Vec<_>>();
+        ids.sort();
+        ids
+    };
+
+    assert_eq!(
+        ids(Some(WorkspaceLifecycleState::Active)),
+        vec![active.id.clone()]
+    );
+    assert_eq!(
+        ids(Some(WorkspaceLifecycleState::Archived)),
+        vec![archived.id.clone()]
+    );
+    let mut both = vec![active.id, archived.id];
+    both.sort();
+    assert_eq!(ids(None), both);
 }
 
 #[test]

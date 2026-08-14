@@ -862,7 +862,7 @@ index is the closed set, not a sample of it. Closure is mechanical in both direc
 | `Spinner` | [Spinner.tsx](../apps/packages/product-client/src/primitives/Spinner.tsx) | Inline loading spinner. |
 | `StatusDot` | [StatusDot.tsx](../apps/packages/product-client/src/primitives/StatusDot.tsx) | Round semantic-status glyph sized by the `icon-status` tier, `tone` × `fill` (solid disc / hollow ring). The union of two hand-rolled dots (`PrStatusDot`, `RecentWorkStatusDot`) and a dozen inline `icon-status rounded-full bg-*` spans; every tone is an opaque ink, so `warning` maps to `warning-foreground`. `PrStatusDot` composes it, as do the workspace tab strip, the settings sidebar and the workflow run/detail lists. `RecentWorkStatusDot` and the inline spans have not migrated: the ones that remain each want a pulsing `live` state, a halo ring, or the `sidebar-status-unseen` tone, and each of those would be the third axis this row rules out. |
 | `Switch` | [Switch.tsx](../apps/packages/product-client/src/primitives/Switch.tsx) | Toggle switch. |
-| `Textarea` | [Textarea.tsx](../apps/packages/product-client/src/primitives/Textarea.tsx) | Multi-line text input (default/ghost/flush/code variants). |
+| `Textarea` | [Textarea.tsx](../apps/packages/product-client/src/primitives/Textarea.tsx) | Multi-line text input (default/ghost/flush variants). Deliberately has no mono/code variant: prose inputs render in the sans stack (PRO-153); genuine code inputs style mono at the call site as the `font-mono text-readable-code` pair (see the secrets/API-key editors). |
 | `Tooltip` | [Tooltip.tsx](../apps/packages/product-client/src/primitives/Tooltip.tsx) | Formatting wrapper over `tooltip-primitive` — see Collision pairs below. |
 | `tooltip-primitive` | [tooltip-primitive.tsx](../apps/packages/product-client/src/primitives/tooltip-primitive.tsx) | Raw `@radix-ui/react-tooltip` wrapper — see Collision pairs below. |
 | `TypewriterRevealText` | [TypewriterRevealText.tsx](../apps/packages/product-client/src/primitives/TypewriterRevealText.tsx) | Reveals a label one character at a time the first time it is assigned; a tab that mounts already named renders whole, and reduced motion skips the character clock. Consumed by `ChromeTab`. |
@@ -880,14 +880,16 @@ module is the styled call-site entry point most consumers use.
 
 **`DropdownMenu` status.** `DropdownMenu.tsx` is a legacy menu system living
 alongside the sanctioned `PopoverButton`/`PopoverMenuItem` pair, not a second
-tier. Five files import it directly:
-[WorkspaceItemMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/sidebar/WorkspaceItemMenu.tsx),
+tier. Four files import it directly:
 [RightPanelNewTabMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/right-panel/RightPanelNewTabMenu.tsx),
 [WorkspaceActionsMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/topbar/WorkspaceActionsMenu.tsx)
-(all `product-client`), and
+(both `product-client`), and
 [ProposedPlanCard.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx), and
 [SelectedResponseActionMenu.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/SelectedResponseActionMenu.tsx)
-(both `product-client`; the latter replaced chat's hand-rolled `role="menu"` machine). Migrating them onto `PopoverButton`/`PopoverMenuItem` waits
+(both `product-client`; the latter replaced chat's hand-rolled `role="menu"` machine). A fifth consumer,
+`WorkspaceItemMenu.tsx`, was deleted when the archiving-workspaces train's R7 rung
+folded the workspace sidebar's three-dot menu into the row's hover-action slot
+plus its existing context menus. Migrating the remaining four onto `PopoverButton`/`PopoverMenuItem` waits
 on parity: Radix's dropdown-menu primitive provides roving-tabindex arrow-key
 navigation, typeahead, and managed focus-return-to-trigger that
 `PopoverButton`/`PopoverMenuItem` do not implement today. Behavior parity is an

@@ -116,13 +116,13 @@ impl WorkspaceRuntime {
                 anyhow::bail!("a workspace record already exists for path: {workspace_path}");
             }
         }
-        if let Some(retired) = self
+        if let Some(archived) = self
             .store
-            .find_retired_incomplete_cleanup_by_path_and_kind(&workspace_path, workspace_kind)?
+            .find_archived_by_path_and_kind(&workspace_path, workspace_kind)?
         {
             anyhow::bail!(
-                "workspace path still has pending cleanup from retired workspace {}: {}",
-                retired.id,
+                "workspace path is reserved by archived workspace {}: {}",
+                archived.id,
                 workspace_path
             );
         }

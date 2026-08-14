@@ -23,9 +23,9 @@ import { getSessionRecord } from "#product/stores/sessions/session-records";
 import {
   applyHistoryStateToStores,
   finishStandaloneApplyOperation,
-  isSessionHistoryTimeoutAbort,
   recordHistoryApplyStepMetrics,
   recordHistoryStateCounts,
+  reportSessionHistoryRehydrateFailure,
   resolveHistoryApplyOperationKind,
   SESSION_APPLY_MEASUREMENT_SURFACES,
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
@@ -338,18 +338,16 @@ export function useSessionHistoryHydration() {
       });
       return true;
     } catch (error) {
-      if (import.meta.env.DEV && !isSessionHistoryTimeoutAbort(error)) {
-        console.debug("[session-runtime] session history rehydrate failed", error);
-      }
-      logLatency("session.history.rehydrate.failed", {
+      reportSessionHistoryRehydrateFailure({
+        error,
         sessionId,
-        afterSeq: options?.afterSeq ?? null,
-        beforeSeq: options?.beforeSeq ?? null,
-        limit: options?.limit ?? null,
-        turnLimit: options?.turnLimit ?? null,
-        timeoutMs: options?.timeoutMs ?? null,
+        operationId: options?.measurementOperationId,
+        afterSeq: options?.afterSeq,
+        beforeSeq: options?.beforeSeq,
+        limit: options?.limit,
+        turnLimit: options?.turnLimit,
+        timeoutMs: options?.timeoutMs,
         elapsedMs: Math.round(performance.now() - startedAt),
-        errorName: error instanceof Error ? error.name : "unknown",
       });
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "error_sanitized");
       return false;
