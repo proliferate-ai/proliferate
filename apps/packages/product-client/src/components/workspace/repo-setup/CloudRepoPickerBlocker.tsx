@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Check } from "#product/primitives/icons/core";
 import { RotateCw, ShieldAlert } from "#product/primitives/icons/status";
 import { GitHub } from "#product/primitives/icons/platform";
@@ -6,6 +7,19 @@ import type {
   CloudRepoPickerBlockerView,
   CloudRepoPickerWaitingView,
 } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
+
+/**
+ * The 32px glyph tile both prerequisite panels lead with. One definition, so
+ * the checklist and the waiting panel cannot drift apart in size or fill while
+ * a user is moving between them.
+ */
+function BlockerTile({ glyph }: { glyph: ReactNode }) {
+  return (
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-control text-muted-foreground">
+      {glyph}
+    </span>
+  );
+}
 
 /** Staged prerequisite state with one primary action for the current step. */
 export function CloudRepoPickerBlocker({
@@ -22,9 +36,7 @@ export function CloudRepoPickerBlocker({
   return (
     <div>
       <div className="flex items-start gap-3 py-1">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-control text-muted-foreground">
-          <ShieldAlert aria-hidden className="icon-paired" />
-        </span>
+        <BlockerTile glyph={<ShieldAlert aria-hidden className="icon-paired" />} />
         <span className="min-w-0 flex-1">
           <h3 className="text-ui font-medium leading-5 text-foreground">{blocker.title}</h3>
           <p className="mt-0.5 text-ui-sm text-muted-foreground">
@@ -90,9 +102,7 @@ function WaitingForGitHub({ waiting }: { waiting: CloudRepoPickerWaitingView }) 
   return (
     <div>
       <div className="flex items-start gap-3 px-2 py-1">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-control text-muted-foreground">
-          <GitHub aria-hidden className="icon-paired" />
-        </span>
+        <BlockerTile glyph={<GitHub aria-hidden className="icon-paired" />} />
         <span className="min-w-0 flex-1">
           <h3 className="text-ui-sm font-medium leading-5 text-foreground">{waiting.title}</h3>
           <p className="mt-0.5 text-ui-sm text-muted-foreground">{waiting.description}</p>

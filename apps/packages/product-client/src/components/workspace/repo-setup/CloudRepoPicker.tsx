@@ -56,7 +56,13 @@ export function CloudRepoPicker({
   return (
     <div className="flex flex-col">
       {/* Confirmation on arrival: without it, finishing the GitHub checklist
-          drops the user into a bare list with no sign the work landed. */}
+          drops the user into a bare list with no sign the work landed.
+
+          The success tint is spelled out because nothing sanctioned carries it
+          at banner scale: `Badge` owns the same three tokens but is a pill and
+          keeps them private, and `NoticeBanner` has no success tone. Worth
+          promoting a success tone onto NoticeBanner if a second banner ever
+          wants one — one instance is not yet a vocabulary. */}
       {connectedBanner ? (
         <div
           role="status"
