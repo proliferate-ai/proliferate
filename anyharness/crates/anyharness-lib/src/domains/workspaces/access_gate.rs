@@ -234,7 +234,7 @@ mod tests {
     use crate::domains::terminals::store::TerminalStore;
     use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
     use crate::domains::workspaces::model::{
-        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
         WorkspaceSurface,
     };
     use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
@@ -254,11 +254,6 @@ mod tests {
             origin: None,
             creator_context: None,
             lifecycle_state: WorkspaceLifecycleState::Active,
-            cleanup_state: WorkspaceCleanupState::None,
-            cleanup_operation: None,
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
             archived_head_sha: None,
             archived_branch: None,
             archived_at: None,

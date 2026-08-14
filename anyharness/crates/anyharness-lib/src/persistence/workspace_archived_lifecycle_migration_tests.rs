@@ -4,29 +4,34 @@
 //! columns.
 //!
 //! Retired rows are ABSORBED, not kept, so these proofs pin the absorption
-//! mapping (including crashed-purge tombstones), the two backfills, the
-//! survival of the five cleanup columns purge still writes until R5, the index
-//! set, restored foreign-key enforcement, the tolerant read of an unknown
-//! lifecycle value, and the idempotence guard.
+//! mapping (including crashed-purge tombstones), the two backfills, and the
+//! tolerant read of an unknown lifecycle value.
+//!
+//! The rebuild's SCHEMA-shape half - the column set, the three indexes,
+//! restored foreign-key enforcement, and the idempotence guard - lives in
+//! `workspace_archived_lifecycle_rebuild_tests.rs`. The two files were one
+//! until R5 grew `seed_pre_0067` past the 600-line cap; splitting beats a
+//! net-new `max_lines` exception. The fixture below stays here and is shared
+//! with that module, exactly as
+//! `custom_migration_registry_tests::table_column_names` is shared with both.
 
 use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 
-use super::custom_migration_registry_tests::table_column_names;
 use super::migrations::run_migrations;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceLifecycleState};
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::persistence::Db;
 
-const MIGRATION: &str = "0067_workspace_archived_lifecycle";
+pub(super) const MIGRATION: &str = "0067_workspace_archived_lifecycle";
 
-struct TempDatabase {
+pub(super) struct TempDatabase {
     dir: PathBuf,
 }
 
 impl TempDatabase {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let dir = std::env::temp_dir().join(format!(
             "anyharness-workspace-archived-migration-{}",
             uuid::Uuid::new_v4()
@@ -39,7 +44,7 @@ impl TempDatabase {
         &self.dir
     }
 
-    fn path(&self) -> PathBuf {
+    pub(super) fn path(&self) -> PathBuf {
         self.dir.join("db.sqlite")
     }
 }
@@ -50,11 +55,16 @@ impl Drop for TempDatabase {
     }
 }
 
-/// The real pre-0067 schema: run the whole registry with 0067 pre-marked as
-/// applied, then unmark it. That reproduces the exact post-0063 shape a field
-/// database is in — including the old `('active', 'retired')` CHECK — instead
-/// of a hand-copied approximation that can drift from the registry.
-fn seed_pre_0067(conn: &mut Connection) {
+/// The real pre-0067 schema: run the whole registry with 0067 AND 0068
+/// pre-marked as applied, then unmark 0067 only. That reproduces the exact
+/// post-0063 shape a field database is in — including the old `('active',
+/// 'retired')` CHECK and the five cleanup columns 0068 later drops — instead
+/// of a hand-copied approximation that can drift from the registry. 0068 must
+/// stay marked applied here: it runs immediately after 0067 in the registry
+/// and assumes 0067's rebuild already happened (it selects the four
+/// archive columns 0067 adds), so leaving it unmarked while 0067 is skipped
+/// would run it against a table that does not have those columns yet.
+pub(super) fn seed_pre_0067(conn: &mut Connection) {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
         .expect("enable foreign keys");
     conn.execute_batch(
@@ -66,6 +76,11 @@ fn seed_pre_0067(conn: &mut Connection) {
     .expect("create migration ledger");
     conn.execute("INSERT INTO _migrations (name) VALUES (?1)", [MIGRATION])
         .expect("pre-mark the migration under test");
+    conn.execute(
+        "INSERT INTO _migrations (name) VALUES ('0068_workspace_drop_cleanup_columns')",
+        [],
+    )
+    .expect("pre-mark the downstream rebuild so it does not run ahead of 0067");
     run_migrations(conn).expect("seed pre-0067 schema");
     conn.execute("DELETE FROM _migrations WHERE name = ?1", [MIGRATION])
         .expect("unmark the migration under test");
@@ -82,7 +97,7 @@ fn seed_pre_0067(conn: &mut Connection) {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn insert_pre_0067_workspace(
+pub(super) fn insert_pre_0067_workspace(
     conn: &Connection,
     id: &str,
     lifecycle_state: &str,
@@ -118,7 +133,7 @@ fn insert_pre_0067_workspace(
     .expect("insert pre-0067 workspace row");
 }
 
-fn lifecycle_of(conn: &Connection, id: &str) -> String {
+pub(super) fn lifecycle_of(conn: &Connection, id: &str) -> String {
     conn.query_row(
         "SELECT lifecycle_state FROM workspaces WHERE id = ?1",
         [id],
@@ -127,7 +142,7 @@ fn lifecycle_of(conn: &Connection, id: &str) -> String {
     .expect("read lifecycle_state")
 }
 
-fn optional_text(conn: &Connection, column: &str, id: &str) -> Option<String> {
+pub(super) fn optional_text(conn: &Connection, column: &str, id: &str) -> Option<String> {
     conn.query_row(
         &format!("SELECT {column} FROM workspaces WHERE id = ?1"),
         [id],
@@ -136,7 +151,7 @@ fn optional_text(conn: &Connection, column: &str, id: &str) -> Option<String> {
     .expect("read column")
 }
 
-fn index_names(conn: &Connection) -> Vec<String> {
+pub(super) fn index_names(conn: &Connection) -> Vec<String> {
     let mut stmt = conn
         .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'workspaces'")
         .expect("prepare index query");
@@ -373,129 +388,6 @@ fn archived_branch_is_backfilled_from_current_then_original_branch() {
 }
 
 #[test]
-fn the_rebuild_keeps_the_five_cleanup_columns_and_adds_the_four_archive_columns() {
-    let database = TempDatabase::new();
-    let mut conn = Connection::open(database.path()).expect("open fixture");
-    seed_pre_0067(&mut conn);
-
-    run_migrations(&mut conn).expect("run 0067");
-
-    let columns = table_column_names(&conn, "workspaces");
-    for column in [
-        "cleanup_state",
-        "cleanup_operation",
-        "cleanup_error_message",
-        "cleanup_failed_at",
-        "cleanup_attempted_at",
-    ] {
-        assert!(
-            columns.contains(&column.to_string()),
-            "purge still writes {column} until R5: {columns:?}"
-        );
-    }
-    for column in [
-        "archived_head_sha",
-        "archived_branch",
-        "archived_at",
-        "partial_capture_json",
-    ] {
-        assert!(
-            columns.contains(&column.to_string()),
-            "missing new column {column}: {columns:?}"
-        );
-    }
-}
-
-#[test]
-fn the_rebuild_recreates_all_three_indexes_and_renames_the_retention_index() {
-    let database = TempDatabase::new();
-    let mut conn = Connection::open(database.path()).expect("open fixture");
-    seed_pre_0067(&mut conn);
-
-    run_migrations(&mut conn).expect("run 0067");
-
-    let indexes = index_names(&conn);
-    for name in [
-        "idx_workspaces_path",
-        "idx_workspaces_repo_root_id",
-        "idx_workspaces_lifecycle",
-    ] {
-        assert!(
-            indexes.contains(&name.to_string()),
-            "missing index {name}: {indexes:?}"
-        );
-    }
-    assert!(
-        !indexes.contains(&"idx_workspaces_retention".to_string()),
-        "the retention index is renamed, not kept: {indexes:?}"
-    );
-    let sql: String = conn
-        .query_row(
-            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_workspaces_lifecycle'",
-            [],
-            |row| row.get(0),
-        )
-        .expect("read lifecycle index DDL");
-    assert!(
-        sql.contains("repo_root_id")
-            && sql.contains("kind")
-            && sql.contains("lifecycle_state")
-            && sql.contains("surface"),
-        "lifecycle index must keep the retention index's column tuple: {sql}"
-    );
-}
-
-#[test]
-fn foreign_key_enforcement_is_restored_after_the_rebuild() {
-    let database = TempDatabase::new();
-    let mut conn = Connection::open(database.path()).expect("open fixture");
-    seed_pre_0067(&mut conn);
-    insert_pre_0067_workspace(
-        &conn,
-        "workspace-active",
-        "active",
-        "none",
-        None,
-        None,
-        Some("main"),
-        Some("main"),
-    );
-
-    run_migrations(&mut conn).expect("run 0067");
-
-    assert_eq!(
-        conn.query_row("PRAGMA foreign_keys", [], |row| row.get::<_, i64>(0))
-            .expect("read foreign key pragma"),
-        1,
-        "the runner must restore foreign key enforcement"
-    );
-    let violations: i64 = conn
-        .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
-            row.get(0)
-        })
-        .expect("run foreign_key_check");
-    assert_eq!(violations, 0);
-    // The rebuilt table is still a live FK parent.
-    conn.execute(
-        "INSERT INTO workspace_access_modes (workspace_id, mode, updated_at)
-         VALUES ('workspace-active', 'normal', '2026-05-05T00:00:00Z')",
-        [],
-    )
-    .expect("child row against a real workspace");
-    let error = conn
-        .execute(
-            "INSERT INTO workspace_access_modes (workspace_id, mode, updated_at)
-             VALUES ('workspace-missing', 'normal', '2026-05-05T00:00:00Z')",
-            [],
-        )
-        .expect_err("child row against a bogus workspace must be refused");
-    assert!(
-        error.to_string().to_lowercase().contains("foreign key"),
-        "unexpected error: {error}"
-    );
-}
-
-#[test]
 fn an_unknown_lifecycle_value_migrates_to_archived_and_does_not_brick_listings() {
     let database = TempDatabase::new();
     let mut conn = Connection::open(database.path()).expect("open fixture");
@@ -552,43 +444,4 @@ fn an_unknown_lifecycle_value_migrates_to_archived_and_does_not_brick_listings()
         .find(|workspace| workspace.id == "workspace-active")
         .expect("active row is still listed");
     assert_eq!(active.lifecycle_state, WorkspaceLifecycleState::Active);
-}
-
-#[test]
-fn rerunning_the_migration_on_an_already_migrated_database_is_a_no_op() {
-    let database = TempDatabase::new();
-    let mut conn = Connection::open(database.path()).expect("open fixture");
-    seed_pre_0067(&mut conn);
-    insert_pre_0067_workspace(
-        &conn,
-        "workspace-retired",
-        "retired",
-        "complete",
-        Some("retire"),
-        Some("2026-05-05T00:00:00Z"),
-        Some("feature/retired"),
-        Some("main"),
-    );
-
-    run_migrations(&mut conn).expect("run 0067");
-    let archived_at_after_first = optional_text(&conn, "archived_at", "workspace-retired");
-
-    // The ledger normally stops a second run; drop the marker so the body's
-    // own idempotence guard is the thing under test.
-    conn.execute("DELETE FROM _migrations WHERE name = ?1", [MIGRATION])
-        .expect("unmark the migration");
-    run_migrations(&mut conn).expect("rerun 0067");
-
-    assert_eq!(lifecycle_of(&conn, "workspace-retired"), "archived");
-    assert_eq!(
-        optional_text(&conn, "archived_at", "workspace-retired"),
-        archived_at_after_first,
-        "the guard must return early instead of rebuilding a second time"
-    );
-    let indexes = index_names(&conn);
-    assert!(indexes.contains(&"idx_workspaces_lifecycle".to_string()));
-    let workspace_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM workspaces", [], |row| row.get(0))
-        .expect("count workspaces");
-    assert_eq!(workspace_count, 1);
 }

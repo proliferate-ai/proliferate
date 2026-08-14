@@ -6,6 +6,7 @@ pub mod diff;
 mod diff_base;
 pub mod diff_files;
 mod diff_support;
+pub mod gc;
 pub mod push;
 pub mod revert_patches;
 pub mod scratch;

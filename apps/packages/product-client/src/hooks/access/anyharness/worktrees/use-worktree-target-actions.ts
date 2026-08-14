@@ -1,10 +1,7 @@
 import type { PruneOrphanWorktreeRequest } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { pruneOrphanWorktree } from "#product/lib/access/anyharness/worktrees";
-import {
-  purgeWorkspace,
-  retryPurgeWorkspace,
-} from "#product/lib/access/anyharness/workspaces";
+import { purgeWorkspace } from "#product/lib/access/anyharness/workspaces";
 import {
   type WorktreeSettingsTarget,
   worktreeSettingsTargetRuntimeConnection,
@@ -21,14 +18,8 @@ export function useWorktreeTargetActions() {
     workspaceId: string,
   ) => purgeWorkspace(worktreeSettingsTargetRuntimeConnection(target), workspaceId), []);
 
-  const retryWorkspacePurge = useCallback((
-    target: WorktreeSettingsTarget,
-    workspaceId: string,
-  ) => retryPurgeWorkspace(worktreeSettingsTargetRuntimeConnection(target), workspaceId), []);
-
   return {
     pruneOrphan,
     purgeWorkspaceHistory,
-    retryWorkspacePurge,
   };
 }

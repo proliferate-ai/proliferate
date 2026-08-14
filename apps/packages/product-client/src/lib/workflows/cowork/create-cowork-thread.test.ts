@@ -178,7 +178,6 @@ function coworkThreadResponse(): CreateCoworkThreadResponse {
       surface: "cowork",
       kind: "local",
       lifecycleState: "active",
-      cleanupState: "none",
       createdAt,
       updatedAt: createdAt,
     },

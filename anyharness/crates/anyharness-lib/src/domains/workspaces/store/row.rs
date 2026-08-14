@@ -5,15 +5,13 @@ use crate::domains::workspaces::creator_context::{
     decode_creator_context_json, encode_creator_context_json,
 };
 use crate::domains::workspaces::model::{
-    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-    WorkspaceModelError, WorkspaceRecord, WorkspaceSurface,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceModelError, WorkspaceRecord, WorkspaceSurface,
 };
 use crate::origin::{decode_origin_json, encode_origin_json};
 
 pub(super) const WORKSPACE_COLUMNS: &str = "\
     id, kind, repo_root_id, path, surface, original_branch, current_branch, display_name,
-    origin_json, creator_context_json, lifecycle_state, cleanup_state, cleanup_operation,
-    cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, archived_head_sha,
+    origin_json, creator_context_json, lifecycle_state, archived_head_sha,
     archived_branch, archived_at, partial_capture_json, created_at, updated_at";
 
 pub(super) fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<()> {
@@ -22,12 +20,10 @@ pub(super) fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqli
     conn.execute(
         "INSERT INTO workspaces (
             id, kind, repo_root_id, path, surface, original_branch, current_branch, display_name,
-            origin_json, creator_context_json, lifecycle_state, cleanup_state, cleanup_operation,
-            cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, archived_head_sha,
+            origin_json, creator_context_json, lifecycle_state, archived_head_sha,
             archived_branch, archived_at, partial_capture_json, created_at, updated_at
          ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-            ?19, ?20, ?21, ?22
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
          )",
         params![
             r.id,
@@ -41,11 +37,6 @@ pub(super) fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqli
             origin_json,
             creator_context_json,
             r.lifecycle_state.as_str(),
-            r.cleanup_state.as_str(),
-            r.cleanup_operation.map(WorkspaceCleanupOperation::as_str),
-            r.cleanup_error_message,
-            r.cleanup_failed_at,
-            r.cleanup_attempted_at,
             r.archived_head_sha,
             r.archived_branch,
             r.archived_at,
@@ -61,8 +52,6 @@ pub(super) fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> 
     let id: String = row.get("id")?;
     let origin_json: Option<String> = row.get("origin_json")?;
     let creator_context_json: Option<String> = row.get("creator_context_json")?;
-    let cleanup_operation =
-        parse_optional_workspace_enum::<WorkspaceCleanupOperation>(row, "cleanup_operation", 12)?;
     Ok(WorkspaceRecord {
         id: id.clone(),
         kind: parse_workspace_enum::<WorkspaceKind>(row, "kind", 1)?,
@@ -75,11 +64,6 @@ pub(super) fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> 
         origin: decode_origin_json("workspaces", &id, origin_json),
         creator_context: decode_creator_context_json("workspaces", &id, creator_context_json),
         lifecycle_state: parse_workspace_lifecycle(row, &id)?,
-        cleanup_state: parse_workspace_enum::<WorkspaceCleanupState>(row, "cleanup_state", 11)?,
-        cleanup_operation,
-        cleanup_error_message: row.get("cleanup_error_message")?,
-        cleanup_failed_at: row.get("cleanup_failed_at")?,
-        cleanup_attempted_at: row.get("cleanup_attempted_at")?,
         archived_head_sha: row.get("archived_head_sha")?,
         archived_branch: row.get("archived_branch")?,
         archived_at: row.get("archived_at")?,
@@ -104,7 +88,7 @@ where
 }
 
 // Lifecycle-only tolerance. parse_workspace_enum stays generic and STRICT for
-// kind / surface / cleanup_state; splitting lifecycle off the shared helper is
+// kind / surface; splitting lifecycle off the shared helper is
 // the point of this rung. Unknown value -> Archived: hidden from the store's
 // active-lifecycle readers, and never a collection-wide parse failure. The
 // column read itself still errors (a missing or non-text column is a schema
@@ -125,22 +109,4 @@ fn parse_workspace_lifecycle(
             WorkspaceLifecycleState::Archived
         }),
     )
-}
-
-fn parse_optional_workspace_enum<T>(
-    row: &rusqlite::Row,
-    column_name: &str,
-    column_index: usize,
-) -> rusqlite::Result<Option<T>>
-where
-    T: for<'a> TryFrom<&'a str, Error = WorkspaceModelError>,
-{
-    let value: Option<String> = row.get(column_name)?;
-    value
-        .as_deref()
-        .map(T::try_from)
-        .transpose()
-        .map_err(|error| {
-            rusqlite::Error::FromSqlConversionFailure(column_index, Type::Text, Box::new(error))
-        })
 }

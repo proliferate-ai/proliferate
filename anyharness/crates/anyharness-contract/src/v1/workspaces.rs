@@ -58,22 +58,6 @@ pub enum WorkspaceLifecycleState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkspaceCleanupState {
-    None,
-    Pending,
-    Complete,
-    Failed,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkspaceCleanupOperation {
-    Retire,
-    Purge,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(
     tag = "kind",
     rename_all = "snake_case",
@@ -134,15 +118,6 @@ pub struct Workspace {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     pub lifecycle_state: WorkspaceLifecycleState,
-    pub cleanup_state: WorkspaceCleanupState,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_error_message: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_failed_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_attempted_at: Option<String>,
     /// When this workspace was archived; the archived settings list orders by
     /// it. Additive-optional, so a client that predates archiving reads the
     /// same body it always did.
@@ -209,41 +184,17 @@ pub struct WorkspaceRetireBlocker {
     pub operation: Option<crate::v1::git::GitOperation>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspacePurgePreflightResponse {
-    pub workspace_id: String,
-    pub workspace_kind: WorkspaceKind,
-    pub lifecycle_state: WorkspaceLifecycleState,
-    pub cleanup_state: WorkspaceCleanupState,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
-    pub can_purge: bool,
-    pub materialized: bool,
-    pub blockers: Vec<WorkspaceRetireBlocker>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspacePurgeOutcome {
     Deleted,
-    Blocked,
-    CleanupFailed,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspacePurgeResponse {
     pub outcome: WorkspacePurgeOutcome,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace: Option<Workspace>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preflight: Option<WorkspacePurgePreflightResponse>,
     pub already_deleted: bool,
-    pub cleanup_attempted: bool,
-    pub cleanup_succeeded: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

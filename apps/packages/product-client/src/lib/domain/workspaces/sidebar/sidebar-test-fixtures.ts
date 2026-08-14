@@ -62,7 +62,6 @@ export function makeWorkspace(args: {
     executionSummary,
     availability,
     lifecycleState: "active",
-    cleanupState: "none",
     createdAt: updatedAt,
     updatedAt,
   };

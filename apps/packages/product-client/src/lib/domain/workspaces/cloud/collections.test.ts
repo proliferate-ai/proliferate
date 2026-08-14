@@ -21,7 +21,6 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     currentBranch: "currentBranch" in overrides ? overrides.currentBranch : "feature/workspace-1",
     executionSummary: overrides.executionSummary,
     lifecycleState: overrides.lifecycleState ?? "active",
-    cleanupState: overrides.cleanupState ?? "none",
     createdAt: overrides.createdAt ?? "2026-04-06T10:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-06T10:00:00.000Z",
   };
@@ -221,13 +220,11 @@ describe("buildWorkspaceCollections", () => {
     const archivedComplete = makeWorkspace({
       id: "workspace-archived-complete",
       lifecycleState: "archived",
-      cleanupState: "complete",
       updatedAt: "2026-04-06T11:00:00.000Z",
     });
     const archivedFailed = makeWorkspace({
       id: "workspace-archived-failed",
       lifecycleState: "archived",
-      cleanupState: "failed",
       updatedAt: "2026-04-06T12:00:00.000Z",
     });
 
@@ -254,7 +251,6 @@ describe("buildWorkspaceCollections", () => {
     const collections = buildWorkspaceCollections([
       makeWorkspace({
         lifecycleState: "archived",
-        cleanupState: "failed",
         executionSummary: {
           phase: "running",
           totalSessionCount: 1,

@@ -30,13 +30,21 @@ fn custom_foreign_key_migrations_register_the_workspace_archived_lifecycle_rebui
     assert!(CUSTOM_FOREIGN_KEY_MIGRATIONS
         .iter()
         .any(|(name, _)| *name == "0067_workspace_archived_lifecycle"));
-    // The rebuild must run LAST: a fresh database has to reach the archived
-    // shape after every earlier rebuild has had its turn at the table.
+}
+
+#[test]
+fn custom_foreign_key_migrations_register_the_workspace_drop_cleanup_columns_rebuild() {
+    assert!(CUSTOM_FOREIGN_KEY_MIGRATIONS
+        .iter()
+        .any(|(name, _)| *name == "0068_workspace_drop_cleanup_columns"));
+    // The rebuild must run LAST: a fresh database has to reach the
+    // cleanup-column-free shape after every earlier rebuild has had its turn
+    // at the table.
     assert_eq!(
         CUSTOM_FOREIGN_KEY_MIGRATIONS
             .last()
             .expect("registry is non-empty")
             .0,
-        "0067_workspace_archived_lifecycle"
+        "0068_workspace_drop_cleanup_columns"
     );
 }

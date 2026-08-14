@@ -135,8 +135,20 @@ checkout and git state, but have distinct workspace ids and therefore distinct
 session lists and runtime session state.
 
 For `kind=worktree`, create remains path-unique. A worktree workspace owns its
-materialized checkout path, so active worktree path collisions and pending
-retired cleanup for the same worktree path still block creation.
+materialized checkout path, so two kinds of claim on that path block creation:
+
+- an ACTIVE worktree workspace already recorded at the path, and
+- an ARCHIVED worktree workspace recorded at the path
+  (`find_archived_by_path_and_kind`,
+  `anyharness/crates/anyharness-lib/src/domains/workspaces/store/lookups.rs`).
+
+The archived clause replaced the retire-era "pending retired cleanup" predicate,
+which is gone with the `cleanup_*` columns. It is deliberately wider than what
+it replaced: archiving reserves a workspace's recorded path for the row's whole
+lifetime, because unarchive restores in place and never relocates, so a path
+handed to a new workspace is a path its owner can never come back to. The same
+refusal applies at all four callers - creation, exact-ref materialization, the
+mobility destination, and identity registration.
 
 ### Create Worktree
 
@@ -271,8 +283,9 @@ The durable workspace rows are loaded and stored through:
 
 `domains/workspaces/archive/` is the archiving-workspaces feature's module, and
 `WorkspaceArchiveService` is its orchestrator — a service struct with injected
-dependencies constructed in the `app/workspaces.rs` wiring family, following
-the `domains/workspaces/purge.rs` precedent. The ADR's `rt.` pseudocode is
+dependencies, constructed directly in `app/mod.rs` alongside its sibling
+`WorkspacePurgeService` (`domains/workspaces/deletion/purge.rs`); there is no
+separate wiring family struct for this pair (R5). The ADR's `rt.` pseudocode is
 shorthand; there is no runtime god object and domains may not import
 `AppState`.
 

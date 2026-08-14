@@ -1,38 +1,11 @@
-use std::fs;
 use std::path::Path;
 
 use super::WorkspaceRuntime;
 use crate::adapters::git::GitService;
 use crate::domains::repo_roots::model::RepoRootRecord;
-use crate::domains::workspaces::managed_root::canonical_managed_worktrees_root;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
 
 impl WorkspaceRuntime {
-    pub fn retire_worktree_materialization(
-        &self,
-        workspace: &WorkspaceRecord,
-    ) -> anyhow::Result<()> {
-        if workspace.kind != WorkspaceKind::Worktree {
-            anyhow::bail!("unsupported workspace kind for retire: {}", workspace.kind);
-        }
-        let worktree = Path::new(&workspace.path);
-        if !worktree.exists() {
-            return Ok(());
-        }
-        let managed_root = canonical_managed_worktrees_root(&self.runtime_home)?;
-        let canonical_worktree = fs::canonicalize(worktree).map_err(|error| {
-            anyhow::anyhow!("canonicalizing workspace checkout path for retire: {error}")
-        })?;
-        if !canonical_worktree.starts_with(&managed_root) {
-            anyhow::bail!(
-                "refusing to remove worktree outside managed worktrees root: {}",
-                workspace.path
-            );
-        }
-        let repo_root = self.repo_root_for_workspace(workspace)?;
-        GitService::remove_worktree_force(&repo_root.path, &workspace.path)?;
-        Ok(())
-    }
     pub fn cleanup_failed_worktree(
         &self,
         repo_root_path: &str,

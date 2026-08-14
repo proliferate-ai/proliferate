@@ -199,9 +199,9 @@ pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &
     db.with_conn(|conn| {
         conn.execute(
             "INSERT INTO workspaces (
-                id, kind, repo_root_id, path, surface, lifecycle_state, cleanup_state,
+                id, kind, repo_root_id, path, surface, lifecycle_state,
                 created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, 'standard', 'active', 'none', ?5, ?5)",
+             ) VALUES (?1, ?2, ?3, ?4, 'standard', 'active', ?5, ?5)",
             rusqlite::params![workspace_id, kind, repo_root_id, path, now],
         )?;
         Ok(())

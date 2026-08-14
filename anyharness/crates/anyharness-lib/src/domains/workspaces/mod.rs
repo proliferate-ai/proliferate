@@ -14,13 +14,10 @@ pub mod model;
 pub mod operation_gate;
 pub mod options;
 pub mod path_identity;
-pub mod purge;
 pub mod resolver;
 #[cfg(test)]
 mod resolver_tests;
 pub mod restore_runtime;
-pub mod retire_policy;
-pub mod retire_preflight;
 pub mod runtime;
 pub mod setup_runtime;
 pub mod store;

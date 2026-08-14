@@ -444,9 +444,9 @@ apps/packages/product-client/src/
   [test_cloud_workspace_materialization_service.py](../../../server/tests/integration/test_cloud_workspace_materialization_service.py).
 - Exact-ref source verification:
   [test_cloud_workspace_exact_ref_source.py](../../../server/tests/integration/test_cloud_workspace_exact_ref_source.py).
-- Retire fencing:
-  [retire_preflight_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight_tests.rs),
-  [deletion_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion_tests.rs).
+- Purge fencing:
+  [purge_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/purge_tests.rs),
+  [deletion/tests/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/mod.rs).
 - Paired workspace-retire proof:
   [test_cloud_workspace_retire_after_commit.py](../../../server/tests/unit/test_cloud_workspace_retire_after_commit.py).
 - Pending, landing with the remaining gap PRs: fetch-on-create

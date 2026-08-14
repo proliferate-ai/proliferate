@@ -14,8 +14,8 @@ use std::process::{Command, Stdio};
 use uuid::Uuid;
 
 use super::refs::{
-    copy_to_rescue, delete_for, list_for_repo, resolve_archive_refs, verify_archive_refs,
-    write_archive_refs, ArchiveRefShape,
+    copy_to_rescue, delete_all_for, delete_for, list_for_repo, resolve_archive_refs,
+    verify_archive_refs, write_archive_refs, ArchiveRefShape,
 };
 use crate::adapters::git::operations::snapshot::WorkspaceSnapshot;
 
@@ -380,4 +380,136 @@ fn delete_for_removes_exactly_its_own_id_and_leaves_siblings_and_rescue_intact()
         !resolved.is_empty(),
         "delete_for must leave the rescue family untouched"
     );
+}
+
+/// Every `refs/proliferate/rescue/**` ref name currently in the repo.
+fn rescue_ref_names(repo: &Path) -> Vec<String> {
+    stdout(
+        repo,
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/proliferate/rescue/",
+        ],
+    )
+    .lines()
+    .filter(|line| !line.is_empty())
+    .map(str::to_string)
+    .collect()
+}
+
+#[test]
+fn delete_all_for_clears_its_own_ids_rescue_names_across_every_generation() {
+    // Done-when #5's rescue half: "a purge of an archived workspace leaves no
+    // refs/proliferate/archive-* AND no refs/proliferate/rescue/* ref for that
+    // workspace id". `rescue_ref_names_for` splits the `<id>-<sha>` directory
+    // component on its LAST hyphen because workspace ids contain hyphens
+    // themselves; a prefix or parsing slip would make the whole verb a silent
+    // no-op while purge still reported Deleted, which is exactly what this
+    // pins. Two generations because rescue names accumulate per head sha.
+    let repo = TempDirGuard::new("refs-delete-all-for-rescue");
+    let head_one = init_repo(repo.path());
+    let work_tree = make_tree(repo.path(), "w.txt", "w\n");
+    let index_tree = make_tree(repo.path(), "i.txt", "i\n");
+    let snap_one = snapshot(
+        head_one.clone(),
+        work_tree.clone(),
+        index_tree.clone(),
+        None,
+        None,
+    );
+    // An id that itself carries hyphens — the parser's actual hazard.
+    write_archive_refs(repo.path(), "ws-with-hyphens-a", &snap_one).expect("write generation one");
+    copy_to_rescue(repo.path(), "ws-with-hyphens-a", &head_one).expect("rescue generation one");
+
+    // A second generation at a different head sha, rescued under its own
+    // `<id>-<sha>` directory.
+    fs::write(repo.path().join("second.txt"), "second\n").expect("write second file");
+    run(repo.path(), &["add", "second.txt"]);
+    run(repo.path(), &["commit", "-m", "second"]);
+    let head_two = stdout(repo.path(), &["rev-parse", "HEAD"]);
+    assert_ne!(head_one, head_two);
+    let snap_two = snapshot(
+        head_two.clone(),
+        work_tree.clone(),
+        index_tree.clone(),
+        None,
+        None,
+    );
+    write_archive_refs(repo.path(), "ws-with-hyphens-a", &snap_two).expect("write generation two");
+    copy_to_rescue(repo.path(), "ws-with-hyphens-a", &head_two).expect("rescue generation two");
+
+    // A sibling id whose rescue family must be untouched — and whose id is a
+    // PREFIX-adjacent neighbour, so a naive `starts_with` match would eat it.
+    let snap_sibling = snapshot(head_one.clone(), work_tree, index_tree, None, None);
+    write_archive_refs(repo.path(), "ws-with-hyphens-a-b", &snap_sibling).expect("write sibling");
+    copy_to_rescue(repo.path(), "ws-with-hyphens-a-b", &head_one).expect("rescue sibling");
+    assert_eq!(rescue_ref_names(repo.path()).len(), 9);
+
+    delete_all_for(repo.path(), "ws-with-hyphens-a").expect("delete_all_for");
+
+    // The purged id: no archive refs and no rescue names, in either generation.
+    assert!(resolve_archive_refs(repo.path(), "ws-with-hyphens-a")
+        .expect("resolve_archive_refs")
+        .is_none());
+    let remaining = rescue_ref_names(repo.path());
+    assert!(
+        remaining
+            .iter()
+            .all(|name| name.starts_with("refs/proliferate/rescue/ws-with-hyphens-a-b-")),
+        "only the sibling's rescue family may survive: {remaining:?}"
+    );
+    assert_eq!(
+        remaining.len(),
+        3,
+        "the sibling's three rescue refs survive intact: {remaining:?}"
+    );
+    // The sibling's live archive refs are untouched too.
+    assert!(resolve_archive_refs(repo.path(), "ws-with-hyphens-a-b")
+        .expect("resolve_archive_refs")
+        .is_some());
+}
+
+#[test]
+fn delete_all_for_leaves_delete_fors_contract_intact_for_a_sibling_id() {
+    // R5-10's whole reason for existing: the rescue clearing lives in a NEW
+    // verb so R2's frozen `delete_for` keeps its pinned "leaves a sibling id's
+    // set and any rescue/ names intact" contract. This asserts the two verbs
+    // do not interfere — `delete_all_for` on one id must leave the OTHER id in
+    // exactly the state `delete_for` promises, rescue names included.
+    let repo = TempDirGuard::new("refs-delete-all-for-noninterference");
+    let head = init_repo(repo.path());
+    let work_tree = make_tree(repo.path(), "w.txt", "w\n");
+    let index_tree = make_tree(repo.path(), "i.txt", "i\n");
+    let snap_a = snapshot(head.clone(), work_tree.clone(), index_tree.clone(), None, None);
+    let snap_b = snapshot(head.clone(), work_tree, index_tree, None, None);
+    write_archive_refs(repo.path(), "ws-a", &snap_a).expect("write a");
+    write_archive_refs(repo.path(), "ws-b", &snap_b).expect("write b");
+    copy_to_rescue(repo.path(), "ws-a", &head).expect("rescue a");
+    copy_to_rescue(repo.path(), "ws-b", &head).expect("rescue b");
+
+    delete_all_for(repo.path(), "ws-a").expect("delete_all_for a");
+
+    assert!(resolve_archive_refs(repo.path(), "ws-b")
+        .expect("resolve_archive_refs")
+        .is_some());
+    let sibling_rescue = format!("refs/proliferate/rescue/ws-b-{head}/archive-heads");
+    assert!(
+        !stdout(repo.path(), &["show-ref", "--verify", "--hash", &sibling_rescue]).is_empty(),
+        "delete_all_for must not touch a sibling id's rescue family"
+    );
+
+    // And `delete_for` on the sibling still behaves as R2 pinned it: its own
+    // three archive refs go, its rescue names stay.
+    delete_for(repo.path(), "ws-b").expect("delete_for b");
+    assert!(resolve_archive_refs(repo.path(), "ws-b")
+        .expect("resolve_archive_refs")
+        .is_none());
+    assert!(
+        !stdout(repo.path(), &["show-ref", "--verify", "--hash", &sibling_rescue]).is_empty(),
+        "delete_for still leaves rescue names alone; only delete_all_for clears them"
+    );
+
+    // Idempotent: a re-issued purge re-walks the same verb and converges.
+    delete_all_for(repo.path(), "ws-a").expect("delete_all_for is idempotent");
 }

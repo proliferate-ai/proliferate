@@ -1844,38 +1844,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_id}/purge/preflight": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["purge_workspace_preflight"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/purge/retry": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["retry_purge_workspace"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/workspaces/{workspace_id}/reviews/code": {
         parameters: {
             query?: never;
@@ -5371,11 +5339,6 @@ export interface components {
              */
             archivedHeadSha?: string | null;
             availability: components["schemas"]["WorkspaceAvailability"];
-            cleanupAttemptedAt?: string | null;
-            cleanupErrorMessage?: string | null;
-            cleanupFailedAt?: string | null;
-            cleanupOperation?: null | components["schemas"]["WorkspaceCleanupOperation"];
-            cleanupState: components["schemas"]["WorkspaceCleanupState"];
             createdAt: string;
             creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
             currentBranch?: string | null;
@@ -5415,10 +5378,6 @@ export interface components {
          * @enum {string}
          */
         WorkspaceAvailability: "available" | "workspace_directory_missing";
-        /** @enum {string} */
-        WorkspaceCleanupOperation: "retire" | "purge";
-        /** @enum {string} */
-        WorkspaceCleanupState: "none" | "pending" | "complete" | "failed";
         WorkspaceCreatorContext: {
             /** @enum {string} */
             kind: "human";
@@ -5554,25 +5513,10 @@ export interface components {
             supported: boolean;
         };
         /** @enum {string} */
-        WorkspacePurgeOutcome: "deleted" | "blocked" | "cleanup_failed";
-        WorkspacePurgePreflightResponse: {
-            blockers: components["schemas"]["WorkspaceRetireBlocker"][];
-            canPurge: boolean;
-            cleanupOperation?: null | components["schemas"]["WorkspaceCleanupOperation"];
-            cleanupState: components["schemas"]["WorkspaceCleanupState"];
-            lifecycleState: components["schemas"]["WorkspaceLifecycleState"];
-            materialized: boolean;
-            workspaceId: string;
-            workspaceKind: components["schemas"]["WorkspaceKind"];
-        };
+        WorkspacePurgeOutcome: "deleted";
         WorkspacePurgeResponse: {
             alreadyDeleted: boolean;
-            cleanupAttempted: boolean;
-            cleanupMessage?: string | null;
-            cleanupSucceeded: boolean;
             outcome: components["schemas"]["WorkspacePurgeOutcome"];
-            preflight?: null | components["schemas"]["WorkspacePurgePreflightResponse"];
-            workspace?: null | components["schemas"]["Workspace"];
         };
         WorkspaceRetireBlocker: {
             code: components["schemas"]["WorkspaceRetireBlockerCode"];
@@ -5659,7 +5603,7 @@ export interface components {
             upstreamBranch?: string | null;
         };
         /** @enum {string} */
-        WorktreeInventoryAction: "prune_checkout" | "delete_workspace_history" | "retry_purge" | "delete_orphan_checkout";
+        WorktreeInventoryAction: "prune_checkout" | "delete_workspace_history" | "delete_orphan_checkout";
         WorktreeInventoryResponse: {
             rows: components["schemas"]["WorktreeInventoryRow"][];
         };
@@ -5669,8 +5613,6 @@ export interface components {
             blockers: components["schemas"]["WorkspaceRetireBlocker"][];
             branch?: string | null;
             canonicalPath?: string | null;
-            cleanupOperation?: null | components["schemas"]["WorkspaceCleanupOperation"];
-            cleanupState?: null | components["schemas"]["WorkspaceCleanupState"];
             gitStatus?: null | components["schemas"]["WorktreeGitStatusSummary"];
             id: string;
             managed: boolean;
@@ -5686,8 +5628,6 @@ export interface components {
         WorktreeInventoryState: "associated" | "orphan_checkout" | "missing_checkout" | "conflict";
         WorktreeInventoryWorkspaceSummary: {
             branch?: string | null;
-            cleanupOperation?: null | components["schemas"]["WorkspaceCleanupOperation"];
-            cleanupState: components["schemas"]["WorkspaceCleanupState"];
             displayName?: string | null;
             id: string;
             kind: components["schemas"]["WorkspaceKind"];
@@ -10956,70 +10896,6 @@ export interface operations {
             };
             /** @description Command execution failed */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    purge_workspace_preflight: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Purge preflight */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspacePurgePreflightResponse"];
-                };
-            };
-            /** @description Workspace not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    retry_purge_workspace: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Purge retry result */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspacePurgeResponse"];
-                };
-            };
-            /** @description Workspace not found */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };

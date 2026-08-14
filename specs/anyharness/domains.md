@@ -83,8 +83,8 @@ workspaces/
   service/
   runtime/
   materialization/
-  purge/
-  retention/
+  archive/
+  deletion/
 ```
 
 ### Product Surface Domains
@@ -327,8 +327,8 @@ Examples:
 domains/sessions/links/
 domains/sessions/subagents/
 domains/workspaces/materialization/
-domains/workspaces/retention/
-domains/workspaces/purge/
+domains/workspaces/archive/
+domains/workspaces/deletion/
 ```
 
 ## Extension Points

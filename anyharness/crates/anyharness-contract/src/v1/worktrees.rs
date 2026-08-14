@@ -1,10 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{
-    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-    WorkspaceRetireBlocker,
-};
+use super::{WorkspaceKind, WorkspaceLifecycleState, WorkspaceRetireBlocker};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -20,7 +17,6 @@ pub enum WorktreeInventoryState {
 pub enum WorktreeInventoryAction {
     PruneCheckout,
     DeleteWorkspaceHistory,
-    RetryPurge,
     DeleteOrphanCheckout,
 }
 
@@ -30,9 +26,6 @@ pub struct WorktreeInventoryWorkspaceSummary {
     pub id: String,
     pub kind: WorkspaceKind,
     pub lifecycle_state: WorkspaceLifecycleState,
-    pub cleanup_state: WorkspaceCleanupState,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,10 +94,6 @@ pub struct WorktreeInventoryRow {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub storage: Option<WorktreeStorageEstimate>,
     pub blockers: Vec<WorkspaceRetireBlocker>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleanup_state: Option<WorkspaceCleanupState>,
     pub available_actions: Vec<WorktreeInventoryAction>,
 }
 

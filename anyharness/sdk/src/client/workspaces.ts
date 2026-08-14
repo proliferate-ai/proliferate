@@ -15,7 +15,6 @@ import type {
   UpdateWorkspaceDisplayNameRequest,
   Workspace,
   WorkspaceLifecycleFilter,
-  WorkspacePurgePreflightResponse,
   WorkspacePurgeResponse,
 } from "../types/workspaces.js";
 import type { WorkspaceSubagentsResponse } from "../types/subagents.js";
@@ -186,16 +185,6 @@ export class WorkspacesClient {
     );
   }
 
-  async purgePreflight(
-    workspaceId: string,
-    options?: AnyHarnessRequestOptions,
-  ): Promise<WorkspacePurgePreflightResponse> {
-    return this.transport.get<WorkspacePurgePreflightResponse>(
-      `/v1/workspaces/${encodeURIComponent(workspaceId)}/purge/preflight`,
-      withTimingCategory(options, "workspace.purge.preflight"),
-    );
-  }
-
   async purge(
     workspaceId: string,
     options?: AnyHarnessRequestOptions,
@@ -203,17 +192,6 @@ export class WorkspacesClient {
     return this.transport.deleteJson<WorkspacePurgeResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}`,
       withTimingCategory(options, "workspace.purge"),
-    );
-  }
-
-  async retryPurge(
-    workspaceId: string,
-    options?: AnyHarnessRequestOptions,
-  ): Promise<WorkspacePurgeResponse> {
-    return this.transport.post<WorkspacePurgeResponse>(
-      `/v1/workspaces/${encodeURIComponent(workspaceId)}/purge/retry`,
-      {},
-      withTimingCategory(options, "workspace.purge.retry"),
     );
   }
 }

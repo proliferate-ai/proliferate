@@ -6994,88 +6994,6 @@
         }
       }
     },
-    "/v1/workspaces/{workspace_id}/purge/preflight": {
-      "get": {
-        "tags": [
-          "workspaces"
-        ],
-        "operationId": "purge_workspace_preflight",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "description": "Workspace ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Purge preflight",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkspacePurgePreflightResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Workspace not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/workspaces/{workspace_id}/purge/retry": {
-      "post": {
-        "tags": [
-          "workspaces"
-        ],
-        "operationId": "retry_purge_workspace",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "description": "Workspace ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Purge retry result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkspacePurgeResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Workspace not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/workspaces/{workspace_id}/reviews/code": {
       "post": {
         "tags": [
@@ -20651,7 +20569,6 @@
           "surface",
           "availability",
           "lifecycleState",
-          "cleanupState",
           "createdAt",
           "updatedAt"
         ],
@@ -20679,37 +20596,6 @@
           },
           "availability": {
             "$ref": "#/components/schemas/WorkspaceAvailability"
-          },
-          "cleanupAttemptedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "cleanupErrorMessage": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "cleanupFailedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "cleanupOperation": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkspaceCleanupOperation"
-              }
-            ]
-          },
-          "cleanupState": {
-            "$ref": "#/components/schemas/WorkspaceCleanupState"
           },
           "createdAt": {
             "type": "string"
@@ -20830,22 +20716,6 @@
         "enum": [
           "available",
           "workspace_directory_missing"
-        ]
-      },
-      "WorkspaceCleanupOperation": {
-        "type": "string",
-        "enum": [
-          "retire",
-          "purge"
-        ]
-      },
-      "WorkspaceCleanupState": {
-        "type": "string",
-        "enum": [
-          "none",
-          "pending",
-          "complete",
-          "failed"
         ]
       },
       "WorkspaceCreatorContext": {
@@ -21431,105 +21301,21 @@
       "WorkspacePurgeOutcome": {
         "type": "string",
         "enum": [
-          "deleted",
-          "blocked",
-          "cleanup_failed"
+          "deleted"
         ]
-      },
-      "WorkspacePurgePreflightResponse": {
-        "type": "object",
-        "required": [
-          "workspaceId",
-          "workspaceKind",
-          "lifecycleState",
-          "cleanupState",
-          "canPurge",
-          "materialized",
-          "blockers"
-        ],
-        "properties": {
-          "blockers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkspaceRetireBlocker"
-            }
-          },
-          "canPurge": {
-            "type": "boolean"
-          },
-          "cleanupOperation": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkspaceCleanupOperation"
-              }
-            ]
-          },
-          "cleanupState": {
-            "$ref": "#/components/schemas/WorkspaceCleanupState"
-          },
-          "lifecycleState": {
-            "$ref": "#/components/schemas/WorkspaceLifecycleState"
-          },
-          "materialized": {
-            "type": "boolean"
-          },
-          "workspaceId": {
-            "type": "string"
-          },
-          "workspaceKind": {
-            "$ref": "#/components/schemas/WorkspaceKind"
-          }
-        }
       },
       "WorkspacePurgeResponse": {
         "type": "object",
         "required": [
           "outcome",
-          "alreadyDeleted",
-          "cleanupAttempted",
-          "cleanupSucceeded"
+          "alreadyDeleted"
         ],
         "properties": {
           "alreadyDeleted": {
             "type": "boolean"
           },
-          "cleanupAttempted": {
-            "type": "boolean"
-          },
-          "cleanupMessage": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "cleanupSucceeded": {
-            "type": "boolean"
-          },
           "outcome": {
             "$ref": "#/components/schemas/WorkspacePurgeOutcome"
-          },
-          "preflight": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkspacePurgePreflightResponse"
-              }
-            ]
-          },
-          "workspace": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/Workspace"
-              }
-            ]
           }
         }
       },
@@ -21858,7 +21644,6 @@
         "enum": [
           "prune_checkout",
           "delete_workspace_history",
-          "retry_purge",
           "delete_orphan_checkout"
         ]
       },
@@ -21918,26 +21703,6 @@
             "type": [
               "string",
               "null"
-            ]
-          },
-          "cleanupOperation": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkspaceCleanupOperation"
-              }
-            ]
-          },
-          "cleanupState": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkspaceCleanupState"
-              }
             ]
           },
           "gitStatus": {
@@ -22008,7 +21773,6 @@
           "id",
           "kind",
           "lifecycleState",
-          "cleanupState",
           "sessionCount"
         ],
         "properties": {
@@ -22017,19 +21781,6 @@
               "string",
               "null"
             ]
-          },
-          "cleanupOperation": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkspaceCleanupOperation"
-              }
-            ]
-          },
-          "cleanupState": {
-            "$ref": "#/components/schemas/WorkspaceCleanupState"
           },
           "displayName": {
             "type": [

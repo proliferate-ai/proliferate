@@ -10,7 +10,7 @@ use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{
-    WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
     WorkspaceSurface,
 };
 use crate::domains::workspaces::options::{
@@ -61,11 +61,6 @@ impl WorkspaceWorktreeCreates for RecordingWorktrees {
                     origin: Some(input.origin),
                     creator_context: input.creator_context,
                     lifecycle_state: WorkspaceLifecycleState::Active,
-                    cleanup_state: WorkspaceCleanupState::None,
-                    cleanup_operation: None,
-                    cleanup_error_message: None,
-                    cleanup_failed_at: None,
-                    cleanup_attempted_at: None,
                     archived_head_sha: None,
                     archived_branch: None,
                     archived_at: None,

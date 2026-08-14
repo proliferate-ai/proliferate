@@ -14,6 +14,10 @@ mod workflow_run_control_migration_tests;
 #[cfg(test)]
 mod workspace_archived_lifecycle_migration_tests;
 #[cfg(test)]
+mod workspace_archived_lifecycle_rebuild_tests;
+#[cfg(test)]
+mod workspace_drop_cleanup_columns_migration_tests;
+#[cfg(test)]
 mod workflow_runs_v2_migration_tests;
 
 pub use sqlite::Db;

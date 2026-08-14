@@ -5,8 +5,6 @@ export type WorkspaceAvailability = components["schemas"]["WorkspaceAvailability
 export type WorkspaceSurface = components["schemas"]["WorkspaceSurface"];
 export type WorkspaceExecutionPhase = components["schemas"]["WorkspaceExecutionPhase"];
 export type WorkspaceExecutionSummary = components["schemas"]["WorkspaceExecutionSummary"];
-export type WorkspaceCleanupOperation =
-  components["schemas"]["WorkspaceCleanupOperation"];
 export type OriginKind = components["schemas"]["OriginKind"];
 export type OriginEntrypoint = components["schemas"]["OriginEntrypoint"];
 export type OriginContext = components["schemas"]["OriginContext"];
@@ -45,8 +43,6 @@ export type WorkspaceRetireBlockerSeverity =
 export type WorkspaceRetireBlocker =
   components["schemas"]["WorkspaceRetireBlocker"];
 export type WorkspacePurgeOutcome = components["schemas"]["WorkspacePurgeOutcome"];
-export type WorkspacePurgePreflightResponse =
-  components["schemas"]["WorkspacePurgePreflightResponse"];
 export type WorkspacePurgeResponse =
   components["schemas"]["WorkspacePurgeResponse"];
 

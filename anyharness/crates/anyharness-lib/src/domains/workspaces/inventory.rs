@@ -11,9 +11,7 @@ use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::domains::workspaces::managed_root::canonical_managed_worktrees_root;
 use crate::domains::workspaces::model::{
-    WorkspaceCleanupOperation as DomainWorkspaceCleanupOperation,
-    WorkspaceCleanupState as DomainWorkspaceCleanupState, WorkspaceKind as DomainWorkspaceKind,
-    WorkspaceLifecycleState as DomainWorkspaceLifecycleState,
+    WorkspaceKind as DomainWorkspaceKind, WorkspaceLifecycleState as DomainWorkspaceLifecycleState,
 };
 use crate::domains::workspaces::store::WorkspaceStore;
 
@@ -34,7 +32,6 @@ pub enum WorktreeInventoryState {
 pub enum WorktreeInventoryAction {
     PruneCheckout,
     DeleteWorkspaceHistory,
-    RetryPurge,
     DeleteOrphanCheckout,
 }
 
@@ -43,8 +40,6 @@ pub struct WorktreeInventoryWorkspaceSummary {
     pub id: String,
     pub kind: WorkspaceKind,
     pub lifecycle_state: WorkspaceLifecycleState,
-    pub cleanup_state: WorkspaceCleanupState,
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
     pub display_name: Option<String>,
     pub branch: Option<String>,
     pub session_count: usize,
@@ -94,8 +89,6 @@ pub struct WorktreeInventoryRow {
     pub total_session_count: usize,
     pub git_status: Option<WorktreeGitStatusSummary>,
     pub storage: WorktreeStorageEstimate,
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
-    pub cleanup_state: Option<WorkspaceCleanupState>,
     pub available_actions: Vec<WorktreeInventoryAction>,
 }
 
@@ -109,20 +102,6 @@ pub enum WorkspaceKind {
 pub enum WorkspaceLifecycleState {
     Active,
     Archived,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WorkspaceCleanupState {
-    None,
-    Pending,
-    Complete,
-    Failed,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WorkspaceCleanupOperation {
-    Retire,
-    Purge,
 }
 
 #[derive(Clone)]
@@ -193,10 +172,6 @@ impl WorktreeInventoryService {
                         id: workspace.id.clone(),
                         kind: workspace_kind(workspace.kind),
                         lifecycle_state: workspace_lifecycle(workspace.lifecycle_state),
-                        cleanup_state: workspace_cleanup(workspace.cleanup_state),
-                        cleanup_operation: workspace
-                            .cleanup_operation
-                            .map(workspace_cleanup_operation),
                         display_name: workspace.display_name.clone(),
                         branch: workspace.current_branch.clone(),
                         session_count,
@@ -225,15 +200,6 @@ impl WorktreeInventoryService {
             if !matches!(state, WorktreeInventoryState::Conflict) {
                 actions.push(WorktreeInventoryAction::DeleteWorkspaceHistory);
             }
-            if associated.iter().any(|workspace| {
-                workspace.cleanup_operation == Some(DomainWorkspaceCleanupOperation::Purge)
-                    && matches!(
-                        workspace.cleanup_state,
-                        DomainWorkspaceCleanupState::Pending | DomainWorkspaceCleanupState::Failed
-                    )
-            }) {
-                actions.push(WorktreeInventoryAction::RetryPurge);
-            }
             rows.push(WorktreeInventoryRow {
                 id: format!("workspace:{path}"),
                 state,
@@ -248,12 +214,6 @@ impl WorktreeInventoryService {
                 branch: associated
                     .first()
                     .and_then(|workspace| workspace.current_branch.clone()),
-                cleanup_operation: associated.first().and_then(|workspace| {
-                    workspace.cleanup_operation.map(workspace_cleanup_operation)
-                }),
-                cleanup_state: associated
-                    .first()
-                    .map(|workspace| workspace_cleanup(workspace.cleanup_state)),
                 associated_workspaces: summaries,
                 total_session_count,
                 git_status,
@@ -299,8 +259,6 @@ impl WorktreeInventoryService {
                         sqlite_bytes: None,
                         total_bytes: worktree_bytes,
                     },
-                    cleanup_operation: None,
-                    cleanup_state: None,
                     available_actions: vec![WorktreeInventoryAction::DeleteOrphanCheckout],
                 });
             }
@@ -498,24 +456,6 @@ fn workspace_lifecycle(state: DomainWorkspaceLifecycleState) -> WorkspaceLifecyc
     }
 }
 
-fn workspace_cleanup(state: DomainWorkspaceCleanupState) -> WorkspaceCleanupState {
-    match state {
-        DomainWorkspaceCleanupState::Pending => WorkspaceCleanupState::Pending,
-        DomainWorkspaceCleanupState::Complete => WorkspaceCleanupState::Complete,
-        DomainWorkspaceCleanupState::Failed => WorkspaceCleanupState::Failed,
-        DomainWorkspaceCleanupState::None => WorkspaceCleanupState::None,
-    }
-}
-
-fn workspace_cleanup_operation(
-    operation: DomainWorkspaceCleanupOperation,
-) -> WorkspaceCleanupOperation {
-    match operation {
-        DomainWorkspaceCleanupOperation::Retire => WorkspaceCleanupOperation::Retire,
-        DomainWorkspaceCleanupOperation::Purge => WorkspaceCleanupOperation::Purge,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
@@ -526,8 +466,7 @@ mod tests {
     use crate::domains::repo_roots::test_support::seed_repo_root_1;
     use crate::domains::workspaces::managed_root::ANYHARNESS_WORKTREES_ROOT_ENV;
     use crate::domains::workspaces::model::{
-        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
-        WorkspaceSurface,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
     };
     use crate::persistence::Db;
 
@@ -581,11 +520,6 @@ mod tests {
             origin: None,
             creator_context: None,
             lifecycle_state: WorkspaceLifecycleState::Active,
-            cleanup_state: WorkspaceCleanupState::None,
-            cleanup_operation: None,
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
             archived_head_sha: None,
             archived_branch: None,
             archived_at: None,
