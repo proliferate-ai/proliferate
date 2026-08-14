@@ -224,4 +224,102 @@ describe("useChatComposerKeyboard", () => {
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith("default");
   });
+
+  it("steps reasoning effort forward on Ctrl+Shift+E", () => {
+    const onSelect = vi.fn();
+    const reasoningEffortControl: LiveSessionControlDescriptor = {
+      key: "effort",
+      label: "Reasoning",
+      detail: "Medium",
+      rawConfigId: "effort",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        { value: "low", label: "Low", selected: false },
+        { value: "medium", label: "Medium", selected: true },
+        { value: "high", label: "High", selected: false },
+      ],
+      onSelect,
+    };
+    const { result } = renderHook(() => useChatComposerKeyboard({
+      handleSubmit: vi.fn(),
+      handleCancel: vi.fn(),
+      isRunning: false,
+      canSubmit: true,
+      modeControl: null,
+      reasoningEffortControl,
+    }));
+    // Shift uppercases the printable key, matching a real Ctrl+Shift+E press.
+    const event = keyboardEvent({ key: "E", code: "KeyE", ctrlKey: true, shiftKey: true });
+
+    result.current.handleKeyDown(event as never);
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith("high");
+  });
+
+  it("wraps reasoning effort back to the first level on Ctrl+Shift+E", () => {
+    const onSelect = vi.fn();
+    const reasoningEffortControl: LiveSessionControlDescriptor = {
+      key: "effort",
+      label: "Reasoning",
+      detail: "High",
+      rawConfigId: "effort",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        { value: "low", label: "Low", selected: false },
+        { value: "high", label: "High", selected: true },
+      ],
+      onSelect,
+    };
+    const { result } = renderHook(() => useChatComposerKeyboard({
+      handleSubmit: vi.fn(),
+      handleCancel: vi.fn(),
+      isRunning: false,
+      canSubmit: true,
+      modeControl: null,
+      reasoningEffortControl,
+    }));
+    const event = keyboardEvent({ key: "E", code: "KeyE", ctrlKey: true, shiftKey: true });
+
+    result.current.handleKeyDown(event as never);
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith("low");
+  });
+
+  it("ignores Ctrl+Shift+E when reasoning effort is not settable", () => {
+    const onSelect = vi.fn();
+    const reasoningEffortControl: LiveSessionControlDescriptor = {
+      key: "effort",
+      label: "Reasoning",
+      detail: "Medium",
+      rawConfigId: "effort",
+      settable: false,
+      pendingState: null,
+      kind: "select",
+      options: [
+        { value: "low", label: "Low", selected: false },
+        { value: "medium", label: "Medium", selected: true },
+      ],
+      onSelect,
+    };
+    const { result } = renderHook(() => useChatComposerKeyboard({
+      handleSubmit: vi.fn(),
+      handleCancel: vi.fn(),
+      isRunning: false,
+      canSubmit: true,
+      modeControl: null,
+      reasoningEffortControl,
+    }));
+    const event = keyboardEvent({ key: "E", code: "KeyE", ctrlKey: true, shiftKey: true });
+
+    result.current.handleKeyDown(event as never);
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });

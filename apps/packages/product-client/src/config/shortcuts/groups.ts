@@ -84,6 +84,7 @@ export const COMPOSER_SHORTCUT_GROUPS = [
     shortcutKeys: [
       "submitMessage",
       "previousMode",
+      "cycleReasoningEffort",
       "stopSession",
       "editLastQueued",
     ],
