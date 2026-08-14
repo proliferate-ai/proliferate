@@ -50,10 +50,7 @@ pub(super) const CUSTOM_FOREIGN_KEY_MIGRATIONS: &[(
     // replays the SQL ladder BEFORE these custom migrations — the gen-1
     // transforms above (0061–0063) must still find the gen-1 shape they
     // rebuild, and only then does gen-2 claim the names.
-    (
-        "0069_workflow_runs_gen2",
-        migrate_workflow_runs_gen2,
-    ),
+    ("0069_workflow_runs_gen2", migrate_workflow_runs_gen2),
 ];
 
 /// Turns the workspace lifecycle enum from `{active, retired}` into

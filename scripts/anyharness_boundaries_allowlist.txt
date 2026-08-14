@@ -90,8 +90,11 @@ API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/health.rs 1 in-me
 API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 3 cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary ; -6: R5 deletes the preflight/retry test module's store constructions along with the handlers
 
 # Rule: policy.rs and *_policy.rs files are pure.
-# 1 file, 1 occurrence.
-POLICY_PURITY anyharness/crates/anyharness-lib/src/domains/workflows/control/policy.rs 1 store-holding policy file: imports WorkflowRunStore at :8 and keeps it as a field, so the decision reads the DB instead of taking facts; target = pass the controlling run id in, or rename to a gate (cleanup PR TBD)
+# Zero occurrences - workflows gen-2 (PR1) deleted the last offender (gen-1's
+# store-holding control/policy.rs) with the gen-1 domain. The gen-2
+# destruction-controller policy holds a raw Db handle, which this rule's
+# store-segment import pattern deliberately does not match; its inline SQL is
+# the DOMAIN_SQL_OUTSIDE_STORE row below.
 
 # Rule: SQL in domains/** lives in the store.
 # 2 files, 2 occurrences.
@@ -106,9 +109,10 @@ POLICY_PURITY anyharness/crates/anyharness-lib/src/domains/workflows/control/pol
 # transaction), and sessions/links/completions.rs's LinkCompletionStore
 # physically relocated to domains/sessions/store/link_completions.rs (a
 # `links/completions.rs` re-export shim keeps every external import path
-# unchanged). Remaining two rows are both engine-invisible cfg(test)
-# boundaries that later PRs still own.
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workflows/workspace_materialization/test_support.rs 1 format!-built COUNT query in a test-support file (not excluded by should_skip); target = none, test fixture
+# unchanged). Of the remaining two rows, access_gate.rs is an
+# engine-invisible cfg(test) boundary; the workflows gen-2 policy row is a
+# real engine-visible read that belongs in the store.
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs 2 the gen-2 destruction-controller policy's controlling-run lookup runs its SELECT inline over a raw Db handle instead of through WorkflowStore; target = move the query into store.rs and pass facts in (journaled ADR wart, cleanup PR TBD)
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 1 inside the inline cfg(test) mod the engine cannot see (DROP TABLE workspace_access_modes); the repo_roots INSERT that used to sit alongside it moved to the shared repo_roots test_support helper (grid plan PR 8c); target = none, engine-invisible cfg boundary
 
 # Rule: the runtime valve holds live/ powers but never re-exports them
@@ -199,6 +203,5 @@ DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/ser
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/store/events.rs 4 4 inline wire paths (SessionEvent/SessionEventEnvelope at :53/:55/:73 and a turbofish deserialize at :527) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/store/persisted_payloads.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/subagents/transcript.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
-DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workflows/execution.rs 1 1 wire type import below the mapper boundary; target = workflows domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workspaces/access_model.rs 1 1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workspaces/creator_context.rs 1 1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)

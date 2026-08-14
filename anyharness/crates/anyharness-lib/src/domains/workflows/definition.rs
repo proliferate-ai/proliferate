@@ -4,6 +4,12 @@
 //! fixtures (`fixtures/contracts/workflow-definition/`): edges form exactly
 //! one linear path covering all nodes, node ids and doc slugs are unique,
 //! every `@input:`/`@doc:` reference resolves, `model` is optional per node.
+//! One grammar on every plane: doc slugs are `[a-z0-9]+(-[a-z0-9]+)*`, input
+//! names `[A-Za-z][A-Za-z0-9_]*`, node ids `[A-Za-z][A-Za-z0-9_-]*`.
+//! References are scanned (case-insensitive sigil detection, `[^\s@]+` token,
+//! trailing prose punctuation peeled) and the peeled token validated: a
+//! malformed reference — wrong-case sigil included — is an error, never a
+//! silent non-match or a prefix match (Ruling C.1).
 //! Nothing about placement lives in the definition; placement is a run-time
 //! binding frozen into the invocation.
 
@@ -70,8 +76,10 @@ pub struct DefinitionInput {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DocTemplate {
     pub slug: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub producing_node_id: Option<String>,
+    /// Required on every plane: every doc has exactly one producing node, and
+    /// the filename law (`NN-slug.md`) derives NN from that node's chain
+    /// position.
+    pub producing_node_id: String,
     pub body: String,
 }
 
@@ -137,8 +145,11 @@ impl WorkflowDefinition {
 
         let mut node_ids = HashSet::new();
         for node in &self.nodes {
-            if node.id.trim().is_empty() {
-                return Err(invalid("node ids must be non-empty"));
+            if !is_valid_node_id(&node.id) {
+                return Err(invalid(format!(
+                    "node id '{}' must match [A-Za-z][A-Za-z0-9_-]*",
+                    node.id
+                )));
             }
             if node.title.trim().is_empty() {
                 return Err(invalid(format!("node '{}' needs a title", node.id)));
@@ -150,26 +161,30 @@ impl WorkflowDefinition {
 
         let mut doc_slugs = HashSet::new();
         for template in &self.doc_templates {
-            if template.slug.trim().is_empty() {
-                return Err(invalid("doc template slugs must be non-empty"));
+            if !is_valid_doc_slug(&template.slug) {
+                return Err(invalid(format!(
+                    "doc slug '{}' must match [a-z0-9]+(-[a-z0-9]+)*",
+                    template.slug
+                )));
             }
             if !doc_slugs.insert(template.slug.as_str()) {
                 return Err(invalid(format!("duplicate doc slug '{}'", template.slug)));
             }
-            if let Some(producer) = &template.producing_node_id {
-                if !node_ids.contains(producer.as_str()) {
-                    return Err(invalid(format!(
-                        "doc template '{}' names unknown producing node '{producer}'",
-                        template.slug
-                    )));
-                }
+            if !node_ids.contains(template.producing_node_id.as_str()) {
+                return Err(invalid(format!(
+                    "doc template '{}' names unknown producing node '{}'",
+                    template.slug, template.producing_node_id
+                )));
             }
         }
 
         let mut input_names = HashSet::new();
         for input in &self.inputs {
-            if input.name.trim().is_empty() {
-                return Err(invalid("input names must be non-empty"));
+            if !is_valid_input_name(&input.name) {
+                return Err(invalid(format!(
+                    "input name '{}' must match [A-Za-z][A-Za-z0-9_]*",
+                    input.name
+                )));
             }
             if !input_names.insert(input.name.as_str()) {
                 return Err(invalid(format!("duplicate input name '{}'", input.name)));
@@ -179,7 +194,9 @@ impl WorkflowDefinition {
         let chain = self.linear_chain(&node_ids)?;
 
         for node in &self.nodes {
-            for reference in parse_references(&node.prompt) {
+            let references = parse_references(&node.prompt)
+                .map_err(|error| invalid(format!("node '{}': {}", node.id, error.detail)))?;
+            for reference in references {
                 match reference {
                     PromptReference::Input(name) => {
                         if !input_names.contains(name.as_str()) {
@@ -273,59 +290,137 @@ impl WorkflowDefinition {
     }
 }
 
-/// A parsed `@input:name` or `@doc:slug` token. The grammar is slug-only
-/// (`[A-Za-z0-9_-]+`); the engine derives NN filename prefixes from chain
-/// position at render time, so builder reorders never break prompts.
+/// A parsed `@input:name` or `@doc:slug` token. The grammar is slug-only;
+/// the engine derives NN filename prefixes from chain position at render
+/// time, so builder reorders never break prompts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptReference {
     Input(String),
     Doc(String),
 }
 
-pub fn parse_references(prompt: &str) -> Vec<PromptReference> {
+/// Doc slug grammar: `[a-z0-9]+(-[a-z0-9]+)*` — lowercase alphanumeric
+/// segments joined by single dashes. This is also the path-safety guarantee:
+/// a valid slug can never traverse (`..`, `/`, absolute paths all fail).
+pub fn is_valid_doc_slug(value: &str) -> bool {
+    !value.is_empty()
+        && !value.starts_with('-')
+        && !value.ends_with('-')
+        && !value.contains("--")
+        && value
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// Input name grammar: `[A-Za-z][A-Za-z0-9_]*`.
+pub fn is_valid_input_name(value: &str) -> bool {
+    let mut chars = value.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Node id grammar: `[A-Za-z][A-Za-z0-9_-]*`.
+pub fn is_valid_node_id(value: &str) -> bool {
+    let mut chars = value.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// A reference the scan found whose token fails its grammar. Malformed
+/// references are validation errors, never silent non-matches: `@doc:plan.md`
+/// is rejected, not prefix-matched to `plan`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceError {
+    pub detail: String,
+}
+
+impl std::fmt::Display for ReferenceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.detail)
+    }
+}
+
+/// Trailing prose punctuation peeled off a captured token before grammar
+/// validation, so `@doc:research-findings.` is a valid reference followed by
+/// a sentence period while `@doc:plan.md` stays a hard error (Ruling C.1).
+fn is_peelable_punctuation(c: char) -> bool {
+    matches!(
+        c,
+        '.' | ','
+            | ';'
+            | ':'
+            | '!'
+            | '?'
+            | ')'
+            | ']'
+            | '}'
+            | '>'
+            | '"'
+            | '\''
+            | '`'
+            | '*'
+            | '»'
+            | '\u{201C}'
+            | '\u{201D}'
+            | '\u{2019}'
+            | '\u{2026}'
+    )
+}
+
+/// Scan-then-validate (one grammar, three planes, Ruling C.1): detect the
+/// `@doc:`/`@input:` sigils case-INsensitively (a wrong-case sigil is an
+/// error, never silent literal text), capture the maximal `[^\s@]+` token,
+/// peel trailing prose punctuation, then validate the peeled token against
+/// the per-kind grammar. A malformed reference is an error, never a silent
+/// non-match or a prefix match.
+pub fn parse_references(prompt: &str) -> Result<Vec<PromptReference>, ReferenceError> {
     let mut references = Vec::new();
-    let bytes = prompt.as_bytes();
     let mut i = 0;
     while let Some(offset) = prompt[i..].find('@') {
         let at = i + offset;
         let rest = &prompt[at + 1..];
-        let (kind, body) = if let Some(body) = rest.strip_prefix("input:") {
-            (Some(PromptReference::Input(String::new())), body)
-        } else if let Some(body) = rest.strip_prefix("doc:") {
-            (Some(PromptReference::Doc(String::new())), body)
-        } else {
-            (None, rest)
+        let sigil = ["input:", "doc:"].into_iter().find(|sigil| {
+            rest.get(..sigil.len())
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case(sigil))
+        });
+        let Some(sigil) = sigil else {
+            i = at + 1;
+            continue;
         };
-        match kind {
-            None => i = at + 1,
-            Some(kind) => {
-                let name: String = body
-                    .chars()
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-                    .collect();
-                let consumed = at
-                    + 1
-                    + match &kind {
-                        PromptReference::Input(_) => "input:".len(),
-                        PromptReference::Doc(_) => "doc:".len(),
-                    }
-                    + name.len();
-                if name.is_empty() {
-                    i = at + 1;
-                    continue;
-                }
-                references.push(match kind {
-                    PromptReference::Input(_) => PromptReference::Input(name),
-                    PromptReference::Doc(_) => PromptReference::Doc(name),
+        let body = &rest[sigil.len()..];
+        let raw_token: String = body
+            .chars()
+            .take_while(|c| !c.is_whitespace() && *c != '@')
+            .collect();
+        if raw_token.is_empty() {
+            // A bare sigil with nothing after it is not a reference attempt.
+            i = at + 1 + sigil.len();
+            continue;
+        }
+        if !rest.starts_with(sigil) {
+            return Err(ReferenceError {
+                detail: format!("reference sigils are lowercase: write @{sigil}{raw_token}"),
+            });
+        }
+        let token = raw_token.trim_end_matches(is_peelable_punctuation);
+        let kind = &sigil[..sigil.len() - 1];
+        let reference = match kind {
+            "input" if is_valid_input_name(token) => PromptReference::Input(token.to_string()),
+            "doc" if is_valid_doc_slug(token) => PromptReference::Doc(token.to_string()),
+            _ => {
+                let grammar = match kind {
+                    "input" => "[A-Za-z][A-Za-z0-9_]*",
+                    _ => "[a-z0-9]+(-[a-z0-9]+)*",
+                };
+                return Err(ReferenceError {
+                    detail: format!("malformed reference @{kind}:{token} (must match {grammar})"),
                 });
-                i = consumed;
             }
-        }
-        if i >= bytes.len() {
-            break;
-        }
+        };
+        i = at + 1 + sigil.len() + token.len();
+        references.push(reference);
     }
-    references
+    Ok(references)
 }
 
 impl InvocationSnapshot {
@@ -356,7 +451,9 @@ impl InvocationSnapshot {
         }
         for name in self.arguments.keys() {
             if !declared.contains(name.as_str()) {
-                return Err(invalid(format!("argument '{name}' is not a declared input")));
+                return Err(invalid(format!(
+                    "argument '{name}' is not a declared input"
+                )));
             }
         }
         Ok(chain)

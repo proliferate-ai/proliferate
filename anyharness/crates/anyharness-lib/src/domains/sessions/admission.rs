@@ -86,7 +86,9 @@ enum SourceInner {
     /// No production producer since gen-1 workflows was superseded; the
     /// admission conflict mechanics stay proven by test-installed policies.
     #[allow(dead_code)]
-    WorkflowRun { run_id: String },
+    WorkflowRun {
+        run_id: String,
+    },
 }
 
 impl SessionMutationSource {
@@ -252,6 +254,11 @@ pub struct SessionMutationPermit {
 pub struct SessionMutationAdmission {
     slots: StdMutex<HashMap<String, Weak<AsyncMutex<()>>>>,
     policy: Arc<dyn SessionControllerPolicy>,
+    /// Gen-2 split: the mutation gate's `policy` decides chattability (gen-2
+    /// sessions stay chattable, so it may admit everything), while THIS policy
+    /// decides whether workspace destruction must fence — the two questions
+    /// diverged when gen-2 made controlled sessions conversational.
+    destruction_policy: Arc<dyn SessionControllerPolicy>,
     operability_policy: Arc<dyn SessionOperabilityPolicy>,
 }
 
@@ -260,9 +267,26 @@ impl SessionMutationAdmission {
         policy: Arc<dyn SessionControllerPolicy>,
         operability_policy: Arc<dyn SessionOperabilityPolicy>,
     ) -> Self {
+        let destruction_policy = policy.clone();
         Self {
             slots: StdMutex::new(HashMap::new()),
             policy,
+            destruction_policy,
+            operability_policy,
+        }
+    }
+
+    /// Gen-2 wiring: a separate durable lookup for the workspace-destruction
+    /// fence. See the field comment on `destruction_policy`.
+    pub fn with_destruction_policy(
+        policy: Arc<dyn SessionControllerPolicy>,
+        destruction_policy: Arc<dyn SessionControllerPolicy>,
+        operability_policy: Arc<dyn SessionOperabilityPolicy>,
+    ) -> Self {
+        Self {
+            slots: StdMutex::new(HashMap::new()),
+            policy,
+            destruction_policy,
             operability_policy,
         }
     }
@@ -366,7 +390,7 @@ impl SessionMutationAdmission {
         &self,
         session_ids: Vec<String>,
     ) -> anyhow::Result<Option<(String, String)>> {
-        let policy = self.policy.clone();
+        let policy = self.destruction_policy.clone();
         tokio::task::spawn_blocking(move || {
             for session_id in session_ids {
                 if let Some(run_id) = policy.controlling_run_id(&session_id)? {
@@ -378,5 +402,4 @@ impl SessionMutationAdmission {
         .await
         .map_err(|error| anyhow::anyhow!("controlled-session re-check task failed: {error}"))?
     }
-
 }

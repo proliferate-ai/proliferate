@@ -152,6 +152,26 @@ pub fn sweep(state: &RunState) -> Vec<InvariantViolation> {
     violations
 }
 
+/// The at-rest sweep: `sweep` plus laws that only hold BETWEEN engine steps.
+/// AdvanceToNext legitimately commits a running-but-unlinked successor before
+/// the stamp step links its session, so the post-transition sweep cannot check
+/// this; boot-time rebuilds and tests observing a settled state can.
+pub fn sweep_at_rest(state: &RunState) -> Vec<InvariantViolation> {
+    let mut violations = sweep(state);
+    for node in &state.nodes {
+        // No running node without a linked session once the engine is at rest
+        // (Ruling K's invariant law).
+        if node.status == WorkflowNodeStatus::Running && node.session_id.is_none() {
+            violations.push(InvariantViolation {
+                run_id: state.run.id.clone(),
+                invariant: "running_nodes_linked_at_rest",
+                detail: format!("running node {} has no linked session", node.id),
+            });
+        }
+    }
+    violations
+}
+
 /// Emit each violation as a named error event; panic in debug builds and
 /// tests so a broken law fails loudly where it happens.
 pub fn report(violations: &[InvariantViolation]) {

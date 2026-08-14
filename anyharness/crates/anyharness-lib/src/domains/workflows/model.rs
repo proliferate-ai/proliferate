@@ -80,7 +80,10 @@ impl WorkflowNodeStatus {
     /// The invariant sweep's "active" set: at most one node row per run may be
     /// in one of these states.
     pub fn is_active(&self) -> bool {
-        matches!(self, Self::Running | Self::AwaitingHuman | Self::NeedsAttention)
+        matches!(
+            self,
+            Self::Running | Self::AwaitingHuman | Self::NeedsAttention
+        )
     }
 }
 
@@ -135,7 +138,9 @@ impl WorkflowNodeType {
     }
 }
 
-/// Node failure vocabulary (rows, never HTTP).
+/// Node failure vocabulary (rows, never HTTP). `superseded` marks a row a
+/// fail-and-redo replaced from a non-failed pause state, so the failed⇔code
+/// row law holds on every failed row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowNodeFailureCode {
@@ -144,6 +149,7 @@ pub enum WorkflowNodeFailureCode {
     Refusal,
     EmptyTurn,
     HarnessCap,
+    Superseded,
 }
 
 impl WorkflowNodeFailureCode {
@@ -154,6 +160,7 @@ impl WorkflowNodeFailureCode {
             Self::Refusal => "refusal",
             Self::EmptyTurn => "empty_turn",
             Self::HarnessCap => "harness_cap",
+            Self::Superseded => "superseded",
         }
     }
 
@@ -164,6 +171,7 @@ impl WorkflowNodeFailureCode {
             "refusal" => Some(Self::Refusal),
             "empty_turn" => Some(Self::EmptyTurn),
             "harness_cap" => Some(Self::HarnessCap),
+            "superseded" => Some(Self::Superseded),
             _ => None,
         }
     }
@@ -245,6 +253,10 @@ pub struct WorkflowRunNodeRecord {
     pub prompt_id: Option<String>,
     pub rendered_envelope: Option<RenderedEnvelope>,
     pub failure_code: Option<WorkflowNodeFailureCode>,
+    /// Stamped when this node's session finishes its FIRST turn of the current
+    /// execution; cleared whenever the node (re)starts fresh. UndoAdvance is
+    /// legal only while the successor has not finished a turn (Ruling J).
+    pub first_turn_finished_at: Option<String>,
     pub created_at: String,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,

@@ -12,16 +12,20 @@ use super::definition::{
 };
 use super::invariants;
 use super::model::{
-    RenderedEnvelope, WorkflowInterruptionCode, WorkflowNodeKind, WorkflowNodeStatus,
-    WorkflowNodeType, WorkflowRunStatus,
+    RenderedEnvelope, WorkflowInterruptionCode, WorkflowNodeFailureCode, WorkflowNodeKind,
+    WorkflowNodeStatus, WorkflowNodeType, WorkflowRunStatus,
 };
-use super::store::{NewRunParams, ResolvedSideEffect, WorkflowStore};
+use super::store::{AppliedTransition, NewRunParams, ResolvedSideEffect, WorkflowStore};
 use super::transition::{
     next, Decision, RunState, Transition, TurnFinished, TurnStopReason, WorkflowCommand,
     WorkflowEvent,
 };
 
 fn test_store() -> WorkflowStore {
+    test_store_with_db().1
+}
+
+fn test_store_with_db() -> (Db, WorkflowStore) {
     let db = Db::open_in_memory().expect("in-memory db with full migrations");
     db.with_conn(|conn| {
         conn.execute(
@@ -36,18 +40,18 @@ fn test_store() -> WorkflowStore {
         )?;
         conn.execute(
             "INSERT INTO workspaces (
-                id, kind, repo_root_id, path, surface, lifecycle_state, cleanup_state,
+                id, kind, repo_root_id, path, surface, lifecycle_state,
                 created_at, updated_at
              ) VALUES (
                 'workspace-1', 'worktree', 'repo-root-1', '/tmp/workspace-1',
-                'standard', 'active', 'none', ?1, ?1
+                'standard', 'active', ?1, ?1
              )",
             ["2026-08-14T00:00:00Z"],
         )?;
         Ok(())
     })
     .expect("seed repo root and workspace");
-    WorkflowStore::new(db)
+    (db.clone(), WorkflowStore::new(db))
 }
 
 fn snapshot() -> InvocationSnapshot {
@@ -94,12 +98,12 @@ fn snapshot() -> InvocationSnapshot {
         doc_templates: vec![
             DocTemplate {
                 slug: "plan-doc".into(),
-                producing_node_id: Some("plan".into()),
+                producing_node_id: "plan".into(),
                 body: "# Plan\n".into(),
             },
             DocTemplate {
                 slug: "notes".into(),
-                producing_node_id: None,
+                producing_node_id: "review".into(),
                 body: String::new(),
             },
         ],
@@ -119,11 +123,15 @@ fn snapshot() -> InvocationSnapshot {
 }
 
 fn params(run_id: &str) -> NewRunParams {
+    let snapshot = snapshot();
+    let definition_json =
+        serde_json::to_string(&snapshot.definition).expect("serialize definition");
     NewRunParams {
         run_id: run_id.into(),
         invocation_id: format!("inv-{run_id}"),
         workspace_id: "workspace-1".into(),
-        snapshot: snapshot(),
+        snapshot,
+        definition_json,
     }
 }
 
@@ -132,6 +140,20 @@ fn decide(state: &RunState, event: &WorkflowEvent) -> Transition {
         Decision::Transition(transition) => transition,
         other => panic!("expected a transition for {event:?}, got {other:?}"),
     }
+}
+
+/// Decide and apply one event the way the live engine does: the transition
+/// carries the event as its telemetry cause.
+fn decide_and_apply(
+    store: &WorkflowStore,
+    run_id: &str,
+    state: &RunState,
+    event: &WorkflowEvent,
+) -> AppliedTransition {
+    let transition = decide(state, event);
+    store
+        .apply_transition(run_id, &transition, event)
+        .expect("apply transition")
 }
 
 fn clean_turn(node_row_id: &str) -> WorkflowEvent {
@@ -180,8 +202,8 @@ fn create_run_materializes_run_nodes_and_docs() {
     assert_eq!(chain[0].chain_index, Some(0));
     assert_eq!(chain[2].chain_index, Some(2));
 
-    // Doc registry: NN from the producing node's chain index; producer-less
-    // seeds keep a bare slug filename.
+    // Doc registry: NN-slug.md, NN from the producing node's chain index
+    // (Ruling C: every doc has a required producer).
     let docs = &created.docs;
     assert_eq!(docs.len(), 2);
     let plan_doc = docs.iter().find(|doc| doc.slug == "plan-doc").unwrap();
@@ -192,8 +214,11 @@ fn create_run_materializes_run_nodes_and_docs() {
     );
     assert!(plan_doc.seeded_from_template);
     let notes = docs.iter().find(|doc| doc.slug == "notes").unwrap();
-    assert_eq!(notes.filename, "notes.md");
-    assert!(notes.producing_node_row_id.is_none());
+    assert_eq!(notes.filename, "01-notes.md");
+    assert_eq!(
+        notes.producing_node_row_id.as_deref(),
+        Some(chain[1].id.as_str())
+    );
 
     assert_healthy(state);
 }
@@ -251,10 +276,55 @@ fn create_run_enforces_the_workspace_foreign_key() {
 }
 
 #[test]
-fn sessions_table_gained_the_two_workflow_columns() {
+fn definition_json_is_stored_byte_verbatim() {
     let store = test_store();
-    // Reach the raw connection through a run-independent query.
-    let _ = store; // schema is shared; open a fresh db for the pragma
+    // Key order and formatting no serializer would produce: if the store ever
+    // round-trips through serde_json::Value, this exact string cannot survive.
+    let odd = "{\n  \"zz_last\":   1,\t\"aa_first\": \"two\"  }";
+    let mut with_odd_json = params("run-1");
+    with_odd_json.definition_json = odd.to_string();
+    let created = store
+        .create_run_with_first_node(with_odd_json)
+        .expect("create run");
+    assert_eq!(created.state.run.definition_json, odd);
+    let reloaded = store
+        .load_run_state("run-1")
+        .expect("load")
+        .expect("run exists");
+    assert_eq!(reloaded.run.definition_json, odd);
+}
+
+#[test]
+fn workspace_deletion_cascades_to_run_rows() {
+    let (db, store) = test_store_with_db();
+    store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    db.with_conn(|conn| {
+        conn.execute("DELETE FROM workspaces WHERE id = 'workspace-1'", [])?;
+        let nodes: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM workflow_run_nodes WHERE run_id = 'run-1'",
+            [],
+            |row| row.get(0),
+        )?;
+        let docs: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM workflow_run_docs WHERE run_id = 'run-1'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(nodes, 0, "node rows must cascade with the workspace");
+        assert_eq!(docs, 0, "doc rows must cascade with the workspace");
+        Ok(())
+    })
+    .expect("delete workspace");
+    assert!(store
+        .load_run_state("run-1")
+        .expect("query run state")
+        .is_none());
+}
+
+#[test]
+fn sessions_table_gained_the_two_workflow_columns() {
     let db = Db::open_in_memory().expect("in-memory db");
     let columns: Vec<String> = db
         .with_conn(|conn| {
@@ -281,9 +351,11 @@ fn happy_path_lifecycle_advances_gates_and_completes() {
         .expect("stamp plan session");
 
     // Plan finishes cleanly: advance to the review gate node.
-    let state = store.load_run_state("run-1").expect("load").expect("run exists");
-    let transition = decide(&state, &clean_turn(&plan_id));
-    let applied = store.apply_transition("run-1", &transition).expect("advance");
+    let state = store
+        .load_run_state("run-1")
+        .expect("load")
+        .expect("run exists");
+    let applied = decide_and_apply(&store, "run-1", &state, &clean_turn(&plan_id));
     assert_healthy(&applied.state);
     let review_id = match &applied.side_effect {
         ResolvedSideEffect::StartNode { node_row_id } => node_row_id.clone(),
@@ -296,12 +368,16 @@ fn happy_path_lifecycle_advances_gates_and_completes() {
     );
     assert!(applied.state.node(&plan_id).unwrap().completed_at.is_some());
     store
-        .stamp_session(&review_id, "sess-review", Some("prompt-review"), Some("claude"))
+        .stamp_session(
+            &review_id,
+            "sess-review",
+            Some("prompt-review"),
+            Some("claude"),
+        )
         .expect("stamp review session");
 
     // The human_in_loop node's clean turn renders the gate.
-    let transition = decide(&applied.state, &clean_turn(&review_id));
-    let applied = store.apply_transition("run-1", &transition).expect("gate");
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &clean_turn(&review_id));
     assert_healthy(&applied.state);
     assert_eq!(applied.state.run.status, WorkflowRunStatus::AwaitingHuman);
     assert_eq!(applied.side_effect, ResolvedSideEffect::None);
@@ -311,13 +387,10 @@ fn happy_path_lifecycle_advances_gates_and_completes() {
     );
 
     // Approving the gate advances to ship.
-    let transition = decide(
-        &applied.state,
-        &WorkflowEvent::Command(WorkflowCommand::ApproveGate {
-            node_row_id: review_id.clone(),
-        }),
-    );
-    let applied = store.apply_transition("run-1", &transition).expect("approve");
+    let approve = WorkflowEvent::Command(WorkflowCommand::ApproveGate {
+        node_row_id: review_id.clone(),
+    });
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &approve);
     assert_healthy(&applied.state);
     let ship_id = match &applied.side_effect {
         ResolvedSideEffect::StartNode { node_row_id } => node_row_id.clone(),
@@ -329,8 +402,7 @@ fn happy_path_lifecycle_advances_gates_and_completes() {
     );
 
     // Ship finishes: the run completes.
-    let transition = decide(&applied.state, &clean_turn(&ship_id));
-    let applied = store.apply_transition("run-1", &transition).expect("complete");
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &clean_turn(&ship_id));
     assert_healthy(&applied.state);
     assert_eq!(applied.state.run.status, WorkflowRunStatus::Completed);
     assert!(applied.state.run.completed_at.is_some());
@@ -349,28 +421,25 @@ fn fail_and_redo_persists_a_running_replacement() {
     let plan_id = created.first_node_row_id.clone();
 
     // The plan turn errors: node failed, run failed.
-    let transition = decide(
-        &created.state,
-        &WorkflowEvent::TurnFinished(TurnFinished {
-            node_row_id: plan_id.clone(),
-            stop_reason: TurnStopReason::Error,
-            queue_empty: true,
-        }),
-    );
-    let applied = store.apply_transition("run-1", &transition).expect("fail");
+    let errored = WorkflowEvent::TurnFinished(TurnFinished {
+        node_row_id: plan_id.clone(),
+        stop_reason: TurnStopReason::Error,
+        queue_empty: true,
+    });
+    let applied = decide_and_apply(&store, "run-1", &created.state, &errored);
     assert_healthy(&applied.state);
     assert_eq!(applied.state.run.status, WorkflowRunStatus::Failed);
-    assert_eq!(applied.state.run.failure_code.as_deref(), Some("turn_error"));
+    assert_eq!(
+        applied.state.run.failure_code.as_deref(),
+        Some("turn_error")
+    );
 
     // Fail-and-redo with an edited prompt.
-    let transition = decide(
-        &applied.state,
-        &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
-            node_row_id: plan_id.clone(),
-            prompt: Some("plan again, smaller steps".into()),
-        }),
-    );
-    let applied = store.apply_transition("run-1", &transition).expect("redo");
+    let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: plan_id.clone(),
+        prompt: Some("plan again, smaller steps".into()),
+    });
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &redo);
     assert_healthy(&applied.state);
     let replacement_id = applied.created_node_row_id.clone().expect("minted row");
     assert_eq!(
@@ -381,14 +450,21 @@ fn fail_and_redo_persists_a_running_replacement() {
     );
     let replacement = applied.state.node(&replacement_id).unwrap();
     assert_eq!(replacement.kind, WorkflowNodeKind::Replacement);
-    assert_eq!(replacement.replaces_node_row_id.as_deref(), Some(plan_id.as_str()));
+    assert_eq!(
+        replacement.replaces_node_row_id.as_deref(),
+        Some(plan_id.as_str())
+    );
     assert_eq!(replacement.status, WorkflowNodeStatus::Running);
     assert_eq!(replacement.prompt, "plan again, smaller steps");
     assert_eq!(replacement.chain_index, Some(0));
-    // The failed row stays, failed, beside its replacement.
+    // The failed row stays, failed, beside its replacement — and keeps its OWN
+    // failure code (superseded is only for rows replaced from a non-failed
+    // pause).
+    let failed = applied.state.node(&plan_id).unwrap();
+    assert_eq!(failed.status, WorkflowNodeStatus::Failed);
     assert_eq!(
-        applied.state.node(&plan_id).unwrap().status,
-        WorkflowNodeStatus::Failed
+        failed.failure_code,
+        Some(WorkflowNodeFailureCode::TurnError)
     );
     assert_eq!(applied.state.run.status, WorkflowRunStatus::Running);
     assert!(applied.state.run.failure_code.is_none());
@@ -399,11 +475,171 @@ fn fail_and_redo_persists_a_running_replacement() {
     );
 
     // The replacement owns the chain position: its clean turn advances to review.
-    let transition = decide(&applied.state, &clean_turn(&replacement_id));
-    let applied = store.apply_transition("run-1", &transition).expect("advance");
+    let applied = decide_and_apply(
+        &store,
+        "run-1",
+        &applied.state,
+        &clean_turn(&replacement_id),
+    );
     assert_healthy(&applied.state);
     let current = applied.state.current_node().unwrap();
     assert_eq!(current.definition_node_id.as_deref(), Some("review"));
+}
+
+#[test]
+fn redo_from_a_parked_gate_marks_the_old_row_superseded() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+
+    // Reach the review gate.
+    let applied = decide_and_apply(&store, "run-1", &created.state, &clean_turn(&plan_id));
+    let review_id = applied.state.current_node().unwrap().id.clone();
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &clean_turn(&review_id));
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::AwaitingHuman);
+
+    // Redo the waiting gate: it was never failed, so the superseded row takes
+    // the dedicated code and the failed⇔code row law still holds.
+    let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: review_id.clone(),
+        prompt: None,
+    });
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &redo);
+    assert_healthy(&applied.state);
+    let old_review = applied.state.node(&review_id).unwrap();
+    assert_eq!(old_review.status, WorkflowNodeStatus::Failed);
+    assert_eq!(
+        old_review.failure_code,
+        Some(WorkflowNodeFailureCode::Superseded)
+    );
+    let replacement_id = applied.created_node_row_id.expect("minted row");
+    let replacement = applied.state.node(&replacement_id).unwrap();
+    assert_eq!(replacement.kind, WorkflowNodeKind::Replacement);
+    assert_eq!(replacement.node_type, WorkflowNodeType::HumanInLoop);
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Running);
+}
+
+#[test]
+fn adhoc_redo_replaces_only_the_adhoc_row() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+
+    let add = WorkflowEvent::Command(WorkflowCommand::AddAdhocNode {
+        anchor_node_row_id: plan_id.clone(),
+        prompt: "also check the error budget".into(),
+        model: None,
+    });
+    let applied = decide_and_apply(&store, "run-1", &created.state, &add);
+    let adhoc_id = applied.created_node_row_id.clone().expect("minted row");
+
+    // The adhoc launch fails: only its row fails, the run is untouched.
+    let launch_failed = WorkflowEvent::NodeLaunchFailed {
+        node_row_id: adhoc_id.clone(),
+    };
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &launch_failed);
+    assert_healthy(&applied.state);
+    assert_eq!(
+        applied.state.node(&adhoc_id).unwrap().status,
+        WorkflowNodeStatus::Failed
+    );
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Running);
+
+    // Fail-and-redo on the failed adhoc row: the replacement is ALSO adhoc,
+    // anchored the same, and the run stays untouched (Ruling K).
+    let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: adhoc_id.clone(),
+        prompt: None,
+    });
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &redo);
+    assert_healthy(&applied.state);
+    let replacement_id = applied.created_node_row_id.clone().expect("minted row");
+    let replacement = applied.state.node(&replacement_id).unwrap();
+    // K.1: the minted row stays kind ADHOC (the client's side-node predicate
+    // keys on kind), anchored the same, replacing the superseded adhoc row.
+    assert_eq!(replacement.kind, WorkflowNodeKind::Adhoc);
+    assert_eq!(
+        replacement.anchor_node_row_id.as_deref(),
+        Some(plan_id.as_str())
+    );
+    assert_eq!(
+        replacement.replaces_node_row_id.as_deref(),
+        Some(adhoc_id.as_str())
+    );
+    assert_eq!(replacement.status, WorkflowNodeStatus::Running);
+    // The old adhoc row keeps its own failure code.
+    assert_eq!(
+        applied.state.node(&adhoc_id).unwrap().failure_code,
+        Some(WorkflowNodeFailureCode::NodeLaunchFailed)
+    );
+    // The run never noticed: still running on plan.
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Running);
+    assert_eq!(
+        applied.state.run.current_node_row_id.as_deref(),
+        Some(plan_id.as_str())
+    );
+
+    // Negative control: fail-and-redo on the RUNNING adhoc replacement is not
+    // a pause and must be refused.
+    let illegal = next(
+        &applied.state,
+        &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+            node_row_id: replacement_id,
+            prompt: None,
+        }),
+    );
+    assert!(
+        matches!(illegal, Decision::Illegal(_)),
+        "expected Illegal, got {illegal:?}"
+    );
+}
+
+#[test]
+fn flipping_the_waiting_gate_to_agent_persists_the_flip() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+
+    // Reach the review gate.
+    let applied = decide_and_apply(&store, "run-1", &created.state, &clean_turn(&plan_id));
+    let review_id = applied.state.current_node().unwrap().id.clone();
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &clean_turn(&review_id));
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::AwaitingHuman);
+
+    // Flipping the waiting gate to agent advances immediately AND persists the
+    // flip on the completed row (a later undo must re-park it as agent).
+    let flip = WorkflowEvent::Command(WorkflowCommand::FlipType {
+        node_row_id: review_id.clone(),
+        node_type: WorkflowNodeType::Agent,
+    });
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &flip);
+    assert_healthy(&applied.state);
+    let review = applied.state.node(&review_id).unwrap();
+    assert_eq!(review.status, WorkflowNodeStatus::Completed);
+    assert_eq!(review.node_type, WorkflowNodeType::Agent);
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Running);
+    assert_eq!(
+        applied
+            .state
+            .current_node()
+            .unwrap()
+            .definition_node_id
+            .as_deref(),
+        Some("ship")
+    );
+
+    // The persisted flip survives a fresh read.
+    let reloaded = store.load_run_state("run-1").expect("load").expect("run");
+    assert_eq!(
+        reloaded.node(&review_id).unwrap().node_type,
+        WorkflowNodeType::Agent
+    );
 }
 
 #[test]
@@ -414,16 +650,15 @@ fn undo_advance_parks_the_gate_and_disposes_the_new_session() {
         .expect("create run");
     let plan_id = created.first_node_row_id.clone();
 
-    let transition = decide(&created.state, &clean_turn(&plan_id));
-    let applied = store.apply_transition("run-1", &transition).expect("advance");
+    let applied = decide_and_apply(&store, "run-1", &created.state, &clean_turn(&plan_id));
     let review_id = applied.state.current_node().unwrap().id.clone();
     store
         .stamp_session(&review_id, "sess-review", Some("prompt-review"), None)
         .expect("stamp");
 
     let state = store.load_run_state("run-1").expect("load").expect("run");
-    let transition = decide(&state, &WorkflowEvent::Command(WorkflowCommand::UndoAdvance));
-    let applied = store.apply_transition("run-1", &transition).expect("undo");
+    let undo = WorkflowEvent::Command(WorkflowCommand::UndoAdvance);
+    let applied = decide_and_apply(&store, "run-1", &state, &undo);
     assert_healthy(&applied.state);
     assert_eq!(
         applied.side_effect,
@@ -447,13 +682,10 @@ fn undo_advance_parks_the_gate_and_disposes_the_new_session() {
     );
 
     // Approving the retroactive gate re-advances.
-    let transition = decide(
-        &applied.state,
-        &WorkflowEvent::Command(WorkflowCommand::ApproveGate {
-            node_row_id: plan_id.clone(),
-        }),
-    );
-    let applied = store.apply_transition("run-1", &transition).expect("re-advance");
+    let approve = WorkflowEvent::Command(WorkflowCommand::ApproveGate {
+        node_row_id: plan_id.clone(),
+    });
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &approve);
     assert_healthy(&applied.state);
     assert_eq!(
         applied.state.current_node().unwrap().id.as_str(),
@@ -462,6 +694,77 @@ fn undo_advance_parks_the_gate_and_disposes_the_new_session() {
     assert_eq!(
         applied.state.node(&review_id).unwrap().status,
         WorkflowNodeStatus::Running
+    );
+}
+
+#[test]
+fn undo_window_closes_after_first_turn_and_reopens_on_reexecution() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+
+    let applied = decide_and_apply(&store, "run-1", &created.state, &clean_turn(&plan_id));
+    let review_id = applied.state.current_node().unwrap().id.clone();
+    store
+        .stamp_session(&review_id, "sess-review", Some("prompt-review"), None)
+        .expect("stamp");
+
+    // Ruling J: the review session finishes its first turn — the undo window
+    // closes, even though nothing else about the state changed.
+    store
+        .note_first_turn_finished(&review_id)
+        .expect("note first turn");
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+    assert!(state
+        .node(&review_id)
+        .unwrap()
+        .first_turn_finished_at
+        .is_some());
+    let undo = WorkflowEvent::Command(WorkflowCommand::UndoAdvance);
+    match next(&state, &undo) {
+        Decision::Illegal(illegal) => {
+            assert!(
+                illegal.detail.contains("undo window is closed"),
+                "unexpected detail: {}",
+                illegal.detail
+            );
+        }
+        other => panic!("expected Illegal, got {other:?}"),
+    }
+    // Stamping is idempotent: a second turn report does not move the stamp.
+    let stamped_at = state
+        .node(&review_id)
+        .unwrap()
+        .first_turn_finished_at
+        .clone();
+    store
+        .note_first_turn_finished(&review_id)
+        .expect("note again");
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+    assert_eq!(
+        state.node(&review_id).unwrap().first_turn_finished_at,
+        stamped_at
+    );
+
+    // Re-execution reopens the window: fence the run, resume it — the node
+    // restarts fresh (stamp cleared), so undo is legal again.
+    let fence = WorkflowEvent::BootFence {
+        code: WorkflowInterruptionCode::RuntimeRestarted,
+    };
+    let applied = decide_and_apply(&store, "run-1", &state, &fence);
+    let resume = WorkflowEvent::Command(WorkflowCommand::Resume);
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &resume);
+    assert!(applied
+        .state
+        .node(&review_id)
+        .unwrap()
+        .first_turn_finished_at
+        .is_none());
+    assert!(
+        matches!(next(&applied.state, &undo), Decision::Transition(_)),
+        "undo must be legal again after the node restarted fresh"
     );
 }
 
@@ -476,14 +779,16 @@ fn boot_fence_interrupts_and_resume_restarts() {
         .stamp_session(&plan_id, "sess-plan", Some("prompt-plan"), None)
         .expect("stamp");
 
-    assert_eq!(store.running_run_ids().expect("list"), vec!["run-1".to_string()]);
+    assert_eq!(
+        store.boot_fence_run_ids().expect("list"),
+        vec!["run-1".to_string()]
+    );
 
     let state = store.load_run_state("run-1").expect("load").expect("run");
     let fence = WorkflowEvent::BootFence {
         code: WorkflowInterruptionCode::RuntimeRestarted,
     };
-    let transition = decide(&state, &fence);
-    let applied = store.apply_transition("run-1", &transition).expect("fence");
+    let applied = decide_and_apply(&store, "run-1", &state, &fence);
     assert_healthy(&applied.state);
     assert_eq!(applied.state.run.status, WorkflowRunStatus::Interrupted);
     assert_eq!(
@@ -495,15 +800,12 @@ fn boot_fence_interrupts_and_resume_restarts() {
         WorkflowNodeStatus::NeedsAttention
     );
     // Fenced runs leave the boot sweep set, and a second fence holds.
-    assert!(store.running_run_ids().expect("list").is_empty());
+    assert!(store.boot_fence_run_ids().expect("list").is_empty());
     assert_eq!(next(&applied.state, &fence), Decision::Hold);
 
     // Resume: the node runs again, unlinked, in a fresh session.
-    let transition = decide(
-        &applied.state,
-        &WorkflowEvent::Command(WorkflowCommand::Resume),
-    );
-    let applied = store.apply_transition("run-1", &transition).expect("resume");
+    let resume = WorkflowEvent::Command(WorkflowCommand::Resume);
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &resume);
     assert_healthy(&applied.state);
     assert_eq!(applied.state.run.status, WorkflowRunStatus::Running);
     assert!(applied.state.run.interruption_code.is_none());
@@ -519,6 +821,78 @@ fn boot_fence_interrupts_and_resume_restarts() {
 }
 
 #[test]
+fn fence_spares_the_gate_and_fences_orphan_adhocs() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+
+    // An adhoc runs beside the chain while the run reaches the review gate.
+    let add = WorkflowEvent::Command(WorkflowCommand::AddAdhocNode {
+        anchor_node_row_id: plan_id.clone(),
+        prompt: "poke around".into(),
+        model: None,
+    });
+    let applied = decide_and_apply(&store, "run-1", &created.state, &add);
+    let adhoc_id = applied.created_node_row_id.clone().expect("minted row");
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &clean_turn(&plan_id));
+    let review_id = applied.state.current_node().unwrap().id.clone();
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &clean_turn(&review_id));
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::AwaitingHuman);
+
+    // The parked gate still owes a fence: the adhoc row is running (Ruling K's
+    // any-node-running sweep set).
+    assert_eq!(
+        store.boot_fence_run_ids().expect("list"),
+        vec!["run-1".to_string()]
+    );
+
+    // The fence parks ONLY the running adhoc; the gate and its pending
+    // approval survive the restart untouched.
+    let fence = WorkflowEvent::BootFence {
+        code: WorkflowInterruptionCode::RuntimeRestarted,
+    };
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &fence);
+    assert_healthy(&applied.state);
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::AwaitingHuman);
+    assert!(applied.state.run.interruption_code.is_none());
+    assert_eq!(
+        applied.state.node(&adhoc_id).unwrap().status,
+        WorkflowNodeStatus::NeedsAttention
+    );
+    assert_eq!(
+        applied.state.node(&review_id).unwrap().status,
+        WorkflowNodeStatus::AwaitingHuman
+    );
+
+    // Negative control: with nothing running the fence holds.
+    assert_eq!(next(&applied.state, &fence), Decision::Hold);
+    assert!(store.boot_fence_run_ids().expect("list").is_empty());
+
+    // Recovery for the fenced adhoc is fail-and-redo from needs_attention.
+    let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: adhoc_id.clone(),
+        prompt: None,
+    });
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &redo);
+    assert_healthy(&applied.state);
+    let old_adhoc = applied.state.node(&adhoc_id).unwrap();
+    assert_eq!(old_adhoc.status, WorkflowNodeStatus::Failed);
+    assert_eq!(
+        old_adhoc.failure_code,
+        Some(WorkflowNodeFailureCode::Superseded)
+    );
+    let replacement = applied
+        .state
+        .node(applied.created_node_row_id.as_deref().unwrap())
+        .unwrap();
+    assert_eq!(replacement.kind, WorkflowNodeKind::Adhoc);
+    // The gate is still parked: the adhoc recovery never touched the run.
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::AwaitingHuman);
+}
+
+#[test]
 fn adhoc_nodes_run_beside_the_chain_without_touching_the_run() {
     let store = test_store();
     let created = store
@@ -526,15 +900,12 @@ fn adhoc_nodes_run_beside_the_chain_without_touching_the_run() {
         .expect("create run");
     let plan_id = created.first_node_row_id.clone();
 
-    let transition = decide(
-        &created.state,
-        &WorkflowEvent::Command(WorkflowCommand::AddAdhocNode {
-            anchor_node_row_id: plan_id.clone(),
-            prompt: "also check the error budget".into(),
-            model: None,
-        }),
-    );
-    let applied = store.apply_transition("run-1", &transition).expect("adhoc");
+    let add = WorkflowEvent::Command(WorkflowCommand::AddAdhocNode {
+        anchor_node_row_id: plan_id.clone(),
+        prompt: "also check the error budget".into(),
+        model: None,
+    });
+    let applied = decide_and_apply(&store, "run-1", &created.state, &add);
     assert_healthy(&applied.state);
     let adhoc_id = applied.created_node_row_id.clone().expect("minted row");
     let adhoc = applied.state.node(&adhoc_id).unwrap();
@@ -551,8 +922,7 @@ fn adhoc_nodes_run_beside_the_chain_without_touching_the_run() {
     assert_eq!(applied.state.effective_chain().len(), 3);
 
     // The chain still advances while the adhoc node runs.
-    let transition = decide(&applied.state, &clean_turn(&plan_id));
-    let applied = store.apply_transition("run-1", &transition).expect("advance");
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &clean_turn(&plan_id));
     assert_healthy(&applied.state);
     assert_eq!(
         applied.state.node(&plan_id).unwrap().status,
@@ -564,8 +934,7 @@ fn adhoc_nodes_run_beside_the_chain_without_touching_the_run() {
     );
 
     // The adhoc turn completes only its own row.
-    let transition = decide(&applied.state, &clean_turn(&adhoc_id));
-    let applied = store.apply_transition("run-1", &transition).expect("adhoc turn");
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &clean_turn(&adhoc_id));
     assert_healthy(&applied.state);
     assert_eq!(
         applied.state.node(&adhoc_id).unwrap().status,
@@ -603,6 +972,28 @@ fn stamp_session_and_envelope_round_trip() {
 }
 
 #[test]
+fn corrupt_rendered_envelope_reads_as_none_not_an_error() {
+    let (db, store) = test_store_with_db();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+    // The one row column no CHECK constraint shields: seed garbage directly.
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE workflow_run_nodes SET rendered_envelope = 'not json' WHERE id = ?1",
+            rusqlite::params![plan_id],
+        )?;
+        Ok(())
+    })
+    .expect("seed corrupt envelope");
+    // Lenient read: the run stays readable, the envelope degrades to None (the
+    // engine re-renders).
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+    assert!(state.node(&plan_id).unwrap().rendered_envelope.is_none());
+}
+
+#[test]
 fn runs_for_workspace_lists_newest_first() {
     let store = test_store();
     store
@@ -622,12 +1013,36 @@ fn runs_for_workspace_lists_newest_first() {
 }
 
 #[test]
+fn run_detail_projects_run_nodes_and_docs_in_one_read() {
+    let store = test_store();
+    store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let detail = store
+        .run_detail("run-1")
+        .expect("read detail")
+        .expect("run exists");
+    let json = serde_json::to_value(&detail).expect("serialize");
+    assert_eq!(json["id"], "run-1");
+    assert_eq!(json["nodes"].as_array().unwrap().len(), 3);
+    assert_eq!(json["docs"].as_array().unwrap().len(), 2);
+    assert!(store
+        .run_detail("ghost-run")
+        .expect("read missing")
+        .is_none());
+}
+
+#[test]
 fn apply_transition_on_unknown_run_errors() {
     let store = test_store();
     let transition = Transition::CompleteRun {
         completed_node_row_id: "ghost".into(),
+        completed_node_type: None,
     };
-    assert!(store.apply_transition("ghost-run", &transition).is_err());
+    let event = clean_turn("ghost");
+    assert!(store
+        .apply_transition("ghost-run", &transition, &event)
+        .is_err());
 }
 
 #[test]
@@ -650,4 +1065,60 @@ fn projection_serializes_camel_case_from_rows() {
     assert_eq!(json["docs"][0]["filename"], "00-plan-doc.md");
     // The rendered envelope never leaves the runtime.
     assert!(json["nodes"][0].get("renderedEnvelope").is_none());
+}
+
+// The tripwire itself: a committed state violating a structural law must
+// panic the debug sweep inside apply_transition. Corruption is seeded by
+// direct SQL — no legal transition can produce it — and the next legal
+// transition trips the sweep.
+#[test]
+#[should_panic(expected = "workflow invariant violations")]
+fn seeded_corruption_panics_the_debug_sweep() {
+    let (db, store) = test_store_with_db();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE workflow_runs SET current_node_row_id = 'ghost-row' WHERE id = 'run-1'",
+            [],
+        )?;
+        Ok(())
+    })
+    .expect("seed corruption");
+    // Any legal transition against the corrupted run commits, then the
+    // post-commit sweep sees current_node_row_id pointing at no row.
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+    let add = WorkflowEvent::Command(WorkflowCommand::AddAdhocNode {
+        anchor_node_row_id: plan_id,
+        prompt: "tripwire".into(),
+        model: None,
+    });
+    let transition = decide(&state, &add);
+    let _ = store.apply_transition("run-1", &transition, &add);
+}
+
+#[test]
+fn running_unlinked_node_trips_only_the_at_rest_sweep() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    // Mid-step this is lawful (the stamp comes after launch), so the
+    // post-transition sweep stays quiet…
+    assert!(invariants::sweep(&created.state).is_empty());
+    // …but a state observed AT REST (boot-time rebuild) must have every
+    // running node linked.
+    let at_rest = invariants::sweep_at_rest(&created.state);
+    assert_eq!(at_rest.len(), 1);
+    assert_eq!(at_rest[0].invariant, "running_nodes_linked_at_rest");
+
+    // Negative control: once the session is stamped, the at-rest sweep is
+    // clean too.
+    store
+        .stamp_session(&created.first_node_row_id, "sess-plan", None, None)
+        .expect("stamp");
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+    assert!(invariants::sweep_at_rest(&state).is_empty());
 }

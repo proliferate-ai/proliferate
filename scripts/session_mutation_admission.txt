@@ -111,6 +111,6 @@ agent_model_snapshot::refresh_model_snapshot workspace-scoped model-snapshot re-
 http_auth::push_revoked_jtis workspace-scoped auth revocation push
 
 # ── workflow-plane (the controller side itself, not a foreign mutation) ──
-workflow_runs::put_workflow_run workflow-plane workflow acceptance/execution
-workflow_runs::cancel_workflow_run workflow-plane workflow cancel; acquires the session permit internally
-workflow_workspaces::put_workflow_run_workspace workflow-plane workflow workspace materialization; creates an isolated workspace, no session controller exists yet
+# Empty at this rung: workflows gen-2 (PR1) deletes the gen-1 workflow HTTP
+# surface; the gen-2 routes land with their own entries in the rung that
+# introduces them (PR5a).

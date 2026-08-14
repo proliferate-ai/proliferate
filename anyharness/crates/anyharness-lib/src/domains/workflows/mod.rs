@@ -10,6 +10,7 @@
 pub mod definition;
 pub mod invariants;
 pub mod model;
+pub mod policy;
 pub mod projection;
 pub mod store;
 pub mod transition;

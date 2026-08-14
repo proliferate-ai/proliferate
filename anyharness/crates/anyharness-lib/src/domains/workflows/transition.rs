@@ -141,6 +141,17 @@ pub enum TurnStopReason {
 }
 
 impl TurnStopReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::CleanEndTurn => "clean_end_turn",
+            Self::Refusal => "refusal",
+            Self::EmptyTurn => "empty_turn",
+            Self::Error => "error",
+            Self::HarnessCap => "harness_cap",
+            Self::Cancelled => "cancelled",
+        }
+    }
+
     fn failure_code(&self) -> Option<WorkflowNodeFailureCode> {
         match self {
             Self::Refusal => Some(WorkflowNodeFailureCode::Refusal),
@@ -182,13 +193,19 @@ pub enum AdhocOutcome {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Transition {
     /// Agent turn done / gate approved / gate flipped to agent, with a next
-    /// node to start.
+    /// node to start. `completed_node_type` persists the flip when a waiting
+    /// gate advanced by being flipped to agent (the row must not keep reading
+    /// human_in_loop after the flip).
     AdvanceToNext {
         completed_node_row_id: String,
         next_node_row_id: String,
+        completed_node_type: Option<WorkflowNodeType>,
     },
     /// Same, but the completed node was last on the chain: the run completes.
-    CompleteRun { completed_node_row_id: String },
+    CompleteRun {
+        completed_node_row_id: String,
+        completed_node_type: Option<WorkflowNodeType>,
+    },
     /// A human_in_loop turn ended cleanly: the gate renders.
     GateNode { node_row_id: String },
     /// Refusal / empty turn / error / launch failure: node failed, run failed.
@@ -219,10 +236,13 @@ pub enum Transition {
         gate_node_row_id: String,
         disposed_session_id: Option<String>,
     },
-    /// Boot fence: the run parks interrupted, the current active node (if any)
-    /// needs attention.
+    /// Boot fence: EVERY running node row (chain or adhoc) parks
+    /// needs_attention; the run parks interrupted only if it was itself
+    /// running. An awaiting_human run keeps its status so the gate and its
+    /// pending approval survive the restart (Ruling K).
     Fence {
-        node_row_id: Option<String>,
+        node_row_ids: Vec<String>,
+        interrupt_run: bool,
         code: WorkflowInterruptionCode,
     },
     /// Resume an interrupted run: the current node runs again in a fresh
@@ -343,7 +363,7 @@ fn on_turn_finished(state: &RunState, turn: &TurnFinished) -> Decision {
             Decision::Hold
         }
         TurnStopReason::CleanEndTurn => match node.node_type {
-            WorkflowNodeType::Agent => advance_or_complete(state, node),
+            WorkflowNodeType::Agent => advance_or_complete(state, node, None),
             WorkflowNodeType::HumanInLoop => Decision::Transition(Transition::GateNode {
                 node_row_id: node.id.clone(),
             }),
@@ -361,14 +381,20 @@ fn on_turn_finished(state: &RunState, turn: &TurnFinished) -> Decision {
     }
 }
 
-fn advance_or_complete(state: &RunState, node: &WorkflowRunNodeRecord) -> Decision {
+fn advance_or_complete(
+    state: &RunState,
+    node: &WorkflowRunNodeRecord,
+    completed_node_type: Option<WorkflowNodeType>,
+) -> Decision {
     match state.next_on_chain(&node.id) {
         Some(next_node) => Decision::Transition(Transition::AdvanceToNext {
             completed_node_row_id: node.id.clone(),
             next_node_row_id: next_node.id.clone(),
+            completed_node_type,
         }),
         None => Decision::Transition(Transition::CompleteRun {
             completed_node_row_id: node.id.clone(),
+            completed_node_type,
         }),
     }
 }
@@ -395,7 +421,7 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                     "only the waiting gate can be approved",
                 );
             }
-            advance_or_complete(state, node)
+            advance_or_complete(state, node, None)
         }
         WorkflowCommand::FlipType {
             node_row_id,
@@ -422,13 +448,13 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
             }
             match node.status {
                 // Flipping the waiting gate to agent advances immediately: the
-                // finished turn counts as done.
+                // finished turn counts as done, and the flip persists on the
+                // completed row so a later undo re-parks it as an agent node.
                 WorkflowNodeStatus::AwaitingHuman
                     if *node_type == WorkflowNodeType::Agent
-                        && state.run.current_node_row_id.as_deref()
-                            == Some(node.id.as_str()) =>
+                        && state.run.current_node_row_id.as_deref() == Some(node.id.as_str()) =>
                 {
-                    advance_or_complete(state, node)
+                    advance_or_complete(state, node, Some(*node_type))
                 }
                 // A running agent node flipped to human_in_loop pauses for the
                 // human when its turn ends; an upcoming (pending) node flips
@@ -454,14 +480,6 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
             let Some(node) = state.node(node_row_id) else {
                 return illegal(state, command.as_str(), None, "unknown node row");
             };
-            if node.kind == WorkflowNodeKind::Adhoc {
-                return illegal(
-                    state,
-                    command.as_str(),
-                    Some(node),
-                    "adhoc nodes are re-run by creating another adhoc node",
-                );
-            }
             if state.is_superseded(&node.id) {
                 return illegal(
                     state,
@@ -470,12 +488,24 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                     "the node was already replaced",
                 );
             }
-            if !matches!(
-                node.status,
-                WorkflowNodeStatus::Failed
-                    | WorkflowNodeStatus::NeedsAttention
-                    | WorkflowNodeStatus::AwaitingHuman
-            ) {
+            let adhoc = node.kind == WorkflowNodeKind::Adhoc;
+            // Adhoc rows never gate, so awaiting_human is not a legal pause
+            // for them; the fence and turn failures are their recovery entry
+            // points (Ruling K).
+            let legal_pause = if adhoc {
+                matches!(
+                    node.status,
+                    WorkflowNodeStatus::Failed | WorkflowNodeStatus::NeedsAttention
+                )
+            } else {
+                matches!(
+                    node.status,
+                    WorkflowNodeStatus::Failed
+                        | WorkflowNodeStatus::NeedsAttention
+                        | WorkflowNodeStatus::AwaitingHuman
+                )
+            };
+            if !legal_pause {
                 return illegal(
                     state,
                     command.as_str(),
@@ -489,10 +519,16 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                 failed_node_row_id: node.id.clone(),
                 replacement: NewNodeSpec {
                     definition_node_id: node.definition_node_id.clone(),
-                    kind: WorkflowNodeKind::Replacement,
+                    // An adhoc row's replacement is also adhoc, anchored the
+                    // same; a chain row's replacement takes its chain slot.
+                    kind: if adhoc {
+                        WorkflowNodeKind::Adhoc
+                    } else {
+                        WorkflowNodeKind::Replacement
+                    },
                     node_type: node.node_type,
                     replaces_node_row_id: Some(node.id.clone()),
-                    anchor_node_row_id: None,
+                    anchor_node_row_id: node.anchor_node_row_id.clone(),
                     chain_index: node.chain_index,
                     title: node.title.clone(),
                     prompt: replacement_prompt,
@@ -520,6 +556,16 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                     command.as_str(),
                     Some(node),
                     "undo applies to the node an advance just started",
+                );
+            }
+            if node.first_turn_finished_at.is_some() {
+                // Ruling J: undo exists to close-dismiss-unlink a JUST-started
+                // node. Once its session finished a turn, undo is a 409.
+                return illegal(
+                    state,
+                    command.as_str(),
+                    Some(node),
+                    "the started node already finished a turn; the undo window is closed",
                 );
             }
             let Some(previous) = state.previous_on_chain(&node.id) else {
@@ -623,18 +669,26 @@ fn adhoc_title(prompt: &str) -> String {
 }
 
 fn on_boot_fence(state: &RunState, code: WorkflowInterruptionCode) -> Decision {
-    if state.run_is_terminal() {
+    // Ruling K: fence EVERY running node row — chain or adhoc — because any of
+    // them holds a dead session after a restart. The run itself parks
+    // interrupted only if it claimed live execution; an awaiting_human run
+    // keeps its status so the gate's pending approval survives, and terminal
+    // or already-interrupted runs keep theirs (idempotent).
+    let node_row_ids: Vec<String> = state
+        .nodes
+        .iter()
+        .filter(|node| node.status == WorkflowNodeStatus::Running)
+        .map(|node| node.id.clone())
+        .collect();
+    let interrupt_run = state.run.status == WorkflowRunStatus::Running;
+    if node_row_ids.is_empty() && !interrupt_run {
         return Decision::Hold;
     }
-    if state.run.status == WorkflowRunStatus::Interrupted {
-        // Idempotent: an already-fenced run stays fenced.
-        return Decision::Hold;
-    }
-    let node_row_id = state
-        .current_node()
-        .filter(|node| node.status.is_active())
-        .map(|node| node.id.clone());
-    Decision::Transition(Transition::Fence { node_row_id, code })
+    Decision::Transition(Transition::Fence {
+        node_row_ids,
+        interrupt_run,
+        code,
+    })
 }
 
 fn on_node_launch_failed(state: &RunState, node_row_id: &str) -> Decision {

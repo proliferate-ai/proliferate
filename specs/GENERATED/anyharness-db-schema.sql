@@ -638,12 +638,14 @@ CREATE TABLE workflow_run_nodes (
     prompt                TEXT NOT NULL,
     status                TEXT NOT NULL CHECK (status IN ('pending','running','needs_attention','awaiting_human','completed','failed')),
     session_id            TEXT,
-    prompt_id             TEXT,                      -- the envelope prompt's id, the extension's match key
+    prompt_id             TEXT,                      -- the envelope prompt's id (provenance; the extension reports every turn end of a linked session)
     rendered_envelope     TEXT,                      -- JSON {instructionBlocks, firstMessage, systemPromptAppend}
-    failure_code          TEXT,
+    failure_code          TEXT CHECK (failure_code IS NULL OR failure_code IN ('node_launch_failed','turn_error','refusal','empty_turn','harness_cap','superseded')),
+    first_turn_finished_at TEXT,                     -- first turn end of the CURRENT execution; bounds UndoAdvance
     created_at            TEXT NOT NULL,
     started_at            TEXT,
-    completed_at          TEXT
+    completed_at          TEXT,
+    CHECK ((status = 'failed') = (failure_code IS NOT NULL))
 );
 
 -- table: workflow_runs
@@ -652,14 +654,15 @@ CREATE TABLE workflow_runs (
     invocation_id       TEXT NOT NULL,
     definition_json     TEXT NOT NULL,               -- verbatim snapshot, IMMUTABLE after insert
     arguments_json      TEXT NOT NULL,
-    workspace_id        TEXT NOT NULL REFERENCES workspaces(id),
+    workspace_id        TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     status              TEXT NOT NULL CHECK (status IN ('running','awaiting_human','interrupted','completed','failed')),
     current_node_row_id TEXT,
-    failure_code        TEXT,
-    interruption_code   TEXT,
+    failure_code        TEXT CHECK (failure_code IS NULL OR failure_code IN ('node_launch_failed','turn_error','refusal','empty_turn','harness_cap','superseded')),
+    interruption_code   TEXT CHECK (interruption_code IS NULL OR interruption_code IN ('user_cancel','app_shutdown','runtime_restarted')),
     created_at          TEXT NOT NULL,
     updated_at          TEXT NOT NULL,
-    completed_at        TEXT
+    completed_at        TEXT,
+    CHECK ((status = 'failed') = (failure_code IS NOT NULL))
 );
 
 -- table: workspace_access_modes

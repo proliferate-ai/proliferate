@@ -90,10 +90,10 @@ use crate::live::sessions::LiveSessionManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
 use crate::persistence::Db;
 
-pub use config::{default_runtime_home, ensure_runtime_home};
-use config::{load_bearer_token, load_runtime_target_id, runtime_identity};
 #[cfg(test)]
 use config::proliferate_home_dir_name;
+pub use config::{default_runtime_home, ensure_runtime_home};
+use config::{load_bearer_token, load_runtime_target_id, runtime_identity};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppStateInitError {
@@ -394,10 +394,15 @@ impl AppState {
         let goal_session_hooks = Arc::new(GoalSessionHooks::new(goal_runtime.clone()));
         // Session mutation admission: gen-2 workflows never gate session
         // mutations (run sessions are ordinary chattable sessions), so the
-        // controller lookup is the permanent no-controller policy. The
-        // operability policy stays the durable relationship lookup.
-        let session_admission = Arc::new(SessionMutationAdmission::new(
+        // mutation-gate controller lookup is the permanent no-controller
+        // policy. Workspace DESTRUCTION still fences on non-terminal gen-2
+        // runs via the separate destruction policy. The operability policy
+        // stays the durable relationship lookup.
+        let session_admission = Arc::new(SessionMutationAdmission::with_destruction_policy(
             Arc::new(NoControllerPolicy),
+            Arc::new(
+                crate::domains::workflows::policy::WorkflowSessionControllerPolicy::new(db.clone()),
+            ),
             Arc::new(session_link_service.clone()),
         ));
         let loop_fire_executor = Arc::new(SessionLoopFireExecutor::new(

@@ -12,6 +12,14 @@
 > document is rewritten at the end of that ladder. Only the workspace
 > placement section below still describes live code
 > (`domains/workspaces/workflow_placement.rs`).
+>
+> Superseded by name: this document's repeated prohibition on a runtime-side
+> workflow actor/manager/scheduler ("no workflow actor", "no scheduler", the
+> run-control and managed-cloud sections' variants) is REVERSED by the
+> Workflows ADR. Gen-2 executes runs through a per-run workflow actor behind
+> a `WorkflowManager`, with SQLite rows as the sole truth and
+> persist-before-act ordering; the prohibition described a gen-1 constraint
+> and no longer binds.
 
 Read before touching: `apps/packages/product-client/src/**/*workflow*`, `server/proliferate/server/workflows/**`, `anyharness/crates/anyharness-lib/src/domains/workflows/**`
 

@@ -14,10 +14,7 @@ use super::transition::{
 
 const T0: &str = "2026-08-14T00:00:00+00:00";
 
-fn run_record(
-    status: WorkflowRunStatus,
-    current_node_row_id: Option<&str>,
-) -> WorkflowRunRecord {
+fn run_record(status: WorkflowRunStatus, current_node_row_id: Option<&str>) -> WorkflowRunRecord {
     WorkflowRunRecord {
         id: "run-1".into(),
         invocation_id: "inv-1".into(),
@@ -64,6 +61,7 @@ fn node_record(
         prompt_id: launched.then(|| format!("prompt-{id}")),
         rendered_envelope: None,
         failure_code: None,
+        first_turn_finished_at: None,
         created_at: T0.into(),
         started_at: launched.then(|| T0.into()),
         completed_at: (status == WorkflowNodeStatus::Completed).then(|| T0.into()),
@@ -75,9 +73,24 @@ fn mid_run() -> RunState {
     RunState {
         run: run_record(WorkflowRunStatus::Running, Some("n2")),
         nodes: vec![
-            node_record("n1", 0, WorkflowNodeType::Agent, WorkflowNodeStatus::Completed),
-            node_record("n2", 1, WorkflowNodeType::Agent, WorkflowNodeStatus::Running),
-            node_record("n3", 2, WorkflowNodeType::Agent, WorkflowNodeStatus::Pending),
+            node_record(
+                "n1",
+                0,
+                WorkflowNodeType::Agent,
+                WorkflowNodeStatus::Completed,
+            ),
+            node_record(
+                "n2",
+                1,
+                WorkflowNodeType::Agent,
+                WorkflowNodeStatus::Running,
+            ),
+            node_record(
+                "n3",
+                2,
+                WorkflowNodeType::Agent,
+                WorkflowNodeStatus::Pending,
+            ),
         ],
     }
 }
@@ -102,12 +115,16 @@ fn expect_transition(decision: Decision) -> Transition {
 #[test]
 fn clean_empty_agent_turn_advances() {
     let state = mid_run();
-    let transition = expect_transition(next(&state, &turn("n2", TurnStopReason::CleanEndTurn, true)));
+    let transition = expect_transition(next(
+        &state,
+        &turn("n2", TurnStopReason::CleanEndTurn, true),
+    ));
     assert_eq!(
         transition,
         Transition::AdvanceToNext {
             completed_node_row_id: "n2".into(),
             next_node_row_id: "n3".into(),
+            completed_node_type: None,
         }
     );
 }
@@ -118,11 +135,15 @@ fn clean_empty_turn_on_last_node_completes_run() {
     state.nodes[1].status = WorkflowNodeStatus::Completed;
     state.nodes[2].status = WorkflowNodeStatus::Running;
     state.run.current_node_row_id = Some("n3".into());
-    let transition = expect_transition(next(&state, &turn("n3", TurnStopReason::CleanEndTurn, true)));
+    let transition = expect_transition(next(
+        &state,
+        &turn("n3", TurnStopReason::CleanEndTurn, true),
+    ));
     assert_eq!(
         transition,
         Transition::CompleteRun {
             completed_node_row_id: "n3".into(),
+            completed_node_type: None,
         }
     );
 }
@@ -140,7 +161,10 @@ fn clean_turn_with_queued_interjection_holds() {
 fn clean_empty_turn_on_human_in_loop_gates() {
     let mut state = mid_run();
     state.nodes[1].node_type = WorkflowNodeType::HumanInLoop;
-    let transition = expect_transition(next(&state, &turn("n2", TurnStopReason::CleanEndTurn, true)));
+    let transition = expect_transition(next(
+        &state,
+        &turn("n2", TurnStopReason::CleanEndTurn, true),
+    ));
     assert_eq!(
         transition,
         Transition::GateNode {
@@ -153,9 +177,15 @@ fn clean_empty_turn_on_human_in_loop_gates() {
 fn failure_stop_reasons_fail_the_node() {
     let cases = [
         (TurnStopReason::Refusal, WorkflowNodeFailureCode::Refusal),
-        (TurnStopReason::EmptyTurn, WorkflowNodeFailureCode::EmptyTurn),
+        (
+            TurnStopReason::EmptyTurn,
+            WorkflowNodeFailureCode::EmptyTurn,
+        ),
         (TurnStopReason::Error, WorkflowNodeFailureCode::TurnError),
-        (TurnStopReason::HarnessCap, WorkflowNodeFailureCode::HarnessCap),
+        (
+            TurnStopReason::HarnessCap,
+            WorkflowNodeFailureCode::HarnessCap,
+        ),
     ];
     for (reason, code) in cases {
         let state = mid_run();
@@ -240,6 +270,7 @@ fn approve_gate_advances() {
         Transition::AdvanceToNext {
             completed_node_row_id: "n2".into(),
             next_node_row_id: "n3".into(),
+            completed_node_type: None,
         }
     );
 }
@@ -258,6 +289,7 @@ fn approve_gate_on_last_node_completes_run() {
         transition,
         Transition::CompleteRun {
             completed_node_row_id: "n2".into(),
+            completed_node_type: None,
         }
     );
 }
@@ -288,11 +320,14 @@ fn flip_waiting_gate_to_agent_advances() {
             node_type: WorkflowNodeType::Agent,
         }),
     ));
+    // The flip persists on the completed row (a later undo re-parks it as an
+    // agent node), so the transition carries the new type.
     assert_eq!(
         transition,
         Transition::AdvanceToNext {
             completed_node_row_id: "n2".into(),
             next_node_row_id: "n3".into(),
+            completed_node_type: Some(WorkflowNodeType::Agent),
         }
     );
 }
@@ -441,8 +476,14 @@ fn fail_and_redo_with_edited_prompt_drops_stored_envelope() {
 #[test]
 fn fail_and_redo_applies_at_every_pause_state() {
     for (run_status, node_status) in [
-        (WorkflowRunStatus::Interrupted, WorkflowNodeStatus::NeedsAttention),
-        (WorkflowRunStatus::AwaitingHuman, WorkflowNodeStatus::AwaitingHuman),
+        (
+            WorkflowRunStatus::Interrupted,
+            WorkflowNodeStatus::NeedsAttention,
+        ),
+        (
+            WorkflowRunStatus::AwaitingHuman,
+            WorkflowNodeStatus::AwaitingHuman,
+        ),
     ] {
         let mut state = mid_run();
         state.run.status = run_status;
@@ -481,8 +522,12 @@ fn fail_and_redo_on_running_node_is_illegal() {
 #[test]
 fn fail_and_redo_on_superseded_node_is_illegal() {
     let mut state = failed_run();
-    let mut replacement =
-        node_record("r2", 1, WorkflowNodeType::Agent, WorkflowNodeStatus::Running);
+    let mut replacement = node_record(
+        "r2",
+        1,
+        WorkflowNodeType::Agent,
+        WorkflowNodeStatus::Running,
+    );
     replacement.kind = WorkflowNodeKind::Replacement;
     replacement.replaces_node_row_id = Some("n2".into());
     state.nodes.push(replacement);
@@ -504,19 +549,27 @@ fn fail_and_redo_on_superseded_node_is_illegal() {
 fn replacement_node_takes_the_chain_position() {
     // With n2 superseded by r2, r2's clean turn advances to n3.
     let mut state = failed_run();
-    let mut replacement =
-        node_record("r2", 1, WorkflowNodeType::Agent, WorkflowNodeStatus::Running);
+    let mut replacement = node_record(
+        "r2",
+        1,
+        WorkflowNodeType::Agent,
+        WorkflowNodeStatus::Running,
+    );
     replacement.kind = WorkflowNodeKind::Replacement;
     replacement.replaces_node_row_id = Some("n2".into());
     state.nodes.push(replacement);
     state.run.status = WorkflowRunStatus::Running;
     state.run.current_node_row_id = Some("r2".into());
-    let transition = expect_transition(next(&state, &turn("r2", TurnStopReason::CleanEndTurn, true)));
+    let transition = expect_transition(next(
+        &state,
+        &turn("r2", TurnStopReason::CleanEndTurn, true),
+    ));
     assert_eq!(
         transition,
         Transition::AdvanceToNext {
             completed_node_row_id: "r2".into(),
             next_node_row_id: "n3".into(),
+            completed_node_type: None,
         }
     );
 }
@@ -551,7 +604,10 @@ fn undo_advance_on_first_node_is_illegal() {
     state.nodes[1].status = WorkflowNodeStatus::Pending;
     state.run.current_node_row_id = Some("n1".into());
     assert!(matches!(
-        next(&state, &WorkflowEvent::Command(WorkflowCommand::UndoAdvance)),
+        next(
+            &state,
+            &WorkflowEvent::Command(WorkflowCommand::UndoAdvance)
+        ),
         Decision::Illegal(_)
     ));
 }
@@ -560,9 +616,36 @@ fn undo_advance_on_first_node_is_illegal() {
 fn undo_advance_while_gated_is_illegal() {
     let state = gated_run();
     assert!(matches!(
-        next(&state, &WorkflowEvent::Command(WorkflowCommand::UndoAdvance)),
+        next(
+            &state,
+            &WorkflowEvent::Command(WorkflowCommand::UndoAdvance)
+        ),
         Decision::Illegal(_)
     ));
+}
+
+// Ruling J: the undo window closes the moment the started node's session
+// finishes a turn — the identical state minus the stamp is legal (the
+// negative control is `undo_advance_parks_previous_node_as_gate`).
+#[test]
+fn undo_advance_after_first_turn_finished_is_illegal() {
+    let mut state = mid_run();
+    state.nodes[1].status = WorkflowNodeStatus::Completed;
+    state.nodes[2].status = WorkflowNodeStatus::Running;
+    state.run.current_node_row_id = Some("n3".into());
+    state.nodes[2].session_id = Some("sess-n3".into());
+    state.nodes[2].first_turn_finished_at = Some(T0.into());
+    match next(
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::UndoAdvance),
+    ) {
+        Decision::Illegal(illegal) => assert!(
+            illegal.detail.contains("undo window is closed"),
+            "unexpected detail: {}",
+            illegal.detail
+        ),
+        other => panic!("expected Illegal, got {other:?}"),
+    }
 }
 
 // ---- boot fence and resume ----
@@ -579,7 +662,77 @@ fn boot_fence_interrupts_the_running_run() {
     assert_eq!(
         transition,
         Transition::Fence {
-            node_row_id: Some("n2".into()),
+            node_row_ids: vec!["n2".into()],
+            interrupt_run: true,
+            code: WorkflowInterruptionCode::RuntimeRestarted,
+        }
+    );
+}
+
+// Ruling K: the fence sweeps EVERY running node row, chain and adhoc alike.
+#[test]
+fn boot_fence_fences_all_running_nodes_chain_and_adhoc() {
+    let state = with_adhoc(mid_run(), WorkflowNodeStatus::Running);
+    let transition = expect_transition(next(
+        &state,
+        &WorkflowEvent::BootFence {
+            code: WorkflowInterruptionCode::RuntimeRestarted,
+        },
+    ));
+    let Transition::Fence {
+        node_row_ids,
+        interrupt_run,
+        ..
+    } = transition
+    else {
+        panic!("expected Fence");
+    };
+    assert!(interrupt_run);
+    assert_eq!(node_row_ids.len(), 2);
+    assert!(node_row_ids.contains(&"n2".to_string()));
+    assert!(node_row_ids.contains(&"a1".to_string()));
+}
+
+// Ruling K: an awaiting_human run keeps its status — the gate's pending
+// approval survives the restart — while its running adhoc still fences.
+#[test]
+fn boot_fence_on_gated_run_fences_the_adhoc_but_keeps_the_gate() {
+    let state = with_adhoc(gated_run(), WorkflowNodeStatus::Running);
+    let transition = expect_transition(next(
+        &state,
+        &WorkflowEvent::BootFence {
+            code: WorkflowInterruptionCode::RuntimeRestarted,
+        },
+    ));
+    assert_eq!(
+        transition,
+        Transition::Fence {
+            node_row_ids: vec!["a1".into()],
+            interrupt_run: false,
+            code: WorkflowInterruptionCode::RuntimeRestarted,
+        }
+    );
+}
+
+// Ruling K: a terminal run with an orphaned running adhoc gets node-only
+// fencing — the run's terminal status is never rewritten.
+#[test]
+fn boot_fence_on_terminal_run_fences_orphan_adhocs_node_only() {
+    let mut state = with_adhoc(mid_run(), WorkflowNodeStatus::Running);
+    state.run.status = WorkflowRunStatus::Completed;
+    state.nodes[1].status = WorkflowNodeStatus::Completed;
+    state.run.current_node_row_id = None;
+    let transition = expect_transition(next(
+        &state,
+        &WorkflowEvent::BootFence {
+            code: WorkflowInterruptionCode::RuntimeRestarted,
+        },
+    ));
+    assert_eq!(
+        transition,
+        Transition::Fence {
+            node_row_ids: vec!["a1".into()],
+            interrupt_run: false,
             code: WorkflowInterruptionCode::RuntimeRestarted,
         }
     );
@@ -602,9 +755,11 @@ fn boot_fence_is_idempotent_on_interrupted_runs() {
 }
 
 #[test]
-fn boot_fence_holds_on_terminal_runs() {
+fn boot_fence_holds_on_quiesced_terminal_runs() {
     let mut state = mid_run();
     state.run.status = WorkflowRunStatus::Completed;
+    state.nodes[1].status = WorkflowNodeStatus::Completed;
+    state.run.current_node_row_id = None;
     assert_eq!(
         next(
             &state,
@@ -694,7 +849,10 @@ fn add_adhoc_anchored_to_adhoc_is_illegal() {
 #[test]
 fn adhoc_turn_completes_only_its_own_row() {
     let state = with_adhoc(mid_run(), WorkflowNodeStatus::Running);
-    let transition = expect_transition(next(&state, &turn("a1", TurnStopReason::CleanEndTurn, true)));
+    let transition = expect_transition(next(
+        &state,
+        &turn("a1", TurnStopReason::CleanEndTurn, true),
+    ));
     assert_eq!(
         transition,
         Transition::AdhocTurn {
@@ -732,6 +890,73 @@ fn adhoc_report_after_completion_holds() {
         next(&state, &turn("a1", TurnStopReason::CleanEndTurn, true)),
         Decision::Hold
     );
+}
+
+// Ruling K.1(a): fail-and-redo is legal on adhoc rows in failed or
+// needs_attention, and the minted row stays kind ADHOC (the client's
+// side-node predicate keys on kind), same anchor, replacing the old row.
+#[test]
+fn fail_and_redo_on_paused_adhoc_mints_an_adhoc_replacement() {
+    for status in [
+        WorkflowNodeStatus::Failed,
+        WorkflowNodeStatus::NeedsAttention,
+    ] {
+        let mut state = with_adhoc(mid_run(), status);
+        if status == WorkflowNodeStatus::Failed {
+            state.nodes[3].failure_code = Some(WorkflowNodeFailureCode::TurnError);
+        }
+        let transition = expect_transition(next(
+            &state,
+            &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+                node_row_id: "a1".into(),
+                prompt: None,
+            }),
+        ));
+        let Transition::Redo {
+            failed_node_row_id,
+            replacement,
+        } = transition
+        else {
+            panic!("expected Redo for adhoc in {status:?}");
+        };
+        assert_eq!(failed_node_row_id, "a1");
+        assert_eq!(replacement.kind, WorkflowNodeKind::Adhoc);
+        assert_eq!(replacement.anchor_node_row_id.as_deref(), Some("n2"));
+        assert_eq!(replacement.replaces_node_row_id.as_deref(), Some("a1"));
+    }
+}
+
+// Ruling K.1(a): awaiting_human is NOT a legal adhoc pause — adhoc rows never
+// gate — even though it is one for chain rows.
+#[test]
+fn fail_and_redo_on_awaiting_human_adhoc_is_illegal() {
+    let state = with_adhoc(mid_run(), WorkflowNodeStatus::AwaitingHuman);
+    assert!(matches!(
+        next(
+            &state,
+            &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+                node_row_id: "a1".into(),
+                prompt: None,
+            })
+        ),
+        Decision::Illegal(_)
+    ));
+}
+
+// Ruling K.1(c): adhoc rows have no gate semantics to flip.
+#[test]
+fn flip_type_on_adhoc_is_illegal() {
+    let state = with_adhoc(mid_run(), WorkflowNodeStatus::Running);
+    assert!(matches!(
+        next(
+            &state,
+            &WorkflowEvent::Command(WorkflowCommand::FlipType {
+                node_row_id: "a1".into(),
+                node_type: WorkflowNodeType::HumanInLoop,
+            })
+        ),
+        Decision::Illegal(_)
+    ));
 }
 
 // ---- launch failures ----
