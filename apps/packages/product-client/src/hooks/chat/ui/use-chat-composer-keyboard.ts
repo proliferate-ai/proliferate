@@ -1,8 +1,5 @@
 import { useCallback } from "react";
-import {
-  getNextSessionModeValue,
-  getPreviousSessionModeValue,
-} from "#product/lib/domain/chat/session-controls/session-mode-control";
+import { getPreviousSessionModeValue } from "#product/lib/domain/chat/session-controls/session-mode-control";
 import { COMPOSER_SHORTCUTS } from "#product/config/shortcuts/composer-shortcuts";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import {
@@ -23,7 +20,6 @@ interface UseChatComposerKeyboardArgs {
   isRunning: boolean;
   canSubmit: boolean;
   modeControl: LiveSessionControlDescriptor | null;
-  reasoningEffortControl?: LiveSessionControlDescriptor | null;
   isEditingQueuedPrompt?: boolean;
   onCancelEdit?: () => void;
   onEditLastQueued?: () => void;
@@ -35,7 +31,6 @@ export function useChatComposerKeyboard({
   isRunning,
   canSubmit,
   modeControl,
-  reasoningEffortControl = null,
   isEditingQueuedPrompt = false,
   onCancelEdit,
   onEditLastQueued,
@@ -100,30 +95,6 @@ export function useChatComposerKeyboard({
       }
     }
 
-    // Ctrl+Shift+E steps reasoning effort forward, wrapping at the top — the
-    // same transition as clicking the composer's effort ladder. Ctrl is the
-    // modifier on every platform (⌃⇧E on macOS), never the ⌘ primary.
-    if (
-      event.key.toLowerCase() === COMPOSER_SHORTCUTS.cycleReasoningEffort.key
-      && event.ctrlKey
-      && event.shiftKey
-      && !event.altKey
-      && !event.metaKey
-      && !isComposerEventComposing(event)
-      && reasoningEffortControl?.settable
-      && reasoningEffortControl.options.length > 1
-    ) {
-      const nextValue = getNextSessionModeValue(
-        reasoningEffortControl.options,
-        reasoningEffortControl.options.find((option) => option.selected)?.value ?? null,
-      );
-      if (nextValue) {
-        event.preventDefault();
-        reasoningEffortControl.onSelect(nextValue);
-        return;
-      }
-    }
-
     if (isRepeatedComposerSubmitKey(event)) {
       event.preventDefault();
       return;
@@ -140,7 +111,6 @@ export function useChatComposerKeyboard({
     isEditingQueuedPrompt,
     isRunning,
     modeControl,
-    reasoningEffortControl,
     onCancelEdit,
     onEditLastQueued,
   ]);

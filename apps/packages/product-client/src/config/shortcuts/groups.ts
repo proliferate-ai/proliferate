@@ -66,6 +66,7 @@ export const SHORTCUT_GROUPS = [
     shortcutKeys: [
       "focusChat",
       "openModelSelector",
+      "cycleReasoningEffort",
       "openTerminal",
       "toggleLeftSidebar",
       "toggleRightPanel",
@@ -84,7 +85,6 @@ export const COMPOSER_SHORTCUT_GROUPS = [
     shortcutKeys: [
       "submitMessage",
       "previousMode",
-      "cycleReasoningEffort",
       "stopSession",
       "editLastQueued",
     ],

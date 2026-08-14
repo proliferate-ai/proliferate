@@ -12,12 +12,6 @@ export const COMPOSER_SHORTCUTS = {
     label: "⇧⇥",
     description: "Previous session mode",
   },
-  cycleReasoningEffort: {
-    key: "e",
-    label: "⌃⇧E",
-    nonMacLabel: "Ctrl+Shift+E",
-    description: "Cycle reasoning effort",
-  },
   stopSession: {
     key: "Escape",
     label: "Esc",

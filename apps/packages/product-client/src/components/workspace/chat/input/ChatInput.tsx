@@ -123,16 +123,11 @@ export function ChatInput({
   const effectiveAgentKind = suppressActiveSessionState
     ? null
     : agentKind ?? modelSelectorProps.launchAgentKind;
-  const composerControlGroups = useMemo(
-    () => buildComposerSessionControlGroups(effectiveSessionConfigControls),
-    [effectiveSessionConfigControls],
-  );
   const effectiveModeControl = suppressActiveSessionState
     ? null
-    : composerControlGroups.modeControl ?? modeControl ?? null;
-  const effectiveReasoningEffortControl = suppressActiveSessionState
-    ? null
-    : composerControlGroups.reasoningEffortControl;
+    : buildComposerSessionControlGroups(effectiveSessionConfigControls).modeControl
+      ?? modeControl
+      ?? null;
   const { handleSubmit, handleCancel } = useChatPromptActions();
   const { openAttachmentPreview } = usePromptAttachmentPreviewActions();
   const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
@@ -257,7 +252,6 @@ export function ChatInput({
     isRunning: isRunningForUi,
     canSubmit,
     modeControl: effectiveModeControl,
-    reasoningEffortControl: effectiveReasoningEffortControl,
     isEditingQueuedPrompt: effectiveIsEditingQueuedPrompt,
     onCancelEdit: cancelEdit,
     onEditLastQueued: editLastQueuedPrompt,
