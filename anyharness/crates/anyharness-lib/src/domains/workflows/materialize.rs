@@ -3,22 +3,73 @@
 //! is created. Harnesses walk the workspace once at session start and never
 //! re-walk, so this ordering is a law, not an optimization (the live engine's
 //! PUT path calls this before StartNode).
+//!
+//! Template bodies are STATIC seeds: they are written to disk byte-for-byte
+//! verbatim, never scanned for references and never interpolated. Only node
+//! prompts participate in `@input:`/`@doc:` resolution.
 
 use std::path::{Path, PathBuf};
 
-use super::definition::DocTemplate;
+use super::definition::{DocTemplate, InvocationSnapshot};
 use super::model::WorkflowRunDocRecord;
 use super::render::CONTEXT_DIR_RELATIVE;
+use super::store::doc_filename;
 use crate::domains::workspaces::exclude::{ensure_proliferate_excluded, ExcludeOutcome};
 
-/// Materialize the context folder for one run: create
-/// `<workspace>/.proliferate/context/`, seed each registry row's file from
-/// its template body, and ensure the clone's shared `/.proliferate/` exclude
+/// A doc's disk identity, computable BEFORE any row exists: the PUT path
+/// materializes from the plan so a disk failure leaves zero rows, and the
+/// store later mints rows with the same filenames from the same law.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedContextDoc {
+    pub slug: String,
+    pub filename: String,
+}
+
+/// Plan the context docs for a validated snapshot: one per template, filename
+/// from the one `NN-slug.md` law over the chain order `validate()` returned.
+pub fn plan_context_docs(snapshot: &InvocationSnapshot, chain: &[String]) -> Vec<PlannedContextDoc> {
+    snapshot
+        .definition
+        .doc_templates
+        .iter()
+        .map(|template| {
+            let producing_position = chain
+                .iter()
+                .position(|definition_node_id| definition_node_id == &template.producing_node_id)
+                .expect("validate() checked every producing node id is on the chain");
+            PlannedContextDoc {
+                slug: template.slug.clone(),
+                filename: doc_filename(&template.slug, producing_position as i64),
+            }
+        })
+        .collect()
+}
+
+/// Materialize the context folder for one run from its registry rows: create
+/// `<workspace>/.proliferate/context/`, seed each row's file from its
+/// template body, and ensure the clone's shared `/.proliferate/` exclude
 /// entry. Idempotent, and run-local edits win: an existing file is never
 /// overwritten.
 pub fn materialize_context(
     workspace_root: &Path,
     docs: &[WorkflowRunDocRecord],
+    templates: &[DocTemplate],
+) -> anyhow::Result<PathBuf> {
+    let planned: Vec<PlannedContextDoc> = docs
+        .iter()
+        .map(|doc| PlannedContextDoc {
+            slug: doc.slug.clone(),
+            filename: doc.filename.clone(),
+        })
+        .collect();
+    materialize_planned_context(workspace_root, &planned, templates)
+}
+
+/// The record-free half of [`materialize_context`], for the PUT path's
+/// disk-before-rows ordering.
+pub fn materialize_planned_context(
+    workspace_root: &Path,
+    docs: &[PlannedContextDoc],
     templates: &[DocTemplate],
 ) -> anyhow::Result<PathBuf> {
     let context_dir = workspace_root.join(CONTEXT_DIR_RELATIVE);

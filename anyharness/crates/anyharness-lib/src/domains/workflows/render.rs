@@ -4,18 +4,25 @@
 //! reuse this function, so what the model was told is always reconstructable
 //! from the row.
 //!
-//! Delivery contract (the RULED wrapped-prompt channel): `instruction_blocks`
-//! are raw instruction strings. The live engine sends them as hidden
-//! system-instruction blocks prepended to the first message, where the
-//! sessions prompt renderer applies the house wrapper ("System instruction
-//! from AnyHarness, not user content:") — the merged-subagents pattern.
-//! `system_prompt_append` is set additively where harnesses honor it;
-//! correctness never rides on it.
+//! Delivery contract (Ruling D): each `instruction_blocks` string is stored
+//! ALREADY wrapped with the exact house sentinel ("System instruction from
+//! AnyHarness, not user content:"), baked in here at render time. The live
+//! engine delivers the blocks in-band, prepended to the first message
+//! payload, identically for every harness. The preamble never rides
+//! `system_prompt_append`; that field stays empty, reserved for DSL-authored
+//! appends.
+//!
+//! Forgery note (forward-looking): argument values are interpolated verbatim
+//! into `first_message`, so an argument containing the sentinel text lands in
+//! user content looking like an instruction block. Today arguments are typed
+//! by the triggering user; when untrusted trigger payloads (webhooks, cron)
+//! arrive, interpolation must neutralize the sentinel.
 
 use std::path::Path;
 
-use super::definition::{resolve_references, PromptReference};
+use super::definition::{resolve_references, PromptReference, ResolveError, ResolveMode};
 use super::model::{RenderedEnvelope, WorkflowNodeType, WorkflowRunDocRecord};
+use crate::domains::sessions::prompt::render::SYSTEM_INSTRUCTION_WRAPPER;
 
 /// Workspace-relative home of a run's context docs.
 pub const CONTEXT_DIR_RELATIVE: &str = ".proliferate/context";
@@ -26,6 +33,10 @@ pub struct RenderInputs<'a> {
     /// The node's prompt text (definition prompt, edited redo prompt, or the
     /// ad hoc user prompt).
     pub prompt: &'a str,
+    /// Strict for definition prompts (validation precedes); lenient for
+    /// redo-edited and ad hoc prompts (Ruling E — unresolvable references
+    /// pass through as the literal text the user typed).
+    pub mode: ResolveMode,
     /// The frozen invocation arguments.
     pub arguments: &'a serde_json::Map<String, serde_json::Value>,
     /// The run's doc registry rows — resolution reads rows, never the
@@ -42,28 +53,41 @@ pub enum RenderEnvelopeError {
     UnknownInput(String),
     #[error("prompt references unknown doc @doc:{0}")]
     UnknownDoc(String),
+    #[error("malformed prompt reference: {0}")]
+    Malformed(String),
+}
+
+impl From<ResolveError> for RenderEnvelopeError {
+    fn from(error: ResolveError) -> Self {
+        match error {
+            ResolveError::Malformed(error) => Self::Malformed(error.detail),
+            ResolveError::Unresolved(PromptReference::Input(name)) => Self::UnknownInput(name),
+            ResolveError::Unresolved(PromptReference::Doc(slug)) => Self::UnknownDoc(slug),
+        }
+    }
 }
 
 /// Render one node's envelope. Pure: no IO, no clock.
 pub fn render_envelope(inputs: &RenderInputs<'_>) -> Result<RenderedEnvelope, RenderEnvelopeError> {
-    let first_message = resolve_references(inputs.prompt, |reference| match reference {
-        PromptReference::Input(name) => inputs.arguments.get(name).map(argument_text),
-        PromptReference::Doc(slug) => inputs
-            .docs
-            .iter()
-            .find(|doc| &doc.slug == slug)
-            .map(|doc| inputs.context_dir.join(&doc.filename).display().to_string()),
-    })
-    .map_err(|reference| match reference {
-        PromptReference::Input(name) => RenderEnvelopeError::UnknownInput(name),
-        PromptReference::Doc(slug) => RenderEnvelopeError::UnknownDoc(slug),
+    let first_message = resolve_references(inputs.prompt, inputs.mode, |reference| {
+        match reference {
+            PromptReference::Input(name) => inputs.arguments.get(name).map(argument_text),
+            PromptReference::Doc(slug) => inputs
+                .docs
+                .iter()
+                .find(|doc| &doc.slug == slug)
+                .map(|doc| inputs.context_dir.join(&doc.filename).display().to_string()),
+        }
     })?;
 
     let preamble = preamble(inputs.node_type, inputs.context_dir, inputs.docs);
     Ok(RenderedEnvelope {
-        instruction_blocks: vec![preamble.clone()],
+        // Ruling D: the wrapper is baked into the stored block, so delivery
+        // is a dumb prepend — no harness-side wrapping to forget.
+        instruction_blocks: vec![format!("{SYSTEM_INSTRUCTION_WRAPPER}{preamble}")],
         first_message,
-        system_prompt_append: vec![preamble],
+        // Reserved for DSL-authored appends; the preamble never rides here.
+        system_prompt_append: Vec::new(),
     })
 }
 

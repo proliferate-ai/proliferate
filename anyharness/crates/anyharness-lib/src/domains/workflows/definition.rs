@@ -367,14 +367,24 @@ fn is_peelable_punctuation(c: char) -> bool {
     )
 }
 
-/// Scan-then-validate (one grammar, three planes, Ruling C.1): detect the
-/// `@doc:`/`@input:` sigils case-INsensitively (a wrong-case sigil is an
-/// error, never silent literal text), capture the maximal `[^\s@]+` token,
-/// peel trailing prose punctuation, then validate the peeled token against
-/// the per-kind grammar. A malformed reference is an error, never a silent
-/// non-match or a prefix match.
-pub fn parse_references(prompt: &str) -> Result<Vec<PromptReference>, ReferenceError> {
-    let mut references = Vec::new();
+/// One scanned reference occurrence: the byte span of `@sigil:token` in the
+/// prompt (peeled punctuation excluded) and its parse outcome.
+struct ScannedReference {
+    start: usize,
+    end: usize,
+    outcome: Result<PromptReference, ReferenceError>,
+}
+
+/// The ONE scan (Ruling C.1) that both [`parse_references`] and
+/// [`resolve_references`] consume, so validation and rendering can never
+/// disagree about what is a reference: detect the `@doc:`/`@input:` sigils
+/// case-INsensitively (a wrong-case sigil is an error, never silent literal
+/// text), capture the maximal `[^\s@]+` token, peel trailing prose
+/// punctuation, then validate the peeled token against the per-kind grammar.
+/// A malformed reference is an error entry, never a silent non-match or a
+/// prefix match.
+fn scan_references(prompt: &str) -> Vec<ScannedReference> {
+    let mut scanned = Vec::new();
     let mut i = 0;
     while let Some(offset) = prompt[i..].find('@') {
         let at = i + offset;
@@ -388,84 +398,116 @@ pub fn parse_references(prompt: &str) -> Result<Vec<PromptReference>, ReferenceE
             continue;
         };
         let body = &rest[sigil.len()..];
-        let raw_token: String = body
-            .chars()
-            .take_while(|c| !c.is_whitespace() && *c != '@')
-            .collect();
+        let raw_end = body
+            .find(|c: char| c.is_whitespace() || c == '@')
+            .unwrap_or(body.len());
+        let raw_token = &body[..raw_end];
         if raw_token.is_empty() {
             // A bare sigil with nothing after it is not a reference attempt.
             i = at + 1 + sigil.len();
             continue;
         }
         if !rest.starts_with(sigil) {
-            return Err(ReferenceError {
-                detail: format!("reference sigils are lowercase: write @{sigil}{raw_token}"),
+            scanned.push(ScannedReference {
+                start: at,
+                end: at + 1 + sigil.len() + raw_token.len(),
+                outcome: Err(ReferenceError {
+                    detail: format!("reference sigils are lowercase: write @{sigil}{raw_token}"),
+                }),
             });
+            i = at + 1 + sigil.len() + raw_token.len();
+            continue;
         }
         let token = raw_token.trim_end_matches(is_peelable_punctuation);
         let kind = &sigil[..sigil.len() - 1];
-        let reference = match kind {
-            "input" if is_valid_input_name(token) => PromptReference::Input(token.to_string()),
-            "doc" if is_valid_doc_slug(token) => PromptReference::Doc(token.to_string()),
+        let outcome = match kind {
+            "input" if is_valid_input_name(token) => Ok(PromptReference::Input(token.to_string())),
+            "doc" if is_valid_doc_slug(token) => Ok(PromptReference::Doc(token.to_string())),
             _ => {
                 let grammar = match kind {
                     "input" => "[A-Za-z][A-Za-z0-9_]*",
                     _ => "[a-z0-9]+(-[a-z0-9]+)*",
                 };
-                return Err(ReferenceError {
+                Err(ReferenceError {
                     detail: format!("malformed reference @{kind}:{token} (must match {grammar})"),
-                });
+                })
             }
         };
-        i = at + 1 + sigil.len() + token.len();
-        references.push(reference);
+        // A malformed token spans its raw capture; a valid one only what the
+        // grammar accepted (the peeled punctuation stays prose).
+        let consumed = match &outcome {
+            Ok(_) => token.len(),
+            Err(_) => raw_token.len(),
+        };
+        scanned.push(ScannedReference {
+            start: at,
+            end: at + 1 + sigil.len() + consumed,
+            outcome,
+        });
+        i = at + 1 + sigil.len() + consumed;
     }
-    Ok(references)
+    scanned
+}
+
+/// Scan-then-validate over the one shared scan. The first malformed
+/// reference fails the parse.
+pub fn parse_references(prompt: &str) -> Result<Vec<PromptReference>, ReferenceError> {
+    scan_references(prompt)
+        .into_iter()
+        .map(|scanned| scanned.outcome)
+        .collect()
+}
+
+/// How [`resolve_references`] treats references it cannot rewrite (Ruling E).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolveMode {
+    /// Definition prompts: validation precedes, so a malformed or
+    /// unresolvable reference here means the rows and definition disagree —
+    /// fail the render.
+    Strict,
+    /// Redo-edited and ad hoc prompts — whatever the user typed: resolvable
+    /// references resolve, everything else passes through as literal text.
+    /// Never a launch refusal on a legal user action.
+    Lenient,
+}
+
+/// Why a strict rewrite failed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolveError {
+    /// The scan found a malformed reference (wrong-case sigil or
+    /// grammar-failing token).
+    Malformed(ReferenceError),
+    /// A well-formed reference the resolver returned `None` for.
+    Unresolved(PromptReference),
 }
 
 /// Rewrite every reference in `prompt` through `resolve`, passing all other
-/// text through verbatim. The scan is the same grammar as
-/// [`parse_references`] — keep them in lockstep. A `None` from `resolve`
-/// fails the whole rewrite with the offending reference: validation makes
-/// this unreachable for definition prompts, so hitting it means the rows and
-/// definition disagree.
+/// text through verbatim. Consumes the same scan as [`parse_references`], so
+/// the two can never drift. Lenient mode never fails.
 pub fn resolve_references(
     prompt: &str,
+    mode: ResolveMode,
     mut resolve: impl FnMut(&PromptReference) -> Option<String>,
-) -> Result<String, PromptReference> {
+) -> Result<String, ResolveError> {
     let mut output = String::with_capacity(prompt.len());
     let mut i = 0;
-    while let Some(offset) = prompt[i..].find('@') {
-        let at = i + offset;
-        output.push_str(&prompt[i..at]);
-        let rest = &prompt[at + 1..];
-        let (prefix_len, make): (usize, fn(String) -> PromptReference) =
-            if rest.starts_with("input:") {
-                ("input:".len(), PromptReference::Input)
-            } else if rest.starts_with("doc:") {
-                ("doc:".len(), PromptReference::Doc)
-            } else {
-                output.push('@');
-                i = at + 1;
-                continue;
-            };
-        let body = &rest[prefix_len..];
-        let name: String = body
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-            .collect();
-        if name.is_empty() {
-            output.push('@');
-            i = at + 1;
-            continue;
+    for scanned in scan_references(prompt) {
+        output.push_str(&prompt[i..scanned.start]);
+        i = scanned.end;
+        let literal = &prompt[scanned.start..scanned.end];
+        match scanned.outcome {
+            Ok(reference) => match resolve(&reference) {
+                Some(replacement) => output.push_str(&replacement),
+                None => match mode {
+                    ResolveMode::Strict => return Err(ResolveError::Unresolved(reference)),
+                    ResolveMode::Lenient => output.push_str(literal),
+                },
+            },
+            Err(error) => match mode {
+                ResolveMode::Strict => return Err(ResolveError::Malformed(error)),
+                ResolveMode::Lenient => output.push_str(literal),
+            },
         }
-        let consumed = at + 1 + prefix_len + name.len();
-        let reference = make(name);
-        match resolve(&reference) {
-            Some(replacement) => output.push_str(&replacement),
-            None => return Err(reference),
-        }
-        i = consumed;
     }
     output.push_str(&prompt[i..]);
     Ok(output)

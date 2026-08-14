@@ -58,7 +58,11 @@ CREATE TABLE workflow_run_docs (
     seeded_from_template  INTEGER NOT NULL,
     created_at            TEXT NOT NULL,
     updated_at            TEXT NOT NULL,
-    UNIQUE (run_id, slug)
+    UNIQUE (run_id, slug),
+    -- The filename law is not injective over slugs alone (seeded "00-plan.md"
+    -- from slug "plan" collides with a registered slug "00-plan"); two rows
+    -- must never claim one file.
+    UNIQUE (run_id, filename)
 );
 
 CREATE INDEX idx_workflow_run_docs_run_id ON workflow_run_docs(run_id);

@@ -8,8 +8,10 @@ use std::process::Command;
 use super::definition::DocTemplate;
 use super::materialize::materialize_context;
 use super::model::WorkflowRunDocRecord;
+use crate::adapters::git::executor::GitOutput;
 use crate::domains::workspaces::exclude::{
-    ensure_proliferate_excluded, ExcludeOutcome, PROLIFERATE_EXCLUDE_ENTRY,
+    classify_common_dir_probe, ensure_proliferate_excluded, ExcludeOutcome,
+    PROLIFERATE_EXCLUDE_ENTRY,
 };
 
 const T0: &str = "2026-08-14T00:00:00+00:00";
@@ -57,7 +59,7 @@ fn doc(slug: &str, filename: &str) -> WorkflowRunDocRecord {
 fn template(slug: &str, body: &str) -> DocTemplate {
     DocTemplate {
         slug: slug.into(),
-        producing_node_id: None,
+        producing_node_id: "plan".into(),
         body: body.into(),
     }
 }
@@ -228,6 +230,83 @@ fn non_git_workspaces_materialize_without_an_exclude_entry() {
     if outcome == ExcludeOutcome::NotAGitRepo {
         assert!(!root.join(".git").exists());
     }
+}
+
+/// Template bodies are STATIC seeds: whatever bytes the definition carries
+/// land on disk verbatim — reference-shaped text, sigils, braces and all.
+/// Nothing scans or interpolates a template body.
+#[test]
+fn template_bodies_seed_byte_for_byte_verbatim() {
+    let tmp = TempDir::new("test");
+    let root = tmp.path().join("repo");
+    init_repo(&root);
+    let body = "# Plan\n@input:ticket and @doc:plan-doc stay literal, so do {braces} and $vars\n\u{201C}smart quotes\u{201D} too\n";
+    let docs = vec![doc("plan-doc", "00-plan-doc.md")];
+    let templates = vec![template("plan-doc", body)];
+    let context_dir = materialize_context(&root, &docs, &templates).expect("materialize");
+    assert_eq!(
+        std::fs::read(context_dir.join("00-plan-doc.md")).expect("read"),
+        body.as_bytes(),
+        "template bodies are static seeds, written verbatim"
+    );
+}
+
+/// A registry row with no matching template still materializes (empty file):
+/// run-local registered docs have no template by construction.
+#[test]
+fn doc_rows_without_templates_seed_empty_files() {
+    let tmp = TempDir::new("test");
+    let root = tmp.path().join("repo");
+    init_repo(&root);
+    let docs = vec![doc("scratch", "scratch.md")];
+    let context_dir = materialize_context(&root, &docs, &[]).expect("materialize");
+    assert_eq!(
+        std::fs::read_to_string(context_dir.join("scratch.md")).expect("read"),
+        ""
+    );
+}
+
+/// F3: only the genuine not-a-repo answer maps to NotAGitRepo. Git FAILING —
+/// dubious ownership, permissions, corruption — must surface as an error, or
+/// the never-committed guarantee silently evaporates.
+#[test]
+fn git_failures_are_errors_not_a_missing_repo() {
+    let root = Path::new("/ws");
+    let ok = |stdout: &str| GitOutput {
+        stdout: stdout.into(),
+        stderr: String::new(),
+        success: true,
+    };
+    let failed = |stderr: &str| GitOutput {
+        stdout: String::new(),
+        stderr: stderr.into(),
+        success: false,
+    };
+
+    let dir = classify_common_dir_probe(root, &ok("/ws/.git\n"))
+        .expect("repo probe")
+        .expect("is a repo");
+    assert_eq!(dir, Path::new("/ws/.git"));
+    // Relative answers resolve against the workspace root.
+    let dir = classify_common_dir_probe(root, &ok(".git\n"))
+        .expect("repo probe")
+        .expect("is a repo");
+    assert_eq!(dir, Path::new("/ws/.git"));
+
+    let outcome = classify_common_dir_probe(
+        root,
+        &failed("fatal: not a git repository (or any of the parent directories): .git\n"),
+    )
+    .expect("genuine not-a-repo is not an error");
+    assert_eq!(outcome, None);
+
+    // Negative controls: every other git failure is an error.
+    classify_common_dir_probe(root, &failed("fatal: detected dubious ownership in repository\n"))
+        .expect_err("dubious ownership must not read as no-repo");
+    classify_common_dir_probe(root, &failed("error: unable to read .git/HEAD: Permission denied\n"))
+        .expect_err("permission failure must not read as no-repo");
+    classify_common_dir_probe(root, &ok(""))
+        .expect_err("a successful probe with no path is malformed, not a repo");
 }
 
 #[test]

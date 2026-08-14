@@ -971,6 +971,108 @@ fn stamp_session_and_envelope_round_trip() {
     assert_eq!(plan.rendered_envelope.as_ref(), Some(&envelope));
 }
 
+/// The spec-ordered proof that RENDERED envelopes survive the real column:
+/// render_envelope's actual output — wrapper and all — stored, reloaded, and
+/// read back from the raw column byte-compatibly.
+#[test]
+fn rendered_envelope_round_trips_through_the_real_column() {
+    let (db, store) = test_store_with_db();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+    let docs = store.list_docs("run-1").expect("docs");
+
+    let envelope = super::render::render_envelope(&super::render::RenderInputs {
+        node_type: WorkflowNodeType::Agent,
+        prompt: "Fix @input:ticket, write @doc:plan-doc.",
+        mode: super::definition::ResolveMode::Strict,
+        arguments: &[(
+            "ticket".to_string(),
+            serde_json::Value::String("PRO-9".into()),
+        )]
+        .into_iter()
+        .collect(),
+        docs: &docs,
+        context_dir: std::path::Path::new("/tmp/workspace-1/.proliferate/context"),
+    })
+    .expect("render");
+    store
+        .store_rendered_envelope(&plan_id, &envelope)
+        .expect("store envelope");
+
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+    let reloaded = state
+        .node(&plan_id)
+        .unwrap()
+        .rendered_envelope
+        .as_ref()
+        .expect("envelope present");
+    assert_eq!(reloaded, &envelope);
+
+    // And through the raw column, not just the mapper.
+    let raw: String = db
+        .with_conn(|conn| {
+            conn.query_row(
+                "SELECT rendered_envelope FROM workflow_run_nodes WHERE id = ?1",
+                [plan_id.as_str()],
+                |row| row.get(0),
+            )
+        })
+        .expect("read raw column");
+    let parsed: RenderedEnvelope = serde_json::from_str(&raw).expect("column parses");
+    assert_eq!(parsed, envelope);
+    assert!(parsed.instruction_blocks[0]
+        .starts_with("System instruction from AnyHarness, not user content:\n"));
+}
+
+/// F7: the filename law is not injective over slugs, so the registry refuses
+/// a second row claiming an existing file (`UNIQUE (run_id, filename)`).
+#[test]
+fn registry_refuses_two_rows_claiming_one_filename() {
+    let store = test_store();
+    store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    // Seeded: slug "plan-doc" produced at chain 0 → "00-plan-doc.md".
+    // A producer-less registration of slug "00-plan-doc" derives the same
+    // filename and must be refused, not silently share the file.
+    let error = store
+        .register_doc("run-1", "00-plan-doc", None)
+        .expect_err("filename collision must be refused");
+    assert!(
+        error.to_string().to_lowercase().contains("unique"),
+        "expected a uniqueness violation, got: {error}"
+    );
+}
+
+/// F4 lockstep: the record-free plan derives exactly the filenames the store
+/// mints, so the PUT path can materialize disk BEFORE any row exists.
+#[test]
+fn planned_docs_match_the_rows_the_store_mints() {
+    let store = test_store();
+    store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let snapshot = snapshot();
+    let chain = snapshot.validate().expect("valid snapshot");
+    let planned = super::materialize::plan_context_docs(&snapshot, &chain);
+    let rows = store.list_docs("run-1").expect("docs");
+    let planned_pairs: Vec<(String, String)> = planned
+        .into_iter()
+        .map(|doc| (doc.slug, doc.filename))
+        .collect();
+    let mut row_pairs: Vec<(String, String)> = rows
+        .into_iter()
+        .map(|doc| (doc.slug, doc.filename))
+        .collect();
+    row_pairs.sort();
+    let mut sorted_planned = planned_pairs.clone();
+    sorted_planned.sort();
+    assert_eq!(sorted_planned, row_pairs);
+    assert!(!sorted_planned.is_empty());
+}
+
 #[test]
 fn corrupt_rendered_envelope_reads_as_none_not_an_error() {
     let (db, store) = test_store_with_db();

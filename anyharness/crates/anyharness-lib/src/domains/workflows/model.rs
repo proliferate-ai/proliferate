@@ -212,11 +212,13 @@ impl WorkflowInterruptionCode {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedEnvelope {
-    /// Hidden system-instruction blocks prepended to the first message
-    /// ("System instruction from AnyHarness, not user content:").
+    /// Instruction blocks prepended in-band to the first message payload,
+    /// stored ALREADY wrapped with the exact house sentinel ("System
+    /// instruction from AnyHarness, not user content:") — Ruling D.
     pub instruction_blocks: Vec<String>,
     pub first_message: String,
-    /// Set additively where harnesses honor it; correctness never rides on it.
+    /// Reserved for DSL-authored appends; the preamble never rides here
+    /// (Ruling D), so no harness can receive it twice.
     pub system_prompt_append: Vec<String>,
 }
 
