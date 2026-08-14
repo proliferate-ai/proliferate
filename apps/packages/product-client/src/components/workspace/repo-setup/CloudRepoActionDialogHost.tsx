@@ -1,16 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 import {
-  useCloudClient,
   useGitHubRepoAuthority,
   useRepositories,
   useSaveRepoEnvironment,
   useValidateCloudRepoBranches,
-} from "@proliferate/cloud-sdk-react";
-import {
-  githubAppRootKey,
-  repositoriesKey,
 } from "@proliferate/cloud-sdk-react";
 import { buildMinimalCloudEnvironmentConfigRequest } from "#product/domain/environments/cloud-environments";
 import {
@@ -42,6 +36,7 @@ import { useActiveOrganization } from "#product/hooks/organizations/facade/use-a
 import { isSettingsAdminRole } from "#product/lib/domain/settings/admin-roles";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { useGitHubAppStateInvalidation } from "#product/hooks/workspaces/cache/use-github-app-state-invalidation";
 import { useGitHubAppUserAuthorization } from "#product/hooks/settings/workflows/use-github-app-user-authorization";
 import { useGitHubAppInstallation } from "#product/hooks/settings/workflows/use-github-app-installation";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
@@ -78,8 +73,6 @@ export function CloudRepoActionDialogHost() {
   // App-ready/E2B-disabled deployment clone without a managed-Cloud gate.
   const requirement = intent ? requirementForCloudRepositoryIntent(intent) : "managed_cloud";
 
-  const client = useCloudClient();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const capabilities = useAppCapabilities();
   const authStatus = useProductAuthStatus();
@@ -111,13 +104,12 @@ export function CloudRepoActionDialogHost() {
     ? configuredCloudKeys.has(cloudRepositoryKey(repo.gitOwner, repo.gitRepoName))
     : false;
 
+  const invalidateGitHubAppState = useGitHubAppStateInvalidation();
   const refetchOnReturn = useCallback(() => {
-    // Auth/install/grant callback: invalidate user authorization, installation,
-    // accessible repos, and per-repo authority (all under the GitHub App root),
-    // plus repositories, so the resolver re-runs with fresh state.
-    void queryClient.invalidateQueries({ queryKey: githubAppRootKey(client.baseUrl) });
-    void queryClient.invalidateQueries({ queryKey: repositoriesKey() });
-  }, [client.baseUrl, queryClient]);
+    // Auth/install/grant callback: re-read everything the trip to GitHub can
+    // have changed, so the resolver re-runs with fresh state.
+    void invalidateGitHubAppState();
+  }, [invalidateGitHubAppState]);
 
   const userAuthorization = useGitHubAppUserAuthorization({
     returnTo: host.links.buildReturnUrl({

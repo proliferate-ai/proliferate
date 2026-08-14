@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  githubAppRootKey,
-  repositoriesKey,
-  useCloudClient,
-  useGitHubAppUserAuthorizationStatus,
-} from "@proliferate/cloud-sdk-react";
+import { useGitHubAppUserAuthorizationStatus } from "@proliferate/cloud-sdk-react";
 import { parseGitRepoId } from "#product/domain/repos/repo-id";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
@@ -38,6 +32,7 @@ import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repos
 import { directoryPickerUnavailableCopy } from "#product/copy/workspaces/directory-picker-copy";
 import { DESKTOP_POINTER_COPY } from "#product/copy/workspaces/desktop-pointer-copy";
 import { useRepoAddedToast } from "#product/hooks/workspaces/ui/use-repo-added-toast";
+import { useGitHubAppStateInvalidation } from "#product/hooks/workspaces/cache/use-github-app-state-invalidation";
 
 /** Confirmation on arrival, once the checklist has actually been walked. */
 const GITHUB_CONNECTED_BANNER = "GitHub connected. Choose a repository.";
@@ -102,8 +97,7 @@ export function useAddRepoFlowController({
   const authStatus = useProductAuthStatus();
   const files = host.desktop?.files ?? null;
   const showRepoAddedToast = useRepoAddedToast();
-  const queryClient = useQueryClient();
-  const client = useCloudClient();
+  const invalidateGitHubAppState = useGitHubAppStateInvalidation();
   const [flowError, setFlowError] = useState<string | null>(null);
 
   const canManageInstallation = isSettingsAdminRole(
@@ -133,17 +127,12 @@ export function useAddRepoFlowController({
   const checkAgain = useCallback(() => {
     setChecking(true);
     setReturnedFromGitHub(true);
-    // The same invalidation the authorization/installation callback triggers:
-    // user authorization, installation, accessible repos and per-repo authority
-    // all live under the GitHub App root.
-    void Promise.all([
-      queryClient.invalidateQueries({ queryKey: githubAppRootKey(client.baseUrl) }),
-      queryClient.invalidateQueries({ queryKey: repositoriesKey() }),
-    ]).finally(() => {
+    // The same invalidation the authorization/installation callback triggers.
+    void invalidateGitHubAppState().finally(() => {
       setChecking(false);
       setWaitingStep(null);
     });
-  }, [client.baseUrl, queryClient]);
+  }, [invalidateGitHubAppState]);
 
   const cancelWaiting = useCallback(() => {
     setWaitingStep(null);
