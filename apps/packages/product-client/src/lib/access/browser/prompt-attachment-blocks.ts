@@ -17,12 +17,9 @@ export async function promptAttachmentSnapshotsToBlocks(
 
   for (const snapshot of snapshots) {
     if (snapshot.kind === "local_ref") {
-      if (!snapshot.localPath) {
-        throw new TypeError("Local reference attachment snapshot is missing its path.");
-      }
       blocks.push({
         type: "resource_link",
-        uri: localPathToFileUri(snapshot.localPath),
+        uri: localPathToFileUri(snapshot.localPath ?? snapshot.name),
         name: snapshot.name,
         mimeType: snapshot.mimeType || null,
         size: snapshot.pathKind === "directory" ? null : snapshot.size,
