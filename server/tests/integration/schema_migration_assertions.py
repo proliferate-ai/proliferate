@@ -135,6 +135,8 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "default_branch",
         "setup_script",
         "run_command",
+        "archive_script",
+        "rerun_setup_on_unarchive",
         "created_at",
         "updated_at",
         "deleted_at",

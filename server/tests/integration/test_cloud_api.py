@@ -311,3 +311,192 @@ class TestCloudRepoCatalog:
             ("acme/disabled", "missing", False),
             ("acme/missing", "missing", False),
         ]
+
+
+class TestRepoEnvironmentArchivingKnobs:
+    """PUT/GET round-trip for archive_script + rerun_setup_on_unarchive (R6)."""
+
+    @pytest.mark.asyncio
+    async def test_put_local_environment_echoes_archiving_knobs(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await register_and_login(client, "archiving-knobs-local@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        response = await client.put(
+            "/v1/cloud/repositories/acme/rocket/environment",
+            headers=headers,
+            json={
+                "kind": "local",
+                "gitProvider": "github",
+                "desktopInstallId": "install-1",
+                "localPath": "/Users/tester/rocket",
+                "defaultBranch": None,
+                "setupScript": "",
+                "runCommand": "",
+                "archiveScript": "scripts/archive.sh",
+                "rerunSetupOnUnarchive": False,
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["archiveScript"] == "scripts/archive.sh"
+        assert payload["rerunSetupOnUnarchive"] is False
+
+    @pytest.mark.asyncio
+    async def test_put_cloud_environment_echoes_archiving_knobs(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        session = await register_and_login(client, "archiving-knobs-cloud@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await link_github_account(db_session, session["user_id"])
+        await seed_github_app_repo_authority(
+            db_session,
+            monkeypatch,
+            user_id=session["user_id"],
+            git_owner="acme",
+        )
+
+        response = await client.put(
+            "/v1/cloud/repositories/acme/rocket/environment",
+            headers=headers,
+            json={
+                "kind": "cloud",
+                "gitProvider": "github",
+                "defaultBranch": None,
+                "setupScript": "",
+                "runCommand": "",
+                "archiveScript": "scripts/archive.sh",
+                "rerunSetupOnUnarchive": False,
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["archiveScript"] == "scripts/archive.sh"
+        assert payload["rerunSetupOnUnarchive"] is False
+
+        listed = await client.get("/v1/cloud/repositories", headers=headers)
+        assert listed.status_code == 200
+        environments = listed.json()["repositories"][0]["environments"]
+        assert environments[0]["archiveScript"] == "scripts/archive.sh"
+        assert environments[0]["rerunSetupOnUnarchive"] is False
+
+    @pytest.mark.asyncio
+    async def test_first_put_omitting_knobs_uses_column_defaults(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await register_and_login(client, "archiving-knobs-defaults@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        response = await client.put(
+            "/v1/cloud/repositories/acme/rocket/environment",
+            headers=headers,
+            json={
+                "kind": "local",
+                "gitProvider": "github",
+                "desktopInstallId": "install-1",
+                "localPath": "/Users/tester/rocket",
+                "defaultBranch": None,
+                "setupScript": "",
+                "runCommand": "",
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["archiveScript"] == ""
+        assert payload["rerunSetupOnUnarchive"] is True
+
+    @pytest.mark.asyncio
+    async def test_put_explicit_false_stores_false_not_swallowed_by_preserve_semantics(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await register_and_login(client, "archiving-knobs-explicit-false@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        body = {
+            "kind": "local",
+            "gitProvider": "github",
+            "desktopInstallId": "install-1",
+            "localPath": "/Users/tester/rocket",
+            "defaultBranch": None,
+            "setupScript": "",
+            "runCommand": "",
+        }
+
+        first = await client.put(
+            "/v1/cloud/repositories/acme/rocket/environment",
+            headers=headers,
+            json={**body, "rerunSetupOnUnarchive": True},
+        )
+        assert first.status_code == 200
+        assert first.json()["rerunSetupOnUnarchive"] is True
+
+        second = await client.put(
+            "/v1/cloud/repositories/acme/rocket/environment",
+            headers=headers,
+            json={**body, "rerunSetupOnUnarchive": False},
+        )
+        assert second.status_code == 200
+        assert second.json()["rerunSetupOnUnarchive"] is False
+
+    @pytest.mark.asyncio
+    async def test_put_omitting_knobs_preserves_stored_values(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        """Negative control: revert the None-guard in _upsert_environment and this fails."""
+
+        session = await register_and_login(client, "archiving-knobs-preserve@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        first = await client.put(
+            "/v1/cloud/repositories/acme/rocket/environment",
+            headers=headers,
+            json={
+                "kind": "local",
+                "gitProvider": "github",
+                "desktopInstallId": "install-1",
+                "localPath": "/Users/tester/rocket",
+                "defaultBranch": None,
+                "setupScript": "",
+                "runCommand": "",
+                "archiveScript": "scripts/archive.sh",
+                "rerunSetupOnUnarchive": False,
+            },
+        )
+        assert first.status_code == 200
+
+        # A second PUT that omits both archiving knobs (as every real client
+        # builder does today) must leave the stored values untouched.
+        second = await client.put(
+            "/v1/cloud/repositories/acme/rocket/environment",
+            headers=headers,
+            json={
+                "kind": "local",
+                "gitProvider": "github",
+                "desktopInstallId": "install-1",
+                "localPath": "/Users/tester/rocket",
+                "defaultBranch": None,
+                "setupScript": "pnpm install",
+                "runCommand": "pnpm dev",
+            },
+        )
+
+        assert second.status_code == 200
+        payload = second.json()
+        assert payload["setupScript"] == "pnpm install"
+        assert payload["runCommand"] == "pnpm dev"
+        assert payload["archiveScript"] == "scripts/archive.sh"
+        assert payload["rerunSetupOnUnarchive"] is False

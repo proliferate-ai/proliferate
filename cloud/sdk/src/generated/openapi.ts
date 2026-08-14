@@ -6093,6 +6093,10 @@ export interface components {
             setupScript: string;
             /** Runcommand */
             runCommand: string;
+            /** Archivescript */
+            archiveScript: string;
+            /** Rerunsetuponunarchive */
+            rerunSetupOnUnarchive: boolean;
             materialization?: components["schemas"]["RepoEnvironmentMaterializationResponse"] | null;
         };
         /** RepoRef */
@@ -6164,6 +6168,10 @@ export interface components {
              * @default
              */
             runCommand: string;
+            /** Archivescript */
+            archiveScript?: string | null;
+            /** Rerunsetuponunarchive */
+            rerunSetupOnUnarchive?: boolean | null;
         };
         /** ScratchPlacement */
         ScratchPlacement: {

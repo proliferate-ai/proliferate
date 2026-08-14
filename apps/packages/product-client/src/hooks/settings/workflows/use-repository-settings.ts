@@ -85,6 +85,8 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
           defaultBranch: environment.defaultBranch,
           setupScript: environment.setupScript,
           runCommand: environment.runCommand,
+          archiveScript: environment.archiveScript,
+          rerunSetupOnUnarchive: environment.rerunSetupOnUnarchive,
         })
       : null;
   }, [
@@ -164,6 +166,8 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
             defaultBranch: nextConfig.defaultBranch,
             setupScript: nextConfig.setupScript,
             runCommand: nextConfig.runCommand,
+            archiveScript: nextConfig.archiveScript,
+            rerunSetupOnUnarchive: nextConfig.rerunSetupOnUnarchive,
           },
         });
       })().catch(() => {
