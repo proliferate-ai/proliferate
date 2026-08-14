@@ -38,7 +38,6 @@ export function buildSidebarWorkspaceItems(args: {
   workspaces: LogicalWorkspace[];
   pendingItem: SidebarWorkspaceItemState | null;
   pendingOwnedWorkspaceId: string | null;
-  archivedSet: Set<string>;
   pinnedSet?: Set<string>;
   selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
@@ -127,7 +126,6 @@ function buildSidebarWorkspaceItem(
   args: {
     selectedLogicalWorkspaceId: string | null;
     selectedWorkspaceId: string | null;
-    archivedSet: Set<string>;
     pinnedSet?: Set<string>;
     workspaceActivities: Record<string, SidebarSessionActivityState>;
     pendingPromptCounts?: Record<string, number>;
@@ -145,10 +143,8 @@ function buildSidebarWorkspaceItem(
   },
 ): SidebarWorkspaceItemWithWorkspace {
   const active = logicalWorkspaceMatchesId(entry, args.selectedLogicalWorkspaceId);
-  const cloudOnlyArchived = !entry.localWorkspace
+  const archived = !entry.localWorkspace
     && entry.cloudWorkspace?.productLifecycle === "archived";
-  const archived = cloudOnlyArchived
-    || logicalWorkspaceRelatedIds(entry).some((id) => args.archivedSet?.has(id));
   const recency = resolveLogicalWorkspaceRecency(entry, args.workspaceLastInteracted);
   const activityLastInteracted = recency.displayAt;
   const lastInteracted = activityLastInteracted ?? recency.recordUpdatedAt;

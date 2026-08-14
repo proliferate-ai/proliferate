@@ -1,5 +1,6 @@
 import { Fragment, useMemo, type ComponentType, type ReactNode } from "react";
 import {
+  Archive,
   KeyRound,
   LifeBuoy,
   Link2,
@@ -87,6 +88,7 @@ const SETTINGS_NAV_ICONS = {
   "agent-grok": harnessNavIcon("grok"),
   "agent-opencode": harnessNavIcon("opencode"),
   appearance: Palette,
+  "archived-workspaces": Archive,
   billing: CreditCard,
   "check-for-updates": RefreshCw,
   environments: SlidersHorizontal,

@@ -181,7 +181,7 @@ export function WorkspaceItemContextMenu({
       {onArchive && !archived && (
         <PopoverMenuItem
           icon={<Archive className="icon-paired shrink-0 text-muted-foreground" />}
-          label="Archive..."
+          label="Archive"
           onClick={() => { close(); onArchive(); }}
         />
       )}

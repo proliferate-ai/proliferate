@@ -167,8 +167,10 @@ pub(super) async fn archive(
     // BEFORE quiesce: a refused archive must not have killed the user's running
     // processes. `snapshot_workspace` re-checks the same conditions
     // authoritatively below, because a conflict can begin during the kill window.
+    let phase1_started = std::time::Instant::now();
     let probe_path = workspace_path.clone();
     blocking(move || GitService::probe_refusals(&probe_path)).await??;
+    let probe_done = std::time::Instant::now();
 
     let quiesce_report =
         quiesce::stop_everything(&service.planes, workspace_id, service.quiesce_deadline())
@@ -181,6 +183,7 @@ pub(super) async fn archive(
                 );
                 ArchiveError::Failed("the workspace could not be quiesced".to_string())
             })?;
+    let quiesce_done = std::time::Instant::now();
 
     // Quiesce's own kills can CREATE refusal states, so the repair runs between
     // quiesce and capture. Without it, archive manufactures permanently
@@ -201,6 +204,7 @@ pub(super) async fn archive(
                 }
                 error
             })?;
+    let repair_done = std::time::Instant::now();
 
     let snapshot_path = workspace_path.clone();
     let snapshot = blocking(move || GitService::snapshot_workspace(&snapshot_path))
@@ -225,6 +229,7 @@ pub(super) async fn archive(
             }
             error
         })?;
+    let snapshot_done = std::time::Instant::now();
 
     {
         let repo_root = repo_root.clone();
@@ -247,6 +252,7 @@ pub(super) async fn archive(
             ArchiveError::Failed(error.to_string())
         })?;
     }
+    let refs_done = std::time::Instant::now();
 
     // Token BEFORE the flip: once any observer can read lifecycle=archived,
     // `cancel_phase2` must find something to fire, or a fast Undo racing this gap
@@ -270,6 +276,17 @@ pub(super) async fn archive(
     // ─── RESPOND AT THE FLIP; PHASE 2 DETACHES ───
     let notices = [repair_notices, snapshot.notices.clone()].concat();
     let record = service.store.require_workspace(workspace_id)?;
+    tracing::info!(
+        workspace_id = %workspace_id,
+        probe_ms = probe_done.duration_since(phase1_started).as_millis() as u64,
+        quiesce_ms = quiesce_done.duration_since(probe_done).as_millis() as u64,
+        repair_ms = repair_done.duration_since(quiesce_done).as_millis() as u64,
+        snapshot_ms = snapshot_done.duration_since(repair_done).as_millis() as u64,
+        refs_ms = refs_done.duration_since(snapshot_done).as_millis() as u64,
+        flip_ms = refs_done.elapsed().as_millis() as u64,
+        total_ms = phase1_started.elapsed().as_millis() as u64,
+        "[anyharness-latency] workspace.archive.phase1_complete"
+    );
     phase2::spawn_phase2(
         service.clone(),
         lease,

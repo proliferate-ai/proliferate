@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { type SettingsSection } from "#product/config/settings";
 import { AccountPane } from "#product/components/settings/panes/AccountPane";
+import { ArchivedWorkspacesPane } from "#product/components/settings/panes/archived/ArchivedWorkspacesPane";
 import { ApiKeysPane } from "#product/components/settings/panes/agents/api-keys/ApiKeysPane";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
 import { AppearancePane } from "#product/components/settings/panes/AppearancePane";
@@ -85,6 +86,9 @@ export function renderSettingsSection(
   }
   if (activeSection === "integrations") {
     return renderCloudGatedPane(authGate, () => <UserIntegrationsPane focus={focus} />);
+  }
+  if (activeSection === "archived-workspaces") {
+    return <ArchivedWorkspacesPane />;
   }
   if (activeSection === "billing") {
     return <BillingPane focus={focus} />;

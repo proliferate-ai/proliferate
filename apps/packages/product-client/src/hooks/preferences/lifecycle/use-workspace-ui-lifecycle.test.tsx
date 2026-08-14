@@ -71,7 +71,6 @@ describe("useWorkspaceUiLifecycle", () => {
   it("hydrates current workspace UI state without rewriting clean bootstrap data", async () => {
     memory.values.set("workspace_ui", {
       ...currentWorkspaceUiState(),
-      archivedWorkspaceIds: ["workspace-a"],
       sidebarOpen: true,
     });
 
@@ -81,14 +80,11 @@ describe("useWorkspaceUiLifecycle", () => {
       expect(useWorkspaceUiStore.getState()._hydrated).toBe(true);
     });
 
-    expect(useWorkspaceUiStore.getState().archivedWorkspaceIds)
-      .toEqual(["workspace-a"]);
     expect(useWorkspaceUiStore.getState().sidebarOpen).toBe(true);
     expect(setItemSpy).not.toHaveBeenCalled();
   });
 
   it("persists migrated legacy state and later workspace UI updates", async () => {
-    memory.values.set("archivedWorkspaceIds", ["legacy-workspace"]);
     memory.values.set("lastViewedAt", {
       "legacy-workspace": "2026-01-01T00:00:00.000Z",
     });
@@ -99,12 +95,11 @@ describe("useWorkspaceUiLifecycle", () => {
       expect(setItemSpy).toHaveBeenCalledTimes(1);
     });
 
-    expect(getItemSpy).toHaveBeenCalledWith("archivedWorkspaceIds");
+    expect(getItemSpy).toHaveBeenCalledWith("lastViewedAt");
     expect(setItemSpy).toHaveBeenCalledWith("workspace_ui", expect.any(String));
     expect(memory.readJson("workspace_ui")).toEqual(
       expect.objectContaining({
         migrationVersion: WORKSPACE_UI_MIGRATION_VERSION,
-        archivedWorkspaceIds: [],
         lastViewedAt: {},
       }),
     );

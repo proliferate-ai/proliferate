@@ -205,6 +205,11 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     setSetupDraft: (setupScript: string) => setDraft({ setupScript }),
     runCommandDraft: state.draft.runCommand,
     setRunCommandDraft: (runCommand: string) => setDraft({ runCommand }),
+    archiveScriptDraft: state.draft.archiveScript,
+    setArchiveScriptDraft: (archiveScript: string) => setDraft({ archiveScript }),
+    rerunSetupOnUnarchiveDraft: state.draft.rerunSetupOnUnarchive,
+    setRerunSetupOnUnarchiveDraft: (rerunSetupOnUnarchive: boolean) =>
+      setDraft({ rerunSetupOnUnarchive }),
     setExplicitDefaultBranch: (branchName: string | null) => {
       setDraft({ defaultBranch: branchName });
     },

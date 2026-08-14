@@ -6,6 +6,7 @@ import {
   worktreeRestoreFailureCopy,
 } from "#product/copy/workspaces/workspace-availability-copy";
 import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/availability";
+import { isWorkspaceArchivedRefusal } from "#product/lib/domain/workspaces/archived/workspace-archived-refusal";
 import { useLatestWorkspaceCollectionsRead } from "#product/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
@@ -51,6 +52,13 @@ export function useWorktreeMissingActions(args: { workspaceId: string }) {
       showToast("Worktree restored.", "info");
       return true;
     } catch (error) {
+      if (isWorkspaceArchivedRefusal(error)) {
+        // WORKSPACE_ARCHIVED (§3.11): the server is correct, only the client
+        // was stale — refresh the listing (the row moves out of active
+        // lists) and surface no failure state here.
+        await refresh();
+        return false;
+      }
       setRestoreError(
         error instanceof AnyHarnessError
           ? worktreeRestoreFailureCopy(error.problem.code, error.problem.detail)

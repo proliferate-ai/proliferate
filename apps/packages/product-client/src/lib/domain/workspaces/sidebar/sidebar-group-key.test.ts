@@ -60,7 +60,6 @@ function sidebarSourceRootForWorkspace(
     logicalWorkspaces,
     showArchived: false,
     workspaceTypes: DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-    archivedSet: new Set(),
     hiddenRepoRootIds: new Set(),
     selectedLogicalWorkspaceId: null,
     selectedWorkspaceId: null,
