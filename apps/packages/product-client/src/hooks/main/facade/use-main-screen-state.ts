@@ -22,6 +22,7 @@ import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-st
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
@@ -82,7 +83,7 @@ export function useMainScreenState(): MainScreenState {
     CLOSED_PUBLISH_DIALOG_STATE,
   );
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,

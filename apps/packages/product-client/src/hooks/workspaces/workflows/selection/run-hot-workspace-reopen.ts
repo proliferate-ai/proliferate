@@ -114,7 +114,6 @@ export function runHotWorkspaceReopen(
   useSessionSelectionStore.getState().activateHotWorkspace({
     logicalWorkspaceId: logicalWorkspace ? logicalWorkspace.id : null,
     workspaceId: resolvedWorkspaceId,
-    clearPending: !request.options?.preservePending,
     initialActiveSessionId: candidate.sessionId,
     hotPaintGate: {
       workspaceId: resolvedWorkspaceId,

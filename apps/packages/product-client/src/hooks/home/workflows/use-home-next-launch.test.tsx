@@ -207,23 +207,6 @@ describe("useHomeNextLaunch", () => {
   // and before awaiting it — not only after the create promise settles.
   it("scopes the launch intent to its pending attempt before the create promise resolves (PRO-230)", async () => {
     const sessionId = "client-session:codex:sync-scope";
-    const pendingEntry = buildSubmittingPendingWorkspaceEntry({
-      attemptId: "sync-scope-attempt",
-      selectedWorkspaceId: null,
-      source: "worktree-created",
-      displayName: "sync-scope",
-      repoLabel: "repo",
-      baseBranchName: "main",
-      request: {
-        kind: "worktree",
-        input: {
-          repoRootId: "repo-root-1",
-          sourceWorkspaceId: null,
-          baseBranch: "main",
-          defaultBranch: "main",
-        },
-      },
-    });
 
     let resolveCreate: (value: { workspaceId: string; projectedSessionId: string | null }) => void =
       () => {};
@@ -232,10 +215,32 @@ describe("useHomeNextLaunch", () => {
         resolveCreate = resolve;
       },
     );
-    // Mirrors production: beginPendingWorkspace runs synchronously in the
-    // create workflow's body, before its first await, so the pending entry
-    // is already in the store by the time the caller gets the promise back.
-    mocks.createWorktreeAndEnterWithResult.mockImplementation(() => {
+    let mintedAttemptId: string | null = null;
+    let pendingEntry: ReturnType<typeof buildSubmittingPendingWorkspaceEntry> | null = null;
+    // Mirrors production: use-home-next-launch.ts pre-mints the attempt id
+    // and threads it through as an option; the create workflow's own
+    // beginPendingWorkspace call (registered here under that same id) runs
+    // synchronously, before its first await, so the pending entry is already
+    // in the registry by the time the caller gets the promise back.
+    mocks.createWorktreeAndEnterWithResult.mockImplementation((_input, options) => {
+      mintedAttemptId = options.attemptId;
+      pendingEntry = buildSubmittingPendingWorkspaceEntry({
+        attemptId: options.attemptId,
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "sync-scope",
+        repoLabel: "repo",
+        baseBranchName: "main",
+        request: {
+          kind: "worktree",
+          input: {
+            repoRootId: "repo-root-1",
+            sourceWorkspaceId: null,
+            baseBranch: "main",
+            defaultBranch: "main",
+          },
+        },
+      });
       useSessionSelectionStore.getState().enterPendingWorkspaceShell(pendingEntry, {
         initialActiveSessionId: sessionId,
       });
@@ -264,10 +269,11 @@ describe("useHomeNextLaunch", () => {
     // The create promise is still pending here, so if scoping only happened
     // in the catch block (the pre-fix behavior), attemptId would still be
     // null at this point.
-    expect(useChatLaunchIntentStore.getState().activeIntent?.attemptId).toBe("sync-scope-attempt");
+    expect(mintedAttemptId).not.toBeNull();
+    expect(useChatLaunchIntentStore.getState().activeIntent?.attemptId).toBe(mintedAttemptId);
 
     putSessionRecord(createEmptySessionRecord(sessionId, "codex", {
-      workspaceId: buildPendingWorkspaceUiKey(pendingEntry),
+      workspaceId: buildPendingWorkspaceUiKey(pendingEntry!),
       materializedSessionId: null,
       modelId: "gpt-5.4",
     }));

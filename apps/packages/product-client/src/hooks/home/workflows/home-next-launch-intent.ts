@@ -5,7 +5,16 @@ import {
   type ChatLaunchRetryMode,
 } from "#product/lib/domain/chat/launch/launch-intent";
 import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
-import type { PendingWorkspaceInitialSession } from "#product/lib/domain/workspaces/creation/pending-entry";
+import type {
+  PendingWorkspaceEntry,
+  PendingWorkspaceInitialSession,
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import {
+  resolveAttendedPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-attention";
+import {
+  pendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
@@ -64,19 +73,22 @@ export function buildHomePendingWorkspaceInitialSession(input: {
   };
 }
 
-export function markHomeLaunchIntentMaterializedFromPendingWorkspace(intentId: string): void {
+export function markHomeLaunchIntentMaterializedFromPendingWorkspace(
+  intentId: string,
+  launchAttemptId?: string | null,
+): void {
   const activeIntent = useChatLaunchIntentStore.getState().activeIntent;
   if (!activeIntent || activeIntent.id !== intentId) {
     return;
   }
 
-  const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
-  const workspaceId = resolveLaunchIntentPendingWorkspaceId(activeIntent, pendingWorkspaceEntry);
+  const pendingEntry = resolveLaunchPendingWorkspaceEntry(launchAttemptId);
+  const workspaceId = resolveLaunchIntentPendingWorkspaceId(activeIntent, pendingEntry);
   // The attempt id is known as soon as the pending entry exists, well before
   // (or even absent) a resolved workspaceId — scoping on it here is what lets
   // a launch that fails before materializing still own only its own shell
   // instead of overriding every workspace's transcript (PRO-230).
-  const attemptId = resolveLaunchIntentPendingAttemptId(activeIntent, pendingWorkspaceEntry);
+  const attemptId = resolveLaunchIntentPendingAttemptId(activeIntent, pendingEntry);
   if (!workspaceId && !attemptId) {
     return;
   }
@@ -87,7 +99,10 @@ export function markHomeLaunchIntentMaterializedFromPendingWorkspace(intentId: s
   });
 }
 
-export function homeLaunchFailureRetryMode(intentId: string): ChatLaunchRetryMode {
+export function homeLaunchFailureRetryMode(
+  intentId: string,
+  launchAttemptId?: string | null,
+): ChatLaunchRetryMode {
   const activeIntent = useChatLaunchIntentStore.getState().activeIntent;
   if (!activeIntent || activeIntent.id !== intentId) {
     return "safe";
@@ -100,8 +115,25 @@ export function homeLaunchFailureRetryMode(intentId: string): ChatLaunchRetryMod
 
   return resolveLaunchIntentPendingWorkspaceId(
     activeIntent,
-    useSessionSelectionStore.getState().pendingWorkspaceEntry,
+    resolveLaunchPendingWorkspaceEntry(launchAttemptId),
   )
     ? "manual_after_workspace"
     : "safe";
+}
+
+/**
+ * A launch owns its own attempt. Only a launch that never minted one (cowork,
+ * cloud) falls back to whatever attempt the user is currently attending.
+ */
+function resolveLaunchPendingWorkspaceEntry(
+  launchAttemptId?: string | null,
+): PendingWorkspaceEntry | null {
+  const selection = useSessionSelectionStore.getState();
+  if (launchAttemptId) {
+    return pendingWorkspaceEntry(selection.pendingWorkspaces, launchAttemptId);
+  }
+  return resolveAttendedPendingWorkspaceEntry(selection.pendingWorkspaces, {
+    selectedLogicalWorkspaceId: selection.selectedLogicalWorkspaceId,
+    selectedWorkspaceId: selection.selectedWorkspaceId,
+  });
 }

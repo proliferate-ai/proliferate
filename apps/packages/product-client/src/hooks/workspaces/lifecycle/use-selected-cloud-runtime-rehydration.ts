@@ -15,13 +15,16 @@ import { useSessionDirectoryStore } from "#product/stores/sessions/session-direc
 import {
   isProjectedSessionMaterializationCandidate,
 } from "#product/lib/domain/sessions/creation/projected-session-materialization";
+import {
+  pendingWorkspaceEntryForWorkspaceId,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 
 export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,
 ): void {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
-  const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
+  const clearPendingWorkspaceEntry = useSessionSelectionStore((state) => state.clearPendingWorkspaceEntry);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const { bootstrapWorkspace } = useWorkspaceBootstrapActions();
   const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
@@ -62,7 +65,10 @@ export function useSelectedCloudRuntimeRehydration(
       shouldRehydrateOnReadyRef.current = true;
     }
 
-    const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+    const pendingWorkspaceEntry = pendingWorkspaceEntryForWorkspaceId(
+      useSessionSelectionStore.getState().pendingWorkspaces,
+      workspaceId,
+    );
     const hasAwaitingPendingWorkspaceEntry = Boolean(
       pendingWorkspaceEntry
         && pendingWorkspaceEntry.workspaceId === workspaceId
@@ -105,7 +111,10 @@ export function useSelectedCloudRuntimeRehydration(
         return;
       }
 
-      const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+      const pendingWorkspaceEntry = pendingWorkspaceEntryForWorkspaceId(
+        useSessionSelectionStore.getState().pendingWorkspaces,
+        workspaceId,
+      );
       if (
         !pendingWorkspaceEntry
         || pendingWorkspaceEntry.workspaceId !== workspaceId
@@ -125,7 +134,7 @@ export function useSelectedCloudRuntimeRehydration(
         workspaceId,
         { eventPrefix: "workspace.cloud_runtime_rehydration" },
       );
-      setPendingWorkspaceEntry(null);
+      clearPendingWorkspaceEntry(pendingWorkspaceEntry.attemptId);
       setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
         workspaceId,
         source: pendingWorkspaceEntry.source,
@@ -154,7 +163,7 @@ export function useSelectedCloudRuntimeRehydration(
     materializeReadyWorkspaceProjectedSessions,
     runtimeUrl,
     selectedLogicalWorkspaceId,
-    setPendingWorkspaceEntry,
+    clearPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
     selectedCloudRuntime.connectionInfo?.accessToken,
     selectedCloudRuntime.connectionInfo?.anyharnessWorkspaceId,

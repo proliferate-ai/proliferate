@@ -92,10 +92,7 @@ export async function runWorkspaceSelection(
         nextWorkspaceIds: [request.workspaceId],
       });
       deps.setSelectedLogicalWorkspaceId(request.workspaceId);
-      deps.setSelectedWorkspace(request.workspaceId, {
-        clearPending: !request.options?.preservePending,
-        initialActiveSessionId,
-      });
+      deps.setSelectedWorkspace(request.workspaceId, { initialActiveSessionId });
       prepareOptimisticWorkspaceSessionShell({
         sessionId: initialActiveSessionId,
         workspaceId: request.workspaceId,
@@ -201,10 +198,7 @@ export async function runWorkspaceSelection(
         nextWorkspaceIds: [directWorkspace.id],
       });
       deps.setSelectedLogicalWorkspaceId(directLogicalWorkspaceId);
-      deps.setSelectedWorkspace(directWorkspace.id, {
-        clearPending: !request.options?.preservePending,
-        initialActiveSessionId,
-      });
+      deps.setSelectedWorkspace(directWorkspace.id, { initialActiveSessionId });
       prepareOptimisticWorkspaceSessionShell({
         sessionId: initialActiveSessionId,
         workspaceId: directWorkspace.id,
@@ -297,10 +291,7 @@ export async function runWorkspaceSelection(
     nextWorkspaceIds: [logicalWorkspace.id, resolvedWorkspaceId],
   });
   deps.setSelectedLogicalWorkspaceId(logicalWorkspace.id);
-  deps.setSelectedWorkspace(resolvedWorkspaceId, {
-    clearPending: !request.options?.preservePending,
-    initialActiveSessionId,
-  });
+  deps.setSelectedWorkspace(resolvedWorkspaceId, { initialActiveSessionId });
   prepareOptimisticWorkspaceSessionShell({
     sessionId: initialActiveSessionId,
     workspaceId: resolvedWorkspaceId,

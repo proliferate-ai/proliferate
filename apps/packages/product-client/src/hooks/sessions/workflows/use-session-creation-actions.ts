@@ -89,9 +89,13 @@ export function useSessionCreationActions() {
     if (!workspaceId) {
       throw new Error("No workspace selected");
     }
-    const recoveryWorkspaceUiKey = resolveWorkspaceUiKey(
-      current.selectedLogicalWorkspaceId, workspaceId,
-    ) ?? workspaceId;
+    // An unattended launch materializes its session while the user is looking
+    // at another workspace, so the caller names the shell rather than letting
+    // the current selection stand in for it.
+    const targetWorkspaceUiKey = options.targetWorkspaceUiKey ?? null;
+    const recoveryWorkspaceUiKey = targetWorkspaceUiKey
+      ?? resolveWorkspaceUiKey(current.selectedLogicalWorkspaceId, workspaceId)
+      ?? workspaceId;
 
     const blockedError = getWorkspaceRuntimeBlockError(workspaceId);
     if (blockedError) {
@@ -161,7 +165,9 @@ export function useSessionCreationActions() {
     });
 
     putSessionRecord(optimisticRecord);
-    activateSession(pendingSessionId);
+    if (options.activateOnCreate !== false) {
+      activateSession(pendingSessionId);
+    }
     logLatency("session.create.optimistic_record", {
       clientSessionId: pendingSessionId,
       workspaceId,
@@ -181,7 +187,12 @@ export function useSessionCreationActions() {
     let currentOwnedShellWorkspaceId: string | null = null;
     let currentOwnedSessionId: string | null = null;
     const writeOwnedShellIntent = (sessionId: string, shellWorkspaceId?: string | null): void => {
-      const write = writeChatShellIntentForSession({ workspaceId, shellWorkspaceId, sessionId });
+      const write = writeChatShellIntentForSession({
+        workspaceId,
+        // Null falls back to the writer's own selection-derived resolution.
+        shellWorkspaceId: shellWorkspaceId ?? targetWorkspaceUiKey,
+        sessionId,
+      });
       if (!write) {
         return;
       }

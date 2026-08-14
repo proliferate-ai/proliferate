@@ -8,8 +8,14 @@ import { CoworkThreadsSection } from "#product/components/workspace/cowork/sideb
 import {
   buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry,
+  type PendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+  type PendingWorkspaceRegistry,
+  upsertPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 
 const coworkState = vi.hoisted(() => ({
   statusLoading: false,
@@ -189,7 +195,7 @@ describe("CoworkThreadsSection", () => {
     });
     coworkState.threadsLoading = true;
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: pendingEntry,
+      pendingWorkspaces: registryOf(pendingEntry),
       selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingEntry),
     });
 
@@ -219,11 +225,14 @@ describe("CoworkThreadsSection", () => {
         },
       },
     });
+    // The row renders because this is the attempt the user is attending: the
+    // sidebar shows the attended entry, not every in-flight attempt.
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: {
+      pendingWorkspaces: registryOf({
         ...pendingEntry,
         workspaceId: "workspace-cowork",
-      },
+      }),
+      selectedWorkspaceId: "workspace-cowork",
     });
     coworkState.threads = [{
       id: "thread-1",
@@ -285,12 +294,13 @@ describe("CoworkThreadsSection", () => {
       },
     });
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: {
+      pendingWorkspaces: registryOf({
         ...pendingEntry,
         stage: "failed",
         workspaceId: "workspace-cowork",
         errorMessage: "Couldn't apply launch defaults",
-      },
+      }),
+      selectedWorkspaceId: "workspace-cowork",
     });
     coworkState.threads = [{
       id: "thread-1",
@@ -330,11 +340,12 @@ describe("CoworkThreadsSection", () => {
       },
     });
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: {
+      pendingWorkspaces: registryOf({
         ...pendingEntry,
         stage: "failed",
         errorMessage: "Couldn't create chat",
-      },
+      }),
+      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingEntry),
     });
 
     render(<CoworkThreadsSection />);
@@ -359,12 +370,13 @@ describe("CoworkThreadsSection", () => {
       },
     });
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: {
+      pendingWorkspaces: registryOf({
         ...pendingEntry,
         stage: "failed",
         workspaceId: "workspace-cowork",
         errorMessage: "Couldn't apply launch defaults",
-      },
+      }),
+      selectedWorkspaceId: "workspace-cowork",
     });
 
     render(<CoworkThreadsSection />);
@@ -374,3 +386,7 @@ describe("CoworkThreadsSection", () => {
     expect(screen.queryByText("No chats yet")).toBeNull();
   });
 });
+
+function registryOf(entry: PendingWorkspaceEntry): PendingWorkspaceRegistry {
+  return upsertPendingWorkspaceEntry(EMPTY_PENDING_WORKSPACE_REGISTRY, entry);
+}

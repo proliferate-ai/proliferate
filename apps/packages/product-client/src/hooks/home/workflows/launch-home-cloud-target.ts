@@ -95,6 +95,13 @@ export async function launchHomeCloudTarget(
     deps.navigate("/");
   }
   const result = await resultPromise;
+  if (result.status === "dismissed") {
+    // The user dismissed the pending workspace. Nothing failed, so the launch
+    // stops quietly instead of raising a "not started" toast.
+    failLatencyFlow(latencyFlowId, "cloud_workspace_create_dismissed");
+    deps.clearLaunchIntentIfActive(input.launchIntentId);
+    return false;
+  }
   if (result.status === "interrupted") {
     failLatencyFlow(latencyFlowId, "cloud_workspace_create_interrupted");
     // Prefer the resolved server message (e.g. a billing gate 402) so the

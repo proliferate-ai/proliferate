@@ -5,6 +5,9 @@ import { useHomeNextLaunchPromptActions } from "#product/hooks/home/workflows/us
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import {
+  createPendingWorkspaceAttemptId,
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -119,6 +122,10 @@ export function useHomeNextLaunch() {
       failure: null,
     });
 
+    // Minted per target branch below; the catch needs it to scope failure state
+    // to this launch's own attempt.
+    let launchAttemptId: string | null = null;
+
     try {
       if (target.kind === "cowork") {
         const resultPromise = createThreadFromSelection({
@@ -173,9 +180,12 @@ export function useHomeNextLaunch() {
       }
 
       if (target.kind === "local") {
+        const attemptId = createPendingWorkspaceAttemptId();
+        launchAttemptId = target.existingWorkspaceId ? null : attemptId;
         const createdWorkspacePromise = target.existingWorkspaceId
           ? null
           : createLocalWorkspaceAndEnterWithResult(target.sourceRoot, {
+            attemptId,
             repoGroupKeyToExpand: target.sourceRoot,
             initialSession,
           });
@@ -183,7 +193,9 @@ export function useHomeNextLaunch() {
           // Same reasoning as the cowork branch: the create call's synchronous
           // prefix (beginPendingWorkspace) has already run, so scope the
           // intent to the pending attempt now rather than only on failure.
-          markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
+          // Pass the pre-minted attemptId explicitly (registry lookup) rather
+          // than relying on the attended/selected entry.
+          markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId, attemptId);
         }
         const queuedProjectedSessionId = createdWorkspacePromise
           ? await promptProjectedPendingWorkspaceSession({
@@ -191,6 +203,7 @@ export function useHomeNextLaunch() {
             promptId,
             launchIntentId,
             waitUntil: createdWorkspacePromise,
+            attemptId,
           })
           : null;
         if (queuedProjectedSessionId) {
@@ -199,6 +212,12 @@ export function useHomeNextLaunch() {
         const createdWorkspace = createdWorkspacePromise
           ? await createdWorkspacePromise
           : null;
+        if (createdWorkspacePromise && !createdWorkspace) {
+          // The user dismissed the pending workspace. Nothing failed, so the
+          // launch stops quietly instead of raising a "not started" toast.
+          clearLaunchIntentIfActive(launchIntentId);
+          return false;
+        }
         const workspaceId = target.existingWorkspaceId ?? createdWorkspace?.workspaceId;
         if (!workspaceId) {
           throw new Error("Workspace creation was interrupted.");
@@ -235,28 +254,40 @@ export function useHomeNextLaunch() {
       }
 
       if (target.kind === "worktree") {
+        const attemptId = createPendingWorkspaceAttemptId();
+        launchAttemptId = attemptId;
         const createdWorkspacePromise = createWorktreeAndEnterWithResult({
           repoRootId: target.repoRootId,
           sourceWorkspaceId: target.sourceWorkspaceId,
           baseBranch: target.baseBranch,
           defaultBranch: target.defaultBranch,
         }, {
+          attemptId,
           initialSession,
         });
         // Same reasoning as the cowork/local branches above: the pending
         // attempt already exists synchronously, so scope the intent now.
-        markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
+        // Pass the pre-minted attemptId explicitly (registry lookup) rather
+        // than relying on the attended/selected entry.
+        markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId, attemptId);
         const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
           text: prompt,
           promptId,
           launchIntentId,
           waitUntil: createdWorkspacePromise,
+          attemptId,
         });
         if (queuedProjectedSessionId) {
           navigate("/");
         }
-        const { workspaceId, projectedSessionId: createdProjectedSessionId } =
-          await createdWorkspacePromise;
+        const createdWorkspace = await createdWorkspacePromise;
+        if (!createdWorkspace) {
+          // The user dismissed the pending worktree. Nothing failed, so the
+          // launch stops quietly instead of raising a "not started" toast.
+          clearLaunchIntentIfActive(launchIntentId);
+          return false;
+        }
+        const { workspaceId, projectedSessionId: createdProjectedSessionId } = createdWorkspace;
         if (!queuedProjectedSessionId) {
           navigate("/");
         }
@@ -303,10 +334,10 @@ export function useHomeNextLaunch() {
         showToast,
       });
     } catch (error) {
-      markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
+      markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId, launchAttemptId);
       failLaunchIntentIfActive(launchIntentId, {
         message: homeNextLaunchErrorMessage(error),
-        retryMode: homeLaunchFailureRetryMode(launchIntentId),
+        retryMode: homeLaunchFailureRetryMode(launchIntentId, launchAttemptId),
       });
       // No Retry here: the Home composer puts the prompt back in the editor
       // when `launch` returns false, so the composer's own send button is the

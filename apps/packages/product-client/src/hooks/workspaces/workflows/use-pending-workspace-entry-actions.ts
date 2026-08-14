@@ -19,6 +19,9 @@ import {
 import {
   resolveActiveProjectedSessionForPendingWorkspace,
 } from "#product/hooks/workspaces/workflows/pending-workspace-projected-session";
+import {
+  getPendingWorkspaceEntry,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import {
@@ -31,6 +34,9 @@ export function usePendingWorkspaceEntryActions() {
   const showToast = useToastStore((state) => state.show);
   const setPendingWorkspaceEntry = useSessionSelectionStore(
     (state) => state.setPendingWorkspaceEntry,
+  );
+  const clearPendingWorkspaceEntry = useSessionSelectionStore(
+    (state) => state.clearPendingWorkspaceEntry,
   );
   const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
@@ -69,7 +75,7 @@ export function usePendingWorkspaceEntryActions() {
         // Cowork retry isn't wired up yet — start a fresh thread from the
         // cowork sidebar. Clearing the pending entry sends the user back.
         showToast("Start a new cowork thread from the sidebar.", "info");
-        setPendingWorkspaceEntry(null);
+        clearPendingWorkspaceEntry(entry.attemptId);
         return;
       case "select-existing":
         {
@@ -85,10 +91,9 @@ export function usePendingWorkspaceEntryActions() {
             errorMessage: null,
           });
           try {
-            const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
             const initialActiveSessionId = resolveActiveProjectedSessionForPendingWorkspace(
               entry.request.workspaceId,
-              pending,
+              getPendingWorkspaceEntry(entry.attemptId),
             );
             await selectWorkspace(entry.request.workspaceId, {
               force: true,
@@ -101,8 +106,8 @@ export function usePendingWorkspaceEntryActions() {
             const cloudWorkspace = cloudWorkspaceId
               ? workspaceCollections?.cloudWorkspaces.find((workspace) => workspace.id === cloudWorkspaceId)
               : null;
-            const current = useSessionSelectionStore.getState().pendingWorkspaceEntry;
-            if (!current || current.attemptId !== entry.attemptId) {
+            const current = getPendingWorkspaceEntry(entry.attemptId);
+            if (!current) {
               return;
             }
             if (cloudWorkspaceId && resolveCloudWorkspaceStatus(cloudWorkspace) !== "ready") {
@@ -116,7 +121,7 @@ export function usePendingWorkspaceEntryActions() {
             materializePendingWorkspaceSessions(current, entry.request.workspaceId, {
               eventPrefix: "workspace.entry.retry",
             });
-            setPendingWorkspaceEntry(null);
+            clearPendingWorkspaceEntry(entry.attemptId);
             setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
               workspaceId: entry.request.workspaceId,
               source: current.source,
@@ -135,6 +140,7 @@ export function usePendingWorkspaceEntryActions() {
         }
     }
   }, [
+    clearPendingWorkspaceEntry,
     createLocalWorkspaceAndEnter,
     createWorktreeAndEnter,
     materializePendingWorkspaceSessions,
@@ -149,12 +155,14 @@ export function usePendingWorkspaceEntryActions() {
     if (entry.workspaceId) {
       clearDeferredLaunchesForWorkspace(entry.workspaceId);
     }
+    // Back is the explicit dismissal: selection no longer drops the entry, so
+    // this is what ends the attempt.
+    clearPendingWorkspaceEntry(entry.attemptId);
     if (entry.originTarget.kind === "home") {
       const selectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
       if (selectedWorkspaceId) {
         clearWorkspaceRuntimeState(selectedWorkspaceId, { clearSelection: true });
       } else {
-        setPendingWorkspaceEntry(null);
         resetWorkspaceEditorState();
       }
       navigate("/");
@@ -168,11 +176,11 @@ export function usePendingWorkspaceEntryActions() {
       showToast(message);
     }
   }, [
+    clearPendingWorkspaceEntry,
     clearWorkspaceRuntimeState,
     clearDeferredLaunchesForWorkspace,
     navigate,
     selectWorkspace,
-    setPendingWorkspaceEntry,
     showToast,
   ]);
 

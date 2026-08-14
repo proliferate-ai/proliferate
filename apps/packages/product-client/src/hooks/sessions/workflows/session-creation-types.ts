@@ -17,6 +17,19 @@ export interface CreateSessionWithResolvedConfigOptions {
   /** Live defaults frozen before an interrupted empty create. */
   frozenLiveControlValues?: Record<string, string>;
   workspaceId?: string;
+  /**
+   * The shell the new session belongs to, when that is not the selected one.
+   * An unattended pending-workspace launch materializes its session while the
+   * user is looking elsewhere, so reading the current selection would write
+   * the shell intent and failure recovery against the wrong workspace.
+   */
+  targetWorkspaceUiKey?: string | null;
+  /**
+   * Defaults to true. False leaves the current active session alone: the
+   * session is created and its shell intent recorded, but the user's view does
+   * not move to it.
+   */
+  activateOnCreate?: boolean;
   latencyFlowId?: string | null;
   measurementOperationId?: MeasurementOperationId | null;
   promptId?: string | null;
@@ -54,6 +67,10 @@ export interface CreateEmptySessionWithResolvedConfigOptions {
   launchControlValues?: Record<string, string>;
   frozenLiveControlValues?: Record<string, string>;
   workspaceId?: string;
+  /** The shell the new session belongs to, when that is not the selected one. */
+  targetWorkspaceUiKey?: string | null;
+  /** Defaults to true. False creates the session without moving the user to it. */
+  activateOnCreate?: boolean;
   latencyFlowId?: string | null;
   clientSessionId?: string | null;
   /** Stable server session UUID used to resume an interrupted empty create. */

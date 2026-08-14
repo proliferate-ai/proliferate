@@ -1,5 +1,9 @@
 import { useEffect } from "react";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import {
+  pendingWorkspaceEntryForWorkspaceId,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
@@ -29,8 +33,9 @@ const CLOUD_WORKSPACE_POLL_INTERVAL_MS = 3000;
 
 export function useCloudWorkspacePolling() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
+  const clearPendingWorkspaceEntry = useSessionSelectionStore((state) => state.clearPendingWorkspaceEntry);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const { data: workspaceCollections } = useWorkspaces();
   const { refreshCloudWorkspace } = useCloudWorkspaceActions();
@@ -122,7 +127,10 @@ export function useCloudWorkspacePolling() {
 
         if (refreshedStatus === "error") {
           shouldScheduleNextPoll = false;
-          const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+          const pending = pendingWorkspaceEntryForWorkspaceId(
+            useSessionSelectionStore.getState().pendingWorkspaces,
+            selectedWorkspaceId,
+          );
           if (
             pending
             && pending.workspaceId === selectedWorkspaceId
@@ -147,7 +155,10 @@ export function useCloudWorkspacePolling() {
 
         if (refreshedStatus === "ready" && !isCloudWorkspacePostReadyPending(workspace)) {
           shouldScheduleNextPoll = false;
-          const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+          const pending = pendingWorkspaceEntryForWorkspaceId(
+            useSessionSelectionStore.getState().pendingWorkspaces,
+            selectedWorkspaceId,
+          );
           const shouldPreservePending = pending?.workspaceId === selectedWorkspaceId
             && pending.stage === "awaiting-cloud-ready";
           const initialActiveSessionId = shouldPreservePending
@@ -189,7 +200,10 @@ export function useCloudWorkspacePolling() {
             return;
           }
 
-          const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+          const currentPending = pendingWorkspaceEntryForWorkspaceId(
+            useSessionSelectionStore.getState().pendingWorkspaces,
+            selectedWorkspaceId,
+          );
           if (
             currentPending
             && currentPending.workspaceId === selectedWorkspaceId
@@ -201,7 +215,7 @@ export function useCloudWorkspacePolling() {
               { eventPrefix: "workspace.cloud_polling" },
             );
             trackWorkspaceInteraction(selectedWorkspaceId, new Date().toISOString());
-            setPendingWorkspaceEntry(null);
+            clearPendingWorkspaceEntry(currentPending.attemptId);
             setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
               workspaceId: selectedWorkspaceId,
               source: currentPending.source,
@@ -248,6 +262,7 @@ export function useCloudWorkspacePolling() {
     refreshCloudWorkspace,
     selectWorkspace,
     selectedWorkspaceId,
+    clearPendingWorkspaceEntry,
     setPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
     shouldHandleCachedCloudWorkspaceFailure,

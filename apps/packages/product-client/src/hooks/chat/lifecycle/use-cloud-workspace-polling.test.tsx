@@ -13,6 +13,11 @@ import {
 } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+  pendingWorkspaceEntry,
+  upsertPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import { useCloudWorkspacePolling } from "#product/hooks/chat/lifecycle/use-cloud-workspace-polling";
 
@@ -73,7 +78,7 @@ describe("useCloudWorkspacePolling", () => {
     useSessionDirectoryStore.getState().clearEntries();
     useSessionTranscriptStore.getState().clearEntries();
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: null,
+      pendingWorkspaces: EMPTY_PENDING_WORKSPACE_REGISTRY,
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 0,
@@ -117,7 +122,10 @@ describe("useCloudWorkspacePolling", () => {
       sessionRelationship: { kind: "root" },
     }));
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: pendingEntry,
+      pendingWorkspaces: upsertPendingWorkspaceEntry(
+        EMPTY_PENDING_WORKSPACE_REGISTRY,
+        pendingEntry,
+      ),
       selectedWorkspaceId: workspaceId,
       activeSessionId: projectedSessionId,
     });
@@ -130,7 +138,7 @@ describe("useCloudWorkspacePolling", () => {
     });
     let pendingEntryAtInteraction: unknown = null;
     mocks.trackWorkspaceInteraction.mockImplementation(() => {
-      pendingEntryAtInteraction = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+      pendingEntryAtInteraction = readPendingEntry();
     });
 
     renderHook(() => useCloudWorkspacePolling());
@@ -154,7 +162,7 @@ describe("useCloudWorkspacePolling", () => {
       );
     });
     expect(pendingEntryAtInteraction).toMatchObject({ attemptId: "attempt-1" });
-    expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
+    expect(readPendingEntry()).toBeNull();
   });
 
   it("marks the current awaiting cloud workspace as failed when polling returns error", async () => {
@@ -176,7 +184,10 @@ describe("useCloudWorkspacePolling", () => {
       workspaceId,
     };
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: pendingEntry,
+      pendingWorkspaces: upsertPendingWorkspaceEntry(
+        EMPTY_PENDING_WORKSPACE_REGISTRY,
+        pendingEntry,
+      ),
       selectedWorkspaceId: workspaceId,
     });
     mocks.refreshCloudWorkspace.mockResolvedValueOnce(cloudWorkspace({
@@ -187,7 +198,7 @@ describe("useCloudWorkspacePolling", () => {
     renderHook(() => useCloudWorkspacePolling());
 
     await waitFor(() => {
-      expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toMatchObject({
+      expect(readPendingEntry()).toMatchObject({
         stage: "failed",
         workspaceId,
         errorMessage: "Provisioning failed",
@@ -218,7 +229,10 @@ describe("useCloudWorkspacePolling", () => {
     };
     mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({ status: "ready" })];
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: pendingEntry,
+      pendingWorkspaces: upsertPendingWorkspaceEntry(
+        EMPTY_PENDING_WORKSPACE_REGISTRY,
+        pendingEntry,
+      ),
       selectedWorkspaceId: workspaceId,
     });
     mocks.refreshCloudWorkspace.mockResolvedValueOnce(cloudWorkspace({ status: "ready" }));
@@ -245,7 +259,7 @@ describe("useCloudWorkspacePolling", () => {
       workspaceId,
       { eventPrefix: "workspace.cloud_polling" },
     );
-    expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
+    expect(readPendingEntry()).toBeNull();
   });
 
   it("marks the current awaiting cloud workspace as failed when the cached cloud workspace is already error", async () => {
@@ -271,14 +285,17 @@ describe("useCloudWorkspacePolling", () => {
       lastError: "Provisioning failed before poll",
     })];
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: pendingEntry,
+      pendingWorkspaces: upsertPendingWorkspaceEntry(
+        EMPTY_PENDING_WORKSPACE_REGISTRY,
+        pendingEntry,
+      ),
       selectedWorkspaceId: workspaceId,
     });
 
     renderHook(() => useCloudWorkspacePolling());
 
     await waitFor(() => {
-      expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toMatchObject({
+      expect(readPendingEntry()).toMatchObject({
         stage: "failed",
         workspaceId,
         errorMessage: "Provisioning failed before poll",
@@ -326,4 +343,11 @@ function cloudWorkspace(
     postReadyCompletedAt: null,
     visibility: "private",
   };
+}
+
+function readPendingEntry() {
+  return pendingWorkspaceEntry(
+    useSessionSelectionStore.getState().pendingWorkspaces,
+    "attempt-1",
+  );
 }

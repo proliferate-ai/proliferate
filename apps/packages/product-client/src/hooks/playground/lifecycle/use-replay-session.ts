@@ -163,7 +163,6 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
           logicalWorkspaceId: null,
           workspaceId: session.workspaceId,
           initialActiveSessionId: session.id,
-          clearPending: false,
         });
         setWorkspaceId(session.workspaceId);
         setSessionId(session.id);

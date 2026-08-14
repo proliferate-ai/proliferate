@@ -12,6 +12,11 @@ export interface WorkspaceSelectionOptions {
   force?: boolean;
   forceCold?: boolean;
   forceSessionDirectoryRefresh?: boolean;
+  /**
+   * Marks the pending-shell handoff, where the projected session the shell is
+   * already painting must survive the selection instead of being replaced by
+   * the workspace's own last-active session.
+   */
   preservePending?: boolean;
   initialActiveSessionId?: string | null;
   latencyFlowId?: string | null;
@@ -61,7 +66,7 @@ export interface WorkspaceSelectionDeps {
   setSelectedLogicalWorkspaceId: (logicalWorkspaceId: string | null) => void;
   setSelectedWorkspace: (
     id: string,
-    opts?: { initialActiveSessionId?: string | null; clearPending?: boolean },
+    opts?: { initialActiveSessionId?: string | null },
   ) => void;
   removeWorkspaceSlots: (workspaceId: string) => void;
   clearSelection: () => void;

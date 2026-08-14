@@ -40,6 +40,7 @@ import {
 import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import {
   buildSettingsHref,
   resolveWorkspaceRepoSettingsHref,
@@ -56,7 +57,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   // acknowledgement intentionally stays in ChatView because errors are
   // transcript-scoped and need the chat surface for context.
   useWorkspaceActivityAcknowledgement({ enabled: visible });
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const pendingWorkspacePath = resolvePendingWorkspacePath(pendingWorkspaceEntry);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
