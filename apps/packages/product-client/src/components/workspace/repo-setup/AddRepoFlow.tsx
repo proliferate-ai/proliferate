@@ -1,7 +1,4 @@
-import * as PopoverPrimitive from "@radix-ui/react-popover";
-
-import { Popover, PopoverAnchor } from "#product/primitives/Popover";
-import { useNativeOverlayRegistration } from "#product/primitives/overlays/overlay-presence";
+import { AnchoredCommandPopover } from "#product/primitives/AnchoredCommandPopover";
 import type { CloudRepoPickerProps } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 import {
   ADD_REPOSITORY_SURFACE_CLASS,
@@ -20,10 +17,12 @@ export type {
   AddRepoFlowStep,
 } from "./AddRepositoryPopover";
 
-/** The app-level flow's surface: the shared chrome plus the enter animation
- * PopoverButton adds for the anchored hosts. */
-export const ADD_REPO_SURFACE_CLASS =
-  `${ADD_REPOSITORY_SURFACE_CLASS} data-[state=open]:animate-popover-in`;
+/** The app-level flow's surface: the same chrome the anchored hosts use. The
+ * enter animation belongs to the popover primitive, not to this class. */
+export const ADD_REPO_SURFACE_CLASS = ADD_REPOSITORY_SURFACE_CLASS;
+
+/** The dialog's accessible name — there is no trigger to borrow one from. */
+const ADD_REPO_DIALOG_LABEL = "Add a repository";
 
 export interface AddRepoFlowProps {
   open: boolean;
@@ -67,51 +66,29 @@ export function AddRepoFlow({
   onBack,
   onClose,
 }: AddRepoFlowProps) {
-  useNativeOverlayRegistration(open);
-
   return (
-    <Popover
+    <AnchoredCommandPopover
       open={open}
       onOpenChange={(isOpen) => {
         if (!isOpen) {
           onClose();
         }
       }}
-      modal
+      aria-label={ADD_REPO_DIALOG_LABEL}
+      className={ADD_REPO_SURFACE_CLASS}
     >
-      <PopoverAnchor asChild>
-        <span
-          aria-hidden
-          className="pointer-events-none fixed left-1/2 top-[15vh] block size-0"
-        />
-      </PopoverAnchor>
-      <PopoverPrimitive.Portal>
-        <PopoverPrimitive.Content
-          data-slot="popover-content"
-          side="bottom"
-          align="center"
-          sideOffset={0}
-          // Focus neutrality, matching PopoverButton: opening must not blur the
-          // composer, closing must not yank focus back to an anchor that is not
-          // a control.
-          onOpenAutoFocus={(event) => event.preventDefault()}
-          onCloseAutoFocus={(event) => event.preventDefault()}
-          className={`z-50 outline-none ${ADD_REPO_SURFACE_CLASS} [transform-origin:var(--radix-popover-content-transform-origin)]`}
-        >
-          <AddRepositoryPopover
-            step={step}
-            options={options}
-            adding={adding}
-            githubConnected={githubConnected}
-            entryNote={entryNote}
-            error={error}
-            cloudPicker={cloudPicker}
-            clonePicker={clonePicker}
-            onPickOption={onPickOption}
-            onBack={onBack}
-          />
-        </PopoverPrimitive.Content>
-      </PopoverPrimitive.Portal>
-    </Popover>
+      <AddRepositoryPopover
+        step={step}
+        options={options}
+        adding={adding}
+        githubConnected={githubConnected}
+        entryNote={entryNote}
+        error={error}
+        cloudPicker={cloudPicker}
+        clonePicker={clonePicker}
+        onPickOption={onPickOption}
+        onBack={onBack}
+      />
+    </AnchoredCommandPopover>
   );
 }
