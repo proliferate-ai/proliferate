@@ -61,14 +61,6 @@ pub fn assemble_session_mcp_launch(
             }
             SessionMcpServer::Stdio(_) => false,
         });
-    if workspace_selected {
-        tracing::info!(
-            target: "anyharness.workspace_mcp.attached",
-            session_id = %record.id,
-            workspace_id = %workspace.id,
-            "Workspace MCP attached to session launch"
-        );
-    }
     launch_extras
         .system_prompt_append
         .append(&mut product_extras.system_prompt_append);
@@ -104,7 +96,7 @@ pub fn assemble_session_mcp_launch(
                 // depending on `workspace_selected`
                 // (WORKSPACE_MCP_ATTACHMENT_FAILED vs the generic internal
                 // code). This field is the only way to tell them apart.
-                tracing::debug!(
+                tracing::warn!(
                     target: "anyharness.workspace_mcp.summary_serialization_failed",
                     session_id = %record.id,
                     workspace_selected,
@@ -122,6 +114,18 @@ pub fn assemble_session_mcp_launch(
         )?;
     mcp_servers.extend(launch_extras.mcp_servers);
     dedupe_mcp_servers(&mut mcp_servers);
+
+    // Emitted only once the summary merge above has succeeded, so this event
+    // is never a false positive against a summary_assembly failure that
+    // still fails the launch.
+    if workspace_selected {
+        tracing::info!(
+            target: "anyharness.workspace_mcp.attached",
+            session_id = %record.id,
+            workspace_id = %workspace.id,
+            "Workspace MCP attached to session launch"
+        );
+    }
 
     Ok(SessionMcpLaunchAssembly {
         mcp_servers,

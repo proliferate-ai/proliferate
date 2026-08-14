@@ -149,11 +149,15 @@ impl CompletionDeliveryWorker {
             } => (delivery, pending),
             ClaimedDeliveryEnqueueOutcome::AlreadyVisible { delivery, .. } => {
                 log_delivered(&delivery, &now.to_rfc3339());
-                log_delivery_skipped(&delivery.delivery_id, "already_visible");
+                log_delivery_skipped(
+                    &delivery.delivery_id,
+                    &delivery.parent_session_id,
+                    "already_visible",
+                );
                 return Ok(());
             }
             ClaimedDeliveryEnqueueOutcome::Stale => {
-                log_delivery_skipped(&delivery.delivery_id, "stale");
+                log_delivery_skipped(&delivery.delivery_id, &delivery.parent_session_id, "stale");
                 return Ok(());
             }
         };
@@ -256,10 +260,11 @@ fn error_chain_class(error: &anyhow::Error) -> &'static str {
 /// Claim-time short circuits. Both return Ok(()) without enqueueing, so
 /// without this record a lease race and a stale delivery look identical to a
 /// delivery that never ran.
-fn log_delivery_skipped(delivery_id: &str, reason: &'static str) {
+fn log_delivery_skipped(delivery_id: &str, session_id: &str, reason: &'static str) {
     tracing::debug!(
         target: "anyharness.subagent.delivery_skipped",
         delivery_id = %delivery_id,
+        session_id = %session_id,
         reason,
         "completion delivery skipped at claim"
     );

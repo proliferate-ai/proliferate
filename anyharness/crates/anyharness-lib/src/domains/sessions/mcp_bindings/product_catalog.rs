@@ -36,7 +36,7 @@ pub fn select_product_mcps<'a>(
     for registration in registrations {
         let attached =
             registration.should_attach(ProductMcpSelectionContext { workspace, session })?;
-        tracing::debug!(
+        tracing::info!(
             target: "anyharness.workspace_mcp.selection",
             session_id = %session.id,
             product_mcp_id = registration.definition().id,

@@ -100,9 +100,9 @@ pub async fn call_tool(
     // Single outcome record for every Workspace tool. The 18 handlers carry
     // only a `tracing::instrument` span, so denials, missing targets and
     // successes are all invisible without this.
-    let target_session_id = target_session_id(arguments.as_ref());
+    let target_id = target_id(arguments.as_ref());
     let result = dispatch_tool(operations, ctx, name, arguments).await;
-    record_tool_call(ctx, name, target_session_id.as_deref(), result.as_ref().err());
+    record_tool_call(ctx, name, target_id.as_deref(), result.as_ref().err());
     result
 }
 
@@ -334,9 +334,9 @@ pub async fn call_tool_output(
             .await
             .map(McpToolOutput::Structured);
     }
-    let target_session_id = target_session_id(arguments.as_ref());
+    let target_id = target_id(arguments.as_ref());
     let result = task_output_response(operations, ctx, arguments);
-    record_tool_call(ctx, name, target_session_id.as_deref(), result.as_ref().err());
+    record_tool_call(ctx, name, target_id.as_deref(), result.as_ref().err());
     result
 }
 
@@ -366,7 +366,7 @@ fn task_output_response(
 
 /// Tool arguments name their target agent uniformly as `agentId`; tools that
 /// address a workspace (or nothing) simply have none.
-fn target_session_id(arguments: Option<&Value>) -> Option<String> {
+fn target_id(arguments: Option<&Value>) -> Option<String> {
     arguments?.get("agentId")?.as_str().map(str::to_string)
 }
 
@@ -376,17 +376,17 @@ fn target_session_id(arguments: Option<&Value>) -> Option<String> {
 fn record_tool_call(
     ctx: &WorkspaceMcpContext,
     operation: &str,
-    target_session_id: Option<&str>,
+    target_id: Option<&str>,
     error: Option<&anyhow::Error>,
 ) {
-    let caller_session_id = ctx.caller.identity().session_id.as_str();
+    let session_id = ctx.caller.identity().session_id.as_str();
     let Some(error) = error else {
         tracing::info!(
             target: "anyharness.agent_ops.tool_call",
             operation,
             outcome = "ok",
-            caller_session_id,
-            target_session_id,
+            session_id,
+            target_id,
             "Workspace MCP tool call completed"
         );
         return;
@@ -395,15 +395,32 @@ fn record_tool_call(
         .downcast_ref::<McpToolCallError>()
         .map(|error| error.code)
         .unwrap_or("AGENT_OPERATIONS_INTERNAL");
-    tracing::warn!(
-        target: "anyharness.agent_ops.tool_call",
-        operation,
-        outcome = agent_operations_outcome_class(error_code),
-        error_code,
-        caller_session_id,
-        target_session_id,
-        "Workspace MCP tool call failed"
-    );
+    let outcome = agent_operations_outcome_class(error_code);
+    // Only a genuine failure (`error`) warrants `warn!`. A caller-caused
+    // refusal (`denied`) or a missing target (`not_found`) is an expected,
+    // caller-fixable outcome and is logged at `info!` so warn-level alerting
+    // stays reserved for actual failures.
+    if outcome == "error" {
+        tracing::warn!(
+            target: "anyharness.agent_ops.tool_call",
+            operation,
+            outcome,
+            error_code,
+            session_id,
+            target_id,
+            "Workspace MCP tool call failed"
+        );
+    } else {
+        tracing::info!(
+            target: "anyharness.agent_ops.tool_call",
+            operation,
+            outcome,
+            error_code,
+            session_id,
+            target_id,
+            "Workspace MCP tool call failed"
+        );
+    }
 }
 
 fn parse<T: DeserializeOwned>(arguments: Option<Value>) -> anyhow::Result<T> {
@@ -476,17 +493,17 @@ mod diagnostics_tests {
     use super::*;
 
     #[test]
-    fn target_session_id_is_read_only_from_the_agent_id_argument() {
+    fn target_id_is_read_only_from_the_agent_id_argument() {
         assert_eq!(
-            target_session_id(Some(&json!({ "agentId": "session-2" }))).as_deref(),
+            target_id(Some(&json!({ "agentId": "session-2" }))).as_deref(),
             Some("session-2")
         );
-        assert_eq!(target_session_id(None), None);
-        assert_eq!(target_session_id(Some(&json!({}))), None);
+        assert_eq!(target_id(None), None);
+        assert_eq!(target_id(Some(&json!({}))), None);
         assert_eq!(
-            target_session_id(Some(&json!({ "workspaceId": "workspace-1" }))),
+            target_id(Some(&json!({ "workspaceId": "workspace-1" }))),
             None
         );
-        assert_eq!(target_session_id(Some(&json!({ "agentId": 7 }))), None);
+        assert_eq!(target_id(Some(&json!({ "agentId": 7 }))), None);
     }
 }

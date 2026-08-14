@@ -136,6 +136,8 @@ impl DurableAgentProductContextResolver {
             // receipt.
             tracing::error!(
                 target: "anyharness.product_context.cross_workspace",
+                session_id = %session.id,
+                workspace_id = %session.workspace_id,
                 child_session_id = %session.id,
                 child_workspace_id = %session.workspace_id,
                 parent_session_id = %parent.id,
