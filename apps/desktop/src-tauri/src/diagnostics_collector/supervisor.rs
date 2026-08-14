@@ -19,6 +19,8 @@ use proliferate_diagnostics_protocol::v1::validation::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::{watch, Mutex as AsyncMutex};
 
+use terminal_control::TerminalControlState;
+
 use super::artifact::DiagnosticsArtifactKind;
 use super::client::{
     contextualize_export_frame, contextualize_health, CollectorClientError, CollectorHttpClient,
@@ -180,6 +182,7 @@ pub(crate) struct DiagnosticsCollectorSupervisor {
     generation_tx: watch::Sender<u64>,
     shutdown_tx: watch::Sender<bool>,
     shutdown_armed: AtomicBool,
+    terminal_control: TerminalControlState,
 }
 
 struct SupervisorInner {
@@ -211,6 +214,10 @@ mod initialization;
 mod lifecycle;
 #[path = "supervisor/queries.rs"]
 mod queries;
+#[path = "supervisor/terminal_control.rs"]
+mod terminal_control;
+
+pub(crate) use terminal_control::{TerminalControlOutcome, TerminalProducerSlot};
 
 fn accept_restart_budget_at(inner: &mut SupervisorInner, now: Instant) -> bool {
     while inner

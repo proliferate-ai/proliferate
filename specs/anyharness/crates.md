@@ -15,6 +15,9 @@ anyharness-credential-discovery/
 proliferate-diagnostics-protocol/
   provider-neutral Desktop diagnostics wire contract and pure validation
 
+proliferate-diagnostics-client/
+  bounded local producer adapter for Desktop-owned Rust children
+
 proliferate-diagnostics-collector/
   standalone loopback diagnostics collector process and bounded memory state
 
@@ -121,6 +124,23 @@ Desktop-owned producers and the standalone collector. It is separate from
 It must not own collector runtime state, transport handlers, files, processes,
 exporters, producer queues, or product orchestration. Cross-language meaning is
 pinned by `fixtures/contracts/rust-observability-v1/`.
+
+## `proliferate-diagnostics-client`
+
+This crate owns the bounded local diagnostics adapter linked into the two
+Desktop-owned Rust producers — the bundled `anyharness serve` child and
+`proliferate-worker`:
+
+- one global `tracing` layer per process with structural secret filtering
+- the bounded admission queue, batching, receipts, and loss accounting
+- activation purely by possession of the two reserved Desktop bridge and
+  shutdown descriptors: `Disabled`, `Bundled`, or `BundledDegraded`, never a
+  product-launch failure
+- each component's fixed bounded fallback file family
+
+It consumes `proliferate-diagnostics-protocol` as its only wire-contract
+authority. It must not own collector runtime state, Desktop/Tauri wiring,
+Sentry/PostHog policy, product behavior, persistent queues, or replay.
 
 ## `proliferate-diagnostics-collector`
 

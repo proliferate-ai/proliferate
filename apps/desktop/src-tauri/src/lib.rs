@@ -384,7 +384,7 @@ pub fn run() {
                     guard.launch_env = keychain::load_all_secrets_for_sidecar();
                     guard.launch_env.extend(agent_seed_env);
                 }
-                sidecar::boot(&sc, &diagnostics_producer).await;
+                sidecar::boot(&sc, &diagnostics_producer, &diagnostics_supervisor).await;
             });
             Ok(())
         })

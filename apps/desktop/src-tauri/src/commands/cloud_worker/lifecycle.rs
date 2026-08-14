@@ -1,21 +1,16 @@
-use std::{
-    io::{Read, Seek, SeekFrom},
-    path::{Path, PathBuf},
-    sync::atomic::Ordering,
-};
+use std::{path::PathBuf, sync::atomic::Ordering};
 
 use tokio::sync::MutexGuard;
-use tokio::time::{timeout, Duration};
+use tokio::time::{timeout_at, Duration, Instant};
 
 use proliferate_diagnostics_protocol::v1::types::TerminalOutcomeV1;
 
-use crate::diagnostics::scrub_diagnostic_text;
 use crate::diagnostics_collector::producer::{
     lifecycle::LifecycleOperation, TauriDiagnosticsProducer,
 };
 
 use super::{
-    CloudWorkerLifecycle, CloudWorkerProcess, EnsureDesktopDispatchWorkerResult,
+    observer, CloudWorkerLifecycle, CloudWorkerProcess, EnsureDesktopDispatchWorkerResult,
     SharedCloudWorkerState, StopDesktopDispatchWorkerResult,
 };
 
@@ -67,6 +62,13 @@ impl From<String> for WorkerStartFailure {
 impl Drop for CloudWorkerProcess {
     fn drop(&mut self) {
         let _ = self.child.start_kill();
+        #[cfg(all(
+            target_os = "macos",
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ))]
+        for drainer in &self.drainers {
+            drainer.abort();
+        }
     }
 }
 
@@ -173,6 +175,7 @@ pub(crate) async fn prepare_desktop_dispatch_worker_update(
 
 pub(crate) fn arm_terminal_shutdown(state: &SharedCloudWorkerState) {
     state.terminal_shutdown_armed.store(true, Ordering::Release);
+    state.signal_child_shutdown();
 }
 
 pub(crate) async fn arm_terminal_shutdown_and_stop_worker(
@@ -196,17 +199,49 @@ pub(crate) async fn stop_tracked_desktop_dispatch_worker(
     stop_process(&mut lifecycle).await
 }
 
+/// Signals the owned Worker's shutdown descriptor and requests its
+/// diagnostics flush with only the time remaining on the caller's joined
+/// producer deadline. The child's returned status/fence is cached on the
+/// bridge owned by `CloudWorkerProcess`. No owned process or no bridge
+/// (unprotected launch) means nothing to flush.
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+pub(crate) async fn flush_child_diagnostics(state: &SharedCloudWorkerState, deadline: Instant) {
+    let Ok(lifecycle) = timeout_at(deadline, state.lifecycle.lock()).await else {
+        return;
+    };
+    let Some(bridge) = lifecycle
+        .process
+        .as_ref()
+        .and_then(|process| process.diagnostics_bridge())
+    else {
+        return;
+    };
+    // Retry the idempotent signal from stable process ownership. This also
+    // closes the narrow outer-slot handoff race without a fresh deadline.
+    bridge.signal_shutdown();
+    let _ = bridge.request_flush_until(deadline).await;
+}
+
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
+pub(crate) async fn flush_child_diagnostics(_state: &SharedCloudWorkerState, _deadline: Instant) {}
+
 #[cfg(test)]
 pub(crate) async fn install_shutdown_test_child(
     state: &SharedCloudWorkerState,
     child: tokio::process::Child,
 ) {
     let mut lifecycle = state.lifecycle.lock().await;
-    lifecycle.process = Some(CloudWorkerProcess {
-        target_id: "shutdown-fixture".to_string(),
+    lifecycle.process = Some(CloudWorkerProcess::untracked(
+        "shutdown-fixture".to_string(),
         child,
-        config_path: PathBuf::from("shutdown-fixture.toml"),
-    });
+        PathBuf::from("shutdown-fixture.toml"),
+    ));
 }
 
 /// Fails the next stop attempt only. Later attempts run the real reap, which is
@@ -227,22 +262,37 @@ async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, Stri
         return finish_stop_attempt(lifecycle, Err(error));
     }
 
-    let process = lifecycle
+    let observation = lifecycle
         .process
         .as_mut()
-        .expect("process presence checked above");
+        .expect("process presence checked above")
+        .child
+        .try_wait();
 
-    let stop_result = match process.child.try_wait() {
-        Ok(Some(_)) => Ok(()),
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let stop_result = match observation {
+        Ok(Some(status)) => Ok((
+            status,
+            crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Natural,
+        )),
         Ok(None) => {
+            let process = lifecycle
+                .process
+                .as_mut()
+                .expect("process presence checked above");
             process
                 .child
                 .start_kill()
                 .map_err(|error| format!("Failed to stop Proliferate Worker: {error}"))?;
-            timeout(Duration::from_secs(2), process.child.wait())
+            timeout_at(deadline, process.child.wait())
                 .await
                 .map_err(|_| "Timed out stopping Proliferate Worker".to_string())?
-                .map(|_| ())
+                .map(|status| {
+                    (
+                        status,
+                        crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Forced,
+                    )
+                })
                 .map_err(|error| format!("Failed to reap Proliferate Worker: {error}"))
         }
         // Do not fall through to `kill` after an ambiguous inspection error.
@@ -257,7 +307,20 @@ async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, Stri
             "Failed to inspect Proliferate Worker shutdown: {error}"
         )),
     };
-    finish_stop_attempt(lifecycle, stop_result)
+    match stop_result {
+        Ok((status, kind)) => {
+            // The child result is established; complete the EOF/cancellation
+            // and bridge fences before the verified owner is released. An
+            // error above retains every owned resource unfenced.
+            let process = lifecycle
+                .process
+                .as_mut()
+                .expect("successful observation retains process");
+            process.finish_verified_reap(status, kind, deadline).await;
+            finish_stop_attempt(lifecycle, Ok(()))
+        }
+        Err(error) => finish_stop_attempt(lifecycle, Err(error)),
+    }
 }
 
 /// Clears the owned handle only after shutdown has been verified.
@@ -271,18 +334,32 @@ fn finish_stop_attempt(
     stop_result: Result<(), String>,
 ) -> Result<bool, String> {
     stop_result?;
+    observer::cancel(lifecycle);
     lifecycle.process = None;
     Ok(true)
 }
 
+// The legacy `worker.log` failure-tail helpers below exist only for
+// unsupported Unix/non-Unix builds, whose activation is `Disabled`. The
+// supported-macOS bundled launch uses the bounded in-memory pipe tail and
+// cannot reach these path helpers.
+
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
 pub(super) const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
 
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
 pub(super) fn worker_startup_failure_message(
     status: &str,
-    log_path: &Path,
+    log_path: &std::path::Path,
     log_tail: &str,
 ) -> String {
-    let scrubbed_log_path = scrub_diagnostic_text(&log_path.to_string_lossy());
+    let scrubbed_log_path = crate::diagnostics::scrub_diagnostic_text(&log_path.to_string_lossy());
     let mut message = format!(
         "Proliferate Worker exited during startup with {status}. See {scrubbed_log_path} for output."
     );
@@ -296,7 +373,13 @@ pub(super) fn worker_startup_failure_message(
 /// Best-effort context for a startup error returned to the renderer. The
 /// worker log is truncated for every launch. Read only a fixed suffix so this
 /// error path cannot allocate or block in proportion to total log volume.
-pub(super) fn read_worker_log_tail(path: &Path, max_lines: usize) -> String {
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
+pub(super) fn read_worker_log_tail(path: &std::path::Path, max_lines: usize) -> String {
+    use std::io::{Read, Seek, SeekFrom};
+
     let Ok(mut file) = std::fs::File::open(path) else {
         return String::new();
     };
@@ -315,5 +398,5 @@ pub(super) fn read_worker_log_tail(path: &Path, max_lines: usize) -> String {
     let contents = String::from_utf8_lossy(&bytes);
     let lines = contents.lines().collect::<Vec<_>>();
     let start = lines.len().saturating_sub(max_lines);
-    scrub_diagnostic_text(&lines[start..].join("\n"))
+    crate::diagnostics::scrub_diagnostic_text(&lines[start..].join("\n"))
 }

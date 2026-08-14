@@ -44,6 +44,7 @@ which = "7"
 window-vibrancy = "0.6"
 uuid.workspace = true
 libc.workspace = true
+proliferate-diagnostics-client.workspace = true
 proliferate-diagnostics-protocol.workspace = true
 zeroize.workspace = true
 

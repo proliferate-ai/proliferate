@@ -54,9 +54,23 @@ main-window-only Tauri handoff. An eligible direct pre-dispatch collector state
 may retain those already-filtered records in `desktop-native.log` while the
 command still returns the original unavailable result; post-dispatch failures
 never fall back. The obsolete renderer diagnostics file receives no new writes,
-but historical discovery remains available to support collection. AnyHarness,
-Worker, and support-file migrations are not part of this ownership change;
-their current local sinks remain in place. Server log routing, Sentry, PostHog,
+but historical discovery remains available to support collection. The bundled
+`anyharness serve` child and the Desktop dispatch Worker carry
+`proliferate-diagnostics-client`: one global tracing layer per process feeds a
+bounded admission queue with receipts, activated purely by possession of the
+two reserved Desktop bridge/shutdown descriptors (`Disabled`, `Bundled`, or
+`BundledDegraded` — an observability outcome, never a product failure).
+Supported-macOS bundled runs write no new `anyharness.log*` once their producer
+installs; a `BundledDegraded` bootstrap suppresses it whether or not the
+producer installed, because the Desktop bridge still owns that run's
+diagnostics authority. A collector-ready bundled run whose producer failed to
+install keeps its legacy file sink, which is all that stands between it and no
+diagnostics at all. Bundled runs write no `worker.log` — Desktop drains Worker
+stdout/stderr into a bounded in-memory tail — while each producer keeps a fixed
+bounded per-component fallback file family. Standalone, external
+`ANYHARNESS_DEV_URL`, cloud/Supervisor, and unsupported-platform modes keep
+their existing sinks, and historical log bytes are never rewritten. Support-file migration is not
+part of this change. Server log routing, Sentry, PostHog,
 and anonymous telemetry are unchanged. The approved boundary and slice registry live in
 [`../adrs/2026-08-10-rust-observability.md`](../adrs/2026-08-10-rust-observability.md).
 

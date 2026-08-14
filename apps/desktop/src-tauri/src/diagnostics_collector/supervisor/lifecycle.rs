@@ -100,6 +100,29 @@ impl DiagnosticsCollectorSupervisor {
             self.publish_state(DesktopDiagnosticsSupervisorStateV1::Stopped { orderly: true });
             return Ok(());
         };
+        // Producer-death and shutdown commands share one async writer gate.
+        // The producer-death path holds the same async lifecycle decision and
+        // takes this gate first, so shutdown cannot interleave its control line
+        // with an already-authorized terminal line.
+        let _control_writer = self.terminal_control.lock_writer().await;
+        // An ambiguous terminal control write may have partially reached the
+        // collector. Never append a shutdown command to that stream: force
+        // the identity-stable owned child to a verified reap instead.
+        if self.terminal_control.writer_is_ambiguous() {
+            let result = process.terminate_and_reap().await;
+            self.invalidate_generation();
+            stop_operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
+            self.publish_state(DesktopDiagnosticsSupervisorStateV1::Stopped { orderly: false });
+            return match result {
+                Ok(()) => Ok(()),
+                Err(_) => {
+                    if let Ok(mut inner) = self.inner.lock() {
+                        inner.process = Some(process);
+                    }
+                    Err(SupervisorUnavailable::Protocol)
+                }
+            };
+        }
         match process.observe_exit() {
             Ok(Some(_)) => {
                 process.finish_reaped();
@@ -341,6 +364,10 @@ impl DiagnosticsCollectorSupervisor {
         let client = process.client();
         let collector_boot_id = process.descriptor().collector_boot_id.clone();
         let schema_major = process.descriptor().schema_major;
+        // A fresh collector generation owns a fresh pair of terminal slots.
+        // `accept_ready` is reached only while the lifecycle decision mutex is
+        // held, so reset precedes publication to every child watcher.
+        self.terminal_control.reset_for_new_collector();
         let (generation, state) = self
             .inner
             .lock()

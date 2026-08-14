@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use proliferate_diagnostics_protocol::v1::types::TerminalOutcomeV1;
 use tokio::sync::Mutex;
+use tokio::time::Instant;
 
 use crate::commands::cloud_worker::{self, SharedCloudWorkerState};
 use crate::sidecar::{self, SharedSidecar};
@@ -155,7 +156,7 @@ impl DiagnosticsShutdownCoordinator {
         self.enter_phase(&mut order, ShutdownPhase::Arm);
         self.supervisor.arm_shutdown();
         cloud_worker::lifecycle::arm_terminal_shutdown(&self.worker);
-        sidecar::arm_terminal_shutdown(&self.anyharness).await;
+        sidecar::arm_terminal_shutdown(&self.anyharness);
         self.enter_phase(&mut order, ShutdownPhase::CancelBrokerSessions);
         let broker = self.broker.lock().await.clone();
         if let Some(broker) = &broker {
@@ -167,7 +168,16 @@ impl DiagnosticsShutdownCoordinator {
         }
 
         self.enter_phase(&mut order, ShutdownPhase::DrainProducer);
-        let _ = self.producer.drain(PRODUCER_DRAIN_TIMEOUT).await;
+        // One absolute deadline governs all three drains: the Tauri producer
+        // drain plus both child bridge flush requests. Each child flush is
+        // capped at the milliseconds remaining on this same deadline; a
+        // missing response never extends it.
+        let flush_deadline = Instant::now() + PRODUCER_DRAIN_TIMEOUT;
+        let _ = tokio::join!(
+            self.producer.drain_until(flush_deadline),
+            cloud_worker::lifecycle::flush_child_diagnostics(&self.worker, flush_deadline),
+            sidecar::observer::flush_child_diagnostics(&self.anyharness, flush_deadline),
+        );
 
         self.enter_phase(&mut order, ShutdownPhase::StopWorker);
         let worker_stop = self.producer.begin_lifecycle("desktop.worker_process.stop");

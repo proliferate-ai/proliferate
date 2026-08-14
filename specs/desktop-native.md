@@ -23,7 +23,7 @@ apps/desktop/src-tauri/
   src/
     lib.rs                     # Tauri builder, plugins, state, commands, boot
     sidecar.rs                 # AnyHarness sidecar discovery, spawn, health
-    diagnostics_collector/    # collector supervision, broker, producer, fallback, shutdown
+    diagnostics_collector/    # collector supervision, broker, producer, child bridge, fallback, shutdown
     agent_seed_env.rs          # seed resource/env resolution for sidecar launch
     app_config.rs              # file-backed app config/runtime-info paths
     commands/
@@ -383,13 +383,36 @@ renderer record through the same bounded fallback pipeline without activating
 it; the command still returns its original unavailable error. Post-dispatch
 receipt, replacement, deadline, and transport failures do not fall back. The
 obsolete renderer diagnostics file receives no new writes, while historical
-support discovery remains. AnyHarness files, Worker output, Sentry, PostHog,
-anonymous telemetry, and support composition remain under their existing
-owners.
+support discovery remains. Sentry, PostHog, anonymous telemetry, and support
+composition remain under their existing owners.
+
+On the two supported packaged macOS targets, owned AnyHarness and Worker
+launches prepare the direct executable first, then create the fallback-root,
+bridge, and shutdown descriptors; only a direct binary child may inherit them
+(never Cargo, a shell, or any wrapper — a `cargo run` launcher spawns
+unprotected). A pre-exec descriptor failure closes every partial authority and
+performs at most one direct unprotected relaunch — an observability outcome,
+never a product failure — and a returned successful protected spawn is the
+point of no retry. Each bridge lives on the identity-stable process owner
+(`SidecarProcess`, `CloudWorkerProcess`) beside the owned `Child`; the Worker
+owner also holds the two pipe drainers and the bounded 65,536-byte/12-line
+in-memory tail that replaces `worker.log` on supported targets. Historical
+`worker.log` files are untouched customer data, and unsupported builds keep
+the legacy writer verbatim. Parent status and flush are one-slot requests with
+fixed deadlines; the child's terminal status/fence is cached at most once, and
+the tail is cleared only when the verified owner is released. Each owner starts
+one generation-bound natural-exit observer after healthy startup; explicit
+stop/restart cancels it while holding the same lifecycle mutex, and an
+ambiguous inspection retains the full owner for later reconciliation.
 
 Terminal shutdown is idempotent: arm shutdown and cancel broker leases; drain
-the native queue; stop/reap Worker and AnyHarness while the collector remains
-available; admit the collector-stop start; stop/reap the collector; write its
+the native queue while one absolute 500 ms deadline concurrently covers that
+drain plus both child bridge shutdown-signal/flush requests, each capped at
+the milliseconds remaining. Child HTTP dispatch and remaining fallback writes
+consume that same absolute window, and a later natural guard reuses a parent
+flush result instead of starting another wait. Then stop/reap Worker and
+AnyHarness while the collector remains available; admit the collector-stop
+start; stop/reap the collector; write its
 terminal to teardown fallback; remove the locator; close fallback. Windows'
 direct-exit updater command enters this same coordinator before installation,
 preserving its existing fail-closed Worker behavior.

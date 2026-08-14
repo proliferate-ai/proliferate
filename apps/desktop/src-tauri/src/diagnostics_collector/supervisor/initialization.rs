@@ -52,6 +52,7 @@ impl DiagnosticsCollectorSupervisor {
             generation_tx,
             shutdown_tx,
             shutdown_armed: AtomicBool::new(false),
+            terminal_control: Default::default(),
         })
     }
 

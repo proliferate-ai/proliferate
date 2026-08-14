@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc, Mutex as StdMutex};
 use std::time::Duration;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
@@ -13,6 +13,7 @@ use crate::desktop_telemetry_mode::{
     current_api_origin, resolve_desktop_telemetry_mode, DesktopTelemetryMode,
 };
 use crate::diagnostics_collector::producer::TauriDiagnosticsProducer;
+use crate::diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor;
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -50,39 +51,35 @@ struct RuntimeHealthRecord {
 
 pub struct SidecarProcess {
     child: Option<Child>,
+    /// Parent side of the protected child diagnostics bridge; `None` for
+    /// external, unprotected, or never-launched children.
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    diagnostics_bridge:
+        Option<crate::diagnostics_collector::child_bridge::runtime::ChildDiagnosticsBridge>,
+    observer_generation: u64,
+    exit_observer: Option<tokio::task::JoinHandle<()>>,
     pub info: RuntimeInfo,
     pub launch_env: HashMap<String, String>,
-    terminal_shutdown_armed: bool,
     #[cfg(test)]
     suppress_runtime_info_persistence: bool,
 }
 
-impl SidecarProcess {
-    fn new(port: u16) -> Self {
-        Self {
-            child: None,
-            info: RuntimeInfo {
-                url: format!("http://{DEFAULT_HOST}:{port}"),
-                port,
-                status: RuntimeStatus::Stopped,
-            },
-            launch_env: HashMap::new(),
-            terminal_shutdown_armed: false,
-            #[cfg(test)]
-            suppress_runtime_info_persistence: false,
-        }
-    }
+pub struct SidecarState {
+    process: Mutex<SidecarProcess>,
+    terminal_shutdown_armed: AtomicBool,
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    child_shutdown_signal: StdMutex<
+        Option<crate::diagnostics_collector::child_bridge::shutdown_signal::ChildShutdownSignal>,
+    >,
 }
 
-impl Drop for SidecarProcess {
-    fn drop(&mut self) {
-        if let Some(ref mut child) = self.child {
-            let _ = child.start_kill();
-        }
-    }
-}
-
-pub type SharedSidecar = Arc<Mutex<SidecarProcess>>;
+pub type SharedSidecar = Arc<SidecarState>;
 
 #[derive(Clone, Copy)]
 enum BootOutcome {
@@ -95,7 +92,15 @@ enum BootOutcome {
 }
 
 pub fn create_sidecar(port: u16) -> SharedSidecar {
-    Arc::new(Mutex::new(SidecarProcess::new(port)))
+    Arc::new(SidecarState {
+        process: Mutex::new(SidecarProcess::new(port)),
+        terminal_shutdown_armed: AtomicBool::new(false),
+        #[cfg(all(
+            target_os = "macos",
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ))]
+        child_shutdown_signal: StdMutex::new(None),
+    })
 }
 
 /// Returns None when ANYHARNESS_DEV_URL is set (caller should skip spawn).
@@ -301,8 +306,13 @@ pub(crate) fn resolve_shell_path() -> Option<String> {
     }
 }
 
+#[path = "sidecar/diagnostics.rs"]
+mod diagnostics;
 #[path = "sidecar/lifecycle.rs"]
 mod lifecycle;
+#[path = "sidecar/observer.rs"]
+pub(crate) mod observer;
+mod state;
 #[cfg(test)]
 #[path = "sidecar/tests.rs"]
 mod tests;
@@ -316,8 +326,7 @@ fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, Str
         ANYHARNESS_DEFER_STARTUP_RETENTION_ENV.to_string(),
         "1".to_string(),
     );
-    // Unconditional (unlike the hosted-only block above): every desktop
-    // install, self-hosted or not, needs this so the render plane can tell a
+    // Every desktop install needs this so the render plane can tell a
     // stale-server state file apart from a fresh one.
     runtime_env.insert(
         PROLIFERATE_API_BASE_URL_ORIGIN_ENV.to_string(),
@@ -341,9 +350,13 @@ fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, Str
     cmd
 }
 
-pub async fn boot(sidecar: &SharedSidecar, producer: &TauriDiagnosticsProducer) {
+pub async fn boot(
+    sidecar: &SharedSidecar,
+    producer: &TauriDiagnosticsProducer,
+    supervisor: &Arc<DiagnosticsCollectorSupervisor>,
+) {
     let operation = producer.begin_lifecycle("desktop.anyharness_process.start");
-    finish_boot_operation(operation, boot_inner(sidecar).await);
+    finish_boot_operation(operation, boot_inner(sidecar, supervisor).await);
 }
 
 fn finish_boot_operation(
@@ -372,24 +385,32 @@ pub async fn restart(
     sidecar: &SharedSidecar,
     launch_env: HashMap<String, String>,
     producer: &TauriDiagnosticsProducer,
+    supervisor: &Arc<DiagnosticsCollectorSupervisor>,
 ) -> Result<(), String> {
     let operation = producer.begin_lifecycle("desktop.anyharness_process.restart");
     {
         let mut guard = sidecar.lock().await;
-        if guard.terminal_shutdown_armed {
+        if sidecar.shutdown_is_armed() {
             operation.terminal(TerminalOutcomeV1::Rejected, Some("shutdown_armed"));
             return Err("AnyHarness restart rejected because shutdown is armed".to_string());
         }
-        if let Some(ref mut child) = guard.child {
-            match child.try_wait() {
-                Ok(Some(_)) => {}
+        let reap_deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        let reaped = if let Some(ref mut child) = guard.child {
+            Some(match child.try_wait() {
+                Ok(Some(status)) => (
+                    status,
+                    crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Natural,
+                ),
                 Ok(None) => {
                     if let Err(error) = child.start_kill() {
                         operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
                         return Err(format!("Failed to stop AnyHarness for restart: {error}"));
                     }
-                    match tokio::time::timeout(Duration::from_secs(2), child.wait()).await {
-                        Ok(Ok(_)) => {}
+                    match tokio::time::timeout_at(reap_deadline, child.wait()).await {
+                        Ok(Ok(status)) => (
+                            status,
+                            crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Forced,
+                        ),
                         Ok(Err(error)) => {
                             operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
                             return Err(format!("Failed to reap AnyHarness for restart: {error}"));
@@ -405,15 +426,29 @@ pub async fn restart(
                     operation.terminal(TerminalOutcomeV1::Failed, Some("child_inspection_failed"));
                     return Err(format!("Failed to inspect AnyHarness for restart: {error}"));
                 }
-            }
+            })
+        } else {
+            None
+        };
+        if let Some((status, kind)) = reaped {
+            guard
+                .finish_diagnostics_reap(status, kind, reap_deadline)
+                .await;
         }
+        observer::cancel_locked(&mut guard);
         guard.child = None;
+        guard.clear_diagnostics_bridge();
+        #[cfg(all(
+            target_os = "macos",
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ))]
+        sidecar.set_child_shutdown_signal(None);
         guard.info.status = RuntimeStatus::Stopped;
         guard.launch_env = launch_env;
         persist_sidecar_runtime_info(&guard, None);
     }
 
-    finish_boot_operation(operation, boot_inner(sidecar).await);
+    finish_boot_operation(operation, boot_inner(sidecar, supervisor).await);
     Ok(())
 }
 
@@ -422,23 +457,30 @@ pub async fn stop(
     producer: &TauriDiagnosticsProducer,
 ) -> Result<bool, String> {
     let operation = producer.begin_lifecycle("desktop.anyharness_process.stop");
+    sidecar.arm_terminal_shutdown();
     let mut guard = sidecar.lock().await;
-    guard.terminal_shutdown_armed = true;
     let Some(child) = guard.child.as_mut() else {
         guard.info.status = RuntimeStatus::Stopped;
         persist_sidecar_runtime_info(&guard, None);
         operation.terminal(TerminalOutcomeV1::Skipped, None);
         return Ok(false);
     };
-    match child.try_wait() {
-        Ok(Some(_)) => {}
+    let reap_deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    let (reaped, reap_kind) = match child.try_wait() {
+        Ok(Some(status)) => (
+            status,
+            crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Orderly,
+        ),
         Ok(None) => {
             if let Err(error) = child.start_kill() {
                 operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
                 return Err(format!("Failed to stop AnyHarness: {error}"));
             }
-            match tokio::time::timeout(Duration::from_secs(2), child.wait()).await {
-                Ok(Ok(_)) => {}
+            match tokio::time::timeout_at(reap_deadline, child.wait()).await {
+                Ok(Ok(status)) => (
+                    status,
+                    crate::diagnostics_collector::child_bridge::reap::ChildReapKind::Forced,
+                ),
                 Ok(Err(error)) => {
                     operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
                     return Err(format!("Failed to reap AnyHarness: {error}"));
@@ -453,16 +495,26 @@ pub async fn stop(
             operation.terminal(TerminalOutcomeV1::Failed, Some("child_inspection_failed"));
             return Err(format!("Failed to inspect AnyHarness shutdown: {error}"));
         }
-    }
+    };
+    guard
+        .finish_diagnostics_reap(reaped, reap_kind, reap_deadline)
+        .await;
+    observer::cancel_locked(&mut guard);
     guard.child = None;
+    guard.clear_diagnostics_bridge();
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    sidecar.set_child_shutdown_signal(None);
     guard.info.status = RuntimeStatus::Stopped;
     persist_sidecar_runtime_info(&guard, None);
     operation.terminal(TerminalOutcomeV1::Succeeded, None);
     Ok(true)
 }
 
-pub(crate) async fn arm_terminal_shutdown(sidecar: &SharedSidecar) {
-    sidecar.lock().await.terminal_shutdown_armed = true;
+pub(crate) fn arm_terminal_shutdown(sidecar: &SharedSidecar) {
+    sidecar.arm_terminal_shutdown();
 }
 
 #[cfg(test)]
