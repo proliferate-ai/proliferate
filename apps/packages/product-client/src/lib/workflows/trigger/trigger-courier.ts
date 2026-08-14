@@ -112,8 +112,8 @@ export async function runWorkflowTrigger(
     // whatever normalization the control plane applied, and the run must be
     // placed against exactly that. (The invocation response is flat, so the
     // ADR's invocation_json is reconstituted here field-for-field.) `id` is
-    // the frozen invocation's own id — without it the runtime falls back to
-    // stamping the run id into the run row's invocation_id.
+    // the frozen invocation's own id, required on the wire — it lands in
+    // the run row's invocation_id.
     projection = await deps.putRun(minted.runId, {
       id: invocation.id,
       schemaVersion: 2,

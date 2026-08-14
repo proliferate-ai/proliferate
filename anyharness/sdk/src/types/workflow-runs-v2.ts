@@ -130,12 +130,13 @@ export interface WorkflowRunProjectionV2 {
 
 /**
  * Body of PUT /v1/workflow-runs/{run_id}: the frozen invocation_json,
- * verbatim, plus the frozen invocation's own `id` — when present it lands on
- * the run row as `invocation_id`; when absent the runtime falls back to the
- * run id.
+ * verbatim, plus the frozen invocation's own `id`, which lands on the run
+ * row as `invocation_id`. Required on the wire — the PR5a review wave
+ * removed the fall-back-to-run-id lenience (workflow_runs.rs declares `id`
+ * with no serde default), and the regenerated schema agrees.
  */
 export interface WorkflowRunPutRequestV2 extends WorkflowInvocationJsonV2 {
-  id?: string;
+  id: string;
 }
 
 export interface WorkflowRunFailRedoRequestV2 {
