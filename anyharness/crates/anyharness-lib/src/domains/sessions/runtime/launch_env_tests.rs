@@ -101,6 +101,43 @@ fn build_session_launch_env_sets_requested_model_for_real_claude_model_id() {
     assert_eq!(env.get("ANTHROPIC_MODEL").map(String::as_str), Some("haiku"));
 }
 
+/// The sentinel filter is an exact (case-insensitive) match, not a
+/// contains-match. A real model id that merely happens to contain the word
+/// "default" is a legitimate model name and must still be forwarded — this
+/// guards against the filter ever widening to `.contains(..)`.
+#[test]
+fn build_session_launch_env_forwards_model_id_that_merely_contains_the_sentinel_word() {
+    let env = build_session_launch_env(
+        &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
+        Some("default-ish-model"),
+    )
+    .expect("build env");
+
+    assert_eq!(
+        env.get("ANTHROPIC_MODEL").map(String::as_str),
+        Some("default-ish-model")
+    );
+}
+
+/// The sentinel filter only ever skips inserting `ANTHROPIC_MODEL`; it must
+/// not disturb any other env this layer contributes (e.g.
+/// `CLAUDE_CODE_EXECUTABLE`).
+#[test]
+fn build_session_launch_env_keeps_other_env_when_sentinel_is_filtered() {
+    let env = build_session_launch_env(
+        &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
+        Some("default"),
+    )
+    .expect("build env");
+
+    assert_eq!(
+        env.get("CLAUDE_CODE_EXECUTABLE").map(String::as_str),
+        Some("/tmp/managed/claude")
+    );
+    assert!(!env.contains_key("ANTHROPIC_MODEL"));
+    assert_eq!(env.len(), 1, "no stray keys expected, got {env:?}");
+}
+
 #[test]
 fn build_session_launch_env_ignores_claude_without_native_path() {
     let env = build_session_launch_env(&resolved_agent(AgentKind::Claude, None), None)

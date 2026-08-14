@@ -61,7 +61,7 @@ fn build_claude_session_launch_env(
     if let Some(model_id) = requested_model_id
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .filter(|value| *value != CATALOG_DEFAULT_MODEL_SENTINEL)
+        .filter(|value| !value.eq_ignore_ascii_case(CATALOG_DEFAULT_MODEL_SENTINEL))
     {
         env.insert("ANTHROPIC_MODEL".to_string(), model_id.to_string());
     }
