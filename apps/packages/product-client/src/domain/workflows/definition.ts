@@ -1,6 +1,6 @@
 import type {
   WorkflowDefinitionCreateRequest,
-  WorkflowDefinitionResponse,
+  WorkflowDefinitionAnyResponse,
   WorkflowDefinitionUpdateRequest,
 } from "@proliferate/cloud-sdk";
 
@@ -136,8 +136,12 @@ export function createWorkflowDefinitionDraft(
 }
 
 export function workflowDefinitionFromResponse(
-  response: WorkflowDefinitionResponse,
-): WorkflowDefinition {
+  response: WorkflowDefinitionAnyResponse,
+): WorkflowDefinition | null {
+  if (response.schemaVersion !== 1) {
+    // A gen-2 row has no stages to map; its UI arrives with the v2 surfaces.
+    return null;
+  }
   return {
     id: response.id,
     userId: response.userId,

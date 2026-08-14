@@ -7320,10 +7320,7 @@ export interface components {
         };
         /** WorkflowInvocationPlacementV2 */
         WorkflowInvocationPlacementV2: {
-            /**
-             * Repoconfigid
-             * Format: uuid
-             */
+            /** Repoconfigid */
             repoConfigId: string;
             /**
              * Mode
