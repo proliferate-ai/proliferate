@@ -35,6 +35,7 @@ import {
 } from "#product/hooks/ui/diff/diff-gap-flatten";
 import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
 import type { ContentSearchSurface } from "#product/stores/search/content-search-store";
+import { useChatTranscriptRow } from "#product/components/workspace/chat/transcript/ChatContentSearchContext";
 import { useDiffContentSearchUnit } from "#product/hooks/ui/diff/use-diff-content-search-unit";
 
 const CHAT_DIFF_PRE_STYLE = {
@@ -380,10 +381,17 @@ export function ChatDiffViewer({
     () => flattenWithGapExpansion(baseRows, gapStates, fileLines),
     [baseRows, gapStates, fileLines],
   );
+  // Interleave inline diff matches with the surrounding transcript-row prose
+  // matches: a diff sits just after its row's prose (rowIndex * 2 + 1). Outside
+  // a transcript row (no context) the unit stays unkeyed and sorts last, unless
+  // the caller supplies its own order key (e.g. a review-pane row index).
+  const transcriptRow = useChatTranscriptRow();
+  const contentSearchOrderKey = contentSearchOrderKeyProp
+    ?? (transcriptRow ? transcriptRow.rowIndex * 2 + 1 : undefined);
   const { contentSearchUnitId, contentSearchQuery, activeMatchId } = useDiffContentSearchUnit({
     surface: contentSearchSurface,
     unitId: contentSearchUnitIdProp,
-    orderKey: contentSearchOrderKeyProp,
+    orderKey: contentSearchOrderKey,
     filePath,
     allCodeLines: parsed.allCodeLines,
     tokens,
