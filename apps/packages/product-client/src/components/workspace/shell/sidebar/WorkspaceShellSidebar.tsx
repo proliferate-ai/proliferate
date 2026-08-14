@@ -7,6 +7,7 @@ import { useWorkspaceSidebarPeek } from "#product/hooks/workspaces/ui/use-worksp
 interface WorkspaceShellSidebarProps {
   open: boolean;
   width: number;
+  glassBackground?: boolean;
   showAnimatedDivider?: boolean;
   snapGeometry?: boolean;
   onToggleSidebar: (options?: { snapGeometry?: boolean }) => void;
@@ -15,6 +16,7 @@ interface WorkspaceShellSidebarProps {
 export function WorkspaceShellSidebar({
   open,
   width,
+  glassBackground = false,
   showAnimatedDivider = false,
   snapGeometry = false,
   onToggleSidebar,
@@ -42,6 +44,13 @@ export function WorkspaceShellSidebar({
       </div>
     </DebugProfiler>
   );
+
+  // Glass only while docked: the collapsed-hover peek floats the same panel
+  // over the content pane, where a translucent fill would bleed chat content
+  // through instead of window vibrancy.
+  const panelBackgroundClass = glassBackground && (open || toggleClosing)
+    ? "bg-sidebar/70"
+    : "bg-sidebar";
 
   const panelStateClass = open
     ? `pointer-events-auto translate-x-0 opacity-100 ${
@@ -86,7 +95,7 @@ export function WorkspaceShellSidebar({
       >
         <div
           id="main-sidebar"
-          className={`absolute inset-y-0 left-0 flex flex-col overflow-hidden bg-sidebar will-change-[opacity,translate] ${panelStateClass}`}
+          className={`absolute inset-y-0 left-0 flex flex-col overflow-hidden ${panelBackgroundClass} will-change-[opacity,translate] ${panelStateClass}`}
           style={{ width }}
           inert={!open && !peekVisible}
           data-sidebar-peek={peekState}

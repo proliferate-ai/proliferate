@@ -245,6 +245,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               <WorkspaceShellSidebar
                 open={sidebarOpen}
                 width={sidebarWidth}
+                // Vibrancy only exists behind the window on macOS Desktop
+                // (apply_vibrancy in src-tauri/src/lib.rs); elsewhere a
+                // translucent sidebar would expose the bare window fill.
+                glassBackground={transparentChromeEnabled && hasMacWindowControls}
                 showAnimatedDivider={transparentChromeEnabled}
                 snapGeometry={workspaceGeometry.snapLeft}
                 onToggleSidebar={workspaceGeometry.toggleLeft}

@@ -357,3 +357,59 @@ describe("WorkspaceShellSidebar hover peek", () => {
     expect(peekState(panel)).toBe("closed");
   });
 });
+
+describe("WorkspaceShellSidebar glass background", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  function renderGlassSidebar(open: boolean) {
+    render(
+      <WorkspaceShellSidebar
+        open={open}
+        width={280}
+        glassBackground
+        onToggleSidebar={() => {}}
+      />,
+    );
+    const panel = document.getElementById("main-sidebar");
+    if (!panel) {
+      throw new Error("sidebar panel did not render");
+    }
+    return panel;
+  }
+
+  it("paints the docked panel translucent", () => {
+    const panel = renderGlassSidebar(true);
+    expect(panel.classList.contains("bg-sidebar/70")).toBe(true);
+    expect(panel.classList.contains("bg-sidebar")).toBe(false);
+  });
+
+  /**
+   * The collapsed-hover peek floats the same panel over the content pane,
+   * where a translucent fill would bleed chat content through instead of
+   * window vibrancy — the peek must stay opaque even in glass mode.
+   */
+  it("keeps the peek overlay opaque", () => {
+    const panel = renderGlassSidebar(false);
+    const trigger = document.querySelector("[data-sidebar-peek-trigger]");
+    if (!trigger) {
+      throw new Error("peek trigger did not render");
+    }
+
+    fireEvent.mouseEnter(trigger);
+
+    expect(peekState(panel)).toBe("open");
+    expect(panel.classList.contains("bg-sidebar")).toBe(true);
+    expect(panel.classList.contains("bg-sidebar/70")).toBe(false);
+  });
+
+  it("stays opaque when glass is not requested", () => {
+    render(
+      <WorkspaceShellSidebar open width={280} onToggleSidebar={() => {}} />,
+    );
+    const panel = document.getElementById("main-sidebar");
+    expect(panel?.classList.contains("bg-sidebar")).toBe(true);
+    expect(panel?.classList.contains("bg-sidebar/70")).toBe(false);
+  });
+});
