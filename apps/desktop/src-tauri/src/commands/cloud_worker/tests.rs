@@ -11,7 +11,7 @@ use tokio::time::{sleep, timeout, Instant};
 
 use super::lifecycle::{
     lock_for_worker_start, prepare_desktop_dispatch_worker_update,
-    prepare_existing_worker_for_ensure,
+    prepare_existing_worker_for_ensure, WorkerStartFailure, WorkerStartFailureKind,
 };
 use super::{
     acquire_worker_database_lock, read_worker_log_tail, startup_watch_window,
@@ -21,6 +21,36 @@ use super::{
 };
 
 const TEST_WORKER_LOCK_PATH_ENV: &str = "PROLIFERATE_TEST_WORKER_LOCK_PATH";
+
+#[test]
+fn worker_start_errors_preserve_the_frozen_bounded_classification() {
+    for (message, kind, classification) in [
+        (
+            "Proliferate Worker binary was not found.",
+            WorkerStartFailureKind::BinaryMissing,
+            "binary_missing",
+        ),
+        (
+            "Proliferate Worker exited during startup with status 1.",
+            WorkerStartFailureKind::EarlyExit,
+            "child_exited",
+        ),
+        (
+            "Failed to inspect Proliferate Worker startup: injected",
+            WorkerStartFailureKind::InspectionFailed,
+            "child_inspection_failed",
+        ),
+        (
+            "Failed to start Proliferate Worker with fixture: injected",
+            WorkerStartFailureKind::SpawnFailed,
+            "spawn_failed",
+        ),
+    ] {
+        let failure = WorkerStartFailure::from(message.to_string());
+        assert_eq!(failure.kind, kind);
+        assert_eq!(failure.kind.classification(), classification);
+    }
+}
 
 #[test]
 fn worker_config_uses_the_desktop_sidecar_url() {

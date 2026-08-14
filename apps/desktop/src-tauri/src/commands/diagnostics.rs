@@ -1,7 +1,12 @@
 use rfd::FileDialog;
 use serde::Deserialize;
+use serde_json::{Map, Value};
 use std::path::PathBuf;
+use std::sync::Arc;
 use tauri::State;
+
+use proliferate_diagnostics_protocol::v1::types::{IngestBatchV1, IngestReceiptV1};
+use proliferate_diagnostics_protocol::v1::validation::parse_ingest_batch_value;
 
 use crate::{
     diagnostics::{
@@ -10,9 +15,169 @@ use crate::{
         ExportDebugBundleOptions, ExportDebugBundleResult, SaveDiagnosticJsonOptions,
         SaveDiagnosticJsonResult, SupportDiagnosticsBundle,
     },
+    diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor,
     sidecar::{RuntimeStatus, SharedSidecar},
     telemetry_file_logging::{RendererDiagnosticLog, RENDERER_DIAGNOSTIC_TARGET},
 };
+
+#[tauri::command]
+pub async fn ingest_renderer_diagnostics(
+    window: tauri::WebviewWindow,
+    supervisor: State<'_, Arc<DiagnosticsCollectorSupervisor>>,
+    batch: serde_json::Value,
+) -> Result<IngestReceiptV1, String> {
+    require_main_window(window.label())?;
+    let batch = parse_renderer_ingest_value(batch)?;
+    supervisor
+        .ingest_renderer(batch)
+        .await
+        .map_err(|error| format!("renderer_ingest_{}", error.classification()))
+}
+
+fn parse_renderer_ingest_value(value: Value) -> Result<IngestBatchV1, String> {
+    let batch = parse_ingest_batch_value(&value)
+        .map_err(|_| "renderer_ingest_invalid_batch".to_string())?;
+    validate_renderer_ingest_shape(&value)
+        .map_err(|_| "renderer_ingest_invalid_batch".to_string())?;
+    Ok(batch)
+}
+
+fn validate_renderer_ingest_shape(value: &Value) -> Result<(), ()> {
+    let batch = closed_object(value, &["schema_version", "records"])?;
+    if let Some(schema) = batch.get("schema_version") {
+        validate_schema_shape(schema)?;
+    }
+    if let Some(records) = batch.get("records") {
+        for record in records.as_array().ok_or(())? {
+            validate_renderer_record_shape(record)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_schema_shape(value: &Value) -> Result<(), ()> {
+    closed_object(value, &["major", "minor"]).map(|_| ())
+}
+
+fn validate_renderer_record_shape(value: &Value) -> Result<(), ()> {
+    let record = closed_object(
+        value,
+        &[
+            "schema_version",
+            "source_timestamp",
+            "producer_sequence",
+            "producer_boot_id",
+            "component",
+            "source",
+            "release",
+            "environment",
+            "operation_id",
+            "parent_operation_id",
+            "trace_id",
+            "workspace_id",
+            "session_id",
+            "turn_id",
+            "item_id",
+            "request_id",
+            "target_id",
+            "prompt_id",
+            "workflow_id",
+            "name",
+            "severity",
+            "arguments",
+            "error_classification",
+            "record_class",
+            "privacy",
+            "redaction",
+            "detailed",
+            "lifecycle",
+        ],
+    )?;
+    if let Some(schema) = record.get("schema_version") {
+        validate_schema_shape(schema)?;
+    }
+    if let Some(arguments) = record.get("arguments") {
+        for argument in arguments.as_array().ok_or(())? {
+            let argument = closed_object(argument, &["name", "privacy", "value"])?;
+            if let Some(value) = argument.get("value") {
+                validate_argument_value_shape(value)?;
+            }
+        }
+    }
+    if let Some(detailed) = record.get("detailed").filter(|value| !value.is_null()) {
+        closed_object(
+            detailed,
+            &["kind", "message", "stream", "dropped_count", "milestone"],
+        )?;
+    }
+    if let Some(lifecycle) = record.get("lifecycle").filter(|value| !value.is_null()) {
+        let lifecycle = closed_object(
+            lifecycle,
+            &["phase", "outcome", "finalizer", "model", "plugin"],
+        )?;
+        if let Some(model) = lifecycle.get("model").filter(|value| !value.is_null()) {
+            closed_object(
+                model,
+                &[
+                    "model_id",
+                    "provider_kind",
+                    "phase",
+                    "input_tokens",
+                    "output_tokens",
+                    "duration_ms",
+                ],
+            )?;
+        }
+        if let Some(plugin) = lifecycle.get("plugin").filter(|value| !value.is_null()) {
+            closed_object(plugin, &["plugin_id", "kind", "phase", "duration_ms"])?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_argument_value_shape(value: &Value) -> Result<(), ()> {
+    let argument_value = closed_object(value, &["type", "value"])?;
+    match argument_value.get("type").and_then(Value::as_str) {
+        Some("list") => {
+            for nested in argument_value
+                .get("value")
+                .and_then(Value::as_array)
+                .ok_or(())?
+            {
+                validate_argument_value_shape(nested)?;
+            }
+        }
+        Some("object") => {
+            for nested in argument_value
+                .get("value")
+                .and_then(Value::as_object)
+                .ok_or(())?
+                .values()
+            {
+                validate_argument_value_shape(nested)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn closed_object<'a>(value: &'a Value, allowed: &[&str]) -> Result<&'a Map<String, Value>, ()> {
+    let object = value.as_object().ok_or(())?;
+    if object
+        .keys()
+        .any(|field| !allowed.contains(&field.as_str()))
+    {
+        return Err(());
+    }
+    Ok(object)
+}
+
+fn require_main_window(label: &str) -> Result<(), String> {
+    (label == "main")
+        .then_some(())
+        .ok_or_else(|| "renderer_ingest_wrong_window".to_string())
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -226,6 +391,60 @@ mod tests {
             component_stack: Some("at WorkspacePane".to_string()),
             route: Some("/workspaces/example".to_string()),
         }
+    }
+
+    #[test]
+    fn renderer_ingest_is_main_window_only_with_a_stable_error() {
+        assert!(require_main_window("main").is_ok());
+        assert_eq!(
+            require_main_window("secondary"),
+            Err("renderer_ingest_wrong_window".to_string())
+        );
+    }
+
+    #[test]
+    fn renderer_ingest_rejects_unknown_fields_at_the_raw_value_boundary() {
+        let value = serde_json::json!({
+            "schema_version": {"major": 1, "minor": 1},
+            "records": [{
+                "schema_version": {"major": 1, "minor": 1},
+                "source_timestamp": "2026-08-11T00:00:00Z",
+                "producer_sequence": 1,
+                "producer_boot_id": "renderer-boot",
+                "component": "desktop_renderer",
+                "source": "renderer",
+                "release": "test",
+                "environment": "test",
+                "operation_id": "renderer-operation",
+                "name": "desktop.renderer.detail",
+                "severity": "info",
+                "arguments": [],
+                "record_class": "detailed",
+                "privacy": "customer_content",
+                "redaction": "structural",
+                "detailed": {"kind": "log", "message": "safe"}
+            }]
+        });
+        assert!(parse_renderer_ingest_value(value.clone()).is_ok());
+        let mut top_level = value.clone();
+        top_level.as_object_mut().expect("batch object").insert(
+            "endpoint".to_string(),
+            serde_json::json!("http://127.0.0.1:1"),
+        );
+        assert_eq!(
+            parse_renderer_ingest_value(top_level),
+            Err("renderer_ingest_invalid_batch".to_string())
+        );
+
+        let mut nested = value;
+        nested["records"][0]["detailed"]
+            .as_object_mut()
+            .expect("detailed object")
+            .insert("token".to_string(), serde_json::json!("secret"));
+        assert_eq!(
+            parse_renderer_ingest_value(nested),
+            Err("renderer_ingest_invalid_batch".to_string())
+        );
     }
 
     #[test]

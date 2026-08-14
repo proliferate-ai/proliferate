@@ -5,11 +5,14 @@ use std::time::Duration;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
+use proliferate_diagnostics_protocol::v1::types::TerminalOutcomeV1;
+
 use crate::agent_seed_env::current_target_triple;
 use crate::app_config::{write_runtime_info_record, RuntimeInfoRecord};
 use crate::desktop_telemetry_mode::{
     current_api_origin, resolve_desktop_telemetry_mode, DesktopTelemetryMode,
 };
+use crate::diagnostics_collector::producer::TauriDiagnosticsProducer;
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -49,6 +52,9 @@ pub struct SidecarProcess {
     child: Option<Child>,
     pub info: RuntimeInfo,
     pub launch_env: HashMap<String, String>,
+    terminal_shutdown_armed: bool,
+    #[cfg(test)]
+    suppress_runtime_info_persistence: bool,
 }
 
 impl SidecarProcess {
@@ -61,6 +67,9 @@ impl SidecarProcess {
                 status: RuntimeStatus::Stopped,
             },
             launch_env: HashMap::new(),
+            terminal_shutdown_armed: false,
+            #[cfg(test)]
+            suppress_runtime_info_persistence: false,
         }
     }
 }
@@ -74,6 +83,16 @@ impl Drop for SidecarProcess {
 }
 
 pub type SharedSidecar = Arc<Mutex<SidecarProcess>>;
+
+#[derive(Clone, Copy)]
+enum BootOutcome {
+    External,
+    Succeeded,
+    Failed(&'static str),
+    TimedOut,
+    Rejected,
+    Cancelled,
+}
 
 pub fn create_sidecar(port: u16) -> SharedSidecar {
     Arc::new(Mutex::new(SidecarProcess::new(port)))
@@ -282,64 +301,13 @@ pub(crate) fn resolve_shell_path() -> Option<String> {
     }
 }
 
+#[path = "sidecar/lifecycle.rs"]
+mod lifecycle;
 #[cfg(test)]
-mod tests {
-    use super::*;
+#[path = "sidecar/tests.rs"]
+mod tests;
 
-    fn hosted_env_lookup(key: &str) -> Option<String> {
-        match key {
-            "ANYHARNESS_SENTRY_DSN" => Some("https://example.invalid/1".to_string()),
-            "ANYHARNESS_SENTRY_ENVIRONMENT" => Some("production".to_string()),
-            "ANYHARNESS_SENTRY_RELEASE" => Some("anyharness@1.2.3".to_string()),
-            "ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE" => Some("0.5".to_string()),
-            _ => None,
-        }
-    }
-
-    #[test]
-    fn sidecar_launch_env_is_empty_outside_hosted_product() {
-        assert!(default_anyharness_launch_env_for_mode(
-            DesktopTelemetryMode::Disabled,
-            hosted_env_lookup
-        )
-        .is_empty());
-        assert!(default_anyharness_launch_env_for_mode(
-            DesktopTelemetryMode::LocalDev,
-            hosted_env_lookup
-        )
-        .is_empty());
-        assert!(default_anyharness_launch_env_for_mode(
-            DesktopTelemetryMode::SelfManaged,
-            hosted_env_lookup,
-        )
-        .is_empty());
-    }
-
-    #[test]
-    fn sidecar_launch_env_includes_sentry_values_in_hosted_product() {
-        let env = default_anyharness_launch_env_for_mode(
-            DesktopTelemetryMode::HostedProduct,
-            hosted_env_lookup,
-        );
-
-        assert_eq!(
-            env.get("ANYHARNESS_SENTRY_DSN"),
-            Some(&"https://example.invalid/1".to_string())
-        );
-        assert_eq!(
-            env.get("ANYHARNESS_SENTRY_ENVIRONMENT"),
-            Some(&"production".to_string())
-        );
-        assert_eq!(
-            env.get("ANYHARNESS_SENTRY_RELEASE"),
-            Some(&"anyharness@1.2.3".to_string())
-        );
-        assert_eq!(
-            env.get("ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE"),
-            Some(&"0.5".to_string())
-        );
-    }
-}
+use lifecycle::{boot_inner, wait_healthy};
 
 fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, String>) -> Command {
     let mut cmd = Command::new(binary);
@@ -373,162 +341,141 @@ fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, Str
     cmd
 }
 
-pub async fn boot(sidecar: &SharedSidecar) {
-    // Dev-URL mode: point at an externally running AnyHarness, skip spawn.
-    if let Ok(dev_url) = std::env::var("ANYHARNESS_DEV_URL") {
-        tracing::info!(
-            runtime_url = %dev_url,
-            "ANYHARNESS_DEV_URL set, using external runtime"
-        );
-        {
-            let mut guard = sidecar.lock().await;
-            guard.info.port = runtime_url_port(&dev_url).unwrap_or(guard.info.port);
-            guard.info.url = dev_url;
-            guard.info.status = RuntimeStatus::Starting;
-            persist_runtime_info(&guard.info, None);
+pub async fn boot(sidecar: &SharedSidecar, producer: &TauriDiagnosticsProducer) {
+    let operation = producer.begin_lifecycle("desktop.anyharness_process.start");
+    finish_boot_operation(operation, boot_inner(sidecar).await);
+}
+
+fn finish_boot_operation(
+    operation: crate::diagnostics_collector::producer::lifecycle::LifecycleOperation,
+    outcome: BootOutcome,
+) {
+    match outcome {
+        BootOutcome::External => operation.terminal(TerminalOutcomeV1::Skipped, None),
+        BootOutcome::Succeeded => operation.terminal(TerminalOutcomeV1::Succeeded, None),
+        BootOutcome::Failed(classification) => {
+            operation.terminal(TerminalOutcomeV1::Failed, Some(classification));
         }
-        wait_healthy(sidecar, false).await;
-        return;
-    }
-
-    let (port, launch_env) = {
-        let guard = sidecar.lock().await;
-        (guard.info.port, guard.launch_env.clone())
-    };
-
-    let binary = match find_anyharness_binary() {
-        Some(b) => b,
-        None => {
-            tracing::error!("No AnyHarness binary found and no dev URL set");
-            let mut guard = sidecar.lock().await;
-            guard.info.status = RuntimeStatus::Failed;
-            persist_runtime_info(&guard.info, None);
-            return;
+        BootOutcome::TimedOut => {
+            operation.terminal(TerminalOutcomeV1::TimedOut, Some("readiness_timeout"));
         }
-    };
-
-    {
-        let mut guard = sidecar.lock().await;
-        guard.info.status = RuntimeStatus::Starting;
-        persist_runtime_info(&guard.info, None);
-    }
-
-    tracing::info!(
-        binary = %binary,
-        port,
-        "Launching AnyHarness sidecar"
-    );
-
-    let child_result = build_spawn_command(&binary, port, &launch_env).spawn();
-
-    match child_result {
-        Ok(child) => {
-            tracing::info!("AnyHarness sidecar spawned; waiting for health");
-            {
-                let mut guard = sidecar.lock().await;
-                guard.child = Some(child);
-                guard.info.status = RuntimeStatus::Starting;
-                persist_runtime_info(&guard.info, None);
-            }
-            wait_healthy(sidecar, true).await;
+        BootOutcome::Rejected => {
+            operation.terminal(TerminalOutcomeV1::Rejected, Some("shutdown_armed"));
         }
-        Err(e) => {
-            tracing::error!(
-                binary = %binary,
-                error = %e,
-                "Failed to spawn AnyHarness sidecar"
-            );
-            let mut guard = sidecar.lock().await;
-            guard.info.status = RuntimeStatus::Failed;
-            persist_runtime_info(&guard.info, None);
+        BootOutcome::Cancelled => {
+            operation.terminal(TerminalOutcomeV1::Cancelled, Some("shutdown_armed"));
         }
     }
 }
 
-pub async fn restart(sidecar: &SharedSidecar, launch_env: HashMap<String, String>) {
+pub async fn restart(
+    sidecar: &SharedSidecar,
+    launch_env: HashMap<String, String>,
+    producer: &TauriDiagnosticsProducer,
+) -> Result<(), String> {
+    let operation = producer.begin_lifecycle("desktop.anyharness_process.restart");
     {
         let mut guard = sidecar.lock().await;
+        if guard.terminal_shutdown_armed {
+            operation.terminal(TerminalOutcomeV1::Rejected, Some("shutdown_armed"));
+            return Err("AnyHarness restart rejected because shutdown is armed".to_string());
+        }
         if let Some(ref mut child) = guard.child {
-            let _ = child.start_kill();
-            let _ = child.wait().await;
+            match child.try_wait() {
+                Ok(Some(_)) => {}
+                Ok(None) => {
+                    if let Err(error) = child.start_kill() {
+                        operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
+                        return Err(format!("Failed to stop AnyHarness for restart: {error}"));
+                    }
+                    match tokio::time::timeout(Duration::from_secs(2), child.wait()).await {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(error)) => {
+                            operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
+                            return Err(format!("Failed to reap AnyHarness for restart: {error}"));
+                        }
+                        Err(_) => {
+                            operation
+                                .terminal(TerminalOutcomeV1::TimedOut, Some("shutdown_timeout"));
+                            return Err("Timed out stopping AnyHarness for restart".to_string());
+                        }
+                    }
+                }
+                Err(error) => {
+                    operation.terminal(TerminalOutcomeV1::Failed, Some("child_inspection_failed"));
+                    return Err(format!("Failed to inspect AnyHarness for restart: {error}"));
+                }
+            }
         }
         guard.child = None;
         guard.info.status = RuntimeStatus::Stopped;
         guard.launch_env = launch_env;
-        persist_runtime_info(&guard.info, None);
+        persist_sidecar_runtime_info(&guard, None);
     }
 
-    boot(sidecar).await;
+    finish_boot_operation(operation, boot_inner(sidecar).await);
+    Ok(())
 }
 
-async fn wait_healthy(sidecar: &SharedSidecar, require_child: bool) {
-    let start = std::time::Instant::now();
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(2))
-        .build()
-        .unwrap_or_default();
-
-    loop {
-        let url = {
-            let mut guard = sidecar.lock().await;
-            if require_child {
-                let Some(child) = guard.child.as_mut() else {
-                    guard.info.status = RuntimeStatus::Stopped;
-                    persist_runtime_info(&guard.info, None);
-                    tracing::error!("AnyHarness sidecar handle missing during startup");
-                    return;
-                };
-                match child.try_wait() {
-                    Ok(Some(status)) => {
-                        guard.info.status = RuntimeStatus::Failed;
-                        persist_runtime_info(&guard.info, None);
-                        tracing::error!(
-                            exit_status = %status,
-                            "AnyHarness sidecar exited before becoming healthy"
-                        );
-                        return;
-                    }
-                    Ok(None) => {}
-                    Err(error) => {
-                        guard.info.status = RuntimeStatus::Failed;
-                        persist_runtime_info(&guard.info, None);
-                        tracing::error!(
-                            error = %error,
-                            "Failed to inspect AnyHarness sidecar process state"
-                        );
-                        return;
-                    }
+pub async fn stop(
+    sidecar: &SharedSidecar,
+    producer: &TauriDiagnosticsProducer,
+) -> Result<bool, String> {
+    let operation = producer.begin_lifecycle("desktop.anyharness_process.stop");
+    let mut guard = sidecar.lock().await;
+    guard.terminal_shutdown_armed = true;
+    let Some(child) = guard.child.as_mut() else {
+        guard.info.status = RuntimeStatus::Stopped;
+        persist_sidecar_runtime_info(&guard, None);
+        operation.terminal(TerminalOutcomeV1::Skipped, None);
+        return Ok(false);
+    };
+    match child.try_wait() {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            if let Err(error) = child.start_kill() {
+                operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
+                return Err(format!("Failed to stop AnyHarness: {error}"));
+            }
+            match tokio::time::timeout(Duration::from_secs(2), child.wait()).await {
+                Ok(Ok(_)) => {}
+                Ok(Err(error)) => {
+                    operation.terminal(TerminalOutcomeV1::Failed, Some("shutdown_failed"));
+                    return Err(format!("Failed to reap AnyHarness: {error}"));
+                }
+                Err(_) => {
+                    operation.terminal(TerminalOutcomeV1::TimedOut, Some("shutdown_timeout"));
+                    return Err("Timed out stopping AnyHarness".to_string());
                 }
             }
-
-            runtime_health_url(&guard.info.url)
-        };
-
-        if start.elapsed() > HEALTH_POLL_TIMEOUT {
-            let mut guard = sidecar.lock().await;
-            guard.info.status = RuntimeStatus::Failed;
-            persist_runtime_info(&guard.info, None);
-            tracing::error!(
-                timeout_ms = HEALTH_POLL_TIMEOUT.as_millis(),
-                "AnyHarness runtime failed to become healthy in time"
-            );
-            return;
         }
-
-        match client.get(&url).send().await {
-            Ok(resp) if resp.status().is_success() => {
-                let health = resp.json::<RuntimeHealthRecord>().await.ok();
-                tracing::info!(health_url = %url, "AnyHarness runtime is healthy");
-                let mut guard = sidecar.lock().await;
-                guard.info.status = RuntimeStatus::Healthy;
-                persist_runtime_info(&guard.info, health.as_ref());
-                return;
-            }
-            _ => {}
+        Err(error) => {
+            operation.terminal(TerminalOutcomeV1::Failed, Some("child_inspection_failed"));
+            return Err(format!("Failed to inspect AnyHarness shutdown: {error}"));
         }
-
-        tokio::time::sleep(HEALTH_POLL_INTERVAL).await;
     }
+    guard.child = None;
+    guard.info.status = RuntimeStatus::Stopped;
+    persist_sidecar_runtime_info(&guard, None);
+    operation.terminal(TerminalOutcomeV1::Succeeded, None);
+    Ok(true)
+}
+
+pub(crate) async fn arm_terminal_shutdown(sidecar: &SharedSidecar) {
+    sidecar.lock().await.terminal_shutdown_armed = true;
+}
+
+#[cfg(test)]
+pub(crate) async fn install_shutdown_test_child(sidecar: &SharedSidecar, child: Child) {
+    let mut guard = sidecar.lock().await;
+    guard.child = Some(child);
+    guard.info.status = RuntimeStatus::Healthy;
+    guard.suppress_runtime_info_persistence = true;
+}
+
+#[cfg(test)]
+pub(crate) async fn suppress_shutdown_test_persistence(sidecar: &SharedSidecar) {
+    sidecar.lock().await.suppress_runtime_info_persistence = true;
 }
 
 fn runtime_health_url(runtime_url: &str) -> String {
@@ -567,4 +514,12 @@ fn persist_runtime_info(info: &RuntimeInfo, health: Option<&RuntimeHealthRecord>
     if let Err(error) = write_runtime_info_record(&record) {
         tracing::warn!(error = %error, "Failed to persist runtime info");
     }
+}
+
+fn persist_sidecar_runtime_info(process: &SidecarProcess, health: Option<&RuntimeHealthRecord>) {
+    #[cfg(test)]
+    if process.suppress_runtime_info_persistence {
+        return;
+    }
+    persist_runtime_info(&process.info, health);
 }

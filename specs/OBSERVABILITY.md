@@ -44,7 +44,12 @@ standalone `proliferate-diagnostics-collector` consumes it over authenticated
 loopback and owns only bounded local ingest, query, tail, export, health, and
 collector-owned lifecycle evidence; its concrete process and transport seam is
 documented in the [collector README](../anyharness/crates/proliferate-diagnostics-collector/README.md).
-Existing local sinks, server log routing, Sentry, PostHog, and anonymous
+Desktop Tauri owns the packaged collector process, authenticated readiness and
+restart policy, a same-user native query broker, and a bounded
+`desktop-native.log` bootstrap/outage fallback. Tauri detail uses the collector
+as its primary local path only while ready. Renderer, AnyHarness, Worker, and
+support migrations are not part of that ownership change; their current local
+sinks remain in place. Server log routing, Sentry, PostHog, and anonymous
 telemetry are unchanged. The approved boundary and slice registry live in
 [`../adrs/2026-08-10-rust-observability.md`](../adrs/2026-08-10-rust-observability.md).
 

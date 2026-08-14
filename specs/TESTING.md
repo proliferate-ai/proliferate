@@ -61,6 +61,18 @@ integration absent. Run `cargo test -p proliferate-diagnostics-collector` for
 the deterministic contract/process suite. The release-only RSS profile runner
 is a separate bounded proof and writes its JSON/CSV evidence outside the repo.
 
+Desktop collector ownership is also Tier 1 at the native seam. Colocated tests
+pin target packaging, protected descriptor/capability handling, authenticated
+startup and replacement generations, bounded restart policy, renderer ingest
+ownership, broker framing/credentials/discovery/caps, query encoding, artifact
+gating, fallback limits, lifecycle pairing, and ordered verified reaping. The
+packaged macOS qualification must contain exactly AnyHarness, Worker,
+`proliferate-debug`, and the non-placeholder collector, then reach
+authenticated health through the broker. RV-2-04's records-minor/tail-1.1
+asymmetry, RV-2-05's malformed-control child-exit behavior, and RV-2-06's
+64-operation moving window remain explicit qualification evidence rather than
+claims that this Desktop slice changed collector internals.
+
 Engine tests that need a step executor use a scripted fake implementing
 `WorkflowStepExecutor` (and equivalent seams elsewhere) — never a real agent.
 
