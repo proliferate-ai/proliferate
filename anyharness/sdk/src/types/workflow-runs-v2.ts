@@ -14,8 +14,8 @@ export type WorkflowNodeTypeV2 = "agent" | "human_in_loop";
 
 export interface WorkflowNodeModelV2 {
   agentKind: string;
-  modelId?: string;
-  modeId?: string;
+  modelId?: string | null;
+  modeId?: string | null;
 }
 
 export interface WorkflowSnapshotNodeV2 {
@@ -23,15 +23,15 @@ export interface WorkflowSnapshotNodeV2 {
   type: WorkflowNodeTypeV2;
   title: string;
   prompt: string;
-  model?: WorkflowNodeModelV2;
+  model?: WorkflowNodeModelV2 | null;
 }
 
 export interface WorkflowSnapshotDefinitionV2 {
   schemaVersion: 2;
   nodes: WorkflowSnapshotNodeV2[];
-  edges: { from: string; to: string }[];
-  inputs: { name: string; description?: string; required: boolean }[];
-  docTemplates: { slug: string; producingNodeId: string; body: string }[];
+  edges?: { from: string; to: string }[];
+  inputs?: { name: string; description?: string; required: boolean }[];
+  docTemplates?: { slug: string; producingNodeId: string; body: string }[];
 }
 
 export interface WorkflowInvocationJsonV2 {

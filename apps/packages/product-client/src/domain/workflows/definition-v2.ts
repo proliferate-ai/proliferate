@@ -112,6 +112,11 @@ export interface DefinitionV2Issue {
  */
 export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Issue[] {
   const issues: DefinitionV2Issue[] = [];
+  // The wire document (PR2's WorkflowDefinitionDocumentV2) allows the three
+  // secondary arrays to be omitted; omitted means "none".
+  const edges = def.edges ?? [];
+  const inputs = def.inputs ?? [];
+  const docTemplates = def.docTemplates ?? [];
 
   if (def.nodes.length === 0) {
     issues.push({ code: "empty_nodes", message: "Add at least one node." });
@@ -132,7 +137,7 @@ export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Iss
   }
 
   const slugCounts = new Map<string, number>();
-  for (const doc of def.docTemplates) {
+  for (const doc of docTemplates) {
     slugCounts.set(doc.slug, (slugCounts.get(doc.slug) ?? 0) + 1);
   }
   for (const [slug, count] of slugCounts) {
@@ -146,7 +151,7 @@ export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Iss
   }
 
   const presentIds = new Set(def.nodes.map((node) => node.id));
-  for (const edge of def.edges) {
+  for (const edge of edges) {
     if (!presentIds.has(edge.from)) {
       issues.push({
         code: "dangling_edge",
@@ -170,7 +175,7 @@ export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Iss
     });
   }
 
-  for (const doc of def.docTemplates) {
+  for (const doc of docTemplates) {
     if (!presentIds.has(doc.producingNodeId)) {
       issues.push({
         code: "unknown_producing_node",
@@ -181,8 +186,8 @@ export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Iss
     }
   }
 
-  const inputNames = new Set(def.inputs.map((input) => input.name));
-  const docSlugs = new Set(def.docTemplates.map((doc) => doc.slug));
+  const inputNames = new Set(inputs.map((input) => input.name));
+  const docSlugs = new Set(docTemplates.map((doc) => doc.slug));
   for (const node of def.nodes) {
     const refs = collectPromptReferences(node.prompt);
     for (const name of refs.inputs) {
@@ -243,7 +248,7 @@ function computeLinearOrder(def: WorkflowDefinitionV2): string[] | null {
 
   const outNext = new Map<string, string[]>();
   const inPrev = new Map<string, string[]>();
-  for (const edge of def.edges) {
+  for (const edge of def.edges ?? []) {
     if (!presentIds.has(edge.from) || !presentIds.has(edge.to)) {
       // Dangling edges are reported as their own issue; ignore them here so
       // they don't also masquerade as a linearity violation.

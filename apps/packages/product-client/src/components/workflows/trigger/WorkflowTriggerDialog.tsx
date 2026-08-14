@@ -54,7 +54,7 @@ export function WorkflowTriggerDialog({
   onLaunched,
   authCacheScope,
 }: WorkflowTriggerDialogProps) {
-  const inputs = definitionRecord.definitionJson.inputs;
+  const inputs = definitionRecord.definition.inputs ?? [];
   const { triggerRun, triggering, error } = useWorkflowTriggerActions({
     authCacheScope,
     onLaunched,
@@ -221,7 +221,7 @@ function freshTriggerForm(
   return {
     key,
     values: Object.fromEntries(
-      definitionRecord.definitionJson.inputs.map((input) => [input.name, ""]),
+      (definitionRecord.definition.inputs ?? []).map((input) => [input.name, ""]),
     ),
     repoConfigId: definitionRecord.defaultRepoConfigId ?? "",
     mode: "worktree",

@@ -113,9 +113,13 @@ describe("WorkflowTriggerDialog", () => {
 function definitionRecord(): WorkflowDefinitionRecordV2 {
   return {
     id: "wf-1",
+    userId: "user-1",
     title: "Issue triage",
+    description: "",
+    schemaVersion: 2,
+    revision: 3,
     defaultRepoConfigId: "repo-1",
-    definitionJson: {
+    definition: {
       schemaVersion: 2,
       nodes: [{
         id: "node-1",
@@ -126,13 +130,13 @@ function definitionRecord(): WorkflowDefinitionRecordV2 {
       edges: [],
       inputs: [
         { name: "issue", description: "Issue key to triage", required: true },
-        { name: "notes", required: false },
+        { name: "notes", description: "", required: false },
       ],
       docTemplates: [],
     },
-    revision: 3,
     createdAt: "2026-08-14T12:00:00Z",
     updatedAt: "2026-08-14T12:00:00Z",
+    deletedAt: null,
   };
 }
 

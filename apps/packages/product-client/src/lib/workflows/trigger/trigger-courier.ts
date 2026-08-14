@@ -15,8 +15,10 @@ import type {
  *
  *   1. `PUT /v1/workflow-invocations/{id}` (control plane) freezes the
  *      definition snapshot and returns the invocation record.
- *   2. `PUT /v1/workflow-runs/{run_id}` (runtime plane) is handed that
- *      record's `invocationJson` verbatim and materializes the workspace.
+ *   2. `PUT /v1/workflow-runs/{run_id}` (runtime plane) is handed a body
+ *      assembled from that record's frozen fields — the definition snapshot,
+ *      the server-normalized arguments, and the placement — and materializes
+ *      the workspace.
  *
  * Both ids are client-minted and both routes are idempotent, so the whole
  * courier is safely re-runnable after a partial failure *as long as the
@@ -32,7 +34,7 @@ export interface TriggerCourierDeps {
   ): Promise<WorkflowInvocationV2>;
   putRun(
     runId: string,
-    invocationJson: WorkflowRunPutRequestV2,
+    body: WorkflowRunPutRequestV2,
   ): Promise<WorkflowRunProjectionV2>;
   /** Fresh client-minted identity; the product binds `crypto.randomUUID`. */
   mintId(): string;
@@ -105,11 +107,18 @@ export async function runWorkflowTrigger(
 
   let projection: WorkflowRunProjectionV2;
   try {
-    // The runtime is handed the control plane's frozen record, never a
-    // reconstruction from `input`: `invocationJson` also carries the
-    // definition snapshot and whatever normalization the control plane
-    // applied, and the run must be placed against exactly that.
-    projection = await deps.putRun(minted.runId, invocation.invocationJson);
+    // The run body is assembled from the control plane's frozen record,
+    // never from `input`: the record carries the definition snapshot and
+    // whatever normalization the control plane applied, and the run must be
+    // placed against exactly that. (The invocation response is flat, so the
+    // ADR's invocation_json is reconstituted here field-for-field.)
+    projection = await deps.putRun(minted.runId, {
+      schemaVersion: 2,
+      workflowDefinitionId: invocation.workflowDefinitionId,
+      definition: invocation.definition,
+      arguments: invocation.arguments,
+      placement: invocation.placement,
+    });
   } catch (reason) {
     throw new WorkflowTriggerError("run", minted, reason);
   }

@@ -1,16 +1,18 @@
 // Workflows gen-2 (schema_version 2) wire types, hand-authored on the frozen
-// Workflows ADR contract. The server half lands in the gen-2 ladder's PR2;
-// once that PR is in this chain's base, `make cloud-openapi` +
-// `make cloud-client-generate` regenerate the canonical schemas and this file
-// is reconciled against them (restack task — drift is a finding, not silently
-// absorbed).
+// Workflows ADR contract and reconciled field-for-field against PR2's
+// regenerated openapi.ts (origin/codex/workflows-gen2-pr2-server-v2:
+// WorkflowDefinitionDocumentV2 / WorkflowDefinitionResponseV2 /
+// WorkflowInvocationResponseV2 / WorkflowNodeModelConfigV2). Once PR2 is in
+// this chain's base, `make cloud-openapi` + `make cloud-client-generate`
+// regenerate the canonical schemas and this file is replaced by them (restack
+// task — any remaining drift is a finding, not silently absorbed).
 
 export type WorkflowNodeTypeV2 = "agent" | "human_in_loop";
 
 export interface WorkflowNodeModelV2 {
   agentKind: string;
-  modelId?: string;
-  modeId?: string;
+  modelId?: string | null;
+  modeId?: string | null;
 }
 
 export interface WorkflowNodeV2 {
@@ -18,7 +20,7 @@ export interface WorkflowNodeV2 {
   type: WorkflowNodeTypeV2;
   title: string;
   prompt: string;
-  model?: WorkflowNodeModelV2;
+  model?: WorkflowNodeModelV2 | null;
 }
 
 export interface WorkflowEdgeV2 {
@@ -28,7 +30,8 @@ export interface WorkflowEdgeV2 {
 
 export interface WorkflowInputV2 {
   name: string;
-  description?: string;
+  /** Required on the wire; the server defaults it to the empty string. */
+  description: string;
   required: boolean;
 }
 
@@ -41,9 +44,9 @@ export interface WorkflowDocTemplateV2 {
 export interface WorkflowDefinitionV2 {
   schemaVersion: 2;
   nodes: WorkflowNodeV2[];
-  edges: WorkflowEdgeV2[];
-  inputs: WorkflowInputV2[];
-  docTemplates: WorkflowDocTemplateV2[];
+  edges?: WorkflowEdgeV2[];
+  inputs?: WorkflowInputV2[];
+  docTemplates?: WorkflowDocTemplateV2[];
 }
 
 export type WorkflowArgumentsV2 = Record<string, string | number | boolean>;
@@ -64,32 +67,38 @@ export interface WorkflowInvocationCreateRequestV2 {
 }
 
 /**
- * The frozen invocation record CP returns; `invocationJson` is byte-for-byte
- * what the trigger courier hands the runtime's PUT /v1/workflow-runs/{run_id}.
+ * The frozen invocation record CP returns — FLAT, per PR2's
+ * WorkflowInvocationResponseV2; there is no `invocationJson` wrapper on the
+ * wire. The trigger courier assembles the runtime's
+ * PUT /v1/workflow-runs/{run_id} body from these fields.
  */
-export interface WorkflowInvocationJsonV2 {
+export interface WorkflowInvocationV2 {
+  id: string;
   schemaVersion: 2;
   workflowDefinitionId: string;
+  definitionRevision: number;
+  title: string;
+  description: string;
   definition: WorkflowDefinitionV2;
   arguments: WorkflowArgumentsV2;
   placement: WorkflowPlacementV2;
-}
-
-export interface WorkflowInvocationV2 {
-  id: string;
-  workflowDefinitionId: string;
-  invocationJson: WorkflowInvocationJsonV2;
   createdAt: string;
 }
 
-/** Definition-record envelope for v2 rows served by the existing CRUD routes. */
+/**
+ * Definition-record envelope for v2 rows served by the existing CRUD routes
+ * (PR2's WorkflowDefinitionResponseV2).
+ */
 export interface WorkflowDefinitionRecordV2 {
   id: string;
+  userId: string;
   title: string;
-  description?: string | null;
-  defaultRepoConfigId?: string | null;
-  definitionJson: WorkflowDefinitionV2;
+  description: string;
+  schemaVersion: 2;
   revision: number;
+  defaultRepoConfigId: string | null;
+  definition: WorkflowDefinitionV2;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
 }

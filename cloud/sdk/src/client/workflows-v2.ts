@@ -27,17 +27,19 @@ export function isWorkflowDefinitionV2(
 }
 
 /**
- * A definition row from the shared list route. `definitionJson` is typed
- * loosely (not `WorkflowDefinitionV2`) because a single list can contain
- * gen-1 and gen-2 rows; narrow it with `isWorkflowDefinitionV2` before
- * treating it as gen-2.
+ * A definition row from the shared list route. The list mixes gen-1
+ * (schema_version 1) and gen-2 rows, so `definition` is typed loosely and
+ * `schemaVersion` sits on the row itself (per the server's
+ * WorkflowDefinitionResponseV2); narrow `definition` with
+ * `isWorkflowDefinitionV2` before treating it as gen-2.
  */
 export interface WorkflowDefinitionListRowV2 {
   id: string;
   title: string;
   description?: string | null;
   defaultRepoConfigId?: string | null;
-  definitionJson: unknown;
+  schemaVersion?: number;
+  definition?: unknown;
   revision: number;
   createdAt: string;
   updatedAt: string;
@@ -51,23 +53,26 @@ export interface WorkflowDefinitionListResponseV2 {
  * Hand-authored request envelopes rather than derived from the generated
  * `WorkflowDefinitionCreateRequest`/`WorkflowDefinitionUpdateRequest` schemas:
  * those generated shapes are gen-1-shaped (flat `stages`/`inputs`) and predate
- * the gen-2 ladder's PR2 server change that lands the `definitionJson`
- * envelope on the wire. Once PR2 is in this chain's base and the OpenAPI
- * client is regenerated, reconcile these against the generated shapes (see
- * the header comment in types/workflows-v2.ts).
+ * the gen-2 ladder's PR2 server change that lands the `definition` document
+ * envelope on the wire (verified against PR2's regenerated openapi.ts:
+ * WorkflowDefinitionCreateRequestV2/UpdateRequestV2). Once PR2 is in this
+ * chain's base and the OpenAPI client is regenerated, replace these with the
+ * generated shapes (see the header comment in types/workflows-v2.ts).
  */
 export interface WorkflowDefinitionCreateRequestV2 {
   title: string;
-  description?: string;
+  /** Required on the wire; the server defaults it to the empty string. */
+  description: string;
   defaultRepoConfigId?: string | null;
-  definitionJson: WorkflowDefinitionV2;
+  definition: WorkflowDefinitionV2;
 }
 
 export interface WorkflowDefinitionUpdateRequestV2 {
   title: string;
-  description?: string;
+  /** Required on the wire; the server defaults it to the empty string. */
+  description: string;
   defaultRepoConfigId?: string | null;
-  definitionJson: WorkflowDefinitionV2;
+  definition: WorkflowDefinitionV2;
   expectedRevision: number;
 }
 

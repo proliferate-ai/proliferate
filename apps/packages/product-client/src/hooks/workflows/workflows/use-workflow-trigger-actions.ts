@@ -52,7 +52,7 @@ export function useWorkflowTriggerActions({
       const result = await runWorkflowTrigger({
         putInvocation: (invocationId, body) =>
           putWorkflowInvocationV2({ invocationId, body }),
-        putRun: (runId, invocationJson) => putRun(runId, invocationJson),
+        putRun: (runId, body) => putRun(runId, body),
         mintId: () => crypto.randomUUID(),
       }, input, retryIds.current);
       retryIds.current = {};

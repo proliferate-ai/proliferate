@@ -39,11 +39,19 @@ describe("runWorkflowTrigger", () => {
       workspaceId: "workspace-1",
     });
 
-    // The run is placed against the control plane's frozen record — same
-    // object, server-normalized argument, and the definition snapshot the
-    // caller never had — not a body rebuilt from `input`.
+    // The run is placed against the control plane's frozen record — the
+    // record's own definition snapshot (same object, one the caller never
+    // had) and its server-normalized argument — not a body rebuilt from
+    // `input`.
     const runBody = vi.mocked(deps.putRun).mock.calls[0]?.[1];
-    expect(runBody).toBe(frozen().invocationJson);
+    expect(runBody).toEqual({
+      schemaVersion: 2,
+      workflowDefinitionId: frozen().workflowDefinitionId,
+      definition: frozen().definition,
+      arguments: frozen().arguments,
+      placement: frozen().placement,
+    });
+    expect(runBody?.definition).toBe(frozen().definition);
     expect(runBody?.arguments).toEqual({ issue: "PRO-174" });
     expect(runBody?.arguments).not.toEqual(input.arguments);
     expect(runBody?.definition.nodes).toHaveLength(1);
@@ -167,30 +175,30 @@ function frozenInvocation(
 ): WorkflowInvocationV2 {
   return {
     id: invocationId,
+    schemaVersion: 2,
     workflowDefinitionId: body.workflowDefinitionId,
-    invocationJson: {
+    definitionRevision: 3,
+    title: "Issue triage",
+    description: "",
+    definition: {
       schemaVersion: 2,
-      workflowDefinitionId: body.workflowDefinitionId,
-      definition: {
-        schemaVersion: 2,
-        nodes: [{
-          id: "node-1",
-          type: "agent",
-          title: "Diagnose",
-          prompt: "Investigate @input:issue",
-        }],
-        edges: [],
-        inputs: [{ name: "issue", required: true }],
-        docTemplates: [],
-      },
-      arguments: Object.fromEntries(
-        Object.entries(body.arguments).map(([name, value]) => [
-          name,
-          typeof value === "string" ? value.trim() : value,
-        ]),
-      ),
-      placement: body.placement,
+      nodes: [{
+        id: "node-1",
+        type: "agent",
+        title: "Diagnose",
+        prompt: "Investigate @input:issue",
+      }],
+      edges: [],
+      inputs: [{ name: "issue", description: "", required: true }],
+      docTemplates: [],
     },
+    arguments: Object.fromEntries(
+      Object.entries(body.arguments).map(([name, value]) => [
+        name,
+        typeof value === "string" ? value.trim() : value,
+      ]),
+    ),
+    placement: body.placement,
     createdAt: "2026-08-14T12:00:00Z",
   };
 }
