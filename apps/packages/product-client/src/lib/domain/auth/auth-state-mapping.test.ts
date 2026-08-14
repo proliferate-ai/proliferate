@@ -6,6 +6,7 @@ import {
   authenticatedAuthState,
   authErrorStatePatch,
   bootstrappingAuthStatePatch,
+  clearAuthIssueStatePatch,
 } from "#product/lib/domain/auth/auth-state-mapping";
 
 const storedSession: StoredAuthSession = {
@@ -64,6 +65,12 @@ describe("auth state mapping", () => {
   it("builds an error-only patch for background callback failures", () => {
     expect(authErrorStatePatch("Sign-in failed")).toEqual({
       error: "Sign-in failed",
+    });
+  });
+
+  it("builds an issue-only clear patch, leaving error untouched", () => {
+    expect(clearAuthIssueStatePatch()).toEqual({
+      issue: null,
     });
   });
 });

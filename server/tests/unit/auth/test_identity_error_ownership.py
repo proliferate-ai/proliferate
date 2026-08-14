@@ -596,5 +596,8 @@ async def test_oauth_provider_token_rejection_keeps_redirect_path(
     )
 
     assert (
-        redirect == "https://client.example.test/callback?error=provider_error&state=client-state"
+        redirect.url
+        == "https://client.example.test/callback?error=provider_error&state=client-state"
     )
+    assert redirect.surface == "web"
+    assert redirect.error == "provider_error"

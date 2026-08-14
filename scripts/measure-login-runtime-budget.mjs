@@ -83,7 +83,13 @@ const DIST = join(REPO_ROOT, "apps", "web", "dist");
 // deps-bump residual). Posthog 1.386.8 pin recovered most weight but PR #1677's
 // 30-package bump had small residual contributors (~500 B). Honest fix = cap raise
 // to 490000 B (pre-bump CI was 481979 B, leaving only 3 KB headroom).
-const CAPS = { js: 490000, css: 66000 };
+// Raised again 2026-08-13 (PRO-111) to 490500 B: AuthShell now surfaces
+// previously-invisible auth errors (stranded callback, denied provider,
+// unreachable deployment) on the login screen via describeAuthIssue — genuine
+// user-facing feature bytes, already minimized (single mapper, no unused
+// exports), not accidental bloat. Measured CI value for the PR was 490138 B
+// (main was 489686 B, a 452 B delta).
+const CAPS = { js: 490500, css: 66000 };
 // Baseline requests zero of these on /login; any byte is a fail-closed
 // regression (login/callback must not eagerly load fonts/images/audio).
 const ZERO_KINDS = ["font", "image", "audio"];
