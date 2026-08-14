@@ -9,12 +9,8 @@ import type {
 import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 
 /**
- * Wire + return shape for `GET /v1/workflow-runs`. The frozen gen-2 contract
- * (`types/workflow-runs-v2.ts`) does not pin a list envelope for this route —
- * the Rust routes are still landing in a sibling lane. This is a cross-lane
- * contract note, not a confirmed wire shape: reconcile against the real
- * response on the next `make sdk-generate` restack if it lands as a bare
- * `WorkflowRunV2[]` instead.
+ * Wire + return shape for `GET /v1/workflow-runs`, confirmed by PR5a's
+ * regenerated schema (`WorkflowRunsListResponse` in generated/openapi.ts).
  */
 export interface WorkflowRunsListResponseV2 {
   runs: WorkflowRunV2[];

@@ -45,6 +45,7 @@ describe("runWorkflowTrigger", () => {
     // `input`.
     const runBody = vi.mocked(deps.putRun).mock.calls[0]?.[1];
     expect(runBody).toEqual({
+      id: frozen().id,
       schemaVersion: 2,
       workflowDefinitionId: frozen().workflowDefinitionId,
       definition: frozen().definition,

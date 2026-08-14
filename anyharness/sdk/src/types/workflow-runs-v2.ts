@@ -1,9 +1,10 @@
 // Workflows gen-2 runtime-plane types, hand-authored on the frozen Workflows
-// ADR contract (camelCase mirror of the runtime's SQLite rows). The Rust
-// routes land in the gen-2 ladder's PR5a; once that PR is in this chain's
-// base, `make sdk-generate` regenerates the canonical OpenAPI types and this
-// file is reconciled against them (restack task — drift is a finding, not
-// silently absorbed).
+// ADR contract (camelCase mirror of the runtime's SQLite rows) and reconciled
+// against PR5a's regenerated OpenAPI types (src/generated/openapi.ts). The
+// generated view schemas mark nullable fields optional (`?: string | null`);
+// that is utoipa's rendering of Option, not the wire: the runtime serializes
+// None as explicit `null` by ruling (projection.rs), so the required `| null`
+// declarations here are the accurate contract.
 
 // @anyharness/sdk is dependency-free, so the invocation-json shapes shared
 // with the cloud plane are declared here structurally rather than imported
@@ -118,8 +119,15 @@ export interface WorkflowRunProjectionV2 {
   docs: WorkflowRunDocV2[];
 }
 
-/** Body of PUT /v1/workflow-runs/{run_id}: the frozen invocation_json, verbatim. */
-export type WorkflowRunPutRequestV2 = WorkflowInvocationJsonV2;
+/**
+ * Body of PUT /v1/workflow-runs/{run_id}: the frozen invocation_json,
+ * verbatim, plus the frozen invocation's own `id` — when present it lands on
+ * the run row as `invocation_id`; when absent the runtime falls back to the
+ * run id.
+ */
+export interface WorkflowRunPutRequestV2 extends WorkflowInvocationJsonV2 {
+  id?: string;
+}
 
 export interface WorkflowRunFailRedoRequestV2 {
   prompt?: string;
