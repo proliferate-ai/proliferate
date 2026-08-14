@@ -61,7 +61,7 @@ export function resolveFileReference(args: {
   resolveAbsolute: (rawPath: string) => string | null;
   workspacePathOverride?: string | null;
 }): ResolvedFileReference {
-  const trimmed = args.rawPath.trim();
+  const trimmed = decodeEncodedSpaces(args.rawPath.trim());
   const { path, line, column } = splitPathLineSuffix(trimmed);
   // The SDK normalizes both an omitted wire field and an explicit null to
   // `null`, so absence cannot safely mean "authoritatively external" here.
@@ -77,6 +77,14 @@ export function resolveFileReference(args: {
     absolutePath: args.resolveAbsolute(path),
     workspacePath,
   };
+}
+
+function decodeEncodedSpaces(path: string): string {
+  // The Markdown render repair percent-encodes literal spaces so CommonMark
+  // will preserve the destination. Decode only that encoding here: decoding
+  // every URI component would reinterpret literal file names containing
+  // sequences such as `%2F` or `%2E%2E` as separators or traversal.
+  return path.replace(/%20/gi, " ");
 }
 
 /**

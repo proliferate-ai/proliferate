@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
+import { cleanup } from "@testing-library/react";
 import type { ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,9 @@ import {
   PLAN_IMPLEMENT_HERE_ROW_LABEL,
 } from "#product/copy/plans/plan-prompts";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
+// User prose renders external links through ProviderLinkMention, which routes
+// opening and copying through the product host, so these renders need one.
+import { renderWithProductHost as render } from "#product/test/product-host-test-utils";
 
 vi.mock("#product/components/content/ui/FilePathLink", () => ({
   FilePathLink: ({ rawPath, children }: { rawPath: string; children?: ReactNode }) => (

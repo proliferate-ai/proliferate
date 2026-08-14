@@ -4,7 +4,7 @@ import {
 import { ChevronRight, ExternalLink } from "#product/primitives/icons/core";
 import { FileText } from "#product/primitives/icons/workspace";
 import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
-import { POPOVER_SURFACE_CLASS } from "#product/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 import type { FileReferencePathKind } from "#product/lib/domain/files/path-references";
@@ -53,13 +53,13 @@ export function FilePathContextMenuContent({
     : {};
 
   return (
-    <div className="relative flex flex-col gap-px">
+    <div role="menu" aria-label="File actions" className="relative flex flex-col gap-px">
       {pathKind !== "directory" && (
         <PopoverMenuItem
           {...FILE_PATH_MENU_ITEM_PROPS}
           {...transcriptProps}
           icon={<FileText className="icon-paired shrink-0" />}
-          label="Open in viewer"
+          label="Open in Proliferate"
           disabled={!canOpenInViewer}
           onClick={() => {
             onOpenInViewer();
@@ -90,14 +90,28 @@ export function FilePathContextMenuContent({
             {...transcriptProps}
             label="Open with"
             disabled={!canOpenExternal}
+            aria-haspopup="menu"
+            aria-expanded={openWithActive}
             trailing={<ChevronRight className="icon-paired" />}
             className={openWithActive
               ? "bg-[var(--color-link-foreground)] text-white hover:bg-[var(--color-link-foreground)] focus:bg-[var(--color-link-foreground)] [&_*]:text-white"
               : ""}
+            onClick={() => setOpenWithActive((active) => !active)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowRight") {
+                event.preventDefault();
+                setOpenWithActive(true);
+              } else if (event.key === "ArrowLeft" || event.key === "Escape") {
+                event.preventDefault();
+                setOpenWithActive(false);
+              }
+            }}
           />
           {openWithActive && (
             <div
-              className={`absolute left-full top-0 z-10 ml-1 min-w-44 ${POPOVER_SURFACE_CLASS}`}
+              role="menu"
+              aria-label="Open with"
+              className={`absolute left-full top-0 z-10 ml-1 flex max-h-[calc(100vh-1rem)] w-[172px] select-none flex-col overflow-y-auto p-1 ${POPOVER_FRAME_CLASS}`}
               onMouseEnter={() => setOpenWithActive(true)}
             >
               {targets.map((target) => (
@@ -128,16 +142,18 @@ export function FilePathContextMenuContent({
           close();
         }}
       />
-      <PopoverMenuItem
-        {...FILE_PATH_MENU_ITEM_PROPS}
-        {...transcriptProps}
-        label={pathKind === "directory" ? "Reveal folder in Finder" : "Reveal in Finder"}
-        disabled={!canReveal}
-        onClick={() => {
-          onRevealInFinder();
-          close();
-        }}
-      />
+      {defaultTarget?.kind !== "finder" && (
+        <PopoverMenuItem
+          {...FILE_PATH_MENU_ITEM_PROPS}
+          {...transcriptProps}
+          label={pathKind === "directory" ? "Reveal folder in Finder" : "Reveal in Finder"}
+          disabled={!canReveal}
+          onClick={() => {
+            onRevealInFinder();
+            close();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -150,5 +166,9 @@ function OpenMenuTargetIcon({
   if (!target?.iconId) {
     return <ExternalLink className="icon-paired shrink-0" />;
   }
-  return <OpenTargetIcon iconId={target.iconId} className="icon-paired shrink-0" variant="menu" />;
+  return (
+    <span aria-hidden="true">
+      <OpenTargetIcon iconId={target.iconId} className="icon-paired shrink-0" variant="menu" />
+    </span>
+  );
 }

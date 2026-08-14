@@ -1,6 +1,10 @@
 import { Button } from "#product/primitives/Button";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
+import {
+  renderTranscriptInlineCode,
+  renderTranscriptLink,
+} from "#product/components/workspace/chat/transcript/transcript-markdown";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
 import { StickyNote } from "#product/primitives/icons/product";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
@@ -59,6 +63,8 @@ export function SubagentLaunchLedger({
                     <MarkdownBody
                       content={prompt}
                       className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                      renderLink={renderTranscriptLink}
+                      renderInlineCode={renderTranscriptInlineCode}
                       renderCodeBlock={renderDesktopCodeBlock}
                     />
                   </div>

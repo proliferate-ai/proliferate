@@ -30,6 +30,7 @@ import {
 } from "./ChatContentSearchContext";
 import { markSearchChildren } from "./MarkdownContentSearchMarks";
 import { stabilizeStreamingMarkdown } from "#product/lib/domain/chat/transcript/streaming-markdown";
+import { normalizeLocalFileLinkMarkdown } from "#product/lib/domain/chat/transcript/file-link-markdown";
 import {
   type HastNode,
   MarkdownRevealContext,
@@ -367,7 +368,9 @@ export const MarkdownBody = memo(function MarkdownBody({
   surface = "message",
 }: MarkdownBodyProps) {
   const parsedContent = useMemo(
-    () => (isStreaming ? stabilizeStreamingMarkdown(content) : content),
+    () => normalizeLocalFileLinkMarkdown(
+      isStreaming ? stabilizeStreamingMarkdown(content) : content,
+    ),
     [content, isStreaming],
   );
   const markdownClassName = [

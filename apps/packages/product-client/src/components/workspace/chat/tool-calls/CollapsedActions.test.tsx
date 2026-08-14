@@ -344,7 +344,7 @@ describe("CollapsedActions", () => {
     expect(html).toContain("data-collapsed-actions-ledger");
     const ledger = document.querySelector("[data-collapsed-actions-ledger]");
     expect(ledger?.textContent).toContain("Read");
-    expect(ledger?.querySelector("[data-file-reference-badge='inline']")?.textContent)
+    expect(ledger?.querySelector("[data-file-reference-badge='plain']")?.textContent)
       .toContain("read.ts");
     expect(html).toContain("overflow-y-auto overflow-x-hidden");
     expect(html).toContain("vertical-scroll-fade-mask");
@@ -436,14 +436,16 @@ describe("CollapsedActions", () => {
     expect(document.body.innerHTML).not.toContain("data-diff-surface=\"chat\"");
     const editRow = ledger?.querySelector("[data-edit-action-row]");
     const editLabel = editRow?.querySelector("[data-edit-action-file-label]");
-    expect(editRow?.textContent).not.toContain("Edit ");
+    expect(editRow?.textContent).toContain("Edited");
     const editIcon = editRow?.querySelector("svg");
     expect(editIcon?.getAttribute("viewBox")).toBe("0 0 20 21");
     expect(editIcon?.querySelector("path")?.getAttribute("d")).toContain("11.3312 4.20472");
     expect(editIcon?.parentElement?.className).toContain("icon-paired");
     expect(editIcon?.parentElement?.className).toContain("text-current");
     expect(editRow?.className).toContain("text-foreground/60");
-    expect(editLabel?.className).toContain("decoration-dotted");
+    expect(
+      editLabel?.querySelector("[data-file-reference-badge='plain']")?.className,
+    ).toContain("decoration-dotted");
     const stats = editRow?.querySelector("[data-thread-find-skip='true']");
     expect(stats?.textContent).toBe("+1-1");
     expect(stats?.querySelector("span")?.className).toContain("text-inherit");
@@ -500,7 +502,7 @@ describe("CollapsedActions", () => {
     const searchRow = screen.getByText("Searched for anchor").parentElement;
     const readRow = screen.getByText("Read").parentElement?.parentElement;
     const commandRow = screen.getByText("Ran pnpm test").parentElement;
-    expect(readRow?.querySelector("[data-file-reference-badge='inline']")?.textContent)
+    expect(readRow?.querySelector("[data-file-reference-badge='plain']")?.textContent)
       .toContain("README.md");
     const searchIcon = searchRow?.querySelector("svg");
     const readIcon = readRow?.children[0]?.querySelector("svg");

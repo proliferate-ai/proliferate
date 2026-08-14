@@ -20,4 +20,4 @@
  * rectangle, and the thicker underline is the accessible indicator instead.
  */
 export const CHAT_TRANSCRIPT_LINK_CLASS =
-  "text-link-foreground no-underline hover:bg-transparent hover:text-link-foreground hover:underline hover:decoration-current hover:decoration-[0.5px] hover:underline-offset-2 focus:bg-transparent focus-visible:bg-transparent active:bg-transparent focus-visible:outline-none focus-visible:underline focus-visible:decoration-current focus-visible:decoration-1 focus-visible:underline-offset-2";
+  "cursor-pointer text-link-foreground no-underline hover:bg-transparent hover:text-link-foreground hover:underline hover:decoration-current hover:decoration-dotted hover:decoration-[0.5px] hover:underline-offset-2 focus:bg-transparent focus-visible:bg-transparent active:bg-transparent focus-visible:outline-none focus-visible:underline focus-visible:decoration-current focus-visible:decoration-dotted focus-visible:decoration-1 focus-visible:underline-offset-2";

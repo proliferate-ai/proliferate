@@ -77,7 +77,7 @@ afterEach(() => {
 
 describe("CollapsedActionRows read rows", () => {
 
-  it("renders read ledger rows as blue, clickable file references", () => {
+  it("renders read ledger rows as row-colored, clickable file references", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       read: toolItem("read", "turn-1", 1, "file_read"),
@@ -92,17 +92,16 @@ describe("CollapsedActionRows read rows", () => {
     fireEvent.click(screen.getByRole("button", { name: /Read files/i }));
 
     const badge = screen.getByText("Read").parentElement
-      ?.querySelector("[data-file-reference-badge='inline']");
+      ?.querySelector("[data-file-reference-badge='plain']");
     const readRow = badge?.closest("[title]");
     expect(badge?.textContent).toContain("read.ts");
     expect(badge?.tagName).toBe("BUTTON");
     expect(badge?.getAttribute("aria-disabled")).toBeNull();
-    expect(badge?.className).toContain("text-link-foreground");
-    expect(badge?.className).toContain("hover:text-link-foreground");
-    expect(badge?.className).not.toContain("!text-inherit");
-    expect(badge?.className).not.toContain("hover:!text-inherit");
+    expect(badge?.className).toContain("text-current");
+    expect(badge?.className).toContain("hover:text-foreground");
+    expect(badge?.className).not.toContain("text-link-foreground");
     expect(badge?.className).toContain("decoration-dotted");
-    expect(badge?.className).toContain("[&>span:first-child]:hidden");
+    expect(badge?.querySelector("[aria-hidden='true']")).toBeNull();
     expect(readRow?.getAttribute("title")).toContain("read.ts");
 
     fireEvent.click(badge as Element);
@@ -127,12 +126,12 @@ describe("CollapsedActionRows read rows", () => {
     fireEvent.click(screen.getByRole("button", { name: /Read files/i }));
 
     const reference = screen.getByText("read.ts")
-      .closest("[data-file-reference-badge='inline']");
+      .closest("[data-file-reference-badge='plain']");
     expect(reference?.tagName).toBe("SPAN");
     expect(reference?.getAttribute("aria-disabled")).toBeNull();
     expect(reference?.className).not.toContain("text-link-foreground");
     expect(reference?.className).not.toContain("cursor-not-allowed");
-    expect(reference?.className).toContain("!no-underline");
+    expect(reference?.className).toContain("cursor-default");
   });
 
   it("opens raw-input fallback reads through workspace-root inference", () => {

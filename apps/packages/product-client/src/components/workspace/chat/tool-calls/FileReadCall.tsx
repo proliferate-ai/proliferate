@@ -3,7 +3,7 @@ import { HighlightedCodeBlock } from "#product/components/content/ui/Highlighted
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
-import { ToolFileChip } from "#product/components/workspace/chat/tool-calls/ToolFileChip";
+import { FileReferenceBadge } from "#product/components/workspace/file-references/FileReferenceBadge";
 import type { FileReadScope } from "@anyharness/sdk";
 
 interface FileReadCallProps {
@@ -37,6 +37,9 @@ export function FileReadCall({
   const resolvedBasename = basename || extractBasename(path);
   const isPartialRead = scope === "line" || scope === "range";
   const scopeLabel = formatScopeLabel(scope, line, startLine, endLine);
+  const referenceLabel = scopeLabel
+    ? `${resolvedBasename} (${scopeLabel})`
+    : resolvedBasename;
   const previewPanel = preview
     ? (
       <ToolActionDetailsPanel>
@@ -57,12 +60,12 @@ export function FileReadCall({
       <span className="shrink-0 text-inherit">
         {status === "running" ? "Reading" : "Read"}
       </span>
-      <ToolFileChip
-        basename={resolvedBasename}
-        pathLabel={workspacePath || path}
+      <FileReferenceBadge
+        rawPath={workspacePath || path}
+        label={referenceLabel}
         workspacePath={workspacePath}
+        variant="plain"
       />
-      {scopeLabel && <span className="truncate text-ui-sm text-faint">{scopeLabel}</span>}
     </div>
   );
 
@@ -74,6 +77,7 @@ export function FileReadCall({
       duration={duration}
       defaultExpanded={defaultExpanded}
       expandable={!!preview}
+      promoteOnHover={false}
     >
       {previewPanel}
     </ToolActionRow>
@@ -92,7 +96,7 @@ function formatScopeLabel(
   }
   if (scope === "range") {
     if (startLine && endLine) {
-      return `lines ${startLine}-${endLine}`;
+      return `lines ${startLine}–${endLine}`;
     }
     if (startLine) {
       return `from line ${startLine}`;

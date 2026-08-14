@@ -52,7 +52,7 @@ export function looksLikeFileReferenceHref(value: string): boolean {
 
   const trimmed = value.trim();
   if (trimmed.length === 0 || trimmed.length > 512) return false;
-  if (/\s/.test(trimmed)) return false;
+  if (/\r|\n/.test(trimmed)) return false;
   if (/[*?[\]{}]/.test(trimmed)) return false;
   // Any scheme (https://, mailto:, vscode:) is not a workspace path.
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return false;

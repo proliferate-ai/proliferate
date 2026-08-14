@@ -2,6 +2,10 @@ import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollA
 import { ProliferateIcon } from "#product/primitives/icons/proliferate-icons";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
+import {
+  renderTranscriptInlineCode,
+  renderTranscriptLink,
+} from "#product/components/workspace/chat/transcript/transcript-markdown";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import type { SkillsToolResultPresentation } from "#product/domain/chats/tools/skills-tool-result";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
@@ -95,6 +99,8 @@ function SkillsToolResultDetails({
           <MarkdownBody
             content={presentation.instructions}
             className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+            renderLink={renderTranscriptLink}
+            renderInlineCode={renderTranscriptInlineCode}
             renderCodeBlock={renderDesktopCodeBlock}
           />
           {presentation.resources.length > 0 ? (
@@ -121,6 +127,8 @@ function SkillsToolResultDetails({
             <MarkdownBody
               content={presentation.content}
               className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+              renderLink={renderTranscriptLink}
+              renderInlineCode={renderTranscriptInlineCode}
               renderCodeBlock={renderDesktopCodeBlock}
             />
           ) : (

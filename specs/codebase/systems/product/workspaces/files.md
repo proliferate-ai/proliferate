@@ -114,6 +114,43 @@ parts in the active session's latest completed turn. It uses the runtime
 `base_worktree` diff scope internally, but `base_worktree` is not a center
 viewer target scope.
 
+## File-Reference Opening
+
+The shared file-reference action model owns links to local files and
+directories in chat prose and transcript tool calls. A primary click routes by
+the resolved target, not by the visual surface that rendered the reference:
+
+- a file inside the current workspace opens or focuses a Proliferate `file`
+  viewer target
+- an absolute Desktop file outside the workspace opens with the configured
+  default target
+- a directory reveals in Finder
+
+An actionable file reference exposes the same ordered context menu in the
+Desktop native menu and the browser/test DOM fallback:
+
+1. `Open in Proliferate` for files; directories omit this item
+2. `Open in {default target}`; when the host has no named default, use `Open
+   externally`
+3. `Open with` as a submenu containing every available editor; Finder,
+   Terminal, and the copy-path pseudo-target are excluded
+4. a separator
+5. `Copy path`
+6. `Reveal in Finder`, or `Reveal folder in Finder` for a directory; omit this
+   item when Finder is already the default target
+
+The default target and each `Open with` entry use the host-provided application
+name and icon. Finder is excluded because reveal is its dedicated action;
+Terminal is not an editor and remains outside this file-link menu. `Copy path`
+copies the resolved absolute path when one exists, otherwise the resolved
+reference path.
+
+Path-kind lookup and the first open are retryable operations. A transient
+lookup or launch failure keeps the reference actionable and reports that the
+next activation retries. If resolution finishes and establishes that none of
+the viewer, external-open, or reveal actions is available, the reference is
+authoritatively unavailable and renders as inert text with no context menu.
+
 ## State Ownership
 
 Remote filesystem and git data belongs to SDK-react/TanStack Query:

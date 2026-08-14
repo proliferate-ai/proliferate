@@ -13,6 +13,10 @@ import { Button } from "#product/primitives/Button";
 import { Robot } from "#product/primitives/icons/product";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
+import {
+  renderTranscriptInlineCode,
+  renderTranscriptLink,
+} from "#product/components/workspace/chat/transcript/transcript-markdown";
 import { SubagentLaunchLedger } from "#product/components/workspace/chat/transcript/SubagentLaunchLedger";
 import { TurnSeparator } from "#product/components/workspace/chat/transcript/TurnSeparator";
 import {
@@ -211,6 +215,8 @@ function AgentResultBlock({ content }: { content: string }) {
           <MarkdownBody
             content={content}
             className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+            renderLink={renderTranscriptLink}
+            renderInlineCode={renderTranscriptInlineCode}
             renderCodeBlock={renderDesktopCodeBlock}
           />
         </div>

@@ -13,6 +13,8 @@ interface ToolActionRowProps {
   expanded?: boolean;
   onExpandedChange?: (next: boolean) => void;
   expandable?: boolean;
+  /** Whether hovering an expandable row promotes all of its text. */
+  promoteOnHover?: boolean;
   className?: string;
 }
 
@@ -27,6 +29,7 @@ export function ToolActionRow({
   expanded: controlledExpanded,
   onExpandedChange,
   expandable = true,
+  promoteOnHover = true,
   className = "",
 }: ToolActionRowProps) {
   const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
@@ -61,7 +64,7 @@ export function ToolActionRow({
           className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-normal font-normal outline-none focus-visible:underline ${
             status === "failed"
               ? "text-destructive/80 hover:text-destructive"
-              : "text-muted-foreground hover:text-foreground"
+              : `text-muted-foreground ${promoteOnHover ? "hover:text-foreground" : ""}`
           }`}
           onClick={() => setExpanded(!expanded)}
           onKeyDown={handleKeyDown}

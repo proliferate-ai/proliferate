@@ -125,6 +125,18 @@ describe("resolveFileReference", () => {
       workspacePath: null,
     });
   });
+
+  it("decodes Markdown-encoded spaces without reinterpreting encoded separators", () => {
+    expect(resolveFileReference({
+      rawPath: "/repo/My%20Project/literal%2Fname.md",
+      workspaceRoot: "/repo",
+      resolveAbsolute,
+    })).toMatchObject({
+      path: "/repo/My Project/literal%2Fname.md",
+      absolutePath: "/repo/My Project/literal%2Fname.md",
+      workspacePath: "My Project/literal%2Fname.md",
+    });
+  });
 });
 
 describe("resolveFileReferencePrimaryAction", () => {

@@ -23,3 +23,9 @@ export interface OpenTarget {
   shortcut?: string;
   iconId?: OpenTargetIconId;
 }
+
+export function fileReferenceOpenWithTargets(
+  targets: readonly OpenTarget[],
+): OpenTarget[] {
+  return targets.filter((target) => target.kind === "editor");
+}

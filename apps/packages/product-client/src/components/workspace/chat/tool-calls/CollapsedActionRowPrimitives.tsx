@@ -99,14 +99,12 @@ export function ActionFileLink({
   displayName: string;
 }) {
   return (
-    // Keep FileReferenceBadge's semantic link color: the surrounding activity
-    // row is intentionally muted, but this child is an actionable file target.
     <FileReferenceBadge
       rawPath={pathLabel}
       label={displayName}
       workspacePath={workspacePath}
-      variant="inline"
-      className={`min-w-0 truncate !px-0 ${CHAT_BUTTON_TEXT_CLASS} !font-normal underline decoration-current decoration-dotted decoration-[0.5px] underline-offset-2 hover:decoration-dotted [&>span:first-child]:hidden`}
+      variant="plain"
+      className={`min-w-0 truncate ${CHAT_BUTTON_TEXT_CLASS}`}
     />
   );
 }
