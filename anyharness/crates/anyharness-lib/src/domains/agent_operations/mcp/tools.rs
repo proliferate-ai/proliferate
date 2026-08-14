@@ -23,6 +23,9 @@ pub const TOOL_NAMES: [&str; 18] = [
     "promote_subagent",
 ];
 
+const AGENT_ID_DESCRIPTION: &str =
+    "Agent session id, as returned by create_agent, list_agents, get_agent, and list_subagents.";
+
 pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "create_workspace",
     "create_agent",
@@ -161,7 +164,7 @@ pub fn build_tool_list() -> Vec<Value> {
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
-                    "agentId": { "type": "string" },
+                    "agentId": { "type": "string", "description": AGENT_ID_DESCRIPTION },
                     "message": { "type": "string" }
                 },
                 "required": ["agentId", "message"]
@@ -193,7 +196,9 @@ fn target_schema() -> Value {
     json!({
         "type": "object",
         "additionalProperties": false,
-        "properties": { "agentId": { "type": "string" } },
+        "properties": {
+            "agentId": { "type": "string", "description": AGENT_ID_DESCRIPTION }
+        },
         "required": ["agentId"]
     })
 }
@@ -296,7 +301,7 @@ mod tests {
             ),
             (
                 "get_agent",
-                "5eaf201fb6b40a613172523762396d833c3c846308801901860839f616feef02".to_string(),
+                "040a2e9313d184c809e29c107eb68a6aa48c8aa0da351773516a4177772faa2e".to_string(),
             ),
             (
                 "list_subagents",
@@ -308,7 +313,7 @@ mod tests {
             ),
             (
                 "list_agent_config_options",
-                "5eaf201fb6b40a613172523762396d833c3c846308801901860839f616feef02".to_string(),
+                "040a2e9313d184c809e29c107eb68a6aa48c8aa0da351773516a4177772faa2e".to_string(),
             ),
             (
                 "get_task_output",
@@ -328,27 +333,27 @@ mod tests {
             ),
             (
                 "resume_agent",
-                "5eaf201fb6b40a613172523762396d833c3c846308801901860839f616feef02".to_string(),
+                "040a2e9313d184c809e29c107eb68a6aa48c8aa0da351773516a4177772faa2e".to_string(),
             ),
             (
                 "send_message",
-                "cd86d3405f350ab79043b3c38eb069c9b536adc8be841cbf55833e1cf2e31009".to_string(),
+                "7835e37361209bef75ced0c752dc265d34f98a6bc5af270434f80e0847f54f44".to_string(),
             ),
             (
                 "interrupt_agent",
-                "5eaf201fb6b40a613172523762396d833c3c846308801901860839f616feef02".to_string(),
+                "040a2e9313d184c809e29c107eb68a6aa48c8aa0da351773516a4177772faa2e".to_string(),
             ),
             (
                 "close_subagent",
-                "5eaf201fb6b40a613172523762396d833c3c846308801901860839f616feef02".to_string(),
+                "040a2e9313d184c809e29c107eb68a6aa48c8aa0da351773516a4177772faa2e".to_string(),
             ),
             (
                 "open_subagent",
-                "5eaf201fb6b40a613172523762396d833c3c846308801901860839f616feef02".to_string(),
+                "040a2e9313d184c809e29c107eb68a6aa48c8aa0da351773516a4177772faa2e".to_string(),
             ),
             (
                 "promote_subagent",
-                "5eaf201fb6b40a613172523762396d833c3c846308801901860839f616feef02".to_string(),
+                "040a2e9313d184c809e29c107eb68a6aa48c8aa0da351773516a4177772faa2e".to_string(),
             ),
         ];
         assert_eq!(actual, expected);

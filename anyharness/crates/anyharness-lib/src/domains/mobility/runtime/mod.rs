@@ -25,9 +25,11 @@ use crate::domains::mobility::model::{
 use crate::domains::mobility::service::{MobilityError, MobilityService};
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::reviews::store::ReviewStore;
+use crate::domains::sessions::links::completions::LinkCompletionStore;
+use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
-use crate::domains::sessions::subagents::service::SubagentService;
+use crate::domains::sessions::store::completion_deliveries::CompletionDeliveryStore;
 use crate::domains::terminals::model::TerminalRecord;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -47,7 +49,9 @@ pub struct MobilityRuntime {
     workspace_runtime: Arc<WorkspaceRuntime>,
     session_service: Arc<SessionService>,
     session_runtime: Arc<SessionRuntime>,
-    subagent_service: Arc<SubagentService>,
+    session_link_service: Arc<SessionLinkService>,
+    link_completion_store: LinkCompletionStore,
+    completion_delivery_store: CompletionDeliveryStore,
     review_store: ReviewStore,
     access_gate: Arc<WorkspaceAccessGate>,
     terminal_service: Arc<TerminalService>,
@@ -61,7 +65,9 @@ impl MobilityRuntime {
         workspace_runtime: Arc<WorkspaceRuntime>,
         session_service: Arc<SessionService>,
         session_runtime: Arc<SessionRuntime>,
-        subagent_service: Arc<SubagentService>,
+        session_link_service: Arc<SessionLinkService>,
+        link_completion_store: LinkCompletionStore,
+        completion_delivery_store: CompletionDeliveryStore,
         review_store: ReviewStore,
         access_gate: Arc<WorkspaceAccessGate>,
         terminal_service: Arc<TerminalService>,
@@ -72,7 +78,9 @@ impl MobilityRuntime {
             workspace_runtime,
             session_service,
             session_runtime,
-            subagent_service,
+            session_link_service,
+            link_completion_store,
+            completion_delivery_store,
             review_store,
             access_gate,
             terminal_service,

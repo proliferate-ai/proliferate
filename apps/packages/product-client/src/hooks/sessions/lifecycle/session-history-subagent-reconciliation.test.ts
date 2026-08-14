@@ -60,6 +60,38 @@ describe("history subagent reconciliation authority", () => {
     expect(application.mountSubagentChildSession).not.toHaveBeenCalled();
   });
 
+  it("replays strict promotion authority from a historical Codex transport envelope", async () => {
+    const direct = workspaceOperation("promote_subagent", CHILD_ID);
+    const wrapped: ToolCallItem = {
+      ...direct,
+      nativeToolName: null,
+      rawInput: {
+        server: "workspace",
+        tool: "promote_subagent",
+        arguments: direct.rawInput,
+      },
+      rawOutput: {
+        content: [{ type: "text", text: JSON.stringify(direct.rawOutput) }],
+        isError: false,
+        structuredContent: direct.rawOutput,
+      },
+    };
+    const authority = await resolveHistorySubagentAuthority({
+      parentSessionId: PARENT_ID,
+      workspaceId: WORKSPACE_ID,
+      events: [],
+      transcript: transcriptWith(wrapped),
+      fetchParentRoster: vi.fn(),
+      fetchVisibleSessionIds: vi.fn(),
+    });
+
+    expect(authority.effects).toEqual([{
+      kind: "mark_session_promoted",
+      childSessionId: CHILD_ID,
+      workspaceId: WORKSPACE_ID,
+    }]);
+  });
+
   it.each(["legacy", "create"] as const)(
     "records and mounts a %s candidate only from the successful current parent roster",
     async (candidateKind) => {
@@ -336,7 +368,7 @@ function workspaceOperation(
     sourceAgentKind: "codex",
     messageId: null,
     title: "Historical agent operation",
-    nativeToolName: `mcp__workspace__${action}`,
+    nativeToolName: `mcp__proliferate_workspace__${action}`,
     parentToolCallId: null,
     rawInput: action === "create_agent"
       ? { workspaceId: WORKSPACE_ID, kind: "subagent", task: "Help" }

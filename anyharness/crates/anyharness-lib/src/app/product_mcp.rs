@@ -13,31 +13,24 @@ use crate::domains::reviews::mcp::{
     self as review_mcp, auth::ReviewMcpAuth, tools as review_mcp_tools, ReviewProductMcpServer,
 };
 use crate::domains::reviews::runtime::ReviewRuntime;
-use crate::domains::sessions::admission::SessionMutationAdmission;
-use crate::domains::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
+use crate::domains::sessions::mcp_bindings::product_catalog::{
+    workspace_mcp_should_attach, ProductMcpLaunchCatalog,
+};
 use crate::domains::sessions::mcp_bindings::product_launch::{
     ProductMcpLaunchRegistration, ProductMcpSelectionContext,
 };
 use crate::domains::sessions::mcp_bindings::product_registry::{
     ProductMcpEndpointHandlerAdapter, ProductMcpEndpointRegistration, ProductMcpEndpointRegistry,
 };
-use crate::domains::sessions::runtime::SessionRuntime;
-use crate::domains::sessions::subagents::mcp::{
-    auth::SubagentMcpAuth, tools as subagent_mcp_tools, SubagentProductMcpServer,
-};
-use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::model::WorkspaceSurface;
-use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
-use crate::domains::workspaces::runtime::WorkspaceRuntime;
 
 pub(super) struct LaunchCatalogDeps {
     pub(super) runtime_base_url: String,
     pub(super) bearer_token: Option<String>,
+    pub(super) workspace_mcp_auth: Arc<WorkspaceMcpAuth>,
     pub(super) review_mcp_auth: Arc<ReviewMcpAuth>,
-    pub(super) subagent_mcp_auth: Arc<SubagentMcpAuth>,
     pub(super) cowork_mcp_auth: Arc<CoworkMcpAuth>,
-    pub(super) subagent_service: Arc<SubagentService>,
 }
 
 pub(super) struct EndpointRegistryDeps {
@@ -45,12 +38,6 @@ pub(super) struct EndpointRegistryDeps {
     pub(super) workspace_mcp_auth: Arc<WorkspaceMcpAuth>,
     pub(super) review_runtime: Arc<ReviewRuntime>,
     pub(super) review_mcp_auth: Arc<ReviewMcpAuth>,
-    pub(super) subagent_service: Arc<SubagentService>,
-    pub(super) session_runtime: Arc<SessionRuntime>,
-    pub(super) workspace_runtime: Arc<WorkspaceRuntime>,
-    pub(super) session_admission: Arc<SessionMutationAdmission>,
-    pub(super) workspace_operation_gate: Arc<WorkspaceOperationGate>,
-    pub(super) subagent_mcp_auth: Arc<SubagentMcpAuth>,
     pub(super) cowork_artifact_runtime: Arc<CoworkArtifactRuntime>,
     pub(super) cowork_runtime: Arc<CoworkRuntime>,
     pub(super) cowork_mcp_auth: Arc<CoworkMcpAuth>,
@@ -60,21 +47,19 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
     let LaunchCatalogDeps {
         runtime_base_url,
         bearer_token,
+        workspace_mcp_auth,
         review_mcp_auth,
-        subagent_mcp_auth,
         cowork_mcp_auth,
-        subagent_service,
     } = deps;
 
     let review_auth = review_mcp_auth.clone();
-    let subagent_auth = subagent_mcp_auth.clone();
     let cowork_auth = cowork_mcp_auth.clone();
-    let subagent_selector_service = subagent_service.clone();
 
     ProductMcpLaunchCatalog::new(
         runtime_base_url,
         bearer_token,
         vec![
+            workspace_launch_registration(workspace_mcp_auth),
             ProductMcpLaunchRegistration::new(
                 &review_mcp::definition::DEFINITION,
                 Arc::new(|ctx: ProductMcpSelectionContext<'_>| {
@@ -88,25 +73,6 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
                 }),
             )
             .with_binding_summary(review_mcp::definition::binding_summary()),
-            ProductMcpLaunchRegistration::new(
-                &crate::domains::sessions::subagents::mcp::definition::DEFINITION,
-                Arc::new(move |ctx: ProductMcpSelectionContext<'_>| {
-                    if ctx.workspace.surface != WorkspaceSurface::Standard
-                        || !ctx.session.subagents_enabled
-                    {
-                        return Ok(false);
-                    }
-                    Ok(subagent_selector_service
-                        .find_subagent_parent(&ctx.session.id)?
-                        .is_none())
-                }),
-                Arc::new(move |workspace_id: &str, session_id: &str| {
-                    subagent_auth.mint_capability_token(workspace_id, session_id)
-                }),
-            )
-            .with_binding_summary(
-                crate::domains::sessions::subagents::mcp::definition::binding_summary(),
-            ),
             ProductMcpLaunchRegistration::new(
                 &cowork_mcp::definition::DEFINITION,
                 Arc::new(|ctx: ProductMcpSelectionContext<'_>| {
@@ -123,6 +89,25 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
     )
 }
 
+fn workspace_launch_registration(
+    workspace_mcp_auth: Arc<WorkspaceMcpAuth>,
+) -> ProductMcpLaunchRegistration {
+    ProductMcpLaunchRegistration::new(
+        &crate::domains::agent_operations::mcp::definition::DEFINITION,
+        Arc::new(|ctx: ProductMcpSelectionContext<'_>| Ok(workspace_mcp_should_attach(ctx))),
+        Arc::new(move |workspace_id: &str, session_id: &str| {
+            workspace_mcp_auth.mint_capability_token(workspace_id, session_id)
+        }),
+    )
+    .with_system_prompt_append(
+        crate::domains::agent_operations::mcp::definition::system_prompt_append(),
+    )
+    .with_first_prompt_system_prompt_append(
+        crate::domains::agent_operations::mcp::definition::first_prompt_system_prompt_append(),
+    )
+    .with_applied_http_binding_summary()
+}
+
 pub(super) fn build_product_mcp_endpoint_registry(
     deps: EndpointRegistryDeps,
 ) -> anyhow::Result<Arc<ProductMcpEndpointRegistry>> {
@@ -131,12 +116,6 @@ pub(super) fn build_product_mcp_endpoint_registry(
         workspace_mcp_auth,
         review_runtime,
         review_mcp_auth,
-        subagent_service,
-        session_runtime,
-        workspace_runtime,
-        session_admission,
-        workspace_operation_gate,
-        subagent_mcp_auth,
         cowork_artifact_runtime,
         cowork_runtime,
         cowork_mcp_auth,
@@ -160,20 +139,6 @@ pub(super) fn build_product_mcp_endpoint_registry(
             review_mcp_tools::MUTATING_TOOL_NAMES,
         ))),
         ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-            Arc::new(SubagentProductMcpServer::new(
-                subagent_service.clone(),
-                session_runtime,
-                workspace_runtime.clone(),
-                session_admission,
-                workspace_operation_gate,
-                subagent_mcp_auth,
-            )),
-            // Legacy subagent mutations must acquire the session permit before
-            // the workspace lease. The server owns both in that order.
-            None,
-            subagent_mcp_tools::MUTATING_TOOL_NAMES,
-        ))),
-        ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
             Arc::new(CoworkProductMcpServer::new(
                 cowork_artifact_runtime,
                 cowork_runtime,
@@ -184,4 +149,25 @@ pub(super) fn build_product_mcp_endpoint_registry(
         ))),
     ];
     ProductMcpEndpointRegistry::new(product_mcp_endpoint_registrations).map(Arc::new)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workspace_registration_delivers_generic_guidance_on_both_launch_channels() {
+        let registration = workspace_launch_registration(Arc::new(WorkspaceMcpAuth::new(
+            std::env::temp_dir().join("workspace-launch-guidance-test"),
+        )));
+        let extras = registration.launch_extras();
+        let expected = crate::domains::agent_operations::mcp::definition::LAUNCH_GUIDANCE;
+
+        assert_eq!(extras.system_prompt_append.len(), 1);
+        assert_eq!(extras.system_prompt_append[0], expected);
+        assert_eq!(extras.first_prompt_system_prompt_append.len(), 1);
+        assert_eq!(extras.first_prompt_system_prompt_append[0], expected);
+        assert!(expected.contains("get_task_output"));
+        assert_eq!(extras.mcp_binding_summaries.len(), 1);
+    }
 }

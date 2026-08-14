@@ -14,6 +14,12 @@ use crate::live::sessions::rendezvous::broker::PermissionDecision;
 #[derive(Debug)]
 pub enum PromptAcceptError {
     EnqueueFailed(String),
+    /// Current durable role/relationship truth could not be resolved. The
+    /// incident UUID becomes the RFC 7807 instance receipt at the API seam.
+    ProductContextUnavailable {
+        incident_id: String,
+        error: crate::live::sessions::product_context::AgentProductContextResolutionError,
+    },
 }
 
 /// Result of the crate-private conditional-cancel command (spec

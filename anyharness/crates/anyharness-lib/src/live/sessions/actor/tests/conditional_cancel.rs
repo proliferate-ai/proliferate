@@ -26,13 +26,13 @@ use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::sessions::extensions::{
     SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
 };
+use crate::domains::sessions::links::completions::LinkCompletionStore;
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::sessions::subagents::delivery::{
     CompletionDeliveryState, CompletionDeliveryStore,
 };
-use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::live::sessions::actor::command::{
     ConditionalCancelOutcome, PromptAcceptance, SessionCommand,
 };
@@ -52,6 +52,7 @@ use crate::persistence::Db;
 
 mod completion_wake;
 mod completion_wake_outcomes;
+mod product_context;
 mod terminal_fence;
 mod unload;
 
@@ -149,10 +150,12 @@ async fn spawn_harness_with_capabilities(
         SessionExecutionPhase::Idle,
     ));
 
-    let event_sink = Arc::new(Mutex::new(SessionEventSink::new(
+    let last_event_seq = store.last_event_seq(SESSION_ID).expect("last event seq");
+    let event_sink = Arc::new(Mutex::new(SessionEventSink::resume_from_seq(
         SESSION_ID.to_string(),
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
+        last_event_seq,
         event_tx.clone(),
         caps.events.clone(),
     )));

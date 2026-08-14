@@ -3,6 +3,12 @@ use crate::domains::agent_operations::model::{
     MAX_AGENT_PAGE_SIZE, MAX_WORKSPACE_PAGE_SIZE,
 };
 use crate::domains::sessions::links::service::CreateSessionLinkError;
+use crate::domains::sessions::mcp_bindings::workspace_attachment::{
+    WORKSPACE_MCP_ATTACHMENT_CODE, WORKSPACE_MCP_ATTACHMENT_DETAIL,
+};
+use crate::domains::sessions::prompt::{
+    AGENT_PRODUCT_CONTEXT_UNAVAILABLE_CODE, AGENT_PRODUCT_CONTEXT_UNAVAILABLE_DETAIL,
+};
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError,
     EnsureLiveSessionError, SendPromptError, SessionLifecycleError, SetSessionConfigOptionError,
@@ -82,6 +88,10 @@ impl AgentOperationsError {
             Self::CallerNotFound => "AGENT_CALLER_NOT_FOUND",
             Self::CallerClosed => "AGENT_CALLER_CLOSED",
             Self::AgentNotFound => "AGENT_NOT_FOUND",
+            Self::CapabilityDenied {
+                denial: CapabilityDenial::SubagentSameWorkspaceRequired,
+                ..
+            } => "SUBAGENT_SAME_WORKSPACE_REQUIRED",
             Self::CapabilityDenied { .. } => "AGENT_CAPABILITY_DENIED",
             Self::SubagentOpenRequired => "SUBAGENT_OPEN_REQUIRED",
             Self::InvalidCursor => "AGENT_CURSOR_INVALID",
@@ -145,6 +155,10 @@ impl AgentOperationsError {
             Self::CallerNotFound => "The calling agent was not found.".into(),
             Self::CallerClosed => "The calling agent is closed.".into(),
             Self::AgentNotFound => "The requested agent was not found.".into(),
+            Self::CapabilityDenied {
+                denial: CapabilityDenial::SubagentSameWorkspaceRequired,
+                ..
+            } => "Subagents must use the calling agent's workspaceId. Use whoami to get it, or create an ordinary agent for another workspace.".into(),
             Self::CapabilityDenied { .. } => {
                 "The calling agent does not have this capability.".into()
             }
@@ -281,6 +295,9 @@ fn create_session_code(error: &CreateAndStartSessionError) -> &'static str {
         }
         CreateAndStartSessionError::WorkspaceSingleSession { .. } => "WORKSPACE_SINGLE_SESSION",
         CreateAndStartSessionError::SessionIdConflict { .. } => "SESSION_ID_CONFLICT",
+        CreateAndStartSessionError::WorkspaceMcpAttachmentFailed(_) => {
+            WORKSPACE_MCP_ATTACHMENT_CODE
+        }
         CreateAndStartSessionError::RouteAuth(error) => error.code(),
         CreateAndStartSessionError::MissingDataKey
         | CreateAndStartSessionError::StartFailed(_)
@@ -295,6 +312,8 @@ fn prompt_code(error: &SendPromptError) -> &'static str {
         SendPromptError::EmptyPrompt => "AGENT_TASK_INVALID",
         SendPromptError::WorkspaceDirectoryMissing { .. } => "WORKSPACE_DIRECTORY_MISSING",
         SendPromptError::InvalidPrompt(error) => error.code,
+        SendPromptError::WorkspaceMcpAttachmentFailed(_) => WORKSPACE_MCP_ATTACHMENT_CODE,
+        SendPromptError::ProductContextUnavailable { .. } => AGENT_PRODUCT_CONTEXT_UNAVAILABLE_CODE,
         SendPromptError::Internal(_) => "AGENT_OPERATIONS_INTERNAL",
     }
 }
@@ -326,6 +345,7 @@ fn resume_code(error: &EnsureLiveSessionError) -> &'static str {
         EnsureLiveSessionError::WorkspaceDirectoryMissing { .. } => "WORKSPACE_DIRECTORY_MISSING",
         EnsureLiveSessionError::RouteAuth(error) => error.code(),
         EnsureLiveSessionError::AgentNotReady { .. } => "AGENT_NOT_READY",
+        EnsureLiveSessionError::WorkspaceMcpAttachmentFailed(_) => WORKSPACE_MCP_ATTACHMENT_CODE,
         EnsureLiveSessionError::MissingDataKey | EnsureLiveSessionError::Internal(_) => {
             "AGENT_OPERATIONS_INTERNAL"
         }
@@ -374,6 +394,9 @@ fn create_session_public_message(error: &CreateAndStartSessionError) -> String {
         CreateAndStartSessionError::SessionIdConflict { .. } => {
             "The requested session identity is already in use.".into()
         }
+        CreateAndStartSessionError::WorkspaceMcpAttachmentFailed(_) => {
+            WORKSPACE_MCP_ATTACHMENT_DETAIL.into()
+        }
         CreateAndStartSessionError::RouteAuth(_) => {
             "The selected agent route is not ready for launch.".into()
         }
@@ -392,6 +415,10 @@ fn prompt_public_message(error: &SendPromptError) -> String {
             "The workspace checkout directory is missing.".into()
         }
         SendPromptError::InvalidPrompt(_) => "The initial task is invalid.".into(),
+        SendPromptError::WorkspaceMcpAttachmentFailed(_) => WORKSPACE_MCP_ATTACHMENT_DETAIL.into(),
+        SendPromptError::ProductContextUnavailable { .. } => {
+            AGENT_PRODUCT_CONTEXT_UNAVAILABLE_DETAIL.into()
+        }
         SendPromptError::Internal(_) => "Agent operations failed.".into(),
     }
 }
@@ -405,6 +432,10 @@ fn message_public_message(error: &SendPromptError) -> String {
             "The workspace checkout directory is missing.".into()
         }
         SendPromptError::InvalidPrompt(_) => "The message is invalid.".into(),
+        SendPromptError::WorkspaceMcpAttachmentFailed(_) => WORKSPACE_MCP_ATTACHMENT_DETAIL.into(),
+        SendPromptError::ProductContextUnavailable { .. } => {
+            AGENT_PRODUCT_CONTEXT_UNAVAILABLE_DETAIL.into()
+        }
         SendPromptError::Internal(_) => "Agent operations failed.".into(),
     }
 }
@@ -441,6 +472,9 @@ fn resume_public_message(error: &EnsureLiveSessionError) -> String {
         EnsureLiveSessionError::AgentNotReady { .. } => {
             "The selected agent is not ready to launch.".into()
         }
+        EnsureLiveSessionError::WorkspaceMcpAttachmentFailed(_) => {
+            WORKSPACE_MCP_ATTACHMENT_DETAIL.into()
+        }
         EnsureLiveSessionError::MissingDataKey | EnsureLiveSessionError::Internal(_) => {
             "Agent operations failed.".into()
         }
@@ -462,5 +496,26 @@ fn workspace_access_message(error: &WorkspaceAccessError) -> String {
         }
         WorkspaceAccessError::WorkspaceRetired(_) => "The workspace is retired.".into(),
         WorkspaceAccessError::Unexpected(_) => "Agent operations failed.".into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domains::sessions::mcp_bindings::workspace_attachment::WorkspaceMcpAttachmentError;
+
+    #[test]
+    fn workspace_create_agent_preserves_attachment_failure_code_and_fixed_message() {
+        let error = AgentOperationsError::Create(CreateOrdinaryAgentSessionError::Create(
+            CreateAndStartSessionError::WorkspaceMcpAttachmentFailed(
+                WorkspaceMcpAttachmentError::summary_cleanup(anyhow::anyhow!(
+                    "private token detail"
+                )),
+            ),
+        ));
+
+        assert_eq!(error.code(), WORKSPACE_MCP_ATTACHMENT_CODE);
+        assert_eq!(error.public_message(), WORKSPACE_MCP_ATTACHMENT_DETAIL);
+        assert!(!error.public_message().contains("private token detail"));
     }
 }

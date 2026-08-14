@@ -3,7 +3,7 @@
 //! No IO: attachment bytes arrive pre-loaded in [`ResolvedParts`] (see
 //! `load_prompt_attachments`), plan references render from their frozen
 //! `body_markdown` snapshot, and the codex first-prompt append arrives as an
-//! already-decided string in [`TurnPromptExtras`]. Base64 encoding and UTF-8
+//! already-decided strings in [`TurnPromptExtras`]. Base64 encoding and UTF-8
 //! validation are pure compute and belong here.
 
 use agent_client_protocol as acp;
@@ -20,6 +20,9 @@ pub type RenderError = PromptValidationError;
 /// Per-turn additions the actor decided before rendering.
 #[derive(Debug, Clone, Default)]
 pub struct TurnPromptExtras {
+    /// Current durable ordinary/delegated role context. This is a separate
+    /// platform-owned block on every turn and never becomes authored content.
+    pub product_context: Option<String>,
     /// When set, prepended as a hidden system-instruction text block (the
     /// codex first-prompt append). The has-turn-started gating is the
     /// caller's decision; render folds the result in verbatim.
@@ -31,7 +34,13 @@ pub fn render(
     parts: &ResolvedParts,
     extras: &TurnPromptExtras,
 ) -> Result<Vec<acp::schema::ContentBlock>, RenderError> {
-    let mut blocks = Vec::with_capacity(payload.blocks.len() + 1);
+    let mut blocks = Vec::with_capacity(payload.blocks.len() + 3);
+    if let Some(append) = &extras.first_prompt_system_prompt_append {
+        blocks.push(system_instruction_block(append));
+    }
+    if let Some(context) = &extras.product_context {
+        blocks.push(system_instruction_block(context));
+    }
     if let Some(context) = agent_message_context(payload) {
         blocks.push(acp::schema::ContentBlock::Text(
             acp::schema::TextContent::new(context),
@@ -137,15 +146,13 @@ pub fn render(
             }
         }
     }
-    if let Some(append) = &extras.first_prompt_system_prompt_append {
-        blocks.insert(
-            0,
-            acp::schema::ContentBlock::Text(acp::schema::TextContent::new(format!(
-                "System instruction from AnyHarness, not user content:\n{append}"
-            ))),
-        );
-    }
     Ok(blocks)
+}
+
+fn system_instruction_block(instruction: &str) -> acp::schema::ContentBlock {
+    acp::schema::ContentBlock::Text(acp::schema::TextContent::new(format!(
+        "System instruction from AnyHarness, not user content:\n{instruction}"
+    )))
 }
 
 fn agent_message_context(payload: &PromptPayload) -> Option<String> {
@@ -391,6 +398,7 @@ mod tests {
             &ResolvedParts::default(),
             &TurnPromptExtras {
                 first_prompt_system_prompt_append: Some("Name the workspace first.".to_string()),
+                ..TurnPromptExtras::default()
             },
         )
         .expect("render");
@@ -405,6 +413,65 @@ mod tests {
             panic!("second block should be text");
         };
         assert_eq!(second.text, "Build a product");
+    }
+
+    #[test]
+    fn product_context_is_a_separate_block_and_authored_text_is_byte_preserved() {
+        let authored = "  Keep my leading space.\n\nAnd my trailing space.  ";
+        let blocks = render(
+            &payload(vec![StoredPromptBlock::Text {
+                text: authored.to_string(),
+            }]),
+            &ResolvedParts::default(),
+            &TurnPromptExtras {
+                product_context: Some("You are currently an ordinary agent.".to_string()),
+                first_prompt_system_prompt_append: None,
+            },
+        )
+        .expect("render");
+
+        let [acp::schema::ContentBlock::Text(context), acp::schema::ContentBlock::Text(message)] =
+            blocks.as_slice()
+        else {
+            panic!("expected product context followed by authored text");
+        };
+        assert_eq!(
+            context.text,
+            "System instruction from AnyHarness, not user content:\nYou are currently an ordinary agent."
+        );
+        assert_eq!(message.text.as_bytes(), authored.as_bytes());
+    }
+
+    #[test]
+    fn product_context_and_first_prompt_append_remain_separate_system_blocks() {
+        let blocks = render(
+            &payload(vec![StoredPromptBlock::Text {
+                text: "Do the work.".to_string(),
+            }]),
+            &ResolvedParts::default(),
+            &TurnPromptExtras {
+                product_context: Some("Current role context.".to_string()),
+                first_prompt_system_prompt_append: Some("Launch guidance.".to_string()),
+            },
+        )
+        .expect("render");
+
+        assert_eq!(blocks.len(), 3);
+        let texts = blocks
+            .iter()
+            .map(|block| match block {
+                acp::schema::ContentBlock::Text(text) => text.text.as_str(),
+                _ => panic!("expected text block"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            texts,
+            vec![
+                "System instruction from AnyHarness, not user content:\nLaunch guidance.",
+                "System instruction from AnyHarness, not user content:\nCurrent role context.",
+                "Do the work.",
+            ]
+        );
     }
 
     #[test]

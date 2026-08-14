@@ -159,9 +159,11 @@ whether those refreshed bindings are persisted. An explicit empty
 `pluginBundle` is a clear request and must be sent with an MCP refresh; this
 keeps the clear self-contained after a runtime process restart.
 
-`CreateSessionRequest.subagentsEnabled` is a create-time session policy.
-Omitted values default to enabled for compatibility. Resume requests do not
-carry this flag; resumed sessions use their persisted policy.
+`CreateSessionRequest.subagentsEnabled` remains accepted and persisted for
+wire and mobility compatibility. Omitted values default to enabled. Workspace
+attachment and current Agent Operations authority do not consult this legacy
+flag. Resume requests do not carry it; resumed sessions retain the persisted
+compatibility value.
 
 ### Cloud Access And Optional Worker Interaction
 
@@ -286,11 +288,12 @@ behavior, it does not belong here.
 ## Mobility Archive Rule
 
 Workspace mobility archives are public transport. If a workspace contains a
-subagent graph, the archive must preserve `session_links` and
-`session_link_completions` plus pending `session_link_wake_schedules` when both
-linked sessions are included. Export must block with a clear preflight error
-when only one side of a subagent link would be moved, because importing a
-partial graph would break child ownership and parent wake behavior.
+delegated-session graph, the archive must preserve `session_links` and
+`session_link_completions` when both linked sessions are included. Pending
+`session_link_wake_schedules` travel only for Cowork links; delegated-agent
+links neither export nor import them. Export must block with a clear preflight
+error when only one side of a live link would be moved, because importing a
+partial graph would break durable relationship ownership.
 The optional `subagentClosedAt` field preserves reversible Closed state across
 mobility; absence remains backward-compatible and means Open.
 

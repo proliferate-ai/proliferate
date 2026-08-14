@@ -5,6 +5,7 @@ use serde_json::json;
 use tokio::sync::broadcast;
 
 mod native_subagents;
+mod product_context;
 mod support;
 
 use super::{AcpChunkPayload, SessionEventSink};

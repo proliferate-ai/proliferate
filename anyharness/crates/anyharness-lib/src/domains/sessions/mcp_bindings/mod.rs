@@ -8,3 +8,4 @@ pub mod product_catalog;
 pub mod product_launch;
 pub mod product_registry;
 pub mod summaries;
+pub mod workspace_attachment;

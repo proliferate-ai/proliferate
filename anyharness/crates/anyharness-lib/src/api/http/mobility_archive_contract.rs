@@ -18,6 +18,7 @@ use crate::domains::mobility::model::{
 };
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::links::completions::LinkWakeScheduleRecord;
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
@@ -29,9 +30,7 @@ use crate::domains::sessions::model::{
 use crate::domains::sessions::subagents::delivery::{
     CompletionDeliveryRecord, CompletionDeliveryState,
 };
-use crate::domains::sessions::subagents::model::{
-    SubagentCompletionRecord, SubagentWakeScheduleRecord,
-};
+use crate::domains::sessions::subagents::model::SubagentCompletionRecord;
 
 pub(super) fn from_contract_archive(
     archive: WorkspaceMobilityArchive,
@@ -248,8 +247,8 @@ fn from_contract_session_link_completion(
 
 fn from_contract_session_link_wake_schedule(
     record: MobilitySessionLinkWakeScheduleRecord,
-) -> Result<SubagentWakeScheduleRecord, ApiError> {
-    Ok(SubagentWakeScheduleRecord {
+) -> Result<LinkWakeScheduleRecord, ApiError> {
+    Ok(LinkWakeScheduleRecord {
         session_link_id: record.session_link_id,
     })
 }
