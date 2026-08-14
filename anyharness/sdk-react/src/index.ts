@@ -59,6 +59,10 @@ export {
   anyHarnessSessionKey,
   anyHarnessSessionLiveConfigKey,
   anyHarnessSessionEventsKey,
+  anyHarnessWorkflowRunsScopeKey,
+  anyHarnessWorkflowRunsListScopeKey,
+  anyHarnessWorkflowRunsListKey,
+  anyHarnessWorkflowRunKey,
   anyHarnessSessionSubagentsKey,
   anyHarnessWorkspaceSubagentsKey,
   anyHarnessSessionReviewsKey,
@@ -195,6 +199,13 @@ export {
   useReorderPendingPromptsMutation,
   useSteerPendingPromptMutation,
 } from "./hooks/session-pending-prompts.js";
+export {
+  useWorkflowRunQuery,
+  useWorkflowRunsQuery,
+  useWorkflowRunMutations,
+  resolveWorkflowRunRefetchInterval,
+  WORKFLOW_RUN_ACTIVE_INTERVAL_MS,
+} from "./hooks/workflow-runs.js";
 export {
   useWorkspacePlansQuery,
   usePlanDetailQuery,

@@ -312,6 +312,43 @@ export function anyHarnessSessionEventsKey(
   ] as const;
 }
 
+export function anyHarnessWorkflowRunsScopeKey(
+  runtimeUrl: string | null | undefined,
+  cacheScopeKey: string | null | undefined,
+) {
+  return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "workflow-runs"] as const;
+}
+
+export function anyHarnessWorkflowRunsListScopeKey(
+  runtimeUrl: string | null | undefined,
+  cacheScopeKey: string | null | undefined,
+) {
+  return [...anyHarnessWorkflowRunsScopeKey(runtimeUrl, cacheScopeKey), "list"] as const;
+}
+
+export function anyHarnessWorkflowRunsListKey(
+  runtimeUrl: string | null | undefined,
+  cacheScopeKey: string | null | undefined,
+  workspaceId?: string | null,
+) {
+  return [
+    ...anyHarnessWorkflowRunsListScopeKey(runtimeUrl, cacheScopeKey),
+    workspaceId ?? null,
+  ] as const;
+}
+
+export function anyHarnessWorkflowRunKey(
+  runtimeUrl: string | null | undefined,
+  cacheScopeKey: string | null | undefined,
+  runId: string | null | undefined,
+) {
+  return [
+    ...anyHarnessWorkflowRunsScopeKey(runtimeUrl, cacheScopeKey),
+    "run",
+    runId ?? null,
+  ] as const;
+}
+
 export function anyHarnessSessionSubagentsKey(
   cacheScopeKey: string | null | undefined,
   workspaceId: string | null | undefined,
