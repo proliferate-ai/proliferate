@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -10,6 +11,7 @@ use crate::domains::terminals::model::{TerminalCommandRunRecord, TerminalCommand
 use crate::domains::terminals::service::{
     append_bounded, complete_command_run, TerminalCommandService,
 };
+use crate::process_kill::kill_group_and_await;
 
 use super::super::handle::TerminalRegistry;
 use super::super::output_sink::TerminalOutputHub;
@@ -18,8 +20,23 @@ use super::stream_format::{terminal_command_preface, workspace_prompt, TerminalS
 pub(in crate::live::terminals) struct ActiveSetupTask {
     pub(in crate::live::terminals) command_run_id: String,
     pub(in crate::live::terminals) abort_handle: tokio::task::AbortHandle,
+    /// The spawned command's process-group id (set once `run_setup_process`
+    /// spawns successfully; `process_group(0)` makes the child its own group
+    /// leader, so the pid IS the pgid). Zero means "not yet known" - lets a
+    /// killer that never owned the `Child` (`kill_active_run_for_workspace`)
+    /// still signal the whole group and await confirmed death.
+    pub(in crate::live::terminals) pgid: Arc<AtomicI32>,
 }
 
+/// Runs a managed shell command to completion (or the timeout), streaming
+/// its output into the terminal's hub exactly as before. Used by BOTH the
+/// start-and-poll setup surface (`start_setup_command` spawns this in a
+/// background task and returns immediately) and the new await-to-exit mode
+/// (`run_blocking_command_for_workspace` awaits the background task's
+/// completion channel instead) - one spawner, two callers, per the ADR's
+/// "the archive script is exactly one more managed run under that
+/// mechanism". Returns the process's exit status; `Err` only when the
+/// process never ran (spawn failure) or its wait() genuinely errored.
 pub(in crate::live::terminals) async fn run_setup_process(
     command_service: TerminalCommandService,
     terminals: TerminalRegistry,
@@ -30,7 +47,8 @@ pub(in crate::live::terminals) async fn run_setup_process(
     command: String,
     env_vars: Vec<(String, String)>,
     timeout: Duration,
-) {
+    pgid: Arc<AtomicI32>,
+) -> anyhow::Result<std::process::ExitStatus> {
     let started_at = Instant::now();
     let hub = hubs.read().await.get(&terminal_id).cloned();
     let mut terminal_formatter = TerminalStreamFormatter::default();
@@ -50,6 +68,12 @@ pub(in crate::live::terminals) async fn run_setup_process(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     cmd.kill_on_drop(true);
+    // Its own process group, so a timeout or an external kill (a killer that
+    // never owned this `Child`, e.g. `kill_active_run_for_workspace`) can
+    // reach the whole tree - the package manager, compiler, dev server -
+    // with one group signal instead of leaving every grandchild running.
+    #[cfg(unix)]
+    cmd.process_group(0);
     for (key, value) in env_vars {
         cmd.env(key, value);
     }
@@ -85,9 +109,12 @@ pub(in crate::live::terminals) async fn run_setup_process(
             .await;
             set_terminal_output_suppressed(&terminals, &terminal_id, false).await;
             let _ = command_service.update_command_run(&record);
-            return;
+            return Err(anyhow::anyhow!("failed to spawn setup command: {error}"));
         }
     };
+    if let Some(pid) = child.id() {
+        pgid.store(pid as i32, Ordering::SeqCst);
+    }
 
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
@@ -174,8 +201,18 @@ pub(in crate::live::terminals) async fn run_setup_process(
             }
             _ = tokio::time::sleep_until(deadline) => {
                 timed_out = true;
-                let _ = child.start_kill();
-                let _ = child.wait().await;
+                let target_pgid = pgid.load(Ordering::SeqCst);
+                if target_pgid > 0 {
+                    // Group TERM -> 5s grace -> KILL, joined with our own
+                    // reap so an owned zombie never blocks the escalation's
+                    // confirmation loop.
+                    let (_, wait_result) =
+                        tokio::join!(kill_group_and_await(target_pgid), child.wait());
+                    status = wait_result.ok();
+                } else {
+                    let _ = child.start_kill();
+                    status = child.wait().await.ok();
+                }
                 while let Some((stream, data)) = rx.recv().await {
                     if stream == "stdout" {
                         append_bounded(&mut stdout_capture, &String::from_utf8_lossy(&data), &mut output_truncated);
@@ -237,6 +274,7 @@ pub(in crate::live::terminals) async fn run_setup_process(
     .await;
     set_terminal_output_suppressed(&terminals, &terminal_id, false).await;
     let _ = command_service.update_command_run(&record);
+    status.ok_or_else(|| anyhow::anyhow!("setup process wait failed"))
 }
 
 pub(in crate::live::terminals) async fn set_terminal_output_suppressed(

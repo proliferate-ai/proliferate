@@ -412,8 +412,12 @@ impl LiveSessionManager {
 
     /// Register a scripted handle for `session_id`: `SetConfigOption` answers
     /// `Applied`, `Prompt` answers `Started` with the scripted turn id,
-    /// `CancelTurnIfActive` answers `Requested`; every command is recorded.
-    /// Other commands are dropped.
+    /// `CancelTurnIfActive` answers `Requested`, `Stop` answers a fixed
+    /// `(3, 1)` census (R3: `stop_all_for_workspace`'s domain-level tests
+    /// exercise census AGGREGATION and the session-row write policy against
+    /// this scripted stand-in - real process-group death is proven at the
+    /// mechanism level and at the actor's own real-process test, not here);
+    /// every command is recorded. Other commands are dropped.
     pub(crate) async fn insert_scripted_session_for_test(
         &self,
         session_id: &str,
@@ -477,6 +481,9 @@ impl LiveSessionManager {
                         }
                         let _ = respond_to.send(ConditionalCancelOutcome::Requested);
                     }
+                    SessionCommand::Stop { respond_to } => {
+                        let _ = respond_to.send(Ok((3, 1)));
+                    }
                     _ => {}
                 }
             }
@@ -485,5 +492,42 @@ impl LiveSessionManager {
             events: seen_rx,
             release,
         }
+    }
+
+    /// Register a handle whose `Stop` reply is deliberately SLOW (`stop_delay`
+    /// before it answers `(1, 0)`) and which answers nothing else. The R3
+    /// fan-out seam: `stop_all_for_workspace` must drive several of these
+    /// concurrently, so N such sessions cost one `stop_delay`, not N of them
+    /// - a sequential walk stacks one full TERM grace per live session and
+    /// blows R4's 8s `QUIESCE_DEADLINE` on the second one.
+    pub(crate) async fn insert_slow_stop_session_for_test(
+        &self,
+        session_id: &str,
+        stop_delay: std::time::Duration,
+    ) {
+        use crate::live::sessions::actor::command::SessionCommand;
+
+        let (command_tx, mut command_rx) = tokio::sync::mpsc::channel(8);
+        let (event_tx, _) = tokio::sync::broadcast::channel(16);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some(format!("native-{session_id}")),
+            anyharness_contract::v1::SessionExecutionPhase::Running,
+        ));
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle);
+
+        tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                if let SessionCommand::Stop { respond_to } = command {
+                    tokio::time::sleep(stop_delay).await;
+                    let _ = respond_to.send(Ok((1, 0)));
+                }
+            }
+        });
     }
 }

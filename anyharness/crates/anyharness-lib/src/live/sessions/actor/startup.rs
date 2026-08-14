@@ -379,6 +379,7 @@ impl SessionActor {
             handle,
             _acp_shutdown: shutdown_tx,
             child,
+            pending_stop_response: None,
         };
         Ok((actor, notification_rx, background_work_rx))
     }

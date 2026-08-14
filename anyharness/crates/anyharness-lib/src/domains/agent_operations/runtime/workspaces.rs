@@ -210,6 +210,10 @@ mod tests {
             cleanup_error_message: None,
             cleanup_failed_at: None,
             cleanup_attempted_at: None,
+            archived_head_sha: None,
+            archived_branch: None,
+            archived_at: None,
+            partial_capture_json: None,
             created_at: created_at.to_string(),
             updated_at: updated_at.to_string(),
         }

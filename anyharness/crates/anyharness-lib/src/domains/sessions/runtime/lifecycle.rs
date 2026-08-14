@@ -13,6 +13,7 @@ use crate::domains::sessions::runtime_event::{
 use super::{SessionLifecycleError, SessionRuntime};
 
 use crate::live::sessions::ConditionalCancelOutcome;
+use crate::process_kill::PlaneKills;
 
 impl SessionRuntime {
     /// Retire the in-memory actor while leaving the durable session fully
@@ -69,35 +70,90 @@ impl SessionRuntime {
             .ok_or_else(|| SessionLifecycleError::SessionNotFound(session_id.to_string()))
     }
 
-    pub async fn force_retire_workspace_live_sessions_for_purge(
-        &self,
-        workspace_id: &str,
-    ) -> anyhow::Result<usize> {
+    /// Stop every live session in `workspace_id`: awaits each agent
+    /// process's confirmed death (group TERM → 5s grace → KILL) and moves
+    /// the session row to its stopped (`idle`) state, never `closed` or
+    /// `dismissed` — the whole point of archiving is that unarchive resumes.
+    /// Generalized from `force_retire_workspace_live_sessions_for_purge`,
+    /// which only dismissed handles and never awaited process death or wrote
+    /// a session row; purge inherits both new behaviors by calling this.
+    /// Infallible from the caller's point of view: a per-session error is
+    /// logged and folded into a zero contribution, matching the `_for_purge`
+    /// precedent.
+    ///
+    /// The per-session stops are driven CONCURRENTLY. Each `stop_and_await`
+    /// carries its own TERM → grace → KILL escalation, so a sequential walk
+    /// would stack one 5s grace window per live session and a workspace with
+    /// two of them could never fit R4's 8s `QUIESCE_DEADLINE`. One grace
+    /// window must cover the whole plane.
+    pub async fn stop_all_for_workspace(&self, workspace_id: &str) -> anyhow::Result<PlaneKills> {
         let sessions = self
             .session_service
             .store()
             .list_by_workspace(workspace_id)?;
-        let mut retired_count = 0usize;
 
-        for session in sessions {
-            let Some(handle) = self.acp_manager.get_handle(&session.id).await else {
-                self.acp_manager.remove_session(&session.id).await;
-                continue;
-            };
+        let stops = sessions.into_iter().map(|session| async move {
+            let mut kills = PlaneKills::default();
 
-            if let Err(error) = handle.dismiss().await {
-                tracing::warn!(
-                    session_id = %session.id,
-                    workspace_id = %workspace_id,
-                    error = %error,
-                    "failed to dismiss live session during workspace purge"
-                );
+            // A session with no live handle contributes no kills, but it
+            // still owns a row. Falling through to the row write rather than
+            // returning early is what makes an INTERRUPTED stop converge: the
+            // attempt that was dropped mid-flight may already have detached
+            // the actor without ever reaching the row, and skipping the write
+            // here would leave that row reading "running" for a session that
+            // is gone for good.
+            if let Some(handle) = self.acp_manager.get_handle(&session.id).await {
+                match handle.stop_and_await().await {
+                    Ok((total, git)) => {
+                        kills.total += total;
+                        kills.git += git;
+                    }
+                    Err(error) => {
+                        // Includes the actor that is already on its way out:
+                        // its mailbox closes the moment it decides to exit, so
+                        // the command is refused rather than answered. "Already
+                        // stopped" is exactly the outcome this primitive wants,
+                        // and a zero contribution states it honestly.
+                        tracing::warn!(
+                            session_id = %session.id,
+                            workspace_id = %workspace_id,
+                            error = %error,
+                            "failed to stop live session during workspace stop"
+                        );
+                    }
+                }
             }
             self.acp_manager.remove_session(&session.id).await;
-            retired_count += 1;
+
+            // Only a live row moves to its stopped state - never rewrite a
+            // row that already reads "closed"/"completed"/"errored", which
+            // `update_status` guards against for `closed_at` but not against
+            // for the status value itself.
+            if matches!(session.status.as_str(), "starting" | "running") {
+                let now = chrono::Utc::now().to_rfc3339();
+                if let Err(error) =
+                    self.session_service
+                        .store()
+                        .update_status(&session.id, "idle", &now)
+                {
+                    tracing::warn!(
+                        session_id = %session.id,
+                        workspace_id = %workspace_id,
+                        error = %error,
+                        "failed to move session to its stopped state during workspace stop"
+                    );
+                }
+            }
+            kills
+        });
+
+        let mut kills = PlaneKills::default();
+        for session_kills in futures::future::join_all(stops).await {
+            kills.total += session_kills.total;
+            kills.git += session_kills.git;
         }
 
-        Ok(retired_count)
+        Ok(kills)
     }
 
     async fn close_session_actor_and_mark_closed(

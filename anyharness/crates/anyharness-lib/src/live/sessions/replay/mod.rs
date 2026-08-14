@@ -420,6 +420,12 @@ async fn handle_non_replay_command(
             let _ = respond_to.send(Ok(()));
             Some(ReplayExitDisposition::Dismiss)
         }
+        SessionCommand::Stop { respond_to } => {
+            // A replay session has no live agent process to kill; nothing
+            // was running, so the census is zero.
+            let _ = respond_to.send(Ok((0, 0)));
+            Some(ReplayExitDisposition::Dismiss)
+        }
         SessionCommand::Close { respond_to } => {
             let _ = respond_to.send(Ok(()));
             Some(ReplayExitDisposition::Close)

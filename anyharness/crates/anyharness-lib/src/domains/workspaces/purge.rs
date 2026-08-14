@@ -137,7 +137,7 @@ impl WorkspacePurgeService {
             });
         }
         self.session_runtime
-            .force_retire_workspace_live_sessions_for_purge(workspace_id)
+            .stop_all_for_workspace(workspace_id)
             .await?;
         let preflight = self
             .preflight_checker
