@@ -18,6 +18,15 @@ use std::collections::BTreeMap;
 
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 
+/// Claude's catalog-declared sentinel model id (`catalogs/agents/catalog.json`,
+/// claude's `models[]`): "use the harness's own default", not a real model
+/// name the CLI understands. A session can carry this as its resolved
+/// `requested_model_id` (it is a legitimate, `defaultVisible` picker entry —
+/// [`ActiveCatalog::validate_launch_in_universe`] resolves it like any other
+/// row), so launch env must recognize and skip it rather than forward it as
+/// `ANTHROPIC_MODEL`, which the CLI rejects with `model_not_found`.
+const CATALOG_DEFAULT_MODEL_SENTINEL: &str = "default";
+
 pub(super) fn build_session_launch_env(
     resolved_agent: &ResolvedAgent,
     requested_model_id: Option<&str>,
@@ -52,6 +61,7 @@ fn build_claude_session_launch_env(
     if let Some(model_id) = requested_model_id
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .filter(|value| *value != CATALOG_DEFAULT_MODEL_SENTINEL)
     {
         env.insert("ANTHROPIC_MODEL".to_string(), model_id.to_string());
     }
