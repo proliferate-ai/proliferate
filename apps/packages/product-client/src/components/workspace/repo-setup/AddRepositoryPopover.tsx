@@ -25,9 +25,10 @@ export type {
 /**
  * The flow's surface, for hosts that anchor it themselves: popover chrome at
  * the menu's own width and padding. Kept here (not at each host) so the three
- * entry points cannot render the same body at three different widths.
+ * entry points cannot render the same body at three different widths — and
+ * matched to the project menu (w-72/p-1), whose sweep renders this same body.
  */
-export const ADD_REPOSITORY_SURFACE_CLASS = `w-80 p-1.5 ${POPOVER_FRAME_CLASS}`;
+export const ADD_REPOSITORY_SURFACE_CLASS = `w-72 p-1 ${POPOVER_FRAME_CLASS}`;
 
 /** The copy the entry menu owes a user who has not connected GitHub yet. */
 export const GITHUB_CONNECTION_FOOTNOTE =
