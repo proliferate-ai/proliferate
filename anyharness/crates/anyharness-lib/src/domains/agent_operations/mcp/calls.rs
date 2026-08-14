@@ -191,8 +191,7 @@ pub async fn call_tool(
                 tracing::info!(
                     target: "anyharness.subagent.spawn_requested",
                     parent_session_id = %ctx.caller.identity().session_id,
-                    tool = name,
-                    "subagent: parent invoked a subagent tool"
+                    "subagent: creation requested"
                 );
             }
             let outcome = operations

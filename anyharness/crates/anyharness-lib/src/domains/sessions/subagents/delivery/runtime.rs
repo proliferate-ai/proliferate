@@ -220,6 +220,7 @@ async fn inject_completion_event(
             "subagent: child turn completion delivered to parent"
         ),
         Err(error) => tracing::warn!(
+            target: "anyharness.subagent.turn_completion_injection_failed",
             delivery_id = %delivery.delivery_id,
             parent_session_id = %delivery.parent_session_id,
             child_session_id = %delivery.child_session_id,

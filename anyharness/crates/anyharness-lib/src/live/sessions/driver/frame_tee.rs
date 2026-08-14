@@ -11,7 +11,12 @@ use serde_json::value::RawValue;
 
 /// Per-frame payload cap. Frames longer than this are recorded truncated with
 /// `truncated = true`.
-pub(in crate::live::sessions) const MAX_LOGGED_FRAME_BYTES: usize = 8_192;
+///
+/// Matched deliberately to the diagnostics protocol's `MAX_STRING_BYTES`
+/// clamp: a larger cap here would let the producer silently clamp a payload
+/// this module had already stamped `truncated = false`, so `truncated` would
+/// stop describing the record that actually ships.
+pub(in crate::live::sessions) const MAX_LOGGED_FRAME_BYTES: usize = 4_096;
 
 #[derive(Clone, Copy)]
 pub(in crate::live::sessions) enum FrameDirection {
@@ -56,7 +61,6 @@ pub(in crate::live::sessions) fn log_frame(
                 rpc_id = header.id.map(rpc_id_text).unwrap_or_default(),
                 payload,
                 truncated,
-                privacy = "internal",
                 "acp frame: send"
             );
         }
@@ -73,7 +77,6 @@ pub(in crate::live::sessions) fn log_frame(
                 rpc_id = header.id.map(rpc_id_text).unwrap_or_default(),
                 payload,
                 truncated,
-                privacy = "internal",
                 "acp frame: recv"
             );
         }
