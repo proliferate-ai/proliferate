@@ -41,6 +41,14 @@ async fn reversible_open_cold_starts_the_same_native_conversation_without_replay
         .ensure_live_session("target", None)
         .await
         .expect("initial actor");
+    wait_for_actor_idle(&state).await;
+    // Stop the live actor before queueing the prompt: an idle actor
+    // legitimately drains the durable queue once its startup grace elapses,
+    // so insert-then-close against a live actor races that drain and loses
+    // on slow CI runners. Close's queue purge is a store transaction that
+    // needs no live actor; unload of a live actor is asserted by the second
+    // close at the end of this test.
+    stop_target_actor(&state).await;
     state
         .session_service
         .store()
@@ -52,7 +60,6 @@ async fn reversible_open_cold_starts_the_same_native_conversation_without_replay
         .close_subagent("caller", "target")
         .await
         .expect("reversible close");
-    wait_for_actor_gone(&state).await;
     assert_eq!(closed.native_session_id.as_deref(), Some("native-target"));
     assert!(state
         .session_service
@@ -79,7 +86,19 @@ async fn reversible_open_cold_starts_the_same_native_conversation_without_replay
         .all(|request| request["params"]["sessionId"] == "native-target"));
     assert!(prompt_texts(&script.request_log).is_empty());
 
-    stop_target_actor(&state).await;
+    // Reversible close of a live actor unloads it without touching the
+    // durable native-session pointer.
+    let closed_live = state
+        .session_runtime
+        .close_subagent("caller", "target")
+        .await
+        .expect("reversible close of a live actor");
+    wait_for_actor_gone(&state).await;
+    assert_eq!(
+        closed_live.native_session_id.as_deref(),
+        Some("native-target")
+    );
+
     drop(state);
     std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
 }
