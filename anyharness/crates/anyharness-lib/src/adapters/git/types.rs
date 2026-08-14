@@ -1,3 +1,6 @@
+use std::path::PathBuf;
+use std::time::SystemTime;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -246,6 +249,90 @@ pub enum GitDiffError {
     MergeBaseNotFound,
     #[error("git diff failed: {message}")]
     GitFailed { message: String },
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
+}
+
+/// A plain projection of a `git worktree list --porcelain` registration,
+/// public so callers outside the git adapter (R4's in-use check) can read
+/// registrations through the adapter instead of re-parsing porcelain output
+/// themselves. Mirrors the shape the adapter already parses internally in
+/// `operations/worktree_restore_registry.rs`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorktreeRegistration {
+    pub path: PathBuf,
+    pub branch: Option<String>,
+    pub prunable: bool,
+    pub locked: bool,
+}
+
+/// Outcome of a forced worktree removal (`operations/worktrees.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorktreeRemoveOutcome {
+    Removed,
+    /// Git reported exit 128 "is not a working tree" and nothing exists at
+    /// the path: the registration was already gone and there is nothing to
+    /// remove. Distinguished from a real failure by a post-call stat.
+    AlreadyGone,
+}
+
+/// Typed failure of a forced worktree removal.
+#[derive(Debug, thiserror::Error)]
+pub enum WorktreeRemoveError {
+    #[error("git worktree remove failed for {path}: {detail}")]
+    Failed { path: String, detail: String },
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
+}
+
+/// The evidence the three archive planes (sessions, terminals, agent
+/// processes) actually killed before an archive capture runs. Lives in the
+/// git adapter, not `domains/workspaces/archive/quiesce.rs` (which the ADR
+/// names), because `scripts/check_anyharness_boundaries.py`'s
+/// `ADAPTERS_PRODUCT_DOMAIN_IMPORT` gate bars `adapters/**` from importing
+/// `crate::domains::**`, and `repair_kill_debris` (an adapter function) must
+/// consume this type. R4's `quiesce.rs` constructs and re-exports it.
+#[derive(Debug, Clone, Copy)]
+pub struct QuiesceReport {
+    /// Total processes the three planes actually killed.
+    pub killed: usize,
+    /// Of those, git processes specifically (matched by the kill's own pid
+    /// check). The ownership proof for kill-debris repair: a nonzero count
+    /// proves a post-quiesce conflict sentinel can be our own kill's debris.
+    pub killed_git: usize,
+    /// When every plane confirmed dead. Bounds which lock files can still
+    /// have a living owner.
+    pub completed_at: SystemTime,
+}
+
+/// A single notice threaded through the archive capture's response and
+/// persisted (the partial-capture variants) on the row as
+/// `partial_capture_json`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SnapshotNotice {
+    DirtySubmodule { paths: Vec<String> },
+    EmbeddedRepo { paths: Vec<String> },
+    PartialCaptureUntracked { paths: Vec<String> },
+    PartialCaptureTracked { paths: Vec<String> },
+    /// Raised by `repair_kill_debris`, never by the capture itself.
+    AbortedGitOperation { operation: String },
+}
+
+/// The typed refusals and failures `snapshot_workspace`, `probe_refusals`,
+/// `repair_kill_debris`, `restore_snapshot`, and `restore_trees` can produce.
+/// R4 maps each variant onto a distinct wire code; `Internal` carries every
+/// mechanical git failure, matching the house style of `CommitError` /
+/// `PushError` / `GitDiffError` above.
+#[derive(Debug, thiserror::Error)]
+pub enum SnapshotError {
+    #[error("the workspace directory is not the root of its own git repository")]
+    HollowCheckout { path: String },
+    #[error("a git {operation} is in progress")]
+    GitOperationInProgress { operation: String },
+    #[error("the branch has no commits yet")]
+    UnbornHead,
+    #[error("git is locked by {file}")]
+    GitLocked { file: String },
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }

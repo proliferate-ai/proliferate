@@ -267,6 +267,36 @@ The durable workspace rows are loaded and stored through:
 - file path safety
 - hosting-provider PR operations
 
+### Archive (dark skeleton)
+
+`domains/workspaces/archive/` is the archiving-workspaces feature's module.
+This rung ships only the skeleton: `mod.rs` declares `pub mod refs;` and
+nothing else — `archive.rs`, `unarchive.rs`, `quiesce.rs`, and `sweep.rs`
+arrive in a later rung, and nothing in the product calls into `archive/`
+yet.
+
+`archive/refs.rs` is the ADR's one stated carve-out from "adapters/git owns
+every git verb": it is the sole reader/writer of the private
+`refs/proliferate/archive-*` namespace (`archive-heads`, `archive-worktrees`,
+`archive-indexes`, plus the exempt `rescue/<id>-<sha>/...` family), shelling
+`git update-ref` / `show-ref --verify` / `for-each-ref` directly rather than
+going through `adapters/git`. `adapters/git` still owns every worktree,
+index, and content verb; only this one namespace's ref-plumbing lives in the
+domain. `scripts/check_anyharness_boundaries.py` says nothing about
+`std::process::Command`, so this passes the automated boundary checker; the
+sole-writer rule is a design invariant enforced by review (grep for
+`update-ref`/`show-ref`/`for-each-ref` against `refs/proliferate/` across the
+tree), not by a script.
+
+`QuiesceReport` — the evidence a later rung's kill-debris repair keys off
+(how many git processes were actually killed, and when quiescing completed)
+— is defined in `adapters/git/types.rs`, not in `archive/quiesce.rs`, even
+though the ADR's design places it in the domain: `adapters/**` may not import
+`crate::domains::**` (`ADAPTERS_PRODUCT_DOMAIN_IMPORT`), so the adapter's
+`repair_kill_debris` cannot consume a domain-owned type. The rung that adds
+`archive/quiesce.rs` constructs and re-exports the adapter's type rather than
+defining a second one.
+
 ## Important Invariants
 
 - Local and worktree workspaces are different durable kinds.
