@@ -54,6 +54,13 @@ Three sub-kinds, in every language:
 | TypeScript | Colocated `*.test.ts(x)` next to source (desktop, packages, SDKs) | `pnpm --filter <pkg> test` |
 | Contract fixtures | `fixtures/contracts/<contract-name>/*.json` | Asserted from each language's tier-1 suite |
 
+Standalone diagnostics collector behavior is Tier 1: exercise its real child
+process and loopback transport with inherited anonymous capability/control
+file descriptors, while keeping Desktop, AnyHarness, Worker, server, and cloud
+integration absent. Run `cargo test -p proliferate-diagnostics-collector` for
+the deterministic contract/process suite. The release-only RSS profile runner
+is a separate bounded proof and writes its JSON/CSV evidence outside the repo.
+
 Engine tests that need a step executor use a scripted fake implementing
 `WorkflowStepExecutor` (and equivalent seams elsewhere) — never a real agent.
 

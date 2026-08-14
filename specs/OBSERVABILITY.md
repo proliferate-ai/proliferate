@@ -39,10 +39,14 @@ representations define diagnostics schema v1.1. Detailed records explain local
 execution; canonical lifecycle records use the closed P0 catalog and one
 `started` plus exactly one allowed terminal. The shared golden contract is
 `fixtures/contracts/rust-observability-v1/`; it pins privacy rejections, API
-shapes, limits, version compatibility, and the release RSS profile. This is a
-contract only: existing local sinks, server log routing, Sentry, PostHog, and
-anonymous telemetry are unchanged. The approved boundary and slice registry
-live in [`../adrs/2026-08-10-rust-observability.md`](../adrs/2026-08-10-rust-observability.md).
+shapes, limits, version compatibility, and the release RSS profile. The
+standalone `proliferate-diagnostics-collector` consumes it over authenticated
+loopback and owns only bounded local ingest, query, tail, export, health, and
+collector-owned lifecycle evidence; its concrete process and transport seam is
+documented in the [collector README](../anyharness/crates/proliferate-diagnostics-collector/README.md).
+Existing local sinks, server log routing, Sentry, PostHog, and anonymous
+telemetry are unchanged. The approved boundary and slice registry live in
+[`../adrs/2026-08-10-rust-observability.md`](../adrs/2026-08-10-rust-observability.md).
 
 ## Instrumenting a new feature
 
