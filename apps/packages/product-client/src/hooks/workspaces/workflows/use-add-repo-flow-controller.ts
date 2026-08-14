@@ -1,12 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGitHubAppUserAuthorizationStatus } from "@proliferate/cloud-sdk-react";
 import { parseGitRepoId } from "#product/domain/repos/repo-id";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import {
-  resolveRepositoryReadiness,
-  type RepositoryCapabilityRequirement,
-} from "#product/domain/repos/repo-readiness";
 import type {
   AddRepoFlowOption,
   AddRepoFlowStep,
@@ -17,22 +13,14 @@ import { useActiveOrganization } from "#product/hooks/organizations/facade/use-a
 import { isSettingsAdminRole } from "#product/lib/domain/settings/admin-roles";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
-import { describeReadinessBlocker } from "#product/lib/domain/workspaces/cloud/describe-readiness-blocker";
-import {
-  buildGitHubWaitingView,
-  cloudEnvironmentAdminRequestCopy,
-  type GitHubWaitingStep,
-} from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-model";
-import type {
-  CloudRepoPickerBlockerView,
-  CloudRepoPickerProps,
-} from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
+import { buildAddRepoPreflightBlockers } from "#product/lib/domain/workspaces/cloud/add-repo-preflight-blockers";
+import { useGitHubSetupWaiting } from "#product/hooks/workspaces/workflows/use-github-setup-waiting";
+import type { CloudRepoPickerProps } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 import { directoryPickerUnavailableCopy } from "#product/copy/workspaces/directory-picker-copy";
 import { DESKTOP_POINTER_COPY } from "#product/copy/workspaces/desktop-pointer-copy";
 import { useRepoAddedToast } from "#product/hooks/workspaces/ui/use-repo-added-toast";
-import { useGitHubAppStateInvalidation } from "#product/hooks/workspaces/cache/use-github-app-state-invalidation";
 
 /** Confirmation on arrival, once the checklist has actually been walked. */
 const GITHUB_CONNECTED_BANNER = "GitHub connected. Choose a repository.";
@@ -97,7 +85,6 @@ export function useAddRepoFlowController({
   const authStatus = useProductAuthStatus();
   const files = host.desktop?.files ?? null;
   const showRepoAddedToast = useRepoAddedToast();
-  const invalidateGitHubAppState = useGitHubAppStateInvalidation();
   const [flowError, setFlowError] = useState<string | null>(null);
 
   const canManageInstallation = isSettingsAdminRole(
@@ -110,135 +97,26 @@ export function useAddRepoFlowController({
   const userAuthorization = useGitHubAppUserAuthorizationStatus(open);
   const githubConnected = userAuthorization.data?.connected === true;
 
-  // Parked on GitHub. Manual re-check only: an auto-poll gives the user nothing
-  // to press while the answer is still "not yet" (see the waiting view model).
-  const [waitingStep, setWaitingStep] = useState<GitHubWaitingStep | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [returnedFromGitHub, setReturnedFromGitHub] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      setWaitingStep(null);
-      setChecking(false);
-      setReturnedFromGitHub(false);
-    }
-  }, [open]);
-
-  const checkAgain = useCallback(() => {
-    setChecking(true);
-    setReturnedFromGitHub(true);
-    // The same invalidation the authorization/installation callback triggers.
-    void invalidateGitHubAppState().finally(() => {
-      setChecking(false);
-      setWaitingStep(null);
-    });
-  }, [invalidateGitHubAppState]);
-
-  const cancelWaiting = useCallback(() => {
-    setWaitingStep(null);
-    setChecking(false);
-  }, []);
-
-  /**
-   * Turn a blocker into the flow's blocker: pressing its CTA opens GitHub AND
-   * parks the panel on the waiting state, because the browser tab is now the
-   * thing the user is looking at and the checklist has nothing left to add.
-   */
-  const decorateBlocker = useCallback((
-    blocker: CloudRepoPickerBlockerView | null | undefined,
-  ): CloudRepoPickerBlockerView | null => {
-    if (!blocker) {
-      return null;
-    }
-    if (waitingStep) {
-      return {
-        ...blocker,
-        waiting: buildGitHubWaitingView({
-          step: waitingStep,
-          canManageInstallation,
-          checking,
-          requestText: canManageInstallation ? null : cloudEnvironmentAdminRequestCopy(),
-          onCheckAgain: checkAgain,
-          onCancel: cancelWaiting,
-        }),
-      };
-    }
-    const action = blocker.onAction;
-    if (!action) {
-      return blocker;
-    }
-    // Which trip this is, read off the checklist the blocker already carries.
-    const nextWaitingStep: GitHubWaitingStep =
-      blocker.steps?.[0]?.status === "complete" ? "install" : "authorize";
-    return {
-      ...blocker,
-      onAction: () => {
-        action();
-        setWaitingStep(nextWaitingStep);
-      },
-    };
-  }, [
+  // Parked on GitHub: the departure, the waiting panel and the manual re-check.
+  const {
+    decorateBlocker,
+    returnedFromGitHub,
     cancelWaiting,
-    canManageInstallation,
-    checkAgain,
-    checking,
-    waitingStep,
-  ]);
+  } = useGitHubSetupWaiting({ open, canManageInstallation });
 
-  // PR2-GATING-01: the cloud path routes through the SAME ordered readiness
-  // resolver every other cloud-repo surface uses, so a deployment with operator
-  // configuration incomplete shows the "operator must configure" explanation
-  // instead of the older prerequisite model's "Authorize GitHub App" CTA. Only
-  // the two repo-independent gates (1 operator config, 2 product sign-in)
-  // precede repo selection; once past them the per-repo picker (its authority
-  // query) owns gates 3+, so we resolve with the later gates satisfied and
-  // surface a blocker only when the resolver stops at gate 1 or 2.
-  const preflightBlockers = useMemo<Record<"cloud" | "clone", CloudRepoPickerBlockerView | null>>(() => {
-    const resolve = (
-      requirement: RepositoryCapabilityRequirement,
-    ): CloudRepoPickerBlockerView | null => {
-      const readiness = resolveRepositoryReadiness({
-        requirement,
-        githubRepositoryAccess: capabilities.githubRepositoryAccessStatus,
-        managedCloud: capabilities.managedCloudStatus,
-        signedIn: authStatus === "authenticated",
-        hasSupportedRepoIdentity: true,
-        authorityLoading: false,
-        authorityError: false,
-        authority: { authorized: true, status: "ready" },
-        canManageInstallation: false,
-        cloudEnvironmentConfigured: true,
-      });
-      if (readiness.gate !== 1 && readiness.gate !== 2) {
-        return null;
-      }
-      return describeReadinessBlocker({
-        readiness,
-        requirement,
-        repo: null,
-        githubAccessDisplayName: capabilities.githubRepositoryAccessDisplayName,
-        orgName: activeOrganization?.name ?? null,
-        installUrl: "https://github.com/settings/installations",
-        userAuthorization: { authorize: () => {}, authorizing: false, error: null },
-        installation: {
-          install: () => {},
-          openInstallationSettings: () => {},
-          installing: false,
-          error: null,
-        },
-        onCopyAdminRequest: () => {},
-        onRetryAuthority: () => {},
-        onSignIn: () => {
-          onClose();
-          navigate("/login");
-        },
-      });
-    };
-    return {
-      cloud: resolve("managed_cloud"),
-      clone: resolve("github_repository_access"),
-    };
-  }, [
+  // The resolver's repo-independent gates, which take precedence over the
+  // picker's own prerequisites (see buildAddRepoPreflightBlockers).
+  const preflightBlockers = useMemo(() => buildAddRepoPreflightBlockers({
+    githubRepositoryAccessStatus: capabilities.githubRepositoryAccessStatus,
+    managedCloudStatus: capabilities.managedCloudStatus,
+    githubAccessDisplayName: capabilities.githubRepositoryAccessDisplayName,
+    signedIn: authStatus === "authenticated",
+    orgName: activeOrganization?.name ?? null,
+    onSignIn: () => {
+      onClose();
+      navigate("/login");
+    },
+  }), [
     activeOrganization?.name,
     authStatus,
     capabilities.githubRepositoryAccessDisplayName,
