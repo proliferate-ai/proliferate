@@ -322,6 +322,37 @@ describe("chat surface", () => {
         isEmpty: true,
       }))).toEqual({ kind: "launch-intent", intentId: "launch-1" });
     });
+
+    // PR #1867 review finding 1: on the success path of a new-workspace Home
+    // launch, `beginPendingWorkspace` sets the pending shell synchronously,
+    // but (pre-fix) the intent's attemptId was only scoped in the catch
+    // block, so the intent stayed unscoped for the whole in-flight window.
+    // These two cases pin the begin-time-scoped state (pane owns the pending
+    // shell) against the previously-broken unscoped state (override is null,
+    // which fell through to session-empty and caused the transcript jump).
+    it("(regression) an intent scoped to its pending attempt at begin time owns the pending shell", () => {
+      expect(resolveLaunchIntentSurfaceOverride({
+        activeLaunchIntentId: "launch-1",
+        launchIntentScope: { pendingUiKey: "pending-workspace:attempt-1", workspaceId: null },
+        launchIntentSessionId: null,
+        activeSessionId: null,
+        hasVisibleSessionContent: false,
+        shellLogicalWorkspaceId: "pending-workspace:attempt-1",
+        shellWorkspaceId: null,
+      })).toEqual({ kind: "launch-intent", intentId: "launch-1" });
+    });
+
+    it("(regression) an intent left unscoped while its pending shell already exists does not own it", () => {
+      expect(resolveLaunchIntentSurfaceOverride({
+        activeLaunchIntentId: "launch-1",
+        launchIntentScope: null,
+        launchIntentSessionId: null,
+        activeSessionId: null,
+        hasVisibleSessionContent: false,
+        shellLogicalWorkspaceId: "pending-workspace:attempt-1",
+        shellWorkspaceId: null,
+      })).toBeNull();
+    });
   });
 
   describe("launchIntentOwnsShell", () => {
