@@ -144,6 +144,8 @@ async def save_local_environment(
         default_branch=body.default_branch,
         setup_script=body.setup_script,
         run_command=body.run_command,
+        archive_script=body.archive_script,
+        rerun_setup_on_unarchive=body.rerun_setup_on_unarchive,
     )
 
 
@@ -190,6 +192,8 @@ async def save_cloud_environment(
         default_branch=default_branch,
         setup_script=body.setup_script,
         run_command=body.run_command,
+        archive_script=body.archive_script,
+        rerun_setup_on_unarchive=body.rerun_setup_on_unarchive,
     )
     sandbox = await cloud_sandboxes_service.ensure_personal_cloud_sandbox_exists(
         db,

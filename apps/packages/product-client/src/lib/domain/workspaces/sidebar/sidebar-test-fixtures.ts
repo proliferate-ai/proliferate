@@ -130,6 +130,8 @@ export function makeRepoEnvironment(
     defaultBranch: "main",
     setupScript: "",
     runCommand: "",
+    archiveScript: "",
+    rerunSetupOnUnarchive: true,
     ...overrides,
   };
 }
