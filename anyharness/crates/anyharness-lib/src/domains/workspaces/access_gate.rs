@@ -24,8 +24,12 @@ pub enum WorkspaceAccessError {
         workspace_id: String,
         mode: WorkspaceAccessMode,
     },
-    #[error("workspace {0} is retired")]
-    WorkspaceRetired(String),
+    /// The workspace is archived: no process may be spawned in it and no
+    /// mutation may touch its worktree until it is unarchived. Reads are
+    /// deliberately NOT refused — the archived page renders chat history and
+    /// file/git reads.
+    #[error("workspace {0} is archived")]
+    WorkspaceArchived(String),
     #[error(transparent)]
     Unexpected(#[from] anyhow::Error),
 }
@@ -98,7 +102,11 @@ impl WorkspaceAccessGate {
             .map_err(WorkspaceAccessError::Unexpected)
     }
 
-    pub fn assert_can_mutate_for_workspace(
+    /// The archived refusal on its own, so the handler-layer wrapper
+    /// (`api/http/access.rs::assert_workspace_active`) and the two gate
+    /// assertions below all decide from ONE predicate. Two guard helpers that
+    /// each re-read the lifecycle column are two guards that can disagree.
+    pub fn assert_workspace_not_archived(
         &self,
         workspace_id: &str,
     ) -> Result<(), WorkspaceAccessError> {
@@ -108,10 +116,18 @@ impl WorkspaceAccessGate {
             .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(workspace_id.to_string()))?;
         if workspace.lifecycle_state == WorkspaceLifecycleState::Archived {
-            return Err(WorkspaceAccessError::WorkspaceRetired(
+            return Err(WorkspaceAccessError::WorkspaceArchived(
                 workspace_id.to_string(),
             ));
         }
+        Ok(())
+    }
+
+    pub fn assert_can_mutate_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> Result<(), WorkspaceAccessError> {
+        self.assert_workspace_not_archived(workspace_id)?;
         let state = self.runtime_state(workspace_id)?;
         match state.mode {
             WorkspaceAccessMode::Normal => Ok(()),
@@ -197,14 +213,7 @@ impl WorkspaceAccessGate {
             .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::SessionNotFound(session_id.to_string()))?;
         let state = self.runtime_state(&session.workspace_id)?;
-        let workspace = self
-            .workspace_store
-            .find_by_id(&session.workspace_id)
-            .map_err(WorkspaceAccessError::Unexpected)?
-            .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(session.workspace_id.clone()))?;
-        if workspace.lifecycle_state == WorkspaceLifecycleState::Archived {
-            return Err(WorkspaceAccessError::WorkspaceRetired(session.workspace_id));
-        }
+        self.assert_workspace_not_archived(&session.workspace_id)?;
         match state.mode {
             WorkspaceAccessMode::Normal => Ok(()),
             mode => Err(WorkspaceAccessError::LiveSessionStartBlocked {

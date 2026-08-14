@@ -136,6 +136,9 @@ pub(super) fn workspace_to_contract_with_summary(
         cleanup_error_message: record.cleanup_error_message,
         cleanup_failed_at: record.cleanup_failed_at,
         cleanup_attempted_at: record.cleanup_attempted_at,
+        archived_at: record.archived_at,
+        archived_head_sha: record.archived_head_sha,
+        archived_branch: record.archived_branch,
         execution_summary: Some(execution_summary),
         origin: record
             .origin

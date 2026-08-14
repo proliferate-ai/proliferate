@@ -267,13 +267,64 @@ The durable workspace rows are loaded and stored through:
 - file path safety
 - hosting-provider PR operations
 
-### Archive (dark skeleton)
+### Archive
 
-`domains/workspaces/archive/` is the archiving-workspaces feature's module.
-This rung ships only the skeleton: `mod.rs` declares `pub mod refs;` and
-nothing else — `archive.rs`, `unarchive.rs`, `quiesce.rs`, and `sweep.rs`
-arrive in a later rung, and nothing in the product calls into `archive/`
-yet.
+`domains/workspaces/archive/` is the archiving-workspaces feature's module, and
+`WorkspaceArchiveService` is its orchestrator — a service struct with injected
+dependencies constructed in the `app/workspaces.rs` wiring family, following
+the `domains/workspaces/purge.rs` precedent. The ADR's `rt.` pseudocode is
+shorthand; there is no runtime god object and domains may not import
+`AppState`.
+
+Three guarantees shape the whole module:
+
+- **Archive answers at the flip.** Everything the user waits for happens before
+  `mark_archived`; the archive script, the worktree removal, and the branch
+  delete run detached afterwards and can each fail without failing the request.
+  That is safe because "leftover" is a DERIVED listing fact, never a stored
+  state, so nothing needs repairing — only converging.
+- **Undo is cheap.** The detached tail carries a generation-tagged cancellation
+  token registered BEFORE the flip (so row-visibility implies token-existence),
+  and unarchive fires it and awaits confirmed process death. A cancel that lands
+  before removal starts skips removal entirely, so the directory is intact and
+  the restore happens in place — which makes Undo-mid-script the CHEAPEST path
+  in the system rather than the most expensive.
+- **Nothing destructive runs on a guess.** Every path comparison resolves both
+  sides through `path_identity.rs`, in whichever direction is safe for the
+  caller: `same_path` (an unresolvable comparison counts as a claim) for the
+  claim gate, whose `true` answer refuses, and `same_path_strict` (an
+  unresolvable comparison counts as somebody else's) for "is this git
+  registration ours?", whose `true` answer admits a reclaim or a prune. Every
+  destructive step also re-reads its row under the workspace's gate lease.
+
+The module's files: `archive.rs` and `unarchive.rs` (the two flows), `phase2.rs`
+(the detached tail plus the leftover predicate), `tiers.rs` (unarchive's pure
+scenario decision), `tokens.rs` (the cancellation map), `inflight.rs` (the
+path-claim exclusion), `quiesce.rs` (the three plane stops), `sweep.rs` (the
+reconciler of last resort), `refs.rs`, and `types.rs`.
+
+Two mechanisms are worth knowing before reading any of it:
+
+- **The leftover predicate** (`phase2::is_leftover`): `kind == Worktree &&
+  lifecycle == Archived && archived_head_sha.is_some() &&
+  !checkout_directory_missing() && !any_other_row_claims_path()`. Every term is
+  load-bearing. The kind guard stops the sweep deleting a user's own checkout;
+  the snapshot guard stops it deleting never-snapshotted work on a sha-NULL row;
+  the path-ownership guard stops "cleaning A's leftover" from deleting B's live
+  worktree.
+- **The claim narrowing** (`store::any_other_row_claims_path`): exactly one
+  shape is excused from claiming its path, an archived row that carries an
+  `archived_head_sha`; every other row claims, including one whose lifecycle
+  value this binary does not recognise. Without the narrowing, two sha-bearing
+  archived rows recording one path each read as the other's claimant and both
+  stay wedged forever. Without the fail-closed direction, a lifecycle state
+  added by a newer binary would read as "not a claimant" to an older one, which
+  is the reading that ends in a deletion.
+
+`sweep.rs` runs a boot pass plus a slow tick, suppressed under `cfg(test)` at
+the wiring site following the `AppState::automatic_poke_engine` precedent — a
+background pass that removes directories would otherwise land in the middle of
+suites that build real worktrees and count what is on disk.
 
 `archive/refs.rs` is the ADR's one stated carve-out from "adapters/git owns
 every git verb": it is the sole reader/writer of the private
@@ -293,9 +344,8 @@ tree), not by a script.
 — is defined in `adapters/git/types.rs`, not in `archive/quiesce.rs`, even
 though the ADR's design places it in the domain: `adapters/**` may not import
 `crate::domains::**` (`ADAPTERS_PRODUCT_DOMAIN_IMPORT`), so the adapter's
-`repair_kill_debris` cannot consume a domain-owned type. The rung that adds
-`archive/quiesce.rs` constructs and re-exports the adapter's type rather than
-defining a second one.
+`repair_kill_debris` cannot consume a domain-owned type. `archive/quiesce.rs`
+constructs and re-exports the adapter's type rather than defining a second one.
 
 ## Important Invariants
 
@@ -310,6 +360,17 @@ defining a second one.
 - Worktree restoration never removes or overwrites an occupied destination and
   treats ambiguous Git registration state as a conflict.
 - Every workspace must point at exactly one repo root.
+- A workspace's path is stable for its lifetime. Native chat resume keys on the
+  absolute worktree path, so an unarchive whose recorded path is occupied is a
+  DECISION (a scenario 409), never a relocation to a sibling directory.
+- An archived workspace refuses every mutation with `WORKSPACE_ARCHIVED` and
+  allows every read. `WorkspaceAccessGate` is the single carrier of that
+  predicate; `api/http/access.rs::assert_workspace_active` is a thin wrapper over
+  it for the routes not already on the gate. Archiving is not deleting: chat
+  history, the file tree, and git state all still render.
+- `GET /v1/workspaces` filters to `active` by default and accepts
+  `?lifecycle=archived|all`, so a client that predates archiving sees exactly
+  the list it saw before.
 - Workspace paths should be canonicalized before identity decisions.
 - Workspace env should be derived from durable workspace + repo-root records,
   not reconstructed ad hoc by callers.

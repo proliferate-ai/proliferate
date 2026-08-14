@@ -5,7 +5,7 @@ use std::time::Instant;
 use super::super::branch_refresh::BranchRefreshBatchOutcome;
 use super::WorkspaceRuntime;
 use crate::domains::workspaces::detector;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceLifecycleState, WorkspaceRecord};
 use crate::domains::workspaces::types::{
     ProjectSetupDetectionResult, SetWorkspaceDisplayNameError,
 };
@@ -77,10 +77,23 @@ impl WorkspaceRuntime {
         Ok(detector::detect_project_setup(Path::new(&record.path)))
     }
 
-    pub fn list_workspaces(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {
+    /// Execution surfaces, optionally narrowed to one lifecycle. `None` means
+    /// every lifecycle (`?lifecycle=all`).
+    ///
+    /// The narrowing happens in SQL, not over the returned vector: the
+    /// `?lifecycle=` filter is the query `idx_workspaces_lifecycle` exists for,
+    /// and reading every archived row only to drop it would also schedule a
+    /// branch refresh for rows nobody asked about.
+    pub fn list_workspaces(
+        &self,
+        lifecycle: Option<WorkspaceLifecycleState>,
+    ) -> anyhow::Result<Vec<WorkspaceRecord>> {
         let started = Instant::now();
         let store_started = Instant::now();
-        let records = self.store.list_execution_surfaces()?;
+        let records = match lifecycle {
+            Some(lifecycle) => self.store.list_by_lifecycle(lifecycle)?,
+            None => self.store.list_execution_surfaces()?,
+        };
         tracing::info!(
             workspace_count = records.len(),
             elapsed_ms = store_started.elapsed().as_millis(),

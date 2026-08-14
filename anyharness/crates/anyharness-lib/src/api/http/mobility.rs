@@ -13,7 +13,7 @@ use axum::{
 };
 use std::time::Instant;
 
-use super::access::assert_workspace_not_retired;
+use super::access::assert_workspace_active;
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::mobility_archive_contract::from_contract_archive;
@@ -59,7 +59,7 @@ pub async fn preflight_workspace_mobility(
             .workspace_operation_gate
             .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
             .await;
-        assert_workspace_not_retired(&state, &workspace_id)?;
+        assert_workspace_active(&state, &workspace_id)?;
         let result = state
             .mobility_runtime
             .preflight_workspace(&workspace_id, &[])
@@ -101,7 +101,7 @@ pub async fn update_workspace_mobility_runtime_state(
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
         .await;
-    assert_workspace_not_retired(&state, &workspace_id)?;
+    assert_workspace_active(&state, &workspace_id)?;
     let record = state
         .workspace_access_gate
         .set_runtime_state(
@@ -401,9 +401,9 @@ fn map_access_error(error: WorkspaceAccessError) -> ApiError {
             ),
             "WORKSPACE_LIVE_SESSION_BLOCKED",
         ),
-        WorkspaceAccessError::WorkspaceRetired(workspace_id) => ApiError::conflict(
-            format!("workspace {workspace_id} is retired"),
-            "WORKSPACE_RETIRED",
+        WorkspaceAccessError::WorkspaceArchived(workspace_id) => ApiError::conflict(
+            format!("workspace {workspace_id} is archived"),
+            "WORKSPACE_ARCHIVED",
         ),
         WorkspaceAccessError::Unexpected(error) => ApiError::internal(format!(
             "workspace access state could not be verified: {error}"
@@ -417,7 +417,7 @@ fn assert_workspace_mode(
     expected_mode: WorkspaceAccessMode,
     expected_handoff_op_id: Option<&str>,
 ) -> Result<(), ApiError> {
-    assert_workspace_not_retired(state, workspace_id)?;
+    assert_workspace_active(state, workspace_id)?;
     let runtime_state = state
         .workspace_access_gate
         .runtime_state(workspace_id)

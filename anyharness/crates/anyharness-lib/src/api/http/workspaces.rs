@@ -2,10 +2,10 @@ use std::time::Instant;
 
 use anyharness_contract::v1::{
     CreateWorkspaceRequest, ResolveWorkspaceFromPathRequest, ResolveWorkspaceResponse,
-    UpdateWorkspaceDisplayNameRequest, Workspace,
+    UpdateWorkspaceDisplayNameRequest, Workspace, WorkspaceLifecycleFilter,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::HeaderMap,
     Extension, Json,
 };
@@ -18,6 +18,7 @@ use super::workspaces_contract::{
     resolve_workspace_response_to_contract, workspace_to_contract,
     workspace_to_contract_with_summary,
 };
+use super::workspaces_lifecycle_contract::lifecycle_filter_to_domain;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::execution_summary::idle_workspace_execution_summary;
@@ -93,9 +94,21 @@ pub async fn create_workspace(
     ))
 }
 
+/// `?lifecycle=` on the list route.
+///
+/// A struct rather than a bare `Query<WorkspaceLifecycleFilter>` because axum
+/// needs a named key to bind, and `#[serde(default)]` is what makes a request
+/// with no query string mean `active` rather than a deserialization error.
+#[derive(Debug, Clone, Copy, Default, serde::Deserialize, utoipa::IntoParams)]
+pub struct ListWorkspacesQuery {
+    #[serde(default)]
+    pub lifecycle: WorkspaceLifecycleFilter,
+}
+
 #[utoipa::path(
     get,
     path = "/v1/workspaces",
+    params(ListWorkspacesQuery),
     responses(
         (status = 200, description = "List workspaces", body = Vec<Workspace>),
     ),
@@ -104,6 +117,7 @@ pub async fn create_workspace(
 pub async fn list_workspaces(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthContext>,
+    Query(query): Query<ListWorkspacesQuery>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<Workspace>>, ApiError> {
     let span = FlowHeaders::from_headers(&headers).span();
@@ -111,8 +125,15 @@ pub async fn list_workspaces(
         let started = Instant::now();
         tracing::info!("[anyharness-latency] workspace.http.list.request_received");
         let workspace_runtime = state.workspace_runtime.clone();
+        // The lifecycle filter defaults to `active`. That IS a behavior change
+        // to this route, and it is safe to land dark because the shipped client
+        // already filters to active rows itself: the server-side default makes
+        // the two agree instead of shipping archived rows the client throws away.
+        // It resolves before the load because the store narrows in SQL - this is
+        // the query the renamed `idx_workspaces_lifecycle` index exists for.
+        let lifecycle = lifecycle_filter_to_domain(query.lifecycle);
         let records_started = Instant::now();
-        let records = run_blocking("list", move || workspace_runtime.list_workspaces())
+        let records = run_blocking("list", move || workspace_runtime.list_workspaces(lifecycle))
             .await?
             .map_err(|e| ApiError::internal(e.to_string()))?;
         tracing::info!(

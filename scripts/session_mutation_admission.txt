@@ -88,6 +88,8 @@ terminals::start_terminal_command workspace-scoped workspace terminal lifecycle
 terminals::update_terminal_title workspace-scoped workspace terminal cosmetic
 workspaces::update_workspace_display_name workspace-scoped workspace cosmetic rename
 workspaces_restore::restore_worktree workspace-scoped restores missing workspace files without mutating or removing session execution state
+workspaces_lifecycle::archive_workspace workspace-scoped archives the workspace: stops every live plane and flips the row, but removes no session and mutates no session's execution state
+workspaces_lifecycle::unarchive_workspace workspace-scoped restores the workspace's files and flips the row back; session rows are untouched, which is why chat history survives an archive
 # (moved to fenced per RETIRE-01 ruling B)
 workspaces_purge::retry_purge_workspace workspace-scoped purge retry of an already-admitted purge
 workspaces_setup::start_setup workspace-scoped workspace setup script

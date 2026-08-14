@@ -13,6 +13,7 @@ pub mod managed_root;
 pub mod model;
 pub mod operation_gate;
 pub mod options;
+pub mod path_identity;
 pub mod purge;
 pub mod resolver;
 #[cfg(test)]

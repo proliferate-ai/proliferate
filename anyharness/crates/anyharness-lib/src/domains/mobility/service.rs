@@ -437,7 +437,9 @@ pub(super) fn map_access_error(error: WorkspaceAccessError) -> MobilityError {
             "workspace {workspace_id} cannot start live sessions while mode={}",
             mode.as_str()
         )),
-        WorkspaceAccessError::WorkspaceRetired(id) => Invalid(format!("workspace {id} is retired")),
+        WorkspaceAccessError::WorkspaceArchived(id) => {
+            Invalid(format!("workspace {id} is archived"))
+        }
         WorkspaceAccessError::Unexpected(error) => MobilityError::Internal(error),
     }
 }

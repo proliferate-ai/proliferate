@@ -16,8 +16,8 @@ use super::http::{
     files, git, goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay,
     repo_roots, reviews, sessions, sessions_config, sessions_events, sessions_fork,
     sessions_interactions, sessions_lifecycle, sessions_prompt, sessions_resume, subagents,
-    terminals, workflow_runs, workflow_workspaces, workspaces, workspaces_purge,
-    workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
+    terminals, workflow_runs, workflow_workspaces, workspaces, workspaces_lifecycle,
+    workspaces_purge, workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
@@ -96,6 +96,14 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}",
             get(workspaces::get_workspace).delete(workspaces_purge::purge_workspace),
+        )
+        .route(
+            "/workspaces/{workspace_id}/archive",
+            post(workspaces_lifecycle::archive_workspace),
+        )
+        .route(
+            "/workspaces/{workspace_id}/unarchive",
+            post(workspaces_lifecycle::unarchive_workspace),
         )
         .route(
             "/workspaces/{workspace_id}/worktree/restore",

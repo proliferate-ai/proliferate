@@ -29,6 +29,29 @@ describe("AnyHarnessTransport problem details", () => {
     });
   });
 
+  it("passes the extra extension payload through untouched", async () => {
+    // CR-2. `extra` is the only structured slot a typed refusal has, and the
+    // dialog that renders it is the only thing that knows the shape. Reshaping or
+    // filtering here would silently drop whichever key a future refusal adds —
+    // so the nested scenario body must come back byte-identical, unlike `detail`,
+    // which IS filtered because it is a human sentence.
+    const scenario = {
+      scenario: "branch_diverged",
+      occupantName: "feature-x",
+      occupantLifecycle: "active",
+      strategies: ["recreate_at_sha", "restore_detached"],
+    };
+    const error = await requestError(problemResponse({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "WORKSPACE_UNARCHIVE_SCENARIO",
+      extra: scenario,
+    }, 409));
+
+    expect(error.problem.extra).toEqual(scenario);
+  });
+
   it("drops structured detail and uses the valid title", async () => {
     const error = await requestError(problemResponse({
       type: "about:blank",

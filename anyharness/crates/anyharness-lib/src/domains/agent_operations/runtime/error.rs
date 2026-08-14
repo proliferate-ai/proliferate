@@ -359,7 +359,7 @@ fn workspace_access_code(error: &WorkspaceAccessError) -> &'static str {
         WorkspaceAccessError::TerminalNotFound(_) => "TERMINAL_NOT_FOUND",
         WorkspaceAccessError::MutationBlocked { .. } => "WORKSPACE_MUTATION_BLOCKED",
         WorkspaceAccessError::LiveSessionStartBlocked { .. } => "WORKSPACE_LIVE_SESSION_BLOCKED",
-        WorkspaceAccessError::WorkspaceRetired(_) => "WORKSPACE_RETIRED",
+        WorkspaceAccessError::WorkspaceArchived(_) => "WORKSPACE_ARCHIVED",
         WorkspaceAccessError::Unexpected(_) => "AGENT_OPERATIONS_INTERNAL",
     }
 }
@@ -494,7 +494,7 @@ fn workspace_access_message(error: &WorkspaceAccessError) -> String {
         WorkspaceAccessError::LiveSessionStartBlocked { .. } => {
             "The workspace cannot start live sessions right now.".into()
         }
-        WorkspaceAccessError::WorkspaceRetired(_) => "The workspace is retired.".into(),
+        WorkspaceAccessError::WorkspaceArchived(_) => "The workspace is archived.".into(),
         WorkspaceAccessError::Unexpected(_) => "Agent operations failed.".into(),
     }
 }

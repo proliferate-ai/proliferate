@@ -23,6 +23,7 @@ impl ApiError {
                 detail,
                 instance: None,
                 code: code.map(String::from),
+                extra: None,
             },
         )
     }
@@ -37,6 +38,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                extra: None,
             },
         )
     }
@@ -51,6 +53,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                extra: None,
             },
         )
     }
@@ -65,6 +68,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                extra: None,
             },
         )
     }
@@ -79,6 +83,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                extra: None,
             },
         )
     }
@@ -93,6 +98,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                extra: None,
             },
         )
     }
@@ -107,6 +113,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                extra: None,
             },
         )
     }
@@ -131,6 +138,7 @@ impl ApiError {
                 status: 503,
                 detail: Some(detail.into()),
                 instance: Some(format!("urn:proliferate:anyharness:incident:{incident_id}")),
+                extra: None,
                 code: Some(code.into()),
             },
         )
@@ -158,6 +166,7 @@ impl ApiError {
                 status: 500,
                 detail: Some(detail.into()),
                 instance: Some(format!("urn:proliferate:anyharness:incident:{incident_id}")),
+                extra: None,
                 code: Some(code.into()),
             },
         )
@@ -194,8 +203,22 @@ impl ApiError {
                 detail: Some(caller_detail),
                 instance: None,
                 code: code.map(String::from),
+                extra: None,
             },
         )
+    }
+
+    /// Attach the structured payload a typed code documents.
+    ///
+    /// The RFC 7807 body has exactly one extension point, and it is opt-in per
+    /// code: a client that has to parse the offending lock file or the list of
+    /// unarchive strategies out of the human `detail` sentence is a client
+    /// coupled to our prose. Codes that carry a payload say so where their
+    /// status is mapped; every other error leaves this absent and the field is
+    /// skip-serializing, so no existing body changes shape.
+    pub fn with_extra(mut self, extra: serde_json::Value) -> Self {
+        self.1.extra = Some(extra);
+        self
     }
 }
 
@@ -223,6 +246,14 @@ impl ApiError {
     #[cfg(test)]
     pub(crate) fn instance(&self) -> Option<&str> {
         self.1.instance.as_deref()
+    }
+
+    /// The structured extension payload, if any. Test/introspection accessor:
+    /// the scenario dialog renders from this, so its shape is worth asserting
+    /// at the mapping layer rather than only end to end.
+    #[cfg(test)]
+    pub(crate) fn extra(&self) -> Option<&serde_json::Value> {
+        self.1.extra.as_ref()
     }
 }
 

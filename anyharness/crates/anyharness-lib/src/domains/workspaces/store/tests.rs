@@ -319,8 +319,11 @@ fn archived_lookup_reserves_the_path_of_every_archived_row() {
 fn active_repo_root_listing_ignores_archived_rows() {
     let (_db, store) = store_with_repo_root();
 
-    let mut archived =
-        workspace_record("workspace-archived", WorkspaceKind::Worktree, "/tmp/archived");
+    let mut archived = workspace_record(
+        "workspace-archived",
+        WorkspaceKind::Worktree,
+        "/tmp/archived",
+    );
     archived.lifecycle_state = WorkspaceLifecycleState::Archived;
     archived.cleanup_state = WorkspaceCleanupState::Complete;
     let active = workspace_record("workspace-active", WorkspaceKind::Worktree, "/tmp/active");
@@ -384,6 +387,52 @@ fn lifecycle_cleanup_update_preserves_workspace_and_persists_failure_detail() {
     assert_eq!(stored.updated_at, "2026-04-29T12:00:01Z");
 }
 
+/// `?lifecycle=` narrows in SQL, so the tolerant read that shows an unknown
+/// lifecycle value AS archived does not put that row on the archived listing:
+/// SQL compares the stored string, not the parsed enum. That is the intended
+/// seam - a row a newer binary wrote is hidden from both filtered listings and
+/// is never offered for unarchive by an older one - but it is a real difference
+/// from filtering the unfiltered listing in memory, so it is pinned here.
+#[test]
+fn list_by_lifecycle_compares_the_stored_string_not_the_tolerant_read() {
+    let (db, store) = store_with_repo_root();
+
+    let future = workspace_record("workspace-future", WorkspaceKind::Worktree, "/tmp/future");
+    store.insert(&future).expect("insert workspace");
+    db.with_conn(|conn| {
+        conn.execute("PRAGMA ignore_check_constraints = ON", [])?;
+        conn.execute(
+            "UPDATE workspaces SET lifecycle_state = 'future_state' WHERE id = ?1",
+            [future.id.as_str()],
+        )?;
+        Ok(())
+    })
+    .expect("corrupt lifecycle_state to a value neither binary knows");
+
+    let ids = |records: Vec<crate::domains::workspaces::model::WorkspaceRecord>| {
+        records
+            .into_iter()
+            .map(|record| record.id)
+            .collect::<Vec<_>>()
+    };
+
+    assert!(ids(store
+        .list_by_lifecycle(WorkspaceLifecycleState::Active)
+        .expect("list active"))
+    .is_empty());
+    assert!(ids(store
+        .list_by_lifecycle(WorkspaceLifecycleState::Archived)
+        .expect("list archived"))
+    .is_empty());
+    // The control: the row is still there, and still reads as archived.
+    assert_eq!(
+        ids(store
+            .list_execution_surfaces()
+            .expect("list execution surfaces")),
+        vec![future.id.clone()]
+    );
+}
+
 #[test]
 fn unknown_lifecycle_value_does_not_brick_listings() {
     let (db, store) = store_with_repo_root();
@@ -394,7 +443,9 @@ fn unknown_lifecycle_value_does_not_brick_listings() {
         "/tmp/corrupted",
     );
     let active = workspace_record("workspace-active", WorkspaceKind::Worktree, "/tmp/active");
-    store.insert(&corrupted).expect("insert corrupted workspace");
+    store
+        .insert(&corrupted)
+        .expect("insert corrupted workspace");
     store.insert(&active).expect("insert active workspace");
 
     db.with_conn(|conn| {
@@ -448,7 +499,9 @@ fn unknown_lifecycle_value_survives_unrelated_mutation() {
         WorkspaceKind::Worktree,
         "/tmp/corrupted",
     );
-    store.insert(&corrupted).expect("insert corrupted workspace");
+    store
+        .insert(&corrupted)
+        .expect("insert corrupted workspace");
 
     db.with_conn(|conn| {
         conn.execute("PRAGMA ignore_check_constraints = ON", [])?;
@@ -483,8 +536,11 @@ fn unknown_lifecycle_value_survives_unrelated_mutation() {
 fn archive_columns_round_trip_through_insert_and_read() {
     let (_db, store) = store_with_repo_root();
 
-    let mut workspace =
-        workspace_record("workspace-archived", WorkspaceKind::Worktree, "/tmp/archived");
+    let mut workspace = workspace_record(
+        "workspace-archived",
+        WorkspaceKind::Worktree,
+        "/tmp/archived",
+    );
     workspace.lifecycle_state = WorkspaceLifecycleState::Archived;
     workspace.archived_head_sha = Some("a".repeat(40));
     workspace.archived_branch = Some("feature/archive-me".to_string());

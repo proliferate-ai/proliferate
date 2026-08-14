@@ -72,6 +72,7 @@ use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::archive::WorkspaceArchiveService;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::domains::workspaces::files_runtime::{
@@ -165,6 +166,7 @@ pub struct AppState {
     pub checkout_deletion_gate: Arc<CheckoutDeletionGate>,
     pub retire_preflight_checker: Arc<RetirePreflightChecker>,
     pub workspace_purge_service: Arc<WorkspacePurgeService>,
+    pub workspace_archive_service: Arc<WorkspaceArchiveService>,
     pub worktree_inventory_service: Arc<WorktreeInventoryService>,
     pub mobility_runtime: Arc<MobilityRuntime>,
     pub materialization_runtime: Arc<MaterializationRuntime>,
@@ -478,9 +480,18 @@ impl AppState {
                 session_service: session_service.clone(),
                 session_admission: session_admission.clone(),
                 terminal_service: terminal_service.clone(),
+                workspace_setup_runtime: workspace_setup_runtime.clone(),
             });
         let retire_preflight_checker = destruction.preflight_checker;
         let workspace_purge_service = destruction.purge;
+        let workspace_archive_service = destruction.archive;
+        // The leftover sweep's boot pass and its slow periodic tick. Suppressed
+        // under `cfg(test)` for the same reason `automatic_poke_engine` is: a
+        // background pass that removes directories would otherwise land in the
+        // middle of suites that build real worktrees and count what is on disk.
+        // In production boots it runs unconditionally.
+        #[cfg(not(test))]
+        workspace_archive_service.clone().spawn_startup_pass();
         let workspace_worktree_runtime = Arc::new(WorkspaceWorktreeRuntime::new(
             workspace_runtime.clone(),
             workspace_setup_runtime.clone(),
@@ -611,6 +622,7 @@ impl AppState {
             checkout_deletion_gate,
             retire_preflight_checker,
             workspace_purge_service,
+            workspace_archive_service,
             worktree_inventory_service,
             mobility_runtime,
             materialization_runtime,
