@@ -117,7 +117,7 @@ export function ContentSearchPill() {
       data-content-search-overlay
       data-content-search-surface={surface}
     >
-      <div className="pointer-events-auto grid max-w-[70vw] w-[340px] grid-cols-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border-[0.5px] border-border bg-sidebar-background shadow-popover">
+      <div className="app-region-no-drag pointer-events-auto grid max-w-[70vw] w-[340px] grid-cols-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border-[0.5px] border-border bg-sidebar-background shadow-popover">
         <div className="col-[1/2] row-[1] flex h-[44px] min-w-0 items-center gap-2 pl-4">
           <Search className="icon-paired shrink-0 text-foreground" />
           <Input
