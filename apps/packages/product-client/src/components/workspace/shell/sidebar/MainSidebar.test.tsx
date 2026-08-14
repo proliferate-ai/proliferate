@@ -128,7 +128,9 @@ vi.mock("#product/primitives/PopoverMenuItem", () => ({
 }));
 
 vi.mock("#product/primitives/patterns/AutoHideScrollArea", () => ({
-  AutoHideScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  AutoHideScrollArea: ({ children }: { children: ReactNode }) => (
+    <div data-testid="sidebar-scroll-area">{children}</div>
+  ),
 }));
 
 vi.mock("#product/primitives/PopoverButton", () => ({
@@ -382,6 +384,41 @@ describe("MainSidebar host capabilities", () => {
     renderMainSidebar();
 
     expect(screen.getByTestId("cowork-threads")).not.toBeNull();
+  });
+});
+
+describe("MainSidebar scroll boundary", () => {
+  function navRow(name: string): HTMLElement {
+    const row = screen
+      .getAllByRole("button", { name: new RegExp(`^${name}`) })
+      .find((element) => element.getAttribute("role") === "button");
+    if (!row) {
+      throw new Error(`Expected a ${name} nav row`);
+    }
+    return row;
+  }
+
+  it("pins New chat above the scroll region", () => {
+    renderMainSidebar();
+
+    const scrollArea = screen.getByTestId("sidebar-scroll-area");
+    expect(scrollArea.contains(navRow("New chat"))).toBe(false);
+  });
+
+  it("scrolls Workspaces, Workflows and Support with the repository list", () => {
+    renderMainSidebar();
+
+    const scrollArea = screen.getByTestId("sidebar-scroll-area");
+    for (const label of ["Workspaces", "Workflows", "Support"]) {
+      expect(scrollArea.contains(navRow(label))).toBe(true);
+    }
+    // ...and above the repositories they now scroll with.
+    const repositories = screen.getByText("Repositories");
+    expect(scrollArea.contains(repositories)).toBe(true);
+    expect(
+      navRow("Support").compareDocumentPosition(repositories)
+        & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
 

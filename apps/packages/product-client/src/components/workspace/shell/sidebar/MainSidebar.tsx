@@ -6,7 +6,8 @@ import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDia
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
 import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
-import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
+import { SidebarPinnedNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
+import { SidebarScrollingNavigationSection } from "#product/components/workspace/shell/sidebar/SidebarScrollingNavigationSection";
 import { SidebarPinnedSection } from "#product/components/workspace/shell/sidebar/SidebarPinnedSection";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceContent";
@@ -34,7 +35,6 @@ import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/s
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
-import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "#product/hooks/workspaces/workflows/use-workspace-display-name-actions";
@@ -54,12 +54,16 @@ import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvi
 import { useReleaseNotice } from "#product/hooks/updates/facade/use-release-notice";
 import { useRepositoryHeaderNewChat } from "#product/hooks/workspaces/ui/use-repository-header-new-chat";
 
+// Platform cannot change at runtime, so the label is resolved once rather
+// than on every render of the sidebar.
+const NEW_CHAT_SHORTCUT_LABEL = getShortcutDisplayLabel(SHORTCUTS.newDefault);
+
+
 export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }: { showRightBorder?: boolean }) {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const { notice, dismissNotice, openChangelog } = useReleaseNotice();
   const actions = useWorkspaceSidebarActions();
-  const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "sidebar" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
   const {
@@ -115,8 +119,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     onLeaveWorkspace: actions.handleGoHome,
   });
 
-  const isOnWorkflows = location.pathname.startsWith(APP_ROUTES.workflows);
-  const isOnWorkspaces = location.pathname === APP_ROUTES.workspaces;
   const isOnHome = location.pathname === APP_ROUTES.home;
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
   const pinWorkspace = useWorkspaceUiStore((s) => s.pinWorkspace);
@@ -236,10 +238,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
     [sidebarShortcutTargetIds],
   );
-  const primaryNavShortcutLabels = useMemo(() => ({
-    newChat: getShortcutDisplayLabel(SHORTCUTS.newDefault),
-    support: getShortcutDisplayLabel(SHORTCUTS.openSupport),
-  }), []);
 
   return (
     <DebugProfiler id="workspace-sidebar">
@@ -257,22 +255,23 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
         )}>
         <ProductSidebarBody>
           <ProductSidebarBrandRow label="Proliferate" />
+          {/* Only the brand row and New chat stay pinned. Everything below
+              scrolls with the repository list. */}
           <DebugProfiler id="workspace-sidebar-primary-nav">
-            <SidebarPrimaryNavigation
+            <SidebarPinnedNavigation
               homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
-              workspacesActive={isOnWorkspaces}
-              workflowsActive={isOnWorkflows}
-              supportActive={false}
               onGoHome={actions.handleGoHome}
-              onGoWorkspaces={actions.handleGoWorkspaces}
-              onGoWorkflows={actions.handleGoWorkflows}
-              onOpenSupport={handleOpenSupport}
               shortcutRevealVisible={shortcutRevealVisible}
-              shortcutLabels={primaryNavShortcutLabels}
+              newChatShortcutLabel={NEW_CHAT_SHORTCUT_LABEL}
             />
           </DebugProfiler>
 
         <ProductSidebarScrollableContent>
+          <SidebarScrollingNavigationSection
+            onGoWorkspaces={actions.handleGoWorkspaces}
+            onGoWorkflows={actions.handleGoWorkflows}
+          />
+
           <WorkspaceCleanupAttentionSection
             workspaces={cleanupAttentionWorkspaces}
             onRetryCleanup={actions.handleRetryWorkspaceCleanup}

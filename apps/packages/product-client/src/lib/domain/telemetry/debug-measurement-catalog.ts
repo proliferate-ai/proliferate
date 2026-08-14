@@ -35,6 +35,7 @@ export type MeasurementSurface =
   | "workspace-sidebar-frame"
   | "workspace-sidebar"
   | "workspace-sidebar-primary-nav"
+  | "workspace-sidebar-scrolling-nav"
   | "workspace-sidebar-content"
   | "workspace-sidebar-footer"
   | "workspace-header-frame"
