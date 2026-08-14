@@ -143,6 +143,52 @@ returned to JavaScript.
 `diagnostics.json` bytes. The archive is never enqueued as an attachment and is
 not removed by queue cleanup.
 
+## Artifact contents at a glance
+
+`diagnostics.json` is one canonical JSON document (`SupportSnapshotV3`). Read
+top to bottom it answers: what build produced this, what the user agreed to,
+what the evidence is, how healthy the pipeline was, and what is not in the
+file and why.
+
+- Identity and build context: `schema_version` (3), `snapshot_id`,
+  `generated_at`, and `app` (version, release, platform, runtime version and
+  status).
+- Consent and selection: the disclosure version the user saw, when consent
+  was granted, the chosen scope, the exact fifteen-minute
+  `source_time_from`/`source_time_to` window, and the bound workspace and
+  session identifiers. Everything in the file must be attributable to this
+  grant.
+- Evidence, organized by source family:
+  - `records`: accepted-order collector records (lifecycle, warnings, errors,
+    and detail from renderer, Tauri, collector, bundled AnyHarness, and
+    Desktop Worker);
+  - `session_ledger`: per selected session, one summary, at most 200
+    normalized events, and at most 100 raw notifications;
+  - `fallback_evidence`: bounded per-component file tails;
+  - `legacy_evidence`: read-only legacy compatibility tails.
+- Pipeline health: `collector` export metadata and `producer_health`, so a
+  missing record is distinguishable as "producer was down" versus "did not
+  happen".
+- The manifest: per-source read/included byte accounting, gaps, omissions,
+  truncation reasons, per-category scrub counts (counts only, never values),
+  the limits in force, and `removed_by_tier` degradation accounting. Absence
+  is always explained, never silent.
+
+Degradation removes candidate groups from tier 8 upward until the exact
+uncompressed bytes fit the cap, oldest first within a tier, and a lifecycle
+started/terminal pair is admitted or removed atomically. The fixed tiers:
+
+| Tier | Contents |
+| --- | --- |
+| 1 | Selected active-session summary and events (Current session scope) |
+| 2 | Collector lifecycle, loss-summary, and WARN/ERROR records |
+| 3 | Collector records correlated to the selection identifiers |
+| 4 | Remaining collector records |
+| 5 | Fallback file tails |
+| 6 | Recent-activity session summaries and events |
+| 7 | Raw session notifications |
+| 8 | Legacy compatibility lines |
+
 ## Privacy
 
 Support reports, diagnostics, and attachments are private by default.
@@ -393,29 +439,14 @@ Only an authorized future outreach step may resolve and snapshot the address.
 ## Current gaps
 
 These are the differences from the target state above that remain in the tree.
-The consented-capture pipeline itself is built: schema-3 snapshot assembly, the
-manifest, the second scrub, opaque staging, the checksummed v2 queue with its
-verified one-way migration, the shared native export permit with fixed support
-prepare/submit lifecycle operations, and the SQL-bounded AnyHarness support
-windows with their generated SDK reads all exist. What is missing is the
-consent surface in front of that pipeline, and the two exports that sit beside
-it.
+The consented-capture pipeline is built and now has its consent surface:
+schema-3 snapshot assembly, the manifest, the second scrub, opaque staging, the
+checksummed v2 queue with its verified one-way migration, the shared native
+export permit with fixed support prepare/submit lifecycle operations, the
+SQL-bounded AnyHarness support windows with their generated SDK reads, and both
+modals' unchecked consent epoch, scope control, and **Save a copy…** action all
+exist. What remains is the legacy export that sits beside the pipeline.
 
-- [ ] No snapshot-consent surface exists, so nothing reaches the consented
-      capture pipeline from the UI. Neither modal offers the explicit
-      disclosure, the unchecked consent epoch, or the active/recent scope
-      control, so a freshly authored job is unconditionally
-      `supportSnapshot: { kind: "none" }`. The old default-on `includeLogs`
-      control is gone and the flag survives only where legacy jobs are read
-      ([SendFeedbackModal.tsx](../../../../../apps/packages/product-client/src/components/support/SendFeedbackModal.tsx),
-      [SubmitPromptModal.tsx](../../../../../apps/packages/product-client/src/components/support/SubmitPromptModal.tsx),
-      [use-support-modal-state.ts](../../../../../apps/packages/product-client/src/hooks/support/facade/use-support-modal-state.ts)).
-- [ ] **Save a copy…** has no caller. The native command, its Tauri wrapper and
-      the `saveArchive` bridge method all exist and write the user-chosen ZIP,
-      but no UI action invokes them, so a user still cannot read what a send
-      would have transmitted. It arrives with the consent surface above
-      ([commands/support_snapshot/mod.rs](../../../../../apps/desktop/src-tauri/src/commands/support_snapshot/mod.rs),
-      [desktop-bridge-support.ts](../../../../../apps/packages/product-client/src/host/desktop-bridge-support.ts)).
 - [ ] The legacy debug-bundle export is untouched by the snapshot work. It is
       no longer on the Desktop bridge and the upload path never calls it, but
       the Tauri command still assembles bounded log tails through the old
