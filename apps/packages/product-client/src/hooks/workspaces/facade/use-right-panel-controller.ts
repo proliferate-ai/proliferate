@@ -5,7 +5,8 @@ import {
   type SetStateAction,
 } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
-import { useTerminalsQuery } from "@anyharness/sdk-react";
+import { useTerminalsQuery, useWorkflowRunsQuery } from "@anyharness/sdk-react";
+import { isWorkflowsV2Enabled } from "#product/lib/domain/capabilities/workflows-v2";
 import { useRightPanelHeaderEntries } from "#product/hooks/workspaces/derived/use-right-panel-header-entries";
 import {
   useRightPanelLifecycle,
@@ -72,6 +73,13 @@ export function useRightPanelController({
     enabled: Boolean(workspaceId && shouldRenderContent),
   });
   const terminals = terminalsQuery.data ?? EMPTY_TERMINALS;
+  // The workflow tool is offered only where there is a run to show. The query
+  // never runs while the gen-2 gate is off, so a gated-off build asks the
+  // runtime nothing about workflows.
+  const workflowRunsQuery = useWorkflowRunsQuery(workspaceId, {
+    enabled: isWorkflowsV2Enabled() && Boolean(workspaceId && shouldRenderContent),
+  });
+  const hasWorkflowRun = (workflowRunsQuery.data?.runs.length ?? 0) > 0;
   const {
     activeTool,
     activeTerminalId,
@@ -84,6 +92,7 @@ export function useRightPanelController({
     terminals,
     openViewerTargets,
     isCloudWorkspaceSelected,
+    hasWorkflowRun,
   });
   const terminalActivationRequestToken = terminalActivationRequest?.workspaceId === workspaceId
     ? terminalActivationRequest.token

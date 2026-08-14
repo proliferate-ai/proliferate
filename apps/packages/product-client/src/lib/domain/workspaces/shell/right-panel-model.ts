@@ -1,3 +1,4 @@
+import { isWorkflowsV2Enabled } from "#product/lib/domain/capabilities/workflows-v2";
 import {
   parseViewerTargetKey,
   viewerTargetKey,
@@ -5,7 +6,7 @@ import {
   type ViewerTargetKey,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
-export type RightPanelTool = "scratch" | "git" | "agents";
+export type RightPanelTool = "scratch" | "git" | "agents" | "workflow";
 export type RightPanelHeaderEntryKey =
   | `tool:${RightPanelTool}`
   | `terminal:${string}`
@@ -84,6 +85,11 @@ export type RightPanelDragOutcome =
   | { kind: "resize"; width: number }
   | { kind: "collapse" };
 
+/**
+ * The always-available tools, in their default header order. The gen-2
+ * workflow tool is deliberately absent: it is launch-gated, and
+ * `availableRightPanelTools` is the one place that decides whether it exists.
+ */
 export const DEFAULT_RIGHT_PANEL_TOOL_ORDER: RightPanelTool[] = [
   "scratch",
   "git",
@@ -102,7 +108,20 @@ export const DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE: RightPanelMaterializedState
 export const DEFAULT_RIGHT_PANEL_WORKSPACE_STATE: RightPanelWorkspaceState =
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE;
 
-const RIGHT_PANEL_TOOLS = new Set<RightPanelTool>(DEFAULT_RIGHT_PANEL_TOOL_ORDER);
+/**
+ * Every tool key that is a *legal* key, availability aside. Parsing has to
+ * recognise `tool:workflow` even where the tool is not offered — a header
+ * order persisted by a gate-on build is read back by a gate-off build, and a
+ * key that fails to parse is indistinguishable from corruption. Availability
+ * (below) is what drops it from the order; parsing only decides what the
+ * string means.
+ */
+const ALL_RIGHT_PANEL_TOOLS: RightPanelTool[] = [
+  ...DEFAULT_RIGHT_PANEL_TOOL_ORDER,
+  "workflow",
+];
+
+const RIGHT_PANEL_TOOLS = new Set<RightPanelTool>(ALL_RIGHT_PANEL_TOOLS);
 
 export function rightPanelToolHeaderKey(tool: RightPanelTool): RightPanelHeaderEntryKey {
   return `tool:${tool}`;
@@ -147,8 +166,28 @@ export function parseRightPanelHeaderEntryKey(
   return null;
 }
 
-export function availableRightPanelTools(_isCloudWorkspaceSelected: boolean): RightPanelTool[] {
-  return DEFAULT_RIGHT_PANEL_TOOL_ORDER;
+/**
+ * Which tools this workspace's header may carry.
+ *
+ * The gen-2 workflow tool rides the launch gate, which is a build-time
+ * constant rather than a per-workspace fact — so it belongs here, where every
+ * reader of the header order (normalization, migration, the header strip)
+ * agrees about it at once. The *run-scoped* half of the workflow tool's
+ * visibility (does this workspace actually have a run?) is not here: it
+ * changes while the panel is open, and stripping a persisted key on every poll
+ * would churn the stored order. That half filters the rendered header entry
+ * instead — see `useRightPanelHeaderEntries`.
+ *
+ * The gate is a defaulted argument rather than a call inside the body so this
+ * stays a pure function of its inputs for tests that pass it explicitly.
+ */
+export function availableRightPanelTools(
+  _isCloudWorkspaceSelected: boolean,
+  workflowsV2Enabled: boolean = isWorkflowsV2Enabled(),
+): RightPanelTool[] {
+  return workflowsV2Enabled
+    ? [...DEFAULT_RIGHT_PANEL_TOOL_ORDER, "workflow"]
+    : DEFAULT_RIGHT_PANEL_TOOL_ORDER;
 }
 
 /**

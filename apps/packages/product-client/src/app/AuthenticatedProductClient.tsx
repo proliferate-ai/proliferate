@@ -7,6 +7,7 @@ import { RepoSetupModalHost } from "#product/components/workspace/repo-setup/Rep
 import { WorkspaceAvailabilityActionHost } from "#product/components/workspace/repo-setup/WorkspaceAvailabilityActionHost"
 import { KeyboardShortcutsDialog } from "#product/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { HarnessUpdateToastPresenter } from "#product/components/feedback/HarnessUpdateToastPresenter"
+import { WorkflowResumePopoverPresenter } from "#product/components/workflows/run-view/WorkflowResumePopoverPresenter"
 import { AuthenticatedAppHost } from "#product/pages/AuthenticatedAppHost"
 import { CoworkThreadLaunchProvider } from "#product/providers/CoworkThreadLaunchProvider"
 import { WorkspaceArchiveActionsProvider } from "#product/providers/WorkspaceArchiveActionsProvider"
@@ -32,6 +33,7 @@ export default function AuthenticatedProductClient(): ReactElement {
         <WorkspaceAvailabilityActionHost />
         <MaterializationHealthPassHost />
         <HarnessUpdateToastPresenter />
+        <WorkflowResumePopoverPresenter />
         <KeyboardShortcutsDialog />
       </CoworkThreadLaunchProvider>
     </WorkspaceArchiveActionsProvider>
