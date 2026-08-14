@@ -23,7 +23,7 @@ from proliferate.server.workflows.domain.invocation import (
     canonical_json,
 )
 from proliferate.server.workflows.domain.validation_v2 import (
-    INPUT_REFERENCE_PATTERN,
+    scan_prompt_references,
     validate_definition_v2_document,
 )
 from proliferate.server.workflows.errors import (
@@ -175,14 +175,6 @@ async def put_workflow_invocation_v2(
             "A schema version 2 invocation requires a schema version 2 definition."
         )
 
-    placement_repo = await repository_store.get_repo_config_by_id_for_user(
-        db,
-        user_id=user_id,
-        repo_config_id=body.placement.repo_config_id,
-    )
-    if placement_repo is None:
-        raise InvalidWorkflowInvocation("Placement repository was not found.")
-
     document = WorkflowDefinitionDocumentV2.model_validate(definition.definition_json)
     arguments: dict[str, ScalarValue] = dict(body.arguments)
     try:
@@ -202,7 +194,7 @@ async def put_workflow_invocation_v2(
         "definition": definition.definition_json,
         "arguments": arguments,
         "placement": {
-            "repoConfigId": str(body.placement.repo_config_id),
+            "repoConfigId": body.placement.repo_config_id,
             "mode": body.placement.mode,
         },
         "createdAt": created_at.isoformat().replace("+00:00", "Z"),
@@ -261,9 +253,9 @@ def _validate_v2_arguments(
         if input_definition.required and input_definition.name not in arguments:
             raise ValueError(f"required input '{input_definition.name}' has no argument")
     for node in document.nodes:
-        for name in INPUT_REFERENCE_PATTERN.findall(node.prompt):
-            if name not in arguments:
-                raise ValueError(f"prompt input '{name}' has no argument")
+        for reference in scan_prompt_references(node.prompt):
+            if reference.kind == "input" and reference.token not in arguments:
+                raise ValueError(f"prompt input '{reference.token}' has no argument")
 
 
 def _validate_document(document: WorkflowDefinitionDocumentV2) -> None:

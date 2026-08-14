@@ -58,6 +58,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Pre-v2 code cannot read schema_version 2 rows (its response models pin
+    # Literal[1]), and the narrow CHECKs below cannot be recreated over them.
+    # Deleting v2 rows on downgrade is sanctioned: the feature ships dark
+    # (flag-off beta), so these rows only exist where someone exercised v2
+    # deliberately. Invocations go first — they reference definitions.
+    op.execute(sa.text("DELETE FROM workflow_invocation WHERE schema_version = 2"))
+    op.execute(sa.text("DELETE FROM workflow_definition WHERE schema_version = 2"))
     op.drop_constraint(
         "ck_workflow_invocation_schema_version",
         "workflow_invocation",

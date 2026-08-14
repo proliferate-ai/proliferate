@@ -19,7 +19,10 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import GitProvider
+from sqlalchemy import select
+
 from proliferate.db.models.cloud.repositories import RepoConfig
+from proliferate.db.models.workflows import WorkflowDefinition, WorkflowInvocation
 from proliferate.db.store import workflow_managed_execution as managed_execution_store
 from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.workflows.domain.invocation import canonical_json
@@ -125,6 +128,35 @@ async def test_v2_invocation_freezes_the_run_snapshot_contract_shape(
     # The frozen record contains the definition verbatim.
     assert frozen["definition"] == definition["definition"]
 
+    # Verbatim at the storage layer too: the frozen invocation_json embeds the
+    # exact definition_json bytes of the definition row, not a re-derivation.
+    definition_row = (
+        await db_session.execute(
+            select(WorkflowDefinition).where(WorkflowDefinition.id == UUID(str(definition["id"])))
+        )
+    ).scalar_one()
+    invocation_row = (
+        await db_session.execute(
+            select(WorkflowInvocation).where(WorkflowInvocation.id == UUID(invocation_id))
+        )
+    ).scalar_one()
+    assert invocation_row.invocation_json["definition"] == definition_row.definition_json
+
+    # A v1-shaped PUT replaying against this v2-occupied id is a caller-side
+    # collision: 409, never "stored data is invalid".
+    v1_shaped_replay = await client.put(
+        f"/v1/workflow-invocations/{invocation_id}",
+        headers=_headers(owner),
+        json={
+            "schemaVersion": 1,
+            "workflowDefinitionId": str(definition["id"]),
+            "expectedRevision": 1,
+            "arguments": {},
+            "target": {"kind": "managedCloud"},
+        },
+    )
+    assert v1_shaped_replay.status_code == 409
+
     # Idempotent replay returns the identical frozen record.
     replay = await client.put(
         f"/v1/workflow-invocations/{invocation_id}",
@@ -212,9 +244,23 @@ async def test_v2_invocation_argument_and_placement_rejections(
     assert (
         await put(_invocation_body(definition_id, str(repo.id), arguments={"topic": "x"})) == 201
     )
-    # Placement repo must belong to the caller.
-    assert await put(_invocation_body(definition_id, str(foreign_repo.id))) == 400
-    # Placement mode is a closed enum.
+    # Placement is shape-only (Ruling A): the CP freezes repoConfigId verbatim
+    # and never resolves it — for local v1 it carries a runtime repo-root id,
+    # which is not a CP repo-config id at all. A foreign CP repo id and a
+    # non-UUID runtime id are both accepted; resolution is the engine's job.
+    assert await put(_invocation_body(definition_id, str(foreign_repo.id))) == 201
+    runtime_placed = await client.put(
+        f"/v1/workflow-invocations/{uuid4()}",
+        headers=_headers(owner),
+        json=_invocation_body(definition_id, "rr_local_9f2c", mode="repo_root"),
+    )
+    assert runtime_placed.status_code == 201
+    assert runtime_placed.json()["placement"] == {
+        "repoConfigId": "rr_local_9f2c",
+        "mode": "repo_root",
+    }
+    # Shape still holds: empty ids and unknown modes are rejected.
+    assert await put(_invocation_body(definition_id, "")) == 422
     assert await put(_invocation_body(definition_id, str(repo.id), mode="floating")) == 422
 
     # A v2 invocation of a v1 definition is invalid.
@@ -297,3 +343,46 @@ async def test_v2_invocation_freezes_the_definition_at_trigger_time(
     assert second.status_code == 201
     assert second.json()["definitionRevision"] == 2
     assert second.json()["definition"] == minimal["definition"]
+
+
+@pytest.mark.asyncio
+async def test_v2_referenced_optional_input_needs_an_argument(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Ruling H: every prompt-referenced input needs an argument, optional or
+    not — the client satisfies this by sending "" for blank optionals."""
+
+    owner = await register_and_login(client, "wf2-inv-optional@example.com")
+    repo = await _seed_repo(db_session, user_id=owner["user_id"], name="optional-repo")
+    fixture = _fixture("v2-full.json")
+    definition_doc = deepcopy(fixture["definition"])
+    assert isinstance(definition_doc, dict)
+    nodes = definition_doc["nodes"]
+    assert isinstance(nodes, list) and isinstance(nodes[0], dict)
+    nodes[0]["prompt"] = "Research @input:topic at @input:depth depth into @doc:research-findings"
+    created = await client.post(
+        "/v1/workflows",
+        headers=_headers(owner),
+        json={
+            "title": "Optional referenced",
+            "description": "",
+            "defaultRepoConfigId": None,
+            "definition": definition_doc,
+        },
+    )
+    assert created.status_code == 201
+    definition_id = str(created.json()["id"])
+
+    async def put(arguments: dict[str, object]) -> int:
+        response = await client.put(
+            f"/v1/workflow-invocations/{uuid4()}",
+            headers=_headers(owner),
+            json=_invocation_body(definition_id, str(repo.id), arguments=arguments),
+        )
+        return response.status_code
+
+    # depth is optional but referenced: omitting it refuses the trigger.
+    assert await put({"topic": "engines"}) == 400
+    # The blank-optional convention: an empty string satisfies the rule.
+    assert await put({"topic": "engines", "depth": ""}) == 201

@@ -9,6 +9,7 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import GitProvider
@@ -222,3 +223,39 @@ async def test_v2_default_repository_must_be_owned(
     accepted = await client.post("/v1/workflows", headers=_headers(owner), json=payload)
     assert accepted.status_code == 201
     assert accepted.json()["defaultRepoConfigId"] == str(own_repo.id)
+
+
+@pytest.mark.asyncio
+async def test_v1_body_cannot_update_a_v2_definition(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The v1 update path must reject v2 rows outright: before the guard it
+    ran v1 validation and NULLed definition_json on the way to a 500."""
+
+    owner = await register_and_login(client, "wf-v2-downgrade-guard@example.com")
+    created = await client.post("/v1/workflows", headers=_headers(owner), json=_v2_payload())
+    assert created.status_code == 201
+    definition_id = str(created.json()["id"])
+
+    downgraded = await client.put(
+        f"/v1/workflows/{definition_id}",
+        headers=_headers(owner),
+        json={**_v1_payload(), "expectedRevision": 1},
+    )
+    assert downgraded.status_code == 400
+    assert downgraded.json()["detail"]["path"] == "schemaVersion"
+
+    # The row is untouched: still v2, document intact, revision unchanged.
+    row = (
+        await db_session.execute(
+            select(WorkflowDefinition).where(WorkflowDefinition.id == UUID(definition_id))
+        )
+    ).scalar_one()
+    assert row.schema_version == 2
+    assert row.definition_json == _fixture_definition("v2-full.json")
+    assert row.revision == 1
+
+    fetched = await client.get(f"/v1/workflows/{definition_id}", headers=_headers(owner))
+    assert fetched.status_code == 200
+    assert fetched.json() == created.json()

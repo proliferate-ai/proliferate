@@ -142,6 +142,20 @@ async def update_workflow_definition_if_revision(
     stages_json: list[dict[str, object]],
     definition_json: dict[str, object] | None = None,
 ) -> WorkflowDefinitionSnapshot | None:
+    values: dict[str, object] = {
+        "title": title,
+        "description": description,
+        "validated_catalog_version": validated_catalog_version,
+        "default_repo_config_id": default_repo_config_id,
+        "inputs_json": deepcopy(inputs_json),
+        "stages_json": deepcopy(stages_json),
+        "revision": WorkflowDefinition.revision + 1,
+        "updated_at": utcnow(),
+    }
+    # v1 callers never carry a document; leaving the column untouched here is
+    # what keeps a v2 row's definition_json safe from a v1-shaped update.
+    if definition_json is not None:
+        values["definition_json"] = deepcopy(definition_json)
     result = await db.execute(
         update(WorkflowDefinition)
         .where(
@@ -150,17 +164,7 @@ async def update_workflow_definition_if_revision(
             WorkflowDefinition.revision == expected_revision,
             WorkflowDefinition.deleted_at.is_(None),
         )
-        .values(
-            title=title,
-            description=description,
-            validated_catalog_version=validated_catalog_version,
-            default_repo_config_id=default_repo_config_id,
-            inputs_json=deepcopy(inputs_json),
-            stages_json=deepcopy(stages_json),
-            definition_json=deepcopy(definition_json),
-            revision=WorkflowDefinition.revision + 1,
-            updated_at=utcnow(),
-        )
+        .values(**values)
         .returning(WorkflowDefinition)
     )
     row = result.scalar_one_or_none()

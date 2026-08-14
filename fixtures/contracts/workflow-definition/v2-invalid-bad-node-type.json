@@ -1,5 +1,6 @@
 {
   "rejectedBy": "shape",
+  "expectedIssuePath": "nodes.0.type",
   "definition": {
     "schemaVersion": 2,
     "nodes": [

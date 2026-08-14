@@ -152,3 +152,66 @@ lane is untouched on every rung.
 
 Additive; plain revert. Nothing consumes v2 until PR5b lands behind the
 `workflows_v2` client flag.
+
+## Amendments (review fix wave, 2026-08-14)
+
+The frozen sections above stand as written; this section corrects the claims
+the Opus review falsified and records the conductor rulings applied on top.
+Each item names what changed.
+
+1. **"Gate / revert: Additive; plain revert" is corrected.** The v2 write
+   path is live on the server the moment this merges, so v2 rows can exist.
+   A plain code revert leaves those rows routing through the v1 response
+   model (`schemaVersion: Literal[1]`) and 500s that user's list; the
+   migration downgrade now deletes v2 rows first (invocations, then
+   definitions) before recreating the narrow `schema_version = 1` CHECKs.
+   Deleting on downgrade is sanctioned: the feature ships dark, so v2 rows
+   exist only where v2 was exercised deliberately.
+2. **"Nothing consumes v2 until PR5b" is corrected.** The shared, unflagged
+   `GET /v1/workflows` list and detail endpoints are consumed by the live v1
+   Workflows UI today. This rung therefore also carries the client-safety
+   floor: `cloud/sdk` re-points its list type at the renamed
+   `WorkflowDefinitionListAnyResponse` generated schema (the stale name had
+   silently degraded to `any`), models the list/detail payloads as the
+   v1|v2 union, and `workflowDefinitionFromResponse` skips non-v1 rows
+   (returns null; the detail surface renders an "Unsupported workflow
+   version" state) instead of crashing on the missing `stages`.
+3. **"All existing v1 workflow tests pass unchanged" is corrected in
+   letter.** Three v1 tests were edited: the union request bodies namespace
+   422 error `loc`s by request-model branch, and the OpenAPI request/response
+   schemas for the shared routes went from `$ref` to `anyOf`. This is a wire
+   contract change on v1 routes for 422 error shapes and the OpenAPI
+   document; no in-repo client parses `loc`.
+4. **§6's `server/openapi.json` claim is corrected**: that file is
+   gitignored; the tracked, CI-verified artifact is
+   `cloud/sdk/src/generated/openapi.ts`.
+5. **§5 argument coverage is completed (Ruling H).** The implemented rule has
+   always been three-part: arguments name only declared inputs, cover every
+   `required` input, and cover every input referenced by any node prompt —
+   referenced-but-optional inputs included. The client satisfies the third
+   rule by sending `""` for blank optional inputs. Now documented and tested.
+6. **Placement validation is relaxed to shape-only (Ruling A).**
+   `placement.repoConfigId` is a non-empty string, not a CP repo config the
+   user owns: for local v1 it carries a RUNTIME repo-root id end to end. The
+   CP freezes placement verbatim and never resolves it — resolution is the
+   engine plane's job. (ADR contradiction journaled for the morning ruling.)
+7. **Reference grammar becomes scan-then-validate (Ruling C, amended C.1).**
+   The scanner detects sigils case-insensitively (so `@INPUT:x` is an error,
+   not silent literal text), captures the following run of non-space non-`@`
+   characters (back-to-back references parse individually), peels trailing
+   prose punctuation from the token, and validates the peeled token against
+   the canonical per-kind grammar. Malformed = wrong-case sigil, empty
+   token, or grammar-fail after the peel: wrong-case tokens, leading dashes,
+   underscore doc slugs, and unpeelable trailing junk (`@doc:plan.md`) are
+   validation errors, never silent non-matches or prefix matches — while a
+   sentence may end directly after a reference (`@doc:research-findings.`
+   is valid). Five `v2-invalid-ref-*` fixtures pin the rejects and
+   `v2-valid-refs.json` pins the accepts for all three planes.
+8. **Cross-version update guards are now symmetric.** The v1 update path
+   rejects v2 rows (400, path `schemaVersion`) before validating or writing;
+   the store only touches `definition_json` when a document is explicitly
+   provided. A v1 PUT replay against an invocation id occupied by a v2
+   invocation is a 409 conflict, not a 400 blaming stored data.
+9. **The frozen invocation embeds the definition verbatim at the storage
+   layer** — `invocation_json["definition"]` equals the definition row's
+   `definition_json` — and this is now pinned DB-level by the producer test.

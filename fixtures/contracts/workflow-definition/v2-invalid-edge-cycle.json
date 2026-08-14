@@ -1,6 +1,7 @@
 {
   "rejectedBy": "structure",
   "expectedIssuePath": "edges",
+  "note": "A full cycle carries n edges for n nodes, so the edge-count arity rule rejects it first; this fixture pins arity, while v2-invalid-disconnected-chain pins the reachability walk (the rule a cycle off the head would otherwise evade).",
   "definition": {
     "schemaVersion": 2,
     "nodes": [

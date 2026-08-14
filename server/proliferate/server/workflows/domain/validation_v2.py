@@ -13,14 +13,43 @@ from dataclasses import dataclass
 
 from proliferate.server.workflows.models_v2 import WorkflowDefinitionDocumentV2
 
-INPUT_REFERENCE_PATTERN = re.compile(r"@input:([A-Za-z][A-Za-z0-9_]*)")
-DOC_REFERENCE_PATTERN = re.compile(r"@doc:([a-z0-9]+(?:-[a-z0-9]+)*)")
+# Scan-then-validate (Ruling C, amended C.1): sigils are detected
+# case-INsensitively so a wrong-case sigil is an error, not silent literal
+# text; the capture stops at whitespace or the next '@' (back-to-back
+# references parse individually); trailing prose punctuation peels off the
+# token before grammar validation, so a sentence may end directly after a
+# reference. Malformed = wrong-case sigil, empty token, or grammar-fail after
+# the peel. Trailing junk that does not peel ('@doc:plan.md') stays an error,
+# not a prefix match.
+REFERENCE_SCAN_PATTERN = re.compile(r"@(input|doc):([^\s@]*)", re.IGNORECASE)
+TRAILING_PROSE_PUNCTUATION_PATTERN = re.compile("[.,;:!?)\\]}>\"'`*»“”‘’…]+\\Z")
+INPUT_NAME_TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_]*\Z")
+DOC_SLUG_TOKEN_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
 
 @dataclass(frozen=True)
 class DefinitionV2Issue:
     path: str
     message: str
+
+
+@dataclass(frozen=True)
+class PromptReference:
+    sigil: str
+    """The sigil word exactly as written (e.g. ``INPUT`` in ``@INPUT:x``)."""
+
+    kind: str
+    """Lowercased sigil: ``input`` or ``doc``."""
+
+    token: str
+    """The captured token after peeling trailing prose punctuation."""
+
+    raw_token: str
+    """The captured token as written, punctuation included."""
+
+    @property
+    def well_formed_sigil(self) -> bool:
+        return self.sigil == self.kind
 
 
 def validate_definition_v2_document(
@@ -68,19 +97,51 @@ def validate_definition_v2_document(
             )
 
     for index, node in enumerate(document.nodes):
-        for name in INPUT_REFERENCE_PATTERN.findall(node.prompt):
-            if name not in input_names:
-                return DefinitionV2Issue(
-                    path=f"nodes.{index}.prompt",
-                    message=f"Prompt references undeclared input '{name}'.",
-                )
-        for slug in DOC_REFERENCE_PATTERN.findall(node.prompt):
-            if slug not in doc_slugs:
-                return DefinitionV2Issue(
-                    path=f"nodes.{index}.prompt",
-                    message=f"Prompt references undeclared doc '{slug}'.",
-                )
+        for reference in scan_prompt_references(node.prompt):
+            problem = _validate_reference(reference, input_names, doc_slugs)
+            if problem is not None:
+                return DefinitionV2Issue(path=f"nodes.{index}.prompt", message=problem)
 
+    return None
+
+
+def scan_prompt_references(prompt: str) -> list[PromptReference]:
+    """Every reference attempt in a prompt, sigils matched case-insensitively."""
+
+    references: list[PromptReference] = []
+    for match in REFERENCE_SCAN_PATTERN.finditer(prompt):
+        raw_token = match.group(2)
+        references.append(
+            PromptReference(
+                sigil=match.group(1),
+                kind=match.group(1).lower(),
+                token=TRAILING_PROSE_PUNCTUATION_PATTERN.sub("", raw_token),
+                raw_token=raw_token,
+            )
+        )
+    return references
+
+
+def _validate_reference(
+    reference: PromptReference,
+    input_names: set[str],
+    doc_slugs: set[str],
+) -> str | None:
+    kind = reference.kind
+    if not reference.well_formed_sigil:
+        return (
+            f"Prompt contains malformed @{kind}: reference "
+            f"'@{reference.sigil}:{reference.raw_token}' (sigils are lowercase)."
+        )
+    if not reference.token:
+        return f"Prompt contains malformed @{kind}: reference with an empty token."
+    grammar = INPUT_NAME_TOKEN_PATTERN if kind == "input" else DOC_SLUG_TOKEN_PATTERN
+    if grammar.fullmatch(reference.token) is None:
+        return f"Prompt contains malformed @{kind}: reference '{reference.token}'."
+    if kind == "input" and reference.token not in input_names:
+        return f"Prompt references undeclared input '{reference.token}'."
+    if kind == "doc" and reference.token not in doc_slugs:
+        return f"Prompt references undeclared doc '{reference.token}'."
     return None
 
 

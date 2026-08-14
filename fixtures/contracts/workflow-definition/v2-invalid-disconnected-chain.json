@@ -1,6 +1,7 @@
 {
   "rejectedBy": "structure",
   "expectedIssuePath": "edges",
+  "note": "Correct arity and degrees, but the walk from the single head cannot reach every node; this is the fixture that genuinely exercises reachability (and with it, cycles hanging off the path).",
   "definition": {
     "schemaVersion": 2,
     "nodes": [

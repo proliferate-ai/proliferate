@@ -159,7 +159,10 @@ class WorkflowDefinitionListAnyResponse(WorkflowWireModel):
 
 
 class WorkflowInvocationPlacementV2(WorkflowInvocationWireModel):
-    repo_config_id: UUID
+    # Shape-only (Ruling A): the CP freezes placement verbatim and never
+    # resolves it — for local v1 this carries a RUNTIME repo-root id, which is
+    # not a CP repo-config id at all. Resolution is the engine plane's job.
+    repo_config_id: Annotated[str, StringConstraints(min_length=1)]
     mode: Literal["worktree", "repo_root"]
 
 
