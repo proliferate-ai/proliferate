@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { ProductClient } from "@proliferate/product-client/ProductClient";
 import { initializeTheme } from "@proliferate/product-client/internal/config/theme";
 import "./lib/access/cloud/client";
+import { installDesktopDevicePixelPublisher } from "./lib/access/appearance/install-device-pixel-publisher";
 import { bootstrapProliferateApiConfig } from "./lib/infra/proliferate-api";
 import { initializeAnonymousTelemetry } from "./lib/integrations/telemetry/anonymous";
 import {
@@ -37,6 +38,7 @@ const API_CONFIG_STARTUP_BUDGET_MS = 1500;
 
 document.documentElement.dataset.proliferateClient = "desktop";
 initializeTheme();
+installDesktopDevicePixelPublisher();
 
 const rendererStartupStartedAt = startStartupTimer();
 installWebKitPerformanceMeasureDetailGuard();
