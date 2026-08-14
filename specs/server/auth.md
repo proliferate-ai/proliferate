@@ -312,10 +312,12 @@ keep the raw 302 in both cases; mobile shares the same
 `proliferate://auth/callback` string as desktop but relies on the OS
 intercepting the redirect, so the branch is always on the challenge's stored
 `surface`, never on the redirect URI's scheme. This branch only applies once a
-challenge is found: a desktop-originated callback whose challenge cannot be
-consumed (expired or replayed state, missing params) still falls through to the
-shared error path and 302s to the web `/auth/error` page, since there is no
-challenge left to read a surface from.
+challenge is found: missing params and a provider-error callback whose
+challenge cannot be consumed both fall through to the shared error path and
+302 to the web `/auth/error` page, since there is no challenge left to read a
+surface from, but an unconsumable challenge on the success branch (expired or
+replayed state) is not caught there and surfaces the shared JSON 400 error
+response instead.
 
 ## Worker actor
 
