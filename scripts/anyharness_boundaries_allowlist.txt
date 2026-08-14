@@ -88,9 +88,16 @@ LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/han
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/manager.rs 4 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 
 # Rule: api/** calls domain facades, never stores.
-# 2 files, 10 occurrences.
+# 4 files, 13 occurrences.
 API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/health.rs 1 in-memory health snapshot named like a store (Arc<RwLock<AgentSeedHealth>>, not SQL); matches the state.*_store pattern; benign - seeded rather than special-cased to keep the pattern simple
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workflow_run_commands.rs 2 the command routes answer their 404 discriminator and post-command projection from WorkflowStore reads; the gen-2 ADR rules reads-from-rows-never-actors (no domain facade exists by design); target = a thin reads facade if one ever grows (post-merge, journaled)
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs 7 courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs
 API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 3 cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary ; -6: R5 deletes the preflight/retry test module's store constructions along with the handlers
+
+# Rule: api/** must not import live runtime internals directly
+# (API_LIVE_RUNTIME_IMPORT).
+# 1 file, 1 occurrence.
+API_LIVE_RUNTIME_IMPORT anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs 1 the command handlers match live::workflows::WorkflowCommandError to pick status codes (the oneshot reply IS the response per the gen-2 ADR); target = re-export the error through the domain or map it at the manager seam (post-merge, journaled)
 
 # Rule: policy.rs and *_policy.rs files are pure.
 # Zero occurrences - workflows gen-2 (PR1) deleted the last offender (gen-1's

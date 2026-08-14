@@ -4365,7 +4365,7 @@
           {
             "name": "run_id",
             "in": "path",
-            "description": "Client-minted run id; the PUT is idempotent on it",
+            "description": "Client-minted run id (a UUID); the PUT is idempotent on it",
             "required": true,
             "schema": {
               "type": "string"
@@ -4404,7 +4404,10 @@
             }
           },
           "400": {
-            "description": "WORKFLOW_SNAPSHOT_INVALID"
+            "description": "WORKFLOW_SNAPSHOT_INVALID (malformed body, non-UUID run id, unknown repo root id)"
+          },
+          "409": {
+            "description": "WORKFLOW_PLACEMENT_CONFLICT, zero rows inserted"
           },
           "503": {
             "description": "WORKFLOW_WORKSPACE_MATERIALIZATION_FAILED, zero rows inserted"
@@ -10752,6 +10755,7 @@
         "type": "object",
         "required": [
           "slug",
+          "producingNodeId",
           "body"
         ],
         "properties": {
@@ -10759,10 +10763,8 @@
             "type": "string"
           },
           "producingNodeId": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string",
+            "description": "Required on every plane: every doc has exactly one producing node, and\nthe filename law (`NN-slug.md`) derives NN from that node's chain\nposition."
           },
           "slug": {
             "type": "string"
@@ -10777,6 +10779,7 @@
           "runId",
           "slug",
           "filename",
+          "producingNodeRowId",
           "seededFromTemplate",
           "createdAt",
           "updatedAt"
@@ -14072,12 +14075,21 @@
         "required": [
           "id",
           "runId",
+          "definitionNodeId",
           "kind",
           "nodeType",
+          "replacesNodeRowId",
+          "anchorNodeRowId",
+          "chainIndex",
           "title",
           "prompt",
           "status",
-          "createdAt"
+          "sessionId",
+          "promptId",
+          "failureCode",
+          "createdAt",
+          "startedAt",
+          "completedAt"
         ],
         "properties": {
           "anchorNodeRowId": {
@@ -16971,8 +16983,12 @@
           "argumentsJson",
           "workspaceId",
           "status",
+          "currentNodeRowId",
+          "failureCode",
+          "interruptionCode",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "completedAt"
         ],
         "properties": {
           "argumentsJson": {
@@ -20010,8 +20026,7 @@
         "type": "object",
         "required": [
           "schemaVersion",
-          "nodes",
-          "edges"
+          "nodes"
         ],
         "properties": {
           "docTemplates": {
@@ -20121,8 +20136,9 @@
       },
       "WorkflowRunPutRequest": {
         "type": "object",
-        "description": "The PUT body: the frozen invocation snapshot the courier reconstitutes\nfrom the control plane's flat invocation response. Extra fields a future\ncourier might forward verbatim (`title`, `definitionRevision`, ...) are\ntolerated and ignored; `id`, when present, is the frozen invocation's own\nid and becomes the run row's `invocation_id`.",
+        "description": "The PUT body: the frozen invocation snapshot the courier reconstitutes\nfrom the control plane's flat invocation response. Extra fields a future\ncourier might forward verbatim (`title`, `definitionRevision`, ...) are\ntolerated and ignored. `id` is the frozen invocation's own id and becomes\nthe run row's `invocation_id`.",
         "required": [
+          "id",
           "schemaVersion",
           "workflowDefinitionId",
           "definition",
@@ -20130,16 +20146,17 @@
         ],
         "properties": {
           "arguments": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
           },
           "definition": {
             "$ref": "#/components/schemas/WorkflowDefinition"
           },
           "id": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           },
           "placement": {
             "$ref": "#/components/schemas/InvocationPlacement"

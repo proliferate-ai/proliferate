@@ -27,6 +27,10 @@ pub const DEFINITION_SCHEMA_VERSION: u32 = 2;
 pub struct WorkflowDefinition {
     pub schema_version: u32,
     pub nodes: Vec<DefinitionNode>,
+    // Omitted arrays parse as empty, exactly the server validator's shape
+    // tolerance — the contract-fixture corpus pins the two planes together
+    // (`contract_fixture_tests`).
+    #[serde(default)]
     pub edges: Vec<DefinitionEdge>,
     #[serde(default)]
     pub inputs: Vec<DefinitionInput>,

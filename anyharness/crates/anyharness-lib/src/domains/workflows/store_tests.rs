@@ -1097,10 +1097,27 @@ fn corrupt_rendered_envelope_reads_as_none_not_an_error() {
 
 #[test]
 fn runs_for_workspace_lists_newest_first() {
-    let store = test_store();
+    let (db, store) = test_store_with_db();
     store
         .create_run_with_first_node(params("run-1"))
         .expect("create run-1");
+    // The one-live-run law (Ruling B): a second run cannot land in the
+    // workspace while run-1 is non-terminal.
+    let refused = store
+        .create_run_with_first_node(params("run-2"))
+        .expect_err("workspace occupied");
+    let occupied = refused
+        .downcast_ref::<super::store::WorkspaceOccupied>()
+        .expect("typed occupancy error");
+    assert_eq!(occupied.occupant_run_id, "run-1");
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE workflow_runs SET status = 'completed' WHERE id = 'run-1'",
+            [],
+        )?;
+        Ok(())
+    })
+    .expect("complete run-1");
     store
         .create_run_with_first_node(params("run-2"))
         .expect("create run-2");
@@ -1125,7 +1142,7 @@ fn run_detail_projects_run_nodes_and_docs_in_one_read() {
         .expect("read detail")
         .expect("run exists");
     let json = serde_json::to_value(&detail).expect("serialize");
-    assert_eq!(json["id"], "run-1");
+    assert_eq!(json["run"]["id"], "run-1");
     assert_eq!(json["nodes"].as_array().unwrap().len(), 3);
     assert_eq!(json["docs"].as_array().unwrap().len(), 2);
     assert!(store

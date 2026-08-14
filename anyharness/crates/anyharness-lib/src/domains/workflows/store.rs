@@ -39,9 +39,11 @@ pub struct NewRunParams {
     pub invocation_id: String,
     pub workspace_id: String,
     pub snapshot: InvocationSnapshot,
-    /// The delivered `definition` JSON, byte-verbatim. The column is the
-    /// frozen snapshot; the store never re-serializes the parsed struct into
-    /// it (key order and formatting must survive for cross-plane comparison).
+    /// The delivered `definition` JSON as the API layer re-emitted it from
+    /// the request body's parsed `Value` (serde_json's map ordering makes it
+    /// key-sorted, not byte-verbatim; `deny_unknown_fields` on the definition
+    /// means no information is lost). The store never re-serializes the
+    /// parsed struct into it.
     pub definition_json: String,
 }
 
@@ -83,6 +85,37 @@ fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
+/// The one-live-run law refused an insert (Ruling B, journaled as an ADR
+/// amendment): the placement workspace already hosts a non-terminal run. The
+/// API layer downcasts to answer 409 `WORKFLOW_PLACEMENT_CONFLICT`.
+#[derive(Debug)]
+pub struct WorkspaceOccupied {
+    pub workspace_id: String,
+    pub occupant_run_id: String,
+}
+
+impl std::fmt::Display for WorkspaceOccupied {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "workspace {} already hosts non-terminal workflow run {}",
+            self.workspace_id, self.occupant_run_id
+        )
+    }
+}
+
+impl std::error::Error for WorkspaceOccupied {}
+
+/// What `node_membership` found — the command routes' 404 discriminator
+/// (unknown run and unknown node carry different codes), answered from one
+/// cheap read instead of the full projection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeMembership {
+    RunMissing,
+    NodeMissing,
+    Present,
+}
+
 fn mint_id() -> String {
     Uuid::new_v4().to_string()
 }
@@ -116,6 +149,18 @@ impl WorkflowStore {
                     first_node_row_id,
                     created: false,
                 });
+            }
+
+            // The one-live-run law (Ruling B), enforced inside the insert
+            // transaction so racing PUTs of different run ids into one
+            // workspace cannot both pass a route-level pre-check.
+            if let Some(occupant_run_id) =
+                Self::non_terminal_run_for_workspace_tx(tx, &params.workspace_id)?
+            {
+                return Err(anyhow::Error::new(WorkspaceOccupied {
+                    workspace_id: params.workspace_id.clone(),
+                    occupant_run_id,
+                }));
             }
 
             let timestamp = now();
@@ -678,6 +723,60 @@ impl WorkflowStore {
             .query_map(params![run_id], map_doc)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(docs)
+    }
+
+    /// The id of the non-terminal run occupying `workspace_id`, if any — the
+    /// one-live-run law's read (Ruling B).
+    pub fn non_terminal_run_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Option<String>> {
+        self.db
+            .with_tx_anyhow(|tx| Self::non_terminal_run_for_workspace_tx(tx, workspace_id))
+    }
+
+    fn non_terminal_run_for_workspace_tx(
+        tx: &Connection,
+        workspace_id: &str,
+    ) -> anyhow::Result<Option<String>> {
+        tx.query_row(
+            "SELECT id FROM workflow_runs
+             WHERE workspace_id = ?1 AND status IN ('running', 'awaiting_human', 'interrupted')
+             LIMIT 1",
+            params![workspace_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(Into::into)
+    }
+
+    /// One cheap read for the command routes' pre-dispatch 404s: run missing,
+    /// node missing on the run, or present.
+    pub fn node_membership(
+        &self,
+        run_id: &str,
+        node_row_id: &str,
+    ) -> anyhow::Result<NodeMembership> {
+        self.db.with_tx_anyhow(|tx| {
+            let run_exists: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM workflow_runs WHERE id = ?1)",
+                params![run_id],
+                |row| row.get(0),
+            )?;
+            if !run_exists {
+                return Ok(NodeMembership::RunMissing);
+            }
+            let node_exists: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM workflow_run_nodes WHERE run_id = ?1 AND id = ?2)",
+                params![run_id, node_row_id],
+                |row| row.get(0),
+            )?;
+            Ok(if node_exists {
+                NodeMembership::Present
+            } else {
+                NodeMembership::NodeMissing
+            })
+        })
     }
 
     /// Every run row, newest first — the unfiltered list route.

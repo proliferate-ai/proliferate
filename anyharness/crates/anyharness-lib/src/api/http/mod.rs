@@ -44,6 +44,7 @@ mod subagents_contract;
 mod subagents_errors;
 pub mod support_windows;
 pub mod terminals;
+pub mod workflow_run_commands;
 pub mod workflow_runs;
 pub mod workspaces;
 pub(crate) mod workspaces_contract;

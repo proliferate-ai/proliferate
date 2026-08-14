@@ -24,6 +24,14 @@ use crate::observability::WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET;
 
 use actor::{CommandReply, WorkflowActor, WorkflowActorDeps};
 
+/// One mailbox entry. `ReadProjection` is a read that queues like a command:
+/// the PUT path uses it so its reply orders AFTER the spawn launch (and any
+/// in-flight step) instead of racing the actor for the rows.
+pub(super) enum ActorRequest {
+    Command(WorkflowCommand),
+    ReadProjection,
+}
+
 /// Commands queue while the actor performs a side effect; their callers see a
 /// slightly later, still-correct projection.
 const COMMAND_MAILBOX_CAPACITY: usize = 32;
@@ -39,7 +47,7 @@ pub enum WorkflowCommandError {
 
 #[derive(Clone)]
 struct WorkflowHandle {
-    commands: mpsc::Sender<(WorkflowCommand, CommandReply)>,
+    commands: mpsc::Sender<(ActorRequest, CommandReply)>,
     notifications: mpsc::UnboundedSender<TurnFinished>,
 }
 
@@ -79,19 +87,50 @@ impl WorkflowManager {
         }
     }
 
+    /// The PUT path's synced start: ensure the actor (whose spawn launches a
+    /// running-unlinked current node) and read the projection THROUGH the
+    /// mailbox, so the reply reflects the launch instead of racing it — the
+    /// actor serves queued requests only after the pre-loop launch completes.
+    pub async fn start_run_synced(
+        self: &Arc<Self>,
+        run_id: &str,
+    ) -> Result<RunProjection, WorkflowCommandError> {
+        self.request(run_id, ActorRequest::ReadProjection).await
+    }
+
     /// Route one command to the run's actor and await the oneshot. The reply
     /// is the eventual HTTP response body: Ok = the fresh full projection,
     /// Illegal = the 409.
     pub async fn command(
-        &self,
+        self: &Arc<Self>,
         run_id: &str,
         command: WorkflowCommand,
     ) -> Result<RunProjection, WorkflowCommandError> {
-        let handle = self.ensure_actor(run_id)?;
+        self.request(run_id, ActorRequest::Command(command)).await
+    }
+
+    async fn request(
+        self: &Arc<Self>,
+        run_id: &str,
+        request: ActorRequest,
+    ) -> Result<RunProjection, WorkflowCommandError> {
+        // Actor rematerialization reads rows; keep that SQLite load off the
+        // async runtime's worker threads.
+        let handle = {
+            let manager = self.clone();
+            let run_id = run_id.to_string();
+            tokio::task::spawn_blocking(move || manager.ensure_actor(&run_id))
+                .await
+                .map_err(|error| {
+                    WorkflowCommandError::Internal(anyhow::anyhow!(
+                        "workflow ensure-actor task failed: {error}"
+                    ))
+                })??
+        };
         let (reply_tx, reply_rx) = oneshot::channel();
         handle
             .commands
-            .send((command, reply_tx))
+            .send((request, reply_tx))
             .await
             .map_err(|_| {
                 WorkflowCommandError::Internal(anyhow::anyhow!("workflow actor mailbox closed"))

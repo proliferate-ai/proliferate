@@ -48,7 +48,7 @@ pub(super) struct WorkflowActorDeps {
 pub(super) struct WorkflowActor {
     pub run_id: String,
     pub deps: Arc<WorkflowActorDeps>,
-    pub commands: mpsc::Receiver<(WorkflowCommand, CommandReply)>,
+    pub commands: mpsc::Receiver<(super::ActorRequest, CommandReply)>,
     pub notifications: mpsc::UnboundedReceiver<TurnFinished>,
 }
 
@@ -71,7 +71,17 @@ impl WorkflowActor {
         loop {
             tokio::select! {
                 command = self.commands.recv() => {
-                    let Some((command, reply)) = command else { break };
+                    let Some((request, reply)) = command else { break };
+                    let command = match request {
+                        super::ActorRequest::Command(command) => command,
+                        super::ActorRequest::ReadProjection => {
+                            match self.deps.store.run_detail(&self.run_id) {
+                                Ok(Some(projection)) => { let _ = reply.send(Ok(projection)); }
+                                Ok(None) | Err(_) => drop(reply), // infra: caller sees Internal
+                            }
+                            continue;
+                        }
+                    };
                     match self.step(&mut state, WorkflowEvent::Command(command)).await {
                         Ok(()) => {
                             match self.deps.store.run_detail(&self.run_id) {

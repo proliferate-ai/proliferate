@@ -261,38 +261,8 @@ mod support_windows;
         super::http::reviews::stop_review,
         super::http::reviews::send_review_feedback,
         super::http::reviews::mark_review_revision_ready,
-        super::http::workflow_runs::put_workflow_run,
-        super::http::workflow_runs::get_workflow_run,
-        super::http::workflow_runs::list_workflow_runs,
-        super::http::workflow_runs::approve_workflow_node,
-        super::http::workflow_runs::fail_redo_workflow_node,
-        super::http::workflow_runs::flip_workflow_node_type,
-        super::http::workflow_runs::undo_workflow_advance,
-        super::http::workflow_runs::resume_workflow_run,
-        super::http::workflow_runs::add_workflow_adhoc_node,
     ),
     components(schemas(
-        super::http::workflow_runs::WorkflowRunPutRequest,
-        super::http::workflow_runs::WorkflowRunsListResponse,
-        super::http::workflow_runs::WorkflowRunFailRedoRequest,
-        super::http::workflow_runs::WorkflowRunFlipTypeRequest,
-        super::http::workflow_runs::WorkflowRunAddAdhocNodeRequest,
-        crate::domains::workflows::projection::RunProjection,
-        crate::domains::workflows::projection::RunView,
-        crate::domains::workflows::projection::NodeView,
-        crate::domains::workflows::projection::DocView,
-        crate::domains::workflows::model::WorkflowRunStatus,
-        crate::domains::workflows::model::WorkflowNodeStatus,
-        crate::domains::workflows::model::WorkflowNodeKind,
-        crate::domains::workflows::model::WorkflowNodeType,
-        crate::domains::workflows::definition::WorkflowDefinition,
-        crate::domains::workflows::definition::DefinitionNode,
-        crate::domains::workflows::definition::NodeModel,
-        crate::domains::workflows::definition::DefinitionEdge,
-        crate::domains::workflows::definition::DefinitionInput,
-        crate::domains::workflows::definition::DocTemplate,
-        crate::domains::workflows::definition::InvocationPlacement,
-        crate::domains::workflows::definition::PlacementMode,
         HealthResponse,
         RuntimeCapabilities,
         RuntimePressureLevel,
@@ -688,7 +658,9 @@ mod support_windows;
 pub struct ApiDoc;
 pub fn openapi_json() -> String {
     support_windows::merge(
-        ApiDoc::openapi().merge_from(super::subagents_openapi::SubagentApiDoc::openapi()),
+        ApiDoc::openapi()
+            .merge_from(super::subagents_openapi::SubagentApiDoc::openapi())
+            .merge_from(super::workflow_runs_openapi::WorkflowRunsApiDoc::openapi()),
     )
     .to_pretty_json()
     .expect("OpenAPI serialization should not fail")

@@ -2872,14 +2872,19 @@ export interface components {
         };
         DocTemplate: {
             body: string;
-            producingNodeId?: string | null;
+            /**
+             * @description Required on every plane: every doc has exactly one producing node, and
+             *     the filename law (`NN-slug.md`) derives NN from that node's chain
+             *     position.
+             */
+            producingNodeId: string;
             slug: string;
         };
         DocView: {
             createdAt: string;
             filename: string;
             id: string;
-            producingNodeRowId?: string | null;
+            producingNodeRowId: string | null;
             runId: string;
             seededFromTemplate: boolean;
             slug: string;
@@ -3743,22 +3748,22 @@ export interface components {
             modelId?: string | null;
         };
         NodeView: {
-            anchorNodeRowId?: string | null;
+            anchorNodeRowId: string | null;
             /** Format: int64 */
-            chainIndex?: number | null;
-            completedAt?: string | null;
+            chainIndex: number | null;
+            completedAt: string | null;
             createdAt: string;
-            definitionNodeId?: string | null;
-            failureCode?: string | null;
+            definitionNodeId: string | null;
+            failureCode: string | null;
             id: string;
             kind: components["schemas"]["WorkflowNodeKind"];
             nodeType: components["schemas"]["WorkflowNodeType"];
             prompt: string;
-            promptId?: string | null;
-            replacesNodeRowId?: string | null;
+            promptId: string | null;
+            replacesNodeRowId: string | null;
             runId: string;
-            sessionId?: string | null;
-            startedAt?: string | null;
+            sessionId: string | null;
+            startedAt: string | null;
             status: components["schemas"]["WorkflowNodeStatus"];
             title: string;
         };
@@ -4492,14 +4497,14 @@ export interface components {
         };
         RunView: {
             argumentsJson: string;
-            completedAt?: string | null;
+            completedAt: string | null;
             createdAt: string;
-            currentNodeRowId?: string | null;
+            currentNodeRowId: string | null;
             /** @description The verbatim definition snapshot, exactly as frozen at PUT time. */
             definitionJson: string;
-            failureCode?: string | null;
+            failureCode: string | null;
             id: string;
-            interruptionCode?: string | null;
+            interruptionCode: string | null;
             invocationId: string;
             status: components["schemas"]["WorkflowRunStatus"];
             updatedAt: string;
@@ -5198,7 +5203,7 @@ export interface components {
         };
         WorkflowDefinition: {
             docTemplates?: components["schemas"]["DocTemplate"][];
-            edges: components["schemas"]["DefinitionEdge"][];
+            edges?: components["schemas"]["DefinitionEdge"][];
             inputs?: components["schemas"]["DefinitionInput"][];
             nodes: components["schemas"]["DefinitionNode"][];
             /** Format: int32 */
@@ -5225,13 +5230,15 @@ export interface components {
          * @description The PUT body: the frozen invocation snapshot the courier reconstitutes
          *     from the control plane's flat invocation response. Extra fields a future
          *     courier might forward verbatim (`title`, `definitionRevision`, ...) are
-         *     tolerated and ignored; `id`, when present, is the frozen invocation's own
-         *     id and becomes the run row's `invocation_id`.
+         *     tolerated and ignored. `id` is the frozen invocation's own id and becomes
+         *     the run row's `invocation_id`.
          */
         WorkflowRunPutRequest: {
-            arguments?: Record<string, never>;
+            arguments?: {
+                [key: string]: unknown;
+            };
             definition: components["schemas"]["WorkflowDefinition"];
-            id?: string | null;
+            id: string;
             placement: components["schemas"]["InvocationPlacement"];
             /** Format: int32 */
             schemaVersion: number;
@@ -8900,7 +8907,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Client-minted run id; the PUT is idempotent on it */
+                /** @description Client-minted run id (a UUID); the PUT is idempotent on it */
                 run_id: string;
             };
             cookie?: never;
@@ -8929,8 +8936,15 @@ export interface operations {
                     "application/json": components["schemas"]["RunProjection"];
                 };
             };
-            /** @description WORKFLOW_SNAPSHOT_INVALID */
+            /** @description WORKFLOW_SNAPSHOT_INVALID (malformed body, non-UUID run id, unknown repo root id) */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WORKFLOW_PLACEMENT_CONFLICT, zero rows inserted */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

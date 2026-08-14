@@ -2,7 +2,9 @@
 //! `AppState`, real SQLite, a real git repository placed through the real
 //! workspace seam, and the house scripted ACP agent behind the sessions the
 //! actor launches. Requests go through tower `oneshot` exactly as production
-//! serves them.
+//! serves them. The fixture is shared with the command-route and placement
+//! suites (`workflow_run_command_route_tests`,
+//! `workflow_runs_placement_route_tests`); the env lock serializes all three.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -20,7 +22,7 @@ use crate::domains::sessions::runtime::prompt_message_actor_tests::{
     build_state, install_scripted_agent_env, temp_runtime_home, write_scripted_agent,
     EnvVarGuard, ScriptedAgent,
 };
-use crate::domains::workflows::model::{WorkflowNodeStatus, WorkflowRunStatus};
+use crate::domains::workflows::model::WorkflowRunStatus;
 use crate::domains::workspaces::managed_root::{
     canonical_managed_worktrees_root, ANYHARNESS_WORKTREES_ROOT_ENV,
 };
@@ -50,11 +52,11 @@ impl Drop for PinnedEnvVar {
     }
 }
 
-struct RouteFixture {
-    state: AppState,
-    script: ScriptedAgent,
-    repo_root_id: String,
-    runtime_home: PathBuf,
+pub(crate) struct RouteFixture {
+    pub(crate) state: AppState,
+    pub(crate) script: ScriptedAgent,
+    pub(crate) repo_root_id: String,
+    pub(crate) runtime_home: PathBuf,
     _worktrees_root: PinnedEnvVar,
     _agent_env: (EnvVarGuard, EnvVarGuard),
     _data_key: test_support::DataKeyEnvGuard,
@@ -68,7 +70,13 @@ impl Drop for RouteFixture {
     }
 }
 
-fn git(dir: &Path, args: &[&str]) {
+/// Deterministic, valid UUIDs so the suites read stably (the PUT route
+/// refuses non-UUID run ids).
+pub(crate) fn run_uuid(tag: u8) -> String {
+    format!("00000000-0000-4000-8000-0000000000{tag:02x}")
+}
+
+pub(crate) fn git(dir: &Path, args: &[&str]) {
     let output = Command::new("git")
         .args(args)
         .current_dir(dir)
@@ -85,7 +93,7 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-fn fixture(label: &str) -> RouteFixture {
+pub(crate) fn fixture(label: &str) -> RouteFixture {
     let env_lock = test_support::lock_env();
     let bearer = test_support::set_bearer_token_env(None);
     let data_key = test_support::set_data_key_env(None);
@@ -137,15 +145,32 @@ fn fixture(label: &str) -> RouteFixture {
 }
 
 impl RouteFixture {
-    async fn request(&self, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+    pub(crate) fn repo_dir(&self) -> PathBuf {
+        self.runtime_home.join("origin-repo")
+    }
+
+    pub(crate) async fn request(
+        &self,
+        method: Method,
+        uri: &str,
+        body: Option<Value>,
+    ) -> (StatusCode, Value) {
+        let bytes = body.map(|body| serde_json::to_vec(&body).expect("body"));
+        self.request_raw(method, uri, bytes).await
+    }
+
+    pub(crate) async fn request_raw(
+        &self,
+        method: Method,
+        uri: &str,
+        body: Option<Vec<u8>>,
+    ) -> (StatusCode, Value) {
         let request = Request::builder()
             .method(method)
             .uri(uri)
             .header(header::CONTENT_TYPE, "application/json");
         let request = match body {
-            Some(body) => request
-                .body(Body::from(serde_json::to_vec(&body).expect("body")))
-                .expect("request"),
+            Some(body) => request.body(Body::from(body)).expect("request"),
             None => request.body(Body::empty()).expect("request"),
         };
         let response = build_router(self.state.clone())
@@ -164,8 +189,9 @@ impl RouteFixture {
         (status, value)
     }
 
-    fn snapshot(&self, definition: Value) -> Value {
+    pub(crate) fn snapshot(&self, definition: Value) -> Value {
         json!({
+            "id": "inv-route",
             "schemaVersion": 2,
             "workflowDefinitionId": "wd-route",
             "definition": definition,
@@ -174,7 +200,7 @@ impl RouteFixture {
         })
     }
 
-    async fn wait_for_run(
+    pub(crate) async fn wait_for_run(
         &self,
         run_id: &str,
         what: &str,
@@ -206,7 +232,7 @@ impl RouteFixture {
         }
     }
 
-    async fn wait_for_control(&self, name: &str) {
+    pub(crate) async fn wait_for_control(&self, name: &str) {
         let path = self.script.control_dir.join(name);
         let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
         while !path.exists() {
@@ -217,12 +243,12 @@ impl RouteFixture {
         }
     }
 
-    fn touch_control(&self, name: &str) {
+    pub(crate) fn touch_control(&self, name: &str) {
         std::fs::write(self.script.control_dir.join(name), "").expect("control file");
     }
 }
 
-fn single_node_definition(prompt: &str) -> Value {
+pub(crate) fn single_node_definition(prompt: &str) -> Value {
     json!({
         "schemaVersion": 2,
         "nodes": [
@@ -239,52 +265,58 @@ fn single_node_definition(prompt: &str) -> Value {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn put_places_a_run_idempotently_and_the_wire_shape_holds() {
     let fixture = fixture("wf-route-put");
+    let run_id = run_uuid(0x01);
+    let uri = format!("/v1/workflow-runs/{run_id}");
     let body = fixture.snapshot(single_node_definition("blocking turn"));
 
-    let (status, projection) = fixture
-        .request(Method::PUT, "/v1/workflow-runs/run-route", Some(body.clone()))
-        .await;
+    let (status, projection) = fixture.request(Method::PUT, &uri, Some(body.clone())).await;
     assert_eq!(status, StatusCode::CREATED, "{projection}");
 
     // The wire contract, field-for-field: `{ run, nodes[], docs[] }`,
     // camelCase, RAW definition/arguments strings, explicit nulls.
-    assert_eq!(projection["run"]["id"], "run-route");
-    assert_eq!(projection["run"]["invocationId"], "run-route");
+    assert_eq!(projection["run"]["id"], json!(run_id));
+    assert_eq!(projection["run"]["invocationId"], "inv-route");
     assert_eq!(projection["run"]["status"], "running");
     assert!(projection["run"]["definitionJson"].is_string());
     assert!(projection["run"]["argumentsJson"].is_string());
     assert!(projection["run"]["completedAt"].is_null());
-    assert_eq!(projection["nodes"][0]["runId"], "run-route");
+    assert_eq!(projection["nodes"][0]["runId"], json!(run_id));
     assert_eq!(projection["nodes"][0]["definitionNodeId"], "solo");
-    assert!(projection["nodes"][0].get("promptId").is_some());
-    assert_eq!(projection["docs"][0]["runId"], "run-route");
+    // The 201 body reads THROUGH the actor mailbox, after the spawn launch:
+    // the first node is already linked to its session, never a null the
+    // client must poll away.
+    assert!(
+        projection["nodes"][0]["sessionId"].is_string(),
+        "{projection}"
+    );
+    assert!(
+        projection["nodes"][0]["promptId"].is_string(),
+        "{projection}"
+    );
+    assert_eq!(projection["docs"][0]["runId"], json!(run_id));
     assert_eq!(projection["docs"][0]["filename"], "00-notes.md");
 
     // Disk before rows: the run worktree exists under the managed root with
     // the seeded context doc and the shared exclude entry.
-    let managed_root =
-        canonical_managed_worktrees_root(&fixture.runtime_home).expect("root");
-    let workspace_root = managed_root.join("workflows/run-route");
+    let managed_root = canonical_managed_worktrees_root(&fixture.runtime_home).expect("root");
+    let workspace_root = managed_root.join(format!("workflows/{run_id}"));
     assert!(workspace_root.is_dir(), "run worktree materialized");
     let seeded = workspace_root.join(".proliferate/context/00-notes.md");
     assert_eq!(
         std::fs::read_to_string(&seeded).expect("seeded doc"),
         "# Notes\n"
     );
-    let exclude = std::fs::read_to_string(
-        fixture.runtime_home.join("origin-repo/.git/info/exclude"),
-    )
-    .expect("exclude file");
+    let exclude =
+        std::fs::read_to_string(fixture.runtime_home.join("origin-repo/.git/info/exclude"))
+            .expect("exclude file");
     assert!(exclude.lines().any(|line| line.trim() == "/.proliferate/"));
 
     // The node is holding its turn; the idempotent replay returns the same
     // run untouched with a 200 and mints nothing new.
     fixture.wait_for_control("turn-seen").await;
-    let (status, replay) = fixture
-        .request(Method::PUT, "/v1/workflow-runs/run-route", Some(body))
-        .await;
+    let (status, replay) = fixture.request(Method::PUT, &uri, Some(body)).await;
     assert_eq!(status, StatusCode::OK, "{replay}");
-    assert_eq!(replay["run"]["id"], "run-route");
+    assert_eq!(replay["run"]["id"], json!(run_id));
     assert_eq!(replay["run"]["workspaceId"], projection["run"]["workspaceId"]);
     assert_eq!(
         replay["nodes"][0]["id"], projection["nodes"][0]["id"],
@@ -293,7 +325,7 @@ async fn put_places_a_run_idempotently_and_the_wire_shape_holds() {
 
     fixture.touch_control("release-turn");
     fixture
-        .wait_for_run("run-route", "run completes", |state| {
+        .wait_for_run(&run_id, "run completes", |state| {
             state.run.status == WorkflowRunStatus::Completed
         })
         .await;
@@ -302,6 +334,8 @@ async fn put_places_a_run_idempotently_and_the_wire_shape_holds() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn put_rejects_an_invalid_snapshot_with_zero_rows() {
     let fixture = fixture("wf-route-invalid");
+    let run_id = run_uuid(0x02);
+    let uri = format!("/v1/workflow-runs/{run_id}");
     let body = fixture.snapshot(json!({
         "schemaVersion": 2,
         "nodes": [
@@ -312,58 +346,89 @@ async fn put_rejects_an_invalid_snapshot_with_zero_rows() {
         "docTemplates": [],
     }));
 
-    let (status, problem) = fixture
-        .request(Method::PUT, "/v1/workflow-runs/run-invalid", Some(body))
-        .await;
+    let (status, problem) = fixture.request(Method::PUT, &uri, Some(body)).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{problem}");
     assert_eq!(problem["code"], "WORKFLOW_SNAPSHOT_INVALID");
 
-    let (status, problem) = fixture
-        .request(Method::GET, "/v1/workflow-runs/run-invalid", None)
-        .await;
+    let (status, problem) = fixture.request(Method::GET, &uri, None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(problem["code"], "WORKFLOW_RUN_NOT_FOUND");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn put_maps_placement_failure_to_503_with_zero_rows() {
-    let fixture = fixture("wf-route-503");
+async fn put_rejects_bad_identities_and_bodies_as_invalid_snapshots() {
+    let fixture = fixture("wf-route-identity");
+    let body = fixture.snapshot(single_node_definition("never launches"));
+
+    // A non-UUID run id never reaches the path/branch laws (Ruling C).
+    let (status, problem) = fixture
+        .request(Method::PUT, "/v1/workflow-runs/run-route", Some(body.clone()))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{problem}");
+    assert_eq!(problem["code"], "WORKFLOW_SNAPSHOT_INVALID");
+
+    // The invocation `id` is required: no silent run-id fallback.
+    let run_id = run_uuid(0x03);
+    let uri = format!("/v1/workflow-runs/{run_id}");
+    let mut missing_id = body.clone();
+    missing_id.as_object_mut().expect("object").remove("id");
+    let (status, problem) = fixture.request(Method::PUT, &uri, Some(missing_id)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{problem}");
+    assert_eq!(problem["code"], "WORKFLOW_SNAPSHOT_INVALID");
+
+    // A body that is not even JSON gets the same ProblemDetails shape, not
+    // axum's bare rejection text.
+    let (status, problem) = fixture
+        .request_raw(Method::PUT, &uri, Some(b"not json".to_vec()))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{problem}");
+    assert_eq!(problem["code"], "WORKFLOW_SNAPSHOT_INVALID");
+
+    let (status, _) = fixture.request(Method::GET, &uri, None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "zero rows inserted");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn put_rejects_an_unknown_repo_root_id_as_an_invalid_snapshot() {
+    let fixture = fixture("wf-route-unknown-root");
+    let run_id = run_uuid(0x04);
+    let uri = format!("/v1/workflow-runs/{run_id}");
     let mut body = fixture.snapshot(single_node_definition("never launches"));
     body["placement"]["repoConfigId"] = json!("ghost-repo-config");
 
-    let (status, problem) = fixture
-        .request(Method::PUT, "/v1/workflow-runs/run-unplaceable", Some(body))
-        .await;
-    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{problem}");
-    assert_eq!(problem["code"], "WORKFLOW_WORKSPACE_MATERIALIZATION_FAILED");
+    // Ruling A: `repoConfigId` is the runtime repo-root id; an id this
+    // runtime does not know is the snapshot being wrong — the 400 — never a
+    // retryable 503.
+    let (status, problem) = fixture.request(Method::PUT, &uri, Some(body)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{problem}");
+    assert_eq!(problem["code"], "WORKFLOW_SNAPSHOT_INVALID");
 
-    let (status, _) = fixture
-        .request(Method::GET, "/v1/workflow-runs/run-unplaceable", None)
-        .await;
+    let (status, _) = fixture.request(Method::GET, &uri, None).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "zero rows inserted");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn reads_project_from_rows_and_the_list_envelope_filters() {
     let fixture = fixture("wf-route-reads");
+    let ghost = run_uuid(0x05);
     let (status, problem) = fixture
-        .request(Method::GET, "/v1/workflow-runs/run-missing", None)
+        .request(Method::GET, &format!("/v1/workflow-runs/{ghost}"), None)
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(problem["code"], "WORKFLOW_RUN_NOT_FOUND");
 
+    let run_id = run_uuid(0x06);
+    let uri = format!("/v1/workflow-runs/{run_id}");
     let body = fixture.snapshot(single_node_definition("blocking turn"));
-    let (status, projection) = fixture
-        .request(Method::PUT, "/v1/workflow-runs/run-listed", Some(body))
-        .await;
+    let (status, projection) = fixture.request(Method::PUT, &uri, Some(body)).await;
     assert_eq!(status, StatusCode::CREATED, "{projection}");
-    let workspace_id = projection["run"]["workspaceId"].as_str().expect("workspace id");
+    let workspace_id = projection["run"]["workspaceId"]
+        .as_str()
+        .expect("workspace id");
 
-    let (status, fetched) = fixture
-        .request(Method::GET, "/v1/workflow-runs/run-listed", None)
-        .await;
+    let (status, fetched) = fixture.request(Method::GET, &uri, None).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(fetched["run"]["id"], "run-listed");
+    assert_eq!(fetched["run"]["id"], json!(run_id));
 
     let (status, listed) = fixture
         .request(
@@ -373,7 +438,7 @@ async fn reads_project_from_rows_and_the_list_envelope_filters() {
         )
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(listed["runs"][0]["id"], "run-listed");
+    assert_eq!(listed["runs"][0]["id"], json!(run_id));
 
     let (status, empty) = fixture
         .request(Method::GET, "/v1/workflow-runs?workspace_id=elsewhere", None)
@@ -384,103 +449,7 @@ async fn reads_project_from_rows_and_the_list_envelope_filters() {
     fixture.wait_for_control("turn-seen").await;
     fixture.touch_control("release-turn");
     fixture
-        .wait_for_run("run-listed", "run completes", |state| {
-            state.run.status == WorkflowRunStatus::Completed
-        })
-        .await;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn commands_return_projections_and_map_the_error_codes() {
-    let fixture = fixture("wf-route-commands");
-    let body = fixture.snapshot(json!({
-        "schemaVersion": 2,
-        "nodes": [
-            { "id": "review", "type": "human_in_loop", "title": "Review", "prompt": "summarize" },
-            { "id": "ship", "type": "agent", "title": "Ship", "prompt": "ship it" }
-        ],
-        "edges": [ { "from": "review", "to": "ship" } ],
-        "inputs": [],
-        "docTemplates": [],
-    }));
-    let (status, projection) = fixture
-        .request(Method::PUT, "/v1/workflow-runs/run-cmd", Some(body))
-        .await;
-    assert_eq!(status, StatusCode::CREATED, "{projection}");
-
-    // Commands on ghosts: unknown run 404s with the run code, unknown node
-    // 404s with the node code.
-    let (status, problem) = fixture
-        .request(
-            Method::POST,
-            "/v1/workflow-runs/run-ghost/nodes/whatever/approve",
-            Some(json!({})),
-        )
-        .await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(problem["code"], "WORKFLOW_RUN_NOT_FOUND");
-    let (status, problem) = fixture
-        .request(
-            Method::POST,
-            "/v1/workflow-runs/run-cmd/nodes/ghost-node/approve",
-            Some(json!({})),
-        )
-        .await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(problem["code"], "WORKFLOW_NODE_NOT_FOUND");
-
-    fixture
-        .wait_for_run("run-cmd", "gate parks", |state| {
-            state.run.status == WorkflowRunStatus::AwaitingHuman
-        })
-        .await;
-    let state = fixture
-        .state
-        .workflow_store
-        .load_run_state("run-cmd")
-        .expect("load")
-        .expect("run");
-    let gate = state
-        .nodes
-        .iter()
-        .find(|node| node.definition_node_id.as_deref() == Some("review"))
-        .expect("gate row");
-    assert_eq!(gate.status, WorkflowNodeStatus::AwaitingHuman);
-
-    // Approve answers with the fresh projection: the gate is completed in the
-    // response body itself, no follow-up read.
-    let (status, projection) = fixture
-        .request(
-            Method::POST,
-            &format!("/v1/workflow-runs/run-cmd/nodes/{}/approve", gate.id),
-            Some(json!({})),
-        )
-        .await;
-    assert_eq!(status, StatusCode::OK, "{projection}");
-    let approved = projection["nodes"]
-        .as_array()
-        .expect("nodes")
-        .iter()
-        .find(|node| node["id"] == json!(gate.id))
-        .expect("gate in projection");
-    assert_eq!(approved["status"], "completed");
-
-    // A second approve is the transition table's refusal: 409 naming the
-    // command and the state it was refused in.
-    let (status, problem) = fixture
-        .request(
-            Method::POST,
-            &format!("/v1/workflow-runs/run-cmd/nodes/{}/approve", gate.id),
-            Some(json!({})),
-        )
-        .await;
-    assert_eq!(status, StatusCode::CONFLICT, "{problem}");
-    assert_eq!(problem["code"], "WORKFLOW_TRANSITION_ILLEGAL");
-    let detail = problem["detail"].as_str().expect("detail");
-    assert!(detail.contains("approve_gate"), "{detail}");
-
-    fixture
-        .wait_for_run("run-cmd", "run completes", |state| {
+        .wait_for_run(&run_id, "run completes", |state| {
             state.run.status == WorkflowRunStatus::Completed
         })
         .await;

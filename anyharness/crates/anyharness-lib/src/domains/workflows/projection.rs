@@ -35,11 +35,18 @@ pub struct RunView {
     pub arguments_json: String,
     pub workspace_id: String,
     pub status: WorkflowRunStatus,
+    // Nullable fields are REQUIRED in the schema: serde always emits them as
+    // explicit `null`, and the TS mirror declares `string | null`, never
+    // optional — `required = true` keeps the generated document honest.
+    #[schema(required = true)]
     pub current_node_row_id: Option<String>,
+    #[schema(required = true)]
     pub failure_code: Option<String>,
+    #[schema(required = true)]
     pub interruption_code: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[schema(required = true)]
     pub completed_at: Option<String>,
 }
 
@@ -48,20 +55,29 @@ pub struct RunView {
 pub struct NodeView {
     pub id: String,
     pub run_id: String,
+    #[schema(required = true)]
     pub definition_node_id: Option<String>,
     pub kind: WorkflowNodeKind,
     pub node_type: WorkflowNodeType,
+    #[schema(required = true)]
     pub replaces_node_row_id: Option<String>,
+    #[schema(required = true)]
     pub anchor_node_row_id: Option<String>,
+    #[schema(required = true)]
     pub chain_index: Option<i64>,
     pub title: String,
     pub prompt: String,
     pub status: WorkflowNodeStatus,
+    #[schema(required = true)]
     pub session_id: Option<String>,
+    #[schema(required = true)]
     pub prompt_id: Option<String>,
+    #[schema(required = true)]
     pub failure_code: Option<String>,
     pub created_at: String,
+    #[schema(required = true)]
     pub started_at: Option<String>,
+    #[schema(required = true)]
     pub completed_at: Option<String>,
 }
 
@@ -72,6 +88,7 @@ pub struct DocView {
     pub run_id: String,
     pub slug: String,
     pub filename: String,
+    #[schema(required = true)]
     pub producing_node_row_id: Option<String>,
     pub seeded_from_template: bool,
     pub created_at: String,

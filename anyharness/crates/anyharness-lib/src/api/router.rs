@@ -83,39 +83,8 @@ pub fn build_router(state: AppState) -> Router {
             "/catalogs/agents/version",
             get(catalogs::get_agent_catalog_version),
         )
-        // Workflow runs (gen-2)
-        .route(
-            "/workflow-runs",
-            get(workflow_runs::list_workflow_runs),
-        )
-        .route(
-            "/workflow-runs/{run_id}",
-            get(workflow_runs::get_workflow_run).put(workflow_runs::put_workflow_run),
-        )
-        .route(
-            "/workflow-runs/{run_id}/nodes/{node_row_id}/approve",
-            post(workflow_runs::approve_workflow_node),
-        )
-        .route(
-            "/workflow-runs/{run_id}/nodes/{node_row_id}/fail-redo",
-            post(workflow_runs::fail_redo_workflow_node),
-        )
-        .route(
-            "/workflow-runs/{run_id}/nodes/{node_row_id}/type",
-            post(workflow_runs::flip_workflow_node_type),
-        )
-        .route(
-            "/workflow-runs/{run_id}/undo-advance",
-            post(workflow_runs::undo_workflow_advance),
-        )
-        .route(
-            "/workflow-runs/{run_id}/resume",
-            post(workflow_runs::resume_workflow_run),
-        )
-        .route(
-            "/workflow-runs/{run_id}/adhoc-nodes",
-            post(workflow_runs::add_workflow_adhoc_node),
-        )
+        // Workflow runs (gen-2): the route table lives with its handlers.
+        .merge(workflow_runs::routes())
         // Workspaces
         .route(
             "/workspaces",

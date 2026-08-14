@@ -19,6 +19,9 @@ pub mod store;
 pub mod transition;
 
 #[cfg(test)]
+#[path = "contract_fixture_tests.rs"]
+mod contract_fixture_tests;
+#[cfg(test)]
 #[path = "definition_tests.rs"]
 mod definition_tests;
 #[cfg(test)]
