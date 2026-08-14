@@ -1,7 +1,16 @@
 import { useCallback } from "react";
 import { AnyHarnessError } from "@anyharness/sdk";
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
+import { recordRendererDiagnostic } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 import { showToast, toastError } from "#product/primitives/utils/show-toast";
+
+/** Stable class from the error's shape (problem code or name), never its text. */
+function classifyCommandError(error: unknown): string {
+  if (error instanceof AnyHarnessError) {
+    return error.problem.code;
+  }
+  return error instanceof Error ? error.name : "unknown";
+}
 
 /**
  * Whether a rejected command lost a race with the run rather than failing.
@@ -49,6 +58,14 @@ export function useWorkflowRunCommand({
       await command();
     } catch (error) {
       if (isWorkflowTransitionRace(error)) {
+        recordRendererDiagnostic({
+          name: "renderer.workflows.run_command_race",
+          severity: "warn",
+          kind: "message",
+          privacy: "operational",
+          correlation: { workflowId: runId },
+          errorClassification: "WORKFLOW_TRANSITION_ILLEGAL",
+        });
         // The control raced the run: say so, refresh, and never let the
         // rejection reach the component that rendered the control.
         showToast({
@@ -62,6 +79,14 @@ export function useWorkflowRunCommand({
         void refetchRun();
         return;
       }
+      recordRendererDiagnostic({
+        name: "renderer.workflows.run_command_failed",
+        severity: "error",
+        kind: "message",
+        privacy: "operational",
+        correlation: { workflowId: runId },
+        errorClassification: classifyCommandError(error),
+      });
       toastError({
         headline: WORKFLOW_RUN_VIEW_COPY.commandFailedHeadline,
         consequence: WORKFLOW_RUN_VIEW_COPY.commandFailedConsequence,

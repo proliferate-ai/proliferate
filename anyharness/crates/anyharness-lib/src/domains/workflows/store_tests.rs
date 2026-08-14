@@ -1292,3 +1292,82 @@ fn running_unlinked_node_trips_only_the_at_rest_sweep() {
     let state = store.load_run_state("run-1").expect("load").expect("run");
     assert!(invariants::sweep_at_rest(&state).is_empty());
 }
+
+/// pr11 subscriber-capture proof: a committed FailNode transition emits the
+/// named `anyharness.workflow_transition` event carrying the machine-readable
+/// `failure_code` classification, and the terminal flip emits the named
+/// run-finished event on the same commit. Negative control (recorded in the
+/// PR body): removing the `failure_code` field from `emit_transition_events`
+/// fails this test; restoring it passes.
+#[test]
+fn fail_node_transition_event_carries_named_target_and_failure_code() {
+    use std::io;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
+
+    impl io::Write for SharedLogWriter {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            self.0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend_from_slice(buffer);
+            Ok(buffer.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-obs"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+    let errored = WorkflowEvent::TurnFinished(TurnFinished {
+        node_row_id: plan_id.clone(),
+        stop_reason: TurnStopReason::Error,
+        queue_empty: true,
+    });
+
+    let log_bytes = Arc::new(Mutex::new(Vec::new()));
+    let log_writer = Arc::clone(&log_bytes);
+    let subscriber = tracing_subscriber::fmt()
+        .without_time()
+        .with_ansi(false)
+        .with_writer(move || SharedLogWriter(Arc::clone(&log_writer)))
+        .finish();
+    let applied = tracing::subscriber::with_default(subscriber, || {
+        decide_and_apply(&store, "run-obs", &created.state, &errored)
+    });
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Failed);
+
+    let logged = String::from_utf8(
+        log_bytes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone(),
+    )
+    .expect("formatted log is UTF-8");
+    let transition_line = logged
+        .lines()
+        .find(|line| line.contains("anyharness.workflow_transition"))
+        .expect("named transition event captured");
+    assert!(transition_line.contains("run-obs"), "{transition_line}");
+    assert!(
+        transition_line.contains(plan_id.as_str()),
+        "{transition_line}"
+    );
+    assert!(transition_line.contains("fail_node"), "{transition_line}");
+    assert!(
+        transition_line.contains("failure_code"),
+        "{transition_line}"
+    );
+    assert!(transition_line.contains("turn_error"), "{transition_line}");
+    assert!(
+        logged.contains("anyharness.workflow_run_finished"),
+        "{logged}"
+    );
+}

@@ -1097,6 +1097,16 @@ fn emit_transition_events(
         WorkflowEvent::NodeLaunchFailed { .. } => ("node_launch_failed", None),
     };
     let node_row_id = transition_node_row_id(transition, applied);
+    // The classification a failing transition carries, so a node_failed row is
+    // diagnosable from the event alone (empty on every non-failing shape).
+    let failure_code = match transition {
+        Transition::FailNode { code, .. } => code.as_str(),
+        Transition::AdhocTurn {
+            outcome: AdhocOutcome::Failed(code),
+            ..
+        } => code.as_str(),
+        _ => "",
+    };
     tracing::info!(
         target: WORKFLOW_TRANSITION_TRACING_TARGET,
         run_id = %applied.state.run.id,
@@ -1104,6 +1114,7 @@ fn emit_transition_events(
         event = transition.label(),
         cause = cause,
         stop_reason = stop_reason.unwrap_or(""),
+        failure_code = failure_code,
         from_state = from_state.as_str(),
         to_state = applied.state.run.status.as_str(),
         "workflow transition applied",

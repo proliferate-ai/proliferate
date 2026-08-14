@@ -5,6 +5,10 @@ import { useWorkflowInvocationV2MutationsAccess } from "#product/hooks/access/cl
 import { workflowTriggerFailureMessage } from "#product/lib/domain/workflows/workflow-trigger-failure";
 import { workflowTriggerIdentityKey } from "#product/lib/domain/workflows/workflow-trigger-identity";
 import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import {
   runWorkflowTrigger,
   WorkflowTriggerError,
   type TriggerCourierIds,
@@ -73,10 +77,34 @@ export function useWorkflowTriggerActions({
       // The PUT's response is the fresh projection, so mounted run views and
       // runs lists are served from it rather than refetching after navigation.
       writeRunProjection(result.projection);
+      recordRendererDiagnostic({
+        name: "renderer.workflows.launch_submitted",
+        severity: "info",
+        kind: "milestone",
+        privacy: "operational",
+        correlation: {
+          workflowId: result.runId,
+          workspaceId: result.workspaceId,
+        },
+      });
       onLaunched?.({ runId: result.runId, workspaceId: result.workspaceId });
       return result;
     } catch (caught) {
       const failure = caught instanceof WorkflowTriggerError ? caught : null;
+      recordRendererDiagnostic({
+        name: "renderer.workflows.launch_failed",
+        severity: "error",
+        kind: "message",
+        privacy: "operational",
+        fields: {
+          stage: diagnosticField(failure?.stage ?? "unknown", "operational"),
+        },
+        errorClassification: failure
+          ? `trigger_${failure.stage}`
+          : caught instanceof Error
+            ? caught.name
+            : "unknown",
+      });
       retry.current = failure ? { identityKey, ids: failure.ids } : null;
       setError(workflowTriggerFailureMessage(
         failure ? failure.reason : caught,

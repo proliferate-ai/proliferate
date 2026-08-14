@@ -33,6 +33,9 @@ use crate::domains::workspaces::workflow_placement::{
     ResolvedWorkflowPlacement, WorkflowPlacementError, WorkflowPlacementRequest,
 };
 use crate::live::workflows::WorkflowCommandError;
+use crate::observability::{
+    WORKFLOW_RUN_ACCEPTED_TRACING_TARGET, WORKFLOW_WORKSPACE_MATERIALIZED_TRACING_TARGET,
+};
 
 pub(super) const RUN_NOT_FOUND: &str = "WORKFLOW_RUN_NOT_FOUND";
 pub(super) const NODE_NOT_FOUND: &str = "WORKFLOW_NODE_NOT_FOUND";
@@ -339,6 +342,13 @@ pub async fn put_workflow_run(
         .await?
         .map_err(|error| ApiError::internal(error.to_string()))?;
         if existing.is_some() {
+            tracing::info!(
+                target: WORKFLOW_RUN_ACCEPTED_TRACING_TARGET,
+                run_id = %run_id,
+                definition_id = %snapshot.workflow_definition_id,
+                outcome = "replayed",
+                "workflow run accepted",
+            );
             let projection = state
                 .workflow_manager
                 .start_run_synced(&run_id)
@@ -365,6 +375,14 @@ pub async fn put_workflow_run(
         .await?
         .map_err(|error| ApiError::internal(error.to_string()))?;
         if let Some(occupant_run_id) = occupant {
+            tracing::info!(
+                target: WORKFLOW_RUN_ACCEPTED_TRACING_TARGET,
+                run_id = %run_id,
+                definition_id = %snapshot.workflow_definition_id,
+                outcome = "conflict",
+                occupant_run_id = %occupant_run_id,
+                "workflow run accepted",
+            );
             compensate_placement(&state, &placed).await;
             return Err(ApiError::conflict(
                 format!("workspace already hosts non-terminal workflow run {occupant_run_id}"),
@@ -375,6 +393,7 @@ pub async fn put_workflow_run(
 
     {
         let planned_docs = plan_context_docs(&snapshot, &chain);
+        let doc_count = planned_docs.len();
         let templates = snapshot.definition.doc_templates.clone();
         let workspace_path = placed.workspace.path.clone();
         let materialized = run_blocking("workflow_run_materialize", move || {
@@ -392,10 +411,18 @@ pub async fn put_workflow_run(
                 "context materialization failed; see runtime logs",
             ));
         }
+        tracing::info!(
+            target: WORKFLOW_WORKSPACE_MATERIALIZED_TRACING_TARGET,
+            run_id = %run_id,
+            workspace_id = %placed.workspace.id,
+            doc_count = doc_count,
+            "workflow run workspace materialized",
+        );
     }
 
     // One transaction: run + node + doc rows. A racing PUT of the same run id
     // loses gracefully — `created: false` — and answers the replay 200.
+    let definition_id = snapshot.workflow_definition_id.clone();
     let created = {
         let store = state.workflow_store.clone();
         let params = NewRunParams {
@@ -415,6 +442,13 @@ pub async fn put_workflow_run(
                 compensate_placement(&state, &placed).await;
                 return Err(match error.downcast_ref::<WorkspaceOccupied>() {
                     Some(occupied) => {
+                        tracing::info!(
+                            target: WORKFLOW_RUN_ACCEPTED_TRACING_TARGET,
+                            run_id = %run_id,
+                            definition_id = %definition_id,
+                            outcome = "conflict",
+                            "workflow run accepted",
+                        );
                         ApiError::conflict(occupied.to_string(), PLACEMENT_CONFLICT)
                     }
                     None => {
@@ -425,6 +459,14 @@ pub async fn put_workflow_run(
             }
         }
     };
+
+    tracing::info!(
+        target: WORKFLOW_RUN_ACCEPTED_TRACING_TARGET,
+        run_id = %run_id,
+        definition_id = %definition_id,
+        outcome = if created.created { "created" } else { "replayed" },
+        "workflow run accepted",
+    );
 
     // The reply reads THROUGH the actor mailbox, so the body already
     // reflects the first node's launch instead of racing it.
