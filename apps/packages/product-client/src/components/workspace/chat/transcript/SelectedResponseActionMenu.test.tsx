@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ConnectedSelectedResponseActionMenu,
   SelectedResponseActionMenu,
   type SelectedResponseAction,
 } from "#product/components/workspace/chat/transcript/SelectedResponseActionMenu";
@@ -10,8 +11,10 @@ import type { SelectedResponseSelection } from "#product/domain/chats/transcript
 
 vi.mock("#product/hooks/chat/workflows/use-selected-response-actions", () => ({
   useSelectedResponseActions: () => ({
-    addToChat: vi.fn(),
+    addToChat: vi.fn(() => ({ id: "annotation-9", ordinal: 3 })),
     moreDetails: vi.fn(),
+    setAnnotationComment: vi.fn(),
+    focusComposer: vi.fn(),
   }),
 }));
 
@@ -193,6 +196,27 @@ describe("SelectedResponseActionMenu", () => {
     expect(onDismiss).not.toHaveBeenCalled();
     expect(screen.queryAllByRole("menuitem")).toHaveLength(2);
     outside.remove();
+  });
+
+  it("reports the added annotation with its anchor rect from Add to chat", async () => {
+    const onAnnotationAdded = vi.fn();
+    render(
+      <ConnectedSelectedResponseActionMenu
+        selection={selection}
+        focusRequestNonce={0}
+        onDismiss={vi.fn()}
+        onAnnotationAdded={onAnnotationAdded}
+      />,
+    );
+    const items = await screen.findAllByRole("menuitem");
+
+    fireEvent.click(items[0]!);
+
+    expect(onAnnotationAdded).toHaveBeenCalledWith({
+      id: "annotation-9",
+      ordinal: 3,
+      anchorRect: selection.anchorRect,
+    });
   });
 
   it("keeps the dismissal-suppression hook reachable from every item", async () => {

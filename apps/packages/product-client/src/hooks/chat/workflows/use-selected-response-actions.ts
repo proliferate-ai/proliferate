@@ -19,17 +19,28 @@ export function useSelectedResponseActions() {
   const addSelectedResponseContext = useChatInputStore(
     (state) => state.addSelectedResponseContext,
   );
+  const setSelectedResponseContextComment = useChatInputStore(
+    (state) => state.setSelectedResponseContextComment,
+  );
   const requestComposerFocus = useChatInputStore((state) => state.requestFocus);
   const showToast = useToastStore((state) => state.show);
   const currentChat = useChatPromptActions();
 
+  // Composer focus is NOT requested here: the annotation comment editor takes
+  // focus first and hands it to the composer once the comment is settled.
   const addToChat = useCallback((text: string) => {
+    if (!workspaceUiKey) {
+      return null;
+    }
+    return addSelectedResponseContext(workspaceUiKey, text);
+  }, [addSelectedResponseContext, workspaceUiKey]);
+
+  const setAnnotationComment = useCallback((id: string, comment: string) => {
     if (!workspaceUiKey) {
       return;
     }
-    addSelectedResponseContext(workspaceUiKey, text);
-    requestComposerFocus();
-  }, [addSelectedResponseContext, requestComposerFocus, workspaceUiKey]);
+    setSelectedResponseContextComment(workspaceUiKey, id, comment);
+  }, [setSelectedResponseContextComment, workspaceUiKey]);
 
   const moreDetails = useCallback((text: string) => {
     const payload = buildPromptWithSelectedResponseContexts(
@@ -49,5 +60,7 @@ export function useSelectedResponseActions() {
   return {
     addToChat,
     moreDetails,
+    setAnnotationComment,
+    focusComposer: requestComposerFocus,
   };
 }

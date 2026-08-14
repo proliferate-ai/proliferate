@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type {
   ChatTranscriptOutboxActions,
   ChatTranscriptViewProps,
@@ -8,7 +8,11 @@ import { ChatContentSearchQueryContext } from "./ChatContentSearchContext";
 import { useChatTranscriptCopySelection } from "#product/hooks/chat/ui/use-chat-transcript-copy-selection";
 import { useChatTranscriptRowRenderer } from "#product/hooks/chat/ui/use-chat-transcript-row-renderer";
 import { useChatTranscriptViewModel } from "#product/hooks/chat/ui/use-chat-transcript-view-model";
-import { ConnectedSelectedResponseActionMenu } from "#product/components/workspace/chat/transcript/SelectedResponseActionMenu";
+import {
+  ConnectedSelectedResponseActionMenu,
+  type SelectedResponsePendingAnnotation,
+} from "#product/components/workspace/chat/transcript/SelectedResponseActionMenu";
+import { ConnectedSelectedResponseAnnotationComposer } from "#product/components/workspace/chat/transcript/SelectedResponseAnnotationComposer";
 
 const noop = () => {};
 const NOOP_OUTBOX_ACTIONS: ChatTranscriptOutboxActions = {
@@ -29,6 +33,8 @@ export function ChatTranscriptView({
   scrollHandleRef,
 }: ChatTranscriptViewProps) {
   const selectionRootRef = useRef<HTMLDivElement>(null);
+  const [pendingAnnotation, setPendingAnnotation] =
+    useState<SelectedResponsePendingAnnotation | null>(null);
   const searchQuery = contentSearch?.query.trim() ? contentSearch.query.trim() : null;
   const model = useChatTranscriptViewModel({
     state,
@@ -95,6 +101,14 @@ export function ChatTranscriptView({
           selection={transcriptSelection.selectedResponse}
           focusRequestNonce={transcriptSelection.menuFocusRequestNonce}
           onDismiss={transcriptSelection.dismissSelectedResponse}
+          onAnnotationAdded={setPendingAnnotation}
+        />
+      ) : null}
+      {pendingAnnotation ? (
+        <ConnectedSelectedResponseAnnotationComposer
+          key={pendingAnnotation.id}
+          annotation={pendingAnnotation}
+          onDone={() => setPendingAnnotation(null)}
         />
       ) : null}
     </ChatContentSearchQueryContext.Provider>

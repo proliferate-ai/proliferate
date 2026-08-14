@@ -6,7 +6,8 @@ import { CHAT_SELECTED_RESPONSE_ACTIONS } from "#product/copy/chat/chat-copy";
 import { useSelectedResponseActions } from "#product/hooks/chat/workflows/use-selected-response-actions";
 
 const mocks = vi.hoisted(() => ({
-  addSelectedResponseContext: vi.fn(),
+  addSelectedResponseContext: vi.fn(() => ({ id: "annotation-1", ordinal: 1 })),
+  setSelectedResponseContextComment: vi.fn(),
   currentSubmit: vi.fn(async () => true),
   requestFocus: vi.fn(),
   showToast: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock("#product/stores/sessions/session-selection-store", () => ({
 vi.mock("#product/stores/chat/chat-input-store", () => ({
   useChatInputStore: (selector: (state: unknown) => unknown) => selector({
     addSelectedResponseContext: mocks.addSelectedResponseContext,
+    setSelectedResponseContextComment: mocks.setSelectedResponseContextComment,
     requestFocus: mocks.requestFocus,
   }),
 }));
@@ -48,14 +50,34 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("useSelectedResponseActions", () => {
-  it("attaches the exact response excerpt to the current workspace and focuses the composer", () => {
+  it("attaches the exact excerpt and reports the annotation without stealing focus", () => {
     const { result } = renderHook(() => useSelectedResponseActions());
 
-    act(() => result.current.addToChat("selected response"));
+    let added: { id: string; ordinal: number } | null = null;
+    act(() => {
+      added = result.current.addToChat("selected response");
+    });
 
     expect(mocks.addSelectedResponseContext).toHaveBeenCalledWith(
       "logical-workspace-1",
       "selected response",
+    );
+    expect(added).toEqual({ id: "annotation-1", ordinal: 1 });
+    // The annotation comment editor takes focus first; the composer is only
+    // focused through focusComposer once the comment settles.
+    expect(mocks.requestFocus).not.toHaveBeenCalled();
+  });
+
+  it("routes annotation comments to the current workspace", () => {
+    const { result } = renderHook(() => useSelectedResponseActions());
+
+    act(() => result.current.setAnnotationComment("annotation-1", "note"));
+    act(() => result.current.focusComposer());
+
+    expect(mocks.setSelectedResponseContextComment).toHaveBeenCalledWith(
+      "logical-workspace-1",
+      "annotation-1",
+      "note",
     );
     expect(mocks.requestFocus).toHaveBeenCalledOnce();
   });

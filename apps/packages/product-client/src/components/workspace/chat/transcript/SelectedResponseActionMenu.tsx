@@ -2,7 +2,10 @@ import { useEffect, useRef } from "react";
 import { MessageCircleQuestion } from "#product/primitives/icons/core";
 import { MessageSquarePlus } from "#product/primitives/icons/product";
 import { CHAT_SELECTED_RESPONSE_ACTIONS } from "#product/copy/chat/chat-copy";
-import type { SelectedResponseSelection } from "#product/domain/chats/transcript/selected-response-context";
+import type {
+  SelectedResponseAnchorRect,
+  SelectedResponseSelection,
+} from "#product/domain/chats/transcript/selected-response-context";
 import { useSelectedResponseActions } from "#product/hooks/chat/workflows/use-selected-response-actions";
 import {
   DropdownMenu,
@@ -13,10 +16,17 @@ import {
 
 export type SelectedResponseAction = "add-to-chat" | "more-details";
 
+export interface SelectedResponsePendingAnnotation {
+  id: string;
+  ordinal: number;
+  anchorRect: SelectedResponseAnchorRect;
+}
+
 export function ConnectedSelectedResponseActionMenu({
   selection,
   focusRequestNonce,
   onDismiss,
+  onAnnotationAdded,
 }: {
   selection: SelectedResponseSelection;
   focusRequestNonce: number;
@@ -24,12 +34,16 @@ export function ConnectedSelectedResponseActionMenu({
     clearNativeSelection?: boolean;
     restoreTranscriptFocus?: boolean;
   }) => void;
+  onAnnotationAdded: (annotation: SelectedResponsePendingAnnotation) => void;
 }) {
   const actions = useSelectedResponseActions();
   const handleAction = (action: SelectedResponseAction) => {
     onDismiss({ clearNativeSelection: true });
     if (action === "add-to-chat") {
-      actions.addToChat(selection.text);
+      const added = actions.addToChat(selection.text);
+      if (added) {
+        onAnnotationAdded({ ...added, anchorRect: selection.anchorRect });
+      }
     } else {
       actions.moreDetails(selection.text);
     }
