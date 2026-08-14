@@ -107,6 +107,18 @@ export function PopoverButton({
     }
   };
 
+  // WebKit selects the word under the pointer as the secondary-button
+  // mousedown default, before `contextmenu` ever fires. Every trigger mode
+  // suppresses the browser context menu (handleContextMenu), so that
+  // pre-selection is never wanted: without this, two-finger-clicking a
+  // transcript file mention flashes a text highlight under the menu.
+  // Primary-button behavior (text selection, focus, drag) is untouched.
+  const handleMouseDown = (event: ReactMouseEvent) => {
+    if (event.button === 2) {
+      event.preventDefault();
+    }
+  };
+
   const handleDoubleClick = (event: ReactMouseEvent) => {
     if (stopPropagation) {
       event.stopPropagation();
@@ -142,6 +154,7 @@ export function PopoverButton({
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           onContextMenu={handleContextMenu}
+          onMouseDown={handleMouseDown}
         >
           {trigger}
         </PopoverTrigger>
@@ -156,6 +169,7 @@ export function PopoverButton({
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
             onContextMenu={handleContextMenu}
+            onMouseDown={handleMouseDown}
           >
             {trigger}
           </Slot>
