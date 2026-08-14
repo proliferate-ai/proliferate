@@ -590,7 +590,44 @@ arrival event remains workspace-scoped for setup and arrival lifecycle state;
 switching session tabs must not clear it or project its receipt into another
 session.
 
-## 4. Visual rules (minimalist pattern)
+### 3.6 File drops attach by upload or local reference
+
+Dropping onto the chat surface accepts every file type and folders. Two
+transports back the chips:
+
+- **Byte uploads** stay the transport for what the upload pipeline already
+  accepts — images within the image cap and small text files — because they
+  work on any workspace and put actual pixels in front of the model
+  (`promptUploadKind` in `prompt-attachment-rules.ts` is the single
+  eligibility source for `addFiles` and drop partitioning).
+- **Local references** (`kind: "local_ref"`) cover everything else: folders,
+  binaries, and oversize files. They carry an absolute path and submit as
+  `resource_link` prompt blocks (`file://` URI), which the runtime passes
+  through to the agent untouched; the co-located agent opens the path itself.
+  No bytes are read, so there is no size cap and no preview affordance on the
+  chip. Folder refs use the `inode/directory` MIME type, which is what flips
+  the chip and transcript icon to the folder visual and the metadata label to
+  "Folder".
+
+HTML5 drops never expose filesystem paths, so `ChatView` recovers them through
+the host seam: `host.desktop.files.readDroppedPaths()` reads the macOS drag
+pasteboard right after the DOM drop (`dragDropEnabled` stays `false`; native
+Tauri drag-drop would swallow DOM drops app-wide). The resolver is only wired
+for local-runtime workspaces, mirroring `resolveRuntimeTargetForWorkspace`:
+`cloud:*` sandboxes and `target:*` SSH targets cannot read this machine's
+paths and keep the byte-upload-only behavior, as do the web host and any drag
+whose pasteboard carries no filenames or whose shape does not correspond to
+the dropped FileList (`droppedPathsMatchFiles`: every File must consume a
+distinct candidate, leftover candidates must be directories — the
+stale-pasteboard guard; the flow falls back to `addFiles`). The pasteboard
+snapshot is additionally bound to the drop's drag session: `ChatView`
+captures the pasteboard changeCount while the drag is over the surface and
+rejects a snapshot read under a different count, and the native read
+discards snapshots whose changeCount moved mid-read.
+In-flight path resolutions are discarded when the workspace scope changes so
+a drop never lands attachments into another workspace's draft. Drops still
+require an active session with prompt capabilities; the new-chat attachment
+flow is separate scope (PRO-186).
 
 These are the calls that get broken most easily.
 
@@ -702,11 +739,13 @@ As-built composer surface — `ChatComposerSurface` (ProductClient) tags itself 
 the `chat-composer-surface` class, whose paint lives in
 `apps/packages/design/src/css/product.css`:
 
-- Background: `--color-composer-background`.
-- Outline: a 0.5px stroke-in-shadow (`0 0 0 0.5px var(--color-border)`)
-  stacked with `--color-composer-shadow` (which resolves to
-  `--shadow-subtle`) — there is no CSS `border`.
-- Radius: `rounded-[var(--radius-composer,1rem)]`; `--radius-composer` is 1rem.
+- Background: `--color-composer-background`. Opaque in both modes; light takes
+  the `#f6f6f6` rail plane, because the fill is the only thing separating the
+  composer from the page.
+- Outline: none. The chrome is fill-only — no CSS `border`, no stroke-in-shadow
+  and no elevation stack. The composer's own shadow token was deleted with the
+  elevation it described.
+- Radius: `rounded-composer`; `--radius-composer` is 1.75rem (28px).
   `ChatComposerDock` locally overrides only the top corners to zero while the
   full-width workspace-activity cap is present.
 

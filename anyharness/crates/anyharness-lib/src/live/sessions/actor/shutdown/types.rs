@@ -7,4 +7,7 @@ pub(in crate::live::sessions::actor) enum ActorExitDisposition {
     },
     Close,
     Dismiss,
+    /// Non-terminal actor retirement. Durable session identity, transcript,
+    /// configuration, and native conversation remain available for restart.
+    Unload,
 }

@@ -3,12 +3,13 @@
 //! No IO: attachment bytes arrive pre-loaded in [`ResolvedParts`] (see
 //! `load_prompt_attachments`), plan references render from their frozen
 //! `body_markdown` snapshot, and the codex first-prompt append arrives as an
-//! already-decided string in [`TurnPromptExtras`]. Base64 encoding and UTF-8
+//! already-decided strings in [`TurnPromptExtras`]. Base64 encoding and UTF-8
 //! validation are pure compute and belong here.
 
 use agent_client_protocol as acp;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 
+use super::provenance::PromptProvenance;
 use super::{PromptPayload, PromptValidationError, ResolvedParts, StoredPromptBlock};
 use crate::domains::sessions::plan_references::render_plan_reference_markdown;
 
@@ -19,6 +20,9 @@ pub type RenderError = PromptValidationError;
 /// Per-turn additions the actor decided before rendering.
 #[derive(Debug, Clone, Default)]
 pub struct TurnPromptExtras {
+    /// Current durable ordinary/delegated role context. This is a separate
+    /// platform-owned block on every turn and never becomes authored content.
+    pub product_context: Option<String>,
     /// When set, prepended as a hidden system-instruction text block (the
     /// codex first-prompt append). The has-turn-started gating is the
     /// caller's decision; render folds the result in verbatim.
@@ -30,7 +34,18 @@ pub fn render(
     parts: &ResolvedParts,
     extras: &TurnPromptExtras,
 ) -> Result<Vec<acp::schema::ContentBlock>, RenderError> {
-    let mut blocks = Vec::with_capacity(payload.blocks.len());
+    let mut blocks = Vec::with_capacity(payload.blocks.len() + 3);
+    if let Some(append) = &extras.first_prompt_system_prompt_append {
+        blocks.push(system_instruction_block(append));
+    }
+    if let Some(context) = &extras.product_context {
+        blocks.push(system_instruction_block(context));
+    }
+    if let Some(context) = agent_message_context(payload) {
+        blocks.push(acp::schema::ContentBlock::Text(
+            acp::schema::TextContent::new(context),
+        ));
+    }
     for block in &payload.blocks {
         match block {
             StoredPromptBlock::Text { text } => {
@@ -131,15 +146,29 @@ pub fn render(
             }
         }
     }
-    if let Some(append) = &extras.first_prompt_system_prompt_append {
-        blocks.insert(
-            0,
-            acp::schema::ContentBlock::Text(acp::schema::TextContent::new(format!(
-                "System instruction from AnyHarness, not user content:\n{append}"
-            ))),
-        );
-    }
     Ok(blocks)
+}
+
+fn system_instruction_block(instruction: &str) -> acp::schema::ContentBlock {
+    acp::schema::ContentBlock::Text(acp::schema::TextContent::new(format!(
+        "System instruction from AnyHarness, not user content:\n{instruction}"
+    )))
+}
+
+fn agent_message_context(payload: &PromptPayload) -> Option<String> {
+    let PromptProvenance::AgentSession {
+        source_session_id,
+        label,
+        ..
+    } = payload.provenance.as_ref()?
+    else {
+        return None;
+    };
+    let label = serde_json::Value::String(label.as_deref().unwrap_or("Agent").to_string());
+    let session_id = serde_json::Value::String(source_session_id.clone());
+    Some(format!(
+        "Message context: This message came from another agent. Sender label: {label}. Sender session ID: {session_id}. To reply, use send_message with agentId {session_id}."
+    ))
 }
 
 #[cfg(test)]
@@ -212,6 +241,43 @@ mod tests {
             panic!("expected one text block");
         };
         assert_eq!(text.text, "hello");
+    }
+
+    #[test]
+    fn send_message_prompt_provenance_renders_replay_stable_sender_context() {
+        let payload = PromptPayload::text("check the failing test".to_string()).with_provenance(
+            PromptProvenance::AgentSession {
+                source_session_id: "session-1".to_string(),
+                session_link_id: None,
+                label: Some("Build Agent".to_string()),
+            },
+        );
+        let provenance_json = payload
+            .provenance_json()
+            .expect("serialize provenance")
+            .expect("agent provenance");
+        let replayed =
+            PromptPayload::from_persisted(None, "check the failing test", Some(&provenance_json));
+
+        for candidate in [&payload, &replayed] {
+            let blocks = render(
+                candidate,
+                &ResolvedParts::default(),
+                &TurnPromptExtras::default(),
+            )
+            .expect("render agent message");
+            let [acp::schema::ContentBlock::Text(context), acp::schema::ContentBlock::Text(message)] =
+                blocks.as_slice()
+            else {
+                panic!("expected sender context followed by message text");
+            };
+            assert_eq!(
+                context.text,
+                "Message context: This message came from another agent. Sender label: \"Build Agent\". Sender session ID: \"session-1\". To reply, use send_message with agentId \"session-1\"."
+            );
+            assert_eq!(message.text, "check the failing test");
+        }
+        assert_eq!(payload.content_parts().len(), 1);
     }
 
     #[test]
@@ -332,6 +398,7 @@ mod tests {
             &ResolvedParts::default(),
             &TurnPromptExtras {
                 first_prompt_system_prompt_append: Some("Name the workspace first.".to_string()),
+                ..TurnPromptExtras::default()
             },
         )
         .expect("render");
@@ -346,6 +413,65 @@ mod tests {
             panic!("second block should be text");
         };
         assert_eq!(second.text, "Build a product");
+    }
+
+    #[test]
+    fn product_context_is_a_separate_block_and_authored_text_is_byte_preserved() {
+        let authored = "  Keep my leading space.\n\nAnd my trailing space.  ";
+        let blocks = render(
+            &payload(vec![StoredPromptBlock::Text {
+                text: authored.to_string(),
+            }]),
+            &ResolvedParts::default(),
+            &TurnPromptExtras {
+                product_context: Some("You are currently an ordinary agent.".to_string()),
+                first_prompt_system_prompt_append: None,
+            },
+        )
+        .expect("render");
+
+        let [acp::schema::ContentBlock::Text(context), acp::schema::ContentBlock::Text(message)] =
+            blocks.as_slice()
+        else {
+            panic!("expected product context followed by authored text");
+        };
+        assert_eq!(
+            context.text,
+            "System instruction from AnyHarness, not user content:\nYou are currently an ordinary agent."
+        );
+        assert_eq!(message.text.as_bytes(), authored.as_bytes());
+    }
+
+    #[test]
+    fn product_context_and_first_prompt_append_remain_separate_system_blocks() {
+        let blocks = render(
+            &payload(vec![StoredPromptBlock::Text {
+                text: "Do the work.".to_string(),
+            }]),
+            &ResolvedParts::default(),
+            &TurnPromptExtras {
+                product_context: Some("Current role context.".to_string()),
+                first_prompt_system_prompt_append: Some("Launch guidance.".to_string()),
+            },
+        )
+        .expect("render");
+
+        assert_eq!(blocks.len(), 3);
+        let texts = blocks
+            .iter()
+            .map(|block| match block {
+                acp::schema::ContentBlock::Text(text) => text.text.as_str(),
+                _ => panic!("expected text block"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            texts,
+            vec![
+                "System instruction from AnyHarness, not user content:\nLaunch guidance.",
+                "System instruction from AnyHarness, not user content:\nCurrent role context.",
+                "Do the work.",
+            ]
+        );
     }
 
     #[test]

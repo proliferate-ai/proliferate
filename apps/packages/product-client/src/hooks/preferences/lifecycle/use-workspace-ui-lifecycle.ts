@@ -41,6 +41,7 @@ async function readWorkspaceUiState(
       archivedWorkspaceIds:
         (await readPersistedJsonValue<string[]>(context, "archivedWorkspaceIds"))
         ?? WORKSPACE_UI_DEFAULTS.archivedWorkspaceIds,
+      pinnedWorkspaceIds: WORKSPACE_UI_DEFAULTS.pinnedWorkspaceIds,
       hiddenRepoRootIds: WORKSPACE_UI_DEFAULTS.hiddenRepoRootIds,
       sidebarOpen: WORKSPACE_UI_DEFAULTS.sidebarOpen,
       sidebarWidth: WORKSPACE_UI_DEFAULTS.sidebarWidth,

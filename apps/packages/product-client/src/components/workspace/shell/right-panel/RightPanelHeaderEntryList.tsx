@@ -8,6 +8,7 @@ import {
   AppShellTabCloseIcon,
   AppShellTerminalIcon,
 } from "#product/primitives/icons/app-shell";
+import { UsersRound } from "#product/primitives/icons/platform";
 import { ScratchPadIcon } from "#product/primitives/icons/product";
 import type { IconProps } from "#product/primitives/icons/types";
 import { RightPanelHeaderEntryDropZone } from "#product/components/workspace/shell/right-panel/RightPanelHeaderEntryDropZone";
@@ -40,6 +41,7 @@ interface ToolConfig {
 const PANEL_TOOLS: Record<RightPanelTool, ToolConfig> = {
   scratch: { label: "Scratch", icon: ScratchPadIcon },
   git: { label: "Changes", icon: AppShellReviewIcon },
+  agents: { label: "Agents", icon: UsersRound },
 };
 
 interface RightPanelHeaderEntryListProps {

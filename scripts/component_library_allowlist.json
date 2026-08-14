@@ -223,10 +223,6 @@
       "count": 1,
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
     },
-    "apps/packages/product-client/src/primitives/patterns/composer/LevelBarsButton.tsx": {
-      "count": 1,
-      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
-    },
     "apps/packages/product-client/src/primitives/patterns/panel/PaneOptionsMenuItem.tsx": {
       "count": 1,
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."

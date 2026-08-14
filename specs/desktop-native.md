@@ -31,6 +31,7 @@ apps/desktop/src-tauri/
       keychain.rs              # local secret storage (auth + env creds as 0600 files; data key in keychain) and sidecar launch secrets
       process.rs               # shell command helpers
       shell.rs                 # OS shell, editor, picker, and open actions
+      drag_drop.rs             # drag-pasteboard path recovery for webview drops
       diagnostics.rs           # renderer diagnostics bridge
 ```
 

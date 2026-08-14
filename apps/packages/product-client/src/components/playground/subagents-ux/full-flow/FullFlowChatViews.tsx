@@ -18,7 +18,6 @@ export function childToPaneAgent(child: FullFlowChild): PrototypeAgent {
     label: child.label,
     harness: child.harness,
     status: child.status,
-    wakeScheduled: child.wakeScheduled,
     detail: child.detail,
   };
 }
@@ -88,12 +87,7 @@ export function ChildChatView({
 }) {
   if (!found) return null;
   const { parent, child } = found;
-  // `detail` is already composed from the runtime status ("Working · 4m");
-  // wakeScheduled is metadata appended after it, never a roster state.
-  const statusLine = [
-    child.detail || FULL_FLOW_STATUS_LABELS[child.status],
-    child.wakeScheduled ? "Wake scheduled" : null,
-  ].filter((part): part is string => part !== null).join(" · ");
+  const statusLine = child.detail || FULL_FLOW_STATUS_LABELS[child.status];
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">

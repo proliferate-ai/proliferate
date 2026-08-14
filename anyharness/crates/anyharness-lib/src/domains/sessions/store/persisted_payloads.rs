@@ -1,7 +1,10 @@
 use anyharness_contract::v1::{
-    ContentPart, ItemCompletedEvent, ItemDeltaEvent, ItemStartedEvent, SessionEvent,
-    TranscriptItemDeltaPayload, TranscriptItemPayload,
+    ContentPart, GoalStatus, ItemCompletedEvent, ItemDeltaEvent, ItemStartedEvent, SessionEvent,
+    TranscriptItemDeltaPayload, TranscriptItemKind, TranscriptItemPayload, TranscriptItemStatus,
 };
+
+use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::model::bounded_assistant_text;
 
 const MAX_PERSISTED_OUTPUT_BYTES: usize = 16 * 1024;
 const TRUNCATION_MARKER: &str = "\n[truncated for storage]";
@@ -15,6 +18,173 @@ pub(crate) fn sanitize_session_event_for_sqlite(event: &SessionEvent) -> Session
         _ => {}
     }
     event
+}
+
+pub(crate) struct RepairedAssistantCompletion {
+    pub item_id: String,
+    pub payload_json: String,
+}
+
+pub(crate) struct PersistedTurnRepairFacts {
+    pub assistant_text: Option<String>,
+    pub open_assistant_completions: Vec<RepairedAssistantCompletion>,
+    pub prompt_begun: bool,
+    pub engine_outcome: Option<SessionTurnOutcome>,
+}
+
+struct AssistantItemState {
+    item_id: String,
+    item: TranscriptItemPayload,
+    completed: bool,
+}
+
+pub(crate) fn persisted_turn_repair_facts(
+    payloads: &[(Option<String>, String)],
+) -> Result<PersistedTurnRepairFacts, serde_json::Error> {
+    use std::collections::HashMap;
+
+    let mut indexes = HashMap::<String, usize>::new();
+    let mut items = Vec::<AssistantItemState>::new();
+    let mut prompt_begun = false;
+    let mut engine_outcome = None;
+    for (item_id, payload) in payloads {
+        let Ok(event) = serde_json::from_str::<SessionEvent>(payload) else {
+            continue;
+        };
+        engine_outcome = inferred_engine_outcome(&event).or(engine_outcome);
+        prompt_begun |= matches!(
+            &event,
+            SessionEvent::ItemStarted(started)
+                if matches!(started.item.kind, TranscriptItemKind::UserMessage)
+        ) || matches!(
+            &event,
+            SessionEvent::ItemCompleted(completed)
+                if matches!(completed.item.kind, TranscriptItemKind::UserMessage)
+        );
+        let Some(item_id) = item_id.as_ref() else {
+            continue;
+        };
+        match event {
+            SessionEvent::ItemStarted(started)
+                if matches!(started.item.kind, TranscriptItemKind::AssistantMessage) =>
+            {
+                if !indexes.contains_key(item_id) {
+                    indexes.insert(item_id.clone(), items.len());
+                    items.push(AssistantItemState {
+                        item_id: item_id.clone(),
+                        item: started.item,
+                        completed: false,
+                    });
+                }
+            }
+            SessionEvent::ItemDelta(delta) => {
+                if let Some(index) = indexes.get(item_id).copied() {
+                    apply_persisted_delta(&mut items[index].item, delta.delta);
+                }
+            }
+            SessionEvent::ItemCompleted(completed)
+                if matches!(completed.item.kind, TranscriptItemKind::AssistantMessage) =>
+            {
+                if let Some(index) = indexes.get(item_id).copied() {
+                    items[index].item = completed.item;
+                    items[index].completed = true;
+                } else {
+                    indexes.insert(item_id.clone(), items.len());
+                    items.push(AssistantItemState {
+                        item_id: item_id.clone(),
+                        item: completed.item,
+                        completed: true,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let messages = items
+        .iter()
+        .map(|state| text_parts(&state.item.content_parts))
+        .collect::<Vec<_>>();
+    let open_assistant_completions = items
+        .into_iter()
+        .filter(|state| !state.completed)
+        .map(|mut state| {
+            state.item.status = TranscriptItemStatus::Completed;
+            Ok(RepairedAssistantCompletion {
+                item_id: state.item_id,
+                payload_json: serde_json::to_string(&SessionEvent::ItemCompleted(
+                    ItemCompletedEvent { item: state.item },
+                ))?,
+            })
+        })
+        .collect::<Result<Vec<_>, serde_json::Error>>()?;
+    Ok(PersistedTurnRepairFacts {
+        assistant_text: bounded_assistant_text(&messages),
+        open_assistant_completions,
+        prompt_begun,
+        engine_outcome,
+    })
+}
+
+fn apply_persisted_delta(item: &mut TranscriptItemPayload, delta: TranscriptItemDeltaPayload) {
+    if let Some(value) = delta.is_transient {
+        item.is_transient = value;
+    }
+    if let Some(value) = delta.status {
+        item.status = value;
+    }
+    if let Some(value) = delta.title {
+        item.title = Some(value);
+    }
+    if let Some(value) = delta.native_tool_name {
+        item.native_tool_name = Some(value);
+    }
+    if let Some(value) = delta.parent_tool_call_id {
+        item.parent_tool_call_id = Some(value);
+    }
+    if let Some(value) = delta.raw_input {
+        item.raw_input = Some(value);
+    }
+    if let Some(value) = delta.raw_output {
+        item.raw_output = Some(value);
+    }
+    if let Some(parts) = delta.replace_content_parts {
+        item.content_parts = parts;
+    }
+    if let Some(text) = delta.append_text {
+        match item.content_parts.last_mut() {
+            Some(ContentPart::Text { text: current }) => current.push_str(&text),
+            _ => item.content_parts.push(ContentPart::Text { text }),
+        }
+    }
+    if let Some(parts) = delta.append_content_parts {
+        item.content_parts.extend(parts);
+    }
+}
+
+fn inferred_engine_outcome(event: &SessionEvent) -> Option<SessionTurnOutcome> {
+    match event {
+        SessionEvent::GoalMet(_) => Some(SessionTurnOutcome::Completed),
+        SessionEvent::GoalCleared(_) => Some(SessionTurnOutcome::Cancelled),
+        SessionEvent::GoalUpdated(updated) => match updated.goal.status {
+            GoalStatus::Active => None,
+            GoalStatus::Met => Some(SessionTurnOutcome::Completed),
+            GoalStatus::Failed | GoalStatus::Blocked => Some(SessionTurnOutcome::Failed),
+            GoalStatus::Cleared | GoalStatus::Paused => Some(SessionTurnOutcome::Cancelled),
+        },
+        _ => None,
+    }
+}
+
+fn text_parts(parts: &[ContentPart]) -> String {
+    parts
+        .iter()
+        .filter_map(|part| match part {
+            ContentPart::Text { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub(crate) fn sanitize_raw_notification_json_for_sqlite(payload_json: &str) -> String {

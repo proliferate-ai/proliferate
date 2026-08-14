@@ -38,6 +38,10 @@ pub(in crate::live::sessions::actor) async fn select_idle_work(
 }
 
 impl SessionActor {
+    pub(in crate::live::sessions::actor) async fn event_mutations_admitted(&self) -> bool {
+        self.event_sink.lock().await.event_mutations_admitted()
+    }
+
     /// Drives the actor to completion: the idle loop, then the established
     /// exit sequence (background-work shutdown, exit finalization, busy
     /// release, process drop) exactly as before.
@@ -76,6 +80,14 @@ impl SessionActor {
         let startup_drain_deadline = tokio::time::Instant::now() + STARTUP_QUEUE_DRAIN_GRACE;
         let mut startup_drain_grace = true;
         loop {
+            // A failed engine-terminal transaction is the actor's global
+            // quiescence boundary. Check under the sink lock before even
+            // reading the durable queue: every command/background path below
+            // may change state before it renders an event, so allowing one to
+            // start would make the frozen terminal sequence unrecoverable.
+            if !self.event_mutations_admitted().await {
+                return ActorExitDisposition::Unload;
+            }
             // Durable queue drain is an idle, low-priority action. A queue
             // mutation already accepted into the actor mailbox wins this
             // boundary, so startup and turn completion cannot capture and run
@@ -148,6 +160,12 @@ impl SessionActor {
         notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
         background_work_rx: &mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
     ) -> Option<ActorExitDisposition> {
+        // Repeat the sink-locked admission at the command entry. The loop
+        // check owns normal ordering; this local gate pins the invariant for
+        // every command that performs durable/live work before rendering.
+        if !self.event_mutations_admitted().await {
+            return Some(ActorExitDisposition::Unload);
+        }
         match cmd {
             SessionCommand::Prompt {
                 payload,
@@ -216,7 +234,9 @@ impl SessionActor {
                 None
             }
             SessionCommand::RunDomainOp { op, respond_to } => {
-                let result = self.run_domain_op_cmd(op).await;
+                let Some(result) = self.run_domain_op_cmd(op).await else {
+                    return Some(ActorExitDisposition::Unload);
+                };
                 let _ = respond_to.send(result);
                 None
             }
@@ -271,6 +291,12 @@ impl SessionActor {
                     .await;
                 let _ = respond_to.send(Ok(()));
                 Some(ActorExitDisposition::Dismiss)
+            }
+            SessionCommand::Unload { respond_to } => {
+                self.resolve_pending_interactions(Resolution::Cancelled)
+                    .await;
+                let _ = respond_to.send(Ok(()));
+                Some(ActorExitDisposition::Unload)
             }
             SessionCommand::Close { respond_to } => {
                 self.resolve_pending_interactions(Resolution::Cancelled)

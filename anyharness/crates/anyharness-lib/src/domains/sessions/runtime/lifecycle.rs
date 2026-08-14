@@ -15,6 +15,23 @@ use super::{SessionLifecycleError, SessionRuntime};
 use crate::live::sessions::ConditionalCancelOutcome;
 
 impl SessionRuntime {
+    /// Retire the in-memory actor while leaving the durable session fully
+    /// resumable. This is intentionally separate from terminal Close and
+    /// user-facing Dismiss semantics.
+    pub async fn unload_live_session_nonterminal(
+        &self,
+        session_id: &str,
+    ) -> Result<(), SessionLifecycleError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
+        let _record = self.get_session_or_not_found(session_id)?;
+        self.acp_manager
+            .unload_session_nonterminal(session_id)
+            .await
+            .map_err(SessionLifecycleError::Internal)
+    }
+
     pub async fn cancel_live_session(
         &self,
         session_id: &str,
@@ -236,6 +253,7 @@ impl SessionRuntime {
     pub async fn restore_dismissed_session(
         &self,
         workspace_id: &str,
+        expected_session_id: &str,
     ) -> Result<Option<SessionRecord>, SessionLifecycleError> {
         self.access_gate
             .assert_can_mutate_for_workspace(workspace_id)
@@ -249,7 +267,7 @@ impl SessionRuntime {
         let Some(restored) = self
             .session_service
             .store()
-            .pop_last_dismissed_in_workspace(workspace_id, &now)
+            .pop_last_dismissed_in_workspace(workspace_id, Some(expected_session_id), &now)
             .map_err(SessionLifecycleError::Internal)?
         else {
             tracing::info!(

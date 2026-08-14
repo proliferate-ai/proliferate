@@ -26,6 +26,7 @@ import {
   pickFolder,
   revealInFinder,
 } from "./shell";
+import { getDragPasteboardChangeCount, readDragDropPaths } from "./drag-drop";
 import { showNativeContextMenu } from "./context-menu";
 import { listenForShortcutMenuEvents } from "./menu";
 import {
@@ -110,6 +111,8 @@ export const desktopBridge: DesktopBridge = {
     },
     getHomeDirectory: getHomeDir,
     isDirectory: pathIsDirectory,
+    getDragPasteboardChangeCount,
+    readDroppedPaths: readDragDropPaths,
     listAvailableEditors,
     listOpenTargets,
     openTarget,

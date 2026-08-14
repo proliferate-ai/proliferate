@@ -14,6 +14,12 @@ use crate::live::sessions::rendezvous::broker::PermissionDecision;
 #[derive(Debug)]
 pub enum PromptAcceptError {
     EnqueueFailed(String),
+    /// Current durable role/relationship truth could not be resolved. The
+    /// incident UUID becomes the RFC 7807 instance receipt at the API seam.
+    ProductContextUnavailable {
+        incident_id: String,
+        error: crate::live::sessions::product_context::AgentProductContextResolutionError,
+    },
 }
 
 /// Result of the crate-private conditional-cancel command (spec
@@ -35,6 +41,7 @@ pub enum PromptAcceptance {
 #[derive(Debug)]
 pub enum QueueMutationError {
     NotFound,
+    Protected,
     StaleOrder { current_seqs: Vec<i64> },
     InvalidReorder(String),
     Internal(String),
@@ -214,6 +221,13 @@ pub(in crate::live::sessions) enum SessionCommand {
         respond_to: oneshot::Sender<ConditionalCancelOutcome>,
     },
     Dismiss {
+        respond_to: oneshot::Sender<anyhow::Result<()>>,
+    },
+    /// Retire the live actor without changing the durable session lifecycle.
+    /// Unlike `Dismiss`, this is an internal execution-lifecycle operation:
+    /// it does not change user-facing visibility. Unlike `Close`, it emits no
+    /// terminal session event and does not make the durable session terminal.
+    Unload {
         respond_to: oneshot::Sender<anyhow::Result<()>>,
     },
     Close {

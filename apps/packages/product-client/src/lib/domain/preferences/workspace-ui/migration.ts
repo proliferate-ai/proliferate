@@ -76,6 +76,11 @@ export function migrateWorkspaceUiState(
     didMigrate = true;
   }
 
+  if (!Array.isArray(state.pinnedWorkspaceIds)) {
+    state.pinnedWorkspaceIds = WORKSPACE_UI_DEFAULTS.pinnedWorkspaceIds;
+    didMigrate = true;
+  }
+
   if (!Array.isArray(state.collapsedRepoGroups)) {
     const legacy = state.collapsedRepoGroups as unknown as Record<string, boolean>;
     state.collapsedRepoGroups = Object.keys(legacy).filter((k) => legacy[k]);

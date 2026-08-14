@@ -15,7 +15,7 @@ import {
   type WorkspaceCreationReceiptState,
 } from "#product/hooks/workspaces/derived/use-workspace-creation-receipt";
 import { usePendingWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-pending-workspace-entry-actions";
-import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import { useWorkspaceShellActions } from "#product/hooks/workspaces/workflows/use-workspace-shell-actions";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 const LINE_TONE_CLASS = {

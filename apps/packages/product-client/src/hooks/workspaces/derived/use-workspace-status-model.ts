@@ -100,7 +100,7 @@ export function useWorkspaceStatusModel() {
           tintClassName: buildDelegatedAgentIdentity({
             id: assignment.sessionLinkId ?? assignment.id,
             title: assignment.personaLabel,
-            sessionId: assignment.reviewerSessionId ?? assignment.id,
+            sessionId: assignment.reviewerSessionId ?? null,
             sessionLinkId: assignment.sessionLinkId ?? null,
           }).textColorClassName,
           working: WORKING_ASSIGNMENT_STATUSES.has(assignment.status),

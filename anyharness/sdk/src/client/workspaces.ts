@@ -15,6 +15,7 @@ import type {
   WorkspaceRetirePreflightResponse,
   WorkspaceRetireResponse,
 } from "../types/workspaces.js";
+import type { WorkspaceSubagentsResponse } from "../types/subagents.js";
 import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
 
 export class WorkspacesClient {
@@ -69,6 +70,16 @@ export class WorkspacesClient {
     return this.transport.get<Workspace>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}`,
       withTimingCategory(options, "workspace.get"),
+    );
+  }
+
+  async listSubagents(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspaceSubagentsResponse> {
+    return this.transport.get<WorkspaceSubagentsResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/subagents`,
+      options,
     );
   }
 

@@ -577,14 +577,14 @@ async fn extension_completion_terminalizes_run_and_step() {
         .bind_session(&run_id, session_id)
         .expect("bind_session"));
     assert!(service.begin_step(&run_id).expect("begin_step"));
-
     let extension = WorkflowRunSessionExtension::new(
         service.clone(),
         Arc::new(crate::domains::workflows::control::WorkflowRunGates::new()),
         Arc::new(
-            crate::domains::sessions::admission::SessionMutationAdmission::new(Arc::new(
-                crate::domains::sessions::admission::NoControllerPolicy,
-            )),
+            crate::domains::sessions::admission::SessionMutationAdmission::new(
+                Arc::new(crate::domains::sessions::admission::NoControllerPolicy),
+                Arc::new(crate::domains::sessions::admission::AllSessionsOperable),
+            ),
         ),
         tokio::runtime::Handle::current(),
     );
