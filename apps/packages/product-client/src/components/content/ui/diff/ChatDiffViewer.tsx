@@ -40,7 +40,10 @@ import {
   type ChatRenderRow,
 } from "#product/hooks/ui/diff/diff-gap-flatten";
 import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
-import { useContentSearchStore } from "#product/stores/search/content-search-store";
+import {
+  useContentSearchStore,
+  type ContentSearchSurface,
+} from "#product/stores/search/content-search-store";
 import { useChatTranscriptRow } from "#product/components/workspace/chat/transcript/ChatContentSearchContext";
 
 const CHAT_DIFF_PRE_STYLE = {
@@ -334,6 +337,8 @@ export function ChatDiffViewer({
   wrapLongLines,
   filePath,
   contentSearchUnitId: contentSearchUnitIdProp,
+  contentSearchSurface = "chat",
+  contentSearchOrderKey: contentSearchOrderKeyProp,
   overscrollBehavior = "none",
   overscrollBehaviorX,
   overscrollBehaviorY,
@@ -351,6 +356,8 @@ export function ChatDiffViewer({
   wrapLongLines: boolean;
   filePath?: string;
   contentSearchUnitId?: string;
+  contentSearchSurface?: ContentSearchSurface;
+  contentSearchOrderKey?: number;
   overscrollBehavior?: CSSProperties["overscrollBehavior"];
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
@@ -382,13 +389,14 @@ export function ChatDiffViewer({
     () => flattenWithGapExpansion(baseRows, gapStates, fileLines),
     [baseRows, gapStates, fileLines],
   );
-  const contentSearchSurface = useContentSearchStore((state) => state.surface);
+  const activeContentSearchSurface = useContentSearchStore((state) => state.surface);
   const contentSearchOpen = useContentSearchStore((state) => state.open);
   const rawContentSearchQuery = useContentSearchStore((state) => state.query);
   const rawActiveMatchId = useContentSearchStore((state) => state.activeMatchId);
   const registerContentSearchUnit = useContentSearchStore((state) => state.registerUnit);
   const unregisterContentSearchUnit = useContentSearchStore((state) => state.unregisterUnit);
-  const chatContentSearchActive = contentSearchOpen && contentSearchSurface === "chat";
+  const chatContentSearchActive =
+    contentSearchOpen && activeContentSearchSurface === contentSearchSurface;
   const contentSearchQuery = chatContentSearchActive ? rawContentSearchQuery : "";
   const activeMatchId = chatContentSearchActive ? rawActiveMatchId : null;
   const fallbackContentSearchUnitId = useId();
@@ -398,11 +406,11 @@ export function ChatDiffViewer({
   );
   // Interleave inline diff matches with the surrounding transcript-row prose
   // matches: a diff sits just after its row's prose (rowIndex * 2 + 1). Outside
-  // a transcript row (no context) the unit stays unkeyed and sorts last.
+  // a transcript row (no context) the unit stays unkeyed and sorts last, unless
+  // the caller supplies its own order key (e.g. a review-pane row index).
   const transcriptRow = useChatTranscriptRow();
-  const contentSearchRowOrderKey = transcriptRow
-    ? transcriptRow.rowIndex * 2 + 1
-    : undefined;
+  const contentSearchRowOrderKey = contentSearchOrderKeyProp
+    ?? (transcriptRow ? transcriptRow.rowIndex * 2 + 1 : undefined);
   const contentSearchMatchIds = useMemo(
     () => {
       const normalizedQuery = normalizeContentSearchQuery(contentSearchQuery);
@@ -468,7 +476,7 @@ export function ChatDiffViewer({
   useEffect(() => {
     registerContentSearchUnit({
       unitId: contentSearchUnitId,
-      surface: "chat",
+      surface: contentSearchSurface,
       query: contentSearchQuery,
       matchIds: contentSearchMatchIds,
       orderKey: contentSearchRowOrderKey,
@@ -479,6 +487,7 @@ export function ChatDiffViewer({
     contentSearchMatchIds,
     contentSearchQuery,
     contentSearchRowOrderKey,
+    contentSearchSurface,
     contentSearchUnitId,
     registerContentSearchUnit,
     unregisterContentSearchUnit,

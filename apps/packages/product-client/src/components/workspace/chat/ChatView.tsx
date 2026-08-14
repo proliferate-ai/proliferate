@@ -20,7 +20,6 @@ import { ChatReadyHero } from "#product/components/workspace/chat/surface/ChatRe
 import { NoWorkspaceState } from "#product/components/workspace/chat/surface/NoWorkspaceState";
 import { SessionTranscriptPane } from "#product/components/workspace/chat/surface/SessionTranscriptPane";
 import { WorkspaceCreationReceipt } from "#product/components/workspace/chat/transcript/WorkspaceCreationReceipt";
-import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import { type ChatSurfaceState, useChatSurfaceState } from "#product/hooks/chat/derived/use-chat-surface-state";
 import {
@@ -128,10 +127,6 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
   }
 }
 
-function shouldEnableContentSearchOverlay(mode: ChatSurfaceState): boolean {
-  return mode.kind !== "no-workspace";
-}
-
 export const ChatView = memo(function ChatView({
   shellRenderSurface = null,
   showWorkspaceStatusPanels = true,
@@ -160,7 +155,6 @@ export const ChatView = memo(function ChatView({
   const queuedPromptEditStatus = useQueuedPromptEditStatus();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const isSessionMode = shouldShowSessionInputChrome(mode);
-  const contentSearchEnabled = shouldEnableContentSearchOverlay(mode);
   const composerDockSlots = useComposerDockSlots({
     suppressSessionSlots,
   });
@@ -281,7 +275,6 @@ export const ChatView = memo(function ChatView({
           aria-hidden="true"
         />
       )}
-      <SessionContentSearchOverlay enabled={contentSearchEnabled} surface="chat" />
       <DebugProfiler id="chat-composer-dock-region">
         <ChatComposerDock
           ref={dockRef}
