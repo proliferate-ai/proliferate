@@ -14,22 +14,28 @@ export interface CommandPaletteEntry {
 }
 
 export type CommandPaletteIconId =
+  | "arrow-left"
+  | "arrow-right"
+  | "arrow-up-right"
   | "chat"
-  | "chat-plus"
+  | "circle-help"
   | "cloud-plus"
-  | "command"
+  | "cloud-upload"
+  | "folder"
   | "folder-plus"
   | "git-branch"
+  | "globe"
+  | "home"
   | "keyboard"
-  | "panel-bottom"
+  | "panel-left"
+  | "panel-right"
   | "pencil"
   | "play"
   | "rotate-ccw"
   | "settings"
-  | "terminal"
-  | "tree"
-  | "arrow-left"
-  | "arrow-right";
+  | "square-pen"
+  | "square-terminal"
+  | "workflow";
 
 export interface CommandPaletteGroup {
   id: CommandPaletteGroupId;
