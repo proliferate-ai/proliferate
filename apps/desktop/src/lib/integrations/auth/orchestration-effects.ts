@@ -15,6 +15,7 @@ import {
   anonymousAuthState,
   authErrorStatePatch,
   authIssueStatePatch,
+  clearAuthIssueStatePatch,
   type AuthClientState,
   type AuthClientStatePatch,
 } from "@proliferate/product-client/internal/lib/domain/auth/auth-state-mapping";
@@ -204,6 +205,19 @@ export function publishCallbackIssue(
       provider: "github",
     },
   });
+}
+
+/**
+ * Clear a previously published auth issue. Desktop calls this when a new
+ * sign-in attempt starts or the active attempt is cancelled, so a stale
+ * failure from a prior attempt doesn't linger into the next one. Mirrors the
+ * authenticated guard on {@link publishCallbackIssue}: only writes state
+ * while not authenticated.
+ */
+export function clearPublishedAuthIssue(deps: AuthOrchestrationDeps): void {
+  if (deps.getAuthState().status !== "authenticated") {
+    deps.setAuthState(clearAuthIssueStatePatch());
+  }
 }
 
 export async function clearPendingGitHubAuth(

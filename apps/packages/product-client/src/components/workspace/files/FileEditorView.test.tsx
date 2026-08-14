@@ -12,6 +12,7 @@ import { useContentSearchStore } from "#product/stores/search/content-search-sto
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 import { useFileTreeStore } from "#product/stores/editor/file-tree-store";
 import { FileEditorView } from "#product/components/workspace/files/FileEditorView";
+import { ContentSearchPill } from "#product/components/workspace/search/ContentSearchPill";
 
 const readWorkspaceFileQuery = vi.fn();
 const gitDiffQuery = vi.fn();
@@ -169,6 +170,7 @@ describe("FileEditorView", () => {
       activeMatchId: null,
       unitsById: {},
       nextUnitOrder: 0,
+      surfaceAvailability: { file: false, review: false },
     });
   });
 
@@ -402,10 +404,14 @@ describe("FileEditorView", () => {
       error: null,
       isLoading: false,
     });
-    const { container } = render(createElement(FileEditorView, {
-      filePath: "package.json",
-      targetKey,
-    }));
+    const { container } = render(createElement("div", null, [
+      createElement(FileEditorView, {
+        key: "editor",
+        filePath: "package.json",
+        targetKey,
+      }),
+      createElement(ContentSearchPill, { key: "pill" }),
+    ]));
 
     expect(screen.queryByLabelText("Search files")).toBeNull();
     fireEvent.click(screen.getByLabelText("Find in file"));
@@ -413,8 +419,9 @@ describe("FileEditorView", () => {
     expect(useContentSearchStore.getState().surface).toBe("file");
     expect(container.querySelector('[data-content-search-surface="file"]')).toBeTruthy();
     expect(screen.getByPlaceholderText("Search file…")).toBeTruthy();
-    expect(screen.queryByLabelText("Search chat")).toBeNull();
-    expect(screen.queryByLabelText("Search diffs")).toBeNull();
+    // The Chat | Diff scope toggle only renders once review search is
+    // available (the git Changes pane is mounted); it stays absent here.
+    expect(screen.queryByRole("radiogroup", { name: "Search scope" })).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Search workspace files" })).toBeNull();
     expect(searchWorkspaceFilesQuery.mock.calls.some(([options]) => options?.enabled === true))
       .toBe(false);
@@ -439,10 +446,14 @@ describe("FileEditorView", () => {
       error: null,
       isLoading: false,
     });
-    const { container } = render(createElement(FileEditorView, {
-      filePath: "package.json",
-      targetKey,
-    }));
+    const { container } = render(createElement("div", null, [
+      createElement(FileEditorView, {
+        key: "editor",
+        filePath: "package.json",
+        targetKey,
+      }),
+      createElement(ContentSearchPill, { key: "pill" }),
+    ]));
 
     fireEvent.click(screen.getByLabelText("Find in file"));
     fireEvent.change(screen.getByPlaceholderText("Search file…"), {

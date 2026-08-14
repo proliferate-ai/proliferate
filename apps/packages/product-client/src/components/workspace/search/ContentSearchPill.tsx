@@ -6,6 +6,7 @@ import {
 } from "react";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
+import { SegmentedControl, type SegmentedControlItem } from "#product/primitives/SegmentedControl";
 import {
   ArrowUp,
   Search,
@@ -17,21 +18,25 @@ import {
   useContentSearchStore,
 } from "#product/stores/search/content-search-store";
 
-interface SessionContentSearchOverlayProps {
-  enabled: boolean;
-  surface: ContentSearchSurface;
-}
+const SURFACE_COPY: Record<ContentSearchSurface, { placeholder: string; inputLabel: string }> = {
+  chat: { placeholder: "Search chat…", inputLabel: "Find in chat" },
+  file: { placeholder: "Search file…", inputLabel: "Find in file" },
+  review: { placeholder: "Search changes…", inputLabel: "Find in changes" },
+};
 
-export function SessionContentSearchOverlay({
-  enabled,
-  surface,
-}: SessionContentSearchOverlayProps) {
+const SEARCH_SCOPE_ITEMS: readonly SegmentedControlItem<"chat" | "review">[] = [
+  { id: "chat", label: "Chat" },
+  { id: "review", label: "Diff" },
+];
+
+export function ContentSearchPill() {
   const inputRef = useRef<HTMLInputElement>(null);
   const open = useContentSearchStore((state) => state.open);
-  const activeSurface = useContentSearchStore((state) => state.surface);
+  const surface = useContentSearchStore((state) => state.surface);
   const query = useContentSearchStore((state) => state.query);
   const activeMatchIndex = useContentSearchStore((state) => state.activeMatchIndex);
   const activeMatchId = useContentSearchStore((state) => state.activeMatchId);
+  const reviewAvailable = useContentSearchStore((state) => state.surfaceAvailability.review);
   const matchCount = useContentSearchStore((state) =>
     selectVisibleContentSearchMatchIds(state).length
   );
@@ -39,20 +44,20 @@ export function SessionContentSearchOverlay({
   const setQuery = useContentSearchStore((state) => state.setQuery);
   const goToNextMatch = useContentSearchStore((state) => state.goToNextMatch);
   const goToPreviousMatch = useContentSearchStore((state) => state.goToPreviousMatch);
+  const openSearch = useContentSearchStore((state) => state.openSearch);
   const hasQuery = query.trim().length > 0;
   const hasMatches = matchCount > 0;
-  const surfaceOpen = enabled && open && activeSurface === surface;
 
   useEffect(() => {
-    if (surfaceOpen) {
+    if (open) {
       window.requestAnimationFrame(() => {
         inputRef.current?.select();
       });
     }
-  }, [surfaceOpen]);
+  }, [open]);
 
   useEffect(() => {
-    if (!surfaceOpen || !activeMatchId) {
+    if (!open || !activeMatchId) {
       return;
     }
 
@@ -75,18 +80,13 @@ export function SessionContentSearchOverlay({
 
       window.requestAnimationFrame(scrollActiveMatchIntoView);
     });
-  }, [activeMatchId, surfaceOpen]);
+  }, [activeMatchId, open]);
 
-  if (!surfaceOpen) {
+  if (!open) {
     return null;
   }
 
-  const placeholder = surface === "file" ? "Search file…" : "Search chat…";
-  const inputLabel = surface === "file" ? "Find in file" : "Find in chat";
-  // The only surface difference is vertical placement: the file overlay sits
-  // below the viewer toolbar; the chat overlay hugs the top. Styling is
-  // otherwise the shared chat pill.
-  const offsetClassName = surface === "file" ? "top-12" : "top-2";
+  const { placeholder, inputLabel } = SURFACE_COPY[surface];
   const resultRowColumnClass = "col-[1/3]";
   const resultLabel = hasMatches
     ? `${activeMatchIndex + 1} of ${matchCount}`
@@ -111,11 +111,13 @@ export function SessionContentSearchOverlay({
 
   return (
     <div
-      className={`pointer-events-none absolute ${offsetClassName} right-4 z-popover flex justify-end`}
+      // Pinned to the window's top-right corner, deliberately overlaying the
+      // header/tab chrome band while search is open.
+      className="pointer-events-none absolute top-2 right-4 z-popover flex justify-end"
       data-content-search-overlay
       data-content-search-surface={surface}
     >
-      <div className="pointer-events-auto grid max-w-[70vw] w-[340px] grid-cols-[minmax(0,1fr)_auto] overflow-hidden rounded-lg border-[0.5px] border-border bg-sidebar-background shadow-popover">
+      <div className="app-region-no-drag pointer-events-auto grid max-w-[70vw] w-[340px] grid-cols-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border-[0.5px] border-border bg-sidebar-background shadow-popover">
         <div className="col-[1/2] row-[1] flex h-[44px] min-w-0 items-center gap-2 pl-4">
           <Search className="icon-paired shrink-0 text-foreground" />
           <Input
@@ -155,7 +157,18 @@ export function SessionContentSearchOverlay({
           </>
         )}
         <div className="col-[2/3] row-[1] flex h-[44px] items-center pr-4">
-          <div className="mr-2 ml-2 h-4 w-px bg-border" />
+          {reviewAvailable && (
+            <>
+              <SegmentedControl
+                variant="plain"
+                ariaLabel="Search scope"
+                value={surface === "review" ? "review" : "chat"}
+                items={SEARCH_SCOPE_ITEMS}
+                onChange={(id) => openSearch(id)}
+              />
+              <div className="mr-2 ml-2 h-4 w-px bg-border" />
+            </>
+          )}
           <Button
             type="button"
             variant="unstyled"

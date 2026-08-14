@@ -1,5 +1,5 @@
-import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "#product/config/app-routes";
+import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
 import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { clearWorkspaceRuntimeState } from "#product/hooks/workspaces/workflows/selection/clear-runtime-state";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
@@ -13,8 +13,10 @@ import {
   retryRetireWorkspaceCleanup,
 } from "#product/lib/access/anyharness/workspaces";
 
+// navigateApp instead of useNavigate: retire actions run only inside click
+// callbacks, and useNavigate would subscribe the sidebar to every location
+// change (PRO-170, PRO-182).
 export function useWorkspaceRetireActions() {
-  const navigate = useNavigate();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const refresh = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const clearSelection = useSessionSelectionStore((state) => state.clearSelection);
@@ -53,7 +55,7 @@ export function useWorkspaceRetireActions() {
         );
         if (targetIsSelected) {
           setSelectedLogicalWorkspaceId(null);
-          navigate(APP_ROUTES.home);
+          navigateApp(APP_ROUTES.home);
         }
       }
       await refresh();

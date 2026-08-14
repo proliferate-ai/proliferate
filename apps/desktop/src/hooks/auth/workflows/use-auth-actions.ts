@@ -40,8 +40,8 @@ export function useAuthActions() {
     ),
     signOut: useCallback(() => signOut(authEffects), [authEffects]),
     cancelAuthFlow: useCallback(
-      (message?: string) => cancelActiveAuthFlow(message),
-      [],
+      (message?: string) => cancelActiveAuthFlow(message, authEffects),
+      [authEffects],
     ),
     linkGoogle: useCallback(
       () => linkDesktopProvider("google", authEffects),

@@ -72,3 +72,14 @@ export function authIssueStatePatch(
 ): Pick<AuthClientState, "issue" | "error"> {
   return { issue, error };
 }
+
+/**
+ * Symmetric clear for {@link authIssueStatePatch}. Callers use this when a new
+ * sign-in attempt starts or the active attempt is cancelled, so a previously
+ * published issue from an earlier attempt doesn't linger into the next one.
+ * Only touches `issue` — the separate `error` string is unrelated UX debt this
+ * patch does not own.
+ */
+export function clearAuthIssueStatePatch(): Pick<AuthClientState, "issue"> {
+  return { issue: null };
+}
