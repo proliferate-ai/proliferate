@@ -122,6 +122,10 @@ interface TodoPillSnapshot {
  * hide, or pin/checklist on hover. Keyed by session (see `TodoProgressPill`
  * below), so cross-session tracker deltas can never read as an advance.
  *
+ * An advance that lands while the pointer is on the pill/checklist does not
+ * restart that cycle: the pinned checklist stays mounted and updates in
+ * place. Hover owns dismissal until the pointer leaves.
+ *
  * Rendering works off the last non-null tracker snapshot rather than the
  * live tracker: when a completed plan leaves the transcript the pill keeps
  * lingering through its scheduled fade instead of being yanked mid-linger.
@@ -134,6 +138,12 @@ function SessionTodoProgressPill() {
   const snapshotRef = useRef<TodoPillSnapshot | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether the pointer is actually on the pill/checklist right now. Distinct
+  // from `state.pinned`, which deliberately survives mouse-leave through the
+  // leave-grace window — the step-advance effect must only hold its fire for
+  // a real hover, never for that grace period (holding fire there would leave
+  // the pill pinned open with no timer left to dismiss it).
+  const hoveredRef = useRef(false);
 
   const summary = tracker ? summarizeTodoProgress(tracker.entries) : null;
   if (tracker && summary) {
@@ -169,6 +179,16 @@ function SessionTodoProgressPill() {
       return;
     }
 
+    if (hoveredRef.current) {
+      // The user is inspecting the pinned checklist. Re-running the
+      // show -> fade cycle here would unpin it: the card vanishes from under
+      // the pointer, remounts on the next pointer move (restarting the
+      // in-progress spinner's rotation), and the pill fades away mid-hover.
+      // Hold the pin instead — the checklist rows update in place, and
+      // dismissal stays owned by mouse-leave.
+      return;
+    }
+
     clearTimers();
     dispatch({ type: "step_advanced" });
     fadeTimerRef.current = setTimeout(() => dispatch({ type: "fade_start" }), TODO_PILL_STEP_FADE_START_MS);
@@ -195,11 +215,13 @@ function SessionTodoProgressPill() {
   }
 
   function handleMouseEnter() {
+    hoveredRef.current = true;
     clearTimers();
     dispatch({ type: "hover_on" });
   }
 
   function handleMouseLeave() {
+    hoveredRef.current = false;
     clearTimers();
     dispatch({ type: "hover_off" });
     fadeTimerRef.current = setTimeout(() => dispatch({ type: "fade_start" }), TODO_PILL_HOVER_FADE_START_MS);
