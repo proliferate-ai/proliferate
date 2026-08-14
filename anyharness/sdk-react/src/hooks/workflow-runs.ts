@@ -20,7 +20,7 @@ import {
   anyHarnessWorkflowRunKey,
   anyHarnessWorkflowRunsListKey,
   anyHarnessWorkflowRunsListScopeKey,
-} from "../lib/query-keys.js";
+} from "../lib/query-keys-workflow-runs.js";
 
 interface RuntimeQueryOptions {
   enabled?: boolean;

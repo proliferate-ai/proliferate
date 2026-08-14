@@ -59,10 +59,6 @@ export {
   anyHarnessSessionKey,
   anyHarnessSessionLiveConfigKey,
   anyHarnessSessionEventsKey,
-  anyHarnessWorkflowRunsScopeKey,
-  anyHarnessWorkflowRunsListScopeKey,
-  anyHarnessWorkflowRunsListKey,
-  anyHarnessWorkflowRunKey,
   anyHarnessSessionSubagentsKey,
   anyHarnessWorkspaceSubagentsKey,
   anyHarnessSessionReviewsKey,
@@ -89,6 +85,13 @@ export {
   anyHarnessTerminalsKey,
   anyHarnessWorkspaceQueryKeyRoots,
 } from "./lib/query-keys.js";
+
+export {
+  anyHarnessWorkflowRunsScopeKey,
+  anyHarnessWorkflowRunsListScopeKey,
+  anyHarnessWorkflowRunsListKey,
+  anyHarnessWorkflowRunKey,
+} from "./lib/query-keys-workflow-runs.js";
 
 export {
   useRuntimeHealthQuery,

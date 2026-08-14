@@ -6,7 +6,10 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnyHarnessRuntime } from "../context/AnyHarnessRuntime.js";
-import { anyHarnessWorkflowRunKey, anyHarnessWorkflowRunsListKey } from "../lib/query-keys.js";
+import {
+  anyHarnessWorkflowRunKey,
+  anyHarnessWorkflowRunsListKey,
+} from "../lib/query-keys-workflow-runs.js";
 import {
   WORKFLOW_RUN_ACTIVE_INTERVAL_MS,
   resolveWorkflowRunRefetchInterval,

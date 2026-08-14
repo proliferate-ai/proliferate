@@ -19,7 +19,7 @@ import {
   workflowDefinitionsV2RootKey,
   workflowDefinitionV2DetailKey,
   workflowInvocationV2Key,
-} from "../lib/query-keys.js";
+} from "../lib/query-keys-workflows-v2.js";
 
 export function useWorkflowDefinitionsV2Query(authCacheScope = "default", enabled = true) {
   const client = useCloudClient();
