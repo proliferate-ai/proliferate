@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { CHAT_SELECTED_RESPONSE_ACTIONS } from "#product/copy/chat/chat-copy";
 import type { SelectedResponsePendingAnnotation } from "#product/components/workspace/chat/transcript/SelectedResponseActionMenu";
 import { useSelectedResponseActions } from "#product/hooks/chat/workflows/use-selected-response-actions";
+import { Input } from "#product/primitives/Input";
 
 export function ConnectedSelectedResponseAnnotationComposer({
   annotation,
@@ -88,9 +89,10 @@ export function SelectedResponseAnnotationComposer({
       >
         {annotation.ordinal}
       </span>
-      <input
+      <Input
         ref={inputRef}
         type="text"
+        variant="unstyled"
         aria-label={CHAT_SELECTED_RESPONSE_ACTIONS.annotationCommentLabel}
         placeholder={CHAT_SELECTED_RESPONSE_ACTIONS.annotationCommentPlaceholder}
         className="w-64 bg-transparent text-ui-sm text-foreground outline-none placeholder:text-muted-foreground"
