@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPromptWithSelectedResponseContexts,
-  selectedResponseContextPreview,
 } from "./selected-response-context";
 
 describe("selected response context", () => {
@@ -40,13 +39,10 @@ describe("selected response context", () => {
     expect(payload.blocks).toHaveLength(1);
   });
 
-  it("truncates only the visual preview", () => {
+  it("keeps the full excerpt in the prompt payload", () => {
     const selectedText = `start ${"context ".repeat(40)}finish`;
-    const preview = selectedResponseContextPreview(selectedText);
     const payload = buildPromptWithSelectedResponseContexts("", [{ text: selectedText }]);
 
-    expect(preview.length).toBeLessThan(selectedText.length);
-    expect(preview.endsWith("...")).toBe(true);
     expect(payload.text).toContain(selectedText);
   });
 });

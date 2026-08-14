@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   currentSubmit: vi.fn(async () => true),
   requestFocus: vi.fn(),
   showToast: vi.fn(),
-  sideChatSubmit: vi.fn(async () => true),
   submitDisabledReason: null as string | null,
 }));
 
@@ -29,8 +28,8 @@ vi.mock("#product/stores/chat/chat-input-store", () => ({
 }));
 
 vi.mock("#product/hooks/chat/workflows/use-chat-prompt-actions", () => ({
-  useChatPromptActions: (options?: { forceNewSession?: boolean }) => ({
-    handleSubmit: options?.forceNewSession ? mocks.sideChatSubmit : mocks.currentSubmit,
+  useChatPromptActions: () => ({
+    handleSubmit: mocks.currentSubmit,
     submitDisabledReason: mocks.submitDisabledReason,
   }),
 }));
@@ -67,25 +66,10 @@ describe("useSelectedResponseActions", () => {
     act(() => result.current.moreDetails("current-chat excerpt"));
 
     expect(mocks.currentSubmit).toHaveBeenCalledOnce();
-    expect(mocks.sideChatSubmit).not.toHaveBeenCalled();
     expectSubmittedExcerpt(
       mocks.currentSubmit,
       CHAT_SELECTED_RESPONSE_ACTIONS.moreDetailsPrompt,
       "current-chat excerpt",
-    );
-  });
-
-  it("routes side chat to a forced new conversation with the full excerpt once", () => {
-    const { result } = renderHook(() => useSelectedResponseActions());
-
-    act(() => result.current.askInSideChat("side-chat excerpt"));
-
-    expect(mocks.sideChatSubmit).toHaveBeenCalledOnce();
-    expect(mocks.currentSubmit).not.toHaveBeenCalled();
-    expectSubmittedExcerpt(
-      mocks.sideChatSubmit,
-      CHAT_SELECTED_RESPONSE_ACTIONS.sideChatPrompt,
-      "side-chat excerpt",
     );
   });
 

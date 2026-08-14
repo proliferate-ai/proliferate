@@ -22,7 +22,6 @@ export function useSelectedResponseActions() {
   const requestComposerFocus = useChatInputStore((state) => state.requestFocus);
   const showToast = useToastStore((state) => state.show);
   const currentChat = useChatPromptActions();
-  const sideChat = useChatPromptActions({ forceNewSession: true });
 
   const addToChat = useCallback((text: string) => {
     if (!workspaceUiKey) {
@@ -47,24 +46,8 @@ export function useSelectedResponseActions() {
     });
   }, [currentChat.handleSubmit, currentChat.submitDisabledReason, showToast]);
 
-  const askInSideChat = useCallback((text: string) => {
-    const payload = buildPromptWithSelectedResponseContexts(
-      CHAT_SELECTED_RESPONSE_ACTIONS.sideChatPrompt,
-      [{ text }],
-    );
-    void sideChat.handleSubmit({
-      ...payload,
-      preserveDraft: true,
-    }).then((submitted) => {
-      if (!submitted && sideChat.submitDisabledReason) {
-        showToast(sideChat.submitDisabledReason);
-      }
-    });
-  }, [showToast, sideChat.handleSubmit, sideChat.submitDisabledReason]);
-
   return {
     addToChat,
     moreDetails,
-    askInSideChat,
   };
 }

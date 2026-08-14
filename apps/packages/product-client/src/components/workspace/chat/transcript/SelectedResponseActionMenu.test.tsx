@@ -12,7 +12,6 @@ vi.mock("#product/hooks/chat/workflows/use-selected-response-actions", () => ({
   useSelectedResponseActions: () => ({
     addToChat: vi.fn(),
     moreDetails: vi.fn(),
-    askInSideChat: vi.fn(),
   }),
 }));
 
@@ -22,14 +21,13 @@ afterEach(() => {
 });
 
 describe("SelectedResponseActionMenu", () => {
-  it("exposes all three actions in order as menu items", async () => {
+  it("exposes both actions in order as menu items", async () => {
     renderMenu();
 
     const items = await screen.findAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual([
       "Add to chat",
       "More details",
-      "Ask in side chat",
     ]);
   });
 
@@ -63,13 +61,11 @@ describe("SelectedResponseActionMenu", () => {
     fireEvent.keyDown(items[0]!, { key: "ArrowDown" });
     await waitFor(() => expect(document.activeElement).toBe(items[1]));
     fireEvent.keyDown(items[1]!, { key: "ArrowDown" });
-    await waitFor(() => expect(document.activeElement).toBe(items[2]));
-    fireEvent.keyDown(items[2]!, { key: "ArrowDown" });
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
 
     // Backward off the first item wraps onto the last.
     fireEvent.keyDown(items[0]!, { key: "ArrowUp" });
-    await waitFor(() => expect(document.activeElement).toBe(items[2]));
+    await waitFor(() => expect(document.activeElement).toBe(items[1]));
   });
 
   it("supports Home and End", async () => {
@@ -78,9 +74,9 @@ describe("SelectedResponseActionMenu", () => {
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
 
     fireEvent.keyDown(items[0]!, { key: "End" });
-    await waitFor(() => expect(document.activeElement).toBe(items[2]));
+    await waitFor(() => expect(document.activeElement).toBe(items[1]));
 
-    fireEvent.keyDown(items[2]!, { key: "Home" });
+    fireEvent.keyDown(items[1]!, { key: "Home" });
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
   });
 
@@ -91,10 +87,10 @@ describe("SelectedResponseActionMenu", () => {
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
 
     fireEvent.keyDown(items[0]!, { key: "End" });
-    await waitFor(() => expect(document.activeElement).toBe(items[2]));
-    fireEvent.keyDown(items[2]!, { key: "Enter" });
+    await waitFor(() => expect(document.activeElement).toBe(items[1]));
+    fireEvent.keyDown(items[1]!, { key: "Enter" });
 
-    expect(onAction).toHaveBeenCalledWith("side-chat");
+    expect(onAction).toHaveBeenCalledWith("more-details");
   });
 
   it("activates the focused item with Space", async () => {
@@ -195,7 +191,7 @@ describe("SelectedResponseActionMenu", () => {
     await Promise.resolve();
 
     expect(onDismiss).not.toHaveBeenCalled();
-    expect(screen.queryAllByRole("menuitem")).toHaveLength(3);
+    expect(screen.queryAllByRole("menuitem")).toHaveLength(2);
     outside.remove();
   });
 

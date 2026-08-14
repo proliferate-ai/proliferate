@@ -25,17 +25,6 @@ export interface SelectedResponsePromptPayload {
   optimisticContentParts: Array<{ type: "text"; text: string }>;
 }
 
-const SELECTED_RESPONSE_PREVIEW_CHARACTER_LIMIT = 220;
-
-export function selectedResponseContextPreview(text: string): string {
-  const compact = text.replace(/\s+/gu, " ").trim();
-  if (compact.length <= SELECTED_RESPONSE_PREVIEW_CHARACTER_LIMIT) {
-    return compact;
-  }
-
-  return `${compact.slice(0, SELECTED_RESPONSE_PREVIEW_CHARACTER_LIMIT - 3).trimEnd()}...`;
-}
-
 export function buildPromptWithSelectedResponseContexts(
   promptText: string,
   contexts: readonly Pick<SelectedResponseContext, "text">[],

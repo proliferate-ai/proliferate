@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { MessageCircleQuestion } from "#product/primitives/icons/core";
-import { MessageSquarePlus, MessagesSquare } from "#product/primitives/icons/product";
+import { MessageSquarePlus } from "#product/primitives/icons/product";
 import { CHAT_SELECTED_RESPONSE_ACTIONS } from "#product/copy/chat/chat-copy";
 import type { SelectedResponseSelection } from "#product/domain/chats/transcript/selected-response-context";
 import { useSelectedResponseActions } from "#product/hooks/chat/workflows/use-selected-response-actions";
@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "#product/primitives/DropdownMenu";
 
-export type SelectedResponseAction = "add-to-chat" | "more-details" | "side-chat";
+export type SelectedResponseAction = "add-to-chat" | "more-details";
 
 export function ConnectedSelectedResponseActionMenu({
   selection,
@@ -30,10 +30,8 @@ export function ConnectedSelectedResponseActionMenu({
     onDismiss({ clearNativeSelection: true });
     if (action === "add-to-chat") {
       actions.addToChat(selection.text);
-    } else if (action === "more-details") {
-      actions.moreDetails(selection.text);
     } else {
-      actions.askInSideChat(selection.text);
+      actions.moreDetails(selection.text);
     }
   };
 
@@ -93,11 +91,6 @@ export function SelectedResponseActionMenu({
       action: "more-details",
       label: CHAT_SELECTED_RESPONSE_ACTIONS.moreDetails,
       icon: MessageCircleQuestion,
-    },
-    {
-      action: "side-chat",
-      label: CHAT_SELECTED_RESPONSE_ACTIONS.askInSideChat,
-      icon: MessagesSquare,
     },
   ];
 
