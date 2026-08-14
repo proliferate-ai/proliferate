@@ -16,7 +16,7 @@ import {
 import type {
   AddRepoFlowOption,
   AddRepoFlowStep,
-} from "#product/components/workspace/repo-setup/AddRepositoryPopover";
+} from "#product/lib/domain/workspaces/creation/add-repo-flow-steps";
 import { useAddCloudEnvironment } from "#product/hooks/workspaces/workflows/use-add-cloud-environment";
 import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
@@ -37,7 +37,7 @@ import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 import { directoryPickerUnavailableCopy } from "#product/copy/workspaces/directory-picker-copy";
 import { DESKTOP_POINTER_COPY } from "#product/copy/workspaces/desktop-pointer-copy";
-import { useRepoAddedToast } from "#product/components/workspace/repo-setup/use-repo-added-toast";
+import { useRepoAddedToast } from "#product/hooks/workspaces/ui/use-repo-added-toast";
 
 /** Confirmation on arrival, once the checklist has actually been walked. */
 const GITHUB_CONNECTED_BANNER = "GitHub connected. Choose a repository.";

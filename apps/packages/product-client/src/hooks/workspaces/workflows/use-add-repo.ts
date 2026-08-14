@@ -11,7 +11,7 @@ import {
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCacheActions } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-import { useRepoAddedToast } from "#product/components/workspace/repo-setup/use-repo-added-toast";
+import { useRepoAddedToast } from "#product/hooks/workspaces/ui/use-repo-added-toast";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { ensureRuntimeReady } from "#product/hooks/workspaces/workflows/runtime-ready";
 

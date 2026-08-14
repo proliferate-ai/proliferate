@@ -9,21 +9,18 @@ import { POPOVER_FRAME_CLASS } from "#product/primitives/popover-surface";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { Spinner } from "#product/primitives/Spinner";
 import type { CloudRepoPickerProps } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
+import type {
+  AddRepoFlowOption,
+  AddRepoFlowStep,
+} from "#product/lib/domain/workspaces/creation/add-repo-flow-steps";
 import { CloudRepoPicker } from "./CloudRepoPicker";
 
-/**
- * The host-truthful entry choices. `add-existing-folder` registers an existing
- * checkout on this machine (Desktop only); `clone-from-github` clones an
- * authorized GitHub repository to this machine (Desktop only, GitHub-App-ready);
- * `cloud` walks the readiness → repo picker → authority → save sequence (both
- * hosts).
- */
-export type AddRepoFlowOption = "add-existing-folder" | "clone-from-github" | "cloud";
-
-export type AddRepoFlowStep =
-  | { kind: "entry" }
-  | { kind: "cloud" }
-  | { kind: "clone" };
+// The flow's vocabulary is domain-owned (the controller hook and the flow store
+// both name a step), re-exported here so existing importers keep working.
+export type {
+  AddRepoFlowOption,
+  AddRepoFlowStep,
+} from "#product/lib/domain/workspaces/creation/add-repo-flow-steps";
 
 /**
  * The flow's surface, for hosts that anchor it themselves: popover chrome at
