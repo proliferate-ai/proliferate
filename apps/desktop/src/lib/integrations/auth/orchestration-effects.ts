@@ -42,7 +42,7 @@ export interface AuthOrchestrationDeps {
   getAuthState(): AuthClientState;
   setAuthState(state: AuthClientStatePatch): void;
   clearSessionRuntimeState(): void;
-  closeRepoSetupModal(): void;
+  dismissRepoAddedReceipt(): void;
   showToast(message: string): void;
 }
 
@@ -140,7 +140,7 @@ export async function applyAnonymousState(
     clearStoredAuthSession,
     clearStoredPendingAuthSession,
     clearSessionRuntimeState: deps.clearSessionRuntimeState,
-    closeRepoSetupModal: deps.closeRepoSetupModal,
+    dismissRepoAddedReceipt: deps.dismissRepoAddedReceipt,
     setAuthState: deps.setAuthState,
   });
 }

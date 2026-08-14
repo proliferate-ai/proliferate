@@ -11,7 +11,7 @@ import {
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCacheActions } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-import { useRepoSetupModalStore } from "#product/stores/ui/repo-setup-modal-store";
+import { useRepoAddedToast } from "#product/components/workspace/repo-setup/use-repo-added-toast";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { ensureRuntimeReady } from "#product/hooks/workspaces/workflows/runtime-ready";
 
@@ -51,7 +51,7 @@ export function useAddRepo() {
   const resolveRepoRootFromPath = useResolveRepoRootFromPathMutation().mutateAsync;
   const saveEnvironment = useSaveRepoEnvironment();
   const unhideRepoRoot = useWorkspaceUiStore((state) => state.unhideRepoRoot);
-  const openRepoSetupModal = useRepoSetupModalStore((state) => state.open);
+  const reportRepoAdded = useRepoAddedToast();
   const showToast = useToastStore((state) => state.show);
   const [isAddingRepo, setIsAddingRepo] = useState(false);
   const canAddRepo = !isRepoEntryBlockedPath(location.pathname);
@@ -126,7 +126,7 @@ export function useAddRepo() {
           ? saveLocalRepoEnvironment
           : undefined,
         unhideRepoRoot,
-        openRepoSetupModal,
+        reportRepoAdded: (added) => reportRepoAdded({ ...added, source: "local" }),
       });
       // Mirrors resolveRepoSourceRoot (lib/domain/settings/repositories.ts) so
       // completion callbacks can select the new settings repository entry.
@@ -142,7 +142,7 @@ export function useAddRepo() {
     canAddRepo,
     invalidateWorkspaceCollectionsForRuntime,
     localRuntime,
-    openRepoSetupModal,
+    reportRepoAdded,
     resolveRepoRootFromPath,
     saveLocalRepoEnvironment,
     showToast,

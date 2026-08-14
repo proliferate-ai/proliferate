@@ -147,10 +147,6 @@ vi.mock("#product/primitives/PopoverButton", () => ({
   ),
 }));
 
-vi.mock("#product/components/workspace/repo-setup/RepoSetupModal", () => ({
-  RepoSetupModal: () => <div data-testid="repo-setup-modal" />,
-}));
-
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: false, cloudUnavailable: false }),
 }));
@@ -295,16 +291,6 @@ vi.mock("#product/hooks/workspaces/derived/use-workspace-sidebar-state", () => (
 
 vi.mock("#product/hooks/sessions/lifecycle/use-session-activity-reconciler", () => ({
   useSessionActivityReconciler: () => {},
-}));
-
-const repoSetupModalState = vi.hoisted(() => ({
-  modal: null,
-  close: vi.fn(),
-}));
-
-vi.mock("#product/stores/ui/repo-setup-modal-store", () => ({
-  useRepoSetupModalStore: (selector: (state: typeof repoSetupModalState) => unknown) =>
-    selector(repoSetupModalState),
 }));
 
 afterEach(() => {

@@ -31,8 +31,8 @@ describe("applyAnonymousAuthState", () => {
       clearSessionRuntimeState: vi.fn(() => {
         calls.push("clearSessionRuntimeState");
       }),
-      closeRepoSetupModal: vi.fn(() => {
-        calls.push("closeRepoSetupModal");
+      dismissRepoAddedReceipt: vi.fn(() => {
+        calls.push("dismissRepoAddedReceipt");
       }),
       setAuthState,
     });
@@ -41,7 +41,7 @@ describe("applyAnonymousAuthState", () => {
       "clearStoredAuthSession",
       "clearStoredPendingAuthSession",
       "clearSessionRuntimeState",
-      "closeRepoSetupModal",
+      "dismissRepoAddedReceipt",
       "setAuthState",
     ]);
     expect(setAuthState).toHaveBeenCalledWith({
