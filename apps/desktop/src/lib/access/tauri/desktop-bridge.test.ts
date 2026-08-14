@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
   ensureSshAnyHarnessTunnel: vi.fn(),
   readWorkspaceScratchPad: vi.fn(),
   writeWorkspaceScratchPad: vi.fn(),
-  logRendererEvent: vi.fn(),
+  reportReactRenderError: vi.fn(),
   collectSupportDiagnostics: vi.fn(),
   saveDiagnosticJson: vi.fn(),
   stageSupportReportAttachment: vi.fn(),
@@ -97,9 +97,11 @@ vi.mock("@/lib/access/tauri/workspace-scratch", () => ({
   writeWorkspaceScratchPad: mocks.writeWorkspaceScratchPad,
 }));
 vi.mock("@/lib/access/tauri/diagnostics", () => ({
-  logRendererEvent: mocks.logRendererEvent,
   collectSupportDiagnostics: mocks.collectSupportDiagnostics,
   saveDiagnosticJson: mocks.saveDiagnosticJson,
+}));
+vi.mock("@/lib/infra/diagnostics/renderer-error-diagnostics", () => ({
+  reportReactRenderError: mocks.reportReactRenderError,
 }));
 vi.mock("@/lib/access/tauri/support", () => ({
   stageSupportReportAttachment: mocks.stageSupportReportAttachment,
@@ -506,15 +508,26 @@ describe("scratch", () => {
 });
 
 describe("diagnostics", () => {
-  it("delegates logEvent and collectSupportBundle", async () => {
-    mocks.logRendererEvent.mockResolvedValue(undefined);
+  it("delegates collectSupportBundle", async () => {
     mocks.collectSupportDiagnostics.mockResolvedValue(null);
 
-    const payload = { source: "renderer", message: "boot" };
-    await desktopBridge.diagnostics.logEvent(payload);
-    expect(mocks.logRendererEvent).toHaveBeenCalledWith(payload);
-
     await expect(desktopBridge.diagnostics.collectSupportBundle()).resolves.toBeNull();
+  });
+
+  it("passes render errors through without string coercion", async () => {
+    const error = Object.create(null, {
+      toString: { value: () => { throw new Error("must not run"); } },
+    });
+    mocks.reportReactRenderError.mockResolvedValue(true);
+
+    await expect(desktopBridge.diagnostics.reportRenderError({
+      error,
+      componentStack: "at ProductRoot",
+    })).resolves.toBe(true);
+    expect(mocks.reportReactRenderError).toHaveBeenCalledWith(
+      error,
+      "at ProductRoot",
+    );
   });
 
   it("maps saveJson object input to positional arguments", async () => {

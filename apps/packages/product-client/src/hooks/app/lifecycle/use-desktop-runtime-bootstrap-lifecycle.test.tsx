@@ -7,10 +7,14 @@ import type {
 } from "@proliferate/product-client/host/desktop-bridge";
 import type { AuthState } from "@proliferate/product-client/host/product-host";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const mocks = vi.hoisted(() => ({
   bootstrapHarnessRuntime: vi.fn(),
-  logRendererEvent: vi.fn(),
+  rendererDiagnostic: vi.fn(),
   recordBootDiagnostic: vi.fn(),
   logStartupDebug: vi.fn(),
 }));
@@ -37,18 +41,19 @@ function makeRuntime(): DesktopRuntimeBridge {
   };
 }
 
-const diagnostics = {
-  logEvent: mocks.logRendererEvent,
-} as unknown as DesktopDiagnosticsBridge;
+const diagnostics = {} as DesktopDiagnosticsBridge;
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.bootstrapHarnessRuntime.mockResolvedValue(undefined);
-  mocks.logRendererEvent.mockResolvedValue(undefined);
+  setRendererDiagnosticsSink({ emit: mocks.rendererDiagnostic });
   useHarnessConnectionStore.getState().resetConnectionState();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  resetRendererDiagnosticsSinkForTest();
+});
 
 describe("useDesktopRuntimeBootstrapLifecycle", () => {
   it("waits for auth loading to finish", async () => {
@@ -63,6 +68,18 @@ describe("useDesktopRuntimeBootstrapLifecycle", () => {
 
     rerender({ status: "anonymous" });
     await waitFor(() => expect(mocks.bootstrapHarnessRuntime).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.rendererDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "renderer.app_bootstrap.app.runtime_bootstrap.completed",
+        kind: "milestone",
+      }),
+    ));
+    expect(mocks.rendererDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "renderer.app_bootstrap.app.runtime_bootstrap.start",
+        kind: "milestone",
+      }),
+    );
     expect(mocks.bootstrapHarnessRuntime.mock.calls[0]?.[0]).toBe(runtime);
     const signal = mocks.bootstrapHarnessRuntime.mock.calls[0]?.[1] as AbortSignal;
     expect(signal.aborted).toBe(false);

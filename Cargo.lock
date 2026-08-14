@@ -4240,7 +4240,6 @@ version = "0.4.10"
 dependencies = [
  "base64 0.22.1",
  "chrono",
- "file-rotate",
  "fs2",
  "getrandom 0.4.3",
  "keyring",
@@ -4271,7 +4270,6 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "tracing",
- "tracing-appender",
  "tracing-subscriber",
  "url",
  "uuid",

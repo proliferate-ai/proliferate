@@ -1,23 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
+import type {
+  IngestBatchV1,
+  IngestReceiptV1,
+} from "@proliferate/product-client/internal/domain/diagnostics/contract";
+import {
+  parseIngestBatchV1,
+  parseIngestReceiptV1,
+} from "@proliferate/product-client/internal/domain/diagnostics/validation";
 
 export function isTauriDesktop(): boolean {
   return typeof window !== "undefined"
     && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
-}
-
-export interface RendererDiagnosticPayload {
-  source: string;
-  message: string;
-  stack?: string | null;
-  componentStack?: string | null;
-  route?: string | null;
-}
-
-export interface RendererEventPayload {
-  source: string;
-  message: string;
-  route?: string | null;
-  elapsedMs?: number | null;
 }
 
 export interface SupportDiagnosticsLog {
@@ -47,22 +40,80 @@ export interface SupportDiagnosticsBundle {
   collectionErrors: string[];
 }
 
-export async function logRendererDiagnostic(
-  payload: RendererDiagnosticPayload,
-): Promise<void> {
+export async function ingestRendererDiagnosticsBatch(
+  input: IngestBatchV1,
+): Promise<IngestReceiptV1> {
+  let batch: IngestBatchV1;
+  try {
+    batch = parseIngestBatchV1(input);
+  } catch {
+    throw new Error("renderer_ingest_invalid_batch");
+  }
+  if (
+    batch.schema_version.major !== 1
+    || batch.schema_version.minor !== 1
+    || batch.records.length === 0
+    || batch.records.some((record) =>
+      record.schema_version.major !== 1
+      || record.schema_version.minor !== 1
+      || record.component !== "desktop_renderer"
+      || record.source !== "renderer"
+    )
+  ) {
+    throw new Error("renderer_ingest_invalid_batch");
+  }
   if (!isTauriDesktop()) {
-    return;
+    throw new Error("renderer_ingest_collector_unsupported");
   }
 
-  await invoke("log_renderer_diagnostic", { input: payload });
+  const rawReceipt = await invoke("ingest_renderer_diagnostics", { batch });
+  try {
+    const receipt = parseIngestReceiptV1(rawReceipt);
+    assertCoherentRendererReceipt(receipt, batch.records.length);
+    return receipt;
+  } catch {
+    throw new Error("renderer_ingest_protocol_error");
+  }
 }
 
-export async function logRendererEvent(payload: RendererEventPayload): Promise<void> {
-  if (!isTauriDesktop()) {
-    return;
+function assertCoherentRendererReceipt(
+  receipt: IngestReceiptV1,
+  submittedCount: number,
+): void {
+  const { accepted_count: acceptedCount, accepted_range: acceptedRange } = receipt;
+  if (
+    receipt.schema_version.major !== 1
+    || receipt.schema_version.minor !== 1
+    || acceptedCount + receipt.duplicate_count + receipt.rejections.length
+      !== submittedCount
+  ) {
+    throw new Error("renderer_ingest_protocol_error");
   }
 
-  await invoke("log_renderer_event", { input: payload });
+  const rejectionIndexes = new Set<number>();
+  for (const rejection of receipt.rejections) {
+    if (
+      rejection.index >= submittedCount
+      || rejectionIndexes.has(rejection.index)
+    ) {
+      throw new Error("renderer_ingest_protocol_error");
+    }
+    rejectionIndexes.add(rejection.index);
+  }
+
+  if (acceptedCount === 0) {
+    if (acceptedRange !== undefined) {
+      throw new Error("renderer_ingest_protocol_error");
+    }
+    return;
+  }
+  if (
+    acceptedRange === undefined
+    || acceptedRange.first > acceptedRange.last
+    || acceptedRange.last - acceptedRange.first + 1 !== acceptedCount
+  ) {
+    throw new Error("renderer_ingest_protocol_error");
+  }
 }
 
 export async function exportDebugBundle(): Promise<string | null> {

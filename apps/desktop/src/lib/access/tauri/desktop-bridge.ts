@@ -37,7 +37,7 @@ import {
   setWebviewZoom,
 } from "./window";
 import { fetchServerMeta, isTauriRuntimeAvailable } from "./connect-server";
-import { reportReactRenderError } from "@/lib/integrations/telemetry/native-diagnostics";
+import { reportReactRenderError } from "@/lib/infra/diagnostics/renderer-error-diagnostics";
 import { setWorkspaceActivityIndicator } from "./dock";
 import {
   checkForUpdate,
@@ -63,7 +63,6 @@ import {
 } from "./workspace-scratch";
 import {
   collectSupportDiagnostics,
-  logRendererEvent,
   saveDiagnosticJson,
 } from "./diagnostics";
 import {
@@ -236,18 +235,9 @@ export const desktopBridge: DesktopBridge = {
   },
 
   diagnostics: {
-    logEvent: logRendererEvent,
     reportRenderError(report: RenderErrorReport): Promise<boolean> {
       // Dedup/fingerprint/suppression stays host-owned in reportReactRenderError.
-      const error =
-        report.error instanceof Error
-          ? report.error
-          : new Error(
-              typeof report.error === "string"
-                ? report.error
-                : String(report.error),
-            );
-      return reportReactRenderError(error, report.componentStack ?? null);
+      return reportReactRenderError(report.error, report.componentStack ?? null);
     },
     collectSupportBundle: collectSupportDiagnostics,
     saveJson(input) {

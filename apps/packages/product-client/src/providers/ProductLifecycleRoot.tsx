@@ -3,7 +3,6 @@
 // never reuses lifecycle hook cells from the module's previous topology.
 import { Suspense, lazy, useEffect, useRef, type ReactNode } from "react"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
-import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge"
 
 import { useConnectivityListeners } from "#product/hooks/app/lifecycle/use-connectivity-listeners"
 import { useDebugSessionActivity } from "#product/hooks/app/lifecycle/use-debug-session-activity"
@@ -42,6 +41,10 @@ import { AppCommandActionsProvider } from "#product/providers/AppCommandActionsP
 import { DesktopProductLifecycleRoot } from "#product/providers/DesktopProductLifecycleRoot"
 import { AppErrorBoundary } from "#product/components/app/AppErrorBoundary"
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth"
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port"
 
 // The restart offer can only exist for an authenticated user (it follows an
 // acked auth switch), so the modal + session-restart machinery is lazy-loaded
@@ -58,7 +61,6 @@ const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250]
 let appRuntimeRenderCount = 0
 
 function recordAppRendererEvent(
-  diagnostics: DesktopDiagnosticsBridge | null,
   message: string,
   elapsedMs?: number,
 ): void {
@@ -66,12 +68,14 @@ function recordAppRendererEvent(
     `app_bootstrap.${message}`,
     elapsedMs === undefined ? undefined : { elapsedMs },
   )
-  void diagnostics?.logEvent({
-    source: "app_bootstrap",
-    message,
-    elapsedMs,
-  }).catch(() => {
-    // Native logging is diagnostic-only; app startup should never depend on it.
+  recordRendererDiagnostic({
+    name: `renderer.app_bootstrap.${message}`,
+    severity: "info",
+    kind: "milestone",
+    privacy: "operational",
+    fields: elapsedMs === undefined
+      ? undefined
+      : { elapsed_ms: diagnosticField(elapsedMs, "operational") },
   })
 }
 
@@ -124,7 +128,6 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_auth_bootstrap")
   const productHost = useProductHost()
   const bootstrapAuth = productHost.auth.restoreSession
-  const diagnostics = productHost.desktop?.diagnostics ?? null
   recordBootDiagnosticOnce("app_runtime.render.after.use_auth_bootstrap")
   recordBootDiagnosticOnce("app_runtime.render.before.auth_status")
   const authStatus = useProductAuthStatus()
@@ -194,14 +197,13 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.after.use_product_storage_persistence_lifecycle")
 
   useEffect(() => {
-    recordAppRendererEvent(diagnostics, "app.bootstrap.start")
+    recordAppRendererEvent("app.bootstrap.start")
     logStartupDebug("app.bootstrap.start")
     const authBootstrapStartedAt = startStartupTimer()
-    recordAppRendererEvent(diagnostics, "app.auth_bootstrap.start")
+    recordAppRendererEvent("app.auth_bootstrap.start")
     logStartupDebug("app.auth_bootstrap.start")
     void bootstrapAuth().finally(() => {
       recordAppRendererEvent(
-        diagnostics,
         "app.auth_bootstrap.completed",
         elapsedStartupMs(authBootstrapStartedAt),
       )
@@ -210,7 +212,7 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
         authStatus: authStatusRef.current,
       })
     })
-  }, [bootstrapAuth, diagnostics])
+  }, [bootstrapAuth])
 
   recordBootDiagnosticOnce("app_runtime.render.before_return", { authStatus })
 

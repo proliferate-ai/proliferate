@@ -1,28 +1,12 @@
-use std::path::PathBuf;
-
-use tracing_subscriber::{
-    filter::{filter_fn, FilterExt},
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-    Layer,
-};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 use crate::{
-    app_config::logs_dir_path,
     desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode},
     diagnostics_collector::producer::TauriDiagnosticsProducer,
-    telemetry_file_logging::{is_renderer_diagnostic_event, RendererDiagnosticLog},
 };
 
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
-    renderer_diagnostic_log: RendererDiagnosticLog,
-}
-
-impl TelemetryGuards {
-    pub fn renderer_diagnostic_log(&self) -> RendererDiagnosticLog {
-        self.renderer_diagnostic_log.clone()
-    }
 }
 
 fn baked_env(key: &str) -> Option<&'static str> {
@@ -78,10 +62,6 @@ fn telemetry_mode_tag(mode: DesktopTelemetryMode) -> Option<&'static str> {
     }
 }
 
-fn renderer_diagnostic_log_path() -> Result<PathBuf, String> {
-    Ok(logs_dir_path()?.join("renderer-diagnostics.log"))
-}
-
 pub fn init(native_diagnostics: &TauriDiagnosticsProducer) -> TelemetryGuards {
     let telemetry_mode = resolve_desktop_telemetry_mode();
     let dsn = if vendor_sentry_enabled(telemetry_mode) {
@@ -123,10 +103,7 @@ pub fn init(native_diagnostics: &TauriDiagnosticsProducer) -> TelemetryGuards {
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)
                 .with_writer(native_writer)
-                .with_filter(
-                    filter_fn(|metadata| !is_renderer_diagnostic_event(metadata))
-                        .and(env_filter_from_env()),
-                ),
+                .with_filter(env_filter_from_env()),
         )
         .init();
 
@@ -140,24 +117,7 @@ pub fn init(native_diagnostics: &TauriDiagnosticsProducer) -> TelemetryGuards {
         });
     }
 
-    let renderer_diagnostic_log = renderer_diagnostic_log_path()
-        .ok()
-        .and_then(|path| match RendererDiagnosticLog::open(path.clone()) {
-            Ok(log) => Some(log),
-            Err(error) => {
-                eprintln!(
-                    "[desktop-native] renderer diagnostic logging disabled for {}: {error}",
-                    path.display()
-                );
-                None
-            }
-        })
-        .unwrap_or_default();
-
-    TelemetryGuards {
-        _sentry: telemetry,
-        renderer_diagnostic_log,
-    }
+    TelemetryGuards { _sentry: telemetry }
 }
 
 #[cfg(test)]

@@ -8,6 +8,10 @@ import type {
 } from "@proliferate/cloud-sdk/types";
 import { useSupportReportUploadQueue } from "#product/hooks/support/lifecycle/use-support-report-upload-queue";
 import type { SupportReportJob } from "#product/lib/domain/support/report-types";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const anyHarnessMocks = vi.hoisted(() => ({
   workspaceId: "workspace-1" as string | null,
@@ -64,7 +68,7 @@ const cloudSupportMocks = vi.hoisted(() => ({
 
 const diagnosticsMocks = vi.hoisted(() => ({
   collectSupportBundle: vi.fn(async () => null),
-  logEvent: vi.fn(async () => {}),
+  rendererDiagnostic: vi.fn(),
   deleteAttachment: vi.fn(async () => {}),
   readAttachment: vi.fn(async () => ""),
 }));
@@ -179,12 +183,14 @@ describe("useSupportReportUploadQueue", () => {
       value: localStorageMock,
     });
     window.localStorage.clear();
+    setRendererDiagnosticsSink({ emit: diagnosticsMocks.rendererDiagnostic });
   });
 
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    resetRendererDiagnosticsSinkForTest();
     window.localStorage.clear();
   });
 
@@ -255,6 +261,17 @@ describe("useSupportReportUploadQueue", () => {
     expect(toastStoreMocks.show).toHaveBeenCalledWith(
       "Couldn't send your report after several tries. Please try again from Help.",
     );
+    expect(diagnosticsMocks.rendererDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "renderer.support.upload_dropped",
+        kind: "message",
+        errorClassification: "exhausted",
+        fields: expect.objectContaining({
+          job_id: { value: "job-capped", privacy: "operational" },
+          failure_kind: { value: "exhausted", privacy: "operational" },
+        }),
+      }),
+    );
   });
 
   it("keeps a fresh blocked-on-sign-in report queued past the attempt budget", async () => {
@@ -277,10 +294,16 @@ describe("useSupportReportUploadQueue", () => {
     renderHook(() => useSupportReportUploadQueue());
 
     await waitFor(() => {
-      expect(diagnosticsMocks.logEvent).toHaveBeenCalledWith({
-        source: "support_report_upload",
-        message: "failed.auth_required",
-      });
+      expect(diagnosticsMocks.rendererDiagnostic).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "renderer.support.upload_failed",
+          errorClassification: "auth_required",
+          fields: expect.objectContaining({
+            job_id: { value: "job-blocked", privacy: "operational" },
+            failure_kind: { value: "auth_required", privacy: "operational" },
+          }),
+        }),
+      );
     });
     // Classified as auth_required AND still queued — the cap did not drop it.
     const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");

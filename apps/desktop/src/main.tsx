@@ -1,3 +1,4 @@
+import "./lib/infra/diagnostics/renderer-diagnostics-install";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -20,11 +21,13 @@ import { elapsedStartupMs, startStartupTimer } from "./lib/infra/measurement/deb
 import {
   installBootStallDiagnostics,
   installWebKitPerformanceMeasureDetailGuard,
-  recordBootDiagnostic,
 } from "./lib/infra/measurement/boot-stall-diagnostics";
 import { installDebugMeasurement } from "./lib/infra/measurement/debug-measurement-install";
 import { startLayoutShiftObserver } from "./lib/infra/measurement/debug-layout-shift";
-import { logRendererEvent } from "./lib/access/tauri/diagnostics";
+import {
+  recordRendererStartupEvent as recordStartupDiagnostic,
+  warnRendererStartupFailure,
+} from "./lib/infra/diagnostics/renderer-startup-diagnostics";
 import { InstrumentedRoutes } from "./lib/integrations/telemetry/sentry";
 import { DesktopHostProviders } from "./providers/DesktopHostProviders";
 // Surface-specific desktop stylesheet stays host-side; the shared product CSS
@@ -47,14 +50,7 @@ installDebugMeasurement();
 startLayoutShiftObserver();
 
 function recordRendererStartupEvent(message: string): void {
-  recordBootDiagnostic(`renderer_startup.${message}`);
-  void logRendererEvent({
-    source: "renderer_startup",
-    message,
-    elapsedMs: elapsedStartupMs(rendererStartupStartedAt),
-  }).catch(() => {
-    // Native logging is diagnostic-only; app startup should never depend on it.
-  });
+  recordStartupDiagnostic(message, elapsedStartupMs(rendererStartupStartedAt));
 }
 
 // ---------------------------------------------------------------------------
@@ -137,10 +133,12 @@ function renderAppOnce() {
   renderApp();
 }
 
-function warnStartupFailure(message: string, error: unknown): void {
-  if (import.meta.env.DEV) {
-    console.warn(message, error);
-  }
+function warnStartupFailure(
+  stage: string,
+  message: string,
+  error: unknown,
+): void {
+  warnRendererStartupFailure(stage, message, error);
 }
 
 function startAnonymousTelemetry(): void {
@@ -148,7 +146,11 @@ function startAnonymousTelemetry(): void {
   try {
     runtimeState = getDesktopTelemetryRuntimeState();
   } catch (error) {
-    warnStartupFailure("Failed to resolve desktop telemetry runtime state", error);
+    warnStartupFailure(
+      "telemetry_runtime_state",
+      "Failed to resolve desktop telemetry runtime state",
+      error,
+    );
     return;
   }
 
@@ -161,7 +163,11 @@ function startAnonymousTelemetry(): void {
     clientDailyActivityEndpoint: getClientDailyActivityEndpoint(),
     telemetryMode: runtimeState.telemetryMode,
   }).catch((error) => {
-    warnStartupFailure("Failed to initialize anonymous telemetry", error);
+    warnStartupFailure(
+      "anonymous_telemetry",
+      "Failed to initialize anonymous telemetry",
+      error,
+    );
   });
 }
 
@@ -179,7 +185,11 @@ function startTelemetryOnce(): void {
     recordRendererStartupEvent("telemetry.completed");
   } catch (error) {
     recordRendererStartupEvent("telemetry.failed");
-    warnStartupFailure("Failed to initialize desktop telemetry", error);
+    warnStartupFailure(
+      "desktop_telemetry",
+      "Failed to initialize desktop telemetry",
+      error,
+    );
   }
 
   recordRendererStartupEvent("anonymous_telemetry.start");
@@ -196,7 +206,11 @@ async function bootstrapApiConfigForStartup(): Promise<boolean> {
     .catch((error) => {
       // Fall back to env/default resolution when no runtime override is available.
       recordRendererStartupEvent("api_config.failed");
-      warnStartupFailure("Failed to bootstrap Proliferate API config", error);
+      warnStartupFailure(
+        "api_config",
+        "Failed to bootstrap Proliferate API config",
+        error,
+      );
       return true;
     });
 
@@ -228,6 +242,6 @@ void (async () => {
   recordRendererStartupEvent("startup.completed");
 })().catch((error) => {
   recordRendererStartupEvent("startup.failed");
-  warnStartupFailure("Failed to start desktop app", error);
+  warnStartupFailure("desktop_startup", "Failed to start desktop app", error);
   renderAppOnce();
 });

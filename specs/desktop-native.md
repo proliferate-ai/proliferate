@@ -375,9 +375,17 @@ accepted internal point-in-time export.
 Native `tracing` detail uses a 1 MiB/256-record memory queue. Before readiness,
 during outages, and after collector teardown, `desktop-native.log` is the
 structurally scrubbed fallback: active plus `.1` through `.3`, 256 KiB each,
-with no disk replay. The existing renderer diagnostics file, AnyHarness files,
-Worker output, Sentry, PostHog, anonymous telemetry, and support composition
-remain under their existing owners.
+with no disk replay. Exact schema-v1.1 Desktop renderer batches normally enter
+the ready collector through the main-window-only native command. After native
+validation and before any authenticated request, `starting`, `unsupported`,
+`degraded`, `stopped`, and shutdown-armed states may write each already-filtered
+renderer record through the same bounded fallback pipeline without activating
+it; the command still returns its original unavailable error. Post-dispatch
+receipt, replacement, deadline, and transport failures do not fall back. The
+obsolete renderer diagnostics file receives no new writes, while historical
+support discovery remains. AnyHarness files, Worker output, Sentry, PostHog,
+anonymous telemetry, and support composition remain under their existing
+owners.
 
 Terminal shutdown is idempotent: arm shutdown and cancel broker leases; drain
 the native queue; stop/reap Worker and AnyHarness while the collector remains
