@@ -52,6 +52,9 @@ export function HomeProjectMenu({
       trigger={trigger}
       side={side}
       className={`w-72 ${POPOVER_SURFACE_CLASS}`}
+      // True of both panels: adding a project is part of choosing one, so the
+      // name holds across the sweep.
+      contentAriaLabel="Project"
     >
       {(close) => (
         <HomeProjectMenuBody

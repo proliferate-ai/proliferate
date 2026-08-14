@@ -45,6 +45,14 @@ describe("SidebarRepositoriesHeader", () => {
     expect(screen.getByText("add-repository-flow")).toBeTruthy();
   });
 
+  it("names the flow it raises, which a bare + cannot", () => {
+    renderHeader();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add repository" }));
+
+    expect(screen.getByRole("dialog", { name: "Add a repository" })).toBeTruthy();
+  });
+
   it("no longer offers New chat here — the nav above owns that", () => {
     renderHeader();
 

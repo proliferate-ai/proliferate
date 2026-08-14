@@ -41,6 +41,13 @@ interface PopoverButtonProps {
   offset?: number;
   /** Class name for the popover surface. */
   className?: string;
+  /**
+   * Accessible name for the popover surface itself, which Radix renders as a
+   * `dialog`. Worth setting whenever the content is a flow rather than a short
+   * menu the trigger already describes — an unnamed dialog announces as just
+   * "dialog". Omitted by default so short menus stay unchanged.
+   */
+  contentAriaLabel?: string;
   /** Stop click propagation on the trigger. Useful inside clickable parents. */
   stopPropagation?: boolean;
   /** Which interaction opens the popover. Default: "click". */
@@ -58,6 +65,7 @@ export function PopoverButton({
   side = "auto",
   offset = 4,
   className = `w-56 ${POPOVER_SURFACE_CLASS}`,
+  contentAriaLabel,
   stopPropagation = false,
   triggerMode = "click",
   externalOpen,
@@ -164,6 +172,7 @@ export function PopoverButton({
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
           data-slot="popover-content"
+          aria-label={contentAriaLabel}
           side={side === "auto" ? "bottom" : side}
           align={align}
           sideOffset={offset}

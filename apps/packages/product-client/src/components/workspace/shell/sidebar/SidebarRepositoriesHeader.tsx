@@ -76,6 +76,10 @@ export function SidebarRepositoriesHeader({
             <PopoverButton
               align="end"
               className={ADD_REPOSITORY_SURFACE_CLASS}
+              // A "+" is not a name. Without this the flow announces as a bare
+              // dialog, which is the one surface here that is a flow and not a
+              // menu the trigger already describes.
+              contentAriaLabel="Add a repository"
               trigger={(
                 <SidebarActionButton
                   title="Add repository"

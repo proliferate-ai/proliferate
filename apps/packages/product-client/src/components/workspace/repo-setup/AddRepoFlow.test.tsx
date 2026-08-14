@@ -66,6 +66,12 @@ describe("AddRepoFlow", () => {
     expect(screen.queryByText(GITHUB_CONNECTION_FOOTNOTE)).toBeNull();
   });
 
+  it("names the dialog it raises — it has no trigger to borrow a name from", () => {
+    renderFlow();
+
+    expect(screen.getByRole("dialog", { name: "Add a repository" })).toBeTruthy();
+  });
+
   it("renders the flow on a popover surface, animating only while open", () => {
     renderFlow();
 

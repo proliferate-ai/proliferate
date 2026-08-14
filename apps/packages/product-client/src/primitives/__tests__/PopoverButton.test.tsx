@@ -74,6 +74,24 @@ describe("PopoverButton", () => {
     });
   });
 
+  it("names the surface when a caller asks, and leaves it unnamed otherwise", () => {
+    const { unmount } = render(
+      <PopoverButton
+        trigger={<Button variant="ghost">Add</Button>}
+        contentAriaLabel="Add a repository"
+      >
+        {() => <div>flow body</div>}
+      </PopoverButton>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(screen.getByRole("dialog", { name: "Add a repository" })).toBeTruthy();
+    unmount();
+
+    render(<SearchPopoverHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Choose project" }));
+    expect(screen.getByRole("dialog").getAttribute("aria-label")).toBeNull();
+  });
+
   it("scopes the enter animation to the open state so Presence can unmount the closed content", () => {
     // A bare `animate-popover-in` leaves the animation declared on the closed
     // element; Radix Presence reads any non-`none` animation name as a running
