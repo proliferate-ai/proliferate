@@ -90,6 +90,9 @@ const DIST = join(REPO_ROOT, "apps", "web", "dist");
 // lazy-load it out of the first-load graph and lower this cap again; the raise
 // is the unblock, not the fix. main and PRs 6-7 of this train measure clean, so
 // this PR is the whole delta.
+// Also on 2026-08-13 (PRO-111, merged on main as 490500): AuthShell surfaces
+// previously-invisible auth errors via describeAuthIssue, +452 B of genuine
+// feature bytes. The 500000 cap above covers both deltas.
 const CAPS = { js: 500000, css: 66000 };
 // Baseline requests zero of these on /login; any byte is a fail-closed
 // regression (login/callback must not eagerly load fonts/images/audio).

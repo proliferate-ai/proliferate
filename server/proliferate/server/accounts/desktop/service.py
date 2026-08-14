@@ -463,6 +463,7 @@ async def finish_github_desktop_callback(
         state=state_data["desktop_state"],
     )
     return make_desktop_handoff_page(
+        provider="github",
         deep_link_url=deep_link_url,
         launch_deep_link=DESKTOP_DEEP_LINK_LAUNCH_ENABLED,
     )
