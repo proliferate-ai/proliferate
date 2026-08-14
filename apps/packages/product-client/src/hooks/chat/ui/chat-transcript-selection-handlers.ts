@@ -251,6 +251,16 @@ export function createChatTranscriptSelectionHandlers({
 
   const selectionchange = () => {
     const root = rootRef.current;
+    // Focus moving into the action menu (keyboard invocation focuses the
+    // first item) clears the window selection on WebKit. That loss is a side
+    // effect of using the menu, not the user abandoning it, so the published
+    // selection must survive while the menu owns focus.
+    if (
+      hasSelectedResponse()
+      && getTargetFactsForEvent(getActiveElement(), root).contextualActions
+    ) {
+      return;
+    }
     const selection = getSelection();
     if (!root || !selection || selection.rangeCount === 0) {
       allTranscriptSelectedRef.current = false;

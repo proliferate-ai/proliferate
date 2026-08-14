@@ -181,6 +181,16 @@ export function SelectedResponseActionMenu({
               // pointer-down or the selection collapses before `onAction` can
               // read it.
               onPointerDown={(event) => event.preventDefault()}
+              // Hover is a focus move too: Radix focuses the hovered item on
+              // pointer-move and the content on pointer-leave, and WebKit
+              // clears the window selection whenever focus moves — which nulls
+              // the published selection and unmounts this menu before a click
+              // can land. Cancelling both makes Radix skip those focus moves;
+              // the classes below supply the hover ink that focus-driven
+              // `data-highlighted` would have painted.
+              onPointerMove={(event) => event.preventDefault()}
+              onPointerLeave={(event) => event.preventDefault()}
+              className="hover:bg-hover hover:[&_svg]:opacity-100"
               onSelect={() => onAction(item.action)}
             >
               <Icon aria-hidden="true" className="icon-paired" />

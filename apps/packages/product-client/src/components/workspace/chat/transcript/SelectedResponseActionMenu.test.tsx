@@ -152,6 +152,34 @@ describe("SelectedResponseActionMenu", () => {
     paragraph.remove();
   });
 
+  it("cancels hover pointer events so Radix cannot move focus into the menu", async () => {
+    renderMenu();
+    const items = await screen.findAllByRole("menuitem");
+
+    // jsdom never moves focus on hover, so asserting focus stays put cannot
+    // fail on its own — the assertion that actually holds the guard is that
+    // the item CANCELS pointer-move and pointer-leave (React derives leave
+    // from pointerout), which is what makes Radix skip the hover focus moves
+    // that collapse the window selection on WebKit and unmount the menu
+    // before a click can land.
+    for (const item of items) {
+      const pointerMove = new window.PointerEvent("pointermove", {
+        bubbles: true,
+        cancelable: true,
+      });
+      fireEvent(item, pointerMove);
+      expect(pointerMove.defaultPrevented).toBe(true);
+
+      const pointerOut = new window.PointerEvent("pointerout", {
+        bubbles: true,
+        cancelable: true,
+        relatedTarget: document.body,
+      });
+      fireEvent(item, pointerOut);
+      expect(pointerOut.defaultPrevented).toBe(true);
+    }
+  });
+
   it("keeps the dismissal-suppression hook reachable from every item", async () => {
     renderMenu();
     const items = await screen.findAllByRole("menuitem");

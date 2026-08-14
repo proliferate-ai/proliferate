@@ -446,4 +446,48 @@ describe("createChatTranscriptSelectionHandlers", () => {
     handlers.selectionchange();
     expect(setSelectedResponse).toHaveBeenLastCalledWith(null);
   });
+
+  it("keeps the published selection while the menu owns focus and the range is lost", () => {
+    const root = {} as HTMLElement;
+    const menuTarget = {} as EventTarget;
+    let activeElement: EventTarget = menuTarget;
+    const setSelectedResponse = vi.fn();
+    const handlers = createChatTranscriptSelectionHandlers({
+      rootRef: { current: root },
+      getCopyText: () => "semantic transcript",
+      transcriptOwnedRef: { current: false },
+      allTranscriptSelectedRef: { current: false },
+      pointerSelectingRef: { current: false },
+      getActiveElement: () => activeElement,
+      getSelection: () => null,
+      getTargetFactsForEvent: (target) =>
+        target === menuTarget
+          ? facts({ contextualActions: true })
+          : facts({ insideRoot: true }),
+      isSelectAllCommandOwner: () => false,
+      focusRoot: vi.fn(),
+      setFullSelectionMarker: vi.fn(),
+      isFullSelectionMarker: () => false,
+      isExactRootSelection: () => false,
+      nodeInsideRoot: () => true,
+      getSelectionDirection: () => "forward",
+      clampSelectionToRoot: vi.fn(),
+      getSelectedResponse: () => null,
+      isSelectedResponseVisible: () => true,
+      setSelectedResponse,
+      hasSelectedResponse: () => true,
+      requestSelectedResponseMenuFocus: vi.fn(),
+      dismissSelectedResponse: vi.fn(),
+    });
+
+    // WebKit clears the native selection when keyboard invocation focuses the
+    // first menu item; that loss must not dismiss the open menu.
+    handlers.selectionchange();
+    expect(setSelectedResponse).not.toHaveBeenCalled();
+
+    // Once focus is back in the document the same empty selection dismisses.
+    activeElement = root;
+    handlers.selectionchange();
+    expect(setSelectedResponse).toHaveBeenLastCalledWith(null);
+  });
 });
