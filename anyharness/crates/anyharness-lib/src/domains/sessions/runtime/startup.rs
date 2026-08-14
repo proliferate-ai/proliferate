@@ -503,20 +503,30 @@ impl SessionRuntime {
                     }
                 }
             })),
+            // Both interaction hooks fire while the caller holds the session
+            // event-sink lock, and the workflow extension does a synchronous
+            // store lookup — so the fan-out is pushed to the blocking pool and
+            // the sink lock is never held across a database read.
             on_interaction_requested: Some(Arc::new({
                 let extensions = self.session_extensions.clone();
                 move |ctx: SessionInteractionRequestedContext| {
-                    for extension in &extensions {
-                        extension.on_interaction_requested(ctx.clone());
-                    }
+                    let extensions = extensions.clone();
+                    tokio::task::spawn_blocking(move || {
+                        for extension in &extensions {
+                            extension.on_interaction_requested(ctx.clone());
+                        }
+                    });
                 }
             })),
             on_interaction_resolved: Some(Arc::new({
                 let extensions = self.session_extensions.clone();
                 move |ctx: SessionInteractionResolvedContext| {
-                    for extension in &extensions {
-                        extension.on_interaction_resolved(ctx.clone());
-                    }
+                    let extensions = extensions.clone();
+                    tokio::task::spawn_blocking(move || {
+                        for extension in &extensions {
+                            extension.on_interaction_resolved(ctx.clone());
+                        }
+                    });
                 }
             })),
             on_exit: None,

@@ -282,13 +282,101 @@ mod tests {
     /// restoring it passes.
     #[test]
     fn on_interaction_requested_emits_full_correlation_for_a_linked_session() {
-        use std::io;
-        use std::sync::{Arc, Mutex};
-
         use anyharness_contract::v1::InteractionKind;
 
+        let extension = linked_extension_fixture();
+        let logged = capture_tracing_output(|| {
+            extension.on_interaction_requested(SessionInteractionRequestedContext {
+                session_id: "session-1".into(),
+                request_id: "req-1".into(),
+                kind: InteractionKind::Permission,
+            });
+            // Silence case: session-2 carries no workflow columns, so the
+            // workflow_columns pre-filter drops the report — zero output.
+            extension.on_interaction_requested(SessionInteractionRequestedContext {
+                session_id: "session-2".into(),
+                request_id: "req-2".into(),
+                kind: InteractionKind::Permission,
+            });
+        });
+
+        let matches: Vec<&str> = logged
+            .lines()
+            .filter(|line| line.contains("anyharness.workflow_node_interaction_requested"))
+            .collect();
+        assert_eq!(matches.len(), 1, "{logged}");
+        let requested_line = matches[0];
+        assert!(requested_line.contains("run-x"), "{requested_line}");
+        assert!(requested_line.contains("node-x"), "{requested_line}");
+        assert!(requested_line.contains("session-1"), "{requested_line}");
+        assert!(requested_line.contains("req-1"), "{requested_line}");
+        assert!(requested_line.contains("permission"), "{requested_line}");
+    }
+
+    /// The resolve-side sibling: a linked session's resolution emits the named
+    /// `anyharness.workflow_node_interaction_resolved` event with the same
+    /// correlation plus the `outcome` discriminant; an unlinked session stays
+    /// silent. Negative control (recorded in the PR body): removing the
+    /// `tracing::info!` call from `on_interaction_resolved` fails this test;
+    /// restoring it passes.
+    #[test]
+    fn on_interaction_resolved_emits_the_outcome_for_a_linked_session() {
+        use anyharness_contract::v1::{InteractionKind, InteractionOutcome};
+
+        let extension = linked_extension_fixture();
+        let logged = capture_tracing_output(|| {
+            extension.on_interaction_resolved(SessionInteractionResolvedContext {
+                session_id: "session-1".into(),
+                request_id: "req-1".into(),
+                kind: InteractionKind::Permission,
+                outcome: InteractionOutcome::Declined,
+            });
+            // Silence case: session-2 carries no workflow columns.
+            extension.on_interaction_resolved(SessionInteractionResolvedContext {
+                session_id: "session-2".into(),
+                request_id: "req-2".into(),
+                kind: InteractionKind::Permission,
+                outcome: InteractionOutcome::Declined,
+            });
+        });
+
+        let matches: Vec<&str> = logged
+            .lines()
+            .filter(|line| line.contains("anyharness.workflow_node_interaction_resolved"))
+            .collect();
+        assert_eq!(matches.len(), 1, "{logged}");
+        let resolved_line = matches[0];
+        assert!(resolved_line.contains("run-x"), "{resolved_line}");
+        assert!(resolved_line.contains("node-x"), "{resolved_line}");
+        assert!(resolved_line.contains("session-1"), "{resolved_line}");
+        assert!(resolved_line.contains("req-1"), "{resolved_line}");
+        assert!(resolved_line.contains("declined"), "{resolved_line}");
+    }
+
+    /// One linked (`session-1` → `run-x`/`node-x`) and one unlinked
+    /// (`session-2`) session over an in-memory store, no bound manager —
+    /// neither interaction hook needs it.
+    fn linked_extension_fixture() -> WorkflowSessionExtension {
         use crate::app::test_support::{insert_session_row, seed_workspace_with_repo_root};
         use crate::persistence::Db;
+
+        let db = Db::open_in_memory().expect("in-memory db with full migrations");
+        seed_workspace_with_repo_root(&db, "workspace-1", "worktree", "/tmp/workspace-1");
+        let session_store = SessionStore::new(db.clone());
+        insert_session_row(&session_store, "workspace-1", "session-1", "idle");
+        insert_session_row(&session_store, "workspace-1", "session-2", "idle");
+        session_store
+            .link_workflow_columns("session-1", "run-x", "node-x")
+            .expect("link workflow columns");
+        WorkflowSessionExtension::new(session_store, WorkflowStore::new(db))
+    }
+
+    /// Local twin of `store_tests::capture_tracing_output` (that helper is
+    /// private to its module): runs `body` under a captured fmt subscriber and
+    /// returns everything it logged.
+    fn capture_tracing_output(body: impl FnOnce()) -> String {
+        use std::io;
+        use std::sync::{Arc, Mutex};
 
         #[derive(Clone)]
         struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
@@ -307,17 +395,6 @@ mod tests {
             }
         }
 
-        let db = Db::open_in_memory().expect("in-memory db with full migrations");
-        seed_workspace_with_repo_root(&db, "workspace-1", "worktree", "/tmp/workspace-1");
-        let session_store = SessionStore::new(db.clone());
-        insert_session_row(&session_store, "workspace-1", "session-1", "idle");
-        insert_session_row(&session_store, "workspace-1", "session-2", "idle");
-        session_store
-            .link_workflow_columns("session-1", "run-x", "node-x")
-            .expect("link workflow columns");
-
-        let extension = WorkflowSessionExtension::new(session_store, WorkflowStore::new(db));
-
         let log_bytes = Arc::new(Mutex::new(Vec::new()));
         let log_writer = Arc::clone(&log_bytes);
         let subscriber = tracing_subscriber::fmt()
@@ -325,38 +402,12 @@ mod tests {
             .with_ansi(false)
             .with_writer(move || SharedLogWriter(Arc::clone(&log_writer)))
             .finish();
-        tracing::subscriber::with_default(subscriber, || {
-            extension.on_interaction_requested(SessionInteractionRequestedContext {
-                session_id: "session-1".into(),
-                request_id: "req-1".into(),
-                kind: InteractionKind::Permission,
-            });
-            // Silence case: session-2 carries no workflow columns, so the
-            // workflow_columns pre-filter drops the report — zero output.
-            extension.on_interaction_requested(SessionInteractionRequestedContext {
-                session_id: "session-2".into(),
-                request_id: "req-2".into(),
-                kind: InteractionKind::Permission,
-            });
-        });
+        tracing::subscriber::with_default(subscriber, body);
 
-        let logged = String::from_utf8(
-            log_bytes
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone(),
-        )
-        .expect("formatted log is UTF-8");
-        let matches: Vec<&str> = logged
-            .lines()
-            .filter(|line| line.contains("anyharness.workflow_node_interaction_requested"))
-            .collect();
-        assert_eq!(matches.len(), 1, "{logged}");
-        let requested_line = matches[0];
-        assert!(requested_line.contains("run-x"), "{requested_line}");
-        assert!(requested_line.contains("node-x"), "{requested_line}");
-        assert!(requested_line.contains("session-1"), "{requested_line}");
-        assert!(requested_line.contains("req-1"), "{requested_line}");
-        assert!(requested_line.contains("permission"), "{requested_line}");
+        let bytes = log_bytes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        String::from_utf8(bytes).expect("formatted log is UTF-8")
     }
 }
