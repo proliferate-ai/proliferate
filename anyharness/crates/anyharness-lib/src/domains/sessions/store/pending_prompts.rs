@@ -4,6 +4,12 @@ use super::SessionStore;
 use crate::domains::sessions::model::{PendingPromptRecord, PendingPromptReorderOutcome};
 use crate::domains::sessions::prompt::PromptPayload;
 
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum PendingPromptWriteError {
+    #[error("canonical completion wake pending prompt is protected")]
+    Protected,
+}
+
 impl SessionStore {
     pub fn insert_pending_prompt(
         &self,
@@ -171,8 +177,24 @@ impl SessionStore {
         payload: &PromptPayload,
     ) -> anyhow::Result<bool> {
         let blocks_json = payload.blocks_json()?;
-        self.db.with_conn(|conn| {
-            let rows = conn.execute(
+        self.db.with_tx_anyhow(|tx| {
+            let record = tx
+                .query_row(
+                    "SELECT * FROM session_pending_prompts
+                     WHERE session_id = ?1 AND seq = ?2",
+                    params![session_id, seq],
+                    map_pending_prompt,
+                )
+                .optional()?;
+            let Some(record) = record else {
+                return Ok(false);
+            };
+            if super::completion_deliveries::canonical::pending_prompt_is_canonical_delivery(
+                tx, &record,
+            )? {
+                return Err(anyhow::Error::new(PendingPromptWriteError::Protected));
+            }
+            let rows = tx.execute(
                 "UPDATE session_pending_prompts
                  SET text = ?3, blocks_json = ?4
                  WHERE session_id = ?1 AND seq = ?2",
@@ -193,8 +215,8 @@ impl SessionStore {
         session_id: &str,
         seq: i64,
     ) -> anyhow::Result<Option<PendingPromptRecord>> {
-        self.db.with_conn(|conn| {
-            let record = conn
+        self.db.with_tx_anyhow(|tx| {
+            let record = tx
                 .query_row(
                     "SELECT * FROM session_pending_prompts WHERE session_id = ?1 AND seq = ?2",
                     params![session_id, seq],
@@ -204,11 +226,17 @@ impl SessionStore {
             if record.is_none() {
                 return Ok(None);
             }
-            conn.execute(
+            let record = record.expect("guarded pending prompt exists");
+            if super::completion_deliveries::canonical::pending_prompt_is_canonical_delivery(
+                tx, &record,
+            )? {
+                return Err(anyhow::Error::new(PendingPromptWriteError::Protected));
+            }
+            tx.execute(
                 "DELETE FROM session_pending_prompts WHERE session_id = ?1 AND seq = ?2",
                 params![session_id, seq],
             )?;
-            Ok(record)
+            Ok(Some(record))
         })
     }
 
@@ -305,7 +333,7 @@ fn validate_pending_prompt_order(existing: &[i64], requested: &[i64]) -> Result<
     Ok(())
 }
 
-fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptRecord> {
+pub(super) fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptRecord> {
     Ok(PendingPromptRecord {
         session_id: row.get("session_id")?,
         seq: row.get("seq")?,

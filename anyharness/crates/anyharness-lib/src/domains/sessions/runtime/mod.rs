@@ -24,6 +24,7 @@ use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAcc
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
+mod agent_creation;
 mod config;
 mod creation;
 mod fork;
@@ -37,12 +38,20 @@ mod launch_policy;
 mod lifecycle;
 mod pending_prompts;
 mod prompt;
+#[cfg(test)]
+pub(crate) mod prompt_message_actor_tests;
+#[cfg(test)]
+mod prompt_message_cold_start_tests;
+#[cfg(test)]
+mod prompt_message_tests;
 mod replay;
 mod startup;
+mod subagent_lifecycle;
 #[cfg(test)]
 mod tests;
 pub(crate) mod view;
 
+pub use agent_creation::{CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError};
 pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
 pub(crate) use lifecycle::LiveTurnCancelOutcome;
 pub(crate) use prompt::TextPromptDispatchError;
@@ -233,6 +242,7 @@ pub struct ForkSessionOutcome {
 pub enum PendingPromptMutationError {
     SessionNotFound(String),
     NotFound,
+    Protected,
     InvalidPrompt(crate::domains::sessions::prompt::PromptValidationError),
     Internal(anyhow::Error),
 }
@@ -249,6 +259,14 @@ pub enum PendingPromptQueueError {
 #[derive(Debug)]
 pub enum SessionLifecycleError {
     SessionNotFound(String),
+    Internal(anyhow::Error),
+}
+
+#[derive(Debug)]
+pub enum SubagentLifecycleError {
+    RelationshipNotFound,
+    OpenRequired,
+    Resume(EnsureLiveSessionError),
     Internal(anyhow::Error),
 }
 
@@ -402,5 +420,10 @@ impl SessionRuntime {
 
     pub fn forget_live_session_for_mobility_blocking(&self, session_id: &str) {
         self.acp_manager.remove_session_blocking(session_id);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn product_mcp_launch_ids(&self) -> Vec<&'static str> {
+        self.product_mcp_launch_catalog.registered_product_ids()
     }
 }

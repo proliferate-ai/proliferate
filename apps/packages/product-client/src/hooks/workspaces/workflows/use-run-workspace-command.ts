@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
@@ -12,6 +11,7 @@ import {
 } from "#product/lib/domain/terminals/run-terminal";
 import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
+import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
@@ -33,8 +33,9 @@ export function useRunWorkspaceCommand({
   openTerminalPanel,
 }: UseRunWorkspaceCommandArgs) {
   // Owns the workspace Run command action exposed by the shell chrome. Terminal
-  // record creation remains delegated to terminal workflow hooks.
-  const navigate = useNavigate();
+  // record creation remains delegated to terminal workflow hooks. Navigation
+  // goes through navigateApp: useNavigate would subscribe the shell body to
+  // every location change (PRO-170).
   const showToast = useToastStore((state) => state.show);
   const showErrorToast = useToastStore((state) => state.showError);
   const { createRunTab } = useTerminalActions();
@@ -155,7 +156,7 @@ export function useRunWorkspaceCommand({
 
     if (!runCommand.trim()) {
       showToast("Configure a Run command for this repository first.");
-      navigate(runCommandSettingsHref);
+      navigateApp(runCommandSettingsHref);
       return;
     }
 
@@ -183,7 +184,6 @@ export function useRunWorkspaceCommand({
     getWorkspaceRuntimeBlockReason,
     isCloudWorkspace,
     isRuntimeReady,
-    navigate,
     openTerminalPanel,
     repoConfigsQuery.error,
     repoConfigsQuery.isLoading,

@@ -29,12 +29,14 @@ import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "#product/lib/domain/preferences
  * v13: add a section-level Repositories collapse flag, distinct from the
  * per-repo-group collapse array — collapsing the section hides every repo
  * group's rows at once instead of each group owning its own toggle only.
+ * v14: add pinned workspace ids for the sidebar Pinned section.
  */
-export const WORKSPACE_UI_MIGRATION_VERSION = 13;
+export const WORKSPACE_UI_MIGRATION_VERSION = 14;
 
 export interface PersistedWorkspaceUiState {
   migrationVersion?: number;
   archivedWorkspaceIds: string[];
+  pinnedWorkspaceIds: string[];
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
   showArchived: boolean;
@@ -70,6 +72,7 @@ export interface WorkspaceUiChangeTrackedState extends PersistedWorkspaceUiState
 
 export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   archivedWorkspaceIds: [],
+  pinnedWorkspaceIds: [],
   hiddenRepoRootIds: [],
   collapsedRepoGroups: [],
   showArchived: false,

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { TranscriptContextProviders } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import {
   PendingInteractionMarkerView,
   TURN_ITEM_GAP_CLASS,
@@ -13,8 +14,35 @@ import {
   resolveTurnTrailingStatus,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 
+const pendingInteractionMocks = vi.hoisted(() => ({
+  readForSession: vi.fn(),
+  bySessionId: {} as Record<string, { kind: string } | null>,
+}));
+
+vi.mock("#product/hooks/chat/derived/use-active-session-identity", () => ({
+  useActiveSessionId: () => "main-session",
+}));
+
+vi.mock("#product/hooks/chat/derived/use-active-pending-session-interactions", () => ({
+  usePendingInteractionStateForSession: (sessionId: string | null) => {
+    pendingInteractionMocks.readForSession(sessionId);
+    const primaryPendingInteraction = sessionId
+      ? pendingInteractionMocks.bySessionId[sessionId] ?? null
+      : null;
+    return {
+      pendingInteractions: primaryPendingInteraction ? [primaryPendingInteraction] : [],
+      pendingApproval: null,
+      pendingUserInput: null,
+      pendingMcpElicitation: null,
+      primaryPendingInteraction,
+    };
+  },
+}));
+
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
+  pendingInteractionMocks.bySessionId = {};
 });
 
 describe("TurnShell", () => {
@@ -174,6 +202,23 @@ describe("resolveTurnTrailingStatus", () => {
     // No more generic 8px "Waiting for your input" copy.
     expect(container.textContent).not.toContain("Waiting for your input");
     expect(container.innerHTML).not.toContain("text-xs");
+  });
+
+  it("reads the embedded transcript child's pending interaction instead of the active main session", () => {
+    pendingInteractionMocks.bySessionId = {
+      "main-session": { kind: "permission" },
+      "child-session": { kind: "user_input" },
+    };
+    const { container } = render(
+      <TranscriptContextProviders sessionId="child-session">
+        {resolveTurnTrailingStatus(STARTED_AT, "needs_input", null)}
+      </TranscriptContextProviders>,
+    );
+
+    expect(pendingInteractionMocks.readForSession).toHaveBeenCalledWith("child-session");
+    expect(pendingInteractionMocks.readForSession).not.toHaveBeenCalledWith("main-session");
+    expect(container.textContent).toContain("Question");
+    expect(container.textContent).not.toContain("Permission");
   });
 });
 

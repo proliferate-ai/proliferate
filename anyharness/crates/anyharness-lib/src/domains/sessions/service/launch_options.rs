@@ -59,6 +59,12 @@ fn live_model_effort_candidates(
 }
 
 impl SessionService {
+    /// Borrow-free active catalog snapshot for application boundaries that
+    /// need to project unavailable rows alongside executable launch choices.
+    pub fn active_agent_catalog(&self) -> crate::domains::agents::catalog::service::ActiveCatalog {
+        self.catalog_service.active_catalog()
+    }
+
     /// Is `value` a model this session may switch to? The current catalog
     /// authorizes an id, alias, or variant only when it is available under the
     /// auth contexts recorded at session creation. Sessions without recorded
@@ -162,8 +168,7 @@ impl SessionService {
                         is_default: default_model_id.as_deref() == Some(model.id.as_str()),
                         default_opt_in: None,
                         description: model.description.clone(),
-                        provider: projection::provider_for_model(&model.id)
-                            .map(str::to_string),
+                        provider: projection::provider_for_model(&model.id).map(str::to_string),
                         status: Some(model.status),
                         effort: projected_model_effort(&model.controls),
                         live_effort_candidates: live_model_effort_candidates(

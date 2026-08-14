@@ -73,7 +73,10 @@ fn resolve_create_block_reason(error: SubagentError) -> Result<String, ProductMc
         | SubagentError::NotOwned
         | SubagentError::TargetRequired
         | SubagentError::ConflictingTarget
-        | SubagentError::Closed) => Err(ProductMcpContextError::conflict(conflict.to_string())),
+        | SubagentError::Closed
+        | SubagentError::OpenRequired) => {
+            Err(ProductMcpContextError::conflict(conflict.to_string()))
+        }
         SubagentError::Link(error) => Err(ProductMcpContextError::Internal(error.into())),
         SubagentError::Internal(error) => Err(ProductMcpContextError::Internal(error)),
     }

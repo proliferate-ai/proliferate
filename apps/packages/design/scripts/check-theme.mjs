@@ -80,10 +80,10 @@ const expectedUtilities = [
   ...["base", "raised", "sticky", "overlay", "popover", "toast", "tooltip", "top"].map((role) =>
     singleUtility(`z-${role}`, "z-index"),
   ),
-  ...["hover", "enter", "exit", "disclosure", "panel", "emphasized"].map((role) =>
+  ...["hover", "enter", "exit", "disclosure", "panel", "pop", "emphasized"].map((role) =>
     singleUtility(`duration-${role}`, "transition-duration"),
   ),
-  ...["out-quint", "spring", "standard", "linear"].map((role) =>
+  ...["out-quint", "pop", "spring", "standard", "linear"].map((role) =>
     singleUtility(`ease-${role}`, "transition-timing-function"),
   ),
   ...["sm", "md", "lg"].map((step) =>
@@ -114,7 +114,7 @@ const expectedCss = [
 }`,
   `@media (prefers-reduced-motion: reduce) {
   :root {
-${["hover", "enter", "exit", "disclosure", "panel", "emphasized"]
+${["hover", "enter", "exit", "disclosure", "panel", "pop", "emphasized"]
   .map((role) => `    --duration-${role}: 0ms;`)
   .join("\n")}
   }
@@ -192,7 +192,10 @@ for (const [name, expected] of Object.entries({
   "--color-surface-editor": "#fafafa",
   "--color-primary": "#1a1c1f",
   "--color-primary-foreground": "#ffffff",
-  "--color-composer-background": "#ffffff",
+  // Off-white, not the #ffffff plane: borderless composer chrome means the
+  // fill alone separates the composer from the page (see tokens.ts). It reuses
+  // the rail plane above rather than introducing a fourth opaque light plane.
+  "--color-composer-background": "#f6f6f6",
   "--color-composer-backdrop-filter": "none",
   "--color-composer-control-foreground": "var(--color-muted-foreground)",
   "--color-composer-control-muted-foreground": "var(--color-faint)",
@@ -212,7 +215,6 @@ for (const [name, expected] of Object.entries({
   "--shadow-popover": "0 0 0 0.5px rgba(26, 28, 31, 0.05), 0 4px 12px rgba(26, 28, 31, 0.1)",
   "--shadow-modal": "0 16px 40px rgba(26, 28, 31, 0.18)",
   "--shadow-user-message": "0 1px 2px rgba(26, 28, 31, 0.05)",
-  "--color-composer-shadow": "0 0 0 0.5px rgba(26, 28, 31, 0.06), 0 1px 3px rgba(26, 28, 31, 0.08), 0 4px 12px rgba(26, 28, 31, 0.06)",
 })) {
   assert(themeTokens[name]?.light === expected, `${name} drifted from the light palette planes`);
 }
@@ -254,6 +256,7 @@ for (const [path, expected] of [
   ["duration.exitMs", 120],
   ["duration.disclosureMs", 200],
   ["duration.panelMs", 240],
+  ["duration.popMs", 280],
   ["duration.emphasizedMs", 300],
   ["activity.thinkingCycleMs", 1800],
   ["activity.streamRevealFadeMs", 320],
@@ -273,8 +276,10 @@ for (const [tokenName, expected] of [
   ["--duration-exit", motion.cssMs(motion.duration.exitMs)],
   ["--duration-disclosure", motion.cssMs(motion.duration.disclosureMs)],
   ["--duration-panel", motion.cssMs(motion.duration.panelMs)],
+  ["--duration-pop", motion.cssMs(motion.duration.popMs)],
   ["--duration-emphasized", motion.cssMs(motion.duration.emphasizedMs)],
   ["--ease-out-quint", motion.ease.outQuint],
+  ["--ease-pop", motion.ease.pop],
   ["--ease-spring", motion.ease.spring],
   ["--ease-standard", motion.ease.standard],
   ["--ease-linear", motion.ease.linear],
@@ -569,6 +574,7 @@ for (const declaration of [
   "animation: composer-value-enter var(--duration-panel) var(--ease-spring);",
   "animation: composer-value-exit var(--duration-panel) var(--ease-spring) forwards;",
   "animation: chip-enter var(--duration-emphasized) var(--ease-spring) both;",
+  "animation: subagent-spawn-chip-enter var(--duration-pop) var(--ease-pop) both;",
   "animation: status-crossfade var(--duration-enter) var(--ease-out-quint);",
   "animation: transcript-activity-in var(--duration-enter) var(--ease-out-quint) both;",
   "animation: dialog-pop-in var(--duration-enter) var(--ease-out-quint);",

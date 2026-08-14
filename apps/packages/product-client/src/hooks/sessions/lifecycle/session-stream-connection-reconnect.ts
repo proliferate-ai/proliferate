@@ -32,11 +32,19 @@ export function scheduleSessionStreamReconnect({
   isStillCurrent,
 }: ScheduleSessionStreamReconnectInput): void {
   clearSessionReconnectTimer(sessionId);
-  if (!isStillCurrent() || !shouldReconnectStream(sessionId)) {
+  if (!isStillCurrent()) {
     return;
   }
+  // External owners (e.g. the Agents pane) decide their own reconnect policy
+  // and must be notified even for a session the shared working/needs_input
+  // gate below would otherwise treat as not worth auto-reconnecting (an idle
+  // child waiting on a parent message never satisfies that gate). Internal
+  // callers keep the existing gated auto-reconnect behavior unchanged.
   if (options?.reconnectOwner === "external") {
     options.onReconnectNeeded?.();
+    return;
+  }
+  if (!shouldReconnectStream(sessionId)) {
     return;
   }
 

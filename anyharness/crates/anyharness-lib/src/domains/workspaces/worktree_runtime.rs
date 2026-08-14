@@ -6,7 +6,9 @@ use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::domains::workspaces::setup_runtime::{WorkspaceSetupError, WorkspaceSetupRuntime};
 use crate::domains::workspaces::types::CreateWorktreeResult;
 use crate::domains::workspaces::worktree_checkout::WorktreeCheckoutMode;
-use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
+use crate::domains::workspaces::worktree_names::{
+    WorktreeNameConflictError, WorktreeNameConflictPolicy,
+};
 use crate::origin::OriginContext;
 
 #[derive(Clone)]
@@ -40,6 +42,8 @@ pub struct CreateWorktreeWorkflowResult {
 pub enum CreateWorktreeWorkflowError {
     #[error("worktree create task failed: {0}")]
     CreateTaskFailed(tokio::task::JoinError),
+    #[error(transparent)]
+    NameConflict(#[from] WorktreeNameConflictError),
     #[error(transparent)]
     Create(anyhow::Error),
     #[error(transparent)]
@@ -89,7 +93,12 @@ impl WorkspaceWorktreeRuntime {
         })
         .await
         .map_err(CreateWorktreeWorkflowError::CreateTaskFailed)?
-        .map_err(CreateWorktreeWorkflowError::Create)?;
+        .map_err(
+            |error| match error.downcast::<WorktreeNameConflictError>() {
+                Ok(conflict) => CreateWorktreeWorkflowError::NameConflict(conflict),
+                Err(error) => CreateWorktreeWorkflowError::Create(error),
+            },
+        )?;
 
         let setup_started = if let Some(script) = normalized_setup_script(input.setup_script) {
             self.setup_runtime

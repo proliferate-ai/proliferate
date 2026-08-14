@@ -145,6 +145,8 @@ pub struct WorkspaceMobilityArchive {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub session_link_completions: Vec<MobilitySessionLinkCompletionRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub session_link_completion_deliveries: Vec<MobilitySessionLinkCompletionDeliveryRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub session_link_wake_schedules: Vec<MobilitySessionLinkWakeScheduleRecord>,
 }
 
@@ -234,6 +236,8 @@ pub struct MobilitySessionLinkRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by_tool_call_id: Option<String>,
     pub created_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subagent_closed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub closed_at: Option<String>,
 }
@@ -258,6 +262,42 @@ pub struct MobilitySessionLinkCompletionRecord {
 #[serde(rename_all = "camelCase")]
 pub struct MobilitySessionLinkWakeScheduleRecord {
     pub session_link_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MobilitySessionLinkCompletionDeliveryRecord {
+    pub delivery_id: String,
+    pub completion_id: String,
+    pub session_link_id: String,
+    pub parent_session_id: String,
+    pub child_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subagent_public_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub child_turn_id: String,
+    pub child_last_event_seq: i64,
+    pub outcome: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assistant_text: Option<String>,
+    pub notification_text: String,
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_prompt_seq: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_turn_id: Option<String>,
+    #[serde(default)]
+    pub attempt_count: i64,
+    pub next_attempt_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_error_code: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enqueued_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delivered_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -293,6 +333,8 @@ pub struct MobilityPendingPromptRecord {
     pub content_parts: Vec<ContentPart>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocks_json: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance_json: Option<String>,
     pub queued_at: String,
 }
 
@@ -345,4 +387,31 @@ pub struct MobilitySessionRawNotificationRecord {
     pub timestamp: String,
     pub notification_kind: String,
     pub payload_json: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MobilityPendingPromptRecord, WorkspaceMobilityArchive};
+
+    #[test]
+    fn older_archives_default_completion_deliveries_and_prompt_provenance() {
+        let archive: WorkspaceMobilityArchive = serde_json::from_value(serde_json::json!({
+            "sourceWorkspacePath": "/source",
+            "repoRootPath": "/source",
+            "baseCommitSha": "abc123",
+            "files": []
+        }))
+        .expect("decode older archive");
+        assert!(archive.session_link_completion_deliveries.is_empty());
+
+        let prompt: MobilityPendingPromptRecord = serde_json::from_value(serde_json::json!({
+            "sessionId": "parent-1",
+            "seq": 7,
+            "promptId": "subagent_completion:delivery-1",
+            "text": "Subagent update",
+            "queuedAt": "2026-08-11T00:00:00Z"
+        }))
+        .expect("decode older pending prompt");
+        assert!(prompt.provenance_json.is_none());
+    }
 }

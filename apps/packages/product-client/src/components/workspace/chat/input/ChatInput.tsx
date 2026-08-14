@@ -46,7 +46,6 @@ import {
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { ChatInputControlRow } from "./ChatInputControlRow";
-import { ConnectedWorkspaceStatusComposerControl } from "./workspace-status/ConnectedWorkspaceStatusComposerControl";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ComposerBlockedStatusLine } from "./ComposerBlockedStatusLine";
 import { ComposerBlockedControlRow } from "./ComposerBlockedControlRow";
@@ -409,17 +408,6 @@ export function ChatInput({
                     isEmpty={effectiveIsEmpty}
                     onSubmit={onSubmit}
                     onCancel={onCancel}
-                    statusControl={suppressActiveSessionState
-                      ? undefined
-                      : (
-                        <ConnectedWorkspaceStatusComposerControl
-                          advancedControls={
-                            buildComposerSessionControlGroups(effectiveSessionConfigControls)
-                              .overflowControls
-                          }
-                          agentKind={effectiveAgentKind}
-                        />
-                      )}
                   />
                 </>
               )}

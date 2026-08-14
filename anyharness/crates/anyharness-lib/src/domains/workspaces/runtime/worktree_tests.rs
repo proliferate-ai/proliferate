@@ -1,16 +1,67 @@
 use std::fs;
 use std::path::Path;
 
-use crate::adapters::git::WorktreeBaseFetch;
+use crate::adapters::git::{GitService, WorktreeBaseFetch};
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::domains::workspaces::worktree_checkout::WorktreeCheckoutMode;
-use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
+use crate::domains::workspaces::worktree_names::{
+    WorktreeNameConflictError, WorktreeNameConflictPolicy,
+};
 use crate::origin::OriginContext;
 use crate::persistence::Db;
 
 use super::test_support::{
     assert_git_command_fails, git_stdout, init_repo, make_runtime, run_git, TempDirGuard,
 };
+
+#[test]
+fn strict_post_create_races_are_classified_from_owner_state_without_parsing_stderr() {
+    let source = TempDirGuard::new("runtime-worktree-strict-race-source");
+    let branch_target = TempDirGuard::new("runtime-worktree-strict-race-branch-target");
+    let path_target = TempDirGuard::new("runtime-worktree-strict-race-path-target");
+    let runtime_home = TempDirGuard::new("runtime-worktree-strict-race-home");
+    let _ = fs::remove_dir_all(branch_target.path());
+    init_repo(source.path());
+
+    let db = Db::open_in_memory().expect("open db");
+    let runtime = make_runtime(&db, runtime_home.path());
+    runtime
+        .create_workspace(&source.path().display().to_string())
+        .expect("register source workspace");
+
+    let raced_branch = "feature/exact-race";
+    assert!(!GitService::ref_exists(
+        source.path(),
+        &format!("refs/heads/{raced_branch}")
+    ));
+    // Simulate another creator winning after the strict preflight check but
+    // before Git's failed create returns. The diagnostic deliberately has no
+    // conflict words, proving classification does not parse stderr.
+    run_git(source.path(), ["branch", raced_branch]);
+    let branch_error = runtime.classify_strict_worktree_create_failure(
+        WorktreeCheckoutMode::NewBranch,
+        &source.path().display().to_string(),
+        branch_target.path(),
+        raced_branch,
+        anyhow::anyhow!("opaque git failure at /private/runtime/branch-target"),
+    );
+    assert!(matches!(
+        branch_error.downcast_ref::<WorktreeNameConflictError>(),
+        Some(WorktreeNameConflictError::Branch { .. })
+    ));
+
+    let path_error = runtime.classify_strict_worktree_create_failure(
+        WorktreeCheckoutMode::NewBranch,
+        &source.path().display().to_string(),
+        path_target.path(),
+        "feature/no-branch-conflict",
+        anyhow::anyhow!("opaque git failure at /private/runtime/path-target"),
+    );
+    assert!(matches!(
+        path_error.downcast_ref::<WorktreeNameConflictError>(),
+        Some(WorktreeNameConflictError::Path { .. })
+    ));
+}
 
 #[test]
 fn create_worktree_fetches_and_bases_on_advanced_remote_branch() {

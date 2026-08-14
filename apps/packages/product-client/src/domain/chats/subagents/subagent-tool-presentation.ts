@@ -1,5 +1,7 @@
 import type { ToolCallItem, ToolResultTextContentPart } from "@anyharness/sdk";
 import type { SubagentExecutionState } from "./subagent-launch";
+import type { AgentOperationsReceiptPresentation } from "../tools/agent-operations-tool-presentation";
+import { isWorkspaceSubagentCreationAction } from "../tools/agent-operations-tool-presentation";
 
 type ToolNameOwner = Pick<ToolCallItem, "nativeToolName">;
 
@@ -90,7 +92,71 @@ export function isSubagentCreationAction(item: ToolNameOwner): boolean {
   // Only the product-MCP create_subagent receipt collapses into a creation
   // group. Native subagent calls stay as durable transcript items throughout
   // their lifecycle and must not match here.
-  return normalizeToolName(item.nativeToolName) === "mcp__subagents__create_subagent";
+  return normalizeToolName(item.nativeToolName) === "mcp__subagents__create_subagent"
+    || isWorkspaceSubagentCreationAction(item as Pick<ToolCallItem, "nativeToolName" | "rawInput">);
+}
+
+/**
+ * Temporary compatibility adapter for durable transcripts produced by the old
+ * subagents MCP. PR10 removes the old owner; until then its send/close records
+ * use the same renderer as workspace agent operations. Wake scheduling is
+ * intentionally not adapted: H7 removed that public behavior.
+ */
+export function deriveLegacySubagentAgentOperationsReceipt(
+  item: ToolCallItem,
+): AgentOperationsReceiptPresentation | null {
+  const normalizedToolName = normalizeToolName(item.nativeToolName);
+  if (
+    normalizedToolName !== "mcp__subagents__send_subagent_message"
+    && normalizedToolName !== "mcp__subagents__close_subagent"
+  ) {
+    return null;
+  }
+
+  const input = isRecord(item.rawInput) ?? {};
+  const output = isRecord(item.rawOutput) ?? parseToolResultJsonObject(item) ?? {};
+  const sessionId =
+    readStringField(output, "childSessionId")
+    ?? readStringField(input, "childSessionId")
+    ?? readStringField(input, "child_session_id");
+  const title =
+    readStringField(output, "label")
+    ?? readStringField(input, "label")
+    ?? "Subagent";
+  const action = normalizedToolName === "mcp__subagents__send_subagent_message"
+    ? "send_message" as const
+    : "close_subagent" as const;
+  const isRunning = item.status === "in_progress";
+  const isFailed = item.status === "failed";
+
+  return {
+    source: "legacy_subagents",
+    action,
+    actionLabel: action === "send_message"
+      ? (isRunning ? "Sending message to" : isFailed ? "Message to agent failed" : "Sent message to")
+      : (isRunning ? "Closing subagent" : isFailed ? "Failed to close subagent" : "Closed subagent"),
+    targetAgentId:
+      readStringField(input, "subagentId")
+      ?? readStringField(input, "subagent_id"),
+    agent: {
+      runtimeId: null,
+      sessionId,
+      workspaceId: null,
+      parentSessionId: null,
+      title,
+      role: "subagent",
+      presentationStatus: action === "close_subagent" && !isFailed ? "closed" : null,
+      executionStatus: action === "close_subagent" && !isFailed ? "closed" : null,
+      closed: action === "close_subagent" && !isFailed,
+    },
+    workspace: null,
+    message:
+      readStringField(input, "message")
+      ?? readStringField(input, "text"),
+    detailLabel: null,
+    isRunning,
+    isFailed,
+  };
 }
 
 export function deriveSubagentMcpReceiptPresentation(

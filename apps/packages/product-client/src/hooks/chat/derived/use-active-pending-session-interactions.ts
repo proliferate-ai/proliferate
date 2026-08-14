@@ -70,17 +70,29 @@ export function useActivePendingPrompts(): readonly PendingPromptEntry[] {
   }, [outboxQueuedPrompts, runtimePendingPrompts, sessionIntents]);
 }
 
-export function useActivePendingInteractionState(): {
+export interface PendingInteractionState {
   pendingInteractions: readonly PendingInteraction[];
   pendingApproval: ReturnType<typeof selectPendingApprovalInteraction>;
   pendingUserInput: ReturnType<typeof selectPendingUserInputInteraction>;
   pendingMcpElicitation: ReturnType<typeof selectPendingMcpElicitationInteraction>;
   primaryPendingInteraction: ReturnType<typeof selectPrimaryPendingInteraction>;
-} {
-  const activeSessionId = useActiveSessionId();
+}
+
+export function useActivePendingInteractionState(): PendingInteractionState {
+  return usePendingInteractionStateForSession(useActiveSessionId());
+}
+
+/**
+ * Explicit-session variant for surfaces rendering a non-active session
+ * (Agents-pane detail transcript). Shares the selector body with the active
+ * wrapper so subscribers keep the same structural-sharing behavior.
+ */
+export function usePendingInteractionStateForSession(
+  sessionId: string | null,
+): PendingInteractionState {
   return useSessionTranscriptStore(useShallow((state) => {
-    const transcript = activeSessionId
-      ? state.entriesById[activeSessionId]?.transcript ?? null
+    const transcript = sessionId
+      ? state.entriesById[sessionId]?.transcript ?? null
       : null;
     return {
       pendingInteractions: transcript?.pendingInteractions ?? EMPTY_PENDING_INTERACTIONS,

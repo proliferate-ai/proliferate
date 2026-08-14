@@ -8,29 +8,29 @@ import {
   appendHistoryTail,
   replaySessionHistory,
 } from "#product/lib/domain/sessions/stream/stream-state";
-import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
+  logLatency,
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
+  uniqueMeasurementOperationIds,
 } from "#product/lib/infra/measurement/measurement-port";
 import type {
   MeasurementOperationId,
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
-import { uniqueMeasurementOperationIds } from "#product/lib/infra/measurement/measurement-port";
 import { fetchSessionHistory } from "#product/lib/access/anyharness/session-runtime";
-import { useLinkedSessionMounting } from "#product/hooks/chat/workflows/subagents/use-linked-session-mounting";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import {
   applyHistoryStateToStores,
   finishStandaloneApplyOperation,
   isSessionHistoryTimeoutAbort,
-  markSessionApplyForNextCommit,
+  recordHistoryApplyStepMetrics,
   recordHistoryStateCounts,
   resolveHistoryApplyOperationKind,
   SESSION_APPLY_MEASUREMENT_SURFACES,
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
 } from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
+import { useSessionHistorySubagentAuthority } from "#product/hooks/sessions/lifecycle/use-session-history-subagent-authority";
 
 export interface SessionHistoryHydrationOptions {
   afterSeq?: number;
@@ -52,7 +52,7 @@ export function useSessionHistoryHydration() {
   const host = useProductHost();
   const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
-  const { mountSubagentChildrenFromEvents } = useLinkedSessionMounting();
+  const reconcileHydratedSubagents = useSessionHistorySubagentAuthority();
 
   const rehydrateSessionSlotFromHistory = useCallback(async (
     sessionId: string,
@@ -146,23 +146,30 @@ export function useSessionHistoryHydration() {
           },
           events,
         );
-        for (const operationId of historyApplyOperationIds) {
-          recordMeasurementMetric({
-            type: "reducer",
-            category: "session.events.list",
-            operationId,
-            durationMs: performance.now() - replayStartedAt,
-            count: events.length,
-          });
-          recordMeasurementWorkflowStep({
-            operationId,
-            step: "session.history.replay",
-            startedAt: replayStartedAt,
-            count: events.length,
-          });
-        }
+        recordHistoryApplyStepMetrics(historyApplyOperationIds, {
+          phase: "replay",
+          startedAt: replayStartedAt,
+          count: events.length,
+        });
 
         if (!nextState.applied) {
+          const mountStartedAt = performance.now();
+          if (!await reconcileHydratedSubagents({
+            sessionId,
+            parentSessionId: currentSlot.materializedSessionId ?? sessionId,
+            workspaceId: currentSlot.workspaceId,
+            events,
+            transcript: currentSlot.transcript,
+            requestHeaders: options?.requestHeaders,
+            isCurrent: options?.isCurrent,
+          })) {
+            finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
+            return false;
+          }
+          recordHistoryApplyStepMetrics(historyApplyOperationIds, {
+            phase: "mount_subagents",
+            startedAt: mountStartedAt,
+          });
           finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed");
           logLatency("session.history.rehydrate.noop", {
             sessionId,
@@ -179,19 +186,10 @@ export function useSessionHistoryHydration() {
           transcript: nextState.state.transcript,
           reconcileEnvelopes: events,
         });
-        for (const operationId of historyApplyOperationIds) {
-          recordMeasurementMetric({
-            type: "store",
-            category: "session.events.list",
-            operationId,
-            durationMs: performance.now() - storeStartedAt,
-          });
-          recordMeasurementWorkflowStep({
-            operationId,
-            step: "session.history.store",
-            startedAt: storeStartedAt,
-          });
-        }
+        recordHistoryApplyStepMetrics(historyApplyOperationIds, {
+          phase: "store",
+          startedAt: storeStartedAt,
+        });
         for (const operationId of historyApplyOperationIds) {
           recordHistoryStateCounts(
             operationId,
@@ -201,19 +199,22 @@ export function useSessionHistoryHydration() {
           );
         }
         const mountStartedAt = performance.now();
-        mountSubagentChildrenFromEvents(
-          currentSlot.workspaceId,
+        if (!await reconcileHydratedSubagents({
+          sessionId,
+          parentSessionId: currentSlot.materializedSessionId ?? sessionId,
+          workspaceId: currentSlot.workspaceId,
           events,
-          options?.requestHeaders,
-        );
-        for (const operationId of historyApplyOperationIds) {
-          recordMeasurementWorkflowStep({
-            operationId,
-            step: "session.history.mount_subagents",
-            startedAt: mountStartedAt,
-          });
-          markSessionApplyForNextCommit(operationId);
+          transcript: nextState.state.transcript,
+          requestHeaders: options?.requestHeaders,
+          isCurrent: options?.isCurrent,
+        })) {
+          finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
+          return false;
         }
+        recordHistoryApplyStepMetrics(historyApplyOperationIds, {
+          phase: "mount_subagents",
+          startedAt: mountStartedAt,
+        });
         finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed", true);
         logLatency("session.history.rehydrate.success", {
           sessionId,
@@ -231,21 +232,11 @@ export function useSessionHistoryHydration() {
           currentSlot.events,
         );
         const nextState = replaySessionHistory(sessionId, replacementEvents);
-        for (const operationId of historyApplyOperationIds) {
-          recordMeasurementMetric({
-            type: "reducer",
-            category: "session.events.list",
-            operationId,
-            durationMs: performance.now() - replayStartedAt,
-            count: events.length,
-          });
-          recordMeasurementWorkflowStep({
-            operationId,
-            step: "session.history.replay",
-            startedAt: replayStartedAt,
-            count: events.length,
-          });
-        }
+        recordHistoryApplyStepMetrics(historyApplyOperationIds, {
+          phase: "replay",
+          startedAt: replayStartedAt,
+          count: events.length,
+        });
 
         const storeStartedAt = performance.now();
         applyHistoryStateToStores(sessionId, currentSlot, {
@@ -253,19 +244,10 @@ export function useSessionHistoryHydration() {
           transcript: nextState.transcript,
           reconcileEnvelopes: events,
         });
-        for (const operationId of historyApplyOperationIds) {
-          recordMeasurementMetric({
-            type: "store",
-            category: "session.events.list",
-            operationId,
-            durationMs: performance.now() - storeStartedAt,
-          });
-          recordMeasurementWorkflowStep({
-            operationId,
-            step: "session.history.store",
-            startedAt: storeStartedAt,
-          });
-        }
+        recordHistoryApplyStepMetrics(historyApplyOperationIds, {
+          phase: "store",
+          startedAt: storeStartedAt,
+        });
         for (const operationId of historyApplyOperationIds) {
           recordHistoryStateCounts(
             operationId,
@@ -275,19 +257,22 @@ export function useSessionHistoryHydration() {
           );
         }
         const mountStartedAt = performance.now();
-        mountSubagentChildrenFromEvents(
-          currentSlot.workspaceId,
+        if (!await reconcileHydratedSubagents({
+          sessionId,
+          parentSessionId: currentSlot.materializedSessionId ?? sessionId,
+          workspaceId: currentSlot.workspaceId,
           events,
-          options?.requestHeaders,
-        );
-        for (const operationId of historyApplyOperationIds) {
-          recordMeasurementWorkflowStep({
-            operationId,
-            step: "session.history.mount_subagents",
-            startedAt: mountStartedAt,
-          });
-          markSessionApplyForNextCommit(operationId);
+          transcript: nextState.transcript,
+          requestHeaders: options?.requestHeaders,
+          isCurrent: options?.isCurrent,
+        })) {
+          finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
+          return false;
         }
+        recordHistoryApplyStepMetrics(historyApplyOperationIds, {
+          phase: "mount_subagents",
+          startedAt: mountStartedAt,
+        });
         finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed", true);
         logLatency("session.history.rehydrate.success", {
           sessionId,
@@ -304,40 +289,21 @@ export function useSessionHistoryHydration() {
         ? mergeFetchedHistoryWithNewerEvents(events, currentSlot.events)
         : events;
       const nextState = replaySessionHistory(sessionId, replacementEvents);
-      for (const operationId of historyApplyOperationIds) {
-        recordMeasurementMetric({
-          type: "reducer",
-          category: "session.events.list",
-          operationId,
-          durationMs: performance.now() - replayStartedAt,
-          count: replacementEvents.length,
-        });
-        recordMeasurementWorkflowStep({
-          operationId,
-          step: "session.history.replay",
-          startedAt: replayStartedAt,
-          count: replacementEvents.length,
-        });
-      }
+      recordHistoryApplyStepMetrics(historyApplyOperationIds, {
+        phase: "replay",
+        startedAt: replayStartedAt,
+        count: replacementEvents.length,
+      });
       const storeStartedAt = performance.now();
       applyHistoryStateToStores(sessionId, currentSlot, {
         events: nextState.events,
         transcript: nextState.transcript,
         reconcileEnvelopes: replacementEvents,
       });
-      for (const operationId of historyApplyOperationIds) {
-        recordMeasurementMetric({
-          type: "store",
-          category: "session.events.list",
-          operationId,
-          durationMs: performance.now() - storeStartedAt,
-        });
-        recordMeasurementWorkflowStep({
-          operationId,
-          step: "session.history.store",
-          startedAt: storeStartedAt,
-        });
-      }
+      recordHistoryApplyStepMetrics(historyApplyOperationIds, {
+        phase: "store",
+        startedAt: storeStartedAt,
+      });
       for (const operationId of historyApplyOperationIds) {
         recordHistoryStateCounts(
           operationId,
@@ -347,19 +313,22 @@ export function useSessionHistoryHydration() {
         );
       }
       const mountStartedAt = performance.now();
-      mountSubagentChildrenFromEvents(
-        currentSlot.workspaceId,
-        replacementEvents,
-        options?.requestHeaders,
-      );
-      for (const operationId of historyApplyOperationIds) {
-        recordMeasurementWorkflowStep({
-          operationId,
-          step: "session.history.mount_subagents",
-          startedAt: mountStartedAt,
-        });
-        markSessionApplyForNextCommit(operationId);
+      if (!await reconcileHydratedSubagents({
+        sessionId,
+        parentSessionId: currentSlot.materializedSessionId ?? sessionId,
+        workspaceId: currentSlot.workspaceId,
+        events: replacementEvents,
+        transcript: nextState.transcript,
+        requestHeaders: options?.requestHeaders,
+        isCurrent: options?.isCurrent,
+      })) {
+        finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
+        return false;
       }
+      recordHistoryApplyStepMetrics(historyApplyOperationIds, {
+        phase: "mount_subagents",
+        startedAt: mountStartedAt,
+      });
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed", true);
       logLatency("session.history.rehydrate.success", {
         sessionId,
@@ -385,7 +354,7 @@ export function useSessionHistoryHydration() {
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "error_sanitized");
       return false;
     }
-  }, [mountSubagentChildrenFromEvents, ssh, cloudClient]);
+  }, [cloudClient, reconcileHydratedSubagents, ssh]);
 
   return {
     rehydrateSessionSlotFromHistory,

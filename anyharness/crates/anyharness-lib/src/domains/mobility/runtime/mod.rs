@@ -91,6 +91,23 @@ impl MobilityRuntime {
             .export_workspace_archive(workspace_id, options)
     }
 
+    #[cfg(test)]
+    pub(crate) fn export_workspace_archive_with_snapshot_hooks(
+        &self,
+        workspace_id: &str,
+        options: &WorkspaceMobilityExportOptions,
+        before_snapshot: impl FnOnce(),
+        after_session_rows: impl FnOnce(),
+    ) -> Result<WorkspaceMobilityArchiveData, MobilityError> {
+        self.mobility_service
+            .export_workspace_archive_with_snapshot_hooks(
+                workspace_id,
+                options,
+                before_snapshot,
+                after_session_rows,
+            )
+    }
+
     async fn active_terminals_async(&self, workspace_id: &str) -> Vec<TerminalRecord> {
         self.terminal_service
             .list_terminals(workspace_id)
