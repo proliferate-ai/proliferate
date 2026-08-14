@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { describeAuthIssue } from "./describe-auth-issue";
+import { describeAuthIssue } from "#product/lib/domain/auth/describe-auth-issue";
 
 describe("describeAuthIssue", () => {
   it("describes an unreachable deployment", () => {
