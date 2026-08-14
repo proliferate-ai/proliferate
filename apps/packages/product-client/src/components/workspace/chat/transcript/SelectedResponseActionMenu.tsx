@@ -1,8 +1,11 @@
 import { useEffect, useRef } from "react";
 import { MessageCircleQuestion } from "#product/primitives/icons/core";
-import { MessageSquarePlus, MessagesSquare } from "#product/primitives/icons/product";
+import { MessageSquarePlus } from "#product/primitives/icons/product";
 import { CHAT_SELECTED_RESPONSE_ACTIONS } from "#product/copy/chat/chat-copy";
-import type { SelectedResponseSelection } from "#product/domain/chats/transcript/selected-response-context";
+import type {
+  SelectedResponseAnchorRect,
+  SelectedResponseSelection,
+} from "#product/domain/chats/transcript/selected-response-context";
 import { useSelectedResponseActions } from "#product/hooks/chat/workflows/use-selected-response-actions";
 import {
   DropdownMenu,
@@ -11,12 +14,19 @@ import {
   DropdownMenuTrigger,
 } from "#product/primitives/DropdownMenu";
 
-export type SelectedResponseAction = "add-to-chat" | "more-details" | "side-chat";
+export type SelectedResponseAction = "add-to-chat" | "more-details";
+
+export interface SelectedResponsePendingAnnotation {
+  id: string;
+  ordinal: number;
+  anchorRect: SelectedResponseAnchorRect;
+}
 
 export function ConnectedSelectedResponseActionMenu({
   selection,
   focusRequestNonce,
   onDismiss,
+  onAnnotationAdded,
 }: {
   selection: SelectedResponseSelection;
   focusRequestNonce: number;
@@ -24,16 +34,18 @@ export function ConnectedSelectedResponseActionMenu({
     clearNativeSelection?: boolean;
     restoreTranscriptFocus?: boolean;
   }) => void;
+  onAnnotationAdded: (annotation: SelectedResponsePendingAnnotation) => void;
 }) {
   const actions = useSelectedResponseActions();
   const handleAction = (action: SelectedResponseAction) => {
     onDismiss({ clearNativeSelection: true });
     if (action === "add-to-chat") {
-      actions.addToChat(selection.text);
-    } else if (action === "more-details") {
-      actions.moreDetails(selection.text);
+      const added = actions.addToChat(selection.text);
+      if (added) {
+        onAnnotationAdded({ ...added, anchorRect: selection.anchorRect });
+      }
     } else {
-      actions.askInSideChat(selection.text);
+      actions.moreDetails(selection.text);
     }
   };
 
@@ -93,11 +105,6 @@ export function SelectedResponseActionMenu({
       action: "more-details",
       label: CHAT_SELECTED_RESPONSE_ACTIONS.moreDetails,
       icon: MessageCircleQuestion,
-    },
-    {
-      action: "side-chat",
-      label: CHAT_SELECTED_RESPONSE_ACTIONS.askInSideChat,
-      icon: MessagesSquare,
     },
   ];
 
@@ -167,6 +174,13 @@ export function SelectedResponseActionMenu({
         loop
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
+        // WKWebView runs the native mouse-down focus fixup even though the
+        // items cancel pointerdown, parking focus outside this portalled menu
+        // mid-press; left alone, the focus-outside close unmounts the menu
+        // before pointerup so no item can ever activate. Outside-click
+        // dismissal is already owned by the transcript's own pointerdown
+        // handling, so the focus-outside path carries no other duty here.
+        onFocusOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => {
           event.preventDefault();
           onEscape();
@@ -177,10 +191,23 @@ export function SelectedResponseActionMenu({
           return (
             <DropdownMenuItem
               key={item.action}
-              // Keeps the window text selection alive: focus must not move on
-              // pointer-down or the selection collapses before `onAction` can
-              // read it.
+              // Keeps focus from moving on pointer-down. WebKit still clears
+              // the window selection natively on menu-item mouse-down despite
+              // the cancel; the selectionchange guard in
+              // chat-transcript-selection-handlers.ts keeps the menu alive
+              // through that so the click can finish (`onAction` reads the
+              // captured text, not the live selection).
               onPointerDown={(event) => event.preventDefault()}
+              // Hover is a focus move too: Radix focuses the hovered item on
+              // pointer-move and the content on pointer-leave, and WebKit
+              // clears the window selection whenever focus moves — which nulls
+              // the published selection and unmounts this menu before a click
+              // can land. Cancelling both makes Radix skip those focus moves;
+              // the classes below supply the hover ink that focus-driven
+              // `data-highlighted` would have painted.
+              onPointerMove={(event) => event.preventDefault()}
+              onPointerLeave={(event) => event.preventDefault()}
+              className="hover:bg-hover hover:[&_svg]:opacity-100"
               onSelect={() => onAction(item.action)}
             >
               <Icon aria-hidden="true" className="icon-paired" />
