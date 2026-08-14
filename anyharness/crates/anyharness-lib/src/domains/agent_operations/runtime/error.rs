@@ -228,7 +228,9 @@ pub fn agent_operations_outcome_class(code: &str) -> &'static str {
         | "SESSION_CONTROLLED_BY_WORKFLOW"
         | "WORKSPACE_MUTATION_BLOCKED"
         | "WORKSPACE_LIVE_SESSION_BLOCKED"
-        | "WORKSPACE_RETIRED" => "denied",
+        | "WORKSPACE_ARCHIVED"
+        | "SUBAGENT_FANOUT_LIMIT"
+        | "WORKSPACE_SINGLE_SESSION" => "denied",
         "AGENT_NOT_FOUND"
         | "AGENT_CALLER_NOT_FOUND"
         | "SESSION_NOT_FOUND"
@@ -564,6 +566,32 @@ mod tests {
         assert_eq!(
             agent_operations_outcome_class(AgentOperationsError::SubagentOpenRequired.code()),
             "denied"
+        );
+        let archived = AgentOperationsError::Create(CreateOrdinaryAgentSessionError::Access(
+            WorkspaceAccessError::WorkspaceArchived("ws_1".into()),
+        ));
+        assert_eq!(
+            agent_operations_outcome_class(archived.code()),
+            "denied",
+            "an archived workspace is a caller-caused refusal, not a generic failure"
+        );
+        let fanout_limit = AgentOperationsError::CreateSubagent(
+            CreateSubagentAgentSessionError::Relationship(CreateSessionLinkError::FanoutLimit),
+        );
+        assert_eq!(
+            agent_operations_outcome_class(fanout_limit.code()),
+            "denied",
+            "hitting the subagent fanout limit is a caller-caused refusal"
+        );
+        let single_session = AgentOperationsError::Create(CreateOrdinaryAgentSessionError::Create(
+            CreateAndStartSessionError::WorkspaceSingleSession {
+                session_id: "session_1".into(),
+            },
+        ));
+        assert_eq!(
+            agent_operations_outcome_class(single_session.code()),
+            "denied",
+            "a workspace already at its single-session limit is a caller-caused refusal"
         );
         assert_eq!(
             agent_operations_outcome_class(AgentOperationsError::AgentNotFound.code()),
