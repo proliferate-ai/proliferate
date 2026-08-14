@@ -3,8 +3,8 @@ import { IconButton } from "#product/primitives/IconButton";
 import { SplitPanelLeft } from "#product/primitives/icons/app-shell";
 import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
 import {
+  MAC_WINDOW_CONTROLS_INSET_CLASS,
   useHasMacWindowControls,
-  useMacWindowControlsInsetClass,
 } from "#product/hooks/ui/layout/use-mac-window-controls";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import {
@@ -32,12 +32,14 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   const desktopHost = useProductHost().desktop !== null;
   // Only a host that actually paints macOS window buttons reserves room for
   // them; on Web (and non-Mac desktop) the inset was dead space above the nav.
-  const macWindowControlsInsetClass = useMacWindowControlsInsetClass();
+  const hasMacWindowControls = useHasMacWindowControls();
+  const macWindowControlsInsetClass = hasMacWindowControls
+    ? MAC_WINDOW_CONTROLS_INSET_CLASS
+    : "";
   // Vibrancy only exists behind the window on macOS Desktop (apply_vibrancy
   // in src-tauri/src/lib.rs); elsewhere a translucent sidebar would expose
   // the bare window fill. Matches WorkspaceShellSidebar so the main sidebar
   // keeps one look across route shells.
-  const hasMacWindowControls = useHasMacWindowControls();
   const glassSidebar = transparentChromeEnabled && hasMacWindowControls;
   const chromeClasses = resolveStandardWorkspaceChromeClasses({
     transparent: transparentChromeEnabled,
