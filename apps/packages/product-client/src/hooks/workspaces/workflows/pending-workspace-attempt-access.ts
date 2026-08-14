@@ -1,10 +1,14 @@
-import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import {
+  buildPendingWorkspaceUiKey,
+  type PendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   isPendingWorkspaceEntryAttended,
 } from "#product/lib/domain/workspaces/creation/pending-attention";
 import {
   pendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function getPendingWorkspaceEntry(
@@ -38,6 +42,29 @@ export function isAttemptAttended(attemptId: string): boolean {
       selectedWorkspaceId: selection.selectedWorkspaceId,
     },
   );
+}
+
+/**
+ * Attend an attempt that is running unattended: its sidebar row and its failure
+ * toast both point here, and both can fire long after selection moved on, so
+ * the entry is re-read by id rather than captured (PRO-230).
+ */
+export function enterPendingWorkspaceAttemptShell(
+  attemptId: string,
+  options?: { initialActiveSessionId?: string | null },
+): boolean {
+  const entry = getPendingWorkspaceEntry(attemptId);
+  if (!entry) {
+    return false;
+  }
+  const workspaceUiKey = buildPendingWorkspaceUiKey(entry);
+  const initialActiveSessionId = options?.initialActiveSessionId
+    ?? useSessionDirectoryStore.getState().sessionIdsByWorkspaceId[workspaceUiKey]?.[0]
+    ?? null;
+  useSessionSelectionStore.getState().enterPendingWorkspaceShell(entry, {
+    initialActiveSessionId,
+  });
+  return true;
 }
 
 /** Patching by attempt id cannot clobber another attempt's entry. */

@@ -15,6 +15,9 @@ import {
   logLatency,
   startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
+import {
+  notifyUnattendedPendingWorkspaceFailure,
+} from "#product/hooks/workspaces/workflows/pending-workspace-failure-notice";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 
 export interface WorkspaceEntryFinalizationResult {
@@ -179,4 +182,5 @@ export function failPendingWorkspaceEntry(
     request: input.overrides?.request ?? input.entry.request,
     setupScript: input.overrides?.setupScript ?? input.entry.setupScript,
   });
+  notifyUnattendedPendingWorkspaceFailure(input.entry, input.errorMessage);
 }

@@ -4,6 +4,7 @@ import {
   resolveLaunchIntentPendingWorkspaceId,
   type ChatLaunchRetryMode,
 } from "#product/lib/domain/chat/launch/launch-intent";
+import { launchIntent } from "#product/lib/domain/chat/launch/launch-intent-registry";
 import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
 import type {
   PendingWorkspaceEntry,
@@ -77,23 +78,23 @@ export function markHomeLaunchIntentMaterializedFromPendingWorkspace(
   intentId: string,
   launchAttemptId?: string | null,
 ): void {
-  const activeIntent = useChatLaunchIntentStore.getState().activeIntent;
-  if (!activeIntent || activeIntent.id !== intentId) {
+  const intent = launchIntent(useChatLaunchIntentStore.getState(), intentId);
+  if (!intent) {
     return;
   }
 
   const pendingEntry = resolveLaunchPendingWorkspaceEntry(launchAttemptId);
-  const workspaceId = resolveLaunchIntentPendingWorkspaceId(activeIntent, pendingEntry);
+  const workspaceId = resolveLaunchIntentPendingWorkspaceId(intent, pendingEntry);
   // The attempt id is known as soon as the pending entry exists, well before
   // (or even absent) a resolved workspaceId — scoping on it here is what lets
   // a launch that fails before materializing still own only its own shell
   // instead of overriding every workspace's transcript (PRO-230).
-  const attemptId = resolveLaunchIntentPendingAttemptId(activeIntent, pendingEntry);
+  const attemptId = resolveLaunchIntentPendingAttemptId(intent, pendingEntry);
   if (!workspaceId && !attemptId) {
     return;
   }
 
-  useChatLaunchIntentStore.getState().markMaterializedIfActive(intentId, {
+  useChatLaunchIntentStore.getState().markMaterialized(intentId, {
     ...(workspaceId ? { workspaceId } : {}),
     ...(attemptId ? { attemptId } : {}),
   });
@@ -103,18 +104,18 @@ export function homeLaunchFailureRetryMode(
   intentId: string,
   launchAttemptId?: string | null,
 ): ChatLaunchRetryMode {
-  const activeIntent = useChatLaunchIntentStore.getState().activeIntent;
-  if (!activeIntent || activeIntent.id !== intentId) {
+  const intent = launchIntent(useChatLaunchIntentStore.getState(), intentId);
+  if (!intent) {
     return "safe";
   }
 
-  const retryMode = resolveChatLaunchRetryMode(activeIntent);
+  const retryMode = resolveChatLaunchRetryMode(intent);
   if (retryMode !== "safe") {
     return retryMode;
   }
 
   return resolveLaunchIntentPendingWorkspaceId(
-    activeIntent,
+    intent,
     resolveLaunchPendingWorkspaceEntry(launchAttemptId),
   )
     ? "manual_after_workspace"

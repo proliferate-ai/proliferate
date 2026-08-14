@@ -19,7 +19,17 @@ import {
 } from "#product/stores/sessions/session-intent-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+  upsertPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import {
+  MAX_CONCURRENT_PENDING_LAUNCHES,
+} from "#product/lib/domain/workspaces/creation/launch-concurrency";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import {
+  launchIntents,
+} from "#product/lib/domain/chat/launch/launch-intent-registry";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
@@ -124,7 +134,7 @@ describe("useHomeNextLaunch", () => {
     useSessionTranscriptStore.getState().clearEntries();
     useSessionIntentStore.getState().clear();
     useSessionSelectionStore.getState().clearSelection();
-    useChatLaunchIntentStore.setState({ activeIntent: null });
+    useChatLaunchIntentStore.setState({ intentsById: {}, intentOrder: [] });
     useDeferredHomeLaunchStore.setState({ launches: {} });
   });
 
@@ -270,7 +280,8 @@ describe("useHomeNextLaunch", () => {
     // in the catch block (the pre-fix behavior), attemptId would still be
     // null at this point.
     expect(mintedAttemptId).not.toBeNull();
-    expect(useChatLaunchIntentStore.getState().activeIntent?.attemptId).toBe(mintedAttemptId);
+    expect(launchIntents(useChatLaunchIntentStore.getState())[0]?.attemptId)
+      .toBe(mintedAttemptId);
 
     putSessionRecord(createEmptySessionRecord(sessionId, "codex", {
       workspaceId: buildPendingWorkspaceUiKey(pendingEntry!),
@@ -306,7 +317,7 @@ describe("useHomeNextLaunch", () => {
     expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
     expect(mocks.createThreadFromSelection).not.toHaveBeenCalled();
     expect(mocks.navigate).not.toHaveBeenCalled();
-    expect(useChatLaunchIntentStore.getState().activeIntent).toBeNull();
+    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual([]);
     expect(mocks.showToast).toHaveBeenCalledWith(
       "Cowork threads are available in the Desktop app.",
       "info",
@@ -350,7 +361,7 @@ describe("useHomeNextLaunch", () => {
 
     expect(succeeded).toBe(false);
     expect(mocks.showErrorToast).not.toHaveBeenCalled();
-    expect(useChatLaunchIntentStore.getState().activeIntent).toBeNull();
+    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual([]);
     // The attempt id is minted by the caller, so intent and prompt routing can
     // scope to this attempt instead of whichever entry happens to be attended.
     expect(mocks.createThreadFromSelection.mock.calls[0]?.[0]?.attemptId)
@@ -396,7 +407,7 @@ describe("useHomeNextLaunch", () => {
     expect(mocks.createLocalWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createCloudWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
-    expect(useChatLaunchIntentStore.getState().activeIntent).toBeNull();
+    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual([]);
     expect(mocks.showToast).toHaveBeenCalledWith(
       "Local launch targets are available in the Desktop app.",
       "info",
@@ -431,4 +442,191 @@ describe("useHomeNextLaunch", () => {
     expect(mocks.createLocalWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();
   });
+  const worktreeTarget = {
+    kind: "worktree" as const,
+    repoRootId: "repo-root-1",
+    sourceWorkspaceId: null,
+    baseBranch: "main",
+    defaultBranch: "main",
+  };
+
+  function pendingWorktreeEntry(attemptId: string) {
+    return buildSubmittingPendingWorkspaceEntry({
+      attemptId,
+      selectedWorkspaceId: null,
+      source: "worktree-created",
+      displayName: attemptId,
+      repoLabel: "repo",
+      baseBranchName: "main",
+      request: {
+        kind: "worktree",
+        input: {
+          repoRootId: "repo-root-1",
+          sourceWorkspaceId: null,
+          baseBranch: "main",
+          defaultBranch: "main",
+        },
+      },
+    });
+  }
+
+  it("runs two Home launches at once, each prompt routed to its own attempt (PRO-230)", async () => {
+    const finishByAttemptId = new Map<string, () => void>();
+    const entriesByAttemptId = new Map<
+      string,
+      ReturnType<typeof buildSubmittingPendingWorkspaceEntry>
+    >();
+    const sessionIdFor = (attemptId: string) => `client-session:codex:${attemptId}`;
+
+    mocks.createWorktreeAndEnterWithResult.mockImplementation((_input, options) => {
+      const attemptId: string = options.attemptId;
+      const sessionId = sessionIdFor(attemptId);
+      const entry = pendingWorktreeEntry(attemptId);
+      entriesByAttemptId.set(attemptId, entry);
+      putSessionRecord(createEmptySessionRecord(sessionId, "codex", {
+        workspaceId: buildPendingWorkspaceUiKey(entry),
+        materializedSessionId: null,
+        modelId: "gpt-5.4",
+      }));
+      // Entering the shell moves selection onto the newest attempt, exactly as
+      // a second submit does in production. The first launch must keep routing
+      // to its own attempt anyway.
+      useSessionSelectionStore.getState().enterPendingWorkspaceShell(entry, {
+        initialActiveSessionId: sessionId,
+      });
+      return new Promise((resolve) => {
+        finishByAttemptId.set(attemptId, () => resolve({
+          workspaceId: `workspace-${attemptId}`,
+          projectedSessionId: sessionId,
+        }));
+      });
+    });
+
+    const { result } = renderHomeNextLaunch();
+
+    let firstLaunch: Promise<boolean> = Promise.resolve(false);
+    let secondLaunch: Promise<boolean> = Promise.resolve(false);
+    await act(async () => {
+      firstLaunch = result.current.launch({
+        text: "first prompt",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: worktreeTarget,
+      });
+      await Promise.resolve();
+      secondLaunch = result.current.launch({
+        text: "second prompt",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: worktreeTarget,
+      });
+      await Promise.resolve();
+    });
+
+    // Both launches are live at the same time: neither the store nor the
+    // pending registry collapsed them into one.
+    const liveIntents = launchIntents(useChatLaunchIntentStore.getState());
+    expect(liveIntents).toHaveLength(2);
+    expect(new Set(liveIntents.map((intent) => intent.text)))
+      .toEqual(new Set(["first prompt", "second prompt"]));
+    const attemptIds = [...finishByAttemptId.keys()];
+    expect(attemptIds).toHaveLength(2);
+    expect(
+      useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder,
+    ).toEqual(attemptIds);
+
+    let results: boolean[] = [];
+    await act(async () => {
+      for (const finish of finishByAttemptId.values()) {
+        finish();
+      }
+      results = await Promise.all([firstLaunch, secondLaunch]);
+    });
+
+    expect(results).toEqual([true, true]);
+    const [firstAttemptId, secondAttemptId] = attemptIds as [string, string];
+    expect(
+      getPromptOutboxEntriesForSession(sessionIdFor(firstAttemptId))
+        .map((entry) => entry.text),
+    ).toEqual(["first prompt"]);
+    expect(
+      getPromptOutboxEntriesForSession(sessionIdFor(secondAttemptId))
+        .map((entry) => entry.text),
+    ).toEqual(["second prompt"]);
+    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual([]);
+  });
+
+  it("refuses a launch past the concurrent cap without minting an intent", async () => {
+    let registry = EMPTY_PENDING_WORKSPACE_REGISTRY;
+    for (let index = 0; index < MAX_CONCURRENT_PENDING_LAUNCHES; index += 1) {
+      registry = upsertPendingWorkspaceEntry(registry, pendingWorktreeEntry(`attempt-${index}`));
+    }
+    useSessionSelectionStore.setState({ pendingWorkspaces: registry });
+
+    const { result } = renderHomeNextLaunch();
+    let succeeded = true;
+    await act(async () => {
+      succeeded = await result.current.launch({
+        text: "one too many",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: worktreeTarget,
+      });
+    });
+
+    expect(succeeded).toBe(false);
+    expect(mocks.showToast).toHaveBeenCalledWith(
+      "Too many workspaces starting. Wait for one to finish.",
+      "info",
+    );
+    expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();
+    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual([]);
+    expect(
+      useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder,
+    ).toHaveLength(MAX_CONCURRENT_PENDING_LAUNCHES);
+  });
+
+  it("collapses the same prompt submitted twice but starts two different ones", async () => {
+    mocks.createWorktreeAndEnterWithResult.mockImplementation((_input, options) => {
+      const attemptId: string = options.attemptId;
+      const sessionId = sessionIdForAttempt(attemptId);
+      const entry = pendingWorktreeEntry(attemptId);
+      putSessionRecord(createEmptySessionRecord(sessionId, "codex", {
+        workspaceId: buildPendingWorkspaceUiKey(entry),
+        materializedSessionId: null,
+        modelId: "gpt-5.4",
+      }));
+      useSessionSelectionStore.getState().enterPendingWorkspaceShell(entry, {
+        initialActiveSessionId: sessionId,
+      });
+      return Promise.resolve({ workspaceId: `workspace-${attemptId}`, projectedSessionId: sessionId });
+    });
+
+    const { result } = renderHomeNextLaunch();
+    const submit = (text: string) => result.current.launch({
+      text,
+      modelSelection: { kind: "codex" as const, modelId: "gpt-5.4" },
+      modeId: null,
+      launchControlValues: {},
+      target: worktreeTarget,
+    });
+
+    await act(async () => {
+      await submit("ship it");
+      await submit("ship it");
+    });
+    expect(mocks.createWorktreeAndEnterWithResult).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await submit("ship something else");
+    });
+    expect(mocks.createWorktreeAndEnterWithResult).toHaveBeenCalledTimes(2);
+  });
 });
+
+function sessionIdForAttempt(attemptId: string) {
+  return `client-session:codex:${attemptId}`;
+}

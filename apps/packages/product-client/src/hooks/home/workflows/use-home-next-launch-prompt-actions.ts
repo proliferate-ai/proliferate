@@ -13,9 +13,9 @@ export function useHomeNextLaunchPromptActions() {
   const { promptSession } = useSessionPromptWorkflow();
   const { createSessionWithResolvedConfig } = useSessionCreationActions();
   const markLaunchIntentMaterialized =
-    useChatLaunchIntentStore((state) => state.markMaterializedIfActive);
+    useChatLaunchIntentStore((state) => state.markMaterialized);
   const markLaunchIntentSendAttempted =
-    useChatLaunchIntentStore((state) => state.markSendAttemptedIfActive);
+    useChatLaunchIntentStore((state) => state.markSendAttempted);
 
   const createFreshSession = useCallback(async (input: {
     workspaceId: string;

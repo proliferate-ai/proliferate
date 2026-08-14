@@ -291,7 +291,7 @@ export function useSessionCreationActions() {
       });
       if (options.launchIntentId) {
         useChatLaunchIntentStore.getState()
-          .markSendAttemptedIfActive(options.launchIntentId);
+          .markSendAttempted(options.launchIntentId);
       }
     }
 
