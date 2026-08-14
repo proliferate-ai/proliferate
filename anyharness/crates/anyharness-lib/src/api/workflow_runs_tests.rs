@@ -214,7 +214,7 @@ use crate::domains::workflows::session_extension::WorkflowRunSessionExtension;
 use crate::domains::workflows::store::WorkflowRunStore;
 use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
 use crate::domains::workspaces::model::{
-    WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
     WorkspaceSurface,
 };
 use crate::domains::workspaces::store::WorkspaceAccessStore;
@@ -600,11 +600,6 @@ async fn extension_completion_terminalizes_run_and_step() {
         origin: None,
         creator_context: None,
         lifecycle_state: WorkspaceLifecycleState::Active,
-        cleanup_state: WorkspaceCleanupState::None,
-        cleanup_operation: None,
-        cleanup_error_message: None,
-        cleanup_failed_at: None,
-        cleanup_attempted_at: None,
         archived_head_sha: None,
         archived_branch: None,
         archived_at: None,

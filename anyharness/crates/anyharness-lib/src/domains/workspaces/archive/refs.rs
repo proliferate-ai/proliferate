@@ -135,6 +135,63 @@ pub fn delete_for(repo_root: &Path, workspace_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Purge-only companion to [`delete_for`]: clears `workspace_id`'s three named
+/// archive refs AND every `rescue/<workspace_id>-<sha>/` name it holds, across
+/// every generation it ever rescued. `delete_for` is R2's frozen, pinned
+/// 2-arg verb — it deliberately leaves `rescue/` alone for the
+/// archived-row lifecycle (that's the whole point of a rescue name: forensic
+/// evidence a still-archived row's failed post-restore verify can be
+/// inspected against). Purge is the one caller for whom "the row is gone
+/// forever" also means "there is nothing left to rescue", so this is a NEW
+/// verb rather than a change to `delete_for`'s contract.
+pub fn delete_all_for(repo_root: &Path, workspace_id: &str) -> anyhow::Result<()> {
+    delete_for(repo_root, workspace_id)?;
+    for ref_name in rescue_ref_names_for(repo_root, workspace_id)? {
+        delete_ref_if_present(repo_root, &ref_name)?;
+    }
+    Ok(())
+}
+
+/// Every full `rescue/<workspace_id>-<sha>/archive-{heads,worktrees,indexes}`
+/// ref name currently held for `workspace_id`. Shares the same
+/// last-hyphen-splits-the-sha parsing as [`rescue_ids_for_repo`] (workspace
+/// ids contain hyphens themselves, so the sha suffix — not the id — is the
+/// fixed-shape half of the directory component).
+fn rescue_ref_names_for(repo_root: &Path, workspace_id: &str) -> anyhow::Result<Vec<String>> {
+    let output = Command::new("git")
+        .current_dir(repo_root)
+        .args([
+            "for-each-ref",
+            "--format=%(refname)",
+            &format!("{ARCHIVE_REFS_PREFIX}rescue/"),
+        ])
+        .output()
+        .map_err(|error| anyhow::anyhow!("git for-each-ref failed to run: {error}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git for-each-ref failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let prefix = format!("{ARCHIVE_REFS_PREFIX}rescue/");
+    let mut names = Vec::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Some(rest) = line.strip_prefix(&prefix) else {
+            continue;
+        };
+        let Some((directory, _leaf)) = rest.split_once('/') else {
+            continue;
+        };
+        let Some((id, _sha)) = directory.rsplit_once('-') else {
+            continue;
+        };
+        if id == workspace_id {
+            names.push(line.to_string());
+        }
+    }
+    Ok(names)
+}
+
 /// Copy `workspace_id`'s current archive refs, verbatim (same raw OIDs, same
 /// shapes), into the `rescue/<id>-<head_sha>/` family — R4's failed
 /// post-restore verify's only writer. Exempt from every sweep duty; dies

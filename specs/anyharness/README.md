@@ -116,7 +116,7 @@ The engine depends on capabilities that are not themselves the engine.
 
 ```text
 domains/workspaces
-  workspace identity, paths, materialization, cleanup, retention
+  workspace identity, paths, materialization, archive/unarchive, purge/deletion
 
 domains/agents
   agent catalog, readiness meaning, install/readiness policy
@@ -312,7 +312,7 @@ which guide to read and where the code belongs.
 | SQLite engine setup, migrations, DB pool wiring | `anyharness-lib/src/persistence/**` | `persistence/**` | [persistence-database.md](persistence-database.md) |
 | Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/domains/sessions/**` | `domains/sessions/**` | [domains.md](domains.md), [session-engine.md](session-engine.md), [sessions.md](sessions.md) |
 | Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/live/sessions/**`, with remaining ACP helpers in `anyharness-lib/src/integrations/acp/**` | `live/sessions/**` plus `integrations/acp/**` | [live-runtime.md](live-runtime.md), [session-engine.md](session-engine.md), [acp.md](acp.md) |
-| Workspace durable lifecycle, materialization, purge/retire, retention policy | `anyharness-lib/src/domains/workspaces/**` | `domains/workspaces/**` | [domains.md](domains.md), [workspaces.md](workspaces.md) |
+| Workspace durable lifecycle, materialization, archive/unarchive, purge/deletion | `anyharness-lib/src/domains/workspaces/**` | `domains/workspaces/**` | [domains.md](domains.md), [workspaces.md](workspaces.md) |
 | Agent catalog, install, credentials, readiness, supported-agent meaning | `anyharness-lib/src/domains/agents/**` | `domains/agents/**` | [domains.md](domains.md), [../codebase/platforms/product/agent-distribution.md](../codebase/platforms/product/agent-distribution.md), [agents.md](agents.md) |
 | Provider CLI install/probe/path/version mechanics | `anyharness-lib/src/integrations/agent_cli/**`, provider-specific ACP code | `integrations/agent_cli/**` | [integrations.md](integrations.md), [harnesses.md](harnesses.md) |
 | Provider-specific behavior such as Claude/Codex extension support or live controls | `anyharness-lib/src/live/sessions/**`, `anyharness-lib/src/integrations/acp/**`, `specs/anyharness/harnesses/**` | harness doc plus owning live runtime/integration module | [harnesses.md](harnesses.md), provider doc under `harnesses/**` |

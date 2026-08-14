@@ -8,8 +8,8 @@ use super::operations::snapshot::WorkspaceSnapshot;
 use super::operations::worktree_branch;
 use super::operations::worktree_restore::WorktreeRestoreOptions;
 use super::operations::{
-    branches, clone, commit, commit_all, diff, diff_files, push, revert_patches, scratch, snapshot,
-    snapshot_restore, staging, status, status_summary, worktrees,
+    branches, clone, commit, commit_all, diff, diff_files, gc, push, revert_patches, scratch,
+    snapshot, snapshot_restore, staging, status, status_summary, worktrees,
 };
 use super::types::{
     CommitError, GitBranch, GitBranchDiffFilesResult, GitDiffError, GitDiffResult, GitDiffScope,
@@ -206,6 +206,13 @@ impl GitService {
 
     pub fn stdout_result(repo_root: &Path, args: &[&str]) -> anyhow::Result<String> {
         worktrees::stdout_result(repo_root, args)
+    }
+
+    /// Purge's (and the sweep's) guarded `git gc`: `gc.worktreePruneExpire=never`
+    /// plus a spelled-out `1.hour.ago` prune window. See `operations::gc` for
+    /// why both literal strings are load-bearing.
+    pub fn gc_repo(repo_root: &Path) -> anyhow::Result<()> {
+        gc::gc_repo(repo_root)
     }
 
     pub fn switch_to_existing_branch(

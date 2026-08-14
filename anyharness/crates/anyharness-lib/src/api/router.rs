@@ -110,14 +110,6 @@ pub fn build_router(state: AppState) -> Router {
             post(workspaces_restore::restore_worktree),
         )
         .route(
-            "/workspaces/{workspace_id}/purge/preflight",
-            get(workspaces_purge::purge_workspace_preflight),
-        )
-        .route(
-            "/workspaces/{workspace_id}/purge/retry",
-            post(workspaces_purge::retry_purge_workspace),
-        )
-        .route(
             "/worktrees/inventory",
             get(worktrees::get_worktree_inventory),
         )

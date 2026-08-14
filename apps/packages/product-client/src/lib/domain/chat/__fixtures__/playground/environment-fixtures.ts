@@ -100,7 +100,6 @@ function worktreeRow({
           branch,
           kind: "worktree",
           lifecycleState: "active",
-          cleanupState: "none",
           sessionCount: sessions,
         },
       ]

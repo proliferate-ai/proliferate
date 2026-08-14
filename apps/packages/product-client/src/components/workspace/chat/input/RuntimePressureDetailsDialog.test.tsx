@@ -14,7 +14,6 @@ function actions(): Actions {
   return {
     pruneOrphan: vi.fn(),
     purgeWorkspace: vi.fn(),
-    retryPurge: vi.fn(),
   };
 }
 

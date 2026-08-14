@@ -14,11 +14,6 @@ pub struct WorkspaceRecord {
     pub origin: Option<OriginContext>,
     pub creator_context: Option<WorkspaceCreatorContext>,
     pub lifecycle_state: WorkspaceLifecycleState,
-    pub cleanup_state: WorkspaceCleanupState,
-    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
-    pub cleanup_error_message: Option<String>,
-    pub cleanup_failed_at: Option<String>,
-    pub cleanup_attempted_at: Option<String>,
     pub archived_head_sha: Option<String>,
     pub archived_branch: Option<String>,
     pub archived_at: Option<String>,
@@ -87,20 +82,6 @@ pub enum WorkspaceLifecycleState {
     Archived,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkspaceCleanupState {
-    None,
-    Pending,
-    Complete,
-    Failed,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkspaceCleanupOperation {
-    Retire,
-    Purge,
-}
-
 #[derive(Debug, thiserror::Error)]
 #[error("unknown workspace {field}: {value}")]
 pub struct WorkspaceModelError {
@@ -144,26 +125,6 @@ impl WorkspaceLifecycleState {
     }
 }
 
-impl WorkspaceCleanupState {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::Pending => "pending",
-            Self::Complete => "complete",
-            Self::Failed => "failed",
-        }
-    }
-}
-
-impl WorkspaceCleanupOperation {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Retire => "retire",
-            Self::Purge => "purge",
-        }
-    }
-}
-
 impl TryFrom<&str> for WorkspaceKind {
     type Error = WorkspaceModelError;
 
@@ -200,32 +161,6 @@ impl TryFrom<&str> for WorkspaceLifecycleState {
     }
 }
 
-impl TryFrom<&str> for WorkspaceCleanupState {
-    type Error = WorkspaceModelError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "none" => Ok(Self::None),
-            "pending" => Ok(Self::Pending),
-            "complete" => Ok(Self::Complete),
-            "failed" => Ok(Self::Failed),
-            _ => Err(WorkspaceModelError::unknown("cleanup_state", value)),
-        }
-    }
-}
-
-impl TryFrom<&str> for WorkspaceCleanupOperation {
-    type Error = WorkspaceModelError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "retire" => Ok(Self::Retire),
-            "purge" => Ok(Self::Purge),
-            _ => Err(WorkspaceModelError::unknown("cleanup_operation", value)),
-        }
-    }
-}
-
 macro_rules! impl_workspace_display {
     ($ty:ty) => {
         impl std::fmt::Display for $ty {
@@ -239,8 +174,6 @@ macro_rules! impl_workspace_display {
 impl_workspace_display!(WorkspaceKind);
 impl_workspace_display!(WorkspaceSurface);
 impl_workspace_display!(WorkspaceLifecycleState);
-impl_workspace_display!(WorkspaceCleanupState);
-impl_workspace_display!(WorkspaceCleanupOperation);
 
 #[derive(Debug, Clone)]
 pub struct ResolvedGitContext {
@@ -275,11 +208,6 @@ pub(crate) fn test_workspace_record(kind: WorkspaceKind, path: &str) -> Workspac
         origin: None,
         creator_context: None,
         lifecycle_state: WorkspaceLifecycleState::Active,
-        cleanup_state: WorkspaceCleanupState::None,
-        cleanup_operation: None,
-        cleanup_error_message: None,
-        cleanup_failed_at: None,
-        cleanup_attempted_at: None,
         archived_head_sha: None,
         archived_branch: None,
         archived_at: None,

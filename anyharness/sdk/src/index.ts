@@ -154,7 +154,6 @@ export type {
   WorkspaceSurface,
   WorkspaceExecutionPhase,
   WorkspaceExecutionSummary,
-  WorkspaceCleanupOperation,
   OriginKind,
   OriginEntrypoint,
   OriginContext,
@@ -181,7 +180,6 @@ export type {
   WorkspaceRetireBlockerSeverity,
   WorkspaceRetireBlocker,
   WorkspacePurgeOutcome,
-  WorkspacePurgePreflightResponse,
   WorkspacePurgeResponse,
 } from "./types/workspaces.js";
 

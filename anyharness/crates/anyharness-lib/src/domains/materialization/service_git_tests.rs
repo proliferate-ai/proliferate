@@ -104,10 +104,7 @@ fn make_bare_origin(prefix: &str) -> Guard {
 fn make_runtime(db: &Db, home: &Path) -> WorkspaceRuntime {
     WorkspaceRuntime::new(
         WorkspaceStore::new(db.clone()),
-        WorkspaceDeleteWorkflow::new(
-            db.clone(),
-            crate::domains::sessions::deletion::SessionDeleteWorkflow::new(db.clone()),
-        ),
+        WorkspaceDeleteWorkflow::new(db.clone()),
         RepoRootService::new(RepoRootStore::new(db.clone())),
         home.to_path_buf(),
     )

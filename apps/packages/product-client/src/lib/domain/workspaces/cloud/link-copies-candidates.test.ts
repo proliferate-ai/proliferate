@@ -33,7 +33,6 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
     kind: "standard",
     lifecycleState: "active",
     surface: "desktop",
-    cleanupState: "none",
     ...overrides,
   } as unknown as Workspace;
 }

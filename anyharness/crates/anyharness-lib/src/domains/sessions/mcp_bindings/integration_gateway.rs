@@ -93,7 +93,7 @@ mod tests {
 
     use crate::domains::sessions::model::SessionRecord;
     use crate::domains::workspaces::model::{
-        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
         WorkspaceSurface,
     };
     use std::path::{Path, PathBuf};
@@ -134,11 +134,6 @@ mod tests {
             origin: None,
             creator_context: None,
             lifecycle_state: WorkspaceLifecycleState::Active,
-            cleanup_state: WorkspaceCleanupState::None,
-            cleanup_operation: None,
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
             archived_head_sha: None,
             archived_branch: None,
             archived_at: None,

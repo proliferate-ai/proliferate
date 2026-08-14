@@ -2,8 +2,7 @@ use super::WorkspaceStore;
 use crate::domains::repo_roots::test_support::seed_repo_root_1;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{
-    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-    WorkspaceRecord, WorkspaceSurface,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
 };
 use crate::origin::OriginContext;
 use crate::persistence::Db;
@@ -21,11 +20,6 @@ fn workspace_record(id: &str, kind: WorkspaceKind, path: &str) -> WorkspaceRecor
         origin: None,
         creator_context: None,
         lifecycle_state: WorkspaceLifecycleState::Active,
-        cleanup_state: WorkspaceCleanupState::None,
-        cleanup_operation: None,
-        cleanup_error_message: None,
-        cleanup_failed_at: None,
-        cleanup_attempted_at: None,
         archived_head_sha: None,
         archived_branch: None,
         archived_at: None,
@@ -144,7 +138,6 @@ fn active_path_lookup_ignores_archived_rows() {
     );
     archived.created_at = "2024-01-01T00:00:00Z".to_string();
     archived.lifecycle_state = WorkspaceLifecycleState::Archived;
-    archived.cleanup_state = WorkspaceCleanupState::Complete;
     let active = workspace_record(
         "workspace-active",
         WorkspaceKind::Worktree,
@@ -192,7 +185,6 @@ fn active_path_lookup_can_exclude_current_workspace() {
         "/tmp/workspace",
     );
     archived.lifecycle_state = WorkspaceLifecycleState::Archived;
-    archived.cleanup_state = WorkspaceCleanupState::Complete;
 
     store.insert(&current).expect("insert current workspace");
     store.insert(&sibling).expect("insert sibling workspace");
@@ -267,20 +259,17 @@ fn active_path_and_kind_lookup_excludes_current_workspace() {
 fn archived_lookup_reserves_the_path_of_every_archived_row() {
     let (_db, store) = store_with_repo_root();
 
-    // An archived row reserves its path for its lifetime, whatever its
-    // cleanup bookkeeping says: unarchive restores in place and never
-    // relocates, so a completed-cleanup row claims its path exactly like a
-    // failed-cleanup one.
+    // An archived row reserves its path for its lifetime, regardless of how
+    // it got there: unarchive restores in place and never relocates, so any
+    // archived row claims its path the same way.
     let mut complete = workspace_record(
         "workspace-complete",
         WorkspaceKind::Worktree,
         "/tmp/complete",
     );
     complete.lifecycle_state = WorkspaceLifecycleState::Archived;
-    complete.cleanup_state = WorkspaceCleanupState::Complete;
     let mut failed = workspace_record("workspace-failed", WorkspaceKind::Worktree, "/tmp/failed");
     failed.lifecycle_state = WorkspaceLifecycleState::Archived;
-    failed.cleanup_state = WorkspaceCleanupState::Failed;
     let active = workspace_record("workspace-active", WorkspaceKind::Worktree, "/tmp/active");
 
     store.insert(&complete).expect("insert complete workspace");
@@ -325,7 +314,6 @@ fn active_repo_root_listing_ignores_archived_rows() {
         "/tmp/archived",
     );
     archived.lifecycle_state = WorkspaceLifecycleState::Archived;
-    archived.cleanup_state = WorkspaceCleanupState::Complete;
     let active = workspace_record("workspace-active", WorkspaceKind::Worktree, "/tmp/active");
 
     store.insert(&archived).expect("insert archived workspace");
@@ -341,50 +329,6 @@ fn active_repo_root_listing_ignores_archived_rows() {
             .collect::<Vec<_>>(),
         vec!["workspace-active"]
     );
-}
-
-#[test]
-fn lifecycle_cleanup_update_preserves_workspace_and_persists_failure_detail() {
-    let (_db, store) = store_with_repo_root();
-
-    let workspace = workspace_record("workspace-1", WorkspaceKind::Worktree, "/tmp/workspace-1");
-    store.insert(&workspace).expect("insert workspace");
-    store
-        .update_lifecycle_cleanup_state(
-            &workspace.id,
-            WorkspaceLifecycleState::Archived,
-            WorkspaceCleanupState::Failed,
-            Some(WorkspaceCleanupOperation::Retire),
-            Some("permission denied"),
-            Some("2026-04-29T12:00:00Z"),
-            Some("2026-04-29T11:59:00Z"),
-            "2026-04-29T12:00:01Z",
-        )
-        .expect("update lifecycle cleanup");
-
-    let stored = store
-        .find_by_id(&workspace.id)
-        .expect("find workspace")
-        .expect("workspace should still exist");
-    assert_eq!(stored.lifecycle_state, WorkspaceLifecycleState::Archived);
-    assert_eq!(stored.cleanup_state, WorkspaceCleanupState::Failed);
-    assert_eq!(
-        stored.cleanup_operation,
-        Some(WorkspaceCleanupOperation::Retire)
-    );
-    assert_eq!(
-        stored.cleanup_error_message.as_deref(),
-        Some("permission denied")
-    );
-    assert_eq!(
-        stored.cleanup_failed_at.as_deref(),
-        Some("2026-04-29T12:00:00Z")
-    );
-    assert_eq!(
-        stored.cleanup_attempted_at.as_deref(),
-        Some("2026-04-29T11:59:00Z")
-    );
-    assert_eq!(stored.updated_at, "2026-04-29T12:00:01Z");
 }
 
 /// `?lifecycle=` narrows in SQL, so the tolerant read that shows an unknown

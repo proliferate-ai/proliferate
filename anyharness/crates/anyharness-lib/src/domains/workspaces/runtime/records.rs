@@ -5,8 +5,7 @@ use uuid::Uuid;
 use crate::domains::repo_roots::model::RepoRootRecord;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{
-    WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
-    WorkspaceSurface,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
 };
 use crate::domains::workspaces::resolver;
 use crate::origin::OriginContext;
@@ -34,11 +33,6 @@ pub(super) fn build_workspace_record(
         origin: Some(origin),
         creator_context,
         lifecycle_state: WorkspaceLifecycleState::Active,
-        cleanup_state: WorkspaceCleanupState::None,
-        cleanup_operation: None,
-        cleanup_error_message: None,
-        cleanup_failed_at: None,
-        cleanup_attempted_at: None,
         archived_head_sha: None,
         archived_branch: None,
         archived_at: None,

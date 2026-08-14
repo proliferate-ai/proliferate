@@ -2,48 +2,9 @@ use rusqlite::{params, Connection};
 
 use super::row::insert_workspace;
 use super::WorkspaceStore;
-use crate::domains::workspaces::model::{
-    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceLifecycleState, WorkspaceRecord,
-};
+use crate::domains::workspaces::model::WorkspaceRecord;
 
 impl WorkspaceStore {
-    pub fn update_lifecycle_cleanup_state(
-        &self,
-        workspace_id: &str,
-        lifecycle_state: WorkspaceLifecycleState,
-        cleanup_state: WorkspaceCleanupState,
-        cleanup_operation: Option<WorkspaceCleanupOperation>,
-        cleanup_error_message: Option<&str>,
-        cleanup_failed_at: Option<&str>,
-        cleanup_attempted_at: Option<&str>,
-        updated_at: &str,
-    ) -> anyhow::Result<()> {
-        self.db.with_conn(|conn| {
-            conn.execute(
-                "UPDATE workspaces
-                 SET lifecycle_state = ?2,
-                     cleanup_state = ?3,
-                     cleanup_operation = ?4,
-                     cleanup_error_message = ?5,
-                     cleanup_failed_at = ?6,
-                     cleanup_attempted_at = ?7,
-                     updated_at = ?8
-                 WHERE id = ?1",
-                params![
-                    workspace_id,
-                    lifecycle_state.as_str(),
-                    cleanup_state.as_str(),
-                    cleanup_operation.map(WorkspaceCleanupOperation::as_str),
-                    cleanup_error_message,
-                    cleanup_failed_at,
-                    cleanup_attempted_at,
-                    updated_at,
-                ],
-            )?;
-            Ok(())
-        })
-    }
-
     /// Flip a row to archived and record the snapshot it can be restored from.
     /// The first code path in the product that writes an archived row: R1's
     /// migration wrote them in raw SQL, so this, [`Self::mark_active`], and
@@ -169,6 +130,13 @@ impl WorkspaceStore {
     pub fn delete_by_id(&self, workspace_id: &str) -> anyhow::Result<()> {
         self.db
             .with_tx(|conn| delete_workspace_row_in_tx(conn, workspace_id))
+    }
+
+    /// Named surface for purge's row-dies-last delete (ADR §1: `require_workspace`
+    /// and `find_workspace` are R4's half of this named CRUD surface;
+    /// `delete_workspace` is R5's). Wraps [`Self::delete_by_id`] verbatim.
+    pub fn delete_workspace(&self, workspace_id: &str) -> anyhow::Result<()> {
+        self.delete_by_id(workspace_id)
     }
 }
 

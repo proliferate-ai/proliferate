@@ -393,9 +393,11 @@ impl WorkspaceArchiveService {
         };
         for repo_root in pending {
             let target = repo_root.clone();
-            let result =
-                tokio::task::spawn_blocking(move || GitService::stdout_result(&target, &["gc"]))
-                    .await;
+            // `GitService::gc_repo`, never a bare `git gc`: the guarded call
+            // carries `gc.worktreePruneExpire=never` and a spelled-out
+            // `1.hour.ago` prune window, which is the whole point of deferring
+            // this to a moment nothing else is claiming the repo root.
+            let result = tokio::task::spawn_blocking(move || GitService::gc_repo(&target)).await;
             match result {
                 Ok(Ok(_)) => tracing::info!(
                     repo_root = %repo_root.display(),

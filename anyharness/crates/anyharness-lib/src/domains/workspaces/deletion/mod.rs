@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use crate::domains::sessions::deletion::SessionDeleteWorkflow;
 use crate::persistence::Db;
+
+pub mod purge;
 
 pub trait WorkspaceDeleteParticipant: Send + Sync {
     fn delete_workspace_rows_in_tx(
@@ -11,53 +12,34 @@ pub trait WorkspaceDeleteParticipant: Send + Sync {
     ) -> rusqlite::Result<()>;
 }
 
+/// The surviving, non-purge half: workspace materialization's own cleanup
+/// path (`remove_worktree_workspace`/`park_local_workspace`), always run on a
+/// workspace already known to have zero sessions — so unlike purge's split
+/// surfaces, there is no session graph left to delete here, and this struct
+/// holds no `SessionDeleteWorkflow` of its own.
 #[derive(Clone)]
 pub struct WorkspaceDeleteWorkflow {
     db: Db,
-    session_delete_workflow: SessionDeleteWorkflow,
     participants: Vec<Arc<dyn WorkspaceDeleteParticipant>>,
 }
 
 impl WorkspaceDeleteWorkflow {
-    pub fn new(db: Db, session_delete_workflow: SessionDeleteWorkflow) -> Self {
+    pub fn new(db: Db) -> Self {
         Self {
             db,
-            session_delete_workflow,
             participants: Vec::new(),
         }
     }
 
     pub fn with_participants(
         db: Db,
-        session_delete_workflow: SessionDeleteWorkflow,
         participants: Vec<Arc<dyn WorkspaceDeleteParticipant>>,
     ) -> Self {
-        Self {
-            db,
-            session_delete_workflow,
-            participants,
-        }
+        Self { db, participants }
     }
 
     pub fn delete_workspace_record(&self, workspace_id: &str) -> anyhow::Result<()> {
         self.db.with_tx(|conn| {
-            self.delete_workspace_scoped_graph_rows_in_tx(conn, workspace_id)?;
-            crate::domains::workspaces::store::delete_workspace_row_in_tx(conn, workspace_id)?;
-            Ok(())
-        })
-    }
-
-    pub fn purge_workspace_with_sessions(&self, workspace_id: &str) -> anyhow::Result<()> {
-        self.db.with_tx(|conn| {
-            let session_ids =
-                crate::domains::sessions::store::sessions::list_session_ids_by_workspace_in_tx(
-                    conn,
-                    workspace_id,
-                )?;
-            for session_id in session_ids {
-                self.session_delete_workflow
-                    .delete_session_graph_in_tx(conn, &session_id)?;
-            }
             self.delete_workspace_scoped_graph_rows_in_tx(conn, workspace_id)?;
             crate::domains::workspaces::store::delete_workspace_row_in_tx(conn, workspace_id)?;
             Ok(())
@@ -79,5 +61,5 @@ impl WorkspaceDeleteWorkflow {
 }
 
 #[cfg(test)]
-#[path = "deletion_tests.rs"]
+#[path = "tests/mod.rs"]
 mod tests;

@@ -92,7 +92,3 @@ export function updateWorkspaceDisplayName(
 export function purgeWorkspace(connection: WorkspaceConnection, workspaceId: string) {
   return getAnyHarnessClient(connection).workspaces.purge(workspaceId);
 }
-
-export function retryPurgeWorkspace(connection: WorkspaceConnection, workspaceId: string) {
-  return getAnyHarnessClient(connection).workspaces.retryPurge(workspaceId);
-}

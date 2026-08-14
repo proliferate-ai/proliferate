@@ -8,8 +8,6 @@ import { AnyHarnessRuntime } from "../context/AnyHarnessRuntime.js";
 import { AnyHarnessWorkspace } from "../context/AnyHarnessWorkspace.js";
 import {
   anyHarnessWorkspaceDetailKey,
-  anyHarnessWorkspacePurgePreflightKey,
-  anyHarnessWorkspaceQueryKeyRoots,
 } from "../lib/query-keys.js";
 import {
   useRuntimeWorkspacesQuery,
@@ -158,15 +156,6 @@ describe("sdk-react workspace query request options", () => {
     expect(requestOptions?.signal).not.toBe(callerController.signal);
     callerController.abort("caller-cancelled");
     expect(requestOptions?.signal.aborted).toBe(true);
-  });
-
-  it("includes the purge preflight root in workspace display cancellation roots", () => {
-    const roots = anyHarnessWorkspaceQueryKeyRoots("http://runtime.test", "workspace-1")
-      .map((root) => JSON.stringify(root));
-
-    expect(roots).toContain(JSON.stringify(
-      anyHarnessWorkspacePurgePreflightKey("http://runtime.test", "workspace-1"),
-    ));
   });
 
   it("keeps a cloud workspace key stable and free of resolved gateway credentials", async () => {

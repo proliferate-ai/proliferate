@@ -243,10 +243,7 @@ async fn invalid_managed_root_fails_closed_without_fallback() {
     let db = Db::open_in_memory().expect("db");
     let workspace_runtime = WorkspaceRuntime::new(
         WorkspaceStore::new(db.clone()),
-        WorkspaceDeleteWorkflow::new(
-            db.clone(),
-            crate::domains::sessions::deletion::SessionDeleteWorkflow::new(db.clone()),
-        ),
+        WorkspaceDeleteWorkflow::new(db.clone()),
         RepoRootService::new(RepoRootStore::new(db.clone())),
         bogus_home.to_path_buf(),
     );

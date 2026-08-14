@@ -1,7 +1,5 @@
 use anyharness_contract::v1::{
-    PruneOrphanWorktreeRequest,
-    WorkspaceCleanupOperation as ContractWorkspaceCleanupOperation,
-    WorkspaceCleanupState as ContractWorkspaceCleanupState, WorkspaceKind as ContractWorkspaceKind,
+    PruneOrphanWorktreeRequest, WorkspaceKind as ContractWorkspaceKind,
     WorkspaceLifecycleState as ContractWorkspaceLifecycleState, WorkspaceRetireBlocker,
     WorktreeGitStatusState as ContractWorktreeGitStatusState,
     WorktreeGitStatusSummary as ContractWorktreeGitStatusSummary,
@@ -16,10 +14,9 @@ use axum::{extract::State, Json};
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::workspaces::inventory::{
-    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-    WorktreeGitStatusState, WorktreeGitStatusSummary, WorktreeInventory, WorktreeInventoryAction,
-    WorktreeInventoryRow, WorktreeInventoryState, WorktreeInventoryWorkspaceSummary,
-    WorktreeStorageEstimate,
+    WorkspaceKind, WorkspaceLifecycleState, WorktreeGitStatusState, WorktreeGitStatusSummary,
+    WorktreeInventory, WorktreeInventoryAction, WorktreeInventoryRow, WorktreeInventoryState,
+    WorktreeInventoryWorkspaceSummary, WorktreeStorageEstimate,
 };
 
 #[utoipa::path(
@@ -90,10 +87,6 @@ fn worktree_inventory_row_to_contract(row: WorktreeInventoryRow) -> ContractWork
         git_status: row.git_status.map(worktree_git_status_to_contract),
         storage: worktree_storage_to_contract(row.storage),
         blockers: Vec::<WorkspaceRetireBlocker>::new(),
-        cleanup_operation: row
-            .cleanup_operation
-            .map(workspace_cleanup_operation_to_contract),
-        cleanup_state: row.cleanup_state.map(workspace_cleanup_state_to_contract),
         available_actions: row
             .available_actions
             .into_iter()
@@ -147,10 +140,6 @@ fn worktree_inventory_workspace_to_contract(
         id: workspace.id,
         kind: workspace_kind_to_contract(workspace.kind),
         lifecycle_state: workspace_lifecycle_state_to_contract(workspace.lifecycle_state),
-        cleanup_state: workspace_cleanup_state_to_contract(workspace.cleanup_state),
-        cleanup_operation: workspace
-            .cleanup_operation
-            .map(workspace_cleanup_operation_to_contract),
         display_name: workspace.display_name,
         branch: workspace.branch,
         session_count: workspace.session_count,
@@ -176,7 +165,6 @@ fn worktree_inventory_action_to_contract(
         WorktreeInventoryAction::DeleteWorkspaceHistory => {
             ContractWorktreeInventoryAction::DeleteWorkspaceHistory
         }
-        WorktreeInventoryAction::RetryPurge => ContractWorktreeInventoryAction::RetryPurge,
         WorktreeInventoryAction::DeleteOrphanCheckout => {
             ContractWorktreeInventoryAction::DeleteOrphanCheckout
         }
@@ -199,22 +187,3 @@ fn workspace_lifecycle_state_to_contract(
     }
 }
 
-fn workspace_cleanup_state_to_contract(
-    state: WorkspaceCleanupState,
-) -> ContractWorkspaceCleanupState {
-    match state {
-        WorkspaceCleanupState::None => ContractWorkspaceCleanupState::None,
-        WorkspaceCleanupState::Pending => ContractWorkspaceCleanupState::Pending,
-        WorkspaceCleanupState::Complete => ContractWorkspaceCleanupState::Complete,
-        WorkspaceCleanupState::Failed => ContractWorkspaceCleanupState::Failed,
-    }
-}
-
-fn workspace_cleanup_operation_to_contract(
-    operation: WorkspaceCleanupOperation,
-) -> ContractWorkspaceCleanupOperation {
-    match operation {
-        WorkspaceCleanupOperation::Retire => ContractWorkspaceCleanupOperation::Retire,
-        WorkspaceCleanupOperation::Purge => ContractWorkspaceCleanupOperation::Purge,
-    }
-}

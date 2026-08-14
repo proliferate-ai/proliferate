@@ -123,13 +123,6 @@ export function anyHarnessRuntimeWorkspacesKey(
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "workspaces"] as const;
 }
 
-export function anyHarnessWorkspacePurgePreflightKey(
-  cacheScopeKey: string | null | undefined,
-  workspaceId: string | null | undefined,
-) {
-  return [...anyHarnessWorkspaceKey(cacheScopeKey, workspaceId), "purge", "preflight"] as const;
-}
-
 export function anyHarnessWorktreesInventoryKey(
   runtimeUrl: string | null | undefined,
   cacheScopeKey: string | null | undefined,
@@ -540,7 +533,6 @@ export function anyHarnessWorkspaceQueryKeyRoots(
   return [
     anyHarnessWorkspaceKey(cacheScopeKey, workspaceId),
     anyHarnessWorkspaceMobilityKey(cacheScopeKey, workspaceId),
-    anyHarnessWorkspacePurgePreflightKey(cacheScopeKey, workspaceId),
     anyHarnessSessionsKey(cacheScopeKey, workspaceId),
     anyHarnessSessionScopeKey(cacheScopeKey, workspaceId),
     anyHarnessPlansKey(cacheScopeKey, workspaceId),

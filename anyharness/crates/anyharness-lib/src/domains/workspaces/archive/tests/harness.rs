@@ -154,9 +154,9 @@ impl Harness {
                 // that backfill silently untestable.
                 conn.execute(
                     "INSERT INTO workspaces (
-                        id, kind, repo_root_id, path, surface, lifecycle_state, cleanup_state,
+                        id, kind, repo_root_id, path, surface, lifecycle_state,
                         display_name, original_branch, current_branch, created_at, updated_at
-                     ) VALUES (?1, ?2, ?3, ?4, 'standard', 'active', 'none', ?1, ?1, ?1, ?5, ?5)",
+                     ) VALUES (?1, ?2, ?3, ?4, 'standard', 'active', ?1, ?1, ?1, ?5, ?5)",
                     rusqlite::params![id, kind, repo_root_id, path, now],
                 )?;
                 Ok(())

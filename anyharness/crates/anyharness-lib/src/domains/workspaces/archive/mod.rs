@@ -20,8 +20,10 @@
 //!
 //! `rt.` in the ADR's pseudocode is shorthand; there is no runtime god object
 //! and domains are barred from importing `AppState`. This follows the house
-//! orchestrator pattern (`domains/workspaces/purge.rs`): a service struct with
-//! injected dependencies, constructed in the `app/workspaces.rs` wiring family.
+//! orchestrator pattern shared with its sibling, `WorkspacePurgeService`
+//! (`domains/workspaces/deletion/purge.rs`, R5): a service struct with
+//! injected dependencies, constructed directly in `app/mod.rs` — there is no
+//! separate wiring family struct for this pair (R5 retired `app/workspaces.rs`).
 
 pub mod archive;
 pub mod inflight;
@@ -199,6 +201,15 @@ impl WorkspaceArchiveService {
         &self.inflight
     }
 
+    /// A snapshot of the deferred-gc set, for purge's gc-guard suite only:
+    /// the unconditional-enqueue assertion has nothing else to read, since
+    /// the sweep's runner is the only other consumer and running it just to
+    /// observe the enqueue would test the runner, not the enqueue.
+    #[cfg(test)]
+    pub(crate) fn deferred_gc_for_tests(&self) -> BTreeSet<PathBuf> {
+        self.deferred_gc.lock().expect("deferred gc set poisoned").clone()
+    }
+
     /// Ask for a repo root's gc to run once nothing is working in it. R5's purge
     /// is the enqueuer; the sweep's tick is the runner.
     pub fn defer_gc(&self, repo_root: PathBuf) {
@@ -206,6 +217,16 @@ impl WorkspaceArchiveService {
             .lock()
             .expect("deferred gc set poisoned")
             .insert(repo_root);
+    }
+
+    /// Whether a repo root currently has an archive/unarchive flow claimed
+    /// against it. Purge's inline gc guard reads this BEFORE running a gc of
+    /// its own, so a gc never races the worktree removal or ref rewrite of a
+    /// sibling workspace's archive/unarchive in the same repo root; it always
+    /// still enqueues into `deferred_gc` regardless of the answer, so a busy
+    /// root's reclaim is deferred rather than dropped.
+    pub fn repo_root_busy(&self, repo_root: &std::path::Path) -> bool {
+        self.inflight.repo_root_busy(repo_root)
     }
 
     /// Resolve a workspace row's repo root into a path. `WorkspaceRecord`

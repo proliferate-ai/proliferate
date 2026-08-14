@@ -4,7 +4,7 @@ use std::sync::Arc;
 use super::*;
 use crate::domains::terminals::model::{CreateTerminalOptions, TerminalPurpose};
 use crate::domains::workspaces::model::{
-    WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
     WorkspaceSurface,
 };
 use crate::domains::workspaces::store::WorkspaceStore;
@@ -36,11 +36,6 @@ fn insert_test_workspace(db: &Db, id: &str, path: &str) {
             origin: None,
             creator_context: None,
             lifecycle_state: WorkspaceLifecycleState::Active,
-            cleanup_state: WorkspaceCleanupState::None,
-            cleanup_operation: None,
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
             archived_head_sha: None,
             archived_branch: None,
             archived_at: None,

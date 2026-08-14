@@ -80,10 +80,7 @@ impl Harness {
         std::fs::create_dir_all(&runtime_home).expect("runtime home");
         let workspace_runtime = Arc::new(WorkspaceRuntime::new(
             WorkspaceStore::new(db.clone()),
-            WorkspaceDeleteWorkflow::new(
-                db.clone(),
-                crate::domains::sessions::deletion::SessionDeleteWorkflow::new(db.clone()),
-            ),
+            WorkspaceDeleteWorkflow::new(db.clone()),
             RepoRootService::new(RepoRootStore::new(db.clone())),
             runtime_home,
         ));

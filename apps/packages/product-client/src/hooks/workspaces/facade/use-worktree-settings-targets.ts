@@ -38,7 +38,6 @@ export function useWorktreeSettingsTargets() {
   const {
     pruneOrphan: pruneOrphanWorktree,
     purgeWorkspaceHistory,
-    retryWorkspacePurge,
   } = useWorktreeTargetActions();
   const readyCloudWorkspaces = useMemo(
     () => cloudWorkspaces.filter((workspace) => resolveCloudWorkspaceStatus(workspace) === "ready"),
@@ -118,20 +117,10 @@ export function useWorktreeSettingsTargets() {
     return result;
   }, [purgeWorkspaceHistory, refreshTarget]);
 
-  const retryPurge = useCallback(async (
-    target: WorktreeSettingsTarget,
-    workspaceId: string,
-  ): Promise<WorkspacePurgeResponse> => {
-    const result = await retryWorkspacePurge(target, workspaceId);
-    await refreshTarget(target);
-    return result;
-  }, [refreshTarget, retryWorkspacePurge]);
-
   return {
     targets: targetStates,
     isDiscovering: cloudConnectionQueries.some((query) => query.isLoading),
     pruneOrphan,
     purgeWorkspace,
-    retryPurge,
   };
 }

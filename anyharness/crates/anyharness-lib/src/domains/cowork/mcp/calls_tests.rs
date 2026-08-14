@@ -7,7 +7,7 @@ use super::calls::{call_artifact_tool, ensure_tool_available};
 use super::context::CoworkMcpContext;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::workspaces::model::{
-    WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
     WorkspaceSurface,
 };
 use crate::origin::OriginContext;
@@ -46,11 +46,6 @@ fn workspace(path: &Path) -> WorkspaceRecord {
         origin: Some(OriginContext::cowork()),
         creator_context: None,
         lifecycle_state: WorkspaceLifecycleState::Active,
-        cleanup_state: WorkspaceCleanupState::None,
-        cleanup_operation: None,
-        cleanup_error_message: None,
-        cleanup_failed_at: None,
-        cleanup_attempted_at: None,
         archived_head_sha: None,
         archived_branch: None,
         archived_at: None,
