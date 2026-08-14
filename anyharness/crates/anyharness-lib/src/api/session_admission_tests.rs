@@ -273,15 +273,6 @@ async fn purge_and_mobility_fail_closed_while_controlled() {
     );
     assert_eq!(payload["code"], "SESSION_CONTROLLED_BY_WORKFLOW");
 
-    // RETIRE-01 ruling B: retirement fails closed exactly like purge.
-    let (status, payload) = call(&state, "POST", format!("/v1/workspaces/{WS}/retire"), None).await;
-    assert_eq!(
-        status,
-        StatusCode::CONFLICT,
-        "retire must fail closed while a workflow controls a session (got {status}: {payload})"
-    );
-    assert_eq!(payload["code"], "SESSION_CONTROLLED_BY_WORKFLOW");
-
     let (status, payload) = call(
         &state,
         "POST",
@@ -380,7 +371,7 @@ async fn ordinary_sessions_keep_existing_behavior() {
 // ── PR1227-LOCK-01: permit-vs-operation-gate lock order ───────────────────
 //
 // The per-session mutation permit and the per-workspace `WorkspaceOperationGate`
-// RwLock are both held at once by fork/plan/review/retire/purge/mobility
+// RwLock are both held at once by fork/plan/review/purge/mobility
 // handlers. Acquiring them in inconsistent orders is an ABBA deadlock. The
 // canonical order (fix) is ALWAYS `permit -> operation lease`. These two proofs
 // pin that: a concurrency test that DEADLOCKS under the old reversed order and
@@ -394,7 +385,7 @@ use std::time::Duration;
 const LOCK_SID: &str = "50000000-0000-4000-8000-000000000050";
 const LOCK_WS: &str = "50000000-0000-4000-8000-000000000051";
 
-/// The permit-then-write camp (models fork/retire/purge): acquire the session
+/// The permit-then-write camp (models fork/purge): acquire the session
 /// permit, signal that it is held, wait for the release cue, then reach for the
 /// workspace write lease (the second lock in this camp's order).
 async fn permit_then_write_camp(

@@ -13,6 +13,10 @@ import type {
   MeasurementOperationRecord,
 } from "./debug-measurement-registry-types";
 import { now } from "./debug-measurement-utils";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostics-port";
 
 type FinishMeasurementOperation = (
   id: MeasurementOperationRecord["id"],
@@ -60,6 +64,17 @@ export function notifyOperationFinish(
     try {
       listener({ operationId: operation.id, reason });
     } catch {
+      recordRendererDiagnostic({
+        name: "renderer.measurement.listener_failed",
+        severity: "error",
+        kind: "message",
+        privacy: "operational",
+        correlation: { operationId: operation.id },
+        fields: {
+          operation_kind: diagnosticField(operation.kind, "operational"),
+        },
+        errorClassification: "measurement_listener_failed",
+      });
       console.error("[debug-measurement] operation finish listener failed", {
         operationId: operation.id,
         operationKind: operation.kind,

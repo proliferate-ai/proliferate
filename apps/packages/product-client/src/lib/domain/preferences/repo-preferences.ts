@@ -2,18 +2,24 @@ export interface RepoConfig {
   defaultBranch: string | null;
   setupScript: string;
   runCommand: string;
+  archiveScript: string;
+  rerunSetupOnUnarchive: boolean;
 }
 
 export type PersistedRepoConfigInput = Record<string, {
   defaultBranch?: string | null;
   setupScript?: string;
   runCommand?: string;
+  archiveScript?: string;
+  rerunSetupOnUnarchive?: boolean;
 }>;
 
 export const DEFAULT_REPO_CONFIG: RepoConfig = {
   defaultBranch: null,
   setupScript: "",
   runCommand: "",
+  archiveScript: "",
+  rerunSetupOnUnarchive: true,
 };
 
 export function normalizeRepoConfig(
@@ -35,6 +41,14 @@ export function normalizeRepoConfig(
       config.runCommand === undefined
         ? current.runCommand
         : config.runCommand,
+    archiveScript:
+      config.archiveScript === undefined
+        ? current.archiveScript
+        : config.archiveScript,
+    rerunSetupOnUnarchive:
+      config.rerunSetupOnUnarchive === undefined
+        ? current.rerunSetupOnUnarchive
+        : config.rerunSetupOnUnarchive,
   };
 }
 

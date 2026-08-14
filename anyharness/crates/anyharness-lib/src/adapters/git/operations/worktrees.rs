@@ -3,15 +3,10 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use super::super::executor::{run_git_with_timeout, TimedGitOutput};
-use super::super::types::WorktreeBaseFetch;
+use super::super::types::{WorktreeBaseFetch, WorktreeRemoveError, WorktreeRemoveOutcome};
 use crate::adapters::git::GitService;
 
 const WORKTREE_BASE_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
-
-pub struct GitWorktreeRemoveOutput {
-    pub success: bool,
-    pub stderr: String,
-}
 
 pub fn create_worktree(
     source_repo_root: &str,
@@ -228,19 +223,40 @@ pub fn prune_stale_worktrees_if_possible(cwd: &Path) {
         .output();
 }
 
+/// `git worktree remove --force --force`; on failure, rm-rf and retry, which
+/// clears the registration with nothing left on disk. No repo-global prune.
+/// Exit 128 maps to `AlreadyGone` only when a post-stat finds nothing there.
 pub fn remove_worktree_force(
     repo_root_path: &str,
     worktree_path: &str,
-) -> anyhow::Result<GitWorktreeRemoveOutput> {
-    let output = Command::new("git")
-        .args(["worktree", "remove", "--force", worktree_path])
-        .current_dir(repo_root_path)
-        .output()?;
+) -> Result<WorktreeRemoveOutcome, WorktreeRemoveError> {
+    let fail = |detail: String| WorktreeRemoveError::Failed { path: worktree_path.to_string(), detail };
+    let run = || {
+        Command::new("git")
+            .args(["worktree", "remove", "--force", "--force", worktree_path])
+            .current_dir(repo_root_path)
+            .output()
+            .map_err(|error| fail(format!("failed to run git worktree remove: {error}")))
+    };
+    let exists = || Path::new(worktree_path).exists();
 
-    Ok(GitWorktreeRemoveOutput {
-        success: output.status.success(),
-        stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-    })
+    let output = run()?;
+    if output.status.success() {
+        return Ok(WorktreeRemoveOutcome::Removed);
+    }
+    if output.status.code() == Some(128) && !exists() {
+        return Ok(WorktreeRemoveOutcome::AlreadyGone);
+    }
+    if exists() {
+        std::fs::remove_dir_all(worktree_path)
+            .map_err(|error| fail(format!("could not remove worktree directory: {error}")))?;
+    }
+
+    let retry = run()?;
+    if retry.status.success() || retry.status.code() == Some(128) {
+        return Ok(WorktreeRemoveOutcome::Removed);
+    }
+    Err(fail(String::from_utf8_lossy(&retry.stderr).trim().to_string()))
 }
 
 pub fn ref_exists(repo_root: &Path, ref_name: &str) -> bool {

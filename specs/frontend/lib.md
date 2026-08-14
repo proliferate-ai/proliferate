@@ -88,7 +88,7 @@ Integration with third-party **services** the app plugs into — **auth** (provi
 **Owns:** the vendor SDK wiring + flow. Examples:
 ```text
 integrations/auth/        proliferate-auth · orchestration-{bootstrap,callback,redirect,transport,effects,provider-flow}
-integrations/telemetry/   sentry · posthog · anonymous · scrub · client · native-diagnostics · config
+integrations/telemetry/   sentry · posthog · anonymous · scrub · client · config
 ```
 
 **Must not own:** product workflow branching · core-backend access (→ `access`) · React behavior (the provider/hook that consumes it lives above).
@@ -100,7 +100,7 @@ integrations/telemetry/   sentry · posthog · anonymous · scrub · client · n
 ### `lib/infra/**`
 Generic technical machinery with **no product vocabulary and no vendor**.
 
-**Owns:** persistence helpers · scheduling/batching/timers · ids/stable keys · measurement plumbing · safe JSON parsing · generic logging utilities.
+**Owns:** persistence helpers · scheduling/batching/timers · ids/stable keys · measurement plumbing · safe JSON parsing · generic logging and diagnostics utilities.
 
 **Must not:** know about chats/sessions/workspaces/agents/billing/repos/prompts (→ `domain`) · be a vendor integration like Sentry/PostHog (→ `integrations/telemetry`).
 

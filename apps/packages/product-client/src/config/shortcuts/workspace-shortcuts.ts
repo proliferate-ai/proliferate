@@ -255,6 +255,16 @@ export const WORKSPACE_SHORTCUTS = {
     nonMacMatch: { kind: "fixed-code", code: "KeyM", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
+  cycleReasoningEffort: {
+    id: "workspace.cycle-reasoning-effort",
+    label: "⌃⇧E",
+    nonMacLabel: "Ctrl+Shift+E",
+    description: "Cycle reasoning effort",
+    owner: "js",
+    match: { kind: "fixed-code", code: "KeyE", meta: false, ctrl: true, shift: true, alt: false },
+    nonMacMatch: { kind: "fixed-code", code: "KeyE", meta: true, shift: true, alt: false },
+    allowInInputs: true,
+  },
   openTerminal: {
     id: "workspace.open-terminal",
     label: "⌘J",
@@ -325,6 +335,15 @@ export const WORKSPACE_SHORTCUTS = {
     description: "Rename current chat",
     owner: "js",
     match: { kind: "fixed", key: "r", meta: true, shift: false, alt: true },
+    allowInInputs: true,
+  },
+  archiveWorkspace: {
+    id: "workspace.archive",
+    label: "⌘⇧A",
+    nonMacLabel: "Ctrl+Shift+A",
+    description: "Archive workspace",
+    owner: "js",
+    match: { kind: "fixed-code", code: "KeyA", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
 } as const satisfies Record<string, ShortcutDef>;

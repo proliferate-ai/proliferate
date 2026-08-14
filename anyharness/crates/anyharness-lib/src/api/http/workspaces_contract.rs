@@ -1,8 +1,7 @@
 use anyharness_contract::v1::{
     DetectProjectSetupResponse, GetSetupStatusResponse, RepoRoot, RepoRootKind,
     ResolveWorkspaceResponse, SetupHint, SetupHintCategory, SetupScriptStatus, Workspace,
-    WorkspaceAvailability, WorkspaceCleanupOperation as ContractWorkspaceCleanupOperation,
-    WorkspaceCleanupState as ContractWorkspaceCleanupState, WorkspaceKind as ContractWorkspaceKind,
+    WorkspaceAvailability, WorkspaceKind as ContractWorkspaceKind,
     WorkspaceLifecycleState as ContractWorkspaceLifecycleState,
     WorkspaceSurface as ContractWorkspaceSurface,
 };
@@ -12,10 +11,7 @@ use crate::app::AppState;
 use crate::domains::repo_roots::model::RepoRootRecord;
 use crate::domains::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
 use crate::domains::workspaces::model::WorkspaceRecord;
-use crate::domains::workspaces::model::{
-    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-    WorkspaceSurface,
-};
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceLifecycleState, WorkspaceSurface};
 use crate::domains::workspaces::runtime::WorkspaceResolution;
 use crate::domains::workspaces::types::{
     DetectedHintCategory, DetectedSetupHint, ProjectSetupDetectionResult,
@@ -129,13 +125,9 @@ pub(super) fn workspace_to_contract_with_summary(
         current_branch: record.current_branch,
         display_name: record.display_name,
         lifecycle_state: workspace_lifecycle_to_contract(record.lifecycle_state),
-        cleanup_state: workspace_cleanup_to_contract(record.cleanup_state),
-        cleanup_operation: record
-            .cleanup_operation
-            .map(workspace_cleanup_operation_to_contract),
-        cleanup_error_message: record.cleanup_error_message,
-        cleanup_failed_at: record.cleanup_failed_at,
-        cleanup_attempted_at: record.cleanup_attempted_at,
+        archived_at: record.archived_at,
+        archived_head_sha: record.archived_head_sha,
+        archived_branch: record.archived_branch,
         execution_summary: Some(execution_summary),
         origin: record
             .origin
@@ -169,27 +161,7 @@ pub(super) fn workspace_lifecycle_to_contract(
 ) -> ContractWorkspaceLifecycleState {
     match value {
         WorkspaceLifecycleState::Active => ContractWorkspaceLifecycleState::Active,
-        WorkspaceLifecycleState::Retired => ContractWorkspaceLifecycleState::Retired,
-    }
-}
-
-pub(super) fn workspace_cleanup_to_contract(
-    value: WorkspaceCleanupState,
-) -> ContractWorkspaceCleanupState {
-    match value {
-        WorkspaceCleanupState::None => ContractWorkspaceCleanupState::None,
-        WorkspaceCleanupState::Pending => ContractWorkspaceCleanupState::Pending,
-        WorkspaceCleanupState::Complete => ContractWorkspaceCleanupState::Complete,
-        WorkspaceCleanupState::Failed => ContractWorkspaceCleanupState::Failed,
-    }
-}
-
-pub(super) fn workspace_cleanup_operation_to_contract(
-    operation: WorkspaceCleanupOperation,
-) -> ContractWorkspaceCleanupOperation {
-    match operation {
-        WorkspaceCleanupOperation::Retire => ContractWorkspaceCleanupOperation::Retire,
-        WorkspaceCleanupOperation::Purge => ContractWorkspaceCleanupOperation::Purge,
+        WorkspaceLifecycleState::Archived => ContractWorkspaceLifecycleState::Archived,
     }
 }
 

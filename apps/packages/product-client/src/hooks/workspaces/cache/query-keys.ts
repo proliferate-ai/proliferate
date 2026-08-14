@@ -9,6 +9,16 @@ export function workspaceCollectionsScopeKey(runtimeUrl: string) {
   return [...workspaceCollectionsRootKey(), runtimeUrl] as const;
 }
 
+/**
+ * The archived-workspaces list query. Deliberately its own key, not folded
+ * into the active-collections cache: the two lists are disjoint by
+ * construction (the server's `lifecycle` filter is the single source of
+ * truth), so there is nothing to merge.
+ */
+export function archivedWorkspacesKey(runtimeUrl: string) {
+  return ["workspaces", "archived", runtimeUrl] as const;
+}
+
 function workspaceCollectionsUserScopeKey(
   runtimeUrl: string,
   authUserId: string | null,
@@ -68,10 +78,8 @@ function isWorkspaceCollections(value: unknown): value is WorkspaceCollections {
 
   const candidate = value as Partial<Record<keyof WorkspaceCollections, unknown>>;
   return Array.isArray(candidate.localWorkspaces)
-    && Array.isArray(candidate.retiredLocalWorkspaces)
     && Array.isArray(candidate.repoRoots)
     && Array.isArray(candidate.cloudWorkspaces)
     && Array.isArray(candidate.workspaces)
-    && Array.isArray(candidate.allWorkspaces)
-    && Array.isArray(candidate.cleanupAttentionWorkspaces);
+    && Array.isArray(candidate.allWorkspaces);
 }

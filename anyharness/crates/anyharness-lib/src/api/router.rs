@@ -27,9 +27,8 @@ use super::ws::terminals as ws_terminals;
 use crate::api::auth::{user_route_allowed, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-
 mod pending_prompt_routes;
-
+mod support_window_routes;
 pub fn build_router(state: AppState) -> Router {
     let v1 = Router::new()
         // Agents
@@ -99,16 +98,16 @@ pub fn build_router(state: AppState) -> Router {
             get(workspaces::get_workspace).delete(workspaces_purge::purge_workspace),
         )
         .route(
+            "/workspaces/{workspace_id}/archive",
+            post(workspaces_lifecycle::archive_workspace),
+        )
+        .route(
+            "/workspaces/{workspace_id}/unarchive",
+            post(workspaces_lifecycle::unarchive_workspace),
+        )
+        .route(
             "/workspaces/{workspace_id}/worktree/restore",
             post(workspaces_restore::restore_worktree),
-        )
-        .route(
-            "/workspaces/{workspace_id}/purge/preflight",
-            get(workspaces_purge::purge_workspace_preflight),
-        )
-        .route(
-            "/workspaces/{workspace_id}/purge/retry",
-            post(workspaces_purge::retry_purge_workspace),
         )
         .route(
             "/worktrees/inventory",
@@ -117,27 +116,6 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/worktrees/orphans/prune",
             post(worktrees::prune_orphan_worktree),
-        )
-        .route(
-            "/worktrees/retention-policy",
-            get(worktrees::get_worktree_retention_policy)
-                .put(worktrees::update_worktree_retention_policy),
-        )
-        .route(
-            "/worktrees/retention/run",
-            post(worktrees::run_worktree_retention),
-        )
-        .route(
-            "/workspaces/{workspace_id}/retire/preflight",
-            get(workspaces_lifecycle::retire_workspace_preflight),
-        )
-        .route(
-            "/workspaces/{workspace_id}/retire",
-            post(workspaces_lifecycle::retire_workspace),
-        )
-        .route(
-            "/workspaces/{workspace_id}/retire/cleanup-retry",
-            post(workspaces_lifecycle::retry_retire_cleanup),
         )
         .route(
             "/repo-roots",
@@ -451,6 +429,7 @@ pub fn build_router(state: AppState) -> Router {
             post(sessions_fork::fork_session),
         )
         .merge(pending_prompt_routes::router())
+        .merge(support_window_routes::router())
         .route(
             "/sessions/{session_id}/goal",
             put(goals::set_session_goal).delete(goals::clear_session_goal),

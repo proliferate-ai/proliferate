@@ -230,6 +230,14 @@ pub(in crate::live::sessions) enum SessionCommand {
     Unload {
         respond_to: oneshot::Sender<anyhow::Result<()>>,
     },
+    /// Workspace-wide stop (`stop_and_await`): unlike `Dismiss`, whose reply
+    /// fires before the actor loop even finishes, this responder is stored
+    /// on the actor and fires only after `run()`'s exit sequence has run the
+    /// process-group kill escalation and reaped the agent child. Carries the
+    /// `(total, git)` kill census.
+    Stop {
+        respond_to: oneshot::Sender<anyhow::Result<(usize, usize)>>,
+    },
     Close {
         respond_to: oneshot::Sender<anyhow::Result<()>>,
     },

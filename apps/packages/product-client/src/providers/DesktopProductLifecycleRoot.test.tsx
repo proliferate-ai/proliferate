@@ -65,9 +65,7 @@ function makeBridge(
       getConnection: vi.fn(),
       restart: vi.fn(),
     },
-    diagnostics: {
-      logEvent: vi.fn().mockResolvedValue(undefined),
-    },
+    diagnostics: {},
     updater: {
       isSupported: vi.fn(() => true),
     },

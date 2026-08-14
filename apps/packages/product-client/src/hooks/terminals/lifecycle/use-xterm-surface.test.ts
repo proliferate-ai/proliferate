@@ -1,12 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 import { APPEARANCE_SIZE_IDS, READABLE_CODE_FONT_SCALES } from "#product/lib/domain/preferences/appearance";
 import { TERMINAL_LINE_HEIGHT } from "#product/lib/domain/terminals/terminal-grid";
 import {
   createSettledResizeReporter,
   resolveXtermSurfaceTypography,
+  recordXtermInitializationFailure,
   XTERM_CURSOR_OPTIONS,
   XTERM_RESIZE_REPORT_SETTLE_MS,
 } from "#product/hooks/terminals/lifecycle/use-xterm-surface";
+
+afterEach(() => {
+  resetRendererDiagnosticsSinkForTest();
+});
 
 describe("xterm cursor contract", () => {
   it("uses the same one-pixel bar geometry as composed text editors", () => {
@@ -82,5 +91,19 @@ describe("createSettledResizeReporter", () => {
     reporter.cancel();
     vi.advanceTimersByTime(XTERM_RESIZE_REPORT_SETTLE_MS * 2);
     expect(report).not.toHaveBeenCalled();
+  });
+});
+
+describe("xterm initialization diagnostics", () => {
+  it("captures the exact failure name and classification", () => {
+    const emit = vi.fn();
+    setRendererDiagnosticsSink({ emit });
+
+    recordXtermInitializationFailure("TerminalViewport", new TypeError("failed"));
+
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({
+      name: "renderer.terminal.xterm_init_failed",
+      errorClassification: "xterm_init_failed",
+    }));
   });
 });

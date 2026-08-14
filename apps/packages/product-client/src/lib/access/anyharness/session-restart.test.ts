@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { restartSessionsOnNewAuth } from "#product/lib/access/anyharness/session-restart";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+  type RendererDiagnosticInput,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const mocks = vi.hoisted(() => ({
   getSessionClientAndWorkspace: vi.fn(),
@@ -7,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   restoreDismissedSession: vi.fn(),
   resumeSession: vi.fn(),
 }));
+let diagnostics: RendererDiagnosticInput[] = [];
 
 vi.mock("#product/lib/access/anyharness/session-runtime", () => ({
   getSessionClientAndWorkspace: mocks.getSessionClientAndWorkspace,
@@ -37,7 +43,13 @@ function stubResolution() {
 }
 
 describe("restartSessionsOnNewAuth", () => {
+  beforeEach(() => {
+    diagnostics = [];
+    setRendererDiagnosticsSink({ emit: (input) => diagnostics.push(input) });
+  });
+
   afterEach(() => {
+    resetRendererDiagnosticsSinkForTest();
     vi.clearAllMocks();
   });
 
@@ -144,6 +156,11 @@ describe("restartSessionsOnNewAuth", () => {
     });
     expect(mocks.resumeSession).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalled();
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      name: "renderer.agent_auth.session_restart_failed",
+      errorClassification: "session_restart_failed",
+      correlation: { sessionId: "bad" },
+    }));
     warn.mockRestore();
   });
 });

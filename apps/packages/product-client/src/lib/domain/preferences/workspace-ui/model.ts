@@ -30,12 +30,15 @@ import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "#product/lib/domain/preferences
  * per-repo-group collapse array — collapsing the section hides every repo
  * group's rows at once instead of each group owning its own toggle only.
  * v14: add pinned workspace ids for the sidebar Pinned section.
+ * v15: drop the client-side archivedWorkspaceIds hide-set. The runtime's
+ * lifecycle filter (`lifecycle=archived`) is now the single source of
+ * truth for which workspaces are archived, so a stale persisted id can no
+ * longer resurrect a hidden row.
  */
-export const WORKSPACE_UI_MIGRATION_VERSION = 14;
+export const WORKSPACE_UI_MIGRATION_VERSION = 15;
 
 export interface PersistedWorkspaceUiState {
   migrationVersion?: number;
-  archivedWorkspaceIds: string[];
   pinnedWorkspaceIds: string[];
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
@@ -71,7 +74,6 @@ export interface WorkspaceUiChangeTrackedState extends PersistedWorkspaceUiState
 }
 
 export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
-  archivedWorkspaceIds: [],
   pinnedWorkspaceIds: [],
   hiddenRepoRootIds: [],
   collapsedRepoGroups: [],

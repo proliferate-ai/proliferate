@@ -11,6 +11,11 @@
  *   - hovering pins the pill (cancels any fade) and reveals the checklist
  *   - mouse-leave restarts a short fade: starts at 1.2s, hidden by 1.8s
  *
+ * A step advance while the pointer is actually on the pill/checklist never
+ * reaches this reducer: the connected component holds its fire so the pinned
+ * checklist stays mounted and updates in place (`step_advanced` would unpin
+ * it out from under the pointer and remount its in-progress spinner).
+ *
  * `pinned` intentionally survives `hover_off` and only drops when the
  * leave-fade actually starts: the checklist card renders while pinned, and
  * it sits above the pill across a small gap — the card must stay mounted

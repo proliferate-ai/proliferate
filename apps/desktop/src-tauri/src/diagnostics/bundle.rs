@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -14,7 +14,6 @@ use crate::app_config::{
 use super::scrub::scrub_diagnostic_text;
 
 const MAX_ROTATED_LOG_FILES: usize = 5;
-const SUPPORT_LOG_TAIL_BYTES: u64 = 2 * 1024 * 1024;
 
 fn desktop_log_base_paths(logs_dir: &Path) -> [PathBuf; 2] {
     [
@@ -54,37 +53,6 @@ pub struct HealthResponse {
     runtime_home: String,
     status: String,
     version: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SupportDiagnosticsBundle {
-    pub schema_version: u32,
-    pub manifest: SupportDiagnosticsManifest,
-    pub health: Option<HealthResponse>,
-    pub logs: Vec<SupportDiagnosticsLog>,
-    pub collection_errors: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SupportDiagnosticsManifest {
-    pub app_version: String,
-    pub runtime_version: Option<String>,
-    pub runtime_status: Option<String>,
-    pub runtime_home: Option<String>,
-    pub platform: String,
-    pub timestamp: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SupportDiagnosticsLog {
-    pub source: String,
-    pub path: String,
-    pub bytes_read: u64,
-    pub truncated: bool,
-    pub text: String,
 }
 
 pub fn suggested_bundle_file_name() -> String {
@@ -229,109 +197,6 @@ pub async fn export_debug_bundle_to_path(
     })
 }
 
-pub async fn collect_support_diagnostics_bundle(
-    runtime_url_override: Option<String>,
-    runtime_status_override: Option<String>,
-) -> Result<SupportDiagnosticsBundle, String> {
-    let runtime_info = load_runtime_info_record().ok().flatten();
-    let runtime_url = runtime_url_override
-        .clone()
-        .or_else(|| runtime_info.as_ref().map(|info| info.url.clone()))
-        .filter(|value| !value.trim().is_empty());
-    let runtime_status = runtime_status_override
-        .clone()
-        .or_else(|| runtime_info.as_ref().map(|info| info.status.clone()))
-        .filter(|value| !value.trim().is_empty());
-    let health = match runtime_status.as_deref() {
-        Some("healthy") => fetch_runtime_health(runtime_url.as_deref()).await,
-        _ => None,
-    };
-
-    let default_runtime_home = default_anyharness_runtime_home_path()?;
-    let anyharness_runtime_home = health
-        .as_ref()
-        .map(|value| PathBuf::from(&value.runtime_home))
-        .or_else(|| {
-            runtime_info
-                .as_ref()
-                .and_then(|value| value.runtime_home.clone().map(PathBuf::from))
-        })
-        .or_else(|| {
-            (runtime_status.as_deref() != Some("healthy")).then_some(default_runtime_home.clone())
-        });
-    let anyharness_base_log = anyharness_runtime_home
-        .as_ref()
-        .map(|runtime_home| runtime_home.join("logs/anyharness.log"));
-
-    let mut logs = Vec::new();
-    let mut collection_errors = Vec::new();
-    for base_path in desktop_log_base_paths(&logs_dir_path()?) {
-        collect_support_logs_for_source(&mut logs, &mut collection_errors, "desktop", &base_path);
-    }
-    if let Some(anyharness_base_log) = anyharness_base_log.as_ref() {
-        collect_support_logs_for_source(
-            &mut logs,
-            &mut collection_errors,
-            "anyharness",
-            anyharness_base_log,
-        );
-    }
-
-    let anyharness_logs_exist = anyharness_base_log
-        .as_ref()
-        .is_some_and(|path| path.is_file());
-    let runtime_home_for_manifest = health
-        .as_ref()
-        .map(|value| value.runtime_home.clone())
-        .or_else(|| {
-            runtime_info
-                .as_ref()
-                .and_then(|value| value.runtime_home.clone())
-        })
-        .or_else(|| {
-            anyharness_logs_exist.then(|| {
-                anyharness_runtime_home
-                    .as_ref()
-                    .expect("runtime home should exist when logs are present")
-                    .to_string_lossy()
-                    .into_owned()
-            })
-        })
-        .map(|value| scrub_diagnostic_text(&value));
-
-    let support_health = health.clone().map(scrub_health_response);
-
-    Ok(SupportDiagnosticsBundle {
-        schema_version: 1,
-        manifest: SupportDiagnosticsManifest {
-            app_version: env!("CARGO_PKG_VERSION").to_string(),
-            runtime_version: health
-                .as_ref()
-                .map(|value| value.version.clone())
-                .or_else(|| {
-                    runtime_info
-                        .as_ref()
-                        .and_then(|value| value.version.clone())
-                }),
-            runtime_status,
-            runtime_home: runtime_home_for_manifest,
-            platform: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
-            timestamp: Utc::now().to_rfc3339(),
-        },
-        health: support_health,
-        logs,
-        collection_errors,
-    })
-}
-
-fn scrub_health_response(health: HealthResponse) -> HealthResponse {
-    HealthResponse {
-        runtime_home: scrub_diagnostic_text(&health.runtime_home),
-        status: health.status,
-        version: health.version,
-    }
-}
-
 fn collect_log_files(base_path: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
 
@@ -354,83 +219,6 @@ fn collect_log_files(base_path: &Path) -> Vec<PathBuf> {
     }
 
     files
-}
-
-fn collect_recent_log_files(base_path: &Path) -> Vec<PathBuf> {
-    let mut files = Vec::new();
-
-    if base_path.is_file() {
-        files.push(base_path.to_path_buf());
-    }
-
-    let rotated = base_path.with_extension(format!(
-        "{}.1",
-        base_path
-            .extension()
-            .and_then(|value| value.to_str())
-            .unwrap_or_default(),
-    ));
-    if rotated.is_file() {
-        files.push(rotated);
-    }
-
-    files
-}
-
-fn collect_support_logs_for_source(
-    logs: &mut Vec<SupportDiagnosticsLog>,
-    collection_errors: &mut Vec<String>,
-    source: &str,
-    base_path: &Path,
-) {
-    for path in collect_recent_log_files(base_path) {
-        match read_scrubbed_log_tail(&path) {
-            Ok(tail) => logs.push(SupportDiagnosticsLog {
-                source: source.to_string(),
-                path: scrub_diagnostic_text(&path.to_string_lossy()),
-                bytes_read: tail.bytes_read,
-                truncated: tail.truncated,
-                text: tail.text,
-            }),
-            Err(_) => collection_errors.push(collection_error_for_source(source)),
-        }
-    }
-}
-
-fn collection_error_for_source(source: &str) -> String {
-    match source {
-        "desktop" => "desktop: unavailable",
-        "anyharness" => "anyharness: unavailable",
-        _ => "diagnostics: unavailable",
-    }
-    .to_string()
-}
-
-struct LogTail {
-    bytes_read: u64,
-    truncated: bool,
-    text: String,
-}
-
-fn read_scrubbed_log_tail(path: &Path) -> Result<LogTail, String> {
-    let mut file = fs::File::open(path)
-        .map_err(|error| format!("Failed to open {}: {error}", path.display()))?;
-    let size = file
-        .metadata()
-        .map_err(|error| format!("Failed to stat {}: {error}", path.display()))?
-        .len();
-    let start = size.saturating_sub(SUPPORT_LOG_TAIL_BYTES);
-    file.seek(SeekFrom::Start(start))
-        .map_err(|error| format!("Failed to seek {}: {error}", path.display()))?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)
-        .map_err(|error| format!("Failed to read {}: {error}", path.display()))?;
-    let text = String::from_utf8_lossy(&bytes);
-    Ok(LogTail {
-        bytes_read: bytes.len() as u64,
-        truncated: start > 0,
-        text: scrub_diagnostic_text(&text),
-    })
 }
 
 async fn fetch_runtime_health(runtime_url: Option<&str>) -> Option<HealthResponse> {
@@ -487,8 +275,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        collect_log_files, collection_error_for_source, desktop_log_base_paths,
-        scrub_diagnostic_text, scrub_health_response, suggested_bundle_file_name, HealthResponse,
+        collect_log_files, desktop_log_base_paths, scrub_diagnostic_text,
+        suggested_bundle_file_name,
     };
 
     fn temp_path(file_name: &str) -> PathBuf {
@@ -538,34 +326,5 @@ mod tests {
     fn scrubber_hides_secrets_in_exported_text() {
         let scrubbed = scrub_diagnostic_text("Authorization: Bearer token123");
         assert!(!scrubbed.contains("token123"));
-    }
-
-    #[test]
-    fn scrub_health_response_hides_runtime_home() {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/Users/example".to_string());
-        let health = scrub_health_response(HealthResponse {
-            runtime_home: format!("{home}/.proliferate/anyharness"),
-            status: "ok".to_string(),
-            version: "0.1.0".to_string(),
-        });
-
-        assert!(!health.runtime_home.contains(&home));
-        assert!(health.runtime_home.starts_with("~") || !home.starts_with('/'));
-    }
-
-    #[test]
-    fn collection_errors_use_fixed_source_classes() {
-        assert_eq!(
-            collection_error_for_source("desktop"),
-            "desktop: unavailable"
-        );
-        assert_eq!(
-            collection_error_for_source("anyharness"),
-            "anyharness: unavailable"
-        );
-        assert_eq!(
-            collection_error_for_source("/private/path"),
-            "diagnostics: unavailable"
-        );
     }
 }

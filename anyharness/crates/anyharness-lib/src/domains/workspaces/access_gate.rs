@@ -24,8 +24,12 @@ pub enum WorkspaceAccessError {
         workspace_id: String,
         mode: WorkspaceAccessMode,
     },
-    #[error("workspace {0} is retired")]
-    WorkspaceRetired(String),
+    /// The workspace is archived: no process may be spawned in it and no
+    /// mutation may touch its worktree until it is unarchived. Reads are
+    /// deliberately NOT refused — the archived page renders chat history and
+    /// file/git reads.
+    #[error("workspace {0} is archived")]
+    WorkspaceArchived(String),
     #[error(transparent)]
     Unexpected(#[from] anyhow::Error),
 }
@@ -98,7 +102,11 @@ impl WorkspaceAccessGate {
             .map_err(WorkspaceAccessError::Unexpected)
     }
 
-    pub fn assert_can_mutate_for_workspace(
+    /// The archived refusal on its own, so the handler-layer wrapper
+    /// (`api/http/access.rs::assert_workspace_active`) and the two gate
+    /// assertions below all decide from ONE predicate. Two guard helpers that
+    /// each re-read the lifecycle column are two guards that can disagree.
+    pub fn assert_workspace_not_archived(
         &self,
         workspace_id: &str,
     ) -> Result<(), WorkspaceAccessError> {
@@ -107,11 +115,19 @@ impl WorkspaceAccessGate {
             .find_by_id(workspace_id)
             .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(workspace_id.to_string()))?;
-        if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
-            return Err(WorkspaceAccessError::WorkspaceRetired(
+        if workspace.lifecycle_state == WorkspaceLifecycleState::Archived {
+            return Err(WorkspaceAccessError::WorkspaceArchived(
                 workspace_id.to_string(),
             ));
         }
+        Ok(())
+    }
+
+    pub fn assert_can_mutate_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> Result<(), WorkspaceAccessError> {
+        self.assert_workspace_not_archived(workspace_id)?;
         let state = self.runtime_state(workspace_id)?;
         match state.mode {
             WorkspaceAccessMode::Normal => Ok(()),
@@ -197,14 +213,7 @@ impl WorkspaceAccessGate {
             .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::SessionNotFound(session_id.to_string()))?;
         let state = self.runtime_state(&session.workspace_id)?;
-        let workspace = self
-            .workspace_store
-            .find_by_id(&session.workspace_id)
-            .map_err(WorkspaceAccessError::Unexpected)?
-            .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(session.workspace_id.clone()))?;
-        if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
-            return Err(WorkspaceAccessError::WorkspaceRetired(session.workspace_id));
-        }
+        self.assert_workspace_not_archived(&session.workspace_id)?;
         match state.mode {
             WorkspaceAccessMode::Normal => Ok(()),
             mode => Err(WorkspaceAccessError::LiveSessionStartBlocked {
@@ -225,7 +234,7 @@ mod tests {
     use crate::domains::terminals::store::TerminalStore;
     use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
     use crate::domains::workspaces::model::{
-        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
         WorkspaceSurface,
     };
     use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
@@ -245,11 +254,10 @@ mod tests {
             origin: None,
             creator_context: None,
             lifecycle_state: WorkspaceLifecycleState::Active,
-            cleanup_state: WorkspaceCleanupState::None,
-            cleanup_operation: None,
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
+            archived_head_sha: None,
+            archived_branch: None,
+            archived_at: None,
+            partial_capture_json: None,
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         }

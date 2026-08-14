@@ -244,7 +244,7 @@ mod tests {
     use crate::domains::sessions::mcp_bindings::product_launch::ProductMcpLaunchRegistration;
     use crate::domains::sessions::model::SessionMcpBindingPolicy;
     use crate::domains::workspaces::model::{
-        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
         WorkspaceSurface,
     };
     use crate::origin::OriginContext;
@@ -283,11 +283,10 @@ mod tests {
             origin: Some(OriginContext::api_local_runtime()),
             creator_context: None,
             lifecycle_state: WorkspaceLifecycleState::Active,
-            cleanup_state: WorkspaceCleanupState::None,
-            cleanup_operation: None,
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
+            archived_head_sha: None,
+            archived_branch: None,
+            archived_at: None,
+            partial_capture_json: None,
             created_at: "2026-03-25T00:00:00Z".to_string(),
             updated_at: "2026-03-25T00:00:00Z".to_string(),
         }

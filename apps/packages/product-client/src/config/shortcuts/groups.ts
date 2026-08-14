@@ -40,6 +40,7 @@ export const SHORTCUT_GROUPS = [
       "workspaceByIndex",
       "previousWorkspace",
       "nextWorkspace",
+      "archiveWorkspace",
     ],
   },
   {
@@ -65,6 +66,7 @@ export const SHORTCUT_GROUPS = [
     shortcutKeys: [
       "focusChat",
       "openModelSelector",
+      "cycleReasoningEffort",
       "openTerminal",
       "toggleLeftSidebar",
       "toggleRightPanel",

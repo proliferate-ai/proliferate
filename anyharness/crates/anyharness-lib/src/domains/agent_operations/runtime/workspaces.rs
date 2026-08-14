@@ -189,7 +189,7 @@ fn project_workspace(runtime_id: &RuntimeIdentity, record: WorkspaceRecord) -> W
 mod tests {
     use super::*;
     use crate::domains::workspaces::model::{
-        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceSurface,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceSurface,
     };
 
     fn workspace(id: &str, created_at: &str, updated_at: &str) -> WorkspaceRecord {
@@ -205,11 +205,10 @@ mod tests {
             origin: None,
             creator_context: None,
             lifecycle_state: WorkspaceLifecycleState::Active,
-            cleanup_state: WorkspaceCleanupState::None,
-            cleanup_operation: None,
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
+            archived_head_sha: None,
+            archived_branch: None,
+            archived_at: None,
+            partial_capture_json: None,
             created_at: created_at.to_string(),
             updated_at: updated_at.to_string(),
         }

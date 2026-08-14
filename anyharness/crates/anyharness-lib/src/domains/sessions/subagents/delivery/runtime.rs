@@ -202,21 +202,32 @@ async fn inject_completion_event(
         outcome: delivery.outcome,
         label: delivery.label.clone(),
     };
-    if let Err(error) = session_runtime
+    match session_runtime
         .emit_runtime_event(
             &delivery.parent_session_id,
             RuntimeInjectedSessionEvent::subagent_turn_completed(completion),
         )
         .await
     {
-        tracing::warn!(
+        Ok(envelope) => tracing::info!(
+            target: "anyharness.subagent.turn_completed",
+            child_session_id = %delivery.child_session_id,
+            parent_session_id = %delivery.parent_session_id,
+            completion_id = %delivery.completion_id,
+            delivery_id = %delivery.delivery_id,
+            outcome = delivery.outcome.as_str(),
+            parent_event_seq = envelope.seq,
+            "subagent: child turn completion delivered to parent"
+        ),
+        Err(error) => tracing::warn!(
+            target: "anyharness.subagent.turn_completion_injection_failed",
             delivery_id = %delivery.delivery_id,
             parent_session_id = %delivery.parent_session_id,
             child_session_id = %delivery.child_session_id,
             result_class = "completion_event_injection_failed",
             error = %error,
             "subagent completion event was not injected into the parent transcript"
-        );
+        ),
     }
 }
 

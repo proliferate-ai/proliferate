@@ -46,12 +46,10 @@ export function workspaceFileTreeStateKey(workspace: Workspace): string {
 
 export interface WorkspaceCollections {
   localWorkspaces: Workspace[];
-  retiredLocalWorkspaces: Workspace[];
   repoRoots: RepoRoot[];
   cloudWorkspaces: CloudWorkspaceSummary[];
   workspaces: Workspace[];
   allWorkspaces: Workspace[];
-  cleanupAttentionWorkspaces: Workspace[];
 }
 
 export function buildWorkspaceCollections(
@@ -60,24 +58,19 @@ export function buildWorkspaceCollections(
   cloudWorkspaces: CloudWorkspaceSummary[] = [],
 ): WorkspaceCollections {
   const sortedLocalWorkspaces = sortWorkspacesByUpdatedAtDesc(localWorkspaces);
+  // Positive filter, not `!== "archived"`: nothing lists archived workspaces
+  // until the archived settings page arrives, so an absorbed row must stay out
+  // of the sidebar the moment the lifecycle migration runs.
   const activeLocalWorkspaces = sortedLocalWorkspaces.filter(
-    (workspace) => workspace.lifecycleState !== "retired",
-  );
-  const retiredLocalWorkspaces = sortedLocalWorkspaces.filter(
-    (workspace) => workspace.lifecycleState === "retired",
-  );
-  const cleanupAttentionWorkspaces = retiredLocalWorkspaces.filter(
-    (workspace) => workspace.cleanupState === "pending" || workspace.cleanupState === "failed",
+    (workspace) => workspace.lifecycleState === "active",
   );
 
   return {
     localWorkspaces: activeLocalWorkspaces,
-    retiredLocalWorkspaces,
     repoRoots,
     cloudWorkspaces,
     workspaces: activeLocalWorkspaces,
     allWorkspaces: sortedLocalWorkspaces,
-    cleanupAttentionWorkspaces,
   };
 }
 

@@ -85,6 +85,8 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
           defaultBranch: environment.defaultBranch,
           setupScript: environment.setupScript,
           runCommand: environment.runCommand,
+          archiveScript: environment.archiveScript,
+          rerunSetupOnUnarchive: environment.rerunSetupOnUnarchive,
         })
       : null;
   }, [
@@ -164,6 +166,8 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
             defaultBranch: nextConfig.defaultBranch,
             setupScript: nextConfig.setupScript,
             runCommand: nextConfig.runCommand,
+            archiveScript: nextConfig.archiveScript,
+            rerunSetupOnUnarchive: nextConfig.rerunSetupOnUnarchive,
           },
         });
       })().catch(() => {
@@ -201,6 +205,11 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     setSetupDraft: (setupScript: string) => setDraft({ setupScript }),
     runCommandDraft: state.draft.runCommand,
     setRunCommandDraft: (runCommand: string) => setDraft({ runCommand }),
+    archiveScriptDraft: state.draft.archiveScript,
+    setArchiveScriptDraft: (archiveScript: string) => setDraft({ archiveScript }),
+    rerunSetupOnUnarchiveDraft: state.draft.rerunSetupOnUnarchive,
+    setRerunSetupOnUnarchiveDraft: (rerunSetupOnUnarchive: boolean) =>
+      setDraft({ rerunSetupOnUnarchive }),
     setExplicitDefaultBranch: (branchName: string | null) => {
       setDraft({ defaultBranch: branchName });
     },

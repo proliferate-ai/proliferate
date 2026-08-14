@@ -254,6 +254,7 @@ export function SidebarWorkspaceContent({
           <>
             <SidebarWorkspaceItems
               items={visibleItems}
+              repoName={group.name}
               shortcutLabelByWorkspaceId={shortcutLabelByWorkspaceId}
               shortcutRevealVisible={shortcutRevealVisible}
               onSelectWorkspace={onSelectWorkspace}

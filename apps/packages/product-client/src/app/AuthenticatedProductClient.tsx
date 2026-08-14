@@ -8,6 +8,7 @@ import { KeyboardShortcutsDialog } from "#product/components/workspace/shell/sid
 import { HarnessUpdateToastPresenter } from "#product/components/feedback/HarnessUpdateToastPresenter"
 import { AuthenticatedAppHost } from "#product/pages/AuthenticatedAppHost"
 import { CoworkThreadLaunchProvider } from "#product/providers/CoworkThreadLaunchProvider"
+import { WorkspaceArchiveActionsProvider } from "#product/providers/WorkspaceArchiveActionsProvider"
 import "./authenticated.css"
 
 /**
@@ -21,14 +22,16 @@ import "./authenticated.css"
  */
 export default function AuthenticatedProductClient(): ReactElement {
   return (
-    <CoworkThreadLaunchProvider>
-      <AuthenticatedAppHost />
-      <AddRepoFlowHost />
-      <CloudRepoActionDialogHost />
-      <WorkspaceAvailabilityActionHost />
-      <MaterializationHealthPassHost />
-      <HarnessUpdateToastPresenter />
-      <KeyboardShortcutsDialog />
-    </CoworkThreadLaunchProvider>
+    <WorkspaceArchiveActionsProvider>
+      <CoworkThreadLaunchProvider>
+        <AuthenticatedAppHost />
+        <AddRepoFlowHost />
+        <CloudRepoActionDialogHost />
+        <WorkspaceAvailabilityActionHost />
+        <MaterializationHealthPassHost />
+        <HarnessUpdateToastPresenter />
+        <KeyboardShortcutsDialog />
+      </CoworkThreadLaunchProvider>
+    </WorkspaceArchiveActionsProvider>
   )
 }

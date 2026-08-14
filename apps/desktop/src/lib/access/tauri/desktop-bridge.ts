@@ -1,5 +1,6 @@
 import type {
   DesktopBridge,
+  DesktopSupportSnapshotBridge,
   LocalRuntimeConnection,
   LocalRuntimeSnapshot,
   ProductCommand,
@@ -37,7 +38,7 @@ import {
   setWebviewZoom,
 } from "./window";
 import { fetchServerMeta, isTauriRuntimeAvailable } from "./connect-server";
-import { reportReactRenderError } from "@/lib/integrations/telemetry/native-diagnostics";
+import { reportReactRenderError } from "@/lib/infra/diagnostics/renderer-error-diagnostics";
 import { setWorkspaceActivityIndicator } from "./dock";
 import {
   checkForUpdate,
@@ -61,16 +62,33 @@ import {
   readWorkspaceScratchPad,
   writeWorkspaceScratchPad,
 } from "./workspace-scratch";
+import { saveDiagnosticJson } from "./diagnostics";
 import {
-  collectSupportDiagnostics,
-  logRendererEvent,
-  saveDiagnosticJson,
-} from "./diagnostics";
-import {
+  beginSupportSnapshotPreparation,
+  beginSupportSnapshotSubmission,
+  cancelSupportSnapshotPreparation,
   deleteStagedSupportReportAttachment,
+  deleteStagedSupportSnapshot,
+  finishSupportSnapshotPreparation,
+  finishSupportSnapshotSubmission,
   readStagedSupportReportAttachment,
+  readStagedSupportSnapshot,
+  reconcileStagedSupportSnapshots,
+  saveSupportSnapshotArchive,
   stageSupportReportAttachment,
 } from "./support";
+
+const desktopSupportSnapshotBridge: DesktopSupportSnapshotBridge = {
+  beginPreparation: beginSupportSnapshotPreparation,
+  finishPreparation: finishSupportSnapshotPreparation,
+  cancelPreparation: cancelSupportSnapshotPreparation,
+  saveArchive: saveSupportSnapshotArchive,
+  readArtifact: readStagedSupportSnapshot,
+  deleteArtifact: deleteStagedSupportSnapshot,
+  reconcileArtifacts: reconcileStagedSupportSnapshots,
+  beginSubmission: beginSupportSnapshotSubmission,
+  finishSubmission: finishSupportSnapshotSubmission,
+};
 
 /**
  * The concrete Desktop bridge. Every method is a thin shape adapter over an
@@ -236,26 +254,19 @@ export const desktopBridge: DesktopBridge = {
   },
 
   diagnostics: {
-    logEvent: logRendererEvent,
     reportRenderError(report: RenderErrorReport): Promise<boolean> {
       // Dedup/fingerprint/suppression stays host-owned in reportReactRenderError.
-      const error =
-        report.error instanceof Error
-          ? report.error
-          : new Error(
-              typeof report.error === "string"
-                ? report.error
-                : String(report.error),
-            );
-      return reportReactRenderError(error, report.componentStack ?? null);
+      return reportReactRenderError(report.error, report.componentStack ?? null);
     },
-    collectSupportBundle: collectSupportDiagnostics,
     saveJson(input) {
       return saveDiagnosticJson(input.suggestedFileName, input.contents);
     },
     stageAttachment: stageSupportReportAttachment,
     readAttachment: readStagedSupportReportAttachment,
     deleteAttachment: deleteStagedSupportReportAttachment,
+    get supportSnapshot() {
+      return isTauriRuntimeAvailable() ? desktopSupportSnapshotBridge : null;
+    },
   },
 
   connect: {

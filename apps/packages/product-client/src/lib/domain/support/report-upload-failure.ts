@@ -4,6 +4,8 @@ export type SupportReportUploadFailureKind =
   | "cloud_unconfigured"
   | "dev_auth_bypass"
   | "local_payload_invalid"
+  | "snapshot_mismatch"
+  | "snapshot_missing"
   | "storage_unconfigured"
   | "upload_conflict"
   | "upload_rejected"
@@ -18,10 +20,37 @@ export interface SupportReportUploadFailure {
   toastCooldownMs: number;
 }
 
-interface ErrorShape {
-  message?: unknown;
-  status?: unknown;
-  code?: unknown;
+export interface SupportReportUploadErrorSnapshot {
+  message: string;
+  status: number | null;
+  code: string | null;
+}
+
+const snapshotArtifactFailures = new WeakMap<object, "snapshot_mismatch" | "snapshot_missing">();
+const localPayloadFailures = new WeakSet<object>();
+
+export class SupportSnapshotArtifactError extends Error {
+  readonly code: "snapshot_mismatch" | "snapshot_missing";
+
+  constructor(code: "snapshot_mismatch" | "snapshot_missing") {
+    super(code === "snapshot_missing"
+      ? "The prepared diagnostic snapshot is missing."
+      : "The prepared diagnostic snapshot no longer matches its receipt.");
+    this.name = "SupportSnapshotArtifactError";
+    this.code = code;
+    snapshotArtifactFailures.set(this, code);
+  }
+}
+
+/** An owned local discriminant; arbitrary thrown prose cannot impersonate it. */
+export class SupportReportLocalPayloadError extends Error {
+  readonly code = "local_payload_invalid";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "SupportReportLocalPayloadError";
+    localPayloadFailures.add(this);
+  }
 }
 
 const SHORT_RETRY_DELAY_MS = 30_000;
@@ -39,9 +68,8 @@ export function describeSupportReportUploadFailure(
   error: unknown,
   attemptCount: number,
 ): SupportReportUploadFailure {
-  const message = supportReportUploadErrorMessage(error);
-  const code = supportReportUploadErrorCode(error);
-  const status = supportReportUploadErrorStatus(error);
+  const snapshot = snapshotSupportReportUploadError(error);
+  const { message, code, status } = snapshot;
 
   if (code === "dev_auth_bypass") {
     return {
@@ -76,10 +104,20 @@ export function describeSupportReportUploadFailure(
     };
   }
 
-  if (
-    code === "support_report_storage_unavailable"
-    || message.toLowerCase().includes("support report upload storage is not configured")
-  ) {
+  const snapshotFailure = ownedSnapshotArtifactFailure(error);
+  if (snapshotFailure) {
+    return {
+      kind: snapshotFailure,
+      message,
+      retryable: false,
+      retryDelayMs: null,
+      toastMessage:
+        "The diagnostic snapshot is no longer available. Start a new report from Help.",
+      toastCooldownMs: 0,
+    };
+  }
+
+  if (code === "support_report_storage_unavailable") {
     return {
       kind: "storage_unconfigured",
       message,
@@ -90,7 +128,7 @@ export function describeSupportReportUploadFailure(
     };
   }
 
-  if (isLocalPayloadError(message)) {
+  if (isLocalPayloadFailure(error)) {
     return {
       kind: "local_payload_invalid",
       message,
@@ -105,7 +143,7 @@ export function describeSupportReportUploadFailure(
   // landed but the client lost the response before clearing the job). This is
   // success, not failure — the queue treats `already_completed` as idempotent
   // cleanup rather than showing an error.
-  if (code === "support_report_already_completed" || isAlreadyCompletedError(message)) {
+  if (code === "support_report_already_completed") {
     return {
       kind: "already_completed",
       message,
@@ -118,8 +156,7 @@ export function describeSupportReportUploadFailure(
 
   // Terminal upload-target conflict: the report's locked object set / intent can
   // never reconcile with this request, so retrying the same job is hopeless.
-  // Prefer the stable server code; fall back to message text for older servers.
-  if (code === "support_report_upload_conflict" || isUploadConflictError(message)) {
+  if (code === "support_report_upload_conflict") {
     return {
       kind: "upload_conflict",
       message,
@@ -159,7 +196,7 @@ export function describeSupportReportUploadFailure(
 
 export function shouldShowSupportReportUploadFailureToast(input: {
   failure: SupportReportUploadFailure;
-  lastToastKind?: SupportReportUploadFailureKind | null;
+  lastToastKind?: string | null;
   lastToastAt?: string | null;
   nowMs: number;
 }): boolean {
@@ -176,46 +213,54 @@ export function shouldShowSupportReportUploadFailureToast(input: {
   return input.nowMs - lastToastMs >= input.failure.toastCooldownMs;
 }
 
-function supportReportUploadErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
+/**
+ * Takes one no-throw snapshot of stable own data fields. Accessors, prototype
+ * values, hostile proxies, and revoked proxies are deliberately ignored.
+ */
+export function snapshotSupportReportUploadError(
+  error: unknown,
+): SupportReportUploadErrorSnapshot {
+  const ownMessage = ownDataValue(error, "message");
+  const ownCode = ownDataValue(error, "code");
+  const ownStatus = ownDataValue(error, "status");
+  const message = typeof error === "string" && error.trim()
+    ? error
+    : typeof ownMessage === "string" && ownMessage.trim()
+      ? ownMessage
+      : "Report upload failed.";
+  return {
+    message,
+    code: typeof ownCode === "string" ? ownCode : null,
+    status: typeof ownStatus === "number" && Number.isSafeInteger(ownStatus)
+      ? ownStatus
+      : null,
+  };
+}
+
+function ownDataValue(value: unknown, key: "code" | "message" | "status"): unknown {
+  if (!isObject(value)) return undefined;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && Object.prototype.hasOwnProperty.call(descriptor, "value")
+      ? descriptor.value
+      : undefined;
+  } catch {
+    return undefined;
   }
-  if (typeof error === "string" && error.trim()) {
-    return error;
-  }
-  const shaped = error as ErrorShape | null;
-  if (shaped && typeof shaped.message === "string" && shaped.message.trim()) {
-    return shaped.message;
-  }
-  return "Report upload failed.";
 }
 
-function supportReportUploadErrorCode(error: unknown): string | null {
-  const shaped = error as ErrorShape | null;
-  return shaped && typeof shaped.code === "string" ? shaped.code : null;
+function ownedSnapshotArtifactFailure(
+  error: unknown,
+): "snapshot_mismatch" | "snapshot_missing" | null {
+  return isObject(error) ? snapshotArtifactFailures.get(error) ?? null : null;
 }
 
-function supportReportUploadErrorStatus(error: unknown): number | null {
-  const shaped = error as ErrorShape | null;
-  return shaped && typeof shaped.status === "number" ? shaped.status : null;
+function isLocalPayloadFailure(error: unknown): boolean {
+  return isObject(error) && localPayloadFailures.has(error);
 }
 
-function isLocalPayloadError(message: string): boolean {
-  return message.startsWith("Diagnostics are too large")
-    || message.startsWith("Attachments are too large")
-    || message.startsWith("Attachment is too large:")
-    || message.startsWith("Attachment data is missing:");
-}
-
-function isUploadConflictError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return normalized.includes("targets already exist for different objects")
-    || normalized.includes("changed diagnostics intent")
-    || normalized.includes("changed attachment intent");
-}
-
-function isAlreadyCompletedError(message: string): boolean {
-  return message.toLowerCase().includes("upload is already completed");
+function isObject(value: unknown): value is object {
+  return (typeof value === "object" && value !== null) || typeof value === "function";
 }
 
 // Terminal-retry guard: a retryable failure that has exhausted its attempt

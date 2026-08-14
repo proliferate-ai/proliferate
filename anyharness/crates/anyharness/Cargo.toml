@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 serde_json.workspace = true
 anyharness-lib.workspace = true
+proliferate-diagnostics-client.workspace = true
 axum.workspace = true
 clap.workspace = true
 tokio.workspace = true
@@ -25,6 +26,7 @@ tower-http.workspace = true
 sentry.workspace = true
 sentry-anyhow.workspace = true
 sentry-tracing.workspace = true
+proliferate-diagnostics-protocol.workspace = true
 
 [dev-dependencies]
 sentry = { workspace = true, features = ["test"] }

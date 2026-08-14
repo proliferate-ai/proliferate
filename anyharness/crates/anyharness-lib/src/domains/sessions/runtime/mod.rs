@@ -37,6 +37,8 @@ mod launch_env;
 mod launch_env_tests;
 mod launch_policy;
 mod lifecycle;
+#[cfg(test)]
+mod lifecycle_tests;
 mod pending_prompts;
 mod prompt;
 #[cfg(test)]

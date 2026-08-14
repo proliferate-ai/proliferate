@@ -75,3 +75,4 @@ mod links;
 mod notifications;
 mod pending_prompts;
 mod sessions;
+mod support_windows;

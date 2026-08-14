@@ -7,7 +7,10 @@ import {
   ProductSidebarSectionHeader,
 } from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
-import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
+import {
+  SidebarPinnedNavigation,
+  SidebarScrollingNavigation,
+} from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
 import type {
@@ -312,19 +315,23 @@ function FullSidebarPane() {
         style={{ width }}
       >
         <ProductSidebarBrandRow label="Proliferate" />
-        <SidebarPrimaryNavigation
+        <SidebarPinnedNavigation
           homeActive
-          workspacesActive={false}
-          workflowsActive={false}
-          supportActive={false}
           onGoHome={() => {}}
-          onGoWorkspaces={() => {}}
-          onGoWorkflows={() => {}}
-          onOpenSupport={() => {}}
           shortcutRevealVisible={shortcutReveal}
-          shortcutLabels={{ newChat: "⌘N", support: "⌘?" }}
+          newChatShortcutLabel="⌘N"
         />
         <div className="flex min-h-0 flex-col px-2">
+          <SidebarScrollingNavigation
+            workspacesActive={false}
+            workflowsActive={false}
+            supportActive={false}
+            onGoWorkspaces={() => {}}
+            onGoWorkflows={() => {}}
+            onOpenSupport={() => {}}
+            shortcutRevealVisible={shortcutReveal}
+            supportShortcutLabel="⌘?"
+          />
           <SidebarRepositoriesHeader
             repositoriesCollapsed={repositoriesCollapsed}
             filtersActive={false}

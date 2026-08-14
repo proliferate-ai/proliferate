@@ -22,6 +22,11 @@ import {
 } from "#product/lib/domain/agents/local-auth-state";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 /**
  * Poll the enrollment while it has not reached `synced` so the pending→synced
@@ -156,6 +161,7 @@ export function useLocalAuthStateSync() {
       } catch (error: unknown) {
         // The runtime HAS the state; only the report failed. pushed !== acked
         // now, so the next sync pass retries the ack without re-pushing.
+        recordAgentAuthFailure("delivery_ack_failed", error, state.revision);
         console.warn("[agent-auth] local state delivery ack failed", error);
       }
     };
@@ -192,6 +198,12 @@ export function useLocalAuthStateSync() {
           lastScheduledRef.current = lastPushedRef.current;
         }
         // No ack on failure (Proof C1): the selection stays visibly pending.
+        recordAgentAuthFailure(
+          "state_push_failed",
+          error,
+          state.revision,
+          plan.action ?? undefined,
+        );
         console.warn("[agent-auth] local state sync push failed", error);
         return;
       }
@@ -203,6 +215,7 @@ export function useLocalAuthStateSync() {
       try {
         await invalidateAgentLaunchReadinessResources(runtimeUrl);
       } catch (error: unknown) {
+        recordAgentAuthFailure("launch_resource_refresh_failed", error, state.revision);
         console.warn("[agent-auth] local launch resource refresh failed", error);
       }
     });
@@ -217,4 +230,29 @@ export function useLocalAuthStateSync() {
     runtimeUrl,
     state,
   ]);
+}
+
+function recordAgentAuthFailure(
+  stage:
+    | "delivery_ack_failed"
+    | "state_push_failed"
+    | "launch_resource_refresh_failed",
+  error: unknown,
+  revision: number,
+  action?: string,
+): void {
+  recordRendererDiagnostic({
+    name: `renderer.agent_auth.${stage}`,
+    severity: "warn",
+    kind: "message",
+    privacy: "operational",
+    fields: {
+      revision: diagnosticField(revision, "operational"),
+      error_name: diagnosticField(safeRendererErrorName(error), "operational"),
+      ...(action === undefined
+        ? {}
+        : { action: diagnosticField(action, "operational") }),
+    },
+    errorClassification: stage,
+  });
 }

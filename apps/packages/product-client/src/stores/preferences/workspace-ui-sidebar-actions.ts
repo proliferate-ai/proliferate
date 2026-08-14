@@ -8,10 +8,6 @@ import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "#product/
 
 type WorkspaceUiSidebarActions = Pick<
   WorkspaceUiState,
-  | "archiveWorkspace"
-  | "archiveWorkspaces"
-  | "unarchiveWorkspace"
-  | "unarchiveWorkspaces"
   | "pinWorkspace"
   | "unpinWorkspace"
   | "hideRepoRoot"
@@ -32,46 +28,6 @@ export function createWorkspaceUiSidebarActions(
   get: WorkspaceUiGet,
 ): WorkspaceUiSidebarActions {
   return {
-    archiveWorkspace: (id) => {
-      const current = get().archivedWorkspaceIds;
-      if (current.includes(id)) {
-        return;
-      }
-      set({ archivedWorkspaceIds: [...current, id] });
-    },
-
-    archiveWorkspaces: (ids) => {
-      const current = get().archivedWorkspaceIds;
-      const currentSet = new Set(current);
-      const newIds = ids.filter((id) => !currentSet.has(id));
-      if (newIds.length === 0) {
-        return;
-      }
-      set({ archivedWorkspaceIds: [...current, ...newIds] });
-    },
-
-    unarchiveWorkspace: (id) => {
-      const current = get().archivedWorkspaceIds;
-      const next = current.filter((workspaceId) => workspaceId !== id);
-      if (next.length === current.length) {
-        return;
-      }
-      set({ archivedWorkspaceIds: next });
-    },
-
-    unarchiveWorkspaces: (ids) => {
-      if (ids.length === 0) {
-        return;
-      }
-      const idSet = new Set(ids);
-      const current = get().archivedWorkspaceIds;
-      const next = current.filter((workspaceId) => !idSet.has(workspaceId));
-      if (next.length === current.length) {
-        return;
-      }
-      set({ archivedWorkspaceIds: next });
-    },
-
     pinWorkspace: (id) => {
       const current = get().pinnedWorkspaceIds;
       if (current.includes(id)) {

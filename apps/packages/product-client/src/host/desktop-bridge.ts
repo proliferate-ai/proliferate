@@ -2,6 +2,12 @@ import type { AnyHarnessClientConnection } from "@anyharness/sdk-react";
 import type { ServerMeta } from "#product/lib/domain/auth/connect-server";
 import type { DroppedPathsSnapshot } from "./desktop-file-drop-bridge";
 import type { DesktopUpdaterBridge } from "./desktop-updater-bridge";
+import type {
+  SaveJsonInput,
+  AttachmentInput,
+  RenderErrorReport,
+  DesktopSupportSnapshotBridge,
+} from "./desktop-bridge-support";
 
 /**
  * The typed Desktop bridge: product-level native capabilities grouped by
@@ -306,88 +312,55 @@ export interface DesktopScratchBridge {
 
 // --- Diagnostics and support ------------------------------------------------
 
-export interface SupportBundleLog {
-  source: string;
-  path: string;
-  bytesRead: number;
-  truncated: boolean;
-  text: string;
-}
-
-/** A support diagnostics bundle. Mirrors Desktop's collected bundle shape. */
-export interface SupportBundle {
-  schemaVersion: number;
-  manifest: {
-    appVersion: string;
-    runtimeVersion?: string | null;
-    runtimeStatus?: string | null;
-    runtimeHome?: string | null;
-    platform: string;
-    timestamp: string;
-  };
-  health?: {
-    runtimeHome: string;
-    status: string;
-    version: string;
-  } | null;
-  logs: SupportBundleLog[];
-  collectionErrors: string[];
-}
-
-export interface SaveJsonInput {
-  suggestedFileName: string;
-  contents: string;
-}
-
-export interface AttachmentInput {
-  clientFileId: string;
-  fileName: string;
-  dataBase64: string;
-}
-
-/** A narrow lifecycle marker written to Desktop's renderer-event log. */
-export interface RendererEventPayload {
-  source: string;
-  message: string;
-  route?: string | null;
-  elapsedMs?: number | null;
-}
+// Re-export support snapshot types from separate module
+export type {
+  SaveJsonInput,
+  AttachmentInput,
+  RenderErrorReport,
+  SupportSnapshotWorkspaceBindingV1,
+  SupportSnapshotSelectionV1,
+  SupportSnapshotConsentV1,
+  SupportSnapshotWindowV1,
+  SupportSnapshotPreparation,
+  PreparedSupportSnapshotV1,
+  PersistedSupportArtifactRefV1,
+  ReconciledSupportArtifactV1,
+  SupportSessionCollectionManifestV1,
+  BeginSupportSnapshotInput,
+  FinishSupportSnapshotInput,
+  SupportSnapshotAttemptOutcome,
+  SupportSnapshotPreparationFailureClassificationV1,
+  SupportSnapshotSubmissionRejectedClassificationV1,
+  SupportSnapshotSubmissionFailedClassificationV1,
+  FinishSupportSnapshotSubmissionInputV1,
+  DesktopSupportSnapshotBridge,
+} from "./desktop-bridge-support";
 
 /**
- * A React render-phase error captured by the product's AppErrorBoundary,
- * forwarded to Desktop's native renderer diagnostic log (not Sentry). The host
- * owns dedup/fingerprint/suppression semantics so the product boundary stays a
- * thin reporter. `error` crosses the boundary as-is; the host derives its
- * message/stack. This is distinct from `logEvent`, which is a narrow lifecycle
- * marker rather than a full error diagnostic.
- */
-export interface RenderErrorReport {
-  error: unknown;
-  componentStack?: string | null;
-}
-
-/**
- * Support UI can use native logs and attachments without importing Tauri.
- * Collection and staging return `null` outside a working native host, matching
- * Desktop's current nullability.
+ * Support UI can save manual debug exports and stage attachments without
+ * importing Tauri. The upload path uses only the consented supportSnapshot
+ * subgroup and never calls the retired schema-1 collector.
  */
 export interface DesktopDiagnosticsBridge {
-  logEvent(payload: RendererEventPayload): Promise<void>;
   /**
-   * Report a product render-phase error to the native renderer diagnostic log.
+   * Report a product render-phase error to the renderer diagnostics producer.
    * The host applies the same dedup/fingerprint/suppression the pre-move
    * renderer diagnostics did; the product boundary just forwards the error.
-   * Resolves true only after the diagnostic was persisted (or an identical
-   * diagnostic was already persisted inside the dedupe window). A host should
-   * resolve false rather than reject when persistence fails, though the product
-   * recovery boundary still guards both throws and rejections.
+   * Resolves true only after a coherent receipt proves collector admission as
+   * accepted-or-duplicate (or an identical diagnostic obtained that proof
+   * inside the dedupe window). It does not claim persistence, fallback
+   * retention, upload, or current collector state. A host should resolve false
+   * rather than reject when admission proof fails, though the product recovery
+   * boundary still guards both throws and rejections.
    */
   reportRenderError(report: RenderErrorReport): Promise<boolean>;
-  collectSupportBundle(): Promise<SupportBundle | null>;
   saveJson(input: SaveJsonInput): Promise<string | null>;
 
   /** Returns the staged attachment path, or null outside the desktop host. */
   stageAttachment(input: AttachmentInput): Promise<string | null>;
   readAttachment(path: string): Promise<string>;
   deleteAttachment(path: string): Promise<void>;
+
+  /** Present only when the packaged native support coordinator is available. */
+  supportSnapshot: DesktopSupportSnapshotBridge | null;
 }

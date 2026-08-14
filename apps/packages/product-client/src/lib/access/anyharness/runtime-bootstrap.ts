@@ -3,9 +3,16 @@ import type {
   DesktopRuntimeBridge,
   LocalRuntimeSnapshot,
 } from "@proliferate/product-client/host/desktop-bridge";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 // Narrow bootstrap wiring: this module is the canonical boot orchestrator for
 // AnyHarness runtime connection state.
-import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import {
+  useHarnessConnectionStore,
+  type HarnessRuntimeUrlSource,
+} from "#product/stores/sessions/harness-connection-store";
 import { DEFAULT_RUNTIME_URL } from "#product/config/runtime";
 
 export async function bootstrapHarnessRuntime(
@@ -20,7 +27,7 @@ export async function bootstrapHarnessRuntime(
     }
     // Tauri commands unavailable (e.g. dev mode) — try fallback URL
     useHarnessConnectionStore.setState({ connectionState: "connecting", error: null });
-    setRuntimeUrlIfChanged(DEFAULT_RUNTIME_URL);
+    setRuntimeUrlIfChanged(DEFAULT_RUNTIME_URL, "default_fallback");
     await pollUntilHealthy(runtime, DEFAULT_RUNTIME_URL, signal);
   }
 }
@@ -50,7 +57,7 @@ async function connectToRuntime(
     return;
   }
   const runtimeUrl = snapshot.connection.runtimeUrl;
-  setRuntimeUrlIfChanged(runtimeUrl);
+  setRuntimeUrlIfChanged(runtimeUrl, "native_capture");
 
   const runtimeReady = await confirmRuntimeReady(runtimeUrl);
   if (signal?.aborted) {
@@ -92,7 +99,10 @@ async function pollUntilHealthy(
       }
       if (runtimeSnapshot.connection.runtimeUrl !== currentRuntimeUrl) {
         currentRuntimeUrl = runtimeSnapshot.connection.runtimeUrl;
-        useHarnessConnectionStore.setState({ runtimeUrl: currentRuntimeUrl });
+        useHarnessConnectionStore.setState({
+          runtimeUrl: currentRuntimeUrl,
+          runtimeUrlSource: "native_capture",
+        });
       }
     } catch {
       if (signal?.aborted) {
@@ -122,6 +132,16 @@ async function pollUntilHealthy(
   if (signal?.aborted) {
     return;
   }
+  recordRendererDiagnostic({
+    name: "renderer.runtime.health_poll_exhausted",
+    severity: "error",
+    kind: "message",
+    privacy: "operational",
+    fields: {
+      max_attempts: diagnosticField(maxAttempts, "operational"),
+    },
+    errorClassification: "runtime_health_poll_exhausted",
+  });
   console.error("[harness] pollUntilHealthy: gave up after %d attempts", maxAttempts);
   useHarnessConnectionStore.setState({ connectionState: "failed", error: "Runtime did not become healthy in time." });
 }
@@ -145,9 +165,13 @@ function waitForPollInterval(signal?: AbortSignal): Promise<boolean> {
   });
 }
 
-function setRuntimeUrlIfChanged(runtimeUrl: string): void {
-  if (useHarnessConnectionStore.getState().runtimeUrl !== runtimeUrl) {
-    useHarnessConnectionStore.setState({ runtimeUrl });
+function setRuntimeUrlIfChanged(
+  runtimeUrl: string,
+  runtimeUrlSource: HarnessRuntimeUrlSource,
+): void {
+  const state = useHarnessConnectionStore.getState();
+  if (state.runtimeUrl !== runtimeUrl || state.runtimeUrlSource !== runtimeUrlSource) {
+    useHarnessConnectionStore.setState({ runtimeUrl, runtimeUrlSource });
   }
 }
 

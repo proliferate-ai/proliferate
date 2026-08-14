@@ -1,89 +1,84 @@
-//! Workspace retire lifecycle handlers: auth/admission → parse → ONE facade
-//! call → map. The retire state machine itself lives in
-//! `domains/workspaces/retire.rs` with its decisions in `retire_policy.rs`
-//! (grid PR 9, structure violation #5).
+//! The two lifecycle transitions: `POST /archive` and `POST /unarchive`.
+//!
+//! Both handlers are thin on purpose. Every ordering guarantee — the pre-gate
+//! fast path, the bounded lease, the load-row-after-lease rule, the quiesce, the
+//! flip, the detached tail, the awaited cancel — lives in the archive subdomain,
+//! because those orderings ARE the feature and a handler is the wrong place to
+//! own them. What lives here is the wire: parse the body's resolved knobs, call
+//! the facade, map the outcome.
+//!
+//! Neither route takes session-mutation permits, and that is a decision rather
+//! than an omission. Today's destructive flows admit every session before taking
+//! their lease; archive replaces that with the exclusive lease plus
+//! load-row-after-lease plus quiesce, which subsume what the permits provided.
+//! Taking permits would let one stuck session mutation block archiving a
+//! workspace — the exact failure archiving exists to give the user a way out of.
 
-use crate::api::http::workspaces_purge::admit_all_workspace_sessions;
-use crate::domains::sessions::admission::SessionMutationKind;
-use anyharness_contract::v1::{WorkspaceRetirePreflightResponse, WorkspaceRetireResponse};
-use axum::{
-    extract::{Path, State},
-    Json,
+use anyharness_contract::v1::{
+    ArchiveWorkspaceRequest, ArchiveWorkspaceResponse, UnarchiveWorkspaceRequest,
+    UnarchiveWorkspaceResponse,
 };
+use axum::extract::{Path, State};
+use axum::Json;
 
 use super::error::ApiError;
-use super::workspaces_lifecycle_contract::{retire_preflight_to_contract, retire_result_to_contract};
+use super::workspaces_lifecycle_contract::{
+    archive_options_from_request, archive_outcome_to_contract, unarchive_options_from_request,
+    unarchive_outcome_to_contract,
+};
 use crate::app::AppState;
 
 #[utoipa::path(
-    get,
-    path = "/v1/workspaces/{workspace_id}/retire/preflight",
+    post,
+    path = "/v1/workspaces/{workspace_id}/archive",
     params(("workspace_id" = String, Path, description = "Workspace ID")),
+    request_body = ArchiveWorkspaceRequest,
     responses(
-        (status = 200, description = "Retire preflight", body = WorkspaceRetirePreflightResponse),
+        (status = 200, description = "Archived the workspace", body = ArchiveWorkspaceResponse),
         (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "The workspace cannot be archived right now", body = anyharness_contract::v1::ProblemDetails),
+        (status = 500, description = "Archiving failed; retryable", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "workspaces"
 )]
-pub async fn retire_workspace_preflight(
+pub async fn archive_workspace(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
-) -> Result<Json<WorkspaceRetirePreflightResponse>, ApiError> {
-    let view = state.workspace_retire_service.preflight(&workspace_id).await?;
-    Ok(Json(retire_preflight_to_contract(view)))
+    body: Option<Json<ArchiveWorkspaceRequest>>,
+) -> Result<Json<ArchiveWorkspaceResponse>, ApiError> {
+    // An absent body is a valid archive with both knobs off. Idempotent
+    // convergence re-POSTs are the reason: they are allowed to be as bare as
+    // `curl -X POST`.
+    let request = body.map(|Json(request)| request).unwrap_or_default();
+    let outcome = state
+        .workspace_archive_service
+        .archive(&workspace_id, archive_options_from_request(request))
+        .await?;
+    Ok(Json(archive_outcome_to_contract(&state, outcome).await?))
 }
 
 #[utoipa::path(
     post,
-    path = "/v1/workspaces/{workspace_id}/retire",
+    path = "/v1/workspaces/{workspace_id}/unarchive",
     params(("workspace_id" = String, Path, description = "Workspace ID")),
+    request_body = UnarchiveWorkspaceRequest,
     responses(
-        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
-        (status = 200, description = "Retire workspace result", body = WorkspaceRetireResponse),
+        (status = 200, description = "Unarchived the workspace", body = UnarchiveWorkspaceResponse),
         (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "The restore needs a decision, or something else holds the workspace", body = anyharness_contract::v1::ProblemDetails),
+        (status = 500, description = "The restore failed; retryable", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "workspaces"
 )]
-pub async fn retire_workspace(
+pub async fn unarchive_workspace(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
-) -> Result<Json<WorkspaceRetireResponse>, ApiError> {
-    // Spec 2b RETIRE-01 ruling (option B): retirement can dematerialize the
-    // workspace a controlled session is running in, so it fails closed like
-    // purge — sorted permits for every workspace session are held across the
-    // whole retirement.
-    let admission =
-        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::WorkspaceRetire)
-            .await?;
-    // PR1227-WORKSPACE-FENCE-02: carry the admitted id set into the under-lease
-    // re-check; the permits are held until this handler returns.
-    let admitted_session_ids = admission.session_ids.clone();
-    let _admission_permits = admission.permits;
-
-    let result = state
-        .workspace_retire_service
-        .retire(&workspace_id, admitted_session_ids)
+    body: Option<Json<UnarchiveWorkspaceRequest>>,
+) -> Result<Json<UnarchiveWorkspaceResponse>, ApiError> {
+    let request = body.map(|Json(request)| request).unwrap_or_default();
+    let outcome = state
+        .workspace_archive_service
+        .unarchive(&workspace_id, unarchive_options_from_request(request))
         .await?;
-    retire_result_to_contract(&state, result).await.map(Json)
-}
-
-#[utoipa::path(
-    post,
-    path = "/v1/workspaces/{workspace_id}/retire/cleanup-retry",
-    params(("workspace_id" = String, Path, description = "Workspace ID")),
-    responses(
-        (status = 200, description = "Cleanup retry result", body = WorkspaceRetireResponse),
-        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
-    ),
-    tag = "workspaces"
-)]
-pub async fn retry_retire_cleanup(
-    State(state): State<AppState>,
-    Path(workspace_id): Path<String>,
-) -> Result<Json<WorkspaceRetireResponse>, ApiError> {
-    let result = state
-        .workspace_retire_service
-        .retry_cleanup(&workspace_id)
-        .await?;
-    retire_result_to_contract(&state, result).await.map(Json)
+    Ok(Json(unarchive_outcome_to_contract(&state, outcome).await?))
 }

@@ -24,10 +24,8 @@ import {
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceKey,
   anyHarnessWorktreesInventoryKey,
-  anyHarnessWorkspacePurgePreflightKey,
   anyHarnessWorkspaceDetailKey,
   anyHarnessWorkspaceDetectSetupKey,
-  anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspaceSetupStatusKey,
   anyHarnessWorkspaceSubagentsKey,
 } from "../lib/query-keys.js";
@@ -61,7 +59,10 @@ export function useRuntimeWorkspacesQuery(options?: RuntimeQueryOptions) {
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.workspaces.list(requestOptionsWithSignal(options?.requestOptions, signal));
+      return client.workspaces.list(
+        undefined,
+        requestOptionsWithSignal(options?.requestOptions, signal),
+      );
     },
   });
 }
@@ -241,96 +242,6 @@ export function useUpdateWorkspaceDisplayNameMutation() {
   });
 }
 
-export function useRetireWorkspacePreflightQuery(options?: WorkspaceQueryOptions) {
-  const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useAnyHarnessCacheScopeKey();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
-
-  return useQuery({
-    queryKey: anyHarnessWorkspaceRetirePreflightKey(cacheScopeKey, workspaceId),
-    enabled: (options?.enabled ?? true) && !!workspaceId,
-    staleTime: 60_000,
-    queryFn: async ({ signal }) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
-      const client = getAnyHarnessClient(resolved.connection);
-      return client.workspaces.retirePreflight(
-        resolved.connection.anyharnessWorkspaceId,
-        requestOptionsWithSignal(options?.requestOptions, signal),
-      );
-    },
-  });
-}
-
-export function usePurgeWorkspacePreflightQuery(options?: WorkspaceQueryOptions) {
-  const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useAnyHarnessCacheScopeKey();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
-
-  return useQuery({
-    queryKey: anyHarnessWorkspacePurgePreflightKey(cacheScopeKey, workspaceId),
-    enabled: (options?.enabled ?? true) && !!workspaceId,
-    staleTime: 60_000,
-    queryFn: async ({ signal }) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
-      const client = getAnyHarnessClient(resolved.connection);
-      return client.workspaces.purgePreflight(
-        resolved.connection.anyharnessWorkspaceId,
-        requestOptionsWithSignal(options?.requestOptions, signal),
-      );
-    },
-  });
-}
-
-export function useRetireWorkspaceMutation() {
-  const runtime = useAnyHarnessRuntimeContext();
-  const workspace = useAnyHarnessWorkspaceContext();
-  const queryClient = useQueryClient();
-  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
-  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
-
-  return useMutation({
-    mutationFn: async (workspaceId: string) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
-      const client = getAnyHarnessClient(resolved.connection);
-      return client.workspaces.retire(resolved.connection.anyharnessWorkspaceId);
-    },
-    onSuccess: async (_data, workspaceId) => {
-      await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspaceRetirePreflightKey(cacheScopeKey, workspaceId),
-      });
-    },
-  });
-}
-
-export function useRetryRetireCleanupMutation() {
-  const runtime = useAnyHarnessRuntimeContext();
-  const workspace = useAnyHarnessWorkspaceContext();
-  const queryClient = useQueryClient();
-  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
-  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
-
-  return useMutation({
-    mutationFn: async (workspaceId: string) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
-      const client = getAnyHarnessClient(resolved.connection);
-      return client.workspaces.retryRetireCleanup(
-        resolved.connection.anyharnessWorkspaceId,
-      );
-    },
-    onSuccess: async (_data, workspaceId) => {
-      await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspaceRetirePreflightKey(cacheScopeKey, workspaceId),
-      });
-    },
-  });
-}
-
 export function usePurgeWorkspaceMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const workspace = useAnyHarnessWorkspaceContext();
@@ -344,44 +255,12 @@ export function usePurgeWorkspaceMutation() {
       const client = getAnyHarnessClient(resolved.connection);
       return client.workspaces.purge(resolved.connection.anyharnessWorkspaceId);
     },
-    onSuccess: async (_data, workspaceId) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
         queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl, cacheScopeKey),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspacePurgePreflightKey(cacheScopeKey, workspaceId),
-      });
-    },
-  });
-}
-
-export function useRetryPurgeWorkspaceMutation() {
-  const runtime = useAnyHarnessRuntimeContext();
-  const workspace = useAnyHarnessWorkspaceContext();
-  const queryClient = useQueryClient();
-  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
-  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
-
-  return useMutation({
-    mutationFn: async (workspaceId: string) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
-      const client = getAnyHarnessClient(resolved.connection);
-      return client.workspaces.retryPurge(
-        resolved.connection.anyharnessWorkspaceId,
-      );
-    },
-    onSuccess: async (_data, workspaceId) => {
-      await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl, cacheScopeKey),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspacePurgePreflightKey(cacheScopeKey, workspaceId),
       });
     },
   });

@@ -41,6 +41,10 @@ vi.mock("#product/stores/toast/toast-store", () => ({
     selector({ show: vi.fn(), showError: vi.fn() }),
 }));
 
+vi.mock("#product/hooks/workspaces/cache/use-workspace-collections-invalidation", () => ({
+  useWorkspaceCollectionsInvalidation: () => vi.fn(),
+}));
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();

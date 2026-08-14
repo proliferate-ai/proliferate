@@ -24,7 +24,6 @@ export function selectPersistedWorkspaceUiState(
 ): PersistedWorkspaceUiState {
   return {
     migrationVersion: WORKSPACE_UI_MIGRATION_VERSION,
-    archivedWorkspaceIds: state.archivedWorkspaceIds,
     pinnedWorkspaceIds: state.pinnedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     collapsedRepoGroups: state.collapsedRepoGroups,
@@ -76,7 +75,6 @@ export function getChangedWorkspaceUiStateKeys(
   next: WorkspaceUiChangeTrackedState,
 ): string[] {
   return [
-    "archivedWorkspaceIds",
     "pinnedWorkspaceIds",
     "hiddenRepoRootIds",
     "collapsedRepoGroups",

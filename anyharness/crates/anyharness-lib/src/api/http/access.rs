@@ -2,7 +2,6 @@ use crate::api::auth::{require_workspace_scope, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
 use crate::domains::workspaces::access_gate::WorkspaceAccessError;
-use crate::domains::workspaces::model::WorkspaceLifecycleState;
 
 pub fn map_access_error(error: WorkspaceAccessError) -> ApiError {
     match error {
@@ -29,9 +28,9 @@ pub fn map_access_error(error: WorkspaceAccessError) -> ApiError {
             ),
             "WORKSPACE_LIVE_SESSION_BLOCKED",
         ),
-        WorkspaceAccessError::WorkspaceRetired(workspace_id) => ApiError::conflict(
-            format!("workspace {workspace_id} is retired"),
-            "WORKSPACE_RETIRED",
+        WorkspaceAccessError::WorkspaceArchived(workspace_id) => ApiError::conflict(
+            format!("workspace {workspace_id} is archived"),
+            "WORKSPACE_ARCHIVED",
         ),
         WorkspaceAccessError::Unexpected(error) => ApiError::internal(format!(
             "workspace access state could not be verified: {error}"
@@ -46,19 +45,33 @@ pub fn assert_workspace_mutable(state: &AppState, workspace_id: &str) -> Result<
         .map_err(map_access_error)
 }
 
-pub fn assert_workspace_not_retired(state: &AppState, workspace_id: &str) -> Result<(), ApiError> {
-    let workspace = state
+/// The workspace exists, and that is all this asserts.
+///
+/// Read routes need the 404, not a lifecycle refusal: an archived workspace
+/// still renders its chat history, its file tree, and its git state, which is
+/// the entire point of archiving instead of deleting. Any route that spawns a
+/// process or writes the worktree uses [`assert_workspace_active`] or the
+/// access gate instead.
+pub fn assert_workspace_exists(state: &AppState, workspace_id: &str) -> Result<(), ApiError> {
+    state
         .workspace_runtime
         .get_workspace(workspace_id)
         .map_err(|error| ApiError::internal(error.to_string()))?
         .ok_or_else(|| ApiError::not_found("Workspace not found", "WORKSPACE_NOT_FOUND"))?;
-    if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
-        return Err(ApiError::conflict(
-            format!("workspace {workspace_id} is retired"),
-            "WORKSPACE_RETIRED",
-        ));
-    }
     Ok(())
+}
+
+/// The archived refusal for routes that are not already on
+/// [`WorkspaceAccessGate`](crate::domains::workspaces::access_gate::WorkspaceAccessGate).
+///
+/// A thin wrapper, deliberately: the gate carries the predicate, so this and
+/// the gate's own `assert_can_mutate_for_workspace` / `assert_can_start_live_session`
+/// cannot drift into two guards that disagree about what "archived" forbids.
+pub fn assert_workspace_active(state: &AppState, workspace_id: &str) -> Result<(), ApiError> {
+    state
+        .workspace_access_gate
+        .assert_workspace_not_archived(workspace_id)
+        .map_err(map_access_error)
 }
 
 pub fn assert_workspace_auth_scope(auth: &AuthContext, workspace_id: &str) -> Result<(), ApiError> {

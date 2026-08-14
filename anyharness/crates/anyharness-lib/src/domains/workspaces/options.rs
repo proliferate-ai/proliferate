@@ -305,7 +305,7 @@ impl WorkspaceOptionRuntime {
 
     pub async fn list_workspaces(&self) -> Result<Vec<WorkspaceRecord>, WorkspaceOptionsError> {
         let workspaces = self.workspaces.clone();
-        tokio::task::spawn_blocking(move || workspaces.list_workspaces())
+        tokio::task::spawn_blocking(move || workspaces.list_workspaces(None))
             .await?
             .map_err(WorkspaceOptionsError::Create)
     }

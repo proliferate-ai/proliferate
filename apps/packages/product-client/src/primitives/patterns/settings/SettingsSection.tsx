@@ -19,8 +19,8 @@ export interface SettingsSectionProps extends Omit<HTMLAttributes<HTMLElement>, 
  * `titleWeight="muted"` (default) is the header used above a card of rows:
  * a small muted label, no description emphasis. `titleWeight="emphasized"`
  * promotes the title to body weight for sections that read as their own
- * mini-heading rather than a card caption (see the "Archiving" block on the
- * archived-workspaces pane).
+ * mini-heading rather than a card caption (see the harness provider and
+ * model sections on the Agents pane).
  *
  * `surface="plain"` opts out of the wash card entirely and is reserved for
  * content that must not sit in a tinted card: previews already on

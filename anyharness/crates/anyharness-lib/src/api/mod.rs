@@ -15,6 +15,8 @@ mod router_tests;
 #[cfg(test)]
 mod session_admission_tests;
 #[cfg(test)]
+mod support_window_route_tests;
+#[cfg(test)]
 mod workflow_runs_portable_contract_tests;
 #[cfg(test)]
 mod workflow_runs_scripted_tests;

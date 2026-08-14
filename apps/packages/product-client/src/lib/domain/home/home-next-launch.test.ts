@@ -9,7 +9,6 @@ import type {
   AgentModelRegistryModel,
 } from "#product/lib/domain/agents/model-options";
 import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
-import { buildLocalSlotLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   buildHomeNextModelGroups,
   buildHomeNextAgentOptions,
@@ -42,7 +41,6 @@ function workspace(overrides: Partial<Workspace>): Workspace {
     path: "/tmp/repo/workspace-1",
     surface: "standard",
     lifecycleState: "active",
-    cleanupState: "none",
     createdAt: "2026-04-01T00:00:00.000Z",
     updatedAt: "2026-04-01T00:00:00.000Z",
     ...overrides,
@@ -150,32 +148,14 @@ describe("home-next branch helpers", () => {
 });
 
 describe("findHomeNextMatchingWorkspace", () => {
-  it("matches by repo root and raw branch, excluding archived and cowork workspaces", () => {
+  it("matches by repo root and raw branch, excluding cowork workspaces", () => {
     const match = findHomeNextMatchingWorkspace({
       repoRootId: "repo-root-1",
       branchName: "feature/raw-name",
-      archivedWorkspaceIds: ["archived"],
       workspaceLastInteracted: {},
       workspaces: [
         workspace({ id: "label-only", currentBranch: "Feature Raw Name" }),
-        workspace({ id: "archived", currentBranch: "feature/raw-name" }),
         workspace({ id: "cowork", surface: "cowork", currentBranch: "feature/raw-name" }),
-        workspace({ id: "match", currentBranch: "feature/raw-name" }),
-      ],
-    });
-
-    expect(match?.id).toBe("match");
-  });
-
-  it("treats local-slot aliases as archived workspace ids", () => {
-    const archivedSlotId = buildLocalSlotLogicalWorkspaceId("slot-archived");
-    const match = findHomeNextMatchingWorkspace({
-      repoRootId: "repo-root-1",
-      branchName: "feature/raw-name",
-      archivedWorkspaceIds: [archivedSlotId],
-      workspaceLastInteracted: {},
-      workspaces: [
-        workspace({ id: "slot-archived", currentBranch: "feature/raw-name" }),
         workspace({ id: "match", currentBranch: "feature/raw-name" }),
       ],
     });
@@ -187,7 +167,6 @@ describe("findHomeNextMatchingWorkspace", () => {
     const match = findHomeNextMatchingWorkspace({
       repoRootId: "repo-root-1",
       branchName: "feature/test",
-      archivedWorkspaceIds: [],
       workspaceLastInteracted: {
         old: "2026-04-03T00:00:00.000Z",
         newer: "2026-04-04T00:00:00.000Z",
@@ -204,30 +183,14 @@ describe("findHomeNextMatchingWorkspace", () => {
 });
 
 describe("findHomeNextLocalWorkspace", () => {
-  it("selects only non-archived local checkouts and ignores worktrees", () => {
+  it("selects local checkouts and ignores worktrees", () => {
     const match = findHomeNextLocalWorkspace({
       repoRootId: "repo-root-1",
-      archivedWorkspaceIds: ["archived-local"],
       workspaceLastInteracted: {
         local: "2026-04-03T00:00:00.000Z",
       },
       workspaces: [
         workspace({ id: "worktree", kind: "worktree" }),
-        workspace({ id: "archived-local", kind: "local" }),
-        workspace({ id: "local", kind: "local" }),
-      ],
-    });
-
-    expect(match?.id).toBe("local");
-  });
-
-  it("excludes local checkouts archived by local-slot alias", () => {
-    const match = findHomeNextLocalWorkspace({
-      repoRootId: "repo-root-1",
-      archivedWorkspaceIds: [buildLocalSlotLogicalWorkspaceId("slot-archived")],
-      workspaceLastInteracted: {},
-      workspaces: [
-        workspace({ id: "slot-archived", kind: "local" }),
         workspace({ id: "local", kind: "local" }),
       ],
     });

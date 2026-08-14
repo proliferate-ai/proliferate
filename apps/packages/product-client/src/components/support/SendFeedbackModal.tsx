@@ -11,6 +11,8 @@ import { useSupportOutreachEmail } from "#product/hooks/support/facade/use-suppo
 import { SupportCheckboxRow } from "#product/components/support/SupportCheckboxRow";
 import { SupportCreditField } from "#product/components/support/SupportCreditField";
 import { SupportModalFooter } from "#product/components/support/SupportModalFooter";
+import { SupportSnapshotConsentField } from "#product/components/support/SupportSnapshotConsentField";
+import { SupportSnapshotSaveCopyButton } from "#product/components/support/SupportSnapshotSaveCopyButton";
 
 export function SendFeedbackModal({ onClose }: { onClose: () => void }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -25,17 +27,16 @@ export function SendFeedbackModal({ onClose }: { onClose: () => void }) {
     handleAttachmentPaste,
     handleCancel,
     handleSend,
-    includeLogs,
     isSubmitting,
     message,
     notifyMe,
     removeAttachment,
     setCreditConsent,
     setCreditName,
-    setIncludeLogs,
     setMessage,
     setNotifyMe,
     setUrgent,
+    snapshotConsent,
     stagingError,
     urgent,
   } = useSupportModalState({ kind: "bug", onClose });
@@ -97,11 +98,7 @@ export function SendFeedbackModal({ onClose }: { onClose: () => void }) {
             creditName={creditName}
             setCreditName={setCreditName}
           />
-          <SupportCheckboxRow
-            checked={includeLogs}
-            onCheckedChange={setIncludeLogs}
-            label="Include app logs"
-          />
+          <SupportSnapshotConsentField snapshot={snapshotConsent} />
         </div>
 
         <SupportModalFooter outreach={outreach} />
@@ -110,6 +107,7 @@ export function SendFeedbackModal({ onClose }: { onClose: () => void }) {
           <Button type="button" variant="ghost" onClick={handleCancel}>
             Cancel
           </Button>
+          <SupportSnapshotSaveCopyButton snapshot={snapshotConsent} />
           <Button
             type="button"
             disabled={!canSend}

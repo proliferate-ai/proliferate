@@ -5,6 +5,8 @@ import { useSupportModalState } from "#product/hooks/support/facade/use-support-
 import { useSupportOutreachEmail } from "#product/hooks/support/facade/use-support-outreach-email";
 import { SupportCreditField } from "#product/components/support/SupportCreditField";
 import { SupportModalFooter } from "#product/components/support/SupportModalFooter";
+import { SupportSnapshotConsentField } from "#product/components/support/SupportSnapshotConsentField";
+import { SupportSnapshotSaveCopyButton } from "#product/components/support/SupportSnapshotSaveCopyButton";
 
 interface SubmitPromptModalProps {
   onClose: () => void;
@@ -22,6 +24,7 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
     setCreditConsent,
     setCreditName,
     setMessage,
+    snapshotConsent,
     stagingError,
   } = useSupportModalState({ kind: "feature", onClose });
   const outreach = useSupportOutreachEmail();
@@ -57,6 +60,7 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
             creditName={creditName}
             setCreditName={setCreditName}
           />
+          <SupportSnapshotConsentField snapshot={snapshotConsent} />
         </div>
 
         {stagingError ? (
@@ -69,6 +73,7 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
           <Button type="button" variant="ghost" onClick={handleCancel}>
             Cancel
           </Button>
+          <SupportSnapshotSaveCopyButton snapshot={snapshotConsent} />
           <Button
             type="button"
             disabled={!canSend}

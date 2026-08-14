@@ -8,8 +8,9 @@ import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-stat
 /**
  * The workspace-copy availability commands (PR 5 UI action model). One pure,
  * DOM-free command model derived from a logical workspace's local/Cloud
- * materialization state, shared by the DOM three-dot menu (WorkspaceItemMenu)
- * and the native context-menu builder so the two stay in exact parity.
+ * materialization state, shared by the DOM context menu (`WorkspaceItem`'s
+ * `PopoverButton`) and the native context-menu builder so the two stay in
+ * exact parity.
  *
  * The repo `…` menu owns repository availability; this owns workspace-copy
  * availability. V1 exposes only the safe core lifecycle — unsupported Git

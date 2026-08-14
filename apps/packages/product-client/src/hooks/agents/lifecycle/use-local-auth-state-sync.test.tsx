@@ -3,9 +3,14 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentAuthState } from "@proliferate/cloud-sdk";
 import { useLocalAuthStateSync } from "#product/hooks/agents/lifecycle/use-local-auth-state-sync";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+  type RendererDiagnosticInput,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const mocks = vi.hoisted(() => ({
   ackAgentAuthState: vi.fn(),
@@ -15,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   useAgentAuthState: vi.fn(),
   useAgentGatewayEnrollment: vi.fn(),
 }));
+let diagnostics: RendererDiagnosticInput[] = [];
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentAuthState: mocks.useAgentAuthState,
@@ -80,7 +86,13 @@ function makeQueryClient() {
 }
 
 describe("useLocalAuthStateSync", () => {
+  beforeEach(() => {
+    diagnostics = [];
+    setRendererDiagnosticsSink({ emit: (input) => diagnostics.push(input) });
+  });
+
   afterEach(() => {
+    resetRendererDiagnosticsSinkForTest();
     cleanup();
     vi.clearAllMocks();
   });
@@ -182,6 +194,10 @@ describe("useLocalAuthStateSync", () => {
     await waitFor(() => expect(warn).toHaveBeenCalled());
     expect(mocks.ackAgentAuthState).not.toHaveBeenCalled();
     expect(mocks.invalidateAgentLaunchReadinessResources).not.toHaveBeenCalled();
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      name: "renderer.agent_auth.state_push_failed",
+      errorClassification: "state_push_failed",
+    }));
     warn.mockRestore();
   });
 
@@ -208,6 +224,10 @@ describe("useLocalAuthStateSync", () => {
 
     await waitFor(() => expect(mocks.ackAgentAuthState).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      name: "renderer.agent_auth.delivery_ack_failed",
+      errorClassification: "delivery_ack_failed",
+    }));
 
     // Next pass: the refetched document is unchanged (same content, new
     // object identity, e.g. a query refetch) — recover the lost stamp.
@@ -229,6 +249,29 @@ describe("useLocalAuthStateSync", () => {
     await Promise.resolve();
     expect(mocks.ackAgentAuthState).toHaveBeenCalledTimes(2);
     warn.mockRestore();
+  });
+
+  it("records launch-resource refresh failure after a successful delivery", async () => {
+    mocks.useAgentGatewayEnrollment.mockReturnValue({
+      data: { syncStatus: "synced" },
+      isError: false,
+    });
+    mocks.useAgentAuthState.mockReturnValue({ data: gatewayState() });
+    mocks.applyAgentAuthState.mockResolvedValue({ applied: true, revision: 5 });
+    mocks.ackAgentAuthState.mockResolvedValue({ surface: "local" });
+    mocks.invalidateAgentLaunchReadinessResources.mockRejectedValue(
+      new Error("resource refresh failed"),
+    );
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    renderSyncHook(makeQueryClient());
+
+    await waitFor(() => {
+      expect(diagnostics).toContainEqual(expect.objectContaining({
+        name: "renderer.agent_auth.launch_resource_refresh_failed",
+        errorClassification: "launch_resource_refresh_failed",
+      }));
+    });
   });
 
   it("invalidates the auth-state query when the enrollment reaches synced (Proof C5 hook half)", async () => {

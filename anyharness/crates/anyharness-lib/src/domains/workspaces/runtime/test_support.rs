@@ -49,10 +49,7 @@ pub(super) fn make_runtime(db: &Db, runtime_home: &Path) -> WorkspaceRuntime {
     let repo_root_service = RepoRootService::new(RepoRootStore::new(db.clone()));
     WorkspaceRuntime::new(
         WorkspaceStore::new(db.clone()),
-        WorkspaceDeleteWorkflow::new(
-            db.clone(),
-            crate::domains::sessions::deletion::SessionDeleteWorkflow::new(db.clone()),
-        ),
+        WorkspaceDeleteWorkflow::new(db.clone()),
         repo_root_service,
         runtime_home.to_path_buf(),
     )

@@ -186,24 +186,41 @@ pub async fn call_tool(
         }
         "create_agent" => {
             let args = parse::<CreateAgentArgs>(arguments)?;
-            serialize(
-                operations
-                    .create_agent(
-                        &ctx.caller,
-                        CreateAgentInput {
-                            workspace: WorkspaceIdentity {
-                                runtime_id: operations.runtime_identity().clone(),
-                                workspace_id: args.workspace_id,
-                            },
-                            kind: args.kind,
-                            task: args.task,
-                            agent_kind: args.agent_kind,
-                            model_id: args.model_id,
-                            mode_id: args.mode_id,
+            let is_subagent = matches!(args.kind, AgentCreationKind::Subagent);
+            if is_subagent {
+                tracing::info!(
+                    target: "anyharness.subagent.spawn_requested",
+                    parent_session_id = %ctx.caller.identity().session_id,
+                    "subagent: creation requested"
+                );
+            }
+            let outcome = operations
+                .create_agent(
+                    &ctx.caller,
+                    CreateAgentInput {
+                        workspace: WorkspaceIdentity {
+                            runtime_id: operations.runtime_identity().clone(),
+                            workspace_id: args.workspace_id,
                         },
-                    )
-                    .await,
-            )
+                        kind: args.kind,
+                        task: args.task,
+                        agent_kind: args.agent_kind,
+                        model_id: args.model_id,
+                        mode_id: args.mode_id,
+                    },
+                )
+                .await;
+            if is_subagent {
+                if let Err(error) = outcome.as_ref() {
+                    tracing::warn!(
+                        target: "anyharness.subagent.spawn_rejected",
+                        parent_session_id = %ctx.caller.identity().session_id,
+                        reason = error.code(),
+                        "subagent: parent may not spawn a subagent"
+                    );
+                }
+            }
+            serialize(outcome)
         }
         "configure_agent" => {
             let args = parse::<ConfigureAgentArgs>(arguments)?;

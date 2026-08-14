@@ -124,7 +124,7 @@ mod tests {
     use crate::domains::artifacts::model::CreateArtifactInput;
     use crate::domains::artifacts::runtime::ArtifactRuntime;
     use crate::domains::workspaces::model::{
-        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceSurface,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceSurface,
     };
     use uuid::Uuid;
 
@@ -195,11 +195,10 @@ mod tests {
                 origin: None,
                 creator_context: None,
                 lifecycle_state: WorkspaceLifecycleState::Active,
-                cleanup_state: WorkspaceCleanupState::None,
-                cleanup_operation: None,
-                cleanup_error_message: None,
-                cleanup_failed_at: None,
-                cleanup_attempted_at: None,
+                archived_head_sha: None,
+                archived_branch: None,
+                archived_at: None,
+                partial_capture_json: None,
                 created_at: now.clone(),
                 updated_at: now,
             };

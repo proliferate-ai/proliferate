@@ -27,7 +27,16 @@ impl SessionRuntime {
             SubagentLinkCloseOutcome::NotFound => {
                 return Err(SubagentLifecycleError::RelationshipNotFound)
             }
-            SubagentLinkCloseOutcome::Closed(_) => {}
+            SubagentLinkCloseOutcome::Closed(_) => {
+                tracing::info!(
+                    target: "anyharness.subagent.link_closed",
+                    parent_session_id = %link.parent_session_id,
+                    child_session_id = %link.child_session_id,
+                    relation = link.relation.as_str(),
+                    cause = "close_subagent_tool",
+                    "subagent: link closed"
+                );
+            }
         }
 
         // Deliberately outside the close/purge transaction: the actor may

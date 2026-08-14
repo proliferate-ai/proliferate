@@ -3,18 +3,18 @@ mod app_config;
 mod commands;
 mod desktop_telemetry_mode;
 pub mod diagnostics;
+pub mod diagnostics_collector;
 mod editors;
 mod quit_flow;
 mod sidecar;
 mod state;
 mod telemetry;
-mod telemetry_file_logging;
 mod workspace_activity_indicator;
 
 use commands::{
     anonymous_telemetry, cloud_worker, config, desktop_identity,
     diagnostics as diagnostics_commands, drag_drop, google_workspace_mcp, keychain, process,
-    runtime, shell, ssh_tunnel, support, window_chrome, workspace_scratch,
+    runtime, shell, ssh_tunnel, support, support_snapshot, window_chrome, workspace_scratch,
 };
 use quit_flow::QuitFlowState;
 use tauri::Manager;
@@ -187,10 +187,50 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
 }
 
 pub fn run() {
-    let telemetry = telemetry::init();
-    let renderer_diagnostic_log = telemetry.renderer_diagnostic_log();
+    let fallback_path = app_config::logs_dir_path().map(|path| path.join("desktop-native.log"));
+    let fallback = fallback_path
+        .and_then(diagnostics_collector::fallback::FallbackDiagnosticsWriter::open)
+        .unwrap_or_default();
+    let diagnostics_producer = diagnostics_collector::producer::TauriDiagnosticsProducer::new(
+        fallback.clone(),
+        format!("proliferate-desktop-native@{}", env!("CARGO_PKG_VERSION")),
+        if app_config::native_dev_profile() {
+            "development".to_string()
+        } else {
+            "production".to_string()
+        },
+    );
+    let _telemetry = telemetry::init(&diagnostics_producer);
     let sc = sidecar::create_sidecar_with_auto_port();
     let cloud_worker_state = cloud_worker::create_cloud_worker_state();
+    let diagnostics_supervisor =
+        diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor::new(
+            diagnostics_producer.clone(),
+            fallback.clone(),
+            format!("proliferate-desktop-native@{}", env!("CARGO_PKG_VERSION")),
+            if app_config::native_dev_profile() {
+                "development".to_string()
+            } else {
+                "production".to_string()
+            },
+        );
+    let support_snapshot_coordinator =
+        diagnostics::support_snapshot::coordinator::SupportSnapshotCoordinator::new(
+            diagnostics_supervisor.clone(),
+            diagnostics_producer.clone(),
+            cloud_worker_state.clone(),
+            sc.clone(),
+        );
+    let broker_state = diagnostics_collector::shutdown::create_broker_server_state();
+    let shutdown_coordinator = diagnostics_collector::shutdown::DiagnosticsShutdownCoordinator::new(
+        diagnostics_supervisor.clone(),
+        diagnostics_producer.clone(),
+        fallback,
+        broker_state.clone(),
+        cloud_worker_state.clone(),
+        sc.clone(),
+        support_snapshot_coordinator.clone(),
+    );
 
     let builder = tauri::Builder::default()
         .plugin(
@@ -213,8 +253,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(sc.clone())
         .manage(cloud_worker_state)
+        .manage(diagnostics_supervisor.clone())
+        .manage(diagnostics_producer.clone())
+        .manage(support_snapshot_coordinator)
+        .manage(shutdown_coordinator.clone())
         .manage(QuitFlowState::default())
-        .manage(renderer_diagnostic_log)
         .manage(workspace_activity_indicator::WorkspaceActivityIndicatorStore::default())
         .manage(ssh_tunnel::SshTunnelState::default())
         .manage(window_chrome::WindowChromeZoom::default())
@@ -224,11 +267,18 @@ pub fn run() {
             config::get_app_config,
             config::set_app_config,
             diagnostics_commands::export_debug_bundle,
-            diagnostics_commands::collect_support_diagnostics,
-            diagnostics_commands::log_renderer_diagnostic,
-            diagnostics_commands::log_renderer_event,
+            diagnostics_commands::ingest_renderer_diagnostics,
             diagnostics_commands::save_diagnostic_json,
             diagnostics_commands::save_diagnostic_json_to_absolute_path,
+            support_snapshot::begin_support_snapshot_preparation,
+            support_snapshot::finish_support_snapshot_preparation,
+            support_snapshot::cancel_support_snapshot_preparation,
+            support_snapshot::save_support_snapshot_archive,
+            support_snapshot::read_staged_support_snapshot,
+            support_snapshot::delete_staged_support_snapshot,
+            support_snapshot::reconcile_staged_support_snapshots,
+            support_snapshot::begin_support_snapshot_submission,
+            support_snapshot::finish_support_snapshot_submission,
             runtime::get_runtime_info,
             runtime::restart_runtime,
             cloud_worker::ensure_desktop_dispatch_worker,
@@ -319,14 +369,39 @@ pub fn run() {
             let _ = app;
 
             let sc = sc.clone();
+            let diagnostics_supervisor = diagnostics_supervisor.clone();
+            let diagnostics_producer = diagnostics_producer.clone();
+            let broker_state = broker_state.clone();
             let agent_seed_env = agent_seed_env::launch_env(app.handle());
             tauri::async_runtime::spawn(async move {
+                diagnostics_producer.start_pump();
+                match diagnostics_collector::broker::server::DiagnosticsBrokerServer::start(
+                    diagnostics_supervisor.clone(),
+                )
+                .await
+                {
+                    Ok(server) => {
+                        let mut broker = broker_state.lock().await;
+                        if diagnostics_supervisor.shutdown_is_armed() {
+                            drop(broker);
+                            server.stop_accepting();
+                            let _ = server.wait_stopped().await;
+                            let _ = server.remove_locator_and_unlock();
+                        } else {
+                            *broker = Some(server);
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(?error, "failed to start diagnostics broker");
+                    }
+                }
+                let _ = diagnostics_supervisor.start().await;
                 {
                     let mut guard = sc.lock().await;
                     guard.launch_env = keychain::load_all_secrets_for_sidecar();
                     guard.launch_env.extend(agent_seed_env);
                 }
-                sidecar::boot(&sc).await;
+                sidecar::boot(&sc, &diagnostics_producer, &diagnostics_supervisor).await;
             });
             Ok(())
         })
@@ -334,12 +409,11 @@ pub fn run() {
         .expect("error while running tauri application")
         .run(|_app_handle, _event| {
             if matches!(_event, tauri::RunEvent::Exit) {
-                let worker_state = _app_handle.state::<cloud_worker::SharedCloudWorkerState>();
-                if let Err(error) = tauri::async_runtime::block_on(
-                    cloud_worker::lifecycle::arm_terminal_shutdown_and_stop_worker(&worker_state),
-                ) {
-                    tracing::warn!(%error, "failed to stop Proliferate Worker during app exit");
-                }
+                let shutdown =
+                    _app_handle.state::<std::sync::Arc<
+                        diagnostics_collector::shutdown::DiagnosticsShutdownCoordinator,
+                    >>();
+                let _ = tauri::async_runtime::block_on(shutdown.shutdown());
             }
             #[cfg(target_os = "macos")]
             {

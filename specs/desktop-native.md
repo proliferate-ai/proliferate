@@ -23,6 +23,7 @@ apps/desktop/src-tauri/
   src/
     lib.rs                     # Tauri builder, plugins, state, commands, boot
     sidecar.rs                 # AnyHarness sidecar discovery, spawn, health
+    diagnostics_collector/    # collector supervision, broker, producer, child bridge, fallback, shutdown
     agent_seed_env.rs          # seed resource/env resolution for sidecar launch
     app_config.rs              # file-backed app config/runtime-info paths
     commands/
@@ -51,6 +52,7 @@ apps/desktop/src-tauri/
 | AnyHarness sidecar | `src/sidecar.rs` is the only owner of local AnyHarness process discovery, spawn, health polling, restart, and runtime info persistence. |
 | Seed env | `src/agent_seed_env.rs` is the only Tauri-side owner of `ANYHARNESS_AGENT_SEED_*` launch env. Hydration logic stays in AnyHarness. |
 | Sidecar binaries | `build.rs` stages binaries; `tauri.conf.json` declares them. Do not add another packaging path for runtime binaries. |
+| Diagnostics collector | `src/diagnostics_collector/` is the sole owner of the collector child, launch capability, authenticated client, restart budget, native producer, same-user query broker, and shutdown order. Supported macOS builds start it before owned AnyHarness/Worker starts; observability failure releases product startup in `unsupported` or `degraded` state. |
 | Secrets | Recreatable secrets (auth session, pending OAuth, provider env creds) are `0600` files in the durable app home; only the anyharness data key stays in the keychain (see the sidecar spec's Local Secrets). Sidecar launch secrets come from `commands/keychain.rs`; do not persist provider secrets in app config JSON. |
 | Desktop dispatch worker | `commands/cloud_worker.rs` and its direct `lifecycle.rs` module own the optional Proliferate Worker launcher process. It is separate from the always-on AnyHarness sidecar. The app exit event stops and reaps the tracked launcher explicitly before Tauri terminates the process. On Windows, updater access also arms shutdown and awaits cleanup after download and before install because install exits without an `Exit` event; later starts become no-ops until that exit. If install fails before exiting, starts remain fail-safe until Desktop is restarted. Process-inspection or termination errors retain the owned child handle and block installation or credential rotation; a persistent inspection error stays blocked for restart or manual recovery rather than risking an unsafe PID-based kill. Releases through 0.3.38 used the `cloud-worker` local namespace; repaired releases use the complete `cloud-worker-v2` config/database/log namespace so a fresh enrollment can revoke and replace an already-orphaned legacy Worker without identifying or killing an unowned process. The renderer enters that namespace only after the enrollment response advertises `pendingTicketPolicy = newest_wins`; until then it retries without reporting the expected deployment skew as a production exception. Credential replacement remains guarded while any untracked Worker owns the active namespace's database lock. |
 | Dev profiles | Profile-specific ports, Tauri config, app home, and runtime home come from `guides/local/dev-profiles.md`; do not hard-code default ports into new Tauri flows. |
@@ -228,7 +230,7 @@ desktop renderer.
 
 | Code | Owns |
 | --- | --- |
-| `apps/desktop/src-tauri/tauri.conf.json` | Declares `binaries/anyharness`, `binaries/proliferate-worker`, and `binaries/proliferate-debug` as Tauri `externalBin` entries. |
+| `apps/desktop/src-tauri/tauri.conf.json` | Declares `binaries/anyharness`, `binaries/proliferate-worker`, `binaries/proliferate-debug`, and `binaries/proliferate-diagnostics-collector` as Tauri `externalBin` entries. |
 | `apps/desktop/src-tauri/build.rs` | Stages target-suffixed binaries into `apps/desktop/src-tauri/binaries/` before Tauri packaging. |
 | `apps/desktop/src-tauri/src/lib.rs` | Creates shared native state, registers commands, collects launch env, and starts boot during `setup`. |
 | `apps/desktop/src-tauri/src/sidecar.rs` | Finds the AnyHarness binary, spawns it, polls `/health`, persists runtime info, and restarts it. |
@@ -251,6 +253,13 @@ desktop renderer.
    macOS this means the sidecar binary is resolved from the app bundle's
    `Contents/MacOS` directory.
 
+For the two accepted macOS targets, release staging requires the exact
+prebuilt `proliferate-diagnostics-collector` artifact and fails rather than
+substituting a placeholder. Debug builds may stage a marked placeholder so
+unrelated Desktop work can compile; the supervisor classifies it as
+`binary_invalid`. Other targets retain an explicit unsupported placeholder and
+the native health state is `unsupported`, never ready.
+
 The Proliferate Worker binary follows the same staging/bundling model, but it
 is not the AnyHarness sidecar. It is launched on demand by desktop dispatch
 logic in `commands/cloud_worker.rs`.
@@ -266,31 +275,34 @@ to the local runtime for catalog convergence or command delivery.
 1. `lib.rs` calls `sidecar::create_sidecar_with_auto_port()`.
 2. Port selection uses `ANYHARNESS_PORT` when set, otherwise an available
    loopback port.
-3. During Tauri `setup`, the app builds sidecar launch env from:
+3. During Tauri `setup`, the app starts the owner-only diagnostics broker and
+   waits for the collector's authenticated, schema-compatible startup barrier.
+   A bounded failure resolves the same barrier as degraded so product startup
+   cannot be held indefinitely.
+4. The app builds sidecar launch env from:
    - local secrets (see [Local Secrets](#local-secrets))
    - agent seed env from `agent_seed_env::launch_env`
-4. `sidecar::boot` starts one of two modes:
+5. `sidecar::boot` starts one of two modes:
    - external runtime mode when `ANYHARNESS_DEV_URL` is set
    - managed child process mode otherwise
-5. Managed child process mode finds the binary in this order:
+6. Managed child process mode finds the binary in this order:
    - `ANYHARNESS_BIN`
    - packaged `anyharness-<target>` next to current executable
    - packaged/dev plain `anyharness` next to current executable
    - workspace target/debug or target/release candidates
    - common install path fallback
-6. The command is:
+7. The command is:
 
 ```text
 anyharness serve --host 127.0.0.1 --port <port>
 ```
 
-7. Launch env also includes:
-   - `ANYHARNESS_DEFER_STARTUP_RETENTION=1`
+8. Launch env also includes:
    - the user's login-shell `PATH`
    - hosted-product Sentry env when applicable
-8. The native shell polls `<runtime-url>/health` until healthy, failed, exited,
+9. The native shell polls `<runtime-url>/health` until healthy, failed, exited,
    or timed out.
-9. `runtime-info.json` is written under the desktop app dir with URL, port,
+10. `runtime-info.json` is written under the desktop app dir with URL, port,
    status, runtime home, and runtime version.
 
 ## Runtime Home
@@ -348,6 +360,61 @@ boot:
 Do not restart AnyHarness from renderer code by shelling out directly. Use the
 Tauri command so state, child process ownership, and `runtime-info.json` remain
 consistent.
+
+## Diagnostics Collector And Shutdown
+
+Tauri passes a new 32-byte random capability and a typed control channel to
+each collector launch through child-only inherited descriptors. It reads one
+bounded descriptor line, authenticates health, and exposes no endpoint or
+token to renderer code or the CLI. The CLI resolves an owner-only locator and
+uses the Tauri-owned pathname Unix-socket broker; customer artifacts reject
+external export, while the default-off internal artifact permits only the
+accepted internal point-in-time export.
+
+Native `tracing` detail uses a 1 MiB/256-record memory queue. Before readiness,
+during outages, and after collector teardown, `desktop-native.log` is the
+structurally scrubbed fallback: active plus `.1` through `.3`, 256 KiB each,
+with no disk replay. Exact schema-v1.1 Desktop renderer batches normally enter
+the ready collector through the main-window-only native command. After native
+validation and before any authenticated request, `starting`, `unsupported`,
+`degraded`, `stopped`, and shutdown-armed states may write each already-filtered
+renderer record through the same bounded fallback pipeline without activating
+it; the command still returns its original unavailable error. Post-dispatch
+receipt, replacement, deadline, and transport failures do not fall back. The
+obsolete renderer diagnostics file receives no new writes, while historical
+support discovery remains. Sentry, PostHog, anonymous telemetry, and support
+composition remain under their existing owners.
+
+On the two supported packaged macOS targets, owned AnyHarness and Worker
+launches prepare the direct executable first, then create the fallback-root,
+bridge, and shutdown descriptors; only a direct binary child may inherit them
+(never Cargo, a shell, or any wrapper — a `cargo run` launcher spawns
+unprotected). A pre-exec descriptor failure closes every partial authority and
+performs at most one direct unprotected relaunch — an observability outcome,
+never a product failure — and a returned successful protected spawn is the
+point of no retry. Each bridge lives on the identity-stable process owner
+(`SidecarProcess`, `CloudWorkerProcess`) beside the owned `Child`; the Worker
+owner also holds the two pipe drainers and the bounded 65,536-byte/12-line
+in-memory tail that replaces `worker.log` on supported targets. Historical
+`worker.log` files are untouched customer data, and unsupported builds keep
+the legacy writer verbatim. Parent status and flush are one-slot requests with
+fixed deadlines; the child's terminal status/fence is cached at most once, and
+the tail is cleared only when the verified owner is released. Each owner starts
+one generation-bound natural-exit observer after healthy startup; explicit
+stop/restart cancels it while holding the same lifecycle mutex, and an
+ambiguous inspection retains the full owner for later reconciliation.
+
+Terminal shutdown is idempotent: arm shutdown and cancel broker leases; drain
+the native queue while one absolute 500 ms deadline concurrently covers that
+drain plus both child bridge shutdown-signal/flush requests, each capped at
+the milliseconds remaining. Child HTTP dispatch and remaining fallback writes
+consume that same absolute window, and a later natural guard reuses a parent
+flush result instead of starting another wait. Then stop/reap Worker and
+AnyHarness while the collector remains available; admit the collector-stop
+start; stop/reap the collector; write its
+terminal to teardown fallback; remove the locator; close fallback. Windows'
+direct-exit updater command enters this same coordinator before installation,
+preserving its existing fail-closed Worker behavior.
 
 ## Failure Modes
 

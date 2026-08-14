@@ -12,6 +12,10 @@ import {
   logSessionActivityTransition,
 } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 type SessionEntries = ReturnType<typeof useSessionDirectoryStore.getState>["entriesById"];
 
@@ -41,6 +45,23 @@ function logTransitions(entries: SessionEntries, seen: Set<string>): void {
   for (const sessionId of liveIds) {
     seen.add(sessionId);
   }
+}
+
+export function recordBusySessionHoldouts(holdouts: readonly unknown[]): void {
+  if (holdouts.length === 0) {
+    return;
+  }
+  recordRendererDiagnostic({
+    name: "renderer.measurement.busy_holdouts",
+    severity: "debug",
+    kind: "progress",
+    privacy: "sensitive",
+    fields: {
+      count: diagnosticField(holdouts.length, "operational"),
+      holdouts: diagnosticField(holdouts, "sensitive"),
+    },
+  });
+  console.info("[session-activity] busy-holdouts", holdouts);
 }
 
 /** Dev tripwire for stuck busy indicators ("shows as generating long after
@@ -84,7 +105,7 @@ export function useDebugSessionActivity(): void {
           }];
         });
       if (holdouts.length > 0) {
-        console.info("[session-activity] busy-holdouts", holdouts);
+        recordBusySessionHoldouts(holdouts);
       }
     }, 10_000);
 

@@ -548,7 +548,7 @@ guides rather than treated as generic utilities.
 | --- | --- | --- |
 | `config.rs` | TOML config loading, defaults, enrollment-token sanitation, atomic private writes | Enrollment or convergence decisions |
 | `error.rs` | Worker error variants and source conversion | Recovery policy |
-| `logging.rs` | Tracing and Sentry initialization, release identity, privacy scrubbing | Per-flow decisions |
+| `logging.rs` | Pre-config bundled diagnostics activation, tracing and Sentry initialization, release identity, privacy scrubbing | Per-flow decisions |
 | `observability.rs` | Heartbeat acknowledgement event | A generic telemetry service |
 | `process_lock.rs` | One Worker process per canonical database path | Process supervision |
 | `versions.rs` | Stamped Worker version and boot-time AnyHarness version hint | Desired-version policy |
@@ -573,8 +573,16 @@ Update gates default to false. Runtime URL defaults to
 
 `logging.rs` stamps component-specific Worker release identity, initializes
 Sentry when configured, and scrubs bearer values, URL query strings, and
-absolute local paths from captured text. Flow modules still decide what an
-event means and when to emit it.
+absolute local paths from captured text. Before config load it also activates
+the bundled Desktop diagnostics adapter purely by possession of the two
+reserved bridge/shutdown descriptors: when present, the bounded
+`proliferate-diagnostics-client` tracing layer joins the subscriber and its
+guard flushes on shutdown; when absent, activation is `Disabled` with no
+producer task, file, or network behavior. Desktop keeps one continuous
+identity-stable natural-exit observer after startup; an ambiguous startup or
+later inspection retains the child, bridge, drainers, and tail rather than
+turning an error into reap authority. Flow modules still decide what an event
+means and when to emit it.
 
 Use current identifiers such as `worker_id` and the authenticated user context
 when available. Do not add removed command, Target, projection, slot, or

@@ -1294,3 +1294,37 @@
   default: ""
   description: Absolute path override for the AnyHarness-managed worktree root used by inventory, orphan pruning, and automatic checkout retention
   tags: [local-dev, self-hosted]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Desktop: Diagnostics (internal builds only)
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN
+  secret: false
+  default: ""
+  description: Absolute path to a diagnostics collector binary the desktop host should spawn instead of the bundled one; required for local diagnostics because a default build cannot export
+  tags: [local-dev, desktop]
+
+- name: PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT
+  secret: false
+  default: ""
+  description: OTLP/HTTP base URL the collector exports records to; the exporter appends /v1/logs itself. Honored only by collectors built with the internal-dogfood-export feature
+  tags: [local-dev, desktop]
+
+- name: PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS
+  secret: true
+  default: ""
+  description: "Comma-separated name=value headers sent with each OTLP export, typically the vendor ingest key. Never commit this value"
+  tags: [local-dev, desktop]
+
+- name: PROLIFERATE_DIAGNOSTICS_DEV_TAG
+  secret: false
+  default: "$USER"
+  description: Developer identity attached to exported records as the dev.user resource attribute, so teammates sharing one environment are distinguishable
+  tags: [local-dev, desktop]
+
+- name: PROLIFERATE_DIAGNOSTICS_BRIDGE_ENDPOINT
+  secret: false
+  default: ""
+  description: Debug builds only. Lets an externally launched AnyHarness runtime attach its diagnostics producer when it did not inherit the control-bridge descriptor, which is the normal case under ANYHARNESS_DEV_URL
+  tags: [local-dev]

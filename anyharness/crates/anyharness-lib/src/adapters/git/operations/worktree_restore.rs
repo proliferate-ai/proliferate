@@ -5,18 +5,41 @@ use std::process::{Command, Output};
 use uuid::Uuid;
 
 use super::worktree_restore_registry::{
-    list_worktree_registrations, registrations_for_path, WorktreeRegistration,
+    list_worktree_registrations, prune_registration_for_path, registrations_for_path,
+    validate_missing_target_registrations, WorktreeRegistration,
 };
 use crate::adapters::git::types::{GitWorktreeRestoreError, GitWorktreeRestoreOutcome};
+
+/// Options for [`restore_worktree`]. A struct, not positional parameters: the
+/// live route keeps passing today's values unchanged while R4's recreate
+/// tiers need the other combinations.
+pub struct WorktreeRestoreOptions<'a> {
+    /// Some(branch) checks the recorded branch out; None restores detached
+    /// at the source repository's current HEAD.
+    pub branch: Option<&'a str>,
+    /// `worktree add --no-checkout`: index empty, directory bare, because
+    /// `restore_snapshot` writes both whole in the next step.
+    pub no_checkout: bool,
+    /// Prune ONLY the target path's own stale registration instead of
+    /// refusing on it. Off preserves today's `RegistrationConflict` refusal,
+    /// which is what the live restore route keeps passing. A SIBLING path's
+    /// registration is never pruned by this verb in either mode: deleting
+    /// another workspace's registration is the one destructive
+    /// cross-workspace interaction this design forbids everywhere.
+    pub prune_target_registration: bool,
+}
 
 pub fn restore_worktree(
     source_repo_root: &Path,
     target_path: &Path,
-    branch_name: &str,
+    options: WorktreeRestoreOptions<'_>,
 ) -> Result<GitWorktreeRestoreOutcome, GitWorktreeRestoreError> {
     let source_repo_root = canonical_repository_root(source_repo_root)?;
     let target_path = canonical_missing_target(target_path)?;
-    ensure_branch_exists(&source_repo_root, branch_name)?;
+    if let Some(branch_name) = options.branch {
+        ensure_branch_exists(&source_repo_root, branch_name)?;
+    }
+    let branch_name = options.branch;
 
     let registrations = list_worktree_registrations(&source_repo_root)?;
     match fs::symlink_metadata(&target_path) {
@@ -35,10 +58,17 @@ pub fn restore_worktree(
         }
     }
 
-    let matching_stale_registration =
-        validate_missing_target_registrations(&registrations, &target_path, branch_name)?;
+    // A detached restore (`branch: None`) runs this same block: only the
+    // branch-conflict half needs a branch name, and the target path's own
+    // stale registration blocks `worktree move` either way.
+    let matching_stale_registration = validate_missing_target_registrations(
+        &registrations,
+        &target_path,
+        branch_name,
+        options.prune_target_registration,
+    )?;
     if matching_stale_registration {
-        prune_stale_worktree_registrations(&source_repo_root)?;
+        prune_registration_for_path(&source_repo_root, &target_path)?;
         let remaining = list_worktree_registrations(&source_repo_root)?;
         if registrations_for_path(&remaining, &target_path)
             .next()
@@ -69,10 +99,18 @@ pub fn restore_worktree(
     }
 
     let staged = create_staged_worktree_path(&target_path)?;
+    let mut args: Vec<&str> = vec!["worktree", "add"];
+    if options.no_checkout {
+        args.push("--no-checkout");
+    }
+    if branch_name.is_none() {
+        args.push("--detach");
+    }
+    args.push("--");
     let output = match Command::new("git")
-        .args(["worktree", "add", "--"])
+        .args(&args)
         .arg(&staged.path)
-        .arg(branch_name)
+        .args(branch_name)
         .current_dir(&source_repo_root)
         .output()
     {
@@ -307,78 +345,10 @@ fn ensure_branch_exists(
     }
 }
 
-fn validate_missing_target_registrations(
-    registrations: &[WorktreeRegistration],
-    target_path: &Path,
-    branch_name: &str,
-) -> Result<bool, GitWorktreeRestoreError> {
-    let target_registrations =
-        registrations_for_path(registrations, target_path).collect::<Vec<_>>();
-    if target_registrations.len() > 1 {
-        return Err(GitWorktreeRestoreError::AmbiguousState {
-            detail: format!(
-                "multiple Git worktree registrations refer to {}",
-                target_path.display()
-            ),
-        });
-    }
-
-    for registration in registrations {
-        if registration.branch.as_deref() != Some(branch_name) || registration.path == target_path {
-            continue;
-        }
-        if registration.prunable {
-            return Err(GitWorktreeRestoreError::RegistrationConflict {
-                path: registration.path.display().to_string(),
-                detail: format!(
-                    "the recorded branch '{branch_name}' is registered to a different missing path"
-                ),
-            });
-        }
-        return Err(GitWorktreeRestoreError::BranchCheckedOutElsewhere {
-            branch: branch_name.to_string(),
-            path: registration.path.display().to_string(),
-        });
-    }
-
-    let Some(registration) = target_registrations.first() else {
-        return Ok(false);
-    };
-    if registration.branch.as_deref() != Some(branch_name) {
-        return Err(GitWorktreeRestoreError::RegistrationConflict {
-            path: target_path.display().to_string(),
-            detail: format!(
-                "the path is registered to {} instead of the recorded branch '{branch_name}'",
-                registration
-                    .branch
-                    .as_deref()
-                    .unwrap_or("a detached checkout")
-            ),
-        });
-    }
-    if registration.locked {
-        return Err(GitWorktreeRestoreError::AmbiguousState {
-            detail: format!(
-                "the missing worktree registration for {} is locked",
-                target_path.display()
-            ),
-        });
-    }
-    if !registration.prunable {
-        return Err(GitWorktreeRestoreError::AmbiguousState {
-            detail: format!(
-                "Git reports {} as active even though the directory is missing",
-                target_path.display()
-            ),
-        });
-    }
-    Ok(true)
-}
-
 fn verify_present_worktree(
     source_repo_root: &Path,
     target_path: &Path,
-    branch_name: &str,
+    branch_name: Option<&str>,
     registrations: &[WorktreeRegistration],
 ) -> Result<(), GitWorktreeRestoreError> {
     let metadata = fs::symlink_metadata(target_path).map_err(|error| {
@@ -431,10 +401,7 @@ fn verify_present_worktree(
         });
     }
     let registration = target_registrations[0];
-    if registration.prunable
-        || registration.locked
-        || registration.branch.as_deref() != Some(branch_name)
-    {
+    if registration.prunable || registration.locked || registration.branch.as_deref() != branch_name {
         return Err(GitWorktreeRestoreError::RegistrationConflict {
             path: target_path.display().to_string(),
             detail: "the existing checkout does not match the recorded branch registration"
@@ -442,20 +409,32 @@ fn verify_present_worktree(
         });
     }
 
-    let current_branch =
-        git_stdout(target_path, ["symbolic-ref", "--short", "HEAD"]).map_err(|_| {
-            GitWorktreeRestoreError::RegistrationConflict {
-                path: target_path.display().to_string(),
-                detail: "the registered checkout has no usable branch".to_string(),
+    let current_branch = git_stdout(target_path, ["symbolic-ref", "--short", "HEAD"]).ok();
+    match branch_name {
+        Some(branch_name) => {
+            let current_branch =
+                current_branch.ok_or_else(|| GitWorktreeRestoreError::RegistrationConflict {
+                    path: target_path.display().to_string(),
+                    detail: "the registered checkout has no usable branch".to_string(),
+                })?;
+            if current_branch != branch_name {
+                return Err(GitWorktreeRestoreError::RegistrationConflict {
+                    path: target_path.display().to_string(),
+                    detail: format!(
+                        "the existing checkout is on '{current_branch}', not the recorded branch '{branch_name}'"
+                    ),
+                });
             }
-        })?;
-    if current_branch != branch_name {
-        return Err(GitWorktreeRestoreError::RegistrationConflict {
-            path: target_path.display().to_string(),
-            detail: format!(
-                "the existing checkout is on '{current_branch}', not the recorded branch '{branch_name}'"
-            ),
-        });
+        }
+        None => {
+            if current_branch.is_some() {
+                return Err(GitWorktreeRestoreError::RegistrationConflict {
+                    path: target_path.display().to_string(),
+                    detail: "the existing checkout is attached to a branch, not detached as recorded"
+                        .to_string(),
+                });
+            }
+        }
     }
 
     Ok(())
@@ -464,7 +443,7 @@ fn verify_present_worktree(
 fn classify_failed_operation(
     source_repo_root: &Path,
     target_path: &Path,
-    branch_name: &str,
+    branch_name: Option<&str>,
     exit_code: Option<i32>,
     operation: &str,
 ) -> Result<GitWorktreeRestoreOutcome, GitWorktreeRestoreError> {
@@ -479,15 +458,17 @@ fn classify_failed_operation(
             path: target_path.display().to_string(),
         });
     }
-    for registration in &registrations {
-        if registration.branch.as_deref() == Some(branch_name)
-            && registration.path != target_path
-            && !registration.prunable
-        {
-            return Err(GitWorktreeRestoreError::BranchCheckedOutElsewhere {
-                branch: branch_name.to_string(),
-                path: registration.path.display().to_string(),
-            });
+    if let Some(branch_name) = branch_name {
+        for registration in &registrations {
+            if registration.branch.as_deref() == Some(branch_name)
+                && registration.path != target_path
+                && !registration.prunable
+            {
+                return Err(GitWorktreeRestoreError::BranchCheckedOutElsewhere {
+                    branch: branch_name.to_string(),
+                    path: registration.path.display().to_string(),
+                });
+            }
         }
     }
     if registrations_for_path(&registrations, target_path)
@@ -505,24 +486,6 @@ fn classify_failed_operation(
             None => format!("{operation} ended without an exit status"),
         },
     })
-}
-
-fn prune_stale_worktree_registrations(
-    source_repo_root: &Path,
-) -> Result<(), GitWorktreeRestoreError> {
-    let output = Command::new("git")
-        .args(["worktree", "prune", "--expire", "now"])
-        .current_dir(source_repo_root)
-        .output()
-        .map_err(|error| GitWorktreeRestoreError::OperationFailed {
-            detail: format!("stale Git worktree metadata could not be pruned: {error}"),
-        })?;
-    if !output.status.success() {
-        return Err(GitWorktreeRestoreError::AmbiguousState {
-            detail: "Git refused to clear the stale worktree registration".to_string(),
-        });
-    }
-    Ok(())
 }
 
 fn canonical_common_git_dir(path: &Path) -> Result<PathBuf, GitWorktreeRestoreError> {

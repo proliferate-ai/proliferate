@@ -21,6 +21,44 @@ impl SessionService {
         }
     }
 
+    /// Do any of this workspace's session rows reference native transcript files
+    /// that are no longer on disk?
+    ///
+    /// The one sessions-domain surface archiving needs, and it exists so the
+    /// archive subdomain never learns where JSONL lives: the paths are derived
+    /// per agent kind (Claude sanitizes the workspace path into a filename, Codex
+    /// keys off the runtime home) and that derivation is a sessions secret.
+    ///
+    /// The signal is a session that HAS a native session id — so the agent did
+    /// keep a transcript — for which the collector finds nothing on disk. A
+    /// session with no native id never had a transcript to lose, and an agent kind
+    /// whose transcripts we do not track would be a false alarm, so both answer
+    /// `false`.
+    pub fn workspace_history_incomplete(&self, workspace_id: &str) -> anyhow::Result<bool> {
+        let Some(workspace) = self.workspace_store.find_by_id(workspace_id)? else {
+            return Ok(false);
+        };
+        let workspace_path = std::path::PathBuf::from(&workspace.path);
+        for session in self
+            .session_store
+            .list_with_dismissed_by_workspace(workspace_id)?
+        {
+            if session.native_session_id.is_none() {
+                continue;
+            }
+            let files = crate::domains::agents::portability::collect_agent_artifacts(
+                &session,
+                &workspace_path,
+                Some(&self.runtime_home),
+            )
+            .unwrap_or_default();
+            if files.is_empty() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     pub fn list_session_event_records(
         &self,
         session_id: &str,
