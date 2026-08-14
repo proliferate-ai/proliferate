@@ -12,9 +12,9 @@ import {
   sendInput,
   sendResize,
   subscribeWithReplay,
-  type TerminalReplayEntry,
   type TerminalStreamIdentity,
 } from "#product/lib/infra/terminals/terminal-stream-registry";
+import type { TerminalReplayEntry } from "#product/lib/infra/terminals/terminal-replay-buffer";
 import {
   clearTerminalIntentionalClose,
   isTerminalIntentionalClose,
@@ -74,6 +74,18 @@ describe("terminal stream registry", () => {
     expect(entries.map((entry) => entry.type)).toEqual(["data", "data"]);
     expect(dataText(entries[0])).toBe("one");
     expect(dataText(entries[1])).toBe("two");
+  });
+
+  it("resumes a viewport after its last rendered order without duplicating history", () => {
+    const identity = streamIdentity();
+    ensureConnected({ identity, baseUrl: "http://runtime.test" });
+    mockState.connections[0]!.options.onData?.(bytes("one"), dataFrame(1));
+    mockState.connections[0]!.options.onData?.(bytes("two"), dataFrame(2));
+
+    const entries: TerminalReplayEntry[] = [];
+    subscribeWithReplay(identity, (entry) => entries.push(entry), { afterOrder: 1 });
+
+    expect(entries.map(dataText)).toEqual(["two"]);
   });
 
   it("reconnects live terminals with afterSeq", () => {
@@ -260,6 +272,30 @@ describe("terminal stream registry", () => {
 
     expect(entries.filter((entry) => entry.type === "local-overflow")).toHaveLength(1);
     expect(entries[entries.length - 1]?.type).toBe("data");
+  });
+
+  it("reports an overflow only when a paused viewport fell behind the replay floor", () => {
+    const identity = streamIdentity();
+    ensureConnected({ identity, baseUrl: "http://runtime.test" });
+    for (let seq = 1; seq <= 1010; seq += 1) {
+      mockState.connections[0]!.options.onData?.(bytes(String(seq)), dataFrame(seq));
+    }
+
+    const staleEntries: TerminalReplayEntry[] = [];
+    subscribeWithReplay(identity, (entry) => staleEntries.push(entry), { afterOrder: 1 });
+    expect(staleEntries[0]?.type).toBe("local-overflow");
+    const renderedThrough = staleEntries.find((entry) => dataText(entry) === "1005")?.order;
+    expect(renderedThrough).toBeTypeOf("number");
+    if (renderedThrough === undefined) {
+      throw new Error("expected the rendered cursor entry");
+    }
+
+    const currentEntries: TerminalReplayEntry[] = [];
+    subscribeWithReplay(identity, (entry) => currentEntries.push(entry), {
+      afterOrder: renderedThrough,
+    });
+    expect(currentEntries.some((entry) => entry.type === "local-overflow")).toBe(false);
+    expect(currentEntries.map(dataText).filter(Boolean)).toEqual(["1006", "1007", "1008", "1009", "1010"]);
   });
 });
 

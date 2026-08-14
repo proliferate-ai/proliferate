@@ -7,40 +7,17 @@ import {
 } from "@anyharness/sdk";
 import { terminalStreamKey } from "#product/lib/infra/terminals/terminal-stream-key";
 import { resetTerminalCloseIntentForTests } from "#product/lib/infra/terminals/terminal-close-intent";
-
-const MAX_REPLAY_DATA_BYTES = 256 * 1024;
-const MAX_REPLAY_ENTRIES = 1000;
-export const TERMINAL_OUTPUT_GAP_MESSAGE = "[terminal output gap: earlier output was discarded]";
+import {
+  nextTerminalReplayOrder,
+  trimTerminalReplayEntries,
+  type TerminalReplayEntry,
+} from "#product/lib/infra/terminals/terminal-replay-buffer";
 
 export interface TerminalStreamIdentity {
   workspaceId: string;
   terminalId: string;
   runtimeIdentity: string;
 }
-
-export type TerminalReplayEntry =
-  | {
-      type: "data";
-      order: number;
-      seq: number;
-      data: Uint8Array;
-    }
-  | {
-      type: "runtime-gap";
-      order: number;
-      requestedAfterSeq: number;
-      floorSeq: number;
-    }
-  | {
-      type: "local-overflow";
-      order: number;
-    }
-  | {
-      type: "exit";
-      order: number;
-      afterSeq: number;
-      code: number | null;
-    };
 
 interface TerminalRegistryEntry {
   identity: TerminalStreamIdentity;
@@ -49,6 +26,7 @@ interface TerminalRegistryEntry {
   nextOrder: number;
   replayEntries: TerminalReplayEntry[];
   replayDataBytes: number;
+  replayFloorOrder: number;
   overflowMarkedSinceReplay: boolean;
   readOnly: boolean;
   exited: boolean;
@@ -134,9 +112,17 @@ export function ensureConnected(options: EnsureConnectedOptions): boolean {
 export function subscribeWithReplay(
   identity: TerminalStreamIdentity,
   listener: (entry: TerminalReplayEntry) => void,
+  options: { afterOrder?: number } = {},
 ): () => void {
   const entry = getOrCreateEntry(identity);
-  const replayEntries = [...entry.replayEntries];
+  const afterOrder = options.afterOrder ?? 0;
+  const missedBufferedOutput = afterOrder < entry.replayFloorOrder;
+  const replayEntries = entry.replayEntries.filter((replayEntry) => {
+    if (replayEntry.type === "local-overflow") {
+      return missedBufferedOutput;
+    }
+    return replayEntry.order > afterOrder;
+  });
   for (const replayEntry of replayEntries) {
     listener(replayEntry);
   }
@@ -193,7 +179,7 @@ export function markExited(identity: TerminalStreamIdentity, code: number | null
   entry.exitCode = code;
   appendReplayEntry(entry, {
     type: "exit",
-    order: nextOrder(entry),
+    order: nextTerminalReplayOrder(entry),
     afterSeq: entry.lastDataSeq,
     code,
   });
@@ -250,6 +236,7 @@ function getOrCreateEntry(identity: TerminalStreamIdentity): TerminalRegistryEnt
     nextOrder: 0,
     replayEntries: [],
     replayDataBytes: 0,
+    replayFloorOrder: 0,
     overflowMarkedSinceReplay: false,
     readOnly: false,
     exited: false,
@@ -272,7 +259,7 @@ function appendDataEntry(
   entry.lastDataSeq = frame.seq;
   appendReplayEntry(entry, {
     type: "data",
-    order: nextOrder(entry),
+    order: nextTerminalReplayOrder(entry),
     seq: frame.seq,
     data,
   });
@@ -285,7 +272,7 @@ function appendRuntimeGapEntry(
 ): void {
   const replayEntry: TerminalReplayEntry = {
     type: "runtime-gap",
-    order: nextOrder(entry),
+    order: nextTerminalReplayOrder(entry),
     requestedAfterSeq: frame.requestedAfterSeq,
     floorSeq: frame.floorSeq,
   };
@@ -297,7 +284,7 @@ function appendRuntimeGapEntry(
   } else {
     entry.replayEntries.push(replayEntry);
   }
-  trimReplayEntries(entry);
+  trimTerminalReplayEntries(entry);
   emitReplayEntry(entry, replayEntry);
 }
 
@@ -309,55 +296,8 @@ function appendReplayEntry(
   if (replayEntry.type === "data") {
     entry.replayDataBytes += replayEntry.data.byteLength;
   }
-  trimReplayEntries(entry);
+  trimTerminalReplayEntries(entry);
   emitReplayEntry(entry, replayEntry);
-}
-
-function trimReplayEntries(entry: TerminalRegistryEntry): void {
-  let lostEntries = false;
-  while (
-    entry.replayEntries.length > MAX_REPLAY_ENTRIES
-    || entry.replayDataBytes > MAX_REPLAY_DATA_BYTES
-  ) {
-    const removed = removeOldestReplayEntry(entry);
-    if (!removed) {
-      break;
-    }
-    lostEntries = true;
-    if (removed.type === "data") {
-      entry.replayDataBytes -= removed.data.byteLength;
-    }
-  }
-
-  if (!lostEntries || entry.overflowMarkedSinceReplay) {
-    return;
-  }
-
-  while (entry.replayEntries.length >= MAX_REPLAY_ENTRIES) {
-    const removed = removeOldestReplayEntry(entry);
-    if (removed?.type === "data") {
-      entry.replayDataBytes -= removed.data.byteLength;
-    }
-  }
-
-  entry.replayEntries.unshift({
-    type: "local-overflow",
-    order: nextOrder(entry),
-  });
-  entry.overflowMarkedSinceReplay = true;
-}
-
-function removeOldestReplayEntry(
-  entry: TerminalRegistryEntry,
-): TerminalReplayEntry | undefined {
-  const removalIndex =
-    entry.overflowMarkedSinceReplay
-    && entry.replayEntries[0]?.type === "local-overflow"
-    && entry.replayEntries.length > 1
-      ? 1
-      : 0;
-  const [removed] = entry.replayEntries.splice(removalIndex, 1);
-  return removed;
 }
 
 function emitReplayEntry(
@@ -387,9 +327,4 @@ function closeAndDeleteEntry(key: string, entry: TerminalRegistryEntry): void {
   activelyCloseHandle(entry);
   entry.listeners.clear();
   registry.delete(key);
-}
-
-function nextOrder(entry: TerminalRegistryEntry): number {
-  entry.nextOrder += 1;
-  return entry.nextOrder;
 }

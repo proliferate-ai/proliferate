@@ -7,10 +7,13 @@ import {
   sendInput,
   sendResize,
   subscribeWithReplay,
-  TERMINAL_OUTPUT_GAP_MESSAGE,
-  type TerminalReplayEntry,
   type TerminalStreamIdentity,
 } from "#product/lib/infra/terminals/terminal-stream-registry";
+import {
+  createTerminalReplayWriter,
+  type TerminalReplayWriter,
+} from "#product/lib/infra/terminals/terminal-replay-writer";
+import { terminalStreamKey } from "#product/lib/infra/terminals/terminal-stream-key";
 import { useTerminalStore } from "#product/stores/terminal/terminal-store";
 
 interface UseTerminalViewportInput {
@@ -31,6 +34,9 @@ export function useTerminalViewport({
 }: UseTerminalViewportInput) {
   const streamIdentityRef = useRef<TerminalStreamIdentity | null>(null);
   const unsubscribeReplayRef = useRef<(() => void) | null>(null);
+  const replayWriterRef = useRef<TerminalReplayWriter | null>(null);
+  const renderedOrderRef = useRef(0);
+  const renderedIdentityKeyRef = useRef<string | null>(null);
   const connectionVersion = useTerminalStore(
     (state) => state.connectionVersionByTerminal[terminal.id] ?? 0,
   );
@@ -64,32 +70,53 @@ export function useTerminalViewport({
   useEffect(() => () => {
     unsubscribeReplayRef.current?.();
     unsubscribeReplayRef.current = null;
+    replayWriterRef.current?.dispose();
+    replayWriterRef.current = null;
   }, []);
 
   useEffect(() => {
     if (!visible || !isTerminalReady || !canConnect || !workspaceId) {
+      unsubscribeReplayRef.current?.();
+      unsubscribeReplayRef.current = null;
+      replayWriterRef.current?.dispose();
+      replayWriterRef.current = null;
       return;
     }
+    let cancelled = false;
     void ensureTabConnection(terminal.id, workspaceId, terminal.status).then((identity) => {
-      if (!identity || !terminalRef.current) {
+      if (cancelled || !identity || !terminalRef.current) {
         return;
       }
-      const existingIdentity = streamIdentityRef.current;
-      if (
-        existingIdentity?.workspaceId === identity.workspaceId
-        && existingIdentity.terminalId === identity.terminalId
-        && existingIdentity.runtimeIdentity === identity.runtimeIdentity
-        && unsubscribeReplayRef.current
-      ) {
-        return;
+      const identityKey = terminalStreamKey(identity);
+      if (renderedIdentityKeyRef.current !== identityKey) {
+        renderedIdentityKeyRef.current = identityKey;
+        renderedOrderRef.current = 0;
       }
       unsubscribeReplayRef.current?.();
+      replayWriterRef.current?.dispose();
       streamIdentityRef.current = identity;
       const term = terminalRef.current;
+      const writer = createTerminalReplayWriter(term, undefined, (entries) => {
+        for (const entry of entries) {
+          if (entry.type !== "local-overflow") {
+            renderedOrderRef.current = Math.max(renderedOrderRef.current, entry.order);
+          }
+        }
+      });
+      replayWriterRef.current = writer;
       unsubscribeReplayRef.current = subscribeWithReplay(identity, (entry) => {
-        writeTerminalReplayEntry(term, entry);
+        writer.enqueue(entry);
+      }, {
+        afterOrder: renderedOrderRef.current,
       });
     });
+    return () => {
+      cancelled = true;
+      unsubscribeReplayRef.current?.();
+      unsubscribeReplayRef.current = null;
+      replayWriterRef.current?.dispose();
+      replayWriterRef.current = null;
+    };
   }, [
     canConnect,
     connectionVersion,
@@ -105,21 +132,4 @@ export function useTerminalViewport({
   return {
     containerRef,
   };
-}
-
-function writeTerminalReplayEntry(
-  terminal: import("@xterm/xterm").Terminal,
-  entry: TerminalReplayEntry,
-): void {
-  if (entry.type === "data") {
-    terminal.write(entry.data);
-    return;
-  }
-  if (entry.type === "runtime-gap" || entry.type === "local-overflow") {
-    terminal.write(`\r\n${TERMINAL_OUTPUT_GAP_MESSAGE}\r\n`);
-    return;
-  }
-  if (entry.type === "exit") {
-    terminal.write("\r\n");
-  }
 }

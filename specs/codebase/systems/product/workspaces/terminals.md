@@ -12,6 +12,20 @@
   (`use-xterm-surface.ts`, `use-terminal-viewport.ts`) over
   `lib/infra/terminals/terminal-stream-registry.ts`.
 
+## Output Rendering
+
+- Only the visible terminal viewport subscribes to renderer output. Runtime
+  streams stay connected and retain bounded replay while another right-panel
+  entry is active; restoring a terminal resumes after its last rendered order
+  without replaying content already present in xterm.
+- Visible output is coalesced in arrival order and written to xterm once per
+  animation frame. Gap and exit markers share the same ordered batch, so output
+  bursts cannot monopolize the main thread with one render write per runtime
+  frame. The pending render batch shares the registry replay byte and entry
+  bounds, so a backgrounded window cannot accumulate an unbounded frame.
+- If a hidden viewport falls behind the bounded client replay floor, its next
+  render starts with one output-gap marker followed by the retained output.
+
 ## Creation Grid Contract
 
 A terminal PTY must be created with the exact cols/rows the xterm renderer
