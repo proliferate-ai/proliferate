@@ -111,10 +111,13 @@ export function ContentSearchPill() {
 
   return (
     <div
-      // Clears the fixed 46px header/tab chrome band (--tab-system-height)
-      // plus an 8px gap, so the pill never overlaps it regardless of which
-      // right-panel tab is active.
-      className="pointer-events-none absolute top-[calc(var(--tab-system-height)+8px)] right-4 z-popover flex justify-end"
+      // Clears the fixed 46px header/tab chrome band plus an 8px gap, so the
+      // pill never overlaps it regardless of which right-panel tab is active.
+      // --tab-system-height is only defined inside the right rail's
+      // .right-panel-tab-system subtree, which this shell-level mount is not a
+      // descendant of, so the 46px fallback (workspace-chrome.ts) is what
+      // resolves here.
+      className="pointer-events-none absolute top-[calc(var(--tab-system-height,46px)+8px)] right-4 z-popover flex justify-end"
       data-content-search-overlay
       data-content-search-surface={surface}
     >
