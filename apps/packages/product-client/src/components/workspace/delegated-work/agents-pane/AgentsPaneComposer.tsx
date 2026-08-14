@@ -1,8 +1,8 @@
 import { useCallback, useState, type KeyboardEvent } from "react";
 import { ArrowUp } from "#product/primitives/icons/core";
 import { Textarea } from "#product/primitives/Textarea";
-import { ComposerActionButton } from "#product/primitives/patterns/ComposerActionButton";
-import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
+import { ComposerActionButton } from "#product/primitives/patterns/composer/ComposerActionButton";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/composer/ComposerTextareaFrame";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
 import { useSessionIntentActions } from "#product/hooks/sessions/workflows/use-session-intent-actions";
 
