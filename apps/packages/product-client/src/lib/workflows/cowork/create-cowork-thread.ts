@@ -12,6 +12,12 @@ import {
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 export interface CreateCoworkThreadWorkflowInput {
+  /**
+   * Pre-minted by callers that need to scope launch-intent and prompt routing
+   * to this attempt before the workflow returns (PRO-230). Minted here when
+   * absent.
+   */
+  attemptId?: string;
   agentKind: string;
   modelId: string;
   modeId?: string | null;
@@ -120,7 +126,7 @@ export async function createCoworkThreadWorkflow(
 
   const selectedWorkspaceId = deps.getSelectedWorkspaceId();
   const entry: PendingWorkspaceEntry = {
-    attemptId: deps.createPendingWorkspaceAttemptId(),
+    attemptId: input.attemptId ?? deps.createPendingWorkspaceAttemptId(),
     source: "cowork-created",
     stage: "submitting",
     displayName: UNTITLED_COWORK_THREAD_TITLE,
@@ -229,17 +235,25 @@ export async function createCoworkThreadWorkflow(
     const selectionStartedAt = deps.startLatencyTimer();
     // Selection is a camera: an unattended thread still materializes, it just
     // does not pull the user out of the workspace they are looking at.
-    if (deps.isAttemptAttended(entry.attemptId)) {
+    const attended = deps.isAttemptAttended(entry.attemptId);
+    if (attended) {
       deps.activateWorkspace({
         logicalWorkspaceId: null,
         workspaceId: result.workspace.id,
         initialActiveSessionId: activeSessionId,
       });
     }
-    deps.rememberLastViewedSession(result.workspace.id, launchedSession.id);
+    // "The user has seen this" state, so it only applies when the thread was
+    // actually on screen; stamping it for an unattended launch suppresses the
+    // unread and first-visit affordances that key off it (PRO-230).
+    if (attended) {
+      deps.rememberLastViewedSession(result.workspace.id, launchedSession.id);
+      deps.markWorkspaceViewed(result.workspace.id);
+      deps.markWorkspaceBootstrappedInSession(result.workspace.id);
+    }
+    // Recency ordering is not a viewed stamp: the thread exists and should sort
+    // as recent whether or not the user watched it appear (spec §8 step 6).
     deps.trackWorkspaceInteraction(result.workspace.id, deps.nowIso());
-    deps.markWorkspaceViewed(result.workspace.id);
-    deps.markWorkspaceBootstrappedInSession(result.workspace.id);
 
     const workspaceInitStartedAt = deps.startLatencyTimer();
     void deps.initWorkspace({

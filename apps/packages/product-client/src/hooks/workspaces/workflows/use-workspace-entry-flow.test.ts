@@ -227,9 +227,12 @@ describe("useWorkspaceEntryFlow", () => {
       selected: true,
     });
 
+    // Attendance is decided once, before the force-selection, and handed to
+    // materialization rather than re-read after the await (PRO-230).
     expect(mocks.materializePendingWorkspaceSessions).toHaveBeenCalledWith(
       entry,
       "cloud-workspace-1",
+      { attended: true },
     );
     expect(mocks.setPendingWorkspaceEntry).toHaveBeenCalledWith(expect.objectContaining({
       attemptId: "attempt-1",
@@ -274,6 +277,7 @@ describe("useWorkspaceEntryFlow", () => {
     expect(mocks.materializePendingWorkspaceSessions).toHaveBeenCalledWith(
       entry,
       "workspace-new",
+      { attended: false },
     );
     expect(mocks.clearPendingWorkspaceEntry).toHaveBeenCalledWith("attempt-1");
     expect(mocks.selectWorkspace).not.toHaveBeenCalled();

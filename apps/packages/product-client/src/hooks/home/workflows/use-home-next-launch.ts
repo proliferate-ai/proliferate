@@ -128,7 +128,10 @@ export function useHomeNextLaunch() {
 
     try {
       if (target.kind === "cowork") {
+        const attemptId = createPendingWorkspaceAttemptId();
+        launchAttemptId = attemptId;
         const resultPromise = createThreadFromSelection({
+          attemptId,
           agentKind: modelSelection.kind,
           modelId: modelSelection.modelId,
           modeId,
@@ -142,19 +145,26 @@ export function useHomeNextLaunch() {
         // now instead of waiting for the catch block, so the launch-intent
         // pane owns its own shell for the whole in-flight window instead of
         // falling through to session-empty (PRO-230 review finding 1).
-        markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
+        // Pass the pre-minted attemptId explicitly (registry lookup) rather
+        // than relying on the attended/selected entry.
+        markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId, attemptId);
         const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
           text: prompt,
           promptId,
           launchIntentId,
           waitUntil: resultPromise,
+          attemptId,
         });
         if (queuedProjectedSessionId) {
           navigate("/");
         }
         const result = await resultPromise;
         if (!result) {
-          throw new Error("Cowork thread creation was interrupted.");
+          // The user dismissed the pending thread. Nothing failed, so the
+          // launch stops quietly instead of raising a "not started" toast,
+          // matching the local and worktree branches below.
+          clearLaunchIntentIfActive(launchIntentId);
+          return false;
         }
         if (!queuedProjectedSessionId) {
           navigate("/");

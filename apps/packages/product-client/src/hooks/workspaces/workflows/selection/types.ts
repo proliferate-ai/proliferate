@@ -7,6 +7,7 @@ import type { Workspace } from "@anyharness/sdk";
 import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import type { ClearSelectionOptions } from "#product/stores/sessions/session-selection-store";
 
 export interface WorkspaceSelectionOptions {
   force?: boolean;
@@ -69,7 +70,7 @@ export interface WorkspaceSelectionDeps {
     opts?: { initialActiveSessionId?: string | null },
   ) => void;
   removeWorkspaceSlots: (workspaceId: string) => void;
-  clearSelection: () => void;
+  clearSelection: (options?: ClearSelectionOptions) => void;
   bootstrapWorkspace: (input: {
     workspaceId: string;
     logicalWorkspaceId: string;

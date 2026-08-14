@@ -235,6 +235,15 @@ responses, and queued prompt edit/delete actions.
    place. A launch the user switched away from still materializes its workspace,
    sends its first prompt, and clears its own entry.
 
+   Scope today: local, worktree, and cowork attempts, plus cloud attempts whose
+   workspace is already ready when the create call returns. A cloud attempt that
+   returns still provisioning parks at `awaiting-cloud-ready`, and both drivers
+   that finish it (`use-cloud-workspace-polling` and
+   `use-selected-cloud-runtime-rehydration`) are scoped to the selected
+   workspace, so that attempt resumes only once the user re-attends it.
+   Background completion for provisioning cloud attempts is delivered by the
+   deferred-launch and polling rework, not by this registry.
+
 10. Liveness gates the pipeline; attendance gates presentation.
     Pipeline work (patch the entry, remap and materialize projected sessions,
     clear the entry) is gated on `isAttemptLive`. Presentation side effects
@@ -730,6 +739,11 @@ Pending failures must preserve enough state to retry or exit cleanly:
   workspaces no longer ends an attempt
 - an interrupted empty-session create remains resumable under its original
   client id and runtime UUID until the runtime acknowledges that create
+- a cloud attempt left at `awaiting-cloud-ready` while the user is looking
+  elsewhere is stalled, not failed: it holds its registry entry and its queued
+  prompt, and resumes when the user re-attends the workspace. See the scope
+  note on invariant 9; background completion for this case is not delivered
+  yet
 
 If materialization fails after a projected session exists, do not create a new
 session automatically. The user should see the failed workspace shell and keep
@@ -751,7 +765,11 @@ Minimum coverage by concern:
 - finalization: projected sessions materialize before pending state clears
 - switching away mid-launch: the launch still materializes the workspace, sends
   its first prompt, and clears its own entry, without throwing, force-selecting,
-  firing an arrival event, or changing the active session
+  firing an arrival event, or changing the active session (covered for the
+  local and worktree paths; the cloud awaiting-ready path is covered when
+  background completion for it lands)
+- a per-workspace clear (retire, mark done, cloud delete, or dismissing one
+  attempt) leaves every other live attempt in the registry
 - home launch: initial prompt remains attached to the projected session and
   does not create a second fresh session
 - interrupted empty-session creation: persistence precedes the create request,

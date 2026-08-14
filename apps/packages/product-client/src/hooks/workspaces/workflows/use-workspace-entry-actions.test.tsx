@@ -330,6 +330,9 @@ describe("useWorkspaceEntryActions", () => {
     expect(mocks.materializePendingWorkspaceSessions).toHaveBeenCalledWith(
       expect.objectContaining({ attemptId: pendingEntry?.attemptId }),
       "workspace-created",
+      // The user moved away before finalization, and that one decision governs
+      // materialization too (PRO-230).
+      { attended: false },
     );
     expect(onlyPendingEntry()).toBeNull();
     // ...without pulling the user back out of the workspace they moved to.

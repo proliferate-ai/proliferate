@@ -114,6 +114,7 @@ export function useCoworkThreadWorkflow() {
   }, [location.pathname, navigate]);
 
   const createThreadWithResolvedConfig = useCallback(async (input: {
+    attemptId?: string;
     agentKind: string;
     modelId: string;
     modeId?: string | null;
@@ -276,6 +277,7 @@ export function useCoworkThreadWorkflow() {
   ]);
 
   const createThreadFromSelection = useCallback(async (input: {
+    attemptId?: string;
     agentKind: string;
     modelId: string;
     modeId?: string | null;
@@ -284,6 +286,7 @@ export function useCoworkThreadWorkflow() {
     sourceWorkspaceId?: string | null;
   }) => {
     return createThreadWithResolvedConfig({
+      attemptId: input.attemptId,
       agentKind: input.agentKind,
       modelId: input.modelId,
       modeId: input.modeId,
