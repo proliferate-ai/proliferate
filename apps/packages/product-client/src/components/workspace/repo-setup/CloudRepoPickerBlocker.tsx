@@ -1,7 +1,25 @@
+import type { ReactNode } from "react";
 import { Check } from "#product/primitives/icons/core";
-import { ShieldAlert } from "#product/primitives/icons/status";
+import { RotateCw, ShieldAlert } from "#product/primitives/icons/status";
+import { GitHub } from "#product/primitives/icons/platform";
 import { Button } from "#product/primitives/Button";
-import type { CloudRepoPickerBlockerView } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
+import type {
+  CloudRepoPickerBlockerView,
+  CloudRepoPickerWaitingView,
+} from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
+
+/**
+ * The 32px glyph tile both prerequisite panels lead with. One definition, so
+ * the checklist and the waiting panel cannot drift apart in size or fill while
+ * a user is moving between them.
+ */
+function BlockerTile({ glyph }: { glyph: ReactNode }) {
+  return (
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-control text-muted-foreground">
+      {glyph}
+    </span>
+  );
+}
 
 /** Staged prerequisite state with one primary action for the current step. */
 export function CloudRepoPickerBlocker({
@@ -9,12 +27,16 @@ export function CloudRepoPickerBlocker({
 }: {
   blocker: CloudRepoPickerBlockerView;
 }) {
+  // Parked on GitHub: the checklist and its CTA would only restate the tab the
+  // user is already looking at, so the waiting panel replaces both.
+  if (blocker.waiting) {
+    return <WaitingForGitHub waiting={blocker.waiting} />;
+  }
+
   return (
     <div>
       <div className="flex items-start gap-3 py-1">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-control text-muted-foreground">
-          <ShieldAlert aria-hidden className="icon-paired" />
-        </span>
+        <BlockerTile glyph={<ShieldAlert aria-hidden className="icon-paired" />} />
         <span className="min-w-0 flex-1">
           <h3 className="text-ui font-medium leading-5 text-foreground">{blocker.title}</h3>
           <p className="mt-0.5 text-ui-sm text-muted-foreground">
@@ -66,6 +88,46 @@ export function CloudRepoPickerBlocker({
           </Button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * "You're on GitHub now" — the state the flow sits in between opening GitHub
+ * and the user coming back. Re-checking is a button, never a poll: the trip can
+ * take minutes and a silent retry loop leaves nothing to press when the answer
+ * is still no.
+ */
+function WaitingForGitHub({ waiting }: { waiting: CloudRepoPickerWaitingView }) {
+  return (
+    <div>
+      <div className="flex items-start gap-3 px-2 py-1">
+        <BlockerTile glyph={<GitHub aria-hidden className="icon-paired" />} />
+        <span className="min-w-0 flex-1">
+          <h3 className="text-ui-sm font-medium leading-5 text-foreground">{waiting.title}</h3>
+          <p className="mt-0.5 text-ui-sm text-muted-foreground">{waiting.description}</p>
+        </span>
+      </div>
+      {waiting.requestText ? (
+        <div className="mx-2 mt-1 rounded-lg border border-border bg-surface-elevated-secondary p-2.5">
+          <p className="text-ui-sm text-muted-foreground">{waiting.requestText}</p>
+        </div>
+      ) : null}
+      <div className="flex items-center justify-end gap-2 px-2 pb-1.5 pt-3">
+        <Button type="button" variant="ghost" size="sm" onClick={waiting.onCancel}>
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="md"
+          loading={waiting.checking}
+          onClick={waiting.onCheckAgain}
+        >
+          <RotateCw aria-hidden className="icon-control" />
+          {waiting.checkAgainLabel}
+        </Button>
+      </div>
     </div>
   );
 }

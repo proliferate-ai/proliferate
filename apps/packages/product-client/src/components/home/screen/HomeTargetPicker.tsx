@@ -51,7 +51,6 @@ interface HomeTargetPickerProps {
   onSelectRepository: (sourceRoot: string) => void;
   onSelectRuntime: (launchKind: HomeNextRepoLaunchKind, targetId?: string | null) => void;
   onSelectBranch: (branchName: string) => void;
-  onAddRepository: () => void;
   onConfigureCloud: (repository: SettingsRepositoryEntry) => void;
 }
 
@@ -72,7 +71,6 @@ export function HomeTargetPicker({
   onSelectRepository,
   onSelectRuntime,
   onSelectBranch,
-  onAddRepository,
   onConfigureCloud,
 }: HomeTargetPickerProps) {
   const [runtimeSearchValue, setRuntimeSearchValue] = useState("");
@@ -133,7 +131,6 @@ export function HomeTargetPicker({
         selectedRepository={selectedRepository}
         onSelectRepository={onSelectRepository}
         onSelectCowork={onSelectCowork}
-        onAddRepository={onAddRepository}
       />
 
       {selectedRepository && destination === "repository" ? (

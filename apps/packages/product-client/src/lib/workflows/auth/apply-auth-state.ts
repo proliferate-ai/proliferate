@@ -14,7 +14,7 @@ export interface ApplyAnonymousAuthStateDeps extends AuthStateWriterDeps {
   clearStoredAuthSession(): Promise<void>;
   clearStoredPendingAuthSession(): Promise<void>;
   clearSessionRuntimeState(): void;
-  closeRepoSetupModal(): void;
+  dismissRepoAddedReceipt(): void;
 }
 
 export interface ApplyAnonymousAuthStateInput {
@@ -30,7 +30,7 @@ export async function applyAnonymousAuthState(
     await deps.clearStoredPendingAuthSession();
   }
   deps.clearSessionRuntimeState();
-  deps.closeRepoSetupModal();
+  deps.dismissRepoAddedReceipt();
   deps.setAuthState(anonymousAuthState());
 }
 

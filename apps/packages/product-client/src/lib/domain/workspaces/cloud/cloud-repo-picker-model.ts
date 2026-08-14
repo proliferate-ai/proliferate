@@ -5,7 +5,25 @@ import type {
   CloudRepoPickerBlockerView,
   CloudRepoPickerRepositoryView,
   CloudRepoPickerSetupStepView,
+  CloudRepoPickerWaitingView,
 } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
+
+/**
+ * The one GitHub setup checklist, in the order the resolver gates it:
+ * authorize the identity, install for repository access, choose a repository.
+ * Every blocker that stands between a user and the picker carries it, so the
+ * remaining work is always countable instead of arriving one opaque screen at
+ * a time.
+ */
+export const GITHUB_SETUP_STEP_LABELS = [
+  "Authorize your GitHub identity",
+  "Install for repository access",
+  "Choose a repository",
+] as const;
+
+/** Fallback for callers that cannot name the host the browser returns to. */
+const DEFAULT_RETURN_GUIDANCE =
+  "Connect the GitHub account that can access the repository.";
 
 export function buildGitHubAppPrerequisiteBlocker({
   organizationId,
@@ -46,9 +64,9 @@ export function buildGitHubAppPrerequisiteBlocker({
       description: "Cloud environments require an active organization before repositories can be added.",
       steps: [
         setupStep("Choose an organization", "Create or join an organization first.", "current"),
-        setupStep("Authorize your GitHub identity", "Connect the GitHub account that can access the repository.", "upcoming"),
-        setupStep("Install for repository access", "Choose which organization repositories Proliferate can use.", "upcoming"),
-        setupStep("Choose a repository", "Select the repository for the cloud environment.", "upcoming"),
+        setupStep(GITHUB_SETUP_STEP_LABELS[0], "Connect the GitHub account that can access the repository.", "upcoming"),
+        setupStep(GITHUB_SETUP_STEP_LABELS[1], "Choose which organization repositories Proliferate can use.", "upcoming"),
+        setupStep(GITHUB_SETUP_STEP_LABELS[2], "Select the repository for the cloud environment.", "upcoming"),
       ],
     };
   }
@@ -57,7 +75,7 @@ export function buildGitHubAppPrerequisiteBlocker({
     return {
       title: "Checking GitHub App access",
       description: "Proliferate is checking your GitHub authorization and organization installation.",
-      steps: setupSteps({
+      steps: buildGitHubSetupSteps({
         userAuthorized: userAuthorizationConnected,
         installationInstalled,
         returnGuidance,
@@ -71,7 +89,7 @@ export function buildGitHubAppPrerequisiteBlocker({
         ? "Reauthorize GitHub App"
         : "Authorize GitHub App",
       description: "Authorize the Proliferate GitHub App so Cloud can use your GitHub identity for repository access.",
-      steps: setupSteps({
+      steps: buildGitHubSetupSteps({
         userAuthorized: false,
         installationInstalled: false,
         returnGuidance,
@@ -89,7 +107,7 @@ export function buildGitHubAppPrerequisiteBlocker({
       return {
         title: "Install GitHub App",
         description: "Install the Proliferate GitHub App for this organization before adding Cloud environments.",
-        steps: setupSteps({
+        steps: buildGitHubSetupSteps({
           userAuthorized: true,
           installationInstalled: false,
           returnGuidance,
@@ -102,7 +120,7 @@ export function buildGitHubAppPrerequisiteBlocker({
     return {
       title: "GitHub App installation required",
       description: "Ask an organization admin to install the Proliferate GitHub App before adding Cloud environments.",
-      steps: setupSteps({
+      steps: buildGitHubSetupSteps({
         userAuthorized: true,
         installationInstalled: false,
         returnGuidance: "An organization owner or admin must choose repository access before you can continue.",
@@ -115,36 +133,108 @@ export function buildGitHubAppPrerequisiteBlocker({
   return null;
 }
 
-function setupSteps({
+/**
+ * The 3-step checklist with complete / current / upcoming resolved from what is
+ * already known. `returnGuidance` is the host-truthful sentence about where
+ * GitHub sends the user back to; callers that have no host to name (the ordered
+ * readiness resolver, which is DOM- and host-free) omit it and get the generic
+ * line instead.
+ */
+export function buildGitHubSetupSteps({
   userAuthorized,
   installationInstalled,
-  returnGuidance,
+  canManageInstallation = true,
+  returnGuidance = DEFAULT_RETURN_GUIDANCE,
 }: {
   userAuthorized: boolean;
   installationInstalled: boolean;
-  returnGuidance: string;
+  canManageInstallation?: boolean;
+  returnGuidance?: string;
 }): readonly CloudRepoPickerSetupStepView[] {
   return [
     setupStep(
-      "Authorize your GitHub identity",
+      GITHUB_SETUP_STEP_LABELS[0],
       userAuthorized ? "GitHub identity authorized." : returnGuidance,
       userAuthorized ? "complete" : "current",
     ),
     setupStep(
-      "Install for repository access",
+      GITHUB_SETUP_STEP_LABELS[1],
       installationInstalled
         ? "Organization repository access installed."
         : userAuthorized
-          ? returnGuidance
+          ? (canManageInstallation
+            ? returnGuidance
+            : "An organization admin needs to grant access.")
           : "Choose organization repository access after authorization.",
       installationInstalled ? "complete" : userAuthorized ? "current" : "upcoming",
     ),
     setupStep(
-      "Choose a repository",
+      GITHUB_SETUP_STEP_LABELS[2],
       "Select the repository for the cloud environment.",
       userAuthorized && installationInstalled ? "current" : "upcoming",
     ),
   ];
+}
+
+/** Which checklist step the user was sent to GitHub for. */
+export type GitHubWaitingStep = "authorize" | "install";
+
+/**
+ * The parked-on-GitHub panel.
+ *
+ * Manual re-check, not polling: the return trip can take a minute (an org
+ * install is a multi-screen GitHub flow) and a spinner that silently re-queries
+ * gives the user nothing to press when the answer is "not yet". "Check again"
+ * re-runs exactly the refetch the authorization callback triggers.
+ */
+export function buildGitHubWaitingView({
+  step,
+  canManageInstallation,
+  checking = false,
+  requestText = null,
+  onCheckAgain,
+  onCancel,
+}: {
+  step: GitHubWaitingStep;
+  canManageInstallation: boolean;
+  checking?: boolean;
+  requestText?: string | null;
+  onCheckAgain: () => void;
+  onCancel: () => void;
+}): CloudRepoPickerWaitingView {
+  if (step === "authorize") {
+    return {
+      title: "Finish authorizing on GitHub",
+      description:
+        "A browser tab opened for you to authorize the Proliferate GitHub App. Come back here when you're done.",
+      requestText: null,
+      checkAgainLabel: checking ? "Checking…" : "I've done this — Check again",
+      checking,
+      onCheckAgain,
+      onCancel,
+    };
+  }
+  if (!canManageInstallation) {
+    return {
+      title: "Waiting on an admin",
+      description:
+        "We copied a request to your clipboard. Send it to an organization admin — access will be ready once they finish installing the app.",
+      requestText: requestText ?? cloudEnvironmentAdminRequestCopy(),
+      checkAgainLabel: checking ? "Checking…" : "Check again",
+      checking,
+      onCheckAgain,
+      onCancel,
+    };
+  }
+  return {
+    title: "Finish installing on GitHub",
+    description: "Choose which repositories Proliferate can access, then come back here.",
+    requestText: null,
+    checkAgainLabel: checking ? "Checking…" : "I've done this — Check again",
+    checking,
+    onCheckAgain,
+    onCancel,
+  };
 }
 
 function setupStep(

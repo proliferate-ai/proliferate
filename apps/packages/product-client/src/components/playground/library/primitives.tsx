@@ -1,4 +1,5 @@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "#product/primitives/AlertDialog";
+import { AnchoredCommandPopover } from "#product/primitives/AnchoredCommandPopover";
 import { AnimatedCollapsibleContent } from "#product/primitives/AnimatedCollapsibleContent";
 import { AnimatedSwapText } from "#product/primitives/AnimatedSwapText";
 import { Badge } from "#product/primitives/Badge";
@@ -172,6 +173,26 @@ function PopoverDemo() {
   );
 }
 
+function AnchoredCommandPopoverDemo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+        Raise command surface
+      </Button>
+      <AnchoredCommandPopover
+        open={open}
+        onOpenChange={setOpen}
+        aria-label="Command surface"
+      >
+        <div className="p-1">
+          <PopoverMenuItem label="Menu item" onClick={() => setOpen(false)} />
+        </div>
+      </AnchoredCommandPopover>
+    </>
+  );
+}
+
 function PopoverButtonDemo() {
   return (
     <PopoverButton trigger={<Button variant="secondary" size="sm">Open menu</Button>}>
@@ -242,6 +263,7 @@ function TooltipPrimitiveDemo() {
 
 export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
   { name: "AlertDialog", subpath: "#product/primitives/AlertDialog", render: AlertDialogDemo },
+  { name: "AnchoredCommandPopover", subpath: "#product/primitives/AnchoredCommandPopover", render: AnchoredCommandPopoverDemo },
   { name: "AnimatedCollapsibleContent", subpath: "#product/primitives/AnimatedCollapsibleContent", render: AnimatedCollapsibleContentDemo },
   { name: "AnimatedSwapText", subpath: "#product/primitives/AnimatedSwapText", render: AnimatedSwapTextDemo },
   { name: "Badge", subpath: "#product/primitives/Badge", render: () => (

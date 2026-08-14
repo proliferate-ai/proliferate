@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, act, waitFor } from "@testing-library/react";
 import type {
   AddRepoFlowOption,
@@ -33,6 +33,17 @@ const cloudHook = vi.hoisted(() => ({
   onRepositorySelected: null as null | ((repo: { gitOwner: string; gitRepoName: string }) => void),
   legacyManual: vi.fn(),
   clonePicker: null as CloudRepoPickerProps | null,
+  cloudPicker: null as CloudRepoPickerProps | null,
+  // What the stubbed picker currently reports as its own prerequisite blocker;
+  // a test clears it to stand for "GitHub is connected now".
+  blocker: undefined as CloudRepoPickerProps["blocker"],
+  // What the entry step was told about the one-time GitHub connection.
+  githubConnected: undefined as boolean | undefined,
+}));
+
+// The user-authorization status query: `data` is undefined while it loads.
+const githubStatus = vi.hoisted(() => ({
+  data: { connected: true } as { connected: boolean } | undefined,
 }));
 const productHost = vi.hoisted(() => ({
   desktop: null as DesktopBridge | null,
@@ -74,7 +85,7 @@ vi.mock("#product/hooks/workspaces/workflows/use-add-cloud-environment", () => (
       query: "",
       manualValue: "acme/manual-clone",
       repositories: [],
-      blocker: OLD_PREREQ_BLOCKER,
+      blocker: cloudHook.blocker,
       onQueryChange: vi.fn(),
       onManualValueChange: vi.fn(),
       onAddRepository: vi.fn(),
@@ -117,11 +128,34 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
 
 vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 
+// The controller's own GitHub reads: the entry footnote's authorization status
+// and the check-again invalidation. Neither is what these gating tests are
+// about, so both are stubbed at their package boundary.
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
+}));
+
+vi.mock("@proliferate/cloud-sdk-react", () => ({
+  githubAppRootKey: () => ["github-app"],
+  repositoriesKey: () => ["repositories"],
+  useCloudClient: () => ({ baseUrl: "https://api.test" }),
+  useGitHubAppUserAuthorizationStatus: () => ({ data: githubStatus.data }),
+}));
+
 // Expose the resolved cloudPicker.blocker title the host hands the flow.
 vi.mock("#product/components/workspace/repo-setup/AddRepoFlow", () => ({
-  AddRepoFlow: ({ step, cloudPicker, clonePicker, error, onPickOption }: AddRepoFlowProps) => {
+  AddRepoFlow: ({
+    step,
+    cloudPicker,
+    clonePicker,
+    error,
+    githubConnected,
+    onPickOption,
+  }: AddRepoFlowProps) => {
     const picker = step.kind === "clone" ? clonePicker : cloudPicker;
+    cloudHook.githubConnected = githubConnected;
     cloudHook.clonePicker = clonePicker ?? null;
+    cloudHook.cloudPicker = cloudPicker ?? null;
     addRepoFlow.onPickOption = onPickOption;
     return (
       <div>
@@ -131,6 +165,10 @@ vi.mock("#product/components/workspace/repo-setup/AddRepoFlow", () => ({
     );
   },
 }));
+
+beforeEach(() => {
+  cloudHook.blocker = OLD_PREREQ_BLOCKER;
+});
 
 afterEach(() => {
   cleanup();
@@ -142,6 +180,11 @@ afterEach(() => {
   auth.status = "authenticated";
   cloudHook.onRepositorySelected = null;
   cloudHook.clonePicker = null;
+  cloudHook.cloudPicker = null;
+  cloudHook.blocker = OLD_PREREQ_BLOCKER;
+  cloudHook.githubConnected = undefined;
+  githubStatus.data = { connected: true };
+  OLD_PREREQ_BLOCKER.onAction.mockClear();
   cloudHook.legacyManual.mockClear();
   productHost.desktop = null;
   addRepoHook.addRepoFromPath.mockReset();
@@ -240,6 +283,39 @@ describe("AddRepoFlowHost cloud gating (PR2-GATING-01)", () => {
     });
   });
 
+  it("keeps the completion callback alive across the cloud handoff", () => {
+    // Regression: the handoff used to run the store's close(), which nulls
+    // `onCompleted` — so the callback was already gone by the time
+    // CloudRepoActionDialogHost finished the registration and read it.
+    const onCompleted = vi.fn();
+    render(<AddRepoFlowHost />);
+    act(() => {
+      useAddRepoFlowStore.getState().openFlow({ onCompleted });
+      useAddRepoFlowStore.getState().setStep({ kind: "cloud" });
+    });
+
+    act(() => {
+      cloudHook.onRepositorySelected?.({ gitOwner: "Acme", gitRepoName: "Rocket" });
+    });
+
+    expect(useAddRepoFlowStore.getState().open).toBe(false);
+    expect(useAddRepoFlowStore.getState().onCompleted).toBe(onCompleted);
+  });
+
+  it("keeps the completion callback alive across the clone handoff", () => {
+    const onCompleted = vi.fn();
+    render(<AddRepoFlowHost />);
+    act(() => {
+      useAddRepoFlowStore.getState().openFlow({ onCompleted });
+      useAddRepoFlowStore.getState().setStep({ kind: "clone" });
+    });
+
+    act(() => cloudHook.clonePicker?.onAddManual());
+
+    expect(useAddRepoFlowStore.getState().open).toBe(false);
+    expect(useAddRepoFlowStore.getState().onCompleted).toBe(onCompleted);
+  });
+
   it("gates Clone on GitHub repository access, not managed Cloud", () => {
     capabilities.value = {
       githubRepositoryAccessStatus: "ready",
@@ -281,6 +357,133 @@ describe("AddRepoFlowHost cloud gating (PR2-GATING-01)", () => {
         gitRepoName: "manual-clone",
       },
     });
+  });
+});
+
+describe("AddRepoFlowHost waiting on GitHub", () => {
+  it("parks on the waiting panel once the checklist CTA has sent the user to GitHub", () => {
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    expect(cloudHook.cloudPicker?.blocker?.waiting).toBeUndefined();
+
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.onAction?.();
+    });
+
+    // The CTA still runs — the waiting panel is in addition to opening GitHub,
+    // not instead of it.
+    expect(OLD_PREREQ_BLOCKER.onAction).toHaveBeenCalled();
+    expect(cloudHook.cloudPicker?.blocker?.waiting?.title)
+      .toBe("Finish authorizing on GitHub");
+    expect(cloudHook.cloudPicker?.blocker?.waiting?.checkAgainLabel)
+      .toBe("I've done this — Check again");
+  });
+
+  it("leaves the waiting panel on Cancel without re-querying", () => {
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.onAction?.();
+    });
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.waiting?.onCancel();
+    });
+
+    expect(cloudHook.cloudPicker?.blocker?.waiting).toBeUndefined();
+  });
+
+  it("re-checks on demand and confirms arrival once nothing blocks the picker", async () => {
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.onAction?.();
+    });
+    await act(async () => {
+      cloudHook.cloudPicker?.blocker?.waiting?.onCheckAgain();
+      await Promise.resolve();
+    });
+
+    // Still blocked (the stubbed picker never clears its prerequisite), so no
+    // premature "connected" claim — but the waiting panel is done.
+    await waitFor(() => {
+      expect(cloudHook.cloudPicker?.blocker?.waiting).toBeUndefined();
+    });
+    expect(cloudHook.cloudPicker?.connectedBanner).toBeNull();
+  });
+
+  it("confirms the connection when a background refetch clears the blocker, with no Check again", async () => {
+    // The user departs for GitHub, finishes there, and comes back to a window
+    // that has already refetched on focus. Nothing was pressed in-app, so a
+    // banner gated on the manual re-check would never fire — and the picker
+    // would look like a bare list that never acknowledged the work.
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.onAction?.();
+    });
+    // The refetch has landed: the picker has no prerequisite left to report.
+    cloudHook.blocker = undefined;
+    act(() => {
+      useAddRepoFlowStore.setState({ step: { kind: "cloud" } });
+    });
+
+    await waitFor(() => {
+      expect(cloudHook.cloudPicker?.connectedBanner)
+        .toBe("GitHub connected. Choose a repository.");
+    });
+    // And the waiting panel is not left parked, ready to resurrect on a later
+    // blocker as a panel about a trip already made.
+    expect(cloudHook.cloudPicker?.blocker?.waiting).toBeUndefined();
+  });
+
+  it("confirms the connection on arrival once the re-check clears the blocker", async () => {
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    act(() => {
+      cloudHook.cloudPicker?.blocker?.onAction?.();
+    });
+    // Standing in for the user having finished on GitHub: the next render's
+    // picker has no prerequisite left to report.
+    cloudHook.blocker = undefined;
+    await act(async () => {
+      cloudHook.cloudPicker?.blocker?.waiting?.onCheckAgain();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(cloudHook.cloudPicker?.connectedBanner)
+        .toBe("GitHub connected. Choose a repository.");
+    });
+  });
+});
+
+describe("AddRepoFlowHost entry footnote", () => {
+  it("does not warn about connecting GitHub while the status is still unknown", () => {
+    // The status query has not resolved. Treating that as "not connected"
+    // flashed "Clone and Cloud need a one-time GitHub connection" at every
+    // already-connected user, every time they opened the menu.
+    githubStatus.data = undefined;
+    render(<AddRepoFlowHost />);
+    act(() => {
+      useAddRepoFlowStore.setState({ open: true, step: { kind: "entry" } });
+    });
+
+    expect(cloudHook.githubConnected).toBe(true);
+  });
+
+  it("warns once the status actually says GitHub is unconnected", () => {
+    githubStatus.data = { connected: false };
+    render(<AddRepoFlowHost />);
+    act(() => {
+      useAddRepoFlowStore.setState({ open: true, step: { kind: "entry" } });
+    });
+
+    expect(cloudHook.githubConnected).toBe(false);
   });
 });
 

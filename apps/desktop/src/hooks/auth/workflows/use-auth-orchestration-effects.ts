@@ -9,7 +9,8 @@ import { useSessionDirectoryStore } from "@proliferate/product-client/internal/s
 import { useSessionSelectionStore } from "@proliferate/product-client/internal/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@proliferate/product-client/internal/stores/sessions/session-transcript-store";
 import { useToastStore } from "@proliferate/product-client/internal/stores/toast/toast-store";
-import { useRepoSetupModalStore } from "@proliferate/product-client/internal/stores/ui/repo-setup-modal-store";
+import { dismissToast } from "@proliferate/product-client/internal/primitives/utils/show-toast";
+import { REPO_ADDED_TOAST_ID } from "@proliferate/product-client/internal/hooks/workspaces/ui/use-repo-added-toast";
 
 // Owns auth orchestration's store/runtime effect wiring. Does not own the auth network flow.
 export function useAuthOrchestrationEffects(): AuthOrchestrationDeps {
@@ -26,8 +27,8 @@ export function useAuthOrchestrationEffects(): AuthOrchestrationDeps {
       useSessionTranscriptStore.getState().clearEntries();
       useSessionSelectionStore.getState().clearSelection();
     },
-    closeRepoSetupModal: () => {
-      useRepoSetupModalStore.getState().close();
+    dismissRepoAddedReceipt: () => {
+      dismissToast(REPO_ADDED_TOAST_ID);
     },
     showToast: (message: string) => {
       useToastStore.getState().show(message);

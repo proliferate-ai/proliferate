@@ -2,7 +2,12 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AddRepoFlow, type AddRepoFlowProps } from "#product/components/workspace/repo-setup/AddRepoFlow";
+import {
+  AddRepoFlow,
+  ADD_REPO_SURFACE_CLASS,
+  GITHUB_CONNECTION_FOOTNOTE,
+  type AddRepoFlowProps,
+} from "#product/components/workspace/repo-setup/AddRepoFlow";
 import type { CloudRepoPickerProps } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 
 function buildCloudPicker(
@@ -41,13 +46,58 @@ describe("AddRepoFlow", () => {
   it("offers the Desktop host choices and reports the cloud pick", () => {
     const { onPickOption } = renderFlow();
 
-    expect(screen.getByText("Add a repository")).toBeTruthy();
     expect(screen.getByText("Add an existing folder")).toBeTruthy();
     expect(screen.getByText("Clone from GitHub")).toBeTruthy();
     expect(screen.getByText("Set up in Cloud")).toBeTruthy();
     fireEvent.click(screen.getByText("Set up in Cloud"));
 
     expect(onPickOption).toHaveBeenCalledWith("cloud");
+  });
+
+  it("names the one-time GitHub connection once, not per row", () => {
+    renderFlow({ githubConnected: false });
+
+    expect(screen.getByText(GITHUB_CONNECTION_FOOTNOTE)).toBeTruthy();
+    expect(screen.queryByText("Needs GitHub")).toBeNull();
+  });
+
+  it("drops the footnote once GitHub is connected", () => {
+    renderFlow({ githubConnected: true });
+
+    expect(screen.queryByText(GITHUB_CONNECTION_FOOTNOTE)).toBeNull();
+  });
+
+  it("carries both footnote lines under one rule, not two stacked blocks", () => {
+    renderFlow({
+      options: ["cloud"],
+      githubConnected: false,
+      entryNote: "Open the Desktop app to add a local folder.",
+    });
+
+    const bordered = Array.from(
+      document.querySelectorAll("[data-telemetry-block] .border-t"),
+    );
+    expect(bordered).toHaveLength(1);
+    expect(bordered[0]?.textContent).toContain(GITHUB_CONNECTION_FOOTNOTE);
+    expect(bordered[0]?.textContent)
+      .toContain("Open the Desktop app to add a local folder.");
+  });
+
+  it("names the dialog it raises — it has no trigger to borrow a name from", () => {
+    renderFlow();
+
+    expect(screen.getByRole("dialog", { name: "Add a repository" })).toBeTruthy();
+  });
+
+  it("renders the flow on a popover surface, animating only while open", () => {
+    renderFlow();
+
+    const content = document.querySelector("[data-slot=popover-content]");
+    for (const surfaceClass of ADD_REPO_SURFACE_CLASS.split(" ")) {
+      expect(content?.className).toContain(surfaceClass);
+    }
+    expect(content?.className).toContain("data-[state=open]:animate-popover-in");
+    expect(content?.className).not.toMatch(/(^|\s)animate-popover-in(\s|$)/);
   });
 
   it("reports the clone-from-github pick", () => {

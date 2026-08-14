@@ -3,6 +3,8 @@ import type { CloudGitRepositorySummary } from "@proliferate/cloud-sdk";
 
 import {
   buildGitHubAppPrerequisiteBlocker,
+  buildGitHubSetupSteps,
+  buildGitHubWaitingView,
   cloudEnvironmentAdminRequestCopy,
   githubSetupReturnSurface,
   mergeRepositories,
@@ -91,6 +93,92 @@ describe("cloud repo picker model", () => {
       fullName: "acme/one",
       defaultBranch: "trunk",
     });
+  });
+
+  it("gives every prerequisite blocker a checklist, never a bare explanation", () => {
+    const blockers = [
+      buildGitHubAppPrerequisiteBlocker(blockerInput({ organizationId: null })),
+      buildGitHubAppPrerequisiteBlocker(blockerInput({ userAuthorizationLoading: true })),
+      buildGitHubAppPrerequisiteBlocker(blockerInput({ userAuthorizationConnected: false })),
+      buildGitHubAppPrerequisiteBlocker(blockerInput({ installationInstalled: false })),
+      buildGitHubAppPrerequisiteBlocker(blockerInput({
+        installationInstalled: false,
+        canManageGitHubAppInstallation: false,
+      })),
+    ];
+
+    for (const blocker of blockers) {
+      expect(blocker?.steps?.length, blocker?.title).toBeGreaterThan(0);
+      expect(
+        blocker?.steps?.filter((step) => step.status === "current").length,
+        blocker?.title,
+      ).toBe(1);
+    }
+  });
+
+  it("keeps host-truthful return guidance on the current step and generic copy without a host", () => {
+    const desktop = buildGitHubSetupSteps({
+      userAuthorized: false,
+      installationInstalled: false,
+      returnGuidance: "GitHub opens in your browser, then returns you to Proliferate Desktop.",
+    });
+    expect(desktop[0]?.description).toBe(
+      "GitHub opens in your browser, then returns you to Proliferate Desktop.",
+    );
+
+    const hostless = buildGitHubSetupSteps({
+      userAuthorized: false,
+      installationInstalled: false,
+    });
+    expect(hostless[0]?.description).toBe(
+      "Connect the GitHub account that can access the repository.",
+    );
+  });
+
+  it("parks on GitHub with a manual re-check, and on an admin for a non-privileged member", () => {
+    const onCheckAgain = vi.fn();
+    const onCancel = vi.fn();
+
+    const authorizing = buildGitHubWaitingView({
+      step: "authorize",
+      canManageInstallation: true,
+      onCheckAgain,
+      onCancel,
+    });
+    expect(authorizing.title).toBe("Finish authorizing on GitHub");
+    expect(authorizing.checkAgainLabel).toBe("I've done this — Check again");
+    expect(authorizing.requestText).toBeNull();
+    authorizing.onCheckAgain();
+    expect(onCheckAgain).toHaveBeenCalledTimes(1);
+
+    const installing = buildGitHubWaitingView({
+      step: "install",
+      canManageInstallation: true,
+      onCheckAgain,
+      onCancel,
+    });
+    expect(installing.title).toBe("Finish installing on GitHub");
+
+    const waitingOnAdmin = buildGitHubWaitingView({
+      step: "install",
+      canManageInstallation: false,
+      onCheckAgain,
+      onCancel,
+    });
+    expect(waitingOnAdmin.title).toBe("Waiting on an admin");
+    // The non-admin has nothing to do on GitHub, so the label drops the claim.
+    expect(waitingOnAdmin.checkAgainLabel).toBe("Check again");
+    expect(waitingOnAdmin.requestText).toBe(cloudEnvironmentAdminRequestCopy());
+  });
+
+  it("names the in-flight re-check so the button is not silently inert", () => {
+    expect(buildGitHubWaitingView({
+      step: "authorize",
+      canManageInstallation: true,
+      checking: true,
+      onCheckAgain: vi.fn(),
+      onCancel: vi.fn(),
+    }).checkAgainLabel).toBe("Checking…");
   });
 
   it("derives host return guidance and the unchanged admin request copy", () => {

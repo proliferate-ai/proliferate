@@ -27,7 +27,6 @@ QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE apps/packages/product-client/src/hooks/worksp
 QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-actions.ts 1 workflow owns useMutation wrapper
 QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-display-name-actions.ts 1 workflow owns useMutation wrapper
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER apps/packages/product-client/src/components/playground/PlaygroundAttachmentFixtures.tsx 5 playground component owns query cache shape
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx 4 connected component owns query invalidation
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts 5 lifecycle hook owns query invalidation
 
 # Direct raw-access ownership debt.
