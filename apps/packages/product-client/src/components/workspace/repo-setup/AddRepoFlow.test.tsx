@@ -66,6 +66,22 @@ describe("AddRepoFlow", () => {
     expect(screen.queryByText(GITHUB_CONNECTION_FOOTNOTE)).toBeNull();
   });
 
+  it("carries both footnote lines under one rule, not two stacked blocks", () => {
+    renderFlow({
+      options: ["cloud"],
+      githubConnected: false,
+      entryNote: "Open the Desktop app to add a local folder.",
+    });
+
+    const bordered = Array.from(
+      document.querySelectorAll("[data-telemetry-block] .border-t"),
+    );
+    expect(bordered).toHaveLength(1);
+    expect(bordered[0]?.textContent).toContain(GITHUB_CONNECTION_FOOTNOTE);
+    expect(bordered[0]?.textContent)
+      .toContain("Open the Desktop app to add a local folder.");
+  });
+
   it("names the dialog it raises — it has no trigger to borrow a name from", () => {
     renderFlow();
 

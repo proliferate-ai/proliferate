@@ -176,6 +176,10 @@ function AddRepoEntryStep({
   title: string;
 }) {
   const entries = options.map((option) => ENTRY_OPTION_DEFS[option]);
+  const footnotes = [
+    githubConnected ? null : GITHUB_CONNECTION_FOOTNOTE,
+    note,
+  ].filter((line): line is string => Boolean(line));
 
   return (
     <div>
@@ -196,15 +200,17 @@ function AddRepoEntryStep({
           onClick={() => onPickOption(entry.option)}
         />
       ))}
-      {githubConnected ? null : (
-        <p className="mt-1 border-t border-border/60 px-2.5 pb-1 pt-2 text-ui-sm text-muted-foreground">
-          {GITHUB_CONNECTION_FOOTNOTE}
-        </p>
-      )}
-      {note ? (
-        <p className="mt-1 border-t border-border/60 px-2.5 pb-1 pt-2 text-ui-sm text-muted-foreground">
-          {note}
-        </p>
+      {/* ONE footnote block, however many lines it has to carry. Two separately
+          bordered blocks stacked a second rule under the menu on Web, where the
+          host note and the GitHub note both apply. */}
+      {footnotes.length ? (
+        <div className="mt-1 space-y-1 border-t border-border/60 px-2.5 pb-1 pt-2">
+          {footnotes.map((footnote) => (
+            <p key={footnote} className="text-ui-sm text-muted-foreground">
+              {footnote}
+            </p>
+          ))}
+        </div>
       ) : null}
     </div>
   );

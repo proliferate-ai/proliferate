@@ -98,7 +98,13 @@ export function useAddRepoFlowController({
   // where the one-time-connection footnote has to appear. Same query key as the
   // picker's own status read, so this costs nothing extra.
   const userAuthorization = useGitHubAppUserAuthorizationStatus(open);
-  const githubConnected = userAuthorization.data?.connected === true;
+  // Unknown reads as connected. The footnote is a warning, and a warning that
+  // appears for the length of one query and then vanishes is noise: an already
+  // connected user would see "you need to connect GitHub" flash every single
+  // time they open the menu.
+  const githubConnected = userAuthorization.data
+    ? userAuthorization.data.connected === true
+    : true;
 
   // The resolver's repo-independent gates, which take precedence over the
   // picker's own prerequisites (see buildAddRepoPreflightBlockers).

@@ -37,6 +37,13 @@ const cloudHook = vi.hoisted(() => ({
   // What the stubbed picker currently reports as its own prerequisite blocker;
   // a test clears it to stand for "GitHub is connected now".
   blocker: undefined as CloudRepoPickerProps["blocker"],
+  // What the entry step was told about the one-time GitHub connection.
+  githubConnected: undefined as boolean | undefined,
+}));
+
+// The user-authorization status query: `data` is undefined while it loads.
+const githubStatus = vi.hoisted(() => ({
+  data: { connected: true } as { connected: boolean } | undefined,
 }));
 const productHost = vi.hoisted(() => ({
   desktop: null as DesktopBridge | null,
@@ -132,13 +139,21 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   githubAppRootKey: () => ["github-app"],
   repositoriesKey: () => ["repositories"],
   useCloudClient: () => ({ baseUrl: "https://api.test" }),
-  useGitHubAppUserAuthorizationStatus: () => ({ data: { connected: true } }),
+  useGitHubAppUserAuthorizationStatus: () => ({ data: githubStatus.data }),
 }));
 
 // Expose the resolved cloudPicker.blocker title the host hands the flow.
 vi.mock("#product/components/workspace/repo-setup/AddRepoFlow", () => ({
-  AddRepoFlow: ({ step, cloudPicker, clonePicker, error, onPickOption }: AddRepoFlowProps) => {
+  AddRepoFlow: ({
+    step,
+    cloudPicker,
+    clonePicker,
+    error,
+    githubConnected,
+    onPickOption,
+  }: AddRepoFlowProps) => {
     const picker = step.kind === "clone" ? clonePicker : cloudPicker;
+    cloudHook.githubConnected = githubConnected;
     cloudHook.clonePicker = clonePicker ?? null;
     cloudHook.cloudPicker = cloudPicker ?? null;
     addRepoFlow.onPickOption = onPickOption;
@@ -167,6 +182,8 @@ afterEach(() => {
   cloudHook.clonePicker = null;
   cloudHook.cloudPicker = null;
   cloudHook.blocker = OLD_PREREQ_BLOCKER;
+  cloudHook.githubConnected = undefined;
+  githubStatus.data = { connected: true };
   OLD_PREREQ_BLOCKER.onAction.mockClear();
   cloudHook.legacyManual.mockClear();
   productHost.desktop = null;
@@ -442,6 +459,31 @@ describe("AddRepoFlowHost waiting on GitHub", () => {
       expect(cloudHook.cloudPicker?.connectedBanner)
         .toBe("GitHub connected. Choose a repository.");
     });
+  });
+});
+
+describe("AddRepoFlowHost entry footnote", () => {
+  it("does not warn about connecting GitHub while the status is still unknown", () => {
+    // The status query has not resolved. Treating that as "not connected"
+    // flashed "Clone and Cloud need a one-time GitHub connection" at every
+    // already-connected user, every time they opened the menu.
+    githubStatus.data = undefined;
+    render(<AddRepoFlowHost />);
+    act(() => {
+      useAddRepoFlowStore.setState({ open: true, step: { kind: "entry" } });
+    });
+
+    expect(cloudHook.githubConnected).toBe(true);
+  });
+
+  it("warns once the status actually says GitHub is unconnected", () => {
+    githubStatus.data = { connected: false };
+    render(<AddRepoFlowHost />);
+    act(() => {
+      useAddRepoFlowStore.setState({ open: true, step: { kind: "entry" } });
+    });
+
+    expect(cloudHook.githubConnected).toBe(false);
   });
 });
 
