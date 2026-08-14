@@ -26,6 +26,7 @@ from proliferate.auth.identity.store import (
     merge_auth_user_into_user,
 )
 from proliferate.auth.identity.types import (
+    AuthCallbackRedirect,
     AuthChallengeSnapshot,
     AuthProviderName,
     AuthSession,
@@ -97,7 +98,7 @@ async def complete_oauth_provider_callback(
     surface: str | None,
     state: str,
     code: str,
-) -> str:
+) -> AuthCallbackRedirect:
     challenge = await consume_provider_challenge(
         db,
         state=state,
@@ -115,11 +116,12 @@ async def complete_oauth_provider_callback(
             ),
         )
     except providers.OAuthProviderTokenRejectedError:
-        return append_query(
+        url = append_query(
             challenge.redirect_uri,
             error="provider_error",
             state=challenge.client_state,
         )
+        return AuthCallbackRedirect(url=url, surface=challenge.surface, error="provider_error")
     except providers.ProviderVerificationError as exc:
         raise AuthFlowError(exc.code, exc.message, status_code=400) from exc
     if callback_surface == "web" and challenge.purpose == "login":
@@ -148,7 +150,8 @@ async def complete_oauth_provider_callback(
             verified=verified,
             notify_signup=not desktop_github_account_or_email_exists,
         )
-    return append_query(challenge.redirect_uri, code=auth_code.code, state=challenge.client_state)
+    url = append_query(challenge.redirect_uri, code=auth_code.code, state=challenge.client_state)
+    return AuthCallbackRedirect(url=url, surface=challenge.surface, error=None)
 
 
 async def _desktop_github_account_or_email_exists(
