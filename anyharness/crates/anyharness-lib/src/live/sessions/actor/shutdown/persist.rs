@@ -29,7 +29,7 @@ pub(in crate::live::sessions::actor) async fn persist_exit_disposition(
             // Invariant: dismiss detaches the live actor without announcing a
             // terminal session_ended event. The session remains durable and
             // resumable from the client's perspective.
-            ActorExitDisposition::Dismiss => {}
+            ActorExitDisposition::Dismiss | ActorExitDisposition::Unload => {}
         }
     }
 
@@ -49,6 +49,12 @@ pub(in crate::live::sessions::actor) async fn persist_exit_disposition(
             handle
                 .clear_pending_interactions_for_terminal_state(SessionExecutionPhase::Idle)
                 .await;
+        }
+        ActorExitDisposition::Unload => {
+            handle
+                .clear_pending_interactions_for_terminal_state(SessionExecutionPhase::Idle)
+                .await;
+            let _ = store.update_status(session_id, "idle", now);
         }
     }
 }

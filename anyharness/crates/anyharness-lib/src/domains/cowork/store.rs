@@ -237,18 +237,18 @@ impl CoworkStore {
                 "INSERT INTO session_links (
                     id, public_id, relation, parent_session_id, child_session_id,
                     workspace_relation, label, created_by_turn_id,
-                    created_by_tool_call_id, created_at, closed_at
+                    created_by_tool_call_id, created_at, subagent_closed_at, closed_at
                  )
-                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12
                  WHERE (
                     SELECT COUNT(*)
                     FROM session_links links
                     JOIN sessions child ON child.id = links.child_session_id
                     WHERE links.relation = ?3
                       AND links.parent_session_id = ?4
-                      AND child.workspace_id = ?12
+                      AND child.workspace_id = ?13
                       AND links.closed_at IS NULL
-                 ) < ?13",
+                 ) < ?14",
                 params![
                     record.id,
                     record.public_id,
@@ -260,6 +260,7 @@ impl CoworkStore {
                     record.created_by_turn_id,
                     record.created_by_tool_call_id,
                     record.created_at,
+                    record.subagent_closed_at,
                     record.closed_at,
                     workspace_id,
                     max_sessions_per_workspace as i64,

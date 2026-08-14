@@ -6,9 +6,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   thoughtItem,
   toolItem,
+  userItem,
 } from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
 import { ProposedPlanToolCallIdsProvider } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
 import { TranscriptItemBlock } from "#product/components/workspace/chat/transcript/TranscriptItemBlock";
+import { TranscriptContextProviders } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 
 vi.mock("#product/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),
@@ -156,6 +158,40 @@ describe("TranscriptItemBlock", () => {
     // Completed reasoning is labeled "Thought" so the animated status owns
     // the live word "Thinking".
     expect(container.textContent).toContain("Thought");
+  });
+
+  it("renders agent-originated messages as right-side receipts with no user bubble", () => {
+    const transcript = createTranscriptState("parent-session");
+    const item = {
+      ...userItem("agent-message-1", "turn-1", 1),
+      text: "Exact message from the agent",
+      contentParts: [{ type: "text" as const, text: "Exact message from the agent" }],
+      promptProvenance: {
+        type: "agentSession" as const,
+        sourceSessionId: "agent-session-1",
+        label: "Schema audit",
+      },
+    };
+    transcript.itemsById = { [item.itemId]: item };
+
+    const { container } = render(
+      <TranscriptContextProviders sessionId="parent-session">
+        <ProposedPlanToolCallIdsProvider value={new Set()}>
+          <TranscriptItemBlock
+            item={item}
+            transcript={transcript}
+            workspaceId="workspace-1"
+            onOpenArtifact={() => {}}
+          />
+        </ProposedPlanToolCallIdsProvider>
+      </TranscriptContextProviders>,
+    );
+
+    expect(container.querySelector("[data-agent-origin-prompt]")?.className).toContain("justify-end");
+    expect(container.querySelector("[data-agent-message-receipt]")?.textContent)
+      .toContain("replied");
+    expect(container.querySelector("[data-chat-user-message]")).toBeNull();
+    expect(container.textContent).not.toContain("Exact message from the agent");
   });
 });
 

@@ -11,19 +11,19 @@ export function collectSubagentSessionRelationshipHints(
   subagents: SessionSubagentsResponse | null | undefined,
 ): SubagentSessionRelationshipHint[] {
   const hintsBySessionId = new Map<string, SubagentSessionRelationshipHint>();
-  if (subagents?.parent) {
+  if (subagents?.parent.parent) {
     hintsBySessionId.set(sessionId, {
       sessionId,
-      parentSessionId: subagents.parent.parentSessionId,
-      sessionLinkId: subagents.parent.sessionLinkId ?? null,
+      parentSessionId: subagents.parent.parent.sessionId,
+      sessionLinkId: null,
     });
   }
 
   for (const child of subagents?.children ?? []) {
-    hintsBySessionId.set(child.childSessionId, {
-      sessionId: child.childSessionId,
-      parentSessionId: sessionId,
-      sessionLinkId: child.sessionLinkId ?? null,
+    hintsBySessionId.set(child.agent.identity.sessionId, {
+      sessionId: child.agent.identity.sessionId,
+      parentSessionId: subagents?.parent.identity.sessionId ?? sessionId,
+      sessionLinkId: child.relationship.sessionLinkId,
     });
   }
 

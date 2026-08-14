@@ -1,10 +1,32 @@
 use rusqlite::params;
 
+use super::completion_deliveries::{
+    DurableSubagentWakeTurn, DurableSubagentWakeTurnOutcome, DurableTerminalTurn,
+};
 use super::persisted_payloads::sanitize_session_event_for_sqlite;
 use super::SessionStore;
 use crate::domains::sessions::model::SessionEventRecord;
 
+mod repair;
+
 impl SessionStore {
+    pub(crate) fn persist_subagent_wake_turn_record(
+        &self,
+        input: &DurableSubagentWakeTurn,
+    ) -> anyhow::Result<DurableSubagentWakeTurnOutcome> {
+        self.db.with_tx(|tx| {
+            super::completion_deliveries::admission::persist_subagent_wake_turn_in_tx(tx, input)
+        })
+    }
+
+    pub(crate) fn persist_terminal_turn_record(
+        &self,
+        input: &DurableTerminalTurn,
+    ) -> anyhow::Result<()> {
+        self.db
+            .with_tx(|tx| super::completion_deliveries::persist_terminal_turn_in_tx(tx, input))
+    }
+
     pub fn next_event_seq(&self, session_id: &str) -> anyhow::Result<i64> {
         self.db.with_conn(|conn| {
             let max: Option<i64> = conn.query_row(
@@ -243,6 +265,30 @@ impl SessionStore {
         })
     }
 
+    /// Read one bounded reverse-chronological batch from the only durable
+    /// event surface that can contribute user-visible task output. Filtering
+    /// in SQL avoids pulling arbitrary tool and runtime traffic into memory.
+    pub(crate) fn list_completed_items_before_desc(
+        &self,
+        session_id: &str,
+        before_seq: i64,
+        limit: i64,
+    ) -> anyhow::Result<Vec<SessionEventRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT *
+                 FROM session_events
+                 WHERE session_id = ?1
+                   AND seq < ?2
+                   AND event_type = 'item_completed'
+                 ORDER BY seq DESC
+                 LIMIT ?3",
+            )?;
+            let rows = stmt.query_map(params![session_id, before_seq, limit], map_event)?;
+            rows.collect()
+        })
+    }
+
     pub fn list_events_before_for_latest_turns(
         &self,
         session_id: &str,
@@ -429,67 +475,9 @@ impl SessionStore {
             )
         })
     }
-
-    /// Find turns that have a `turn_started` but no corresponding `turn_ended`
-    /// (or `error` / `session_ended`) and close them with a synthetic
-    /// `turn_ended` event carrying `stop_reason: cancelled`. Returns the number
-    /// of turns repaired.
-    pub fn repair_unclosed_turns(&self, session_id: &str) -> anyhow::Result<u32> {
-        self.db.with_tx(|conn| {
-            // Find turn_ids that were started but never ended.
-            let mut stmt = conn.prepare(
-                "SELECT DISTINCT e.turn_id
-                 FROM session_events e
-                 WHERE e.session_id = ?1
-                   AND e.event_type = 'turn_started'
-                   AND e.turn_id IS NOT NULL
-                   AND NOT EXISTS (
-                     SELECT 1 FROM session_events e2
-                     WHERE e2.session_id = e.session_id
-                       AND e2.turn_id = e.turn_id
-                       AND e2.event_type IN ('turn_ended', 'error', 'session_ended')
-                   )",
-            )?;
-            let unclosed_turn_ids: Vec<String> = stmt
-                .query_map([session_id], |row| row.get(0))?
-                .collect::<Result<Vec<_>, _>>()?;
-
-            if unclosed_turn_ids.is_empty() {
-                return Ok(0);
-            }
-
-            let now = chrono::Utc::now().to_rfc3339();
-            let payload_json = r#"{"type":"turn_ended","stopReason":"cancelled"}"#;
-            let mut count = 0u32;
-
-            for turn_id in &unclosed_turn_ids {
-                let next_seq: i64 = conn.query_row(
-                    "SELECT COALESCE(MAX(seq), 0) + 1 FROM session_events WHERE session_id = ?1",
-                    [session_id],
-                    |row| row.get(0),
-                )?;
-
-                conn.execute(
-                    "INSERT INTO session_events (session_id, seq, timestamp, event_type, turn_id, item_id, payload_json)
-                     VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6)",
-                    params![session_id, next_seq, now, "turn_ended", turn_id, payload_json],
-                )?;
-
-                tracing::info!(
-                    session_id = %session_id,
-                    turn_id = %turn_id,
-                    seq = next_seq,
-                    "repaired unclosed turn with synthetic turn_ended"
-                );
-                count += 1;
-            }
-
-            Ok(count)
-        })
-    }
 }
 
-fn map_event(row: &rusqlite::Row) -> rusqlite::Result<SessionEventRecord> {
+pub(super) fn map_event(row: &rusqlite::Row) -> rusqlite::Result<SessionEventRecord> {
     Ok(SessionEventRecord {
         id: row.get("id")?,
         session_id: row.get("session_id")?,

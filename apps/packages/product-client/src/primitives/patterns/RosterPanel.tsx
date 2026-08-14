@@ -28,6 +28,12 @@ export interface RosterPanelProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   /** Static section label. Widens the DOM `title` attribute, which is a string. */
   title: ReactNode;
+  /**
+   * Element the section label renders as. The default stays a `span`; a panel
+   * that is a labeled document section (a grouped roster with several sibling
+   * panels) passes a heading tag so assistive tech keeps the outline.
+   */
+  titleAs?: "span" | "h2" | "h3";
   /** Right-aligned header control (an `IconButton`, not a tab). */
   headerAction?: ReactNode;
   /** Shown in place of the list when there are no children; `null` suppresses it. */
@@ -40,6 +46,7 @@ export interface RosterPanelProps
 
 export function RosterPanel({
   title,
+  titleAs: TitleTag = "span",
   headerAction,
   empty,
   footer,
@@ -52,7 +59,7 @@ export function RosterPanel({
   return (
     <div className={twMerge("flex flex-col gap-1.5", className)} {...props}>
       <div className="flex items-center justify-between px-1 pt-0.5">
-        <span className="text-ui font-medium text-foreground">{title}</span>
+        <TitleTag className="text-ui font-medium text-foreground">{title}</TitleTag>
         {headerAction}
       </div>
       {!hasRows && empty !== undefined && empty !== null && (

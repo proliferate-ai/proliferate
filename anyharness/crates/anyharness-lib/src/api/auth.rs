@@ -208,6 +208,9 @@ pub fn user_route_allowed(
             require_permission(claim, Permission::Read)?;
             require_workspace_scope(claim, workspace_id)
         }
+        ["workspaces", workspace_id, "subagents"] if method == Method::GET => {
+            require_workspace_permission(claim, workspace_id, Permission::Read)
+        }
         ["workspaces", workspace_id, "plans"] if method == Method::GET => {
             require_workspace_permission(claim, workspace_id, Permission::Read)
         }
@@ -315,6 +318,11 @@ pub fn user_route_allowed(
         }
         ["sessions", session_id, "subagents"] if method == Method::GET => {
             require_session_permission(claim, session_id, Permission::Read)
+        }
+        ["sessions", session_id, "subagents", _, "close" | "open" | "promote"]
+            if method == Method::POST =>
+        {
+            require_session_permission(claim, session_id, Permission::Control)
         }
         ["sessions", session_id, "reviews"] if method == Method::GET => {
             require_session_permission(claim, session_id, Permission::Read)

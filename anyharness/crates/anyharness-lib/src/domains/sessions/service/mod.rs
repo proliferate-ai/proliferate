@@ -156,6 +156,14 @@ impl SessionService {
         &self.attachment_storage
     }
 
+    pub fn find_last_dismissed_in_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Option<SessionRecord>> {
+        self.session_store
+            .find_last_dismissed_in_workspace(workspace_id)
+    }
+
     /// Look up a single prompt attachment's record (not its bytes — see
     /// [`SessionService::read_prompt_attachment_content`]) by session and
     /// attachment id, for the download-by-id handler.

@@ -122,6 +122,13 @@ impl SessionActor {
         catalog_authorized_model: bool,
     ) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError>
     {
+        if !self.event_mutations_admitted().await {
+            return Err(
+                crate::live::sessions::actor::command::SetConfigOptionCommandError::Rejected(
+                    "terminal transaction unresolved".to_string(),
+                ),
+            );
+        }
         apply_specific_config_option(
             &self.conn,
             &self.native_session_id,
@@ -145,6 +152,13 @@ impl SessionActor {
         catalog_authorized_model: bool,
     ) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError>
     {
+        if !self.event_mutations_admitted().await {
+            return Err(
+                crate::live::sessions::actor::command::SetConfigOptionCommandError::Rejected(
+                    "terminal transaction unresolved".to_string(),
+                ),
+            );
+        }
         let resolved_value = queue_pending_config_change(
             self.caps.state.as_ref(),
             &self.session_id,

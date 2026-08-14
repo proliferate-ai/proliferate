@@ -50,6 +50,9 @@ export function formatWakePromptTranscriptText(
         ? "Coding session"
         : "Subagent"
     );
+  if (!completion) {
+    return `${title} updated`;
+  }
   return formatWakeTitle(title, completion?.outcome ?? null);
 }
 
@@ -126,6 +129,29 @@ export function isAgentSessionProvenance(
   provenance: PromptProvenance | null | undefined,
 ): provenance is Extract<PromptProvenance, { type: "agentSession" }> {
   return provenance?.type === "agentSession";
+}
+
+export function formatAgentMessageReceiptVerb({
+  provenance,
+  completion,
+}: {
+  provenance: Extract<PromptProvenance, { type: "agentSession" }> | WakePromptProvenance;
+  completion?: LinkCompletionMetadata | null;
+}): string {
+  if (provenance.type === "agentSession") {
+    return "replied";
+  }
+  if (!completion) {
+    return "updated ·";
+  }
+  const outcome = normalizeOutcome(completion?.outcome ?? null);
+  if (outcome === "failed") {
+    return "failed ·";
+  }
+  if (outcome === "cancelled" || outcome === "canceled") {
+    return "cancelled ·";
+  }
+  return "finished ·";
 }
 
 export function formatSubagentLabel(

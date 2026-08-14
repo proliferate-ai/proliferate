@@ -57,7 +57,7 @@ describe("useRightPanelViewerActions", () => {
     expect(typeof update).toBe("function");
     expect(update(state)).toEqual({
       activeEntryKey: "tool:git",
-      headerOrder: ["tool:scratch", "tool:git"],
+      headerOrder: ["tool:scratch", "tool:git", "tool:agents"],
     });
   });
 });

@@ -56,6 +56,9 @@ const SUBAGENT_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
   "subagents-queued-wake",
   "subagents-queued-wake-with-approval",
   "subagent-wake-card",
+  "agent-operations-receipts",
+  "agent-operations-grouping-insertion",
+  "agent-operations-pending-aggregate",
 ];
 
 const CLOUD_COMPOSER_SCENARIOS: ScenarioKey[] = [
@@ -75,6 +78,7 @@ const QUEUE_COMPOSER_SCENARIOS: ScenarioKey[] = [
   "pending-prompts-with-approval",
   "subagents-queued-wake",
   "subagents-queued-wake-with-approval",
+  "agent-operations-pending-aggregate",
 ];
 
 // The composer surface renders ComposerModelSelectorControl, which calls
@@ -178,6 +182,7 @@ describe("playground scenarios", () => {
     const subagentComposerHtml = renderToStaticMarkup(renderDelegationSlot("subagents-composer-many"));
     expect(subagentComposerHtml).not.toContain("color-mix");
     expect(subagentComposerHtml).not.toContain("style=");
+    expect(subagentComposerHtml.toLowerCase()).not.toContain("wake scheduled");
     expect(subagentComposerHtml).not.toMatch(/Codex|Claude|Grok|gpt-|sonnet|opus|model/i);
   });
 
@@ -201,13 +206,14 @@ describe("playground scenarios", () => {
     expect(isValidElement(renderActiveSlot("pending-prompts-with-approval"))).toBe(true);
   });
 
-  it("renders subagent wake prompts as plain queued text", () => {
+  it("renders queued subagent updates as a no-control aggregate", () => {
     const html = renderToStaticMarkup(renderOutboundSlot("subagents-queued-wake"));
-    expect(html).toContain("runtime-server-sdk-survey finished");
-    expect(html).not.toContain("Turn Completed");
+    expect(html).toContain("From subagents");
+    expect(html).toContain("1 update");
     expect(html).not.toContain("Child session:");
-    expect(html).toContain('aria-label="Delete queued message"');
+    expect(html).not.toContain('aria-label="Delete queued message"');
     expect(html).not.toContain('aria-label="Edit queued message"');
+    expect(html).not.toContain('aria-label="Reorder queued message"');
   });
 
   it("keeps queued rows compact and exposes steer, reorder, and edit actions", () => {

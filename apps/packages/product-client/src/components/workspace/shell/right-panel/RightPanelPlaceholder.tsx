@@ -8,11 +8,15 @@ export function RightPanelPlaceholder({ activeEntryKey }: { activeEntryKey: Righ
   const kind = entry?.kind === "tool" ? entry.tool : entry?.kind ?? "git";
   const title = kind === "scratch"
     ? "Scratch is getting ready"
+    : kind === "agents"
+      ? "Agents are getting ready"
     : kind === "terminal"
       ? "Terminals are getting ready"
       : "Git view is getting ready";
   const description = kind === "scratch"
     ? "Your workspace notes will appear here as soon as the workspace finishes loading."
+    : kind === "agents"
+      ? "Delegated agents will appear here as soon as the workspace finishes loading."
     : kind === "terminal"
       ? "Terminals will connect once the workspace runtime is ready."
       : "Changes and diffs will appear here as soon as the workspace finishes loading.";

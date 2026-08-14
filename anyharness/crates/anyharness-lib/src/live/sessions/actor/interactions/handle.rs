@@ -34,7 +34,7 @@ impl SessionActor {
     pub(in crate::live::sessions::actor) async fn run_domain_op_cmd(
         &self,
         op: Box<dyn SessionDomainOp>,
-    ) -> Box<dyn std::any::Any + Send> {
+    ) -> Option<Box<dyn std::any::Any + Send>> {
         run_domain_op(
             &self.handle,
             &self.event_sink,
@@ -56,6 +56,10 @@ pub(in crate::live::sessions::actor) async fn handle_resolve_interaction(
     request_id: String,
     resolution: Resolution,
 ) -> Result<(), ResolveInteractionCommandError> {
+    let mut sink = event_sink.lock().await;
+    if !sink.event_mutations_admitted() {
+        return Err(ResolveInteractionCommandError::ActorDead);
+    }
     let outcome = match resolution {
         Resolution::Selected { option_id } => interaction_broker
             .resolve_with_option_id(session_id, &request_id, &option_id)
@@ -92,10 +96,8 @@ pub(in crate::live::sessions::actor) async fn handle_resolve_interaction(
 
     let (kind, contract_outcome) = broker_outcome_to_interaction_event(outcome);
 
-    {
-        let mut sink = event_sink.lock().await;
-        sink.interaction_resolved(request_id.clone(), kind, contract_outcome);
-    }
+    sink.interaction_resolved(request_id.clone(), kind, contract_outcome);
+    drop(sink);
     handle.remove_pending_interaction(&request_id).await;
     Ok(())
 }
@@ -113,14 +115,17 @@ pub(in crate::live::sessions::actor) async fn run_domain_op(
     workspace_id: &str,
     agent_kind: &str,
     op: Box<dyn SessionDomainOp>,
-) -> Box<dyn std::any::Any + Send> {
+) -> Option<Box<dyn std::any::Any + Send>> {
     let step = {
         let mut sink = event_sink.lock().await;
+        if !sink.event_mutations_admitted() {
+            return None;
+        }
         let mut emitter = SessionOpEmitter::new(&mut sink, session_id, workspace_id, agent_kind);
         op.begin(&mut emitter)
     };
     match step {
-        SessionOpStep::Done(value) => value,
+        SessionOpStep::Done(value) => Some(value),
         SessionOpStep::ResolveInteraction {
             request_id,
             resolution,
@@ -136,9 +141,12 @@ pub(in crate::live::sessions::actor) async fn run_domain_op(
             )
             .await;
             let mut sink = event_sink.lock().await;
+            if !sink.event_mutations_admitted() {
+                return None;
+            }
             let mut emitter =
                 SessionOpEmitter::new(&mut sink, session_id, workspace_id, agent_kind);
-            then.finish(&mut emitter, outcome)
+            Some(then.finish(&mut emitter, outcome))
         }
     }
 }

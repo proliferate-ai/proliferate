@@ -29,7 +29,7 @@ import {
 } from "#product/hooks/chat/ui/use-queued-prompt-edit";
 import { focusChatInput } from "#product/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "#product/lib/domain/chat/composer/file-mention-draft-model";
-import { promptAttachmentSnapshotsToContentParts } from "#product/domain/chats/composer/prompt-attachment-snapshot";
+import { promptAttachmentSnapshotsToContentParts } from "#product/domain/chats/composer/prompt-attachment-content-parts";
 import { buildPromptWithSelectedResponseContexts } from "#product/domain/chats/transcript/selected-response-context";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "#product/lib/domain/chat/session-controls/session-controls";
@@ -46,7 +46,6 @@ import {
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { ChatInputControlRow } from "./ChatInputControlRow";
-import { ConnectedWorkspaceStatusComposerControl } from "./workspace-status/ConnectedWorkspaceStatusComposerControl";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ComposerBlockedStatusLine } from "./ComposerBlockedStatusLine";
 import { ComposerBlockedControlRow } from "./ComposerBlockedControlRow";
@@ -409,17 +408,6 @@ export function ChatInput({
                     isEmpty={effectiveIsEmpty}
                     onSubmit={onSubmit}
                     onCancel={onCancel}
-                    statusControl={suppressActiveSessionState
-                      ? undefined
-                      : (
-                        <ConnectedWorkspaceStatusComposerControl
-                          advancedControls={
-                            buildComposerSessionControlGroups(effectiveSessionConfigControls)
-                              .overflowControls
-                          }
-                          agentKind={effectiveAgentKind}
-                        />
-                      )}
                   />
                 </>
               )}

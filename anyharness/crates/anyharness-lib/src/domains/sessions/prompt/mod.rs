@@ -22,6 +22,10 @@ mod tests;
 use provenance::{decode_prompt_provenance, PromptProvenance};
 
 pub const MAX_PROMPT_BLOCKS: usize = 32;
+pub const SUBAGENT_COMPLETION_PROMPT_ID_PREFIX: &str = "subagent_completion:";
+pub const AGENT_PRODUCT_CONTEXT_UNAVAILABLE_CODE: &str = "AGENT_PRODUCT_CONTEXT_UNAVAILABLE";
+pub const AGENT_PRODUCT_CONTEXT_UNAVAILABLE_DETAIL: &str =
+    "Agent product context is temporarily unavailable; retry the prompt.";
 pub const MAX_ATTACHMENTS_PER_PROMPT: usize = 10;
 // Plan references have their own count/byte budget because they resolve to
 // trusted markdown snapshots, not uploaded attachment payloads.
@@ -91,9 +95,14 @@ impl PromptPayload {
     }
 
     pub fn blocks_json(&self) -> anyhow::Result<Option<String>> {
-        if self.blocks.len() == 1
-            && matches!(self.blocks.first(), Some(StoredPromptBlock::Text { .. }))
-        {
+        // A single text block may use the legacy compact representation only
+        // when the persisted summary can reconstruct that block losslessly.
+        // `text_summary` intentionally trims outer whitespace for display, so
+        // authored bytes that differ must retain their canonical block JSON.
+        if matches!(
+            self.blocks.as_slice(),
+            [StoredPromptBlock::Text { text }] if text == &self.text_summary
+        ) {
             return Ok(None);
         }
         Ok(Some(serde_json::to_string(&self.blocks)?))
@@ -111,6 +120,13 @@ impl PromptPayload {
         self.provenance
             .as_ref()
             .and_then(PromptProvenance::to_public)
+    }
+
+    pub(crate) fn has_subagent_wake_provenance(&self) -> bool {
+        matches!(
+            self.provenance.as_ref(),
+            Some(PromptProvenance::SubagentWake { .. })
+        )
     }
 
     pub(crate) fn with_provenance(mut self, provenance: PromptProvenance) -> Self {

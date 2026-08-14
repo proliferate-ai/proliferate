@@ -271,7 +271,7 @@ fn pop_last_dismissed_restores_latest_session_atomically() {
         .expect("dismiss second session");
 
     let restored = store
-        .pop_last_dismissed_in_workspace("workspace-1", "2026-03-25T04:00:00Z")
+        .pop_last_dismissed_in_workspace("workspace-1", None, "2026-03-25T04:00:00Z")
         .expect("pop dismissed session")
         .expect("restored session exists");
     assert_eq!(restored.id, "session-2");
@@ -279,14 +279,14 @@ fn pop_last_dismissed_restores_latest_session_atomically() {
     assert_eq!(restored.updated_at, "2026-03-25T04:00:00Z");
 
     let next = store
-        .pop_last_dismissed_in_workspace("workspace-1", "2026-03-25T05:00:00Z")
+        .pop_last_dismissed_in_workspace("workspace-1", None, "2026-03-25T05:00:00Z")
         .expect("pop next dismissed session")
         .expect("next restored session exists");
     assert_eq!(next.id, "session-1");
     assert_eq!(next.dismissed_at, None);
 
     let none = store
-        .pop_last_dismissed_in_workspace("workspace-1", "2026-03-25T06:00:00Z")
+        .pop_last_dismissed_in_workspace("workspace-1", None, "2026-03-25T06:00:00Z")
         .expect("pop empty dismissed stack");
     assert!(none.is_none());
 }

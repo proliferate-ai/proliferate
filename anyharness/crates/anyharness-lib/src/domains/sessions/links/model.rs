@@ -87,7 +87,36 @@ pub struct SessionLinkRecord {
     pub created_by_turn_id: Option<String>,
     pub created_by_tool_call_id: Option<String>,
     pub created_at: String,
+    /// Reversible subagent operability gate. Unlike `closed_at`, this does not
+    /// end the relationship or the child session's durable conversation.
+    pub subagent_closed_at: Option<String>,
     pub closed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubagentLinkCloseResult {
+    pub link: SessionLinkRecord,
+    pub was_already_closed: bool,
+    pub purged_pending_prompt_count: usize,
+    pub removed_wake_schedule: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubagentLinkCloseOutcome {
+    NotFound,
+    Closed(SubagentLinkCloseResult),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubagentLinkOpenResult {
+    pub link: SessionLinkRecord,
+    pub was_already_open: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubagentLinkOpenOutcome {
+    NotFound,
+    Opened(SubagentLinkOpenResult),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
