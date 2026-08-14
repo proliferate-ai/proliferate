@@ -220,7 +220,46 @@ fn capture_work_tree(
     let seeded_by_copy = real_index
         .as_deref()
         .is_some_and(|index| std::fs::copy(index, &temp_index).is_ok());
-    if !seeded_by_copy {
+    if seeded_by_copy {
+        // The copy also carries skip-worktree bits, and `git add -A` honors
+        // them — it would keep the INDEX content for those paths and silently
+        // drop their on-disk edits from the capture (spec §6.8 only cedes the
+        // BIT across the round trip, never content). Clear the bits in the
+        // capture index so those paths are re-examined like every other.
+        let flagged = Command::new("git")
+            .current_dir(workspace_path)
+            .env("GIT_INDEX_FILE", &temp_index)
+            .env("LC_ALL", "C")
+            .args(["ls-files", "-v", "-z"])
+            .output()
+            .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git ls-files -v failed to run: {error}")))?;
+        let skip_worktree_paths: Vec<String> = flagged
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter_map(|entry| {
+                let entry = String::from_utf8_lossy(entry);
+                let (tag, path) = entry.split_once(' ')?;
+                (tag == "S" || tag == "s").then(|| path.to_string())
+            })
+            .collect();
+        if !skip_worktree_paths.is_empty() {
+            let mut unset = Command::new("git");
+            unset
+                .current_dir(workspace_path)
+                .env("GIT_INDEX_FILE", &temp_index)
+                .args(["update-index", "--no-skip-worktree", "--"])
+                .args(&skip_worktree_paths);
+            let unset = unset
+                .output()
+                .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git update-index --no-skip-worktree failed to run: {error}")))?;
+            if !unset.status.success() {
+                return Err(SnapshotError::Internal(anyhow::anyhow!(
+                    "git update-index --no-skip-worktree failed: {}",
+                    String::from_utf8_lossy(&unset.stderr).trim()
+                )));
+            }
+        }
+    } else {
         let seed = Command::new("git")
             .current_dir(workspace_path)
             .env("GIT_INDEX_FILE", &temp_index)
