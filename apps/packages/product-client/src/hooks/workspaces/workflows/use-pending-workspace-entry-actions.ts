@@ -22,6 +22,10 @@ import {
 import {
   getPendingWorkspaceEntry,
 } from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
+import {
+  launchIntentForAttempt,
+} from "#product/lib/domain/chat/launch/launch-intent-registry";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import {
@@ -156,8 +160,17 @@ export function usePendingWorkspaceEntryActions() {
       clearDeferredLaunchesForWorkspace(entry.workspaceId);
     }
     // Back is the explicit dismissal: selection no longer drops the entry, so
-    // this is what ends the attempt.
+    // this is what ends the attempt. It ends exactly one attempt — the entry
+    // and the launch intent that owns it — and leaves every other launch in
+    // flight (PRO-230).
     clearPendingWorkspaceEntry(entry.attemptId);
+    const linkedIntent = launchIntentForAttempt(
+      useChatLaunchIntentStore.getState(),
+      entry.attemptId,
+    );
+    if (linkedIntent) {
+      useChatLaunchIntentStore.getState().clear(linkedIntent.id);
+    }
     if (entry.originTarget.kind === "home") {
       const selectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
       if (selectedWorkspaceId) {

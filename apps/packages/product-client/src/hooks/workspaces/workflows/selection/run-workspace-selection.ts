@@ -7,6 +7,11 @@ import {
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+import { isPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { pendingWorkspaceEntryForUiKey } from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import {
+  enterPendingWorkspaceAttemptShell,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 import {
   findLogicalWorkspace,
   logicalWorkspaceRelatedIds,
@@ -55,6 +60,30 @@ export async function runWorkspaceSelection(
   deps: WorkspaceSelectionDeps,
   request: WorkspaceSelectionRequest,
 ): Promise<void> {
+  // Every live attempt has a sidebar row, so any of them can be clicked while
+  // its launch is still running. A pending ui key resolves to no workspace at
+  // all, so without this it fell through to "Workspace not found." — re-enter
+  // the attempt's pending shell instead, landing on its creation receipt with
+  // retry/back (PRO-230).
+  if (isPendingWorkspaceUiKey(request.workspaceId)) {
+    const selection = useSessionSelectionStore.getState();
+    const entry = pendingWorkspaceEntryForUiKey(selection.pendingWorkspaces, request.workspaceId);
+    if (entry) {
+      if (
+        selection.selectedLogicalWorkspaceId === request.workspaceId
+        && !request.options?.force
+      ) {
+        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_already_selected");
+        return;
+      }
+      enterPendingWorkspaceAttemptShell(entry.attemptId, {
+        initialActiveSessionId: request.options?.initialActiveSessionId,
+      });
+      cancelLatencyFlow(request.options?.latencyFlowId, "pending_workspace_shell");
+      return;
+    }
+  }
+
   const logicalWorkspace = findLogicalWorkspace(deps.logicalWorkspaces, request.workspaceId);
   if (!logicalWorkspace) {
     const targetWorkspace = parseTargetWorkspaceSyntheticId(request.workspaceId);

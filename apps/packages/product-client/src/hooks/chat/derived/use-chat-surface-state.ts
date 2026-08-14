@@ -8,7 +8,7 @@ import {
 import { resolveLaunchIntentScope } from "#product/lib/domain/chat/launch/launch-intent";
 import { shouldShowCloudWorkspaceStatusScreen } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useShellLaunchIntent } from "#product/hooks/chat/derived/use-shell-launch-intent";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use-active-session-transcript-state";
@@ -29,7 +29,7 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   );
   const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const workspaceArrivalEvent = useSessionSelectionStore((state) => state.workspaceArrivalEvent);
-  const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
+  const activeLaunchIntent = useShellLaunchIntent();
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const {

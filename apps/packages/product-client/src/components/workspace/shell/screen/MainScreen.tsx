@@ -8,6 +8,9 @@ import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useHotSessionIngest } from "#product/hooks/sessions/lifecycle/use-hot-session-ingest";
+import {
+  useStaleFailedPendingWorkspaceGc,
+} from "#product/hooks/workspaces/lifecycle/use-stale-failed-pending-workspace-gc";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
@@ -19,6 +22,7 @@ const EMPTY_WORKSPACES: Workspace[] = [];
 export const MainScreen = memo(function MainScreen({ visible = true }: { visible?: boolean }) {
   usePersistedLogicalWorkspaceSelection();
   useHotSessionIngest();
+  useStaleFailedPendingWorkspaceGc();
   const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const { data: workspaceCollections } = useWorkspaces();

@@ -8,6 +8,16 @@ import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/doma
 import {
   createPendingWorkspaceAttemptId,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
+import {
+  canBeginPendingLaunch,
+  isDuplicateLaunchSubmit,
+  launchSubmitFingerprint,
+  type LaunchSubmitFingerprint,
+} from "#product/lib/domain/workspaces/creation/launch-concurrency";
+import {
+  pendingWorkspaceEntries,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -35,15 +45,19 @@ interface HomeNextLaunchInput {
 export function useHomeNextLaunch() {
   const navigate = useNavigate();
   const [isLaunching, setIsLaunching] = useState(false);
-  const inFlightRef = useRef(false);
+  // Was an in-flight lock, which refused every second launch. Now it only
+  // remembers the last submit, so the identical prompt sent twice in a
+  // keystroke still collapses into one launch while two different prompts
+  // start two (PRO-230).
+  const lastSubmitRef = useRef<LaunchSubmitFingerprint | null>(null);
   const showToast = useToastStore((state) => state.show);
   const showErrorToast = useToastStore((state) => state.showError);
   const enqueueDeferredLaunch = useDeferredHomeLaunchStore((state) => state.enqueue);
   const beginLaunchIntent = useChatLaunchIntentStore((state) => state.begin);
-  const clearLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.clearIfActive);
-  const failLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.failIfActive);
+  const clearLaunchIntent = useChatLaunchIntentStore((state) => state.clear);
+  const failLaunchIntent = useChatLaunchIntentStore((state) => state.fail);
   const markLaunchIntentMaterialized =
-    useChatLaunchIntentStore((state) => state.markMaterializedIfActive);
+    useChatLaunchIntentStore((state) => state.markMaterialized);
   const { desktopTargetsAvailable, createThreadFromSelection } =
     useCoworkThreadLaunchContext();
   const {
@@ -66,7 +80,11 @@ export function useHomeNextLaunch() {
     target,
   }: HomeNextLaunchInput): Promise<boolean> => {
     const prompt = text.trim();
-    if (!prompt || inFlightRef.current) {
+    if (!prompt) {
+      return false;
+    }
+    const submit = launchSubmitFingerprint(prompt, Date.now());
+    if (isDuplicateLaunchSubmit(lastSubmitRef.current, submit)) {
       return false;
     }
     if (!desktopTargetsAvailable && target.kind !== "cloud") {
@@ -76,8 +94,20 @@ export function useHomeNextLaunch() {
       showToast(message, "info");
       return false;
     }
+    // Prompting an existing workspace starts no workspace, so it takes no
+    // launch slot and the cap does not apply to it.
+    const createsWorkspace = target.kind !== "local" || target.existingWorkspaceId === null;
+    if (
+      createsWorkspace
+      && !canBeginPendingLaunch(
+        pendingWorkspaceEntries(useSessionSelectionStore.getState().pendingWorkspaces),
+      )
+    ) {
+      showToast("Too many workspaces starting. Wait for one to finish.", "info");
+      return false;
+    }
 
-    inFlightRef.current = true;
+    lastSubmitRef.current = submit;
     setIsLaunching(true);
     const launchIntentId = newHomeNextLaunchId();
     const promptId = newHomeNextLaunchId();
@@ -163,7 +193,7 @@ export function useHomeNextLaunch() {
           // The user dismissed the pending thread. Nothing failed, so the
           // launch stops quietly instead of raising a "not started" toast,
           // matching the local and worktree branches below.
-          clearLaunchIntentIfActive(launchIntentId);
+          clearLaunchIntent(launchIntentId);
           return false;
         }
         if (!queuedProjectedSessionId) {
@@ -185,7 +215,7 @@ export function useHomeNextLaunch() {
             launchIntentId,
           });
         }
-        clearLaunchIntentIfActive(launchIntentId);
+        clearLaunchIntent(launchIntentId);
         return true;
       }
 
@@ -225,7 +255,7 @@ export function useHomeNextLaunch() {
         if (createdWorkspacePromise && !createdWorkspace) {
           // The user dismissed the pending workspace. Nothing failed, so the
           // launch stops quietly instead of raising a "not started" toast.
-          clearLaunchIntentIfActive(launchIntentId);
+          clearLaunchIntent(launchIntentId);
           return false;
         }
         const workspaceId = target.existingWorkspaceId ?? createdWorkspace?.workspaceId;
@@ -259,7 +289,7 @@ export function useHomeNextLaunch() {
             allowFreshFallback: target.existingWorkspaceId !== null,
           });
         }
-        clearLaunchIntentIfActive(launchIntentId);
+        clearLaunchIntent(launchIntentId);
         return true;
       }
 
@@ -294,7 +324,7 @@ export function useHomeNextLaunch() {
         if (!createdWorkspace) {
           // The user dismissed the pending worktree. Nothing failed, so the
           // launch stops quietly instead of raising a "not started" toast.
-          clearLaunchIntentIfActive(launchIntentId);
+          clearLaunchIntent(launchIntentId);
           return false;
         }
         const { workspaceId, projectedSessionId: createdProjectedSessionId } = createdWorkspace;
@@ -319,7 +349,7 @@ export function useHomeNextLaunch() {
             allowFreshFallback: false,
           });
         }
-        clearLaunchIntentIfActive(launchIntentId);
+        clearLaunchIntent(launchIntentId);
         return true;
       }
 
@@ -338,14 +368,14 @@ export function useHomeNextLaunch() {
         promptProjectedPendingWorkspaceSession,
         promptProjectedOrCreateFreshSession,
         markLaunchIntentMaterialized,
-        clearLaunchIntentIfActive,
+        clearLaunchIntent,
         enqueueDeferredLaunch,
         navigate,
         showToast,
       });
     } catch (error) {
       markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId, launchAttemptId);
-      failLaunchIntentIfActive(launchIntentId, {
+      failLaunchIntent(launchIntentId, {
         message: homeNextLaunchErrorMessage(error),
         retryMode: homeLaunchFailureRetryMode(launchIntentId, launchAttemptId),
       });
@@ -360,12 +390,11 @@ export function useHomeNextLaunch() {
       });
       return false;
     } finally {
-      inFlightRef.current = false;
       setIsLaunching(false);
     }
   }, [
     beginLaunchIntent,
-    clearLaunchIntentIfActive,
+    clearLaunchIntent,
     createCloudWorkspaceAndEnterWithResult,
     promptProjectedOrCreateFreshSession,
     promptProjectedPendingWorkspaceSession,
@@ -374,7 +403,7 @@ export function useHomeNextLaunch() {
     createWorktreeAndEnterWithResult,
     desktopTargetsAvailable,
     enqueueDeferredLaunch,
-    failLaunchIntentIfActive,
+    failLaunchIntent,
     markLaunchIntentMaterialized,
     navigate,
     promptExistingSession,

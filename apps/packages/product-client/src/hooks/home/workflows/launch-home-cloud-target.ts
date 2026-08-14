@@ -51,7 +51,7 @@ export interface LaunchHomeCloudTargetDeps {
       sessionId?: string | null;
     },
   ) => void;
-  clearLaunchIntentIfActive: (intentId: string) => void;
+  clearLaunchIntent: (intentId: string) => void;
   enqueueDeferredLaunch: (launch: DeferredHomeLaunch) => void;
   navigate: (to: string) => void;
   /** Only ever called with "info": this path's two outcomes are both queued, not failed. */
@@ -99,7 +99,7 @@ export async function launchHomeCloudTarget(
     // The user dismissed the pending workspace. Nothing failed, so the launch
     // stops quietly instead of raising a "not started" toast.
     failLatencyFlow(latencyFlowId, "cloud_workspace_create_dismissed");
-    deps.clearLaunchIntentIfActive(input.launchIntentId);
+    deps.clearLaunchIntent(input.launchIntentId);
     return false;
   }
   if (result.status === "interrupted") {
@@ -134,7 +134,7 @@ export async function launchHomeCloudTarget(
         allowFreshFallback: false,
       });
     }
-    deps.clearLaunchIntentIfActive(input.launchIntentId);
+    deps.clearLaunchIntent(input.launchIntentId);
     if (result.status !== "ready") {
       deps.showToast(CLOUD_QUEUED_MESSAGE, "info");
     }

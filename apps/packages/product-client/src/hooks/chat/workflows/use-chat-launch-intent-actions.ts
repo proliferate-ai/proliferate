@@ -2,13 +2,17 @@ import { useCallback } from "react";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
 import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { useShellLaunchIntent } from "#product/hooks/chat/derived/use-shell-launch-intent";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useHomeDraftHandoffStore } from "#product/stores/home/home-draft-handoff-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
+// Retry/back/dismiss act on this shell's own launch intent, never on "the"
+// intent: with several launches in flight the pane the user is looking at owns
+// exactly one of them (PRO-230).
 export function useChatLaunchIntentActions() {
-  const activeIntent = useChatLaunchIntentStore((state) => state.activeIntent);
-  const clearIfActive = useChatLaunchIntentStore((state) => state.clearIfActive);
+  const activeIntent = useShellLaunchIntent();
+  const clearLaunchIntent = useChatLaunchIntentStore((state) => state.clear);
   const setHomeDraftText = useHomeDraftHandoffStore((state) => state.setDraftText);
   const deselectWorkspacePreservingSlots = useSessionSelectionStore(
     (state) => state.deselectWorkspacePreservingSessions,
@@ -35,10 +39,10 @@ export function useChatLaunchIntentActions() {
     setHomeDraftText(activeIntent.text);
     setSelectedLogicalWorkspaceId(null);
     deselectWorkspacePreservingSlots();
-    clearIfActive(activeIntent.id);
+    clearLaunchIntent(activeIntent.id);
   }, [
     activeIntent,
-    clearIfActive,
+    clearLaunchIntent,
     deselectWorkspacePreservingSlots,
     setHomeDraftText,
     setSelectedLogicalWorkspaceId,
@@ -50,7 +54,7 @@ export function useChatLaunchIntentActions() {
     }
 
     const intent = activeIntent;
-    clearIfActive(intent.id);
+    clearLaunchIntent(intent.id);
     if (intent.materializedWorkspaceId && intent.materializedSessionId) {
       void openWorkspaceSession({
         workspaceId: intent.materializedWorkspaceId,
@@ -65,7 +69,7 @@ export function useChatLaunchIntentActions() {
     }
   }, [
     activeIntent,
-    clearIfActive,
+    clearLaunchIntent,
     openWorkspaceSession,
     selectWorkspace,
   ]);

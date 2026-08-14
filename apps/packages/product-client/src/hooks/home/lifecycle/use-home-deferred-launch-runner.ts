@@ -7,6 +7,7 @@ import {
   resolveChatLaunchRetryMode,
   type ChatLaunchRetryMode,
 } from "#product/lib/domain/chat/launch/launch-intent";
+import { launchIntent } from "#product/lib/domain/chat/launch/launch-intent-registry";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -23,8 +24,9 @@ function shouldClearAsMissing(input: {
 }
 
 function launchFailureRetryMode(intentId: string): ChatLaunchRetryMode {
-  const activeIntent = useChatLaunchIntentStore.getState().activeIntent;
-  return resolveChatLaunchRetryMode(activeIntent?.id === intentId ? activeIntent : null);
+  return resolveChatLaunchRetryMode(
+    launchIntent(useChatLaunchIntentStore.getState(), intentId),
+  );
 }
 
 // Owns deferred cloud launch consumption. Does not own initial Home launch initiation.
@@ -34,7 +36,7 @@ export function useHomeDeferredLaunchRunner() {
   const markConsuming = useDeferredHomeLaunchStore((state) => state.markConsuming);
   const markPending = useDeferredHomeLaunchStore((state) => state.markPending);
   const clear = useDeferredHomeLaunchStore((state) => state.clear);
-  const failLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.failIfActive);
+  const failLaunchIntent = useChatLaunchIntentStore((state) => state.fail);
   const { createSessionWithResolvedConfig } = useSessionCreationActions();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const {
@@ -54,7 +56,7 @@ export function useHomeDeferredLaunchRunner() {
     for (const launch of launches) {
       if (now - launch.createdAt > DEFERRED_HOME_LAUNCH_STALE_MS) {
         clear(launch.id);
-        failLaunchIntentIfActive(launch.launchIntentId, {
+        failLaunchIntent(launch.launchIntentId, {
           message: "Cloud workspace did not become ready in time.",
           retryMode: launchFailureRetryMode(launch.launchIntentId),
         });
@@ -66,7 +68,7 @@ export function useHomeDeferredLaunchRunner() {
         isWorkspaceDataAuthoritative: workspaceCollectionsLoaded,
       })) {
         clear(launch.id);
-        failLaunchIntentIfActive(launch.launchIntentId, {
+        failLaunchIntent(launch.launchIntentId, {
           message: "Cloud workspace was removed before the queued prompt could send.",
           retryMode: "safe",
         });
@@ -74,7 +76,7 @@ export function useHomeDeferredLaunchRunner() {
     }
   }, [
     clear,
-    failLaunchIntentIfActive,
+    failLaunchIntent,
     knownCloudWorkspaceIds,
     launches,
     workspaceCollectionsLoaded,
@@ -112,7 +114,7 @@ export function useHomeDeferredLaunchRunner() {
         });
         // Clear even if the hook re-ran mid-flight; the prompt was sent, so a remount must not retry it.
         clear(readyLaunch.id);
-        useChatLaunchIntentStore.getState().clearIfActive(readyLaunch.launchIntentId);
+        useChatLaunchIntentStore.getState().clear(readyLaunch.launchIntentId);
       } catch (error) {
         if (cancelled) {
           markPending(readyLaunch.id);
@@ -122,7 +124,7 @@ export function useHomeDeferredLaunchRunner() {
         const stillExists = knownCloudWorkspaceIds.has(readyLaunch.cloudWorkspaceId);
         if (!stillExists) {
           clear(readyLaunch.id);
-          failLaunchIntentIfActive(readyLaunch.launchIntentId, {
+          failLaunchIntent(readyLaunch.launchIntentId, {
             message: "Cloud workspace was removed before the queued prompt could send.",
             retryMode: "safe",
           });
@@ -131,7 +133,7 @@ export function useHomeDeferredLaunchRunner() {
         }
 
         clear(readyLaunch.id);
-        failLaunchIntentIfActive(readyLaunch.launchIntentId, {
+        failLaunchIntent(readyLaunch.launchIntentId, {
           message: "Cloud workspace is ready, but the queued prompt could not be sent.",
           retryMode: launchFailureRetryMode(readyLaunch.launchIntentId),
         });
@@ -147,7 +149,7 @@ export function useHomeDeferredLaunchRunner() {
   }, [
     clear,
     createSessionWithResolvedConfig,
-    failLaunchIntentIfActive,
+    failLaunchIntent,
     knownCloudWorkspaceIds,
     markConsuming,
     markPending,

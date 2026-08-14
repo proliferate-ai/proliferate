@@ -46,8 +46,9 @@ vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
 }));
 
 vi.mock("#product/stores/chat/chat-launch-intent-store", () => ({
-  useChatLaunchIntentStore: (selector: (state: { activeIntent: null }) => unknown) =>
-    selector({ activeIntent: null }),
+  useChatLaunchIntentStore: (
+    selector: (state: { intentsById: Record<string, never>; intentOrder: string[] }) => unknown,
+  ) => selector({ intentsById: {}, intentOrder: [] }),
 }));
 
 vi.mock("#product/stores/sessions/session-selection-store", () => ({
