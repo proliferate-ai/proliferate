@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AddRepoFlow,
+  ADD_REPO_SURFACE_CLASS,
   GITHUB_CONNECTION_FOOTNOTE,
   type AddRepoFlowProps,
 } from "#product/components/workspace/repo-setup/AddRepoFlow";
@@ -92,7 +93,9 @@ describe("AddRepoFlow", () => {
     renderFlow();
 
     const content = document.querySelector("[data-slot=popover-content]");
-    expect(content?.className).toContain("w-80");
+    for (const surfaceClass of ADD_REPO_SURFACE_CLASS.split(" ")) {
+      expect(content?.className).toContain(surfaceClass);
+    }
     expect(content?.className).toContain("data-[state=open]:animate-popover-in");
     expect(content?.className).not.toMatch(/(^|\s)animate-popover-in(\s|$)/);
   });
