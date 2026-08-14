@@ -54,7 +54,7 @@ function transcriptWithAssistantProse(text: string): TranscriptState {
   return transcript;
 }
 
-function renderIndex(transcript: TranscriptState) {
+function renderIndex(transcript: TranscriptState, enabled?: boolean) {
   return renderHook(() =>
     useChatTranscriptContentSearch({
       transcript,
@@ -62,6 +62,7 @@ function renderIndex(transcript: TranscriptState) {
       optimisticPrompt: null,
       outboxEntries: [],
       goalEvents: [],
+      ...(enabled === undefined ? {} : { enabled }),
     }),
   );
 }
@@ -96,6 +97,35 @@ describe("useChatTranscriptContentSearch", () => {
     const transcript = transcriptWithAssistantProse("foo foo");
     renderIndex(transcript);
     expect(selectVisibleContentSearchMatchIds(useContentSearchStore.getState())).toEqual([]);
+  });
+
+  it("registers no units when an embedded transcript disables search", () => {
+    useContentSearchStore.setState({ open: true, surface: "chat", query: "foo" });
+    const transcript = transcriptWithAssistantProse("foo foo");
+    renderIndex(transcript, false);
+
+    expect(useContentSearchStore.getState().unitsById).toEqual({});
+    expect(selectVisibleContentSearchMatchIds(useContentSearchStore.getState())).toEqual([]);
+  });
+
+  it("unregisters existing units when an instance becomes disabled", () => {
+    useContentSearchStore.setState({ open: true, surface: "chat", query: "foo" });
+    const transcript = transcriptWithAssistantProse("foo");
+    const { rerender } = renderHook(
+      ({ enabled }) => useChatTranscriptContentSearch({
+        transcript,
+        activeSessionId: "session-1",
+        optimisticPrompt: null,
+        outboxEntries: [],
+        goalEvents: [],
+        enabled,
+      }),
+      { initialProps: { enabled: true } },
+    );
+    expect(Object.keys(useContentSearchStore.getState().unitsById)).toHaveLength(1);
+
+    rerender({ enabled: false });
+    expect(useContentSearchStore.getState().unitsById).toEqual({});
   });
 
   it("unregisters units on unmount", () => {

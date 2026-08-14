@@ -111,6 +111,7 @@ export function TurnDisplayBlockNode({
         <SubagentCreationGroupBlock
           itemIds={block.itemIds}
           transcript={transcript}
+          animateEntries={animateActivityEntry}
         />
       </TranscriptActivityBlock>
     );

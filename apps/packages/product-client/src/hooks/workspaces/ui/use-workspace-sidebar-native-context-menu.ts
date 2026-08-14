@@ -18,6 +18,9 @@ export function useWorkspaceSidebarNativeContextMenu({
   archived,
   canArchive,
   canUnarchive,
+  pinned,
+  canPin,
+  canUnpin,
   canMarkDone,
   onRename,
   onCopyWorkspaceLocation,
@@ -25,6 +28,8 @@ export function useWorkspaceSidebarNativeContextMenu({
   onOpenPullRequest,
   onArchive,
   onUnarchive,
+  onPin,
+  onUnpin,
   onMarkDone,
   availabilityCommands,
   onAvailabilityCommand,
@@ -39,6 +44,9 @@ export function useWorkspaceSidebarNativeContextMenu({
   archived: boolean;
   canArchive: boolean;
   canUnarchive: boolean;
+  pinned?: boolean;
+  canPin?: boolean;
+  canUnpin?: boolean;
   canMarkDone: boolean;
   onRename: () => void;
   onCopyWorkspaceLocation: () => void;
@@ -46,6 +54,8 @@ export function useWorkspaceSidebarNativeContextMenu({
   onOpenPullRequest: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
+  onPin?: () => void;
+  onUnpin?: () => void;
   onMarkDone: () => void;
   availabilityCommands?: WorkspaceAvailabilityCommand[];
   onAvailabilityCommand?: (kind: WorkspaceAvailabilityCommandKind) => void;
@@ -62,6 +72,9 @@ export function useWorkspaceSidebarNativeContextMenu({
       archived,
       canArchive,
       canUnarchive,
+      pinned,
+      canPin,
+      canUnpin,
       canMarkDone,
       onRename,
       onCopyWorkspaceLocation,
@@ -69,6 +82,8 @@ export function useWorkspaceSidebarNativeContextMenu({
       onOpenPullRequest,
       onArchive,
       onUnarchive,
+      onPin,
+      onUnpin,
       onMarkDone,
       availabilityCommands,
       onAvailabilityCommand,
@@ -87,6 +102,9 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   archived,
   canArchive,
   canUnarchive,
+  pinned,
+  canPin,
+  canUnpin,
   canMarkDone,
   onRename,
   onCopyWorkspaceLocation,
@@ -94,6 +112,8 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   onOpenPullRequest,
   onArchive,
   onUnarchive,
+  onPin,
+  onUnpin,
   onMarkDone,
   availabilityCommands,
   onAvailabilityCommand,
@@ -108,6 +128,9 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   archived: boolean;
   canArchive: boolean;
   canUnarchive: boolean;
+  pinned?: boolean;
+  canPin?: boolean;
+  canUnpin?: boolean;
   canMarkDone: boolean;
   onRename: () => void;
   onCopyWorkspaceLocation: () => void;
@@ -115,6 +138,8 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   onOpenPullRequest: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
+  onPin?: () => void;
+  onUnpin?: () => void;
   onMarkDone: () => void;
   availabilityCommands?: WorkspaceAvailabilityCommand[];
   onAvailabilityCommand?: (kind: WorkspaceAvailabilityCommandKind) => void;
@@ -125,6 +150,22 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
       id: "rename",
       label: "Rename",
       onSelect: onRename,
+    });
+  }
+
+  if (!pinned && canPin && onPin) {
+    items.push({
+      id: "pin",
+      label: "Pin",
+      onSelect: onPin,
+    });
+  }
+
+  if (pinned && canUnpin && onUnpin) {
+    items.push({
+      id: "unpin",
+      label: "Unpin",
+      onSelect: onUnpin,
     });
   }
 

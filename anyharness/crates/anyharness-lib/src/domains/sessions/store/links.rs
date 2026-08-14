@@ -100,8 +100,8 @@ fn insert_session_link_row(
         "INSERT INTO session_links (
             id, public_id, relation, parent_session_id, child_session_id,
             workspace_relation, label, created_by_turn_id, created_by_tool_call_id,
-            created_at, closed_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            created_at, subagent_closed_at, closed_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             record.id,
             record.public_id,
@@ -113,6 +113,7 @@ fn insert_session_link_row(
             record.created_by_turn_id,
             record.created_by_tool_call_id,
             record.created_at,
+            record.subagent_closed_at,
             record.closed_at,
         ],
     )?;

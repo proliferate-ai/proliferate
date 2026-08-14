@@ -103,12 +103,18 @@ It stores an advisory relationship between two existing sessions:
 - optional creator turn id
 - optional creator tool-call id
 - created timestamp
+- optional `subagent_closed_at`, the reversible operability gate for subagent
+  relationships
+- optional `closed_at`, the terminal relationship-history marker
 
 The link service validates that parent and child sessions exist, rejects
 self-links, and enforces uniqueness for `(relation, parent_session_id,
 child_session_id)`. For `subagent` links, a child may have only one parent.
 Deleting a session removes any links where that session is the parent or child,
 including completion and wake-schedule rows attached to those links.
+Accepted completion-delivery snapshots are separate from link history: deleting
+the parent removes them, while promotion or later child deletion preserves them
+until the parent sees the attributed completion prompt.
 
 Session links are durable product state, but their creator turn/tool metadata is
 provenance only. It must not be used as an authorization, billing, or trust
@@ -182,6 +188,8 @@ The model is intentionally small:
 - the child is a normal session in the same workspace as the parent
 - the durable ownership boundary is `relation = subagent`
 - `session_links` is the access-control check for every child-id-taking tool
+- the child session and capped relationship are inserted atomically, so an
+  in-progress subagent creation is never observable as an ordinary session
 - PR2 does not cascade-delete child sessions when a parent is deleted; deleting
   either session removes only the link and attached completion/schedule rows
 - nested subagents are blocked; a session that is already a subagent child does
@@ -190,6 +198,34 @@ The model is intentionally small:
 - `subagents_enabled` is a durable create-time session policy. Missing legacy
   rows default enabled in the session store/read model. Resume reads the stored
   policy and does not silently re-enable disabled sessions.
+
+Subagent relationship operability is separate from terminal session state:
+
+- Open means `subagent_closed_at` is unset and parent/user mutations may target
+  the child.
+- Close atomically sets `subagent_closed_at`, purges every durable pending
+  prompt, and removes the one-shot wake schedule. Completion-ledger rows,
+  transcript, config, native session id, session row, and relationship remain.
+- After that transaction commits, the runtime non-terminally unloads the actor.
+  An active turn is cancelled with a bounded grace period; already-streamed
+  output and the Cancelled completion are preserved. Close never writes the
+  session's `closed_at` or `dismissed_at`.
+- Open restarts the same durable/native conversation before clearing the gate.
+  Failure leaves the relationship Closed, and purged prompts are not replayed.
+- Closed relationships remain parent/user-queryable and count toward the
+  eight-child limit, but all mutation paths other than Open or idempotent Close
+  return an Open-required conflict.
+- Promotion is allowed only while Open. It physically deletes the relationship
+  while leaving the session, actor, active turn, native identity, transcript,
+  and config untouched; subsequent authorization and reads treat the session
+  as ordinary.
+
+The relationship mutation gate is shared by the workspace agent-operations
+surface, HTTP session mutations, and the older `subagents` MCP server. This
+keeps Close serialized against prompts, config changes, wake scheduling, and
+terminal lifecycle calls even while both MCP surfaces exist. The older MCP
+server retains its terminal close operation for its Open-only path; a
+reversibly Closed relationship cannot use it.
 
 The subagent domain lives under
 `anyharness/crates/anyharness-lib/src/domains/sessions/subagents/**`.
@@ -292,28 +328,24 @@ desktop or public HTTP shapes.
 
 ### Parent Wake
 
-Child turn completion is passive by default. When a child turn finishes, the
-subagent extension inserts a durable completion row keyed by
-`(session_link_id, child_turn_id)` and injects a typed
-`subagent_turn_completed` metadata event into the parent session. SDK reducers
-and UI consumers use this for latest state; it is not transcript content.
+Every terminal child turn atomically records a completion row and an independent
+delivery snapshot while the subagent relationship exists. A retry worker turns
+that snapshot into one durable, attributed parent prompt using the stable
+delivery id for deduplication. This is automatic for completed, failed, and
+cancelled turns, including reversible Close cancellation; it does not depend on
+the legacy one-shot wake schedule. The worker reconciles parent transcript and
+pending-queue state before inserting, and marks delivery complete only after the
+attributed parent transcript item is durable.
 
-Parent wake prompts require an explicit one-shot schedule. Parent agents should
-call `schedule_subagent_wake` after `create_subagent` or
-`send_subagent_message` when they want to listen for the child's next
-completion. Legacy `wakeOnCompletion` fields on create/send are still parsed for
-backward compatibility but are no longer advertised. The schedule is a latch in
-`session_link_wake_schedules`; it applies only to the next newly recorded
-completion for that link and is consumed in the same transaction that queues the
-parent prompt. Duplicate/replayed completion processing must not consume a
-schedule created after the original completion row already existed.
+Legacy one-shot wake schedules remain persisted for the legacy surface, but do
+not gate automatic terminal-completion delivery.
 
 Parent-to-child prompts use internal `agent_session` provenance with the parent
 session id and session link id. Runtime child-to-parent wake prompts use
-internal `subagent_wake` provenance with the `session_link_id` and
-`completion_id`. Legacy `system/subagent_wake` rows are tolerated for
-pending-wake detection, but public read models must not fabricate missing link
-or completion ids.
+internal `subagent_wake` provenance with the `session_link_id` and stable
+delivery id as `completion_id`. Legacy `system/subagent_wake` rows are tolerated
+for pending-wake detection, but public read models must not fabricate missing
+link or completion ids.
 
 ## Session Extensions
 

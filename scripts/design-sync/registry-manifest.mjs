@@ -117,7 +117,7 @@ export function groupFor(displayName, tierId, subpath) {
     }
     return kit;
   }
-  if (displayName.startsWith("Composer") || displayName === "LevelBarsButton") return "composer";
+  if (displayName.startsWith("Composer")) return "composer";
   if (displayName === "ToastHost" || displayName === "Sonner" || displayName.startsWith("Toast")) return "toast";
   if (displayName.startsWith("Sidebar")) return "sidebar";
   if (displayName.startsWith("Settings")) return "settings";

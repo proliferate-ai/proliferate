@@ -132,6 +132,11 @@ impl MobilityRuntime {
                     .import_completion(completion)
                     .map_err(MobilityError::Internal)?;
             }
+            for delivery in &archive.session_link_completion_deliveries {
+                self.subagent_service
+                    .import_completion_delivery(delivery)
+                    .map_err(MobilityError::Internal)?;
+            }
             for schedule in &archive.session_link_wake_schedules {
                 self.subagent_service
                     .import_wake_schedule(schedule)

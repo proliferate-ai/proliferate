@@ -158,7 +158,7 @@ describe("buildTurnPresentation", () => {
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
       {
         kind: "subagent_creations",
-        blockId: "create1-create2",
+        blockId: "create1",
         itemIds: ["create1", "create2"],
       },
       { kind: "item", itemId: "final" },
@@ -285,13 +285,13 @@ describe("buildTurnPresentation", () => {
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
       {
         kind: "subagent_creations",
-        blockId: "create1-create1",
+        blockId: "create1",
         itemIds: ["create1"],
       },
       { kind: "item", itemId: "send" },
       {
         kind: "subagent_creations",
-        blockId: "create2-create2",
+        blockId: "create2",
         itemIds: ["create2"],
       },
     ]);

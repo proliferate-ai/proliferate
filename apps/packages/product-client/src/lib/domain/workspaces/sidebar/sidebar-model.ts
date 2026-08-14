@@ -74,6 +74,13 @@ export interface SidebarWorkspaceItemState {
   subtitle: string | null;
   active: boolean;
   archived: boolean;
+  /**
+   * The persisted pin ids this workspace matched across its related logical
+   * ids (mirrors the `archived` matching); non-empty means pinned. Unpin
+   * removes every one of them, so a pin recorded under a former identity
+   * (alias, local-slot, or materialization id) cannot outlive the row.
+   */
+  pinnedIds: string[];
   variant: SidebarWorkspaceVariant;
   statusIndicator: SidebarStatusIndicator | null;
   lastInteracted: string | null;

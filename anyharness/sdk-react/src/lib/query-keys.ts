@@ -341,6 +341,13 @@ export function anyHarnessSessionSubagentsKey(
   return [...anyHarnessSessionKey(cacheScopeKey, workspaceId, sessionId), "subagents"] as const;
 }
 
+export function anyHarnessWorkspaceSubagentsKey(
+  cacheScopeKey: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessWorkspaceKey(cacheScopeKey, workspaceId), "subagents"] as const;
+}
+
 export function anyHarnessSessionReviewsKey(
   cacheScopeKey: string | null | undefined,
   workspaceId: string | null | undefined,

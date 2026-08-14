@@ -254,7 +254,7 @@ function computeFlyoutPosition(rect: DOMRect, childCount: number): FlyoutState["
 }
 
 function renderSubagentTrailing(child: HeaderSubagentChildRow): ReactNode {
-  if (child.wakeScheduled) {
+  if (child.source !== "subagent" && child.wakeScheduled) {
     return <span className="text-ui text-foreground">Wake scheduled</span>;
   }
   if (child.statusLabel === "Failed") {

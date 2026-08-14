@@ -16,8 +16,6 @@ import type {
   ReorderPendingPromptsRequest,
   ResolveInteractionRequest,
   ResumeSessionRequest,
-  ScheduleSubagentWakeRequest,
-  ScheduleSubagentWakeResponse,
   SetSessionConfigOptionRequest,
   SetSessionConfigOptionResponse,
   SetSessionGoalRequest,
@@ -27,9 +25,12 @@ import type {
   SessionLoopResponse,
   SessionLoopsResponse,
   ClearSessionLoopsResponse,
-  SessionSubagentsResponse,
   UpdateSessionTitleRequest,
 } from "../types/sessions.js";
+import type {
+  SessionSubagentsResponse,
+  SubagentLifecycleResponse,
+} from "../types/subagents.js";
 import { normalizeSessionEventEnvelope } from "../types/events.js";
 import {
   normalizeForkSessionResponse,
@@ -84,17 +85,44 @@ export class SessionsClient {
     );
   }
 
-  async scheduleSubagentWake(
-    sessionId: string,
+  async closeSubagent(
+    parentSessionId: string,
     childSessionId: string,
     options?: AnyHarnessRequestOptions,
-  ): Promise<ScheduleSubagentWakeResponse> {
-    const request: ScheduleSubagentWakeRequest = {};
-    return this.transport.post<ScheduleSubagentWakeResponse>(
-      `/v1/sessions/${encodeURIComponent(sessionId)}/subagents/${
+  ): Promise<SubagentLifecycleResponse> {
+    return this.transport.post<SubagentLifecycleResponse>(
+      `/v1/sessions/${encodeURIComponent(parentSessionId)}/subagents/${
         encodeURIComponent(childSessionId)
-      }/wake`,
-      request,
+      }/close`,
+      undefined,
+      options,
+    );
+  }
+
+  async openSubagent(
+    parentSessionId: string,
+    childSessionId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<SubagentLifecycleResponse> {
+    return this.transport.post<SubagentLifecycleResponse>(
+      `/v1/sessions/${encodeURIComponent(parentSessionId)}/subagents/${
+        encodeURIComponent(childSessionId)
+      }/open`,
+      undefined,
+      options,
+    );
+  }
+
+  async promoteSubagent(
+    parentSessionId: string,
+    childSessionId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<SubagentLifecycleResponse> {
+    return this.transport.post<SubagentLifecycleResponse>(
+      `/v1/sessions/${encodeURIComponent(parentSessionId)}/subagents/${
+        encodeURIComponent(childSessionId)
+      }/promote`,
+      undefined,
       options,
     );
   }

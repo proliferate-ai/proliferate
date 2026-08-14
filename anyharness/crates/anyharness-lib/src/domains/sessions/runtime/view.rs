@@ -15,9 +15,11 @@ use anyharness_contract::v1::{
 
 use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::domains::sessions::execution_summary::{
-    idle_workspace_execution_summary, summarize_session_record, summarize_workspace_sessions,
+    idle_workspace_execution_summary, session_execution_state, summarize_session_record,
+    summarize_workspace_sessions,
 };
 use crate::domains::sessions::links::model::SessionLinkRecord;
+use crate::domains::sessions::model::SessionExecutionState;
 use crate::domains::sessions::model::{PendingPromptRecord, SessionRecord};
 
 use super::SessionRuntime;
@@ -147,6 +149,15 @@ impl SessionRuntime {
         };
 
         summarize_session_record(record, live_snapshot.as_ref())
+    }
+
+    pub async fn session_execution_state(&self, record: &SessionRecord) -> SessionExecutionState {
+        let live_snapshot = match self.acp_manager.get_handle(&record.id).await {
+            Some(handle) => Some(handle.execution_snapshot().await),
+            None => None,
+        };
+
+        session_execution_state(record, live_snapshot.as_ref())
     }
 
     pub async fn workspace_execution_summary(

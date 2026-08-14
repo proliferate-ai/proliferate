@@ -1,8 +1,34 @@
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Mutex;
 
+use serde_json::json;
+
 use super::{proliferate_home_dir_name, test_support, AppState};
-use crate::{domains::agents::installer::seed::AgentSeedStore, persistence::Db};
+use crate::{
+    domains::{
+        agent_operations::mcp::auth::WorkspaceMcpAuth, agents::installer::seed::AgentSeedStore,
+        sessions::store::SessionStore,
+    },
+    integrations::mcp::product_server::{ProductMcpAuthHeader, ProductMcpRequestContext},
+    persistence::Db,
+};
+
+mod completion_delivery_crash_tests;
+
+fn run_git(path: &Path, args: &[&str]) {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(path)
+        .output()
+        .expect("spawn git");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
 
 #[tokio::test(flavor = "current_thread")]
 async fn app_state_allows_missing_bearer_token_when_not_required() {
@@ -132,6 +158,251 @@ async fn app_state_wires_integration_gateway_extension_to_served_runtime_home() 
             .runtime_home(),
         runtime_home.as_path()
     );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn app_state_serves_workspace_mcp_for_an_explicit_session_capability_without_launching_it() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+    let runtime_home = PathBuf::from(format!(
+        "/tmp/anyharness-workspace-serving-receipt-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let repository_path = PathBuf::from(format!(
+        "/tmp/anyharness-workspace-serving-repo-{}",
+        uuid::Uuid::new_v4()
+    ));
+    fs::create_dir_all(&repository_path).expect("create repository path");
+    run_git(&repository_path, &["init", "-b", "main"]);
+    run_git(
+        &repository_path,
+        &["config", "user.email", "workspace@example.com"],
+    );
+    run_git(&repository_path, &["config", "user.name", "Workspace Test"]);
+    fs::write(repository_path.join("README.md"), "seed\n").expect("write repository seed");
+    run_git(&repository_path, &["add", "README.md"]);
+    run_git(&repository_path, &["commit", "-m", "seed"]);
+    let state = AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("expected in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("expected app state");
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-1",
+        "local",
+        &repository_path.to_string_lossy(),
+    );
+    test_support::insert_session_row(
+        &SessionStore::new(state.db.clone()),
+        "workspace-1",
+        "session-1",
+        "idle",
+    );
+
+    let endpoint = state
+        .product_mcp_endpoint_registry
+        .get_by_route_slug("workspace")
+        .expect("Workspace serving endpoint");
+    assert!(!state
+        .session_runtime
+        .product_mcp_launch_ids()
+        .contains(&"workspace"));
+    let auth = WorkspaceMcpAuth::new(runtime_home.clone());
+    let token = auth
+        .mint_capability_token("workspace-1", "session-1")
+        .expect("mint explicit Workspace capability");
+    let context =
+        ProductMcpRequestContext::new("workspace-1", "session-1", endpoint.definition().id);
+    assert!(endpoint
+        .validate_capability_token(ProductMcpAuthHeader::Product { value: &token }, &context,)
+        .expect("validate explicit Workspace capability")
+        .is_valid());
+    let created = endpoint
+        .dispatch(
+            context,
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "create_workspace",
+                    "arguments": {
+                        "repositoryId": "repo-root-workspace-1",
+                        "creationMode": "local",
+                        "displayName": "Created by agent"
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("dispatch Workspace endpoint")
+        .expect("Workspace response");
+    assert_eq!(
+        created["result"]["structuredContent"]["workspace"]["kind"],
+        "local"
+    );
+    let created_workspace = &created["result"]["structuredContent"]["workspace"];
+    assert_eq!(created_workspace["origin"]["kind"], "system");
+    assert_eq!(created_workspace["origin"]["entrypoint"], "local_runtime");
+    assert_eq!(created_workspace["creatorContext"]["kind"], "agent");
+    assert_eq!(
+        created_workspace["creatorContext"]["sourceSessionId"],
+        "session-1"
+    );
+    assert_eq!(
+        created_workspace["creatorContext"]["sourceSessionWorkspaceId"],
+        "workspace-1"
+    );
+    let created_workspace_id = created_workspace["identity"]["workspaceId"]
+        .as_str()
+        .expect("created workspace id")
+        .to_string();
+    let durable_created = state
+        .workspace_runtime
+        .get_workspace(&created_workspace_id)
+        .expect("read durable created workspace")
+        .expect("durable created workspace");
+    assert_eq!(
+        created_workspace["origin"],
+        serde_json::to_value(
+            durable_created
+                .origin
+                .as_ref()
+                .expect("durable created origin")
+                .to_contract()
+        )
+        .expect("serialize user API origin")
+    );
+    assert_eq!(
+        created_workspace["creatorContext"],
+        serde_json::to_value(
+            durable_created
+                .creator_context
+                .as_ref()
+                .expect("durable created context")
+                .to_contract()
+        )
+        .expect("serialize user API creator context")
+    );
+    let listed = endpoint
+        .dispatch(
+            ProductMcpRequestContext::new("workspace-1", "session-1", endpoint.definition().id),
+            json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": { "name": "list_workspaces", "arguments": {} }
+            }),
+        )
+        .await
+        .expect("dispatch Workspace list")
+        .expect("Workspace list response");
+    let listed_workspaces = listed["result"]["structuredContent"]["workspaces"]
+        .as_array()
+        .expect("workspace list");
+    assert_eq!(listed_workspaces.len(), 2);
+    assert!(listed_workspaces
+        .iter()
+        .any(|workspace| { workspace["identity"]["workspaceId"] == "workspace-1" }));
+    let listed_created = listed_workspaces
+        .iter()
+        .find(|workspace| workspace["identity"]["workspaceId"] == created_workspace_id)
+        .expect("created workspace in MCP list");
+    assert_eq!(listed_created["origin"], created_workspace["origin"]);
+    assert_eq!(
+        listed_created["creatorContext"],
+        created_workspace["creatorContext"]
+    );
+
+    let workspace_options = endpoint
+        .dispatch(
+            ProductMcpRequestContext::new("workspace-1", "session-1", endpoint.definition().id),
+            json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": { "name": "list_workspace_options", "arguments": {} }
+            }),
+        )
+        .await
+        .expect("dispatch Workspace options")
+        .expect("Workspace options response");
+    let repository = workspace_options["result"]["structuredContent"]["repositories"]
+        .as_array()
+        .expect("repository options")
+        .iter()
+        .find(|repository| repository["repositoryId"] == "repo-root-workspace-1")
+        .expect("seeded repository option");
+    assert_eq!(repository["availability"]["state"], "present");
+    let creation_modes = workspace_options["result"]["structuredContent"]["creationModes"]
+        .as_array()
+        .expect("creation modes");
+    assert!(creation_modes.iter().any(|mode| mode["mode"] == "worktree"));
+    assert!(creation_modes.iter().any(|mode| mode["mode"] == "local"));
+
+    let launch_options = endpoint
+        .dispatch(
+            ProductMcpRequestContext::new("workspace-1", "session-1", endpoint.definition().id),
+            json!({
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_agent_launch_options",
+                    "arguments": { "workspaceId": "workspace-1" }
+                }
+            }),
+        )
+        .await
+        .expect("dispatch agent launch options")
+        .expect("agent launch options response");
+    assert_eq!(
+        launch_options["result"]["structuredContent"]["workspace"]["workspaceId"],
+        "workspace-1"
+    );
+    assert!(launch_options["result"]["structuredContent"]["agents"]
+        .as_array()
+        .is_some_and(|agents| !agents.is_empty()));
+
+    let config_options = endpoint
+        .dispatch(
+            ProductMcpRequestContext::new("workspace-1", "session-1", endpoint.definition().id),
+            json!({
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_agent_config_options",
+                    "arguments": { "agentId": "session-1" }
+                }
+            }),
+        )
+        .await
+        .expect("dispatch agent config options")
+        .expect("agent config options response");
+    assert_eq!(
+        config_options["result"]["structuredContent"]["agent"]["sessionId"],
+        "session-1"
+    );
+    assert_eq!(
+        config_options["result"]["structuredContent"]["workspace"]["workspaceId"],
+        "workspace-1"
+    );
+    assert!(!state
+        .agent_operations
+        .runtime_identity()
+        .as_str()
+        .contains("/tmp/"));
+    let _ = fs::remove_dir_all(repository_path);
+    let _ = fs::remove_dir_all(runtime_home);
 }
 
 #[test]

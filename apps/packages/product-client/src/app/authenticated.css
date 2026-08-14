@@ -1,24 +1,14 @@
 /* Authenticated-only interaction styles stay behind the lazy product boundary
  * so chat affordances do not consume the public login shell's CSS budget. */
 
-@property --workspace-left-width {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
-@property --workspace-right-width {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
+/* --workspace-left-width/--workspace-right-width stay unregistered on
+   purpose: WebKit applies page zoom to a registered <length> custom property
+   once when it computes and again at the consumer, so a zoomed window renders
+   the panes at width·zoom² (PRO-166). Each consumer eases its own concrete
+   property against these shared durations instead. */
 .standard-workspace-shell {
   --workspace-left-geometry-duration: var(--duration-panel);
   --workspace-right-geometry-duration: var(--duration-panel);
-  transition-property: --workspace-left-width, --workspace-right-width;
-  transition-duration: var(--workspace-left-geometry-duration), var(--workspace-right-geometry-duration);
-  transition-timing-function: var(--ease-out-cubic), var(--ease-out-cubic);
 }
 
 /* A live left-separator drag and the explicitly snapped toggle path both
@@ -33,10 +23,6 @@
    the collapse a drag past the threshold triggers, which clears this flag. */
 .standard-workspace-shell[data-snap-right-geometry="true"] {
   --workspace-right-geometry-duration: 0ms;
-}
-
-.standard-workspace-shell[data-manual-workspace-geometry="true"] {
-  transition: none;
 }
 
 /* Transcript Markdown owns one scoped semantic type contract. The body scale

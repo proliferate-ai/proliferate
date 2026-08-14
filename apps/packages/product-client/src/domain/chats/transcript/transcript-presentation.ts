@@ -3,7 +3,11 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import { isSubagentCreationAction } from "../subagents/subagent-tool-presentation";
+import {
+  deriveLegacySubagentAgentOperationsReceipt,
+  isSubagentCreationAction,
+} from "../subagents/subagent-tool-presentation";
+import { isAgentOperationsReceiptAction } from "../tools/agent-operations-tool-presentation";
 import { isKnownModeSwitchToolCall } from "../tools/mode-switch-display";
 
 export type TurnDisplayBlock =
@@ -59,10 +63,11 @@ export function buildTranscriptDisplayBlocks({
   const flushSubagentCreations = () => {
     if (pendingSubagentCreationIds.length === 0) return;
     const firstId = pendingSubagentCreationIds[0] ?? "subagent-creations";
-    const lastId = pendingSubagentCreationIds[pendingSubagentCreationIds.length - 1] ?? firstId;
     blocks.push({
       kind: "subagent_creations",
-      blockId: `${firstId}-${lastId}`,
+      // A progressive run grows as create results settle. Keying only from the
+      // first durable item keeps the mounted run stable while later chips join.
+      blockId: firstId,
       itemIds: pendingSubagentCreationIds,
     });
     pendingSubagentCreationIds = [];
@@ -78,6 +83,13 @@ export function buildTranscriptDisplayBlocks({
     if (item.kind === "tool_call" && isSubagentCreationAction(item)) {
       flushActions();
       pendingSubagentCreationIds.push(itemId);
+      continue;
+    }
+
+    if (item.kind === "tool_call" && isTranscriptReceiptAction(item)) {
+      flushSubagentCreations();
+      flushActions();
+      blocks.push({ kind: "item", itemId });
       continue;
     }
 
@@ -225,6 +237,7 @@ function buildCompletedHistoryRootIds(
   return rootIds.filter((itemId) =>
     itemId !== finalAssistantItemId
     && transcript.itemsById[itemId]?.kind !== "user_message"
+    && !isTranscriptReceiptAction(transcript.itemsById[itemId])
   );
 }
 
@@ -284,6 +297,9 @@ function isCollapsibleAction(
   item: Extract<TranscriptItem, { kind: "tool_call" }>,
   childrenByParentId: Map<string, string[]>,
 ): boolean {
+  if (isTranscriptReceiptAction(item)) {
+    return false;
+  }
   if ((childrenByParentId.get(item.itemId) ?? []).length > 0) {
     return false;
   }
@@ -295,4 +311,13 @@ function isCollapsibleAction(
     && item.semanticKind !== "cowork_artifact_create"
     && item.semanticKind !== "cowork_artifact_update"
     && item.nativeToolName !== "Agent";
+}
+
+function isTranscriptReceiptAction(item: TranscriptItem | undefined): boolean {
+  return item?.kind === "tool_call"
+    && (
+      isAgentOperationsReceiptAction(item)
+      || deriveLegacySubagentAgentOperationsReceipt(item) !== null
+      || isSubagentCreationAction(item)
+    );
 }

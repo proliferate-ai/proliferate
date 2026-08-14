@@ -13,8 +13,13 @@ use crate::live::sessions::actor::fork::handle::reject_busy_close_native_child_s
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::diagnostics::{age_ms, PromptDiagnostics};
-use crate::live::sessions::actor::turn::start::StartedPromptTurn;
+use crate::live::sessions::actor::turn::start::{BeginPromptTurnOutcome, StartedPromptTurn};
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
+
+#[cfg(not(test))]
+const UNLOAD_CANCEL_GRACE: Duration = Duration::from_secs(5);
+#[cfg(test)]
+const UNLOAD_CANCEL_GRACE: Duration = Duration::from_millis(100);
 
 pub(in crate::live::sessions::actor) struct ActivePromptRequest {
     pub payload: PromptPayload,
@@ -53,10 +58,7 @@ impl SessionActor {
                 prompt_id = current_prompt_id.as_deref(),
                 "[workspace-latency] session.actor.prompt.received"
             );
-            let StartedPromptTurn {
-                acp_blocks,
-                turn_id,
-            } = match self
+            let start = match self
                 .begin_prompt_turn(
                     &current_payload,
                     current_prompt_id.clone(),
@@ -69,6 +71,20 @@ impl SessionActor {
                     if let Some(respond_to) = current_respond_to.take() {
                         let _ = respond_to.send(Err(error));
                     }
+                    break 'drain;
+                }
+            };
+            let StartedPromptTurn {
+                acp_blocks,
+                turn_id,
+            } = match start {
+                BeginPromptTurnOutcome::Started(started) => started,
+                BeginPromptTurnOutcome::Skipped(outcome) => {
+                    tracing::info!(
+                        session_id = %self.session_id,
+                        outcome = subagent_wake_skip_class(&outcome),
+                        "completion wake stopped before ACP dispatch"
+                    );
                     break 'drain;
                 }
             };
@@ -99,6 +115,9 @@ impl SessionActor {
             let req = acp::schema::PromptRequest::new(self.native_session_id.clone(), acp_blocks);
 
             let mut prompt_result = None;
+            let unload_deadline = tokio::time::sleep(UNLOAD_CANCEL_GRACE);
+            tokio::pin!(unload_deadline);
+            let mut unload_requested = false;
             let mut prompt_diagnostics = PromptDiagnostics::new(current_prompt_id.clone());
             tracing::info!(
                 session_id = %self.session_id,
@@ -153,6 +172,9 @@ impl SessionActor {
                     result = &mut prompt_fut => {
                         prompt_result = Some(result);
                     }
+                    _ = &mut unload_deadline, if unload_requested => {
+                        break;
+                    }
                     notification = notification_rx.recv() => {
                         if let Some(notif) = notification {
                             prompt_diagnostics.observe_notification(&notif);
@@ -192,13 +214,29 @@ impl SessionActor {
                                 let _ = respond_to.send(Ok(()));
                                 exit_after_prompt = Some(ActorExitDisposition::Dismiss);
                             }
+                            Some(SessionCommand::Unload { respond_to }) => {
+                                self.resolve_pending_interactions(Resolution::Cancelled).await;
+                                let _ = self.conn
+                                    .send_notification(acp::schema::CancelNotification::new(self.native_session_id.clone()));
+                                let _ = respond_to.send(Ok(()));
+                                unload_requested = true;
+                                unload_deadline.as_mut().reset(tokio::time::Instant::now() + UNLOAD_CANCEL_GRACE);
+                                exit_after_prompt = Some(ActorExitDisposition::Unload);
+                            }
                             Some(SessionCommand::ResolveInteraction { request_id, resolution, respond_to }) => {
                                 let result = self.resolve_interaction(request_id, resolution).await;
                                 let _ = respond_to.send(result);
                             }
                             Some(SessionCommand::RunDomainOp { op, respond_to }) => {
-                                let result = self.run_domain_op_cmd(op).await;
-                                let _ = respond_to.send(result);
+                                if let Some(result) = self.run_domain_op_cmd(op).await {
+                                    let _ = respond_to.send(result);
+                                } else {
+                                    unload_requested = true;
+                                    unload_deadline.as_mut().reset(
+                                        tokio::time::Instant::now() + UNLOAD_CANCEL_GRACE,
+                                    );
+                                    exit_after_prompt = Some(ActorExitDisposition::Unload);
+                                }
                             }
                             Some(SessionCommand::CallAgentExtMethod { method, params, respond_to }) => {
                                 // Dispatched off the actor loop (see
@@ -280,18 +318,35 @@ impl SessionActor {
                 }
             }
 
-            let result = prompt_result.expect("prompt_result must be set");
-            let broken_session = self
-                .finish_prompt_result(
-                    result,
+            let broken_session = if unload_requested {
+                self.finish_forced_unload_cancel(
                     &mut prompt_diagnostics,
                     notification_rx,
                     background_work_rx,
                 )
                 .await;
+                false
+            } else {
+                let result = prompt_result.expect("prompt_result must be set");
+                self.finish_prompt_result(
+                    result,
+                    &mut prompt_diagnostics,
+                    notification_rx,
+                    background_work_rx,
+                )
+                .await
+            };
 
             self.resume_replay_filter.disable();
 
+            if broken_session && exit_after_prompt.is_none() {
+                // Terminal persistence exhausted its bounded retry while the
+                // exact frozen batch remains in the sink. Retire this actor
+                // before it can re-enter idle and accept any event-producing
+                // work; the no-live-handle subagent recovery pass owns the
+                // durable open turn from here.
+                exit_after_prompt = Some(ActorExitDisposition::Unload);
+            }
             if exit_after_prompt.is_some() || broken_session {
                 break 'drain;
             }
@@ -313,5 +368,18 @@ impl SessionActor {
         while let Ok(notif) = notification_rx.try_recv() {
             self.handle_notification(&notif).await;
         }
+    }
+}
+
+fn subagent_wake_skip_class(
+    outcome: &crate::live::sessions::sink::SubagentWakeTurnStartOutcome,
+) -> &'static str {
+    match outcome {
+        crate::live::sessions::sink::SubagentWakeTurnStartOutcome::Admitted { .. } => "admitted",
+        crate::live::sessions::sink::SubagentWakeTurnStartOutcome::AlreadyVisible => {
+            "already_visible"
+        }
+        crate::live::sessions::sink::SubagentWakeTurnStartOutcome::Discarded => "discarded",
+        crate::live::sessions::sink::SubagentWakeTurnStartOutcome::Stale => "stale",
     }
 }

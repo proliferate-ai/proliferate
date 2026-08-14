@@ -2,7 +2,7 @@ import { PopoverButton } from "#product/primitives/PopoverButton";
 import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 import type { DelegatedWorkComposerViewModel } from "#product/hooks/chat/facade/use-delegated-work-composer";
-import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
+import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGlyph";
 import { AgentsPopoverSubagentSection } from "./AgentsPopoverSubagentSection";
 
 export function DelegatedWorkComposerControl({
@@ -17,9 +17,9 @@ export function DelegatedWorkComposerControl({
       trigger={(
         <ComposerControlButton
           icon={singleAgent ? (
-            <DelegatedAgentIdenticon
+            <AgentIdentityGlyph
               identity={singleAgent}
-              className={`size-3.5 ${singleAgent.textColorClassName}`}
+              className={`icon-compact text-chat ${singleAgent.textColorClassName}`}
             />
           ) : undefined}
           label={singleAgent ? singleAgent.displayName : "Agents"}
