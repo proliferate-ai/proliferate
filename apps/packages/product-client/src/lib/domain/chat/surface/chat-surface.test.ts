@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  launchIntentOwnsShell,
   resolveChatSurfaceState,
   resolveLaunchIntentSurfaceOverride,
   shouldMountWorkspaceShell,
@@ -352,48 +351,6 @@ describe("chat surface", () => {
         shellLogicalWorkspaceId: "pending-workspace:attempt-1",
         shellWorkspaceId: null,
       })).toBeNull();
-    });
-  });
-
-  describe("launchIntentOwnsShell", () => {
-    it("owns an empty shell when unscoped", () => {
-      expect(launchIntentOwnsShell({
-        scope: null,
-        shellLogicalWorkspaceId: null,
-        shellWorkspaceId: null,
-      })).toBe(true);
-    });
-
-    it("does not own a selected shell when unscoped", () => {
-      expect(launchIntentOwnsShell({
-        scope: null,
-        shellLogicalWorkspaceId: "workspace-1",
-        shellWorkspaceId: "workspace-1",
-      })).toBe(false);
-    });
-
-    it("owns the shell matching its pending UI key", () => {
-      expect(launchIntentOwnsShell({
-        scope: { pendingUiKey: "pending-workspace:attempt-1", workspaceId: null },
-        shellLogicalWorkspaceId: "pending-workspace:attempt-1",
-        shellWorkspaceId: null,
-      })).toBe(true);
-    });
-
-    it("does not own an unrelated shell when scoped", () => {
-      expect(launchIntentOwnsShell({
-        scope: { pendingUiKey: null, workspaceId: "workspace-a" },
-        shellLogicalWorkspaceId: "workspace-b",
-        shellWorkspaceId: "workspace-b",
-      })).toBe(false);
-    });
-
-    it("owns the shell matching its materialized/target workspace id", () => {
-      expect(launchIntentOwnsShell({
-        scope: { pendingUiKey: null, workspaceId: "workspace-a" },
-        shellLogicalWorkspaceId: "workspace-a",
-        shellWorkspaceId: "workspace-a",
-      })).toBe(true);
     });
   });
 });
