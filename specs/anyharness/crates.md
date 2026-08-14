@@ -12,6 +12,9 @@ anyharness-contract/
 anyharness-credential-discovery/
   shared provider credential discovery and portable auth normalization
 
+proliferate-diagnostics-protocol/
+  provider-neutral Desktop diagnostics wire contract and pure validation
+
 anyharness-lib/
   runtime implementation
 ```
@@ -104,3 +107,14 @@ This crate owns the runtime:
 - protocol/vendor integrations
 
 Use [README.md](README.md) for the internal runtime structure.
+
+## `proliferate-diagnostics-protocol`
+
+This crate owns schema-versioned diagnostics envelopes, API shapes, closed
+vocabularies, hard bounds, and pure record/lifecycle validation shared across
+Desktop-owned producers and the future collector. It is separate from
+`anyharness-contract`, whose audience is the AnyHarness public transport API.
+
+It must not own collector runtime state, transport handlers, files, processes,
+exporters, producer queues, or product orchestration. Cross-language meaning is
+pinned by `fixtures/contracts/rust-observability-v1/`.

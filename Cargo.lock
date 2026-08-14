@@ -4289,6 +4289,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "proliferate-diagnostics-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "proliferate-runtime-update-protocol"
 version = "0.1.0"
 dependencies = [
