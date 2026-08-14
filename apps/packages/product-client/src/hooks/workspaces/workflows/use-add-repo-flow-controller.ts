@@ -20,7 +20,10 @@ import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 import { directoryPickerUnavailableCopy } from "#product/copy/workspaces/directory-picker-copy";
 import { DESKTOP_POINTER_COPY } from "#product/copy/workspaces/desktop-pointer-copy";
-import { useRepoAddedToast } from "#product/hooks/workspaces/ui/use-repo-added-toast";
+import {
+  buildCloudRepoAddedReceipt,
+  useRepoAddedToast,
+} from "#product/hooks/workspaces/ui/use-repo-added-toast";
 
 /** Confirmation on arrival, once the checklist has actually been walked. */
 const GITHUB_CONNECTED_BANNER = "GitHub connected. Choose a repository.";
@@ -156,20 +159,17 @@ export function useAddRepoFlowController({
         repo: { gitProvider: "github", ...repo },
       });
     },
+    // Not the live completion path: `onRepositorySelected` above short-circuits
+    // every selection into the cloud intent, and CloudRepoActionDialogHost
+    // fires the receipt when the registration actually lands. Kept correct (via
+    // the shared receipt builder, never a second copy of its copy) so removing
+    // that short-circuit does not silently drop the confirmation.
     onEnvironmentAdded: (repoId) => {
       // Read before closing — close() clears the completion callback.
       const onCompleted = useAddRepoFlowStore.getState().onCompleted;
       onClose();
       if (repoId) {
-        // Settings names a Cloud-only repository `cloud:owner/name` (see
-        // buildSettingsRepositoryEntries); the receipt's "Customize defaults"
-        // has to hand back that exact identity or it lands on nothing.
-        const identity = parseGitRepoId(repoId);
-        showRepoAddedToast({
-          repoName: identity?.gitRepoName ?? repoId,
-          sourceRoot: `cloud:${repoId}`,
-          source: "cloud",
-        });
+        showRepoAddedToast(buildCloudRepoAddedReceipt(repoId));
         onCompleted?.({ kind: "cloud", repoId });
       }
     },

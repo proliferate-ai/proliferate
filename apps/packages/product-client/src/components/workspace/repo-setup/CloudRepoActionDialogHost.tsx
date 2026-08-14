@@ -46,7 +46,7 @@ import {
   type CloneRepoAttempt,
 } from "#product/hooks/workspaces/workflows/use-clone-repo";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
-import { useToastStore } from "#product/stores/toast/toast-store";
+import { buildCloudRepoAddedReceipt, useRepoAddedToast } from "#product/hooks/workspaces/ui/use-repo-added-toast";
 import { formatGitRepoId } from "#product/domain/repos/repo-id";
 
 const USER_AUTHORIZATION_RETURN_TO_SOURCE = "github_app_callback";
@@ -65,7 +65,7 @@ export function CloudRepoActionDialogHost() {
   const intent = useCloudRepositoryIntentStore((state) => state.activeIntent);
   const clearIntent = useCloudRepositoryIntentStore((state) => state.clear);
   const closeAddRepoFlow = useAddRepoFlowStore((state) => state.close);
-  const showToast = useToastStore((state) => state.show);
+  const showRepoAddedToast = useRepoAddedToast();
   const { cloneRepo } = useCloneRepo();
   const repo = intent ? repoForCloudRepositoryIntent(intent) : null;
   // Clone depends only on GitHub repository access; managed-Cloud intents depend
@@ -200,9 +200,11 @@ export function CloudRepoActionDialogHost() {
     const onCompleted = useAddRepoFlowStore.getState().onCompleted;
     const repoId = formatGitRepoId(target);
     closeAddRepoFlow();
-    showToast(`Added ${repoId}`, "info");
+    // Where a cloud add actually lands is where the receipt belongs: the same
+    // "Added" card a local add produces, not a bare informational line.
+    showRepoAddedToast(buildCloudRepoAddedReceipt(repoId));
     onCompleted?.({ kind: "cloud", repoId });
-  }, [closeAddRepoFlow, showToast]);
+  }, [closeAddRepoFlow, showRepoAddedToast]);
 
   const cloneFromGitHub = useCallback(async (target: CloudRepoIdentity) => {
     if (!intent || intent.kind !== "clone_from_github") {
@@ -228,9 +230,15 @@ export function CloudRepoActionDialogHost() {
     cloneAttemptRef.current = null;
     const onCompleted = useAddRepoFlowStore.getState().onCompleted;
     closeAddRepoFlow();
-    showToast(`Cloned ${formatGitRepoId(target)}`, "info");
+    // A finished clone is a repository on this machine, so it earns exactly the
+    // receipt a local folder add does — checkout path and all.
+    showRepoAddedToast({
+      repoName: target.gitRepoName,
+      sourceRoot: result.sourceRoot,
+      source: "local",
+    });
     onCompleted?.({ kind: "local", sourceRoot: result.sourceRoot });
-  }, [cloneRepo, closeAddRepoFlow, intent, showToast]);
+  }, [cloneRepo, closeAddRepoFlow, intent, showRepoAddedToast]);
 
   // Once every access gate is green, continue the held intent (save env →
   // create). Gate 9 (`set_up_cloud`) is the normal continue point: the resolver

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "#product/config/app-routes";
+import { parseGitRepoId } from "#product/domain/repos/repo-id";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 import { useHomeNextTargetSelectionState } from "#product/hooks/home/ui/use-home-next-target-selection-state";
 import { dismissToast, showToast } from "#product/primitives/utils/show-toast";
@@ -24,6 +25,24 @@ export interface RepoAddedToastInput {
    */
   sourceRoot: string;
   source: RepoAddedSource;
+}
+
+/**
+ * The receipt for a repository that lives only in Cloud.
+ *
+ * Settings names such a repository `cloud:owner/name` (see
+ * buildSettingsRepositoryEntries), so both of the receipt's actions have to
+ * hand back that exact identity or they land on nothing. Shared because two
+ * surfaces can complete a Cloud add — the flow's own picker, and the ordered-
+ * readiness host that finishes a handed-off intent.
+ */
+export function buildCloudRepoAddedReceipt(repoId: string): RepoAddedToastInput {
+  const identity = parseGitRepoId(repoId);
+  return {
+    repoName: identity?.gitRepoName ?? repoId,
+    sourceRoot: `cloud:${repoId}`,
+    source: "cloud",
+  };
 }
 
 /**
