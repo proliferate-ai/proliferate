@@ -4,7 +4,6 @@ mod materialization;
 mod mobility;
 mod product_mcp;
 mod sessions;
-mod workflows;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -56,6 +55,7 @@ use crate::domains::reviews::mcp::auth::ReviewMcpAuth;
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
+use crate::domains::sessions::admission::{NoControllerPolicy, SessionMutationAdmission};
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
 use crate::domains::sessions::links::completions::LinkCompletionStore;
 use crate::domains::sessions::links::service::SessionLinkService;
@@ -69,7 +69,6 @@ use crate::domains::sessions::store::SessionStore;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::terminals::store::TerminalStore;
-use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::archive::quiesce::QuiescePlanes;
 use crate::domains::workspaces::archive::WorkspaceArchiveService;
@@ -92,9 +91,9 @@ use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
 use crate::persistence::Db;
 
 pub use config::{default_runtime_home, ensure_runtime_home};
-use config::{
-    load_bearer_token, load_runtime_target_id, proliferate_home_dir_name, runtime_identity,
-};
+use config::{load_bearer_token, load_runtime_target_id, runtime_identity};
+#[cfg(test)]
+use config::proliferate_home_dir_name;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppStateInitError {
@@ -107,8 +106,6 @@ pub enum AppStateInitError {
     InvalidDataKey(String),
     #[error("Invalid product MCP endpoint registry: {0}")]
     InvalidProductMcpRegistry(#[source] anyhow::Error),
-    #[error("Failed to fence interrupted workflow runs during startup: {0}")]
-    WorkflowFencingFailed(#[source] anyhow::Error),
 }
 
 #[derive(Clone)]
@@ -172,9 +169,6 @@ pub struct AppState {
     pub plan_runtime: Arc<PlanRuntime>,
     pub goal_service: Arc<GoalService>,
     pub goal_runtime: Arc<GoalRuntime>,
-    pub workflow_run_runtime: Arc<WorkflowRunRuntime>,
-    pub workflow_workspace_runtime:
-        Arc<crate::domains::workflows::workspace_materialization::WorkflowWorkspaceRuntime>,
     pub session_admission: Arc<crate::domains::sessions::admission::SessionMutationAdmission>,
     pub loop_service: Arc<LoopService>,
     pub loop_runtime: Arc<LoopRuntime>,
@@ -398,10 +392,14 @@ impl AppState {
             workspace_access_gate.clone(),
         ));
         let goal_session_hooks = Arc::new(GoalSessionHooks::new(goal_runtime.clone()));
-        let workflow_wiring =
-            workflows::wire_workflows_before_sessions(&db, Arc::new(session_link_service.clone()))?;
-        let session_admission = workflow_wiring.admission.clone();
-        let workflow_run_session_extension = workflow_wiring.session_extension.clone();
+        // Session mutation admission: gen-2 workflows never gate session
+        // mutations (run sessions are ordinary chattable sessions), so the
+        // controller lookup is the permanent no-controller policy. The
+        // operability policy stays the durable relationship lookup.
+        let session_admission = Arc::new(SessionMutationAdmission::new(
+            Arc::new(NoControllerPolicy),
+            Arc::new(session_link_service.clone()),
+        ));
         let loop_fire_executor = Arc::new(SessionLoopFireExecutor::new(
             loop_service.clone(),
             acp_manager.clone(),
@@ -433,7 +431,6 @@ impl AppState {
             goal_session_hooks,
             loop_session_hooks,
             activity_session_hooks,
-            workflow_run_session_extension,
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -453,16 +450,6 @@ impl AppState {
             activity_service.clone(),
         ));
         completion_delivery_wiring.spawn(&session_runtime);
-        // Workflow runs — phase 2 (after SessionRuntime): the async facades.
-        let workflow_phase_two = workflows::wire_workflow_runtime(
-            workflow_wiring,
-            session_runtime.clone(),
-            workspace_operation_gate.clone(),
-            workspace_access_gate.clone(),
-            workspace_runtime.clone(),
-        );
-        let workflow_run_runtime = workflow_phase_two.run_runtime;
-        let workflow_workspace_runtime = workflow_phase_two.workspace_runtime;
         // Destructive workspace family: the archive orchestrator and the
         // row-dies-last purge orchestrator, constructed directly here. There
         // is no wiring family struct left for this pair once the shared
@@ -637,8 +624,6 @@ impl AppState {
             plan_runtime,
             goal_service,
             goal_runtime,
-            workflow_run_runtime,
-            workflow_workspace_runtime,
             session_admission,
             loop_service,
             loop_runtime,

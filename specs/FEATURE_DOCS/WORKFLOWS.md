@@ -1,4 +1,18 @@
 
+> **SUPERSEDED (gen-2, 2026-08-14).** The Workflows ADR replaced the gen-1
+> system this document describes. The gen-1 runtime execution vertical
+> (one-prompt runs, portable invocations, run control, managed cloud
+> execution) has been deleted from the runtime; `workflow_runs`,
+> `workflow_run_steps`, and `workflow_workspace_materializations` were
+> dropped and recreated as the gen-2 tables (`workflow_runs`,
+> `workflow_run_nodes`, `workflow_run_docs`). The gen-2 model — multi-node
+> runs on a linear chain, one session per node, a pure transition table, and
+> a client-delivered invocation snapshot — is documented by the delivery
+> specs (`delivery-spec-workflows-gen2-pr1.md` and successors) until this
+> document is rewritten at the end of that ladder. Only the workspace
+> placement section below still describes live code
+> (`domains/workspaces/workflow_placement.rs`).
+
 Read before touching: `apps/packages/product-client/src/**/*workflow*`, `server/proliferate/server/workflows/**`, `anyharness/crates/anyharness-lib/src/domains/workflows/**`
 
 This document covers the Workflow system spanning server ↔ runtime ↔ workspace placement, including definitions, invocations, runs, run control, workspace placement, and managed cloud execution.

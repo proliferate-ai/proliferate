@@ -26,11 +26,10 @@
 //!
 //! Workspace-destruction fence (PR1227-WORKSPACE-FENCE-01): the workspace-wide
 //! destructive paths (`purge_workspace`, `retire_workspace`) admit the CURRENT
-//! session set up front, but the workflow executor holds only the SHARED
-//! `SessionStart` lease when it creates and binds a fresh preselected session
-//! (`execution.rs`: `acquire_shared(SessionStart) -> reserve_new_session ->
-//! bind_session`). That session id is a brand-new UUID absent from the
-//! destructive path's snapshot, so its keyed permit is never acquired. To keep
+//! session set up front, but a controller-owned creator holding only the SHARED
+//! `SessionStart` lease can create and bind a fresh preselected session whose
+//! brand-new UUID is absent from the destructive path's snapshot, so its keyed
+//! permit is never acquired. To keep
 //! the fail-closed contract, each destructive path RE-ENUMERATES the workspace
 //! session set AFTER it holds the EXCLUSIVE workspace lease and conflicts (409)
 //! if any session is controlled by a nonterminal workflow
@@ -84,6 +83,9 @@ pub struct SessionMutationSource(SourceInner);
 #[derive(Debug, Clone)]
 enum SourceInner {
     External,
+    /// No production producer since gen-1 workflows was superseded; the
+    /// admission conflict mechanics stay proven by test-installed policies.
+    #[allow(dead_code)]
     WorkflowRun { run_id: String },
 }
 
@@ -96,6 +98,7 @@ impl SessionMutationSource {
 
     /// The owning workflow's own mutation authority (ruling 3: includes the
     /// crate-private exact-active-turn live cancel).
+    #[cfg(test)]
     pub(crate) fn workflow_run(run_id: &str) -> Self {
         Self(SourceInner::WorkflowRun {
             run_id: run_id.to_string(),
@@ -376,35 +379,4 @@ impl SessionMutationAdmission {
         .map_err(|error| anyhow::anyhow!("controlled-session re-check task failed: {error}"))?
     }
 
-    /// Reserve a NEW session id's gate before its row becomes visible
-    /// (ruling 1). No policy lookup: there is no durable row yet, and the
-    /// caller is by construction the creator. The returned permit is held
-    /// through durable creation and controller binding; foreign callers
-    /// arriving meanwhile wait on this same gate and then observe the
-    /// controller.
-    ///
-    /// PR1227-ADMISSION-01: this bypasses the controller-policy lookup, which
-    /// is sound ONLY for a fresh preselected id whose owner is the workflow
-    /// executor. Both the visibility (`pub(crate)`) and the source guard lock
-    /// the fresh-id contract at the type boundary — the sole caller is the
-    /// workflow executor (the Workflows domain's `execution` module), and an
-    /// External source here is a programming error, never a runtime-reachable
-    /// state.
-    pub(crate) async fn reserve_new_session(
-        &self,
-        session_id: &str,
-        source: &SessionMutationSource,
-    ) -> Result<SessionMutationPermit, SessionMutationConflict> {
-        debug_assert!(
-            matches!(source.0, SourceInner::WorkflowRun { .. }),
-            "reserve_new_session bypasses controller policy and is only sound \
-             for the workflow executor's preselected id; source must be a \
-             trusted WorkflowRun, never External"
-        );
-        let gate = self
-            .slot(session_id)
-            .map_err(SessionMutationConflict::Internal)?;
-        let guard = gate.lock_owned().await;
-        Ok(SessionMutationPermit { _guard: guard })
-    }
 }

@@ -1,84 +1,67 @@
-//! Durable domain types for one-prompt workflow execution (spec
-//! `workflow-runs.md`). These are the workflow domain's own models: contract
-//! wire types stop at the API mapper and never appear here.
-
-use std::collections::BTreeMap;
+//! Row records and status vocabulary for the gen-2 workflow tables. The
+//! failure vocabulary on rows is distinct from HTTP error codes: node
+//! `failure_code` says why a node failed, run `interruption_code` says why a
+//! run parked recoverable.
 
 use serde::{Deserialize, Serialize};
 
-/// `workflow:` — the stable prefix on every workflow-owned prompt ID. The
-/// session extension matches on this to tell a workflow turn from any other.
-pub const WORKFLOW_PROMPT_ID_PREFIX: &str = "workflow:";
-
-/// The deterministic, workflow-owned prompt identity for a run's single step.
-/// Opaque correlation evidence; not the replay guard.
-pub fn workflow_prompt_id(run_id: &str) -> String {
-    format!("{WORKFLOW_PROMPT_ID_PREFIX}{run_id}:0:0")
-}
-
-/// Durable run status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum WorkflowRunStatus {
-    Accepted,
     Running,
+    AwaitingHuman,
+    Interrupted,
     Completed,
     Failed,
-    Cancelled,
-    Interrupted,
 }
 
 impl WorkflowRunStatus {
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Accepted => "accepted",
             Self::Running => "running",
+            Self::AwaitingHuman => "awaiting_human",
+            Self::Interrupted => "interrupted",
             Self::Completed => "completed",
             Self::Failed => "failed",
-            Self::Cancelled => "cancelled",
-            Self::Interrupted => "interrupted",
         }
     }
 
     pub fn parse(value: &str) -> Option<Self> {
         match value {
-            "accepted" => Some(Self::Accepted),
             "running" => Some(Self::Running),
+            "awaiting_human" => Some(Self::AwaitingHuman),
+            "interrupted" => Some(Self::Interrupted),
             "completed" => Some(Self::Completed),
             "failed" => Some(Self::Failed),
-            "cancelled" => Some(Self::Cancelled),
-            "interrupted" => Some(Self::Interrupted),
             _ => None,
         }
     }
 
-    pub fn is_terminal(self) -> bool {
-        matches!(
-            self,
-            Self::Completed | Self::Failed | Self::Cancelled | Self::Interrupted
-        )
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, Self::Completed | Self::Failed)
     }
 }
 
-/// Durable step status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkflowStepStatus {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowNodeStatus {
     Pending,
     Running,
+    NeedsAttention,
+    AwaitingHuman,
     Completed,
     Failed,
-    Cancelled,
-    Interrupted,
 }
 
-impl WorkflowStepStatus {
-    pub fn as_str(self) -> &'static str {
+impl WorkflowNodeStatus {
+    pub fn as_str(&self) -> &'static str {
         match self {
             Self::Pending => "pending",
             Self::Running => "running",
+            Self::NeedsAttention => "needs_attention",
+            Self::AwaitingHuman => "awaiting_human",
             Self::Completed => "completed",
             Self::Failed => "failed",
-            Self::Cancelled => "cancelled",
-            Self::Interrupted => "interrupted",
         }
     }
 
@@ -86,428 +69,195 @@ impl WorkflowStepStatus {
         match value {
             "pending" => Some(Self::Pending),
             "running" => Some(Self::Running),
+            "needs_attention" => Some(Self::NeedsAttention),
+            "awaiting_human" => Some(Self::AwaitingHuman),
             "completed" => Some(Self::Completed),
             "failed" => Some(Self::Failed),
-            "cancelled" => Some(Self::Cancelled),
-            "interrupted" => Some(Self::Interrupted),
             _ => None,
         }
     }
 
-    pub fn is_terminal(self) -> bool {
-        matches!(
-            self,
-            Self::Completed | Self::Failed | Self::Cancelled | Self::Interrupted
-        )
+    /// The invariant sweep's "active" set: at most one node row per run may be
+    /// in one of these states.
+    pub fn is_active(&self) -> bool {
+        matches!(self, Self::Running | Self::AwaitingHuman | Self::NeedsAttention)
     }
 }
 
-/// The stable, programmatic failure result stored on failed rows (spec §6.1).
-/// No failure message is ever persisted; this code is the whole result.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkflowRunFailureCode {
-    WorkspaceUnavailable,
-    SessionCreateFailed,
-    SessionStartFailed,
-    PromptDispatchFailed,
-    SessionTurnFailed,
-    SessionTurnCancelled,
-    RuntimeRestarted,
-    SessionConfigApplyFailed,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowNodeKind {
+    Defined,
+    Replacement,
+    Adhoc,
 }
 
-impl WorkflowRunFailureCode {
-    pub fn as_str(self) -> &'static str {
+impl WorkflowNodeKind {
+    pub fn as_str(&self) -> &'static str {
         match self {
-            Self::WorkspaceUnavailable => "workspace_unavailable",
-            Self::SessionCreateFailed => "session_create_failed",
-            Self::SessionStartFailed => "session_start_failed",
-            Self::PromptDispatchFailed => "prompt_dispatch_failed",
-            Self::SessionTurnFailed => "session_turn_failed",
-            Self::SessionTurnCancelled => "session_turn_cancelled",
-            Self::RuntimeRestarted => "runtime_restarted",
-            Self::SessionConfigApplyFailed => "session_config_apply_failed",
+            Self::Defined => "defined",
+            Self::Replacement => "replacement",
+            Self::Adhoc => "adhoc",
         }
     }
 
     pub fn parse(value: &str) -> Option<Self> {
         match value {
-            "workspace_unavailable" => Some(Self::WorkspaceUnavailable),
-            "session_create_failed" => Some(Self::SessionCreateFailed),
-            "session_start_failed" => Some(Self::SessionStartFailed),
-            "prompt_dispatch_failed" => Some(Self::PromptDispatchFailed),
-            "session_turn_failed" => Some(Self::SessionTurnFailed),
-            "session_turn_cancelled" => Some(Self::SessionTurnCancelled),
-            "runtime_restarted" => Some(Self::RuntimeRestarted),
-            "session_config_apply_failed" => Some(Self::SessionConfigApplyFailed),
+            "defined" => Some(Self::Defined),
+            "replacement" => Some(Self::Replacement),
+            "adhoc" => Some(Self::Adhoc),
             _ => None,
         }
     }
 }
 
-/// The closed run interruption code (spec workflow-run-control §4): present
-/// if and only if the run status is `interrupted`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowNodeType {
+    Agent,
+    HumanInLoop,
+}
+
+impl WorkflowNodeType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Agent => "agent",
+            Self::HumanInLoop => "human_in_loop",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "agent" => Some(Self::Agent),
+            "human_in_loop" => Some(Self::HumanInLoop),
+            _ => None,
+        }
+    }
+}
+
+/// Node failure vocabulary (rows, never HTTP).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowNodeFailureCode {
+    NodeLaunchFailed,
+    TurnError,
+    Refusal,
+    EmptyTurn,
+    HarnessCap,
+}
+
+impl WorkflowNodeFailureCode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::NodeLaunchFailed => "node_launch_failed",
+            Self::TurnError => "turn_error",
+            Self::Refusal => "refusal",
+            Self::EmptyTurn => "empty_turn",
+            Self::HarnessCap => "harness_cap",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "node_launch_failed" => Some(Self::NodeLaunchFailed),
+            "turn_error" => Some(Self::TurnError),
+            "refusal" => Some(Self::Refusal),
+            "empty_turn" => Some(Self::EmptyTurn),
+            "harness_cap" => Some(Self::HarnessCap),
+            _ => None,
+        }
+    }
+}
+
+/// Run interruption vocabulary: recoverable parks, offered by the resume
+/// popover. `runtime_restarted` is inherited from gen-1's boot fence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum WorkflowInterruptionCode {
+    UserCancel,
+    AppShutdown,
     RuntimeRestarted,
 }
 
 impl WorkflowInterruptionCode {
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
+            Self::UserCancel => "user_cancel",
+            Self::AppShutdown => "app_shutdown",
             Self::RuntimeRestarted => "runtime_restarted",
         }
     }
 
     pub fn parse(value: &str) -> Option<Self> {
         match value {
+            "user_cancel" => Some(Self::UserCancel),
+            "app_shutdown" => Some(Self::AppShutdown),
             "runtime_restarted" => Some(Self::RuntimeRestarted),
             _ => None,
         }
     }
 }
 
-/// The terminal turn result observed for the workflow's single prompt. This is
-/// the workflow domain's own twin of the sessions `SessionTurnOutcome`; the
-/// session extension maps into it so the store never imports sessions types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkflowTurnOutcome {
-    Completed,
-    Failed,
-    Cancelled,
+/// The stored, re-creatable prompt unit: retry, fail-and-redo, and ad hoc
+/// re-running all reuse the same rendering. Persisted as JSON in
+/// `workflow_run_nodes.rendered_envelope`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderedEnvelope {
+    /// Hidden system-instruction blocks prepended to the first message
+    /// ("System instruction from AnyHarness, not user content:").
+    pub instruction_blocks: Vec<String>,
+    pub first_message: String,
+    /// Set additively where harnesses honor it; correctness never rides on it.
+    pub system_prompt_append: Vec<String>,
 }
 
-impl WorkflowTurnOutcome {
-    /// The durable run/step status this outcome terminalizes to, plus the
-    /// failure code (present only for the failed forms).
-    pub fn terminal_states(
-        self,
-    ) -> (
-        WorkflowRunStatus,
-        WorkflowStepStatus,
-        Option<WorkflowRunFailureCode>,
-    ) {
-        match self {
-            Self::Completed => (
-                WorkflowRunStatus::Completed,
-                WorkflowStepStatus::Completed,
-                None,
-            ),
-            Self::Failed => (
-                WorkflowRunStatus::Failed,
-                WorkflowStepStatus::Failed,
-                Some(WorkflowRunFailureCode::SessionTurnFailed),
-            ),
-            // A correlated cancelled turn is truthful `cancelled`, not a
-            // failure (spec workflow-run-control §4).
-            Self::Cancelled => (
-                WorkflowRunStatus::Cancelled,
-                WorkflowStepStatus::Cancelled,
-                None,
-            ),
-        }
-    }
-}
-
-/// The `workflow_runs` row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowRunRecord {
     pub id: String,
-    pub schema_version: i64,
-    pub invocation_json: String,
-    pub resolved_plan_json: Option<String>,
-    pub status: WorkflowRunStatus,
+    pub invocation_id: String,
+    pub definition_json: String,
+    pub arguments_json: String,
     pub workspace_id: String,
-    pub session_id: Option<String>,
-    pub failure_code: Option<WorkflowRunFailureCode>,
-    /// Monotonic run snapshot version: starts at 1 on acceptance and
-    /// increments exactly once per externally visible snapshot transaction.
-    pub state_version: i64,
-    /// First durable cancellation intent; never cleared once set.
-    pub cancel_requested_at: Option<String>,
-    /// Present if and only if the run status is `interrupted`.
+    pub status: WorkflowRunStatus,
+    pub current_node_row_id: Option<String>,
+    pub failure_code: Option<String>,
     pub interruption_code: Option<WorkflowInterruptionCode>,
     pub created_at: String,
     pub updated_at: String,
-    pub started_at: Option<String>,
-    pub finished_at: Option<String>,
+    pub completed_at: Option<String>,
 }
 
-/// The `workflow_run_steps` row.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkflowRunStepRecord {
+pub struct WorkflowRunNodeRecord {
+    pub id: String,
     pub run_id: String,
-    pub stage_index: i64,
-    pub step_index: i64,
-    pub status: WorkflowStepStatus,
-    pub prompt_id: String,
-    pub turn_id: Option<String>,
-    pub failure_code: Option<WorkflowRunFailureCode>,
+    pub definition_node_id: Option<String>,
+    pub kind: WorkflowNodeKind,
+    pub node_type: WorkflowNodeType,
+    pub replaces_node_row_id: Option<String>,
+    pub anchor_node_row_id: Option<String>,
+    pub chain_index: Option<i64>,
+    pub title: String,
+    pub prompt: String,
+    pub status: WorkflowNodeStatus,
+    pub session_id: Option<String>,
+    pub prompt_id: Option<String>,
+    pub rendered_envelope: Option<RenderedEnvelope>,
+    pub failure_code: Option<WorkflowNodeFailureCode>,
+    pub created_at: String,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkflowRunDocRecord {
+    pub id: String,
+    pub run_id: String,
+    pub slug: String,
+    pub filename: String,
+    pub producing_node_row_id: Option<String>,
+    pub seeded_from_template: bool,
     pub created_at: String,
     pub updated_at: String,
-    pub started_at: Option<String>,
-    pub finished_at: Option<String>,
-}
-
-/// A resolved scalar argument value. Untagged so it round-trips as a bare JSON
-/// scalar; the fixed variant order (bool, number, string) keeps parsing
-/// unambiguous. `serde_json::Number` preserves integer-vs-float representation.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum WorkflowArgumentValue {
-    Bool(bool),
-    Number(serde_json::Number),
-    String(String),
-}
-
-/// A declared scalar input type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum WorkflowInputType {
-    String,
-    Number,
-    Boolean,
-}
-
-/// Domain twin of a declared input.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowInput {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub input_type: WorkflowInputType,
-    pub required: bool,
-}
-
-/// Domain twin of the stage harness configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowHarnessConfig {
-    pub agent_kind: String,
-    pub model_id: Option<String>,
-    pub mode_id: Option<String>,
-}
-
-/// Domain twin of the single prompt step.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowPromptStep {
-    pub kind: String,
-    pub prompt: String,
-}
-
-/// Domain twin of a stage.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowStage {
-    pub harness_config: WorkflowHarnessConfig,
-    pub steps: Vec<WorkflowPromptStep>,
-}
-
-/// Domain twin of the frozen definition.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowDefinition {
-    pub inputs: Vec<WorkflowInput>,
-    pub stages: Vec<WorkflowStage>,
-}
-
-/// The un-normalized PUT input handed to the runtime by the API mapper. Carries
-/// the still-open argument values so the service can raise typed validation
-/// errors on type mismatches.
-#[derive(Debug, Clone)]
-pub struct PutWorkflowRunInput {
-    pub schema_version: i64,
-    pub workspace_id: String,
-    pub definition: WorkflowDefinition,
-    pub arguments: BTreeMap<String, serde_json::Value>,
-}
-
-/// The normalized invocation: workspace, frozen definition, and typed
-/// arguments. Its `serde_json::to_string` IS the canonical `invocation_json` —
-/// `BTreeMap` key order plus fixed struct field order normalize away incoming
-/// whitespace and key ordering, while typed values and array order survive.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowRunInvocation {
-    pub workspace_id: String,
-    pub definition: WorkflowDefinition,
-    pub arguments: BTreeMap<String, WorkflowArgumentValue>,
-}
-
-/// Schema-v2 portable model intent. Resolution produces one concrete model
-/// before the durable acceptance transaction.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum WorkflowModelSelection {
-    TargetDefault,
-    Exact {
-        #[serde(rename = "modelId")]
-        model_id: String,
-    },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum WorkflowPermissionPolicy {
-    WorkflowDefault,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowHarnessConfigV2 {
-    pub agent_kind: String,
-    pub model_selection: WorkflowModelSelection,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub effort: Option<String>,
-    pub permission_policy: WorkflowPermissionPolicy,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowStageV2 {
-    pub harness_config: WorkflowHarnessConfigV2,
-    pub steps: Vec<WorkflowPromptStep>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowDefinitionV2 {
-    pub inputs: Vec<WorkflowInput>,
-    pub stages: Vec<WorkflowStageV2>,
-}
-
-#[derive(Debug, Clone)]
-pub struct PutWorkflowRunInputV2 {
-    pub schema_version: i64,
-    pub workspace_id: String,
-    pub definition: WorkflowDefinitionV2,
-    pub arguments: BTreeMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Clone)]
-pub enum VersionedPutWorkflowRunInput {
-    V1(PutWorkflowRunInput),
-    V2(PutWorkflowRunInputV2),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowRunStoredSourceV2 {
-    pub workspace_id: String,
-    pub definition: WorkflowDefinitionV2,
-    pub arguments: BTreeMap<String, WorkflowArgumentValue>,
-}
-
-impl WorkflowRunStoredSourceV2 {
-    pub fn to_canonical_json(&self) -> serde_json::Result<String> {
-        serde_jcs::to_string(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum VersionedWorkflowRunStoredSource {
-    V1(WorkflowRunInvocation),
-    V2(WorkflowRunStoredSourceV2),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowResolvedEffortConfig {
-    pub config_id: String,
-    pub value: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowResolvedPlanV2 {
-    pub workspace_id: String,
-    pub agent_kind: String,
-    pub model_id: String,
-    pub mode_id: String,
-    pub effort_config: Option<WorkflowResolvedEffortConfig>,
-    pub rendered_prompt: String,
-    pub prompt_id: String,
-}
-
-impl WorkflowResolvedPlanV2 {
-    pub fn to_json(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
-    }
-}
-
-impl WorkflowRunInvocation {
-    /// The canonical JSON serialization. Serialization of these fixed-shape
-    /// deterministic types cannot fail, but the boundary is surfaced as a
-    /// `serde_json::Result` for the one caller that persists it.
-    pub fn to_canonical_json(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn prompt_id_is_deterministic() {
-        assert_eq!(workflow_prompt_id("abc"), "workflow:abc:0:0".to_string());
-    }
-
-    #[test]
-    fn status_strings_round_trip() {
-        for status in [
-            WorkflowRunStatus::Accepted,
-            WorkflowRunStatus::Running,
-            WorkflowRunStatus::Completed,
-            WorkflowRunStatus::Failed,
-        ] {
-            assert_eq!(WorkflowRunStatus::parse(status.as_str()), Some(status));
-        }
-        for status in [
-            WorkflowStepStatus::Pending,
-            WorkflowStepStatus::Running,
-            WorkflowStepStatus::Completed,
-            WorkflowStepStatus::Failed,
-        ] {
-            assert_eq!(WorkflowStepStatus::parse(status.as_str()), Some(status));
-        }
-    }
-
-    #[test]
-    fn failure_code_strings_round_trip() {
-        for code in [
-            WorkflowRunFailureCode::WorkspaceUnavailable,
-            WorkflowRunFailureCode::SessionCreateFailed,
-            WorkflowRunFailureCode::SessionStartFailed,
-            WorkflowRunFailureCode::PromptDispatchFailed,
-            WorkflowRunFailureCode::SessionTurnFailed,
-            WorkflowRunFailureCode::SessionTurnCancelled,
-            WorkflowRunFailureCode::RuntimeRestarted,
-        ] {
-            assert_eq!(WorkflowRunFailureCode::parse(code.as_str()), Some(code));
-            assert!(code.as_str().len() <= 64);
-        }
-    }
-
-    #[test]
-    fn argument_values_preserve_numeric_form() {
-        let integer: WorkflowArgumentValue = serde_json::from_value(serde_json::json!(3)).unwrap();
-        assert!(matches!(integer, WorkflowArgumentValue::Number(_)));
-        assert_eq!(serde_json::to_string(&integer).unwrap(), "3");
-
-        let float: WorkflowArgumentValue = serde_json::from_value(serde_json::json!(3.5)).unwrap();
-        assert_eq!(serde_json::to_string(&float).unwrap(), "3.5");
-
-        let boolean: WorkflowArgumentValue =
-            serde_json::from_value(serde_json::json!(true)).unwrap();
-        assert_eq!(serde_json::to_string(&boolean).unwrap(), "true");
-
-        let text: WorkflowArgumentValue = serde_json::from_value(serde_json::json!("hi")).unwrap();
-        assert_eq!(serde_json::to_string(&text).unwrap(), "\"hi\"");
-    }
 }

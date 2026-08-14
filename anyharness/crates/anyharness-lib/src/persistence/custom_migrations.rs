@@ -45,6 +45,15 @@ pub(super) const CUSTOM_FOREIGN_KEY_MIGRATIONS: &[(
         "0068_workspace_drop_cleanup_columns",
         migrate_workspace_drop_cleanup_columns,
     ),
+    // Workflows gen-2 supersession: drop-and-recreate of the gen-1 tables.
+    // Registered here rather than in the SQL ladder because a fresh database
+    // replays the SQL ladder BEFORE these custom migrations — the gen-1
+    // transforms above (0061–0063) must still find the gen-1 shape they
+    // rebuild, and only then does gen-2 claim the names.
+    (
+        "0069_workflow_runs_gen2",
+        migrate_workflow_runs_gen2,
+    ),
 ];
 
 /// Turns the workspace lifecycle enum from `{active, retired}` into
@@ -219,6 +228,10 @@ fn migrate_workspace_drop_cleanup_columns(tx: &Transaction<'_>) -> rusqlite::Res
     )?;
 
     Ok(())
+}
+
+fn migrate_workflow_runs_gen2(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    tx.execute_batch(include_str!("sql/0069_workflow_runs_gen2.sql"))
 }
 
 /// Spec 2b: at most one NONTERMINAL workflow run controls one session;

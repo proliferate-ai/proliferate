@@ -2,7 +2,14 @@ use std::{borrow::Cow, path::PathBuf, sync::Arc, time::Duration};
 
 use anyharness_lib::{
     app::default_runtime_home,
-    observability::{AGENT_STDERR_TRACING_TARGET, RUNTIME_INCIDENT_TRACING_TARGET},
+    observability::{
+        AGENT_STDERR_TRACING_TARGET, RUNTIME_INCIDENT_TRACING_TARGET,
+        WORKFLOW_BOOT_FENCE_TRACING_TARGET, WORKFLOW_INVARIANT_VIOLATION_TRACING_TARGET,
+        WORKFLOW_NODE_LAUNCHED_TRACING_TARGET, WORKFLOW_NODE_LAUNCH_FAILED_TRACING_TARGET,
+        WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET, WORKFLOW_RUN_FINISHED_TRACING_TARGET,
+        WORKFLOW_RUN_STARTED_TRACING_TARGET, WORKFLOW_TRANSITION_ILLEGAL_TRACING_TARGET,
+        WORKFLOW_TRANSITION_TRACING_TARGET,
+    },
 };
 use proliferate_diagnostics_client::{
     install_desktop_producer, BundledDesktopDiagnosticsBootstrap, DesktopDiagnosticsActivation,
@@ -354,6 +361,10 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
 /// Record naming for this component: the two legacy targets keep their
 /// rewritten names and kinds, and every other `anyharness.` target names its
 /// own record, so adding a named event is only a `target:`.
+///
+/// The gen-2 workflow targets are spelled with underscores but publish dotted
+/// record names, so they stay explicit table entries rather than riding the
+/// pass-through prefix.
 fn anyharness_target_mappings() -> TargetMappingConfig {
     TargetMappingConfig::new(vec![
         TargetMapping::stdio(
@@ -364,6 +375,42 @@ fn anyharness_target_mappings() -> TargetMappingConfig {
         TargetMapping::span_event(
             RUNTIME_INCIDENT_TRACING_TARGET,
             "anyharness.runtime.incident",
+        ),
+        TargetMapping::span_event(
+            WORKFLOW_RUN_STARTED_TRACING_TARGET,
+            "anyharness.workflow.run.started",
+        ),
+        TargetMapping::span_event(
+            WORKFLOW_TRANSITION_TRACING_TARGET,
+            "anyharness.workflow.transition",
+        ),
+        TargetMapping::span_event(
+            WORKFLOW_NODE_LAUNCHED_TRACING_TARGET,
+            "anyharness.workflow.node.launched",
+        ),
+        TargetMapping::span_event(
+            WORKFLOW_RUN_FINISHED_TRACING_TARGET,
+            "anyharness.workflow.run.finished",
+        ),
+        TargetMapping::span_event(
+            WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET,
+            "anyharness.workflow.notification.stale",
+        ),
+        TargetMapping::span_event(
+            WORKFLOW_TRANSITION_ILLEGAL_TRACING_TARGET,
+            "anyharness.workflow.transition.illegal",
+        ),
+        TargetMapping::span_event(
+            WORKFLOW_NODE_LAUNCH_FAILED_TRACING_TARGET,
+            "anyharness.workflow.node.launch_failed",
+        ),
+        TargetMapping::span_event(
+            WORKFLOW_BOOT_FENCE_TRACING_TARGET,
+            "anyharness.workflow.boot_fence",
+        ),
+        TargetMapping::span_event(
+            WORKFLOW_INVARIANT_VIOLATION_TRACING_TARGET,
+            "anyharness.workflow.invariant_violation",
         ),
     ])
     .with_passthrough_prefix(ANYHARNESS_RECORD_NAME_PREFIX)
