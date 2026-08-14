@@ -162,6 +162,29 @@ describe("FullTranscriptRowList", () => {
     expect(button?.getAttribute("aria-hidden")).toBe("true");
   });
 
+  it("submit re-pins to the soft bottom, preserving the manual-only overlay range", () => {
+    const props = {
+      ...makeProps(vi.fn(), 50),
+      bottomInsetPx: 160,
+      nonDisplacingBottomInsetPx: 160,
+    };
+    const { container, rerender } = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    const button = container.querySelector('[aria-label="Scroll to bottom"]');
+    Object.defineProperty(viewport, "scrollHeight", { value: 1_000, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 0, configurable: true });
+    fireEvent.scroll(viewport, { target: { scrollTop: 400 } });
+    expect(button?.getAttribute("aria-hidden")).toBe("false");
+
+    // Unlike the scroll-to-bottom button, a submit must not consume the
+    // manual-only overlay range: the follow target is the soft bottom above
+    // the dock-slot card (hard bottom 1000 minus the 160px overlay range),
+    // so the stream never slides under the card.
+    rerender(<FullTranscriptRowList {...props} lastPromptSubmittedAtMs={1_000} />);
+    expect(viewport.scrollTop).toBe(840);
+    expect(button?.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("adds manual scroll range for composer cards without moving the transcript", () => {
     const notifyResize = stubCapturingResizeObserver();
     const props = makeProps(vi.fn(), 50);

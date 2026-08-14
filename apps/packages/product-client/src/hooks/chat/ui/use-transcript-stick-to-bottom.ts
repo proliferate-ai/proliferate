@@ -292,12 +292,15 @@ export function useTranscriptStickToBottom({
 
   // A prompt submit is an explicit return-to-bottom intent: re-pin even when
   // the pin was silently lost earlier (so the sent bubble can never render
-  // clipped behind the dock), and glue across the composer-collapse /
+  // clipped behind the dock), snap, and glue across the composer-collapse /
   // row-measurement settle so the multi-frame geometry change lands as one
-  // silent jump, exactly like session re-entry. Registered after the inset
-  // effect above but before consumer layout effects, so their pinned snaps
-  // read the restored pin. Only a monotonic increase of the submission stamp
-  // qualifies — see the option's contract.
+  // silent jump, exactly like session re-entry. Unlike the scroll-to-bottom
+  // button, a submit does NOT consume the manual-only overlay range: the
+  // follow target stays the soft bottom above any dock-slot card, so the
+  // stream never slides under it. Registered after the inset effect above but
+  // before consumer layout effects, so their pinned snaps read the restored
+  // pin. Only a monotonic increase of the submission stamp qualifies — see
+  // the option's contract.
   const lastPromptSubmittedAtRef = useRef(lastPromptSubmittedAtMs);
   useLayoutEffect(() => {
     const previous = lastPromptSubmittedAtRef.current;
@@ -306,10 +309,11 @@ export function useTranscriptStickToBottom({
       lastPromptSubmittedAtMs != null
       && (previous == null || lastPromptSubmittedAtMs > previous)
     ) {
-      handleScrollToBottomClick();
+      setPinned(true);
+      scrollToBottom();
       startGlueLoop();
     }
-  }, [handleScrollToBottomClick, lastPromptSubmittedAtMs, startGlueLoop]);
+  }, [lastPromptSubmittedAtMs, scrollToBottom, setPinned, startGlueLoop]);
 
   // Session re-entry: snap instantly, then glue for a few frames so the
   // measurement backlog of freshly mounted rows (virtualizer estimates

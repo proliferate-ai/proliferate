@@ -9,11 +9,10 @@ import {
 
 export function useChatDockInset() {
   const dockRef = useRef<HTMLDivElement>(null);
-  const lastMeasuredDockHeightRef = useRef(0);
-  // Surface + footer sum — the channel that drives the transcript's
-  // structural bottom inset (computeChatStableBottomInsetPx minus the
-  // non-displacing offset-top share).
-  const lastMeasuredStructuralHeightRef = useRef(0);
+  // The transcript's structural bottom inset (stable dock reserve minus the
+  // non-displacing offset-top share) as of the last committed measure. The
+  // ResizeObserver's shrink gate compares candidate geometry against this.
+  const lastMeasuredStructuralInsetRef = useRef(0);
   const [metrics, setMetrics] = useState({
     composerSurfaceHeightPx: 0,
     composerSurfaceOffsetTopPx: 0,
@@ -29,13 +28,15 @@ export function useChatDockInset() {
 
     let frameId: number | null = null;
 
-    const measure = () => {
+    // Shared by measure() and the observer's shrink gate so the gate compares
+    // exactly what a measure would commit — no rounding or channel drift.
+    const readDockMetrics = () => {
       const dockRect = dock.getBoundingClientRect();
       const composerSurface = dock.querySelector<HTMLElement>("[data-chat-composer-surface]");
       const composerFooter = dock.querySelector<HTMLElement>("[data-chat-composer-footer]");
       const surfaceRect = composerSurface?.getBoundingClientRect() ?? null;
       const footerRect = composerFooter?.getBoundingClientRect() ?? null;
-      const nextMetrics = {
+      return {
         composerSurfaceHeightPx: surfaceRect ? Math.max(0, Math.ceil(surfaceRect.height)) : 0,
         composerSurfaceOffsetTopPx: surfaceRect
           ? Math.max(0, Math.ceil(surfaceRect.top - dockRect.top))
@@ -43,9 +44,14 @@ export function useChatDockInset() {
         composerFooterHeightPx: footerRect ? Math.max(0, Math.ceil(footerRect.height)) : 0,
         dockHeightPx: Math.max(0, Math.ceil(dockRect.height)),
       };
-      lastMeasuredDockHeightRef.current = nextMetrics.dockHeightPx;
-      lastMeasuredStructuralHeightRef.current =
-        nextMetrics.composerSurfaceHeightPx + nextMetrics.composerFooterHeightPx;
+    };
+
+    const structuralInsetOf = (dockMetrics: ReturnType<typeof readDockMetrics>) =>
+      computeChatStableBottomInsetPx(dockMetrics) - dockMetrics.composerSurfaceOffsetTopPx;
+
+    const measure = () => {
+      const nextMetrics = readDockMetrics();
+      lastMeasuredStructuralInsetRef.current = structuralInsetOf(nextMetrics);
       setMetrics((current) =>
         current.composerSurfaceHeightPx === nextMetrics.composerSurfaceHeightPx
         && current.composerSurfaceOffsetTopPx === nextMetrics.composerSurfaceOffsetTopPx
@@ -75,31 +81,28 @@ export function useChatDockInset() {
       });
     };
 
-    const readHeightPx = (element: Element | null) =>
-      element ? Math.max(0, Math.ceil(element.getBoundingClientRect().height)) : 0;
-
     const observer = new ResizeObserver(() => {
-      // A shrink on either channel is the submit-collapse path: clearing the
-      // draft drops the surface (and usually the dock) in the same frame the
-      // prompt row mounts. The rAF-deferred measure would let that frame paint
-      // against the stale (taller) inset, then drop the whole transcript a
-      // notch when the correction lands. ResizeObserver fires after layout and
-      // before paint, so flushing the measure synchronously commits the
-      // corrected inset — and the pinned snap that depends on it — before the
-      // collapse frame paints. The dock rect alone is not enough: a queued
-      // send mounts its outbound card in the very commit that collapses the
-      // surface, so the dock can net-grow while the structural inset shrinks —
-      // only the surface+footer sum catches that. Growth keeps the rAF
-      // coalescing path: next-frame is prompt enough for typing, and a sync
-      // flush per keystroke would tax input latency.
-      const dockHeightPx = readHeightPx(dock);
-      const structuralHeightPx =
-        readHeightPx(dock.querySelector("[data-chat-composer-surface]"))
-        + readHeightPx(dock.querySelector("[data-chat-composer-footer]"));
-      if (
-        dockHeightPx < lastMeasuredDockHeightRef.current
-        || structuralHeightPx < lastMeasuredStructuralHeightRef.current
-      ) {
+      // Any structural-inset shrink must commit before the shrink frame
+      // paints: while pinned, the rAF-deferred measure would let that frame
+      // paint against the stale (taller) inset, then drop the whole
+      // transcript a notch when the correction lands. ResizeObserver fires
+      // after layout and before paint, so flushing the measure synchronously
+      // commits the corrected inset — and the pinned snap that depends on it —
+      // before the frame paints. The submit collapse is the loudest case, but
+      // Escape-clears, select-all deletes, and backspacing across a line wrap
+      // are the same visual class and take the same path (a few sync flushes
+      // across a held backspace is the accepted price of never notching).
+      // Gating on the derived structural inset — not the dock rect — matters
+      // in both directions: a queued send mounts its outbound card in the
+      // very commit that collapses the surface, so the dock can net-grow
+      // while the structural inset shrinks; and a dock-slot card dismissal
+      // shrinks the dock while the structural inset stays put, which must
+      // NOT force a sync flush (that shrink is the non-displacing overlay
+      // share, whose clamp the scroll engine already classifies as
+      // non-user). Growth keeps the rAF coalescing path: next-frame is
+      // prompt enough for typing, and a sync flush per grow-keystroke would
+      // tax input latency.
+      if (structuralInsetOf(readDockMetrics()) < lastMeasuredStructuralInsetRef.current) {
         if (frameId !== null) {
           window.cancelAnimationFrame(frameId);
           frameId = null;
