@@ -28,6 +28,13 @@ export interface UseTranscriptStickToBottomOptions {
    * bottom or clicks the scroll-to-bottom button.
    */
   autoFollowBottomInsetPx?: number;
+  /**
+   * Epoch ms of the newest prompt submission (outbox enqueue or session-level
+   * optimistic prompt). A monotonic increase re-pins: sending is an explicit
+   * return-to-bottom intent. Entries leaving the outbox (delivery, dismissal)
+   * can only lower the stamp and must not re-pin.
+   */
+  lastPromptSubmittedAtMs?: number | null;
 }
 
 export interface TranscriptStickToBottom {
@@ -43,8 +50,6 @@ export interface TranscriptStickToBottom {
   scrollToBottom: () => void;
   /** Snap + re-pin, for the scroll-to-bottom button. */
   handleScrollToBottomClick: () => void;
-  /** Snap + re-pin + glue for an explicit prompt submit (send = return-to-bottom intent). */
-  pinToBottom: () => void;
   /** Wrap ANY external scrollTop/scrollToOffset write so its scroll event is excluded from pin/direction. */
   notifyProgrammaticScroll: (write: () => void) => void;
   /** Force the pin state (history prepend / anchor restore intentionally unpin to hold the user's position). */
@@ -65,6 +70,7 @@ export function useTranscriptStickToBottom({
   onScrollSample,
   repinThresholdPx = REPIN_BOTTOM_THRESHOLD_PX,
   autoFollowBottomInsetPx = 0,
+  lastPromptSubmittedAtMs = null,
 }: UseTranscriptStickToBottomOptions): TranscriptStickToBottom {
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
@@ -288,13 +294,22 @@ export function useTranscriptStickToBottom({
   // the pin was silently lost earlier (so the sent bubble can never render
   // clipped behind the dock), and glue across the composer-collapse /
   // row-measurement settle so the multi-frame geometry change lands as one
-  // silent jump, exactly like session re-entry.
-  const pinToBottom = useCallback(() => {
-    consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
-    setPinned(true);
-    scrollToBottom();
-    startGlueLoop();
-  }, [scrollToBottom, setPinned, startGlueLoop]);
+  // silent jump, exactly like session re-entry. Registered after the inset
+  // effect above but before consumer layout effects, so their pinned snaps
+  // read the restored pin. Only a monotonic increase of the submission stamp
+  // qualifies — see the option's contract.
+  const lastPromptSubmittedAtRef = useRef(lastPromptSubmittedAtMs);
+  useLayoutEffect(() => {
+    const previous = lastPromptSubmittedAtRef.current;
+    lastPromptSubmittedAtRef.current = lastPromptSubmittedAtMs;
+    if (
+      lastPromptSubmittedAtMs != null
+      && (previous == null || lastPromptSubmittedAtMs > previous)
+    ) {
+      handleScrollToBottomClick();
+      startGlueLoop();
+    }
+  }, [handleScrollToBottomClick, lastPromptSubmittedAtMs, startGlueLoop]);
 
   // Session re-entry: snap instantly, then glue for a few frames so the
   // measurement backlog of freshly mounted rows (virtualizer estimates
@@ -358,7 +373,6 @@ export function useTranscriptStickToBottom({
     notifyUserScrollIntent,
     scrollToBottom,
     handleScrollToBottomClick,
-    pinToBottom,
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,

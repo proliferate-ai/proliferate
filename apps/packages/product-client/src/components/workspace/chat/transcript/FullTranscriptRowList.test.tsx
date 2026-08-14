@@ -131,11 +131,33 @@ describe("FullTranscriptRowList", () => {
     fireEvent.scroll(viewport, { target: { scrollTop: 400 } });
     expect(button?.getAttribute("aria-hidden")).toBe("false");
 
-    // pendingPromptText's null -> non-null transition is an explicit
-    // return-to-bottom intent; it must re-pin even though the user scrolled
-    // away and the pin was never re-earned.
-    rerender(<FullTranscriptRowList {...props} pendingPromptText="hello" />);
+    // A rising submission stamp is an explicit return-to-bottom intent; it
+    // must re-pin even though the user scrolled away and the pin was never
+    // re-earned.
+    rerender(<FullTranscriptRowList {...props} lastPromptSubmittedAtMs={1_000} />);
 
+    expect(viewport.scrollTop).toBe(1_000);
+    expect(button?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("does not re-pin when the newest submission stamp falls (entry left the outbox)", () => {
+    const props = { ...makeProps(vi.fn(), 50), lastPromptSubmittedAtMs: 2_000 };
+    const { container, rerender } = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    const button = container.querySelector('[aria-label="Scroll to bottom"]');
+    Object.defineProperty(viewport, "scrollHeight", { value: 1_000, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 0, configurable: true });
+    fireEvent.scroll(viewport, { target: { scrollTop: 400 } });
+    expect(button?.getAttribute("aria-hidden")).toBe("false");
+
+    // The newest entry leaving the outbox (delivery, dismissal) lowers the
+    // stamp; that is not a submit and must not fight the user's position.
+    rerender(<FullTranscriptRowList {...props} lastPromptSubmittedAtMs={1_000} />);
+    expect(viewport.scrollTop).toBe(400);
+    expect(button?.getAttribute("aria-hidden")).toBe("false");
+
+    // The next real submit raises it past every stamp seen before — re-pin.
+    rerender(<FullTranscriptRowList {...props} lastPromptSubmittedAtMs={3_000} />);
     expect(viewport.scrollTop).toBe(1_000);
     expect(button?.getAttribute("aria-hidden")).toBe("true");
   });
@@ -266,7 +288,7 @@ function makeProps(
     selectedWorkspaceId: "workspace-1",
     activeSessionId: "session-1",
     isSessionBusy: false,
-    pendingPromptText: null,
+    lastPromptSubmittedAtMs: null,
     onLoadOlderHistory,
     onScrollSample: vi.fn(),
     renderRow: (row: TranscriptVirtualRow) => <div>{row.key}</div>,

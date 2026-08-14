@@ -502,12 +502,17 @@ re-show while pinned, a short pre-paint rAF "glue" loop holds the viewport at th
 true bottom until row measurement settles, collapsing the resume backlog into one
 jump instead of a visible crawl.
 
-Submitting a prompt is an explicit return-to-bottom intent. The optimistic
-prompt's arrival (`pendingPromptText` transitioning null -> non-null) re-pins
-through the engine's `pinToBottom` — even when the pin was silently lost
-earlier — then snaps and runs the same glue loop so the composer collapse and
-new-row measurement settle land as one silent jump. Materialization clearing
-the pending text must not re-pin, and a queued send produces no transition.
+Submitting a prompt is an explicit return-to-bottom intent. The engine itself
+detects the submit through its `lastPromptSubmittedAtMs` option: the newest
+creation stamp across the session's prompt outbox plus the session-level
+optimistic prompt (`lastPromptSubmittedAtMs` in the intent selectors, wired
+down from the transcript view model). Every real submit enqueues an outbox
+intent — including queue-placed sends, which never render as transcript rows —
+so the stamp rises exactly once per send, and a monotonic increase re-pins,
+snaps, and runs the same glue loop so the composer collapse and new-row
+measurement settle land as one silent jump, even when the pin was silently
+lost earlier. Entries leaving the outbox (materialization, delivery,
+dismissal) can only lower the stamp and must not re-pin.
 
 When the transcript is shorter than the viewport, both row-list paths
 top-align the conversation (no `mt-auto` bottom anchor): a fresh conversation
@@ -537,11 +542,15 @@ if another card stacks, only its newly added height remains manual-only. If a
 consumed overlay shrinks or disappears, the browser's upward clamp to the new
 hard bottom is layout movement, not user intent, and must preserve the pinned
 state. Composer-surface height remains structural and continues to re-stick
-promptly when the input itself grows. A dock shrink (clearing the draft at
-submit) flushes its inset re-measure synchronously inside the ResizeObserver
-callback — still pre-paint — instead of deferring a frame, so the collapse
-frame never paints against the stale taller inset and then drops the whole
-transcript a notch; growth keeps the rAF-coalesced next-frame path.
+promptly when the input itself grows. A shrink of the dock rect or of the
+surface+footer sum (the channel that drives the structural inset) flushes the
+inset re-measure synchronously inside the ResizeObserver callback — still
+pre-paint — instead of deferring a frame, so the collapse frame never paints
+against the stale taller inset and then drops the whole transcript a notch.
+Watching the dock rect alone is not enough: a queued send mounts its outbound
+card in the very commit that collapses the surface, so the dock can net-grow
+while the structural inset shrinks. Growth keeps the rAF-coalesced next-frame
+path.
 
 A send intent with `placement: "queue"` is represented by the composer's
 outbound queue and must not also produce a transcript row. A queued send that

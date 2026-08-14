@@ -38,7 +38,7 @@ export function VirtualizedTranscriptRowList({
   selectedWorkspaceId,
   activeSessionId,
   isSessionBusy,
-  pendingPromptText,
+  lastPromptSubmittedAtMs,
   onLoadOlderHistory,
   onScrollSample,
   renderRow,
@@ -66,7 +66,6 @@ export function VirtualizedTranscriptRowList({
     notifyUserScrollIntent,
     scrollToBottom,
     handleScrollToBottomClick,
-    pinToBottom,
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
@@ -74,6 +73,7 @@ export function VirtualizedTranscriptRowList({
     scrollRef,
     onScrollSample,
     autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
+    lastPromptSubmittedAtMs,
   });
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
@@ -317,20 +317,6 @@ export function VirtualizedTranscriptRowList({
     virtualizer,
   ]);
 
-  // Submitting a prompt is an explicit return-to-bottom intent. Re-pin on the
-  // optimistic prompt's arrival — before the pinned snap effect below reads
-  // the pin — so a pin silently lost during typing cannot leave the sent
-  // bubble clipped behind the dock. Only the null -> non-null transition
-  // qualifies; the prompt materializing (clearing the text) must not re-pin.
-  const previousPendingPromptTextRef = useRef(pendingPromptText);
-  useLayoutEffect(() => {
-    const hadPendingPrompt = previousPendingPromptTextRef.current != null;
-    previousPendingPromptTextRef.current = pendingPromptText;
-    if (!hadPendingPrompt && pendingPromptText != null) {
-      pinToBottom();
-    }
-  }, [pendingPromptText, pinToBottom]);
-
   useLayoutEffect(() => {
     if (!pinnedRef.current) {
       return;
@@ -338,7 +324,7 @@ export function VirtualizedTranscriptRowList({
     scrollToBottom();
   }, [
     isSessionBusy,
-    pendingPromptText,
+    lastPromptSubmittedAtMs,
     pinnedRef,
     renderableRows.length,
     scrollToBottom,

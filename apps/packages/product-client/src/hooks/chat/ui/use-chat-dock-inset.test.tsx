@@ -32,8 +32,8 @@ function flushRafRound() {
   }
 }
 
-/** jsdom never lays out, so the dock's rect must be stubbed directly. */
-function stubDockHeight(el: HTMLElement, height: number) {
+/** jsdom never lays out, so element rects must be stubbed directly. */
+function stubElementHeight(el: HTMLElement, height: number) {
   el.getBoundingClientRect = () => ({
     x: 0, y: 0, width: 0, height,
     top: 0, left: 0, right: 0, bottom: height,
@@ -72,6 +72,8 @@ interface HarnessHandle {
 function renderHarness() {
   const handle: { current: HarnessHandle | null } = { current: null };
   let dockEl: HTMLDivElement | null = null;
+  let surfaceEl: HTMLDivElement | null = null;
+  let footerEl: HTMLDivElement | null = null;
 
   function Harness() {
     const { dockRef, dockHeightPx } = useChatDockInset();
@@ -82,7 +84,20 @@ function renderHarness() {
           dockRef.current = node;
           dockEl = node;
         }}
-      />
+      >
+        <div
+          data-chat-composer-surface
+          ref={(node) => {
+            surfaceEl = node;
+          }}
+        />
+        <div
+          data-chat-composer-footer
+          ref={(node) => {
+            footerEl = node;
+          }}
+        />
+      </div>
     );
   }
 
@@ -94,6 +109,12 @@ function renderHarness() {
     get dockEl() {
       return dockEl!;
     },
+    get surfaceEl() {
+      return surfaceEl!;
+    },
+    get footerEl() {
+      return footerEl!;
+    },
   };
 }
 
@@ -104,7 +125,7 @@ describe("useChatDockInset", () => {
   it("defers a dock height increase to the rAF-coalesced path", () => {
     const notifyResize = stubCapturingResizeObserver();
     const handle = renderHarness();
-    stubDockHeight(handle.dockEl, 200);
+    stubElementHeight(handle.dockEl, 200);
 
     act(() => {
       notifyResize();
@@ -123,7 +144,7 @@ describe("useChatDockInset", () => {
     const handle = renderHarness();
 
     // Establish a taller baseline first, via the normal rAF-deferred path.
-    stubDockHeight(handle.dockEl, 200);
+    stubElementHeight(handle.dockEl, 200);
     act(() => {
       notifyResize();
       flushRafRound();
@@ -131,11 +152,37 @@ describe("useChatDockInset", () => {
     expect(handle.current.dockHeightPx).toBe(200);
 
     // The collapse path must land before the next paint — no rAF flush needed.
-    stubDockHeight(handle.dockEl, 80);
+    stubElementHeight(handle.dockEl, 80);
     act(() => {
       notifyResize();
     });
     expect(handle.current.dockHeightPx).toBe(80);
+    expect(rafCallbacks.filter(Boolean)).toHaveLength(0);
+  });
+
+  it("applies a surface collapse synchronously even when the dock net-grows (queued send)", () => {
+    const notifyResize = stubCapturingResizeObserver();
+    const handle = renderHarness();
+
+    // Baseline: tall draft surface inside the dock.
+    stubElementHeight(handle.dockEl, 200);
+    stubElementHeight(handle.surfaceEl, 120);
+    stubElementHeight(handle.footerEl, 40);
+    act(() => {
+      notifyResize();
+      flushRafRound();
+    });
+    expect(handle.current.dockHeightPx).toBe(200);
+
+    // Queued send: the draft clears (surface collapses) in the same commit
+    // the outbound card mounts, so the dock rect net-grows. The structural
+    // channel still shrank — the sync path must fire, no rAF flush needed.
+    stubElementHeight(handle.dockEl, 240);
+    stubElementHeight(handle.surfaceEl, 40);
+    act(() => {
+      notifyResize();
+    });
+    expect(handle.current.dockHeightPx).toBe(240);
     expect(rafCallbacks.filter(Boolean)).toHaveLength(0);
   });
 });
