@@ -241,6 +241,36 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(true);
   });
 
+  it("yields the left-sidebar toggle to the composer editor's bold chord", () => {
+    const composerEditorTarget = {
+      closest: (selector: string) =>
+        selector === "[data-chat-composer-editor]" ? {} : null,
+    } as unknown as EventTarget;
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      target: composerEditorTarget,
+    } as KeyboardEvent)).toBe(false);
+
+    // The right-panel toggle (⌘⌥B) is not a formatting chord and stays global.
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleRightPanel, {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+      defaultPrevented: false,
+      target: composerEditorTarget,
+    } as KeyboardEvent)).toBe(true);
+  });
+
   it("allows right-panel toggle from text-entry and terminal focus targets", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleRightPanel, {
       key: "b",

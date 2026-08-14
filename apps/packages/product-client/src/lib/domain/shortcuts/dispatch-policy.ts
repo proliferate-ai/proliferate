@@ -156,10 +156,28 @@ function isDigitShortcutEvent(event: KeyboardShortcutEventLike): boolean {
   return /^[1-9]$/.test(event.key) || /^Digit[1-9]$/.test(event.code ?? "");
 }
 
+function isComposerRichTextTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  return typeof element?.closest === "function"
+    && element.closest("[data-chat-composer-editor]") !== null;
+}
+
 export function shouldDispatchKeyboardShortcut(
   shortcut: Pick<ShortcutDef, "allowInInputs" | "id" | "match" | "nonMacMatch">,
   event: KeyboardShortcutEventLike,
 ): boolean {
+  // The composer's rich-text editor authors bold with the same primary-B
+  // chord (Lexical's native FORMAT_TEXT_COMMAND handling), so while the
+  // keydown target is inside a composer editor the editor owns the key.
+  // Everywhere else — including the terminal — the sidebar keeps it
+  // (PRO-265).
+  if (
+    shortcut.id === SHORTCUTS.toggleLeftSidebar.id
+    && isComposerRichTextTarget(event.target)
+  ) {
+    return false;
+  }
+
   if (
     event.defaultPrevented
     && !canBypassDefaultPrevented(shortcut, event)

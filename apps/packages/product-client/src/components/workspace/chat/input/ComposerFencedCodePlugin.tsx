@@ -27,15 +27,6 @@ export function ComposerFencedCodePlugin() {
 
   useEffect(() => {
     const unregisterTextTransform = editor.registerNodeTransform(TextNode, (textNode) => {
-      // The composer has no way to author the inline-code text format (typed
-      // backticks stay literal), so any occurrence is rich-paste debris. Left
-      // alone it renders unstyled yet serializes backtick-wrapped, turning
-      // subsequent messages into code (PRO-159) — keep the characters, drop
-      // the format.
-      if (textNode.hasFormat("code")) {
-        textNode.toggleFormat("code");
-        return;
-      }
       const paragraph = textNode.getParent();
       if (!$isParagraphNode(paragraph) || paragraph.getParent()?.getType() !== "root") {
         return;

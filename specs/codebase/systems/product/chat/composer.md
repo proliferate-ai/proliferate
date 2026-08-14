@@ -105,7 +105,10 @@ fence exists on its own line; an incomplete fence remains literal text. A
 complete pasted fence is imported as the same editable code block. The editor
 serializes that block back to fenced Markdown, so draft and submission
 boundaries remain unchanged. Cmd/Ctrl-B and Cmd/Ctrl-I toggle marks through the
-rich-text command layer. Tab/Shift-Tab indent or outdent only when the selection
+rich-text command layer; while focus is inside a composer editor the global
+left-sidebar toggle yields the B chord to the editor (PRO-265) — everywhere
+else, including the terminal, it keeps toggling the sidebar.
+Tab/Shift-Tab indent or outdent only when the selection
 is inside a list item. Every composer surface — workspace, Home, and queued
 edits — submits on plain Enter or Cmd/Ctrl-Enter, including from a list item or
 code block, and Shift-Enter inserts a newline without submitting. Queued edits
@@ -116,9 +119,12 @@ Rich clipboard code is normalized on entry. A pasted rendered code block
 double `<pre>`/`<code>` conversion is dissolved — and a code block that ends
 the draft always keeps a continuation paragraph after it, so the caret can
 always leave the block (the same continuation the typed-fence path creates).
-The inline-code text format is not part of the composer's document model:
-there is no way to author it (typed backticks stay literal), so rich pastes
-that carry it keep their characters and drop the format. An external draft
+Bold and italic are the only authorable text formats, and no block-level
+alignment or indent is authorable outside list nesting. Everything beyond
+that in a rich paste — the inline-code text format (typed backticks stay
+literal), underline, strikethrough, centered or indented blocks — keeps its
+characters and structure and drops the formatting on entry
+(`ComposerFormatGuardPlugin`, PRO-159/PRO-265). An external draft
 replacement resets inherited selection formats along with the content;
 without that reset the format bits survive the clear and re-apply to
 everything typed after a send (PRO-159).
