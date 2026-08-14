@@ -34,6 +34,7 @@ struct ResourceKey {
 /// rejects them, so this is a second fence rather than a new privacy path; the
 /// count of what it dropped is returned so exporter health can report it.
 pub(super) fn encode_batch(records: &[CollectorAcceptedRecordV1]) -> (Value, u64) {
+    let dev_tag = super::dev_tag();
     let mut grouped: BTreeMap<ResourceKey, BTreeMap<SchemaVersionV1, Vec<Value>>> = BTreeMap::new();
     let mut refused = 0_u64;
     for accepted in records {
@@ -59,7 +60,7 @@ pub(super) fn encode_batch(records: &[CollectorAcceptedRecordV1]) -> (Value, u64
         .into_iter()
         .map(|(key, scopes)| {
             json!({
-                "resource": { "attributes": resource_attributes(&key) },
+                "resource": { "attributes": resource_attributes(&key, dev_tag) },
                 "scopeLogs": scopes
                     .into_iter()
                     .map(|(version, log_records)| json!({
@@ -76,8 +77,8 @@ pub(super) fn encode_batch(records: &[CollectorAcceptedRecordV1]) -> (Value, u64
     (json!({ "resourceLogs": resource_logs }), refused)
 }
 
-fn resource_attributes(key: &ResourceKey) -> Vec<Value> {
-    vec![
+fn resource_attributes(key: &ResourceKey, dev_tag: Option<&str>) -> Vec<Value> {
+    let mut attributes = vec![
         attribute("service.name", string_value(component_name(key.component))),
         attribute("service.version", string_value(&key.release)),
         attribute("service.instance.id", string_value(&key.producer_boot_id)),
@@ -86,7 +87,13 @@ fn resource_attributes(key: &ResourceKey) -> Vec<Value> {
             string_value(&key.environment),
         ),
         attribute("telemetry.sdk.name", string_value(SCOPE_NAME)),
-    ]
+    ];
+    if let Some(tag) = dev_tag {
+        // Identifies whose desktop produced the record when teammates share
+        // one dogfood environment. Absent unless configured.
+        attributes.push(attribute("dev.user", string_value(tag)));
+    }
+    attributes
 }
 
 fn log_record(accepted: &CollectorAcceptedRecordV1) -> Value {
