@@ -19,6 +19,7 @@ type MockActionsState = {
   workspacePath: string | null;
   absolutePath: string | null;
   canOpenPrimary: boolean;
+  primaryActionFailed: boolean;
   primaryUnavailableReason: string | null;
 };
 
@@ -28,6 +29,7 @@ const state: MockActionsState = {
   workspacePath: "src/App.tsx",
   absolutePath: "/repo/src/App.tsx",
   canOpenPrimary: true,
+  primaryActionFailed: false,
   primaryUnavailableReason: null,
 };
 
@@ -44,6 +46,7 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", 
     pathKind: state.pathKind,
     pathKindPending: state.pathKindPending,
     canOpenPrimary: state.canOpenPrimary,
+    primaryActionFailed: state.primaryActionFailed,
     primaryUnavailableReason: state.primaryUnavailableReason,
     openPrimary: vi.fn(),
   }),
@@ -86,6 +89,7 @@ afterEach(() => {
   state.workspacePath = "src/App.tsx";
   state.absolutePath = "/repo/src/App.tsx";
   state.canOpenPrimary = true;
+  state.primaryActionFailed = false;
   state.primaryUnavailableReason = null;
 });
 
@@ -166,12 +170,56 @@ describe("FileReferenceBadge interaction semantics", () => {
   });
 
   it("keeps the full destination in the actionable reference tooltip", () => {
-    state.primaryUnavailableReason = "Could not resolve this path. Click to retry.";
+    state.primaryUnavailableReason = "Resolve this path in the workspace.";
     const { container } = renderBadge("src/App.tsx");
     const reference = container.querySelector("[data-file-reference-badge='inline']");
 
     expect(reference?.getAttribute("title"))
       .toBe("/repo/src/App.tsx");
+  });
+
+  it("explains an unavailable reference instead of showing its destination", () => {
+    state.canOpenPrimary = false;
+    state.primaryUnavailableReason = "External files are available in the Desktop app.";
+    const { container } = renderBadge("/Users/pablo/notes/README.md");
+    const reference = container.querySelector("[data-file-reference-badge='inline']");
+
+    expect(reference?.getAttribute("title"))
+      .toBe("External files are available in the Desktop app.");
+  });
+
+  it("reports that the next activation retries after a failed one", () => {
+    // The reference stays actionable on purpose after a transient failure, so
+    // the destination tooltip would hide the only signal that clicking again
+    // does something different.
+    state.primaryActionFailed = true;
+    state.primaryUnavailableReason = "Could not resolve this path. Click to retry.";
+    const { container } = renderBadge("src/App.tsx");
+    const reference = container.querySelector("[data-file-reference-badge='inline']");
+
+    expect(reference?.tagName).toBe("BUTTON");
+    expect(reference?.getAttribute("title"))
+      .toBe("Could not resolve this path. Click to retry.");
+  });
+
+  it("drops a caller's pointer-events opt-in on an inert reference", () => {
+    // An inert reference is text over whatever the call site layered behind it
+    // (an edit row's absolute diff-toggle overlay); re-enabling pointer events
+    // would turn the filename into a dead zone.
+    state.canOpenPrimary = false;
+    const { container } = render(
+      <ProductHostProvider host={webTestHost}>
+        <FileReferenceBadge
+          rawPath="/tmp/unavailable.txt"
+          variant="plain"
+          className="pointer-events-auto text-chat"
+        />
+      </ProductHostProvider>,
+    );
+    const reference = container.querySelector("[data-file-reference-badge='plain']");
+
+    expect(reference?.className).not.toContain("pointer-events-auto");
+    expect(reference?.className).toContain("text-chat");
   });
 
   it("renders an unavailable reference as plain text instead of a disabled link", () => {

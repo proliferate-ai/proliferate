@@ -63,12 +63,30 @@ function ExternalProviderLinkMention({
   const trigger = (
     <a
       href={actions.normalizedHref}
+      // Native fallback: a modified click, a middle click, or a host opener
+      // that never resolves still lands in a background tab with no referrer.
+      target="_blank"
+      rel="noopener noreferrer"
       title={actions.normalizedHref}
       data-provider-link-host={host}
       className={INLINE_MENTION_CLASS}
       onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+        // Cmd/Ctrl/Shift/Alt-click and non-primary buttons are the browser's
+        // own open-in-tab/window vocabulary; routing them through the host
+        // opener would collapse every variant into one plain open.
+        if (
+          event.button !== 0
+          || event.metaKey
+          || event.ctrlKey
+          || event.shiftKey
+          || event.altKey
+        ) {
+          return;
+        }
         event.preventDefault();
-        void actions.openInBrowser();
+        void actions.openInBrowser().catch(() => {
+          window.open(actions.normalizedHref, "_blank", "noopener,noreferrer");
+        });
       }}
       onContextMenuCapture={nativeContextMenu.onContextMenuCapture}
     >

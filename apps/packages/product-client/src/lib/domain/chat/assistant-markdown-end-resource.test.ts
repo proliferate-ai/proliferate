@@ -26,6 +26,29 @@ describe("resolveAssistantMarkdownEndResource", () => {
     ].join("\n"))).toBeNull();
   });
 
+  it("resolves a destination whose literal spaces were never encoded", () => {
+    // The card reads the rendered copy, not the raw source: on the raw text a
+    // space-bearing destination is not a link at all, so the exact case the
+    // link repair exists for would otherwise never produce a card.
+    expect(resolveAssistantMarkdownEndResource(
+      "The write-up is [the decision doc](/repo/specs/Final Decision.md).",
+    )).toEqual({
+      rawPath: "/repo/specs/Final Decision.md",
+      path: "/repo/specs/Final Decision.md",
+      displayName: "Final Decision.md",
+      typeLabel: "Document · MD",
+    });
+  });
+
+  it("decodes only encoded spaces, never encoded separators", () => {
+    expect(resolveAssistantMarkdownEndResource("[odd](/repo/a%2Fb.md)")).toEqual({
+      rawPath: "/repo/a%2Fb.md",
+      path: "/repo/a%2Fb.md",
+      displayName: "a%2Fb.md",
+      typeLabel: "Document · MD",
+    });
+  });
+
   it("supports MDX references and returns null for non-document files", () => {
     expect(resolveAssistantMarkdownEndResource("[guide](docs/guide.mdx)")?.displayName)
       .toBe("guide.mdx");

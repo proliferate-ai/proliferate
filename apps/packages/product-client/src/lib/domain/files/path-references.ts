@@ -79,11 +79,19 @@ export function resolveFileReference(args: {
   };
 }
 
-function decodeEncodedSpaces(path: string): string {
-  // The Markdown render repair percent-encodes literal spaces so CommonMark
-  // will preserve the destination. Decode only that encoding here: decoding
-  // every URI component would reinterpret literal file names containing
-  // sequences such as `%2F` or `%2E%2E` as separators or traversal.
+/**
+ * The Markdown render repair percent-encodes literal spaces so CommonMark will
+ * preserve the destination. Decode only that encoding: decoding every URI
+ * component would reinterpret literal file names containing sequences such as
+ * `%2F` or `%2E%2E` as separators or traversal.
+ *
+ * Scope tradeoff, accepted: this runs for every file reference, including
+ * tool-output paths that were never percent-encoded, so a file literally named
+ * with `%20` in it resolves to the space-bearing name instead. That is far
+ * rarer than an agent emitting a repaired link, and unlike a full
+ * `decodeURIComponent` it cannot manufacture a separator or a traversal.
+ */
+export function decodeEncodedSpaces(path: string): string {
   return path.replace(/%20/gi, " ");
 }
 

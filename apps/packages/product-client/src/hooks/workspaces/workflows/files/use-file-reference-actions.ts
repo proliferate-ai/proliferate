@@ -126,6 +126,10 @@ export function useFileReferenceActions({
   const canOpenPrimary = resolvedPrimaryAction !== "unavailable"
     || (pathKind === null && canResolvePathKind);
   const pathKindPending = externalPathKindPending || statQuery.isFetching;
+  // A resolution or launch failure leaves the reference actionable on purpose:
+  // the next activation retries it. Surfaces report that instead of the plain
+  // destination so the retry affordance is discoverable.
+  const primaryActionFailed = pathResolutionFailed || primaryOpenFailed;
   const primaryUnavailableReason = pathKindPending
     ? "Checking whether this path is a file or folder…"
     : primaryOpenFailed
@@ -335,6 +339,7 @@ export function useFileReferenceActions({
     canOpenExternal,
     canOpenPrimary,
     canReveal,
+    primaryActionFailed,
     primaryUnavailableReason,
     copyPath,
     openInSidebar,

@@ -68,6 +68,13 @@ export function FileReferenceBadge({
     ? "relative mr-[3px] inline-block h-[1lh] w-3.5 shrink-0 align-bottom"
     : "inline-flex shrink-0 items-center justify-center";
   const destinationTitle = actions.reference.absolutePath ?? actions.reference.path;
+  // An unavailable reference, and one whose last activation failed, explain
+  // themselves — including that activating again retries. Everything else
+  // shows where the reference points.
+  const referenceTitle =
+    (!actions.canOpenPrimary || actions.primaryActionFailed)
+      ? actions.primaryUnavailableReason ?? destinationTitle
+      : destinationTitle;
 
   const handleClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
     if (stopPropagation) {
@@ -119,7 +126,7 @@ export function FileReferenceBadge({
         data-file-reference-unavailable="true"
         data-path-kind={actions.pathKind ?? "unknown"}
         aria-busy={actions.pathKindPending || undefined}
-        title={destinationTitle}
+        title={referenceTitle}
         className={resolveUnavailableBadgeClassName(variant, className)}
       >
         {contents}
@@ -136,7 +143,7 @@ export function FileReferenceBadge({
       data-file-reference-badge={variant}
       data-path-kind={actions.pathKind ?? "unknown"}
       aria-busy={actions.pathKindPending || undefined}
-      title={destinationTitle}
+      title={referenceTitle}
       onClick={handleClick}
       onContextMenuCapture={onContextMenuCapture}
       className={resolveBadgeClassName(variant, className)}
@@ -159,10 +166,25 @@ export function FileReferenceBadge({
   );
 }
 
+/**
+ * An inert reference is text, not a control: it must not capture clicks that
+ * belong to whatever sits behind it (an edit row's absolute diff-toggle
+ * overlay, for one). Call sites re-enable pointer events for the actionable
+ * badge inside a `pointer-events-none` wrapper, so that opt-in is dropped here
+ * rather than left to Tailwind's class-order-independent cascade.
+ */
+function stripPointerEventsOptIn(className: string): string {
+  return className
+    .split(/\s+/)
+    .filter((token) => token !== "" && !token.endsWith("pointer-events-auto"))
+    .join(" ");
+}
+
 function resolveUnavailableBadgeClassName(
   variant: FileReferenceBadgeVariant,
-  className: string,
+  rawClassName: string,
 ): string {
+  const className = stripPointerEventsOptIn(rawClassName);
   if (variant === "chip") {
     return [
       "inline-flex h-auto min-w-0 max-w-full cursor-default items-center gap-px rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-ui leading-none text-foreground/70 shadow-none",

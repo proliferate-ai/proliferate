@@ -15,8 +15,7 @@ import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-
 import { resolveDiffDisplayPolicy } from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { Button } from "#product/primitives/Button";
-import { ArrowUpRight } from "#product/primitives/icons/core";
-import { Copy } from "#product/primitives/icons/core";
+import { ArrowUpRight, Copy } from "#product/primitives/icons/core";
 import { FileReferenceBadge } from "#product/components/workspace/file-references/FileReferenceBadge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
@@ -76,9 +75,13 @@ function EditActionRow({
   const row = (
     <div
       data-edit-action-row
+      // A failed row keeps its destructive tint through hover/focus. The
+      // group-level promote-to-foreground rule is unlayered CSS, so it would
+      // outrank any utility here; it excludes rows carrying this flag instead.
+      data-edit-action-failed={failed || undefined}
       className={`relative flex min-w-0 max-w-full items-center text-left text-chat transition-colors ${
         failed
-          ? "text-destructive/80 hover:text-destructive"
+          ? "text-destructive/80 group-hover/edit-action:text-destructive group-focus-within/edit-action:text-destructive"
           : "text-foreground/60 hover:text-foreground"
       }`}
     >
@@ -172,7 +175,7 @@ function EditActionRow({
                     event.stopPropagation();
                     void host.clipboard.writeText(patch);
                   }}
-                  className="size-6 rounded-lg border-0 bg-transparent p-0 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-1"
+                  className="size-6 rounded-lg border-0 bg-transparent p-0 text-muted-foreground focus-visible:ring-1"
                 >
                   <Copy className="icon-paired" />
                 </Button>

@@ -19,7 +19,6 @@
 
 apps/packages/product-client/src/components/workspace/chat/input/ChatInput.tsx 447 blocked-status composer takeover branch (textarea/control-row swap + focus restore); split on next growth
 apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 425 workspace bootstrap actions + gateway billing-block capture into the status screen (C8); split on next growth
-apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx 525 existing markdown transcript renderer pending split
 # Relocated from apps/desktop/src by the Desktop-product move into product-client
 # (web-desktop-unification slice 04). Same files, same counts/reasons — relocation,
 # not gate-weakening; product-client/src is a structure-report scan root. Counts

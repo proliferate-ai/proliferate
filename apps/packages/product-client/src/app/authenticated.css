@@ -208,7 +208,11 @@
   }
 }
 
-.group\/edit-action:is(:hover, :focus-within) [data-edit-action-row] {
+/* Unlayered, so it outranks any Tailwind text-color utility on the row. A
+   failed row must keep its destructive tint on hover/focus, so it opts out
+   through data-edit-action-failed and promotes itself with group variants. */
+.group\/edit-action:is(:hover, :focus-within)
+  [data-edit-action-row]:not([data-edit-action-failed]) {
   color: var(--color-foreground);
 }
 

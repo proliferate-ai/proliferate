@@ -1,15 +1,8 @@
 import {
-  Children,
-  cloneElement,
   createContext,
-  createElement,
-  isValidElement,
   memo,
   useContext,
   useMemo,
-  type ContextType,
-  type HTMLAttributes,
-  type ReactElement,
   type ReactNode,
 } from "react";
 import ReactMarkdown from "react-markdown";
@@ -26,16 +19,17 @@ import {
 import {
   ChatContentSearchQueryContext,
   useChatContentSearchPaint,
-  type ChatContentSearchPaint,
 } from "./ChatContentSearchContext";
-import { markSearchChildren } from "./MarkdownContentSearchMarks";
 import { stabilizeStreamingMarkdown } from "#product/lib/domain/chat/transcript/streaming-markdown";
 import { normalizeLocalFileLinkMarkdown } from "#product/lib/domain/chat/transcript/file-link-markdown";
+import { MarkdownRevealContext } from "./MarkdownRevealText";
 import {
-  type HastNode,
-  MarkdownRevealContext,
-  revealChildren,
-} from "./MarkdownRevealText";
+  LI_CLASSNAME,
+  mdHtmlElement,
+  type MdElementProps,
+  type MdTag,
+} from "./MarkdownHtmlElement";
+import { GridTaskListItem } from "./MarkdownTaskListItem";
 
 interface MarkdownBodyProps {
   content: string;
@@ -102,29 +96,6 @@ export type MarkdownCodeBlockRenderer = (
   input: MarkdownCodeBlockRenderInput,
 ) => ReactNode | null | undefined;
 
-type MdElementProps = HTMLAttributes<HTMLElement> & {
-  node?: unknown;
-};
-
-type MdTag =
-  | "blockquote"
-  | "del"
-  | "em"
-  | "h1"
-  | "h2"
-  | "h3"
-  | "h4"
-  | "h5"
-  | "h6"
-  | "li"
-  | "ol"
-  | "p"
-  | "strong"
-  | "table"
-  | "td"
-  | "th"
-  | "ul";
-
 type MdCodeProps = MdElementProps & {
   children?: ReactNode;
   className?: string;
@@ -140,7 +111,7 @@ const MarkdownCodeBlockContext = createContext(false);
 // unset, so the fallback keeps that secondary chrome on --text-chat while
 // conversation bodies grow to match the composer. Authenticated CSS owns the
 // scoped font-size and line-height so chat rules stay out of the login bundle.
-const LI_CLASSNAME = "pl-0.5";
+//
 // Prose elements (paragraphs, headings, lists, blockquotes) fill the full
 // shared 40rem thread column — the same width as wide blocks (tables, code),
 // the composer below, and the new-chat flow — so the measure does not change
@@ -271,89 +242,6 @@ function createMarkdownAnchor(renderLink: MarkdownLinkRenderer | undefined) {
   };
 }
 
-// Plan-view task-list grid: checkbox column sized auto, content column
-// minmax(0,1fr). react-markdown emits tight task items as
-// `li > input + <inline content>` (and loose ones with the input inside the
-// leading <p>), so a pure-CSS grid would scatter the inline runs across
-// cells; instead the item is restructured into checkbox + content wrapper.
-function GridTaskListItem(props: MdElementProps & { children?: ReactNode }) {
-  const { children, dangerouslySetInnerHTML, className, node: _node, ...rest } = props;
-  const isTaskListItem =
-    typeof className === "string" && className.includes("task-list-item");
-  const split = isTaskListItem && !dangerouslySetInnerHTML
-    ? splitTaskListItemChildren(children)
-    : null;
-  if (!split) {
-    return mdHtmlElement("li", LI_CLASSNAME, props);
-  }
-  const mergedClassName = [
-    LI_CLASSNAME,
-    "grid grid-cols-[auto_minmax(0,1fr)]",
-    className,
-  ].filter(Boolean).join(" ");
-  return (
-    <li {...rest} className={mergedClassName}>
-      {cloneElement(split.checkbox, {
-        // Nudge: drop the checkbox 0.25rem so it optically centers on
-        // the first text line.
-        className: [split.checkbox.props.className, "mt-1"].filter(Boolean).join(" "),
-      })}
-      <div className="min-w-0">{split.content}</div>
-    </li>
-  );
-}
-
-interface SplitTaskListItem {
-  checkbox: ReactElement<{ className?: string }>;
-  content: ReactNode[];
-}
-
-function splitTaskListItemChildren(children: ReactNode): SplitTaskListItem | null {
-  const nodes = Children.toArray(children);
-  // Tight items: the checkbox input is a direct child of the <li>.
-  const inputIndex = nodes.findIndex(isCheckboxElement);
-  if (inputIndex >= 0) {
-    return {
-      checkbox: nodes[inputIndex] as SplitTaskListItem["checkbox"],
-      content: [...nodes.slice(0, inputIndex), ...nodes.slice(inputIndex + 1)],
-    };
-  }
-  // Loose items: the checkbox sits at the head of the leading paragraph.
-  const paragraphIndex = nodes.findIndex(
-    (node) => isValidElement(node) && hastTagName(node) === "p",
-  );
-  if (paragraphIndex < 0) {
-    return null;
-  }
-  const paragraph = nodes[paragraphIndex] as ReactElement<{ children?: ReactNode }>;
-  const paragraphChildren = Children.toArray(paragraph.props.children);
-  const nestedInputIndex = paragraphChildren.findIndex(isCheckboxElement);
-  if (nestedInputIndex < 0) {
-    return null;
-  }
-  const strippedParagraph = cloneElement(paragraph, undefined, ...[
-    ...paragraphChildren.slice(0, nestedInputIndex),
-    ...paragraphChildren.slice(nestedInputIndex + 1),
-  ]);
-  return {
-    checkbox: paragraphChildren[nestedInputIndex] as SplitTaskListItem["checkbox"],
-    content: [
-      ...nodes.slice(0, paragraphIndex),
-      strippedParagraph,
-      ...nodes.slice(paragraphIndex + 1),
-    ],
-  };
-}
-
-function isCheckboxElement(node: ReactNode): boolean {
-  return isValidElement(node) && node.type === "input";
-}
-
-function hastTagName(node: ReactElement): string | null {
-  const hast = (node.props as { node?: { tagName?: unknown } }).node;
-  return typeof hast?.tagName === "string" ? hast.tagName : null;
-}
-
 export const MarkdownBody = memo(function MarkdownBody({
   content,
   className = "",
@@ -367,12 +255,13 @@ export const MarkdownBody = memo(function MarkdownBody({
   enableContentSearch = false,
   surface = "message",
 }: MarkdownBodyProps) {
-  const parsedContent = useMemo(
-    () => normalizeLocalFileLinkMarkdown(
-      isStreaming ? stabilizeStreamingMarkdown(content) : content,
-    ),
-    [content, isStreaming],
-  );
+  const parsedContent = useMemo(() => {
+    const source = isStreaming ? stabilizeStreamingMarkdown(content) : content;
+    // The local-file link repair is a *message* affordance. A file viewer
+    // renders a file's own bytes, so rewriting its destinations would corrupt
+    // displayed content rather than fix agent prose.
+    return surface === "file-content" ? source : normalizeLocalFileLinkMarkdown(source);
+  }, [content, isStreaming, surface]);
   const markdownClassName = [
     // Single measure: the thread column (config/chat-layout.ts) uses the same 48rem
     // --container-transcript-thread token as the new-chat flow, and BOTH
@@ -492,37 +381,4 @@ function markdownUrlTransform(value: string): string {
     return "";
   }
   return value;
-}
-
-// Re-export for downstream consumers that import from this module.
-
-// mdHtmlElement is called from within STATIC_MARKDOWN_COMPONENTS entries,
-// which ARE React component functions (hooks-valid call site).
-function mdHtmlElement(
-  tag: MdTag,
-  baseClassName: string,
-  props: MdElementProps,
-  revealState: ContextType<typeof MarkdownRevealContext> = null,
-  searchPaint: ChatContentSearchPaint | null = null,
-) {
-  const {
-    children,
-    dangerouslySetInnerHTML,
-    className,
-    node,
-    ...rest
-  } = props;
-  const mergedClassName = [baseClassName, className].filter(Boolean).join(" ");
-
-  if (dangerouslySetInnerHTML) {
-    return createElement(tag, {
-      ...rest,
-      className: mergedClassName,
-      dangerouslySetInnerHTML,
-    });
-  }
-  const finalChildren = searchPaint
-    ? markSearchChildren(children, searchPaint.query, searchPaint.rowUnitId)
-    : revealChildren(children, node as HastNode | undefined, revealState);
-  return createElement(tag, { ...rest, className: mergedClassName }, finalChildren);
 }

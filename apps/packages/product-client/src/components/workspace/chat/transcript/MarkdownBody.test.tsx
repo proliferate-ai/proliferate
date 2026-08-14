@@ -138,6 +138,22 @@ describe("MarkdownBody presentation", () => {
     expect(html).not.toContain("[the draft](");
   });
 
+  it("never repairs links on the file-content surface", () => {
+    // A file viewer renders a file's own bytes: rewriting its destinations
+    // would corrupt displayed content instead of fixing agent prose.
+    const renderLink = vi.fn(({ href }: MarkdownLinkRenderInput) => (
+      <span data-workspace-file={href}>the draft</span>
+    ));
+    renderMarkdown("Open [the draft](/Users/pablo/My Project/Final Draft.md).", {
+      renderLink,
+      surface: "file-content",
+    });
+
+    expect(renderLink).not.toHaveBeenCalledWith(expect.objectContaining({
+      href: "/Users/pablo/My%20Project/Final%20Draft.md",
+    }));
+  });
+
   it("keeps content-search marks inside the presentation DOM", () => {
     const html = renderToStaticMarkup(
       <ChatContentSearchQueryContext.Provider value="readable">

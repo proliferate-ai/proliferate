@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { PropsWithChildren, ReactElement } from "react";
 import {
   cleanup,
@@ -66,13 +69,24 @@ afterEach(() => {
   fileReferenceOpenState.pathKind = "file";
 });
 
-function editItem({ patch = false }: { patch?: boolean } = {}) {
-  const item = toolItem("edit-1", "turn-1", 1, "file_change");
+function editItem({
+  patch = false,
+  failed = false,
+}: { patch?: boolean; failed?: boolean } = {}) {
+  const item = toolItem("edit-1", "turn-1", 1, "file_change", failed ? "failed" : "completed");
   const part = item.contentParts[0];
   if (patch && part?.type === "file_change") {
     part.patch = "@@ -1 +1 @@\n-old\n+new";
   }
   return item;
+}
+
+function editRow(): HTMLElement {
+  const row = document.querySelector("[data-edit-action-row]");
+  if (!(row instanceof HTMLElement)) {
+    throw new Error("expected an edit action row");
+  }
+  return row;
 }
 
 describe("CollapsedEditActionRows", () => {
@@ -129,6 +143,40 @@ describe("CollapsedEditActionRows", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("keeps a failed row destructive through hover and focus", () => {
+    render(<EditRows item={editItem({ failed: true })} />);
+    const row = editRow();
+
+    // The group-level promote-to-foreground rule in authenticated.css is
+    // unlayered, so it outranks any Tailwind text-color utility. A failed row
+    // opts out through this flag and promotes itself with group variants;
+    // without both halves the row loses its red tint exactly on hover/focus.
+    expect(row.getAttribute("data-edit-action-failed")).toBe("true");
+    expect(row.className).toContain("text-destructive/80");
+    expect(row.className).toContain("group-hover/edit-action:text-destructive");
+    expect(row.className).toContain("group-focus-within/edit-action:text-destructive");
+    expect(row.className).not.toContain("hover:text-foreground");
+  });
+
+  it("leaves a succeeded row promoting to foreground", () => {
+    render(<EditRows item={editItem()} />);
+    const row = editRow();
+
+    expect(row.getAttribute("data-edit-action-failed")).toBeNull();
+    expect(row.className).toContain("text-foreground/60");
+  });
+
+  it("keeps an unavailable filename from swallowing the row's diff toggle", () => {
+    fileReferenceOpenState.canOpenPrimary = false;
+    render(<EditRows item={editItem({ patch: true })} />);
+
+    const badge = document.querySelector("[data-file-reference-unavailable='true']");
+    // The row's diff toggle is an absolute overlay behind a pointer-events-none
+    // content layer. An inert filename must not re-enable pointer events, or it
+    // becomes a dead zone over the toggle.
+    expect(badge?.className).not.toContain("pointer-events-auto");
+  });
+
   it("shows a persistent copy action in the expanded diff header", () => {
     render(<EditRows item={editItem({ patch: true })} />);
 
@@ -136,5 +184,24 @@ describe("CollapsedEditActionRows", () => {
 
     const copy = screen.getByRole("button", { name: "Copy diff for edit-1.ts" });
     expect(copy.closest(".opacity-100")).toBeTruthy();
+  });
+});
+
+describe("edit-action row hover promotion CSS", () => {
+  const AUTHENTICATED_CSS = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), "../../../../app/authenticated.css"),
+    "utf8",
+  );
+
+  it("excludes failed rows from the unlayered promote-to-foreground rule", () => {
+    // Unlayered CSS beats every Tailwind utility regardless of specificity, so
+    // without this :not() a failed row turns foreground-grey on hover/focus —
+    // the one moment its destructive tint matters most.
+    expect(AUTHENTICATED_CSS).toContain(
+      "[data-edit-action-row]:not([data-edit-action-failed])",
+    );
+    expect(AUTHENTICATED_CSS).not.toMatch(
+      /:is\(:hover, :focus-within\)\s+\[data-edit-action-row\]\s*\{/,
+    );
   });
 });

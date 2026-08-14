@@ -2,6 +2,8 @@ import {
   looksLikeFileReferenceHref,
   splitPathLineSuffix,
 } from "#product/lib/domain/files/path-detection";
+import { decodeEncodedSpaces } from "#product/lib/domain/files/path-references";
+import { normalizeLocalFileLinkMarkdown } from "#product/lib/domain/chat/transcript/file-link-markdown";
 
 export interface AssistantMarkdownEndResource {
   rawPath: string;
@@ -22,7 +24,11 @@ export function resolveAssistantMarkdownEndResource(
 ): AssistantMarkdownEndResource | null {
   if (!markdown) return null;
 
-  const visibleMarkdown = stripMarkdownCode(markdown);
+  // Read the same copy the transcript renders. On the raw source a
+  // space-bearing destination is not a link at all, so the exact `.md`
+  // references this card exists for would never produce one. The repair is
+  // pure and idempotent, so running it here costs nothing else.
+  const visibleMarkdown = stripMarkdownCode(normalizeLocalFileLinkMarkdown(markdown));
   const seen = new Set<string>();
   let resolved: AssistantMarkdownEndResource | null = null;
 
@@ -66,13 +72,9 @@ function stripQueryAndFragment(value: string): string {
   return suffixIndex >= 0 ? value.slice(0, suffixIndex) : value;
 }
 
-function safelyDecodePath(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
+// Match the file resolver exactly: only the repair's own `%20` is decoded, so
+// a literal `a%2Fb.md` stays one name instead of becoming a nested path.
+const safelyDecodePath = decodeEncodedSpaces;
 
 function basename(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;

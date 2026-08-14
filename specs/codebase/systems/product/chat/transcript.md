@@ -152,6 +152,11 @@ Rules:
   spaces, never encoded separators or traversal. Never rewrite the transcript
   source, inline/fenced code examples, images, external URLs, or unrelated
   malformed Markdown.
+  - A link title stays outside the repair: only the destination is wrapped, so
+    `[g](/a/My Notes.md "Read it")` keeps its title.
+  - The repair applies to transcript and message surfaces only. A body
+    rendering a file's own content (`surface="file-content"`, the file viewer)
+    is never repaired, because displayed file bytes must render as written.
 - Once the assistant reveal frontier settles, the final unique Markdown file
   reference also renders as a compact end-resource card after prose. Its
   default subtitle identifies `Document · MD`; hover/focus changes that

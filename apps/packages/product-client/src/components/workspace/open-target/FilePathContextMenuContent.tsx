@@ -96,7 +96,10 @@ export function FilePathContextMenuContent({
             className={openWithActive
               ? "bg-[var(--color-link-foreground)] text-white hover:bg-[var(--color-link-foreground)] focus:bg-[var(--color-link-foreground)] [&_*]:text-white"
               : ""}
-            onClick={() => setOpenWithActive((active) => !active)}
+            // Open, never toggle: the wrapper already opened the submenu on
+            // mouseenter/focus, so toggling would make the first click close
+            // what hovering just revealed.
+            onClick={() => setOpenWithActive(true)}
             onKeyDown={(event) => {
               if (event.key === "ArrowRight") {
                 event.preventDefault();
@@ -111,7 +114,7 @@ export function FilePathContextMenuContent({
             <div
               role="menu"
               aria-label="Open with"
-              className={`absolute left-full top-0 z-10 ml-1 flex max-h-[calc(100vh-1rem)] w-[172px] select-none flex-col overflow-y-auto p-1 ${POPOVER_FRAME_CLASS}`}
+              className={`absolute left-full top-0 z-10 ml-1 flex max-h-[calc(100vh-1rem)] min-w-44 select-none flex-col overflow-y-auto p-1 ${POPOVER_FRAME_CLASS}`}
               onMouseEnter={() => setOpenWithActive(true)}
             >
               {targets.map((target) => (
