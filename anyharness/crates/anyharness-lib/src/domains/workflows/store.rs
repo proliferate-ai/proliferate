@@ -63,6 +63,12 @@ pub enum ResolvedSideEffect {
     None,
     StartNode { node_row_id: String },
     DisposeSession { session_id: String },
+    /// Ruling L's compound effect: a redo of a RUNNING node first disposes
+    /// the session it took over from, then starts the minted replacement.
+    DisposeThenStart {
+        session_id: String,
+        node_row_id: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -151,11 +157,11 @@ impl WorkflowStore {
                     "INSERT INTO workflow_run_nodes (
                         id, run_id, definition_node_id, kind, node_type,
                         replaces_node_row_id, anchor_node_row_id, chain_index,
-                        title, prompt, status, session_id, prompt_id,
+                        title, prompt, status, session_id, prompt_id, model,
                         rendered_envelope, failure_code, created_at, started_at, completed_at
                      )
                      VALUES (?1, ?2, ?3, 'defined', ?4, NULL, NULL, ?5, ?6, ?7, ?8,
-                             NULL, NULL, NULL, NULL, ?9, ?10, NULL)",
+                             NULL, NULL, NULL, NULL, NULL, ?9, ?10, NULL)",
                     params![
                         row_ids[position],
                         params.run_id,
@@ -335,6 +341,7 @@ impl WorkflowStore {
                 Transition::Redo {
                     failed_node_row_id,
                     replacement,
+                    disposed_session_id,
                 } => {
                     supersede_node(tx, failed_node_row_id)?;
                     let new_id = insert_new_node(tx, run_id, replacement, &timestamp)?;
@@ -356,8 +363,16 @@ impl WorkflowStore {
                             },
                         )?;
                     }
-                    side_effect = ResolvedSideEffect::StartNode {
-                        node_row_id: new_id.clone(),
+                    side_effect = match disposed_session_id {
+                        // Ruling L: a redo-from-running kills the wedged
+                        // session before the replacement launches.
+                        Some(session_id) => ResolvedSideEffect::DisposeThenStart {
+                            session_id: session_id.clone(),
+                            node_row_id: new_id.clone(),
+                        },
+                        None => ResolvedSideEffect::StartNode {
+                            node_row_id: new_id.clone(),
+                        },
                     };
                     created_node_row_id = Some(new_id);
                 }
@@ -567,18 +582,6 @@ impl WorkflowStore {
             .with_tx_anyhow(|tx| Self::load_run_state_tx(tx, run_id))
     }
 
-    /// The one read every command replies with: the full client projection
-    /// (run, nodes, docs), from rows in a single transaction.
-    pub fn run_detail(&self, run_id: &str) -> anyhow::Result<Option<super::projection::RunProjection>> {
-        self.db.with_tx_anyhow(|tx| {
-            let Some(state) = Self::load_run_state_tx(tx, run_id)? else {
-                return Ok(None);
-            };
-            let docs = Self::list_docs_tx(tx, run_id)?;
-            Ok(Some(super::projection::project(&state, &docs)))
-        })
-    }
-
     pub fn load_run_state_tx(tx: &Connection, run_id: &str) -> anyhow::Result<Option<RunState>> {
         let Some(run) = tx
             .query_row(
@@ -736,10 +739,12 @@ impl WorkflowStore {
     }
 }
 
-/// Emit the non-transition decision events: a Hold on a turn report is the
-/// staleness guard firing (`workflow.notification.stale`), an Illegal is the
-/// refused command/report (`workflow.transition.illegal`). The engine calls
-/// this on every decision; applied transitions emit inside `apply_transition`.
+/// Emit the non-transition decision events: a Hold on a turn report is either
+/// the staleness guard firing or the queued-interjection hold (told apart by
+/// `queue_empty` — a held report with a non-empty queue is the node staying
+/// open on purpose); an Illegal is the refused command/report
+/// (`workflow.transition.illegal`). The engine calls this on every decision;
+/// applied transitions emit inside `apply_transition`.
 pub fn emit_decision_events(run_id: &str, event: &WorkflowEvent, decision: &Decision) {
     match decision {
         Decision::Transition(_) => {}
@@ -750,7 +755,8 @@ pub fn emit_decision_events(run_id: &str, event: &WorkflowEvent, decision: &Deci
                     run_id = %run_id,
                     node_row_id = %turn.node_row_id,
                     stop_reason = turn.stop_reason.as_str(),
-                    "stale workflow turn report held",
+                    queue_empty = turn.queue_empty,
+                    "workflow turn report held",
                 );
             }
         }
@@ -931,15 +937,16 @@ fn insert_new_node(
         .as_ref()
         .map(serde_json::to_string)
         .transpose()?;
+    let model_json = spec.model.as_ref().map(serde_json::to_string).transpose()?;
     tx.execute(
         "INSERT INTO workflow_run_nodes (
             id, run_id, definition_node_id, kind, node_type,
             replaces_node_row_id, anchor_node_row_id, chain_index,
-            title, prompt, status, session_id, prompt_id,
+            title, prompt, status, session_id, prompt_id, model,
             rendered_envelope, failure_code, created_at, started_at, completed_at
          )
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'running',
-                 NULL, NULL, ?11, NULL, ?12, ?12, NULL)",
+                 NULL, NULL, ?11, ?12, NULL, ?13, ?13, NULL)",
         params![
             id,
             run_id,
@@ -951,6 +958,7 @@ fn insert_new_node(
             spec.chain_index,
             spec.title,
             spec.prompt,
+            model_json,
             envelope_json,
             timestamp,
         ],
@@ -1092,6 +1100,17 @@ fn map_node(row: &Row<'_>) -> rusqlite::Result<WorkflowRunNodeRecord> {
                 None
             }
         });
+    // Same leniency: an unreadable model pick degrades to the default
+    // resolution path instead of bricking the run's reads.
+    let model = row
+        .get::<_, Option<String>>("model")?
+        .and_then(|json| match serde_json::from_str(&json) {
+            Ok(model) => Some(model),
+            Err(error) => {
+                tracing::error!(%error, "unreadable workflow node model; reading as none");
+                None
+            }
+        });
     Ok(WorkflowRunNodeRecord {
         id: row.get("id")?,
         run_id: row.get("run_id")?,
@@ -1116,6 +1135,7 @@ fn map_node(row: &Row<'_>) -> rusqlite::Result<WorkflowRunNodeRecord> {
         )?,
         session_id: row.get("session_id")?,
         prompt_id: row.get("prompt_id")?,
+        model,
         rendered_envelope: envelope,
         failure_code: row
             .get::<_, Option<String>>("failure_code")?

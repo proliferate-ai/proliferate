@@ -1,11 +1,11 @@
 //! The one sessions-domain touchpoint (gen-2). Two duties, both keyed by the
 //! loose workflow columns on `sessions`:
 //!
-//! - At launch, `resolve_launch_extras` hands the node's stored envelope to
-//!   the session over the house dual channel: the preamble rides the
-//!   first-prompt channel (wrapped by `system_instruction_block`, consumed
-//!   only by Codex) and the additive `systemPrompt.append` session meta
-//!   (consumed by every other harness). Nothing is delivered twice.
+//! - At launch, `resolve_launch_extras` passes through the envelope's
+//!   DSL-authored `systemPrompt.append` strings — and nothing else. The
+//!   preamble instruction blocks never ride launch extras: the actor delivers
+//!   them in-band, prepended to the first message payload, identically for
+//!   every harness (Ruling D).
 //! - At every turn end, `on_turn_finished` peeks the durable pending-prompt
 //!   queue AT THAT INSTANT (the actor's mailbox introduces latency during
 //!   which the session actor re-drains the queue itself; peeking early is what
@@ -14,9 +14,11 @@
 //!   the session actor.
 //!
 //! The manager is built after `SessionRuntime` (which consumes the extension
-//! list), so the handle arrives late through a `OnceLock`.
+//! list), so the handle arrives late through a `OnceLock` — holding `Weak`,
+//! because the manager's deps own that same runtime and an `Arc` here would
+//! close the cycle and leak every actor task for the process lifetime.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, Weak};
 
 use crate::domains::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
@@ -30,7 +32,7 @@ use crate::live::workflows::WorkflowManager;
 pub struct WorkflowSessionExtension {
     session_store: SessionStore,
     workflow_store: WorkflowStore,
-    manager: OnceLock<Arc<WorkflowManager>>,
+    manager: OnceLock<Weak<WorkflowManager>>,
 }
 
 impl WorkflowSessionExtension {
@@ -42,20 +44,30 @@ impl WorkflowSessionExtension {
         }
     }
 
-    /// Wiring-order late bind; one shot, further binds are ignored.
-    pub fn bind_manager(&self, manager: Arc<WorkflowManager>) {
-        let _ = self.manager.set(manager);
+    /// Wiring-order late bind; one shot, further binds are ignored. Stores a
+    /// `Weak` so runtime → extension → manager → runtime never becomes an
+    /// `Arc` cycle.
+    pub fn bind_manager(&self, manager: &Arc<WorkflowManager>) {
+        let _ = self.manager.set(Arc::downgrade(manager));
     }
 }
 
 /// The ruled mapping from the generic turn context to the table's vocabulary.
-/// `EmptyTurn` is never produced here: the context does not expose
-/// turn-activity emptiness yet, and the table keeps the variant for when it
-/// does.
+/// The session actor's empty-turn reclassification is the one `Failed` with a
+/// clean `end_turn` stop (every other failure carries an error stop or none),
+/// so that exact pair is the ADR's `empty_turn`. `forced_unload` is the
+/// hook-only marker `finish_forced_unload_cancel` stamps on a non-terminal
+/// actor unload: cancelled, but by the platform, not the user.
 fn map_stop_reason(outcome: SessionTurnOutcome, stop_reason: Option<&str>) -> TurnStopReason {
     match outcome {
-        SessionTurnOutcome::Cancelled => TurnStopReason::Cancelled,
-        SessionTurnOutcome::Failed => TurnStopReason::Error,
+        SessionTurnOutcome::Cancelled => match stop_reason {
+            Some("forced_unload") => TurnStopReason::ForcedUnload,
+            _ => TurnStopReason::Cancelled,
+        },
+        SessionTurnOutcome::Failed => match stop_reason {
+            Some("end_turn") => TurnStopReason::EmptyTurn,
+            _ => TurnStopReason::Error,
+        },
         SessionTurnOutcome::Completed => match stop_reason {
             Some("refusal") => TurnStopReason::Refusal,
             Some("max_tokens") | Some("max_turn_requests") => TurnStopReason::HarnessCap,
@@ -85,9 +97,11 @@ impl SessionExtension for WorkflowSessionExtension {
             // moved underneath a straggler start. Launch plain.
             return Ok(SessionLaunchExtras::default());
         };
+        // Only the DSL-authored appends; the preamble goes in-band with the
+        // first message (Ruling D), so no harness receives it twice or not
+        // at all.
         Ok(SessionLaunchExtras {
             system_prompt_append: envelope.system_prompt_append.clone(),
-            first_prompt_system_prompt_append: envelope.instruction_blocks.clone(),
             ..SessionLaunchExtras::default()
         })
     }
@@ -115,11 +129,11 @@ impl SessionExtension for WorkflowSessionExtension {
             .map(|head| head.is_none())
             .unwrap_or(true);
         let stop_reason = map_stop_reason(ctx.outcome, ctx.stop_reason.as_deref());
-        let Some(manager) = self.manager.get() else {
+        let Some(manager) = self.manager.get().and_then(Weak::upgrade) else {
             tracing::error!(
                 session_id = %ctx.session_id,
                 run_id = %run_id,
-                "workflow manager unbound at turn end; report dropped",
+                "workflow manager unbound or dropped at turn end; report dropped",
             );
             return;
         };
@@ -158,10 +172,25 @@ mod tests {
             TurnStopReason::HarnessCap
         );
         assert_eq!(map_stop_reason(Completed, None), TurnStopReason::CleanEndTurn);
-        assert_eq!(map_stop_reason(Failed, Some("end_turn")), TurnStopReason::Error);
+        // The empty-turn reclassification: the only Failed that ends with a
+        // clean end_turn stop (turn/finish.rs) is the zero-activity turn.
+        assert_eq!(
+            map_stop_reason(Failed, Some("end_turn")),
+            TurnStopReason::EmptyTurn
+        );
+        assert_eq!(map_stop_reason(Failed, None), TurnStopReason::Error);
+        assert_eq!(
+            map_stop_reason(Failed, Some("something_else")),
+            TurnStopReason::Error
+        );
         assert_eq!(
             map_stop_reason(Cancelled, Some("cancelled")),
             TurnStopReason::Cancelled
+        );
+        // A platform unload is not a user cancel: it parks app_shutdown.
+        assert_eq!(
+            map_stop_reason(Cancelled, Some("forced_unload")),
+            TurnStopReason::ForcedUnload
         );
     }
 }

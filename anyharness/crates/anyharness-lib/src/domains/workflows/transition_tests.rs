@@ -59,6 +59,7 @@ fn node_record(
         status,
         session_id: launched.then(|| format!("sess-{id}")),
         prompt_id: launched.then(|| format!("prompt-{id}")),
+        model: None,
         rendered_envelope: None,
         failure_code: None,
         first_turn_finished_at: None,
@@ -210,6 +211,24 @@ fn cancelled_turn_interrupts() {
         Transition::InterruptNode {
             node_row_id: "n2".into(),
             code: WorkflowInterruptionCode::UserCancel,
+        }
+    );
+}
+
+// A platform unload (forced-unload cancel) parks the run app_shutdown, never
+// user_cancel: the resume popover must not blame the user for an eviction.
+#[test]
+fn forced_unload_interrupts_with_app_shutdown() {
+    let state = mid_run();
+    let transition = expect_transition(next(
+        &state,
+        &turn("n2", TurnStopReason::ForcedUnload, true),
+    ));
+    assert_eq!(
+        transition,
+        Transition::InterruptNode {
+            node_row_id: "n2".into(),
+            code: WorkflowInterruptionCode::AppShutdown,
         }
     );
 }
@@ -439,6 +458,7 @@ fn fail_and_redo_from_failed_creates_replacement() {
     let Transition::Redo {
         failed_node_row_id,
         replacement,
+        disposed_session_id,
     } = transition
     else {
         panic!("expected Redo");
@@ -449,6 +469,8 @@ fn fail_and_redo_from_failed_creates_replacement() {
     assert_eq!(replacement.chain_index, Some(1));
     assert_eq!(replacement.prompt, "prompt for n2");
     assert_eq!(replacement.definition_node_id.as_deref(), Some("def-n2"));
+    // A pause-state redo has no live turn to kill.
+    assert_eq!(disposed_session_id, None);
 }
 
 #[test]
@@ -504,14 +526,42 @@ fn fail_and_redo_applies_at_every_pause_state() {
     }
 }
 
+// Ruling L: fail-and-redo is legal on a RUNNING chain node — the liveness
+// escape for a wedged node whose turn will never end — and the committed
+// transition names the live session to dispose before the replacement starts.
 #[test]
-fn fail_and_redo_on_running_node_is_illegal() {
+fn fail_and_redo_on_running_chain_node_disposes_the_live_session() {
     let state = mid_run();
+    let transition = expect_transition(next(
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+            node_row_id: "n2".into(),
+            prompt: None,
+        }),
+    ));
+    let Transition::Redo {
+        failed_node_row_id,
+        replacement,
+        disposed_session_id,
+    } = transition
+    else {
+        panic!("expected Redo");
+    };
+    assert_eq!(failed_node_row_id, "n2");
+    assert_eq!(replacement.kind, WorkflowNodeKind::Replacement);
+    assert_eq!(disposed_session_id.as_deref(), Some("sess-n2"));
+}
+
+// Ruling L's negative control (K.1 scope): adhoc rows keep the pause-only
+// rule — a RUNNING adhoc is not redoable.
+#[test]
+fn fail_and_redo_on_running_adhoc_is_illegal() {
+    let state = with_adhoc(mid_run(), WorkflowNodeStatus::Running);
     assert!(matches!(
         next(
             &state,
             &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
-                node_row_id: "n2".into(),
+                node_row_id: "a1".into(),
                 prompt: None,
             })
         ),
@@ -881,6 +931,19 @@ fn adhoc_failure_and_cancel_touch_only_the_adhoc_row() {
             outcome: AdhocOutcome::NeedsAttention,
         }
     );
+    // A platform unload parks the adhoc the same way a user cancel does: it
+    // needs attention, it did not fail.
+    let transition = expect_transition(next(
+        &state,
+        &turn("a1", TurnStopReason::ForcedUnload, true),
+    ));
+    assert_eq!(
+        transition,
+        Transition::AdhocTurn {
+            node_row_id: "a1".into(),
+            outcome: AdhocOutcome::NeedsAttention,
+        }
+    );
 }
 
 #[test]
@@ -905,6 +968,13 @@ fn fail_and_redo_on_paused_adhoc_mints_an_adhoc_replacement() {
         if status == WorkflowNodeStatus::Failed {
             state.nodes[3].failure_code = Some(WorkflowNodeFailureCode::TurnError);
         }
+        // The adhoc's own launch pick must survive the redo (its replacement
+        // has no definition node to resolve a model through).
+        state.nodes[3].model = Some(super::definition::NodeModel {
+            agent_kind: "codex".into(),
+            model_id: Some("adhoc-pick".into()),
+            mode_id: None,
+        });
         let transition = expect_transition(next(
             &state,
             &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
@@ -915,6 +985,7 @@ fn fail_and_redo_on_paused_adhoc_mints_an_adhoc_replacement() {
         let Transition::Redo {
             failed_node_row_id,
             replacement,
+            disposed_session_id,
         } = transition
         else {
             panic!("expected Redo for adhoc in {status:?}");
@@ -923,6 +994,11 @@ fn fail_and_redo_on_paused_adhoc_mints_an_adhoc_replacement() {
         assert_eq!(replacement.kind, WorkflowNodeKind::Adhoc);
         assert_eq!(replacement.anchor_node_row_id.as_deref(), Some("n2"));
         assert_eq!(replacement.replaces_node_row_id.as_deref(), Some("a1"));
+        assert_eq!(
+            replacement.model.as_ref().and_then(|model| model.model_id.as_deref()),
+            Some("adhoc-pick")
+        );
+        assert_eq!(disposed_session_id, None);
     }
 }
 

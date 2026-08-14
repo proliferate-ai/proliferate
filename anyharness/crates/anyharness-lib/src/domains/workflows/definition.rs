@@ -45,7 +45,7 @@ pub struct DefinitionNode {
     pub model: Option<NodeModel>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NodeModel {
     pub agent_kind: String,

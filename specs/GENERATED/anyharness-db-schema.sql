@@ -643,6 +643,7 @@ CREATE TABLE workflow_run_nodes (
     status                TEXT NOT NULL CHECK (status IN ('pending','running','needs_attention','awaiting_human','completed','failed')),
     session_id            TEXT,
     prompt_id             TEXT,                      -- the envelope prompt's id (provenance; the extension reports every turn end of a linked session)
+    model                 TEXT,                      -- JSON NodeModel: the row's own launch pick (adhoc); NULL = resolve via the frozen definition, then the app default
     rendered_envelope     TEXT,                      -- JSON {instructionBlocks, firstMessage, systemPromptAppend}
     failure_code          TEXT CHECK (failure_code IS NULL OR failure_code IN ('node_launch_failed','turn_error','refusal','empty_turn','harness_cap','superseded')),
     first_turn_finished_at TEXT,                     -- first turn end of the CURRENT execution; bounds UndoAdvance

@@ -15,6 +15,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::workflows::invariants;
 use crate::domains::workflows::projection::RunProjection;
 use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::workflows::transition::{IllegalTransition, TurnFinished, WorkflowCommand};
@@ -132,13 +133,17 @@ impl WorkflowManager {
 
     /// Registry hit hands back the mailbox; a miss on any existing run
     /// rematerializes the actor from rows first (terminal runs included:
-    /// fail-and-redo is legal on them). The lock is held across the load and
-    /// spawn — both synchronous — so two racing callers can never mint two
-    /// actors for one run.
+    /// fail-and-redo is legal on them). The state loads OUTSIDE the lock —
+    /// `notify` takes the same std mutex on the session actor's task, and a
+    /// lock held across a SQLite read would park `finish_prompt_result` —
+    /// with a re-check under the lock, so two racing callers still never mint
+    /// two actors for one run (the loser's loaded state is discarded).
     fn ensure_actor(&self, run_id: &str) -> Result<WorkflowHandle, WorkflowCommandError> {
-        let mut registry = self.registry.lock().expect("workflow registry poisoned");
-        if let Some(handle) = registry.get(run_id) {
-            return Ok(handle.clone());
+        {
+            let registry = self.registry.lock().expect("workflow registry poisoned");
+            if let Some(handle) = registry.get(run_id) {
+                return Ok(handle.clone());
+            }
         }
         let state = self
             .deps
@@ -146,6 +151,15 @@ impl WorkflowManager {
             .load_run_state(run_id)
             .map_err(WorkflowCommandError::Internal)?
             .ok_or(WorkflowCommandError::RunNotFound)?;
+        // The rebuild tripwire, ALL builds: rows a fresh actor is about to
+        // trust must hold the invariant laws. This is `sweep`, not
+        // `sweep_at_rest` — the create-then-start seam legally rests a
+        // running-unlinked current node here (the spawn launch heals it).
+        invariants::report(&invariants::sweep(&state));
+        let mut registry = self.registry.lock().expect("workflow registry poisoned");
+        if let Some(handle) = registry.get(run_id) {
+            return Ok(handle.clone());
+        }
         let (commands_tx, commands_rx) = mpsc::channel(COMMAND_MAILBOX_CAPACITY);
         let (notifications_tx, notifications_rx) = mpsc::unbounded_channel();
         let actor = WorkflowActor {

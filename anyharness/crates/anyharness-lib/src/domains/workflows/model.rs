@@ -253,6 +253,10 @@ pub struct WorkflowRunNodeRecord {
     pub status: WorkflowNodeStatus,
     pub session_id: Option<String>,
     pub prompt_id: Option<String>,
+    /// The row's own launch pick — set for adhoc nodes (and inherited by their
+    /// redo replacements, Ruling K.1). It wins over any definition resolution;
+    /// `None` means resolve via `definition_node_id`, then the app default.
+    pub model: Option<super::definition::NodeModel>,
     pub rendered_envelope: Option<RenderedEnvelope>,
     pub failure_code: Option<WorkflowNodeFailureCode>,
     /// Stamped when this node's session finishes its FIRST turn of the current

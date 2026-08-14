@@ -41,8 +41,10 @@ pub struct SessionTurnFinishedContext {
     pub workspace: WorkspaceRecord,
     pub session_id: String,
     pub turn_id: String,
-    /// The workflow-owned prompt id when present; used for exact prompt-identity
-    /// matching by workflow completion. `None` for prompts with no id.
+    /// The finished prompt's caller-supplied id when it carried one
+    /// (provenance only). The workflow extension matches by session link and
+    /// reports EVERY turn end of a linked session — a queued interjection's
+    /// turn must be able to complete a node — never by prompt identity.
     pub prompt_id: Option<String>,
     pub outcome: SessionTurnOutcome,
     pub stop_reason: Option<String>,

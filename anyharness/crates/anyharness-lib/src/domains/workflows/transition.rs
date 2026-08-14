@@ -138,6 +138,9 @@ pub enum TurnStopReason {
     Error,
     HarnessCap,
     Cancelled,
+    /// A non-terminal actor unload (app shutdown, runtime eviction) cancelled
+    /// the turn — not the user. Parks with `app_shutdown`, never `user_cancel`.
+    ForcedUnload,
 }
 
 impl TurnStopReason {
@@ -149,6 +152,7 @@ impl TurnStopReason {
             Self::Error => "error",
             Self::HarnessCap => "harness_cap",
             Self::Cancelled => "cancelled",
+            Self::ForcedUnload => "forced_unload",
         }
     }
 
@@ -158,7 +162,7 @@ impl TurnStopReason {
             Self::EmptyTurn => Some(WorkflowNodeFailureCode::EmptyTurn),
             Self::Error => Some(WorkflowNodeFailureCode::TurnError),
             Self::HarnessCap => Some(WorkflowNodeFailureCode::HarnessCap),
-            Self::CleanEndTurn | Self::Cancelled => None,
+            Self::CleanEndTurn | Self::Cancelled | Self::ForcedUnload => None,
         }
     }
 }
@@ -225,9 +229,12 @@ pub enum Transition {
         node_type: WorkflowNodeType,
     },
     /// Fail-and-redo: the old row stays failed beside its replacement.
+    /// `disposed_session_id` is set when the redo hit a RUNNING chain node
+    /// (Ruling L): its live session is disposed before the replacement starts.
     Redo {
         failed_node_row_id: String,
         replacement: NewNodeSpec,
+        disposed_session_id: Option<String>,
     },
     /// Undo an advance: the just-started node returns to pending unlinked, the
     /// completed node parks as a retroactive gate.
@@ -333,7 +340,9 @@ fn on_turn_finished(state: &RunState, turn: &TurnFinished) -> Decision {
         let outcome = match turn.stop_reason {
             TurnStopReason::CleanEndTurn if turn.queue_empty => AdhocOutcome::Completed,
             TurnStopReason::CleanEndTurn => return Decision::Hold,
-            TurnStopReason::Cancelled => AdhocOutcome::NeedsAttention,
+            TurnStopReason::Cancelled | TurnStopReason::ForcedUnload => {
+                AdhocOutcome::NeedsAttention
+            }
             reason => AdhocOutcome::Failed(
                 reason
                     .failure_code()
@@ -371,6 +380,10 @@ fn on_turn_finished(state: &RunState, turn: &TurnFinished) -> Decision {
         TurnStopReason::Cancelled => Decision::Transition(Transition::InterruptNode {
             node_row_id: node.id.clone(),
             code: WorkflowInterruptionCode::UserCancel,
+        }),
+        TurnStopReason::ForcedUnload => Decision::Transition(Transition::InterruptNode {
+            node_row_id: node.id.clone(),
+            code: WorkflowInterruptionCode::AppShutdown,
         }),
         reason => Decision::Transition(Transition::FailNode {
             node_row_id: node.id.clone(),
@@ -491,7 +504,10 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
             let adhoc = node.kind == WorkflowNodeKind::Adhoc;
             // Adhoc rows never gate, so awaiting_human is not a legal pause
             // for them; the fence and turn failures are their recovery entry
-            // points (Ruling K).
+            // points (Ruling K). A RUNNING chain node may also be redone
+            // (Ruling L) — the liveness escape for a wedged node whose turn
+            // will never end; its live session is disposed in the same
+            // committed step. Adhoc rows keep the pause-only rule (K.1).
             let legal_pause = if adhoc {
                 matches!(
                     node.status,
@@ -503,6 +519,7 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                     WorkflowNodeStatus::Failed
                         | WorkflowNodeStatus::NeedsAttention
                         | WorkflowNodeStatus::AwaitingHuman
+                        | WorkflowNodeStatus::Running
                 )
             };
             if !legal_pause {
@@ -510,7 +527,8 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                     state,
                     command.as_str(),
                     Some(node),
-                    "fail-and-redo applies at a pause: failed, needs_attention, or awaiting_human",
+                    "fail-and-redo applies at a pause (failed, needs_attention, awaiting_human) \
+                     or to a running chain node",
                 );
             }
             let prompt_edited = prompt.is_some();
@@ -539,7 +557,16 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                     } else {
                         node.rendered_envelope.clone()
                     },
-                    model: None,
+                    // An adhoc redo keeps its launch pick; a chain replacement
+                    // resolves through the frozen definition it inherits.
+                    model: if adhoc { node.model.clone() } else { None },
+                },
+                // Ruling L: redo of a mid-flight node disposes the session it
+                // is taking over from; pause states hold no live turn to kill.
+                disposed_session_id: if node.status == WorkflowNodeStatus::Running {
+                    node.session_id.clone()
+                } else {
+                    None
                 },
             })
         }

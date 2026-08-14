@@ -23,8 +23,11 @@ use crate::domains::workflows::model::{
     WorkflowInterruptionCode, WorkflowNodeFailureCode, WorkflowNodeKind, WorkflowNodeStatus,
     WorkflowNodeType, WorkflowRunStatus,
 };
+use crate::domains::sessions::runtime::SendPromptOutcome;
 use crate::domains::workflows::store::{CreatedRun, NewRunParams, WorkflowStore};
-use crate::domains::workflows::transition::{RunState, WorkflowCommand};
+use crate::domains::workflows::transition::{
+    RunState, TurnFinished, TurnStopReason, WorkflowCommand,
+};
 use crate::persistence::Db;
 
 const WORKSPACE_ID: &str = "wf-workspace";
@@ -140,12 +143,17 @@ fn create_run_rows(
     run_id: &str,
     snapshot: InvocationSnapshot,
 ) -> CreatedRun {
+    // Production stores the courier's delivered JSON byte-verbatim; the tests
+    // build the definition in code, so its serialization stands in for it.
+    let definition_json =
+        serde_json::to_string(&snapshot.definition).expect("definition json");
     let created = store
         .create_run_with_first_node(NewRunParams {
             run_id: run_id.into(),
             invocation_id: format!("inv-{run_id}"),
             workspace_id: WORKSPACE_ID.into(),
             snapshot: snapshot.clone(),
+            definition_json,
         })
         .expect("create run rows");
     materialize_context(
@@ -250,6 +258,24 @@ fn node_by_def<'a>(state: &'a RunState, definition_node_id: &str) -> &'a crate::
         .unwrap_or_else(|| panic!("node {definition_node_id} missing"))
 }
 
+/// Every `session/prompt` request's FULL text-block list, in arrival order —
+/// the in-band delivery assertions need the leading instruction blocks, not
+/// just the last block `prompt_texts` extracts.
+fn prompt_block_texts(path: &std::path::Path) -> Vec<Vec<String>> {
+    read_requests(path)
+        .into_iter()
+        .filter(|request| request["method"] == "session/prompt")
+        .filter_map(|request| {
+            request["params"]["prompt"].as_array().map(|blocks| {
+                blocks
+                    .iter()
+                    .filter_map(|block| block["text"].as_str().map(str::to_string))
+                    .collect()
+            })
+        })
+        .collect()
+}
+
 fn assert_quiesced(state: &RunState) {
     let violations = invariants::sweep(state);
     assert!(violations.is_empty(), "invariant violations: {violations:?}");
@@ -275,7 +301,7 @@ async fn happy_path_resolves_references_teaches_the_preamble_and_completes() {
         }],
         doc_templates: vec![DocTemplate {
             slug: "plan-doc".into(),
-            producing_node_id: Some("plan".into()),
+            producing_node_id: "plan".into(),
             body: "# Plan\n".into(),
         }],
     };
@@ -302,23 +328,46 @@ async fn happy_path_resolves_references_teaches_the_preamble_and_completes() {
             format!("Ship per {doc_path}"),
         ]
     );
-    // The preamble rode each `session/new` as the additive systemPrompt
-    // append — the channel every non-Codex harness consumes (first-prompt
-    // inlining is the Codex-only half of the dual-channel contract).
-    let appends: Vec<String> = read_requests(&fixture.script.request_log)
+    // Ruling D: the wrapped preamble rides IN-BAND as the leading text block
+    // of each node's first prompt — identical for every harness — and the
+    // node's first message is always the LAST block.
+    let payloads = prompt_block_texts(&fixture.script.request_log);
+    assert_eq!(payloads.len(), 2, "one first prompt per node session");
+    for blocks in &payloads {
+        // House machinery may prepend its own leading blocks (product
+        // context); the workflow contract is positional, not exhaustive:
+        // the preamble is the block immediately before the first message,
+        // and it appears exactly once — never doubled, never trailing.
+        let preamble = &blocks[blocks.len() - 2];
+        assert!(
+            preamble.starts_with("System instruction from AnyHarness, not user content:\n"),
+            "the exact house sentinel leads the preamble block"
+        );
+        assert!(preamble.contains("never stop to ask questions"));
+        assert!(preamble.contains(&*doc_path));
+        assert_eq!(
+            blocks
+                .iter()
+                .filter(|block| block.contains("never stop to ask questions"))
+                .count(),
+            1,
+            "the preamble rides exactly once per first prompt"
+        );
+    }
+    // And never on the session-meta channel: no harness hears it twice, no
+    // harness misses it.
+    let session_meta_carries_preamble = read_requests(&fixture.script.request_log)
         .into_iter()
         .filter(|request| request["method"] == "session/new")
-        .filter_map(|request| {
+        .any(|request| {
             request["params"]["_meta"]["systemPrompt"]["append"]
                 .as_str()
-                .map(str::to_string)
-        })
-        .collect();
-    assert_eq!(appends.len(), 2, "one systemPrompt append per node session");
-    assert!(appends
-        .iter()
-        .all(|append| append.contains("never stop to ask questions")));
-    assert!(appends.iter().all(|append| append.contains(&*doc_path)));
+                .is_some_and(|append| append.contains("never stop to ask questions"))
+        });
+    assert!(
+        !session_meta_carries_preamble,
+        "the preamble must not ride systemPrompt.append (Ruling D)"
+    );
 
     // The sessions carry the workflow columns; clearing unlinks (the helper
     // pair the actor and undo-advance rely on).
@@ -579,7 +628,13 @@ async fn an_adhoc_node_runs_beside_the_chain_and_never_moves_it() {
             WorkflowCommand::AddAdhocNode {
                 anchor_node_row_id: created.first_node_row_id.clone(),
                 prompt: "adhoc side question".into(),
-                model: None,
+                // The launch pick must reach the minted session (F3): same
+                // scripted agent kind, but a distinctive model id to trace.
+                model: Some(crate::domains::workflows::definition::NodeModel {
+                    agent_kind: "claude".into(),
+                    model_id: Some("haiku".into()),
+                    mode_id: None,
+                }),
             },
         )
         .await;
@@ -612,6 +667,22 @@ async fn an_adhoc_node_runs_beside_the_chain_and_never_moves_it() {
     );
     assert!(prompt_texts(&fixture.script.request_log)
         .contains(&"adhoc side question".to_string()));
+    // The pick persisted on the row and reached the minted session (F3): a
+    // model choice the API accepted must never silently launch the default.
+    assert_eq!(
+        adhoc.model.as_ref().and_then(|model| model.model_id.as_deref()),
+        Some("haiku")
+    );
+    let adhoc_session = fixture
+        .state
+        .session_service
+        .get_session(adhoc.session_id.as_deref().expect("adhoc session"))
+        .expect("load adhoc session")
+        .expect("adhoc session exists");
+    assert_eq!(
+        adhoc_session.requested_model_id.as_deref(),
+        Some("haiku")
+    );
 
     fixture.touch_control("release-turn");
     let state = fixture
@@ -664,5 +735,336 @@ async fn the_boot_fence_heals_the_crash_window_and_resume_completes_the_run() {
         .await;
     assert!(node_by_def(&state, "solo").session_id.is_some());
     assert_eq!(prompt_texts(&fixture.script.request_log), vec!["heal me"]);
+    assert_quiesced(&state);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_queued_interjection_holds_the_advance_until_the_queue_drains() {
+    let fixture = fixture("wf-interject");
+    let definition = chain(vec![
+        agent_node("hold", "blocking turn"),
+        agent_node("ship", "then ship"),
+    ]);
+    fixture.start("run-interject", definition);
+
+    fixture.wait_for_control("turn-seen").await;
+    let state = fixture
+        .wait_for("run-interject", "hold node has a session", |state| {
+            node_by_def(state, "hold").session_id.is_some()
+        })
+        .await;
+    let session_id = node_by_def(&state, "hold")
+        .session_id
+        .clone()
+        .expect("hold session");
+
+    // A user interjection lands mid-turn: gen-2 sessions stay chattable, so
+    // the session actor queues it — and its presence must HOLD the chain when
+    // the blocking turn ends, or the queued message would be abandoned in a
+    // session the run has already moved past.
+    let outcome = fixture
+        .state
+        .session_runtime
+        .send_text_prompt_with_id(
+            &session_id,
+            "queued interjection".into(),
+            "test-interjection-1".into(),
+        )
+        .await
+        .expect("interjection accepted");
+    assert!(
+        matches!(outcome, SendPromptOutcome::Queued { .. }),
+        "the interjection queues behind the live turn"
+    );
+
+    fixture.touch_control("release-turn");
+    let state = fixture
+        .wait_for("run-interject", "run completed", |state| {
+            state.run.status == WorkflowRunStatus::Completed
+        })
+        .await;
+    // The queued message ran inside the hold node's session BEFORE the chain
+    // advanced: the whole run's prompt order, exact — nothing dropped, nothing
+    // reordered.
+    assert_eq!(
+        prompt_texts(&fixture.script.request_log),
+        vec!["blocking turn", "queued interjection", "then ship"]
+    );
+    assert_quiesced(&state);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stale_turn_report_after_undo_neither_moves_rows_nor_closes_the_window() {
+    let fixture = fixture("wf-stale");
+    let definition = chain(vec![
+        agent_node("first", "do the first step"),
+        agent_node("second", "blocking turn"),
+    ]);
+    fixture.start("run-stale", definition);
+
+    fixture.wait_for_control("turn-seen").await;
+    fixture
+        .wait_for("run-stale", "second node running with a session", |state| {
+            let second = node_by_def(state, "second");
+            second.status == WorkflowNodeStatus::Running && second.session_id.is_some()
+        })
+        .await;
+    fixture
+        .command("run-stale", WorkflowCommand::UndoAdvance)
+        .await;
+    let state = fixture
+        .wait_for("run-stale", "undo parks the predecessor", |state| {
+            state.run.status == WorkflowRunStatus::AwaitingHuman
+        })
+        .await;
+    let second = node_by_def(&state, "second");
+    assert_eq!(second.session_id, None);
+    assert!(second.first_turn_finished_at.is_none(), "window open");
+
+    // The disposed session's dying report was already in flight when undo
+    // landed: replay that straggler by hand. The unlinked row makes it stale,
+    // so it must move no rows AND must not stamp shut the undo window the
+    // undo just reopened (Ruling J's ordering: staleness before the stamp).
+    fixture.state.workflow_manager.notify(
+        "run-stale",
+        TurnFinished {
+            node_row_id: second.id.clone(),
+            stop_reason: TurnStopReason::CleanEndTurn,
+            queue_empty: true,
+        },
+    );
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let state = fixture
+        .state
+        .workflow_store
+        .load_run_state("run-stale")
+        .expect("load run state")
+        .expect("run exists");
+    assert_eq!(state.run.status, WorkflowRunStatus::AwaitingHuman);
+    let second = node_by_def(&state, "second");
+    assert_eq!(second.status, WorkflowNodeStatus::Pending);
+    assert!(
+        second.first_turn_finished_at.is_none(),
+        "a stale report must not close the undo window (Ruling J)"
+    );
+
+    // And the run is still healthy: re-approving relaunches and completes.
+    fixture.touch_control("release-turn");
+    let first = node_by_def(&state, "first");
+    fixture
+        .command(
+            "run-stale",
+            WorkflowCommand::ApproveGate {
+                node_row_id: first.id.clone(),
+            },
+        )
+        .await;
+    let state = fixture
+        .wait_for("run-stale", "run completed", |state| {
+            state.run.status == WorkflowRunStatus::Completed
+        })
+        .await;
+    assert_quiesced(&state);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_launch_fails_the_run_and_compensates_the_half_born_session() {
+    use crate::integrations::agent_cli::executable::make_executable;
+
+    let fixture = fixture("wf-launchfail");
+    // Swap the agent for a dud AFTER the fixture installed the real one: a
+    // valid executable (so readiness passes and the durable session row gets
+    // created) that exits without ever speaking ACP (so the start fails —
+    // the failure lands AFTER the row exists, the compensation window). The
+    // fixture holds the env lock for its whole life, so the direct set_var
+    // is race-free, and the fixture's own guard restores the value on drop.
+    let dud = fixture.runtime_home.join("dud-agent");
+    std::fs::write(&dud, "#!/bin/sh\nexit 0\n").expect("write dud agent");
+    make_executable(&dud).expect("make dud agent executable");
+    std::env::set_var("ANYHARNESS_CLAUDE_AGENT_PROGRAM", &dud);
+    let definition = chain(vec![agent_node("solo", "never launches")]);
+    fixture.start("run-launchfail", definition);
+
+    let state = fixture
+        .wait_for("run-launchfail", "launch failure fails the run", |state| {
+            state.run.status == WorkflowRunStatus::Failed
+        })
+        .await;
+    assert_eq!(
+        state.run.failure_code.as_deref(),
+        Some("node_launch_failed")
+    );
+    let solo = node_by_def(&state, "solo");
+    assert_eq!(solo.status, WorkflowNodeStatus::Failed);
+    assert_eq!(
+        solo.failure_code,
+        Some(WorkflowNodeFailureCode::NodeLaunchFailed)
+    );
+
+    // The house compensation ran: the stamped session row is GONE — a
+    // half-born session must not linger in the run workspace.
+    let stamped = solo
+        .session_id
+        .clone()
+        .expect("the launch stamped the session before starting it");
+    assert!(
+        fixture
+            .state
+            .session_service
+            .get_session(&stamped)
+            .expect("session lookup")
+            .is_none(),
+        "compensation deletes the half-born session row"
+    );
+    assert_quiesced(&state);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn turn_reports_never_block_even_while_the_actor_is_busy() {
+    let fixture = fixture("wf-wedge");
+    let definition = chain(vec![agent_node("solo", "blocking turn")]);
+    let created = fixture.start("run-wedge", definition);
+
+    fixture.wait_for_control("turn-seen").await;
+    // Keep the actor busy: an adhoc launch is a real multi-step side effect
+    // (render, create, start, dispatch) performed inline on its loop.
+    let manager = fixture.state.workflow_manager.clone();
+    let anchor = created.first_node_row_id.clone();
+    let adhoc_command = tokio::spawn(async move {
+        manager
+            .command(
+                "run-wedge",
+                WorkflowCommand::AddAdhocNode {
+                    anchor_node_row_id: anchor,
+                    prompt: "wedge probe".into(),
+                    model: None,
+                },
+            )
+            .await
+    });
+
+    // The session actor's finish path calls notify() synchronously, so it
+    // must never wait on the workflow actor, whatever that actor is doing.
+    // Scope honesty: this pins the fire-and-forget unbounded send and the
+    // brief registry lock — a bounded wall clock for a thousand sends while
+    // the actor works its mailbox.
+    let spam_started = std::time::Instant::now();
+    for i in 0..1000 {
+        fixture.state.workflow_manager.notify(
+            "run-wedge",
+            TurnFinished {
+                node_row_id: format!("junk-{i}"),
+                stop_reason: TurnStopReason::CleanEndTurn,
+                queue_empty: true,
+            },
+        );
+    }
+    assert!(
+        spam_started.elapsed() < Duration::from_secs(5),
+        "notify must not block on a busy actor"
+    );
+    adhoc_command
+        .await
+        .expect("adhoc task")
+        .expect("adhoc command");
+    fixture
+        .wait_for("run-wedge", "adhoc probe completed", |state| {
+            state.nodes.iter().any(|node| {
+                node.kind == WorkflowNodeKind::Adhoc
+                    && node.status == WorkflowNodeStatus::Completed
+            })
+        })
+        .await;
+
+    fixture.touch_control("release-turn");
+    let state = fixture
+        .wait_for("run-wedge", "run completed", |state| {
+            state.run.status == WorkflowRunStatus::Completed
+        })
+        .await;
+    // Every junk report was dropped as stale: rows moved only for the real
+    // chain node and the adhoc probe.
+    assert_eq!(state.nodes.len(), 2);
+    assert!(state
+        .nodes
+        .iter()
+        .all(|node| node.status == WorkflowNodeStatus::Completed));
+    assert_quiesced(&state);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn fail_and_redo_from_running_disposes_the_wedged_session_and_relaunches() {
+    let fixture = fixture("wf-redorun");
+    let definition = chain(vec![agent_node("solo", "blocking turn")]);
+    fixture.start("run-redorun", definition);
+
+    fixture.wait_for_control("turn-seen").await;
+    let state = fixture
+        .wait_for("run-redorun", "node running with a session", |state| {
+            node_by_def(state, "solo").session_id.is_some()
+        })
+        .await;
+    let solo = node_by_def(&state, "solo");
+    let old_id = solo.id.clone();
+    let wedged_session = solo.session_id.clone().expect("wedged session");
+
+    // Ruling L: a wedged RUNNING chain node is redoable — the redo takes
+    // over, disposes the live session mid-turn, and relaunches replacement.
+    fixture
+        .command(
+            "run-redorun",
+            WorkflowCommand::FailAndRedo {
+                node_row_id: old_id.clone(),
+                prompt: Some("redo from running".into()),
+            },
+        )
+        .await;
+
+    let state = fixture
+        .wait_for("run-redorun", "replacement completes the run", |state| {
+            state.run.status == WorkflowRunStatus::Completed
+        })
+        .await;
+    let old = state
+        .nodes
+        .iter()
+        .find(|node| node.id == old_id)
+        .expect("old row");
+    assert_eq!(old.status, WorkflowNodeStatus::Failed);
+    // Taken over from a running (non-failed) state: superseded, not a
+    // turn-sourced failure code.
+    assert_eq!(
+        old.failure_code,
+        Some(WorkflowNodeFailureCode::Superseded)
+    );
+    // Disposed, not destroyed: the session row survives, but it no longer
+    // reports into any workflow.
+    assert!(
+        fixture
+            .state
+            .session_service
+            .get_session(&wedged_session)
+            .expect("session lookup")
+            .is_some(),
+        "disposal dismisses, it never deletes"
+    );
+    assert_eq!(
+        fixture
+            .state
+            .session_service
+            .store()
+            .workflow_columns(&wedged_session)
+            .expect("columns"),
+        None
+    );
+    let replacement = state
+        .nodes
+        .iter()
+        .find(|node| node.replaces_node_row_id.as_deref() == Some(old_id.as_str()))
+        .expect("replacement row");
+    assert_eq!(replacement.kind, WorkflowNodeKind::Replacement);
+    assert_eq!(replacement.status, WorkflowNodeStatus::Completed);
+    assert!(prompt_texts(&fixture.script.request_log)
+        .contains(&"redo from running".to_string()));
     assert_quiesced(&state);
 }

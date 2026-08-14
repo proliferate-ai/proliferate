@@ -478,7 +478,7 @@ impl AppState {
             SessionStore::new(db.clone()),
             WorkspaceStore::new(db.clone()),
         ));
-        workflow_session_extension.bind_manager(workflow_manager.clone());
+        workflow_session_extension.bind_manager(&workflow_manager);
         // Destructive workspace family: the archive orchestrator and the
         // row-dies-last purge orchestrator, constructed directly here. There
         // is no wiring family struct left for this pair once the shared
