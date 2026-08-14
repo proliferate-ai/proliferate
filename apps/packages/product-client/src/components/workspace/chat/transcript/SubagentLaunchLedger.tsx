@@ -2,22 +2,15 @@ import { Button } from "#product/primitives/Button";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
-import { ExternalLink } from "#product/primitives/icons/core";
 import { StickyNote } from "#product/primitives/icons/product";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import { useState } from "react";
-import type {
-  SubagentExecutionState,
-  SubagentProvisioningStatus,
-} from "#product/domain/chats/subagents/subagent-launch";
+import type { SubagentExecutionState } from "#product/domain/chats/subagents/subagent-launch";
 
 interface SubagentLaunchLedgerProps {
   prompt: string | null;
-  provisioningStatus: SubagentProvisioningStatus | null;
   executionState: SubagentExecutionState;
-  childSessionId: string | null;
-  onOpenChild?: (childSessionId: string) => void;
 }
 
 const CHAT_ACTION_TEXT_CLASS =
@@ -25,17 +18,9 @@ const CHAT_ACTION_TEXT_CLASS =
 
 export function SubagentLaunchLedger({
   prompt,
-  provisioningStatus,
   executionState,
-  childSessionId,
-  onOpenChild,
 }: SubagentLaunchLedgerProps) {
-  const hasWakeScheduled = provisioningStatus?.wakeScheduled === true
-    || provisioningStatus?.wakeScheduleCreated === true;
-  const status = formatProvisioningStatus(
-    executionState,
-    provisioningStatus?.promptStatus ?? null,
-  );
+  const status = formatLaunchStatus(executionState);
   const [promptExpanded, setPromptExpanded] = useState(false);
 
   return (
@@ -44,14 +29,6 @@ export function SubagentLaunchLedger({
         label={status.label}
         tone={status.tone}
       />
-      <SubagentSessionActionRow
-        childSessionId={childSessionId}
-        onOpenChild={onOpenChild}
-        failed={executionState === "failed"}
-      />
-      {hasWakeScheduled && (
-        <PlainSubagentActionRow label="Will wake parent when finished" />
-      )}
       {prompt && (
         <div>
           <Button
@@ -95,39 +72,6 @@ export function SubagentLaunchLedger({
   );
 }
 
-function SubagentSessionActionRow({
-  childSessionId,
-  onOpenChild,
-  failed,
-}: {
-  childSessionId: string | null;
-  onOpenChild?: (childSessionId: string) => void;
-  failed: boolean;
-}) {
-  if (!childSessionId || !onOpenChild) {
-    return failed ? (
-      <PlainSubagentActionRow
-        label="Subagent session unavailable"
-        tone="failed"
-      />
-    ) : null;
-  }
-
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      data-chat-transcript-ignore
-      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
-      onClick={() => onOpenChild(childSessionId)}
-    >
-      <span className="min-w-0 truncate">Open subagent</span>
-      <ExternalLink className="icon-compact shrink-0 text-faint opacity-0 transition-opacity duration-hover group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100" />
-    </Button>
-  );
-}
-
 function PlainSubagentActionRow({
   label,
   tone = "normal",
@@ -147,9 +91,8 @@ function PlainSubagentActionRow({
   );
 }
 
-function formatProvisioningStatus(
+function formatLaunchStatus(
   executionState: SubagentExecutionState,
-  promptStatus: string | null,
 ): { label: string; tone: "normal" | "failed" } {
   if (executionState === "failed") {
     return { label: "Launch failed", tone: "failed" };
@@ -161,14 +104,6 @@ function formatProvisioningStatus(
 
   if (executionState === "running") {
     return { label: "Creating", tone: "normal" };
-  }
-
-  if (promptStatus === "running") {
-    return { label: "Working", tone: "normal" };
-  }
-
-  if (promptStatus === "queued") {
-    return { label: "Prompt queued", tone: "normal" };
   }
 
   if (executionState === "background") {

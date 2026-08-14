@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { SessionSubagentsResponse } from "@anyharness/sdk";
 import { anyHarnessSessionSubagentsKey } from "@anyharness/sdk-react";
 import { collectSubagentSessionRelationshipHints } from "#product/domain/chats/subagents/session-relationship-hints";
-import { buildWorkspaceHeaderSubagentHierarchy } from "#product/lib/domain/workspaces/tabs/workspace-header-subagent-hierarchy";
+import {
+  buildWorkspaceHeaderSubagentHierarchy,
+  type HeaderHierarchyQueryRow,
+} from "#product/lib/domain/workspaces/tabs/workspace-header-subagent-hierarchy";
 import {
   clearStagedReplacedSessionTombstone,
   resetReplacedSessionTombstonesForTests,
@@ -58,8 +61,8 @@ describe("header subagent query identity", () => {
   });
 });
 
-describe("promoted header subagent filtering", () => {
-  it("removes a promoted child from both the visual hierarchy and relationship hints", () => {
+describe("pane-only subagent filtering", () => {
+  it("keeps unpromoted children out of tabs while retaining relationship hints", () => {
     const response: SessionSubagentsResponse = {
       parent: agent("durable-parent", null),
       children: [child("durable-promoted"), child("durable-sibling")],
@@ -96,9 +99,75 @@ describe("promoted header subagent filtering", () => {
       resolveClientSessionId,
     });
     expect(hierarchy.childToParent.has("client-promoted")).toBe(false);
-    expect(hierarchy.childrenByParentSessionId.get("client-parent")?.map(
-      (entry) => entry.sessionId,
-    )).toEqual(["client-sibling"]);
+    expect(hierarchy.childrenByParentSessionId.has("client-parent")).toBe(false);
+    expect(hierarchy.paneOnlySubagentSessionIds).toEqual(new Set(["client-sibling"]));
+  });
+
+  it("preserves review and Cowork children as attached tab hierarchy", () => {
+    const hierarchy = buildWorkspaceHeaderSubagentHierarchy({
+      rows: [{
+        sessionId: "parent",
+        subagentSuccess: true,
+        subagentData: {
+          parent: agent("parent", null),
+          children: [child("subagent")],
+        },
+        reviewSuccess: true,
+        reviewData: {
+          reviews: [{
+            id: "review-1",
+            kind: "code",
+            parentSessionId: "parent",
+            rounds: [{
+              id: "round-1",
+              status: "reviewing",
+              assignments: [{
+                id: "assignment-1",
+                sessionLinkId: "review-link",
+                reviewerSessionId: "review-child",
+                personaLabel: "Security reviewer",
+                agentKind: "codex",
+                status: "reviewing",
+              }],
+            }],
+          }],
+        } as HeaderHierarchyQueryRow["reviewData"],
+        coworkSuccess: true,
+        coworkData: {
+          workspaces: [{
+            coworkWorkspaceId: "cowork-workspace",
+            ownershipId: "ownership-1",
+            workspaceId: "workspace-2",
+            sourceWorkspaceId: "workspace-1",
+            label: "Cowork workspace",
+            createdAt: "2026-08-12T00:00:00Z",
+            sessions: [{
+              coworkAgentId: "cowork-agent",
+              sessionLinkId: "cowork-link",
+              codingSessionId: "cowork-child",
+              title: "Cowork child",
+              label: "Cowork child",
+              status: "running",
+              agentKind: "claude",
+              modelId: null,
+              modeId: null,
+              wakeScheduled: false,
+              linkCreatedAt: "2026-08-12T00:00:00Z",
+              sessionCreatedAt: "2026-08-12T00:00:00Z",
+            }],
+          }],
+        },
+      }],
+      resolveClientSessionId: (sessionId) => sessionId,
+    });
+
+    expect(hierarchy.paneOnlySubagentSessionIds).toEqual(new Set(["subagent"]));
+    expect(hierarchy.childToParent).toEqual(new Map([
+      ["review-child", "parent"],
+      ["cowork-child", "parent"],
+    ]));
+    expect(hierarchy.childrenByParentSessionId.get("parent")?.map((row) => row.source))
+      .toEqual(["review", "cowork"]);
   });
 
   it("detaches a promoted session from stale cached parent metadata", () => {

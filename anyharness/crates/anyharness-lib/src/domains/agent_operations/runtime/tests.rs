@@ -229,7 +229,8 @@ async fn list_reads_exclude_all_subagents_and_scope_children_to_the_parent() {
     let children = operations
         .list_subagents(&caller(&operations, "P"))
         .await
-        .expect("list P children");
+        .expect("list P children")
+        .agents;
     assert_eq!(children.len(), 1);
     assert_eq!(children[0].identity.session_id, "C");
     assert_eq!(
@@ -473,6 +474,7 @@ async fn terminal_ordinary_agents_are_hidden_while_relationship_closed_subagents
             .list_subagents(&caller)
             .await
             .expect("list Closed subagent")
+            .agents
             .into_iter()
             .map(|agent| agent.identity.session_id)
             .collect::<Vec<_>>(),

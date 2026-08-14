@@ -1,4 +1,5 @@
 import type { PropsWithChildren, ReactElement } from "react";
+import type { SessionEventEnvelope } from "@anyharness/sdk";
 import { render as testingRender, type RenderResult } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
@@ -52,7 +53,7 @@ export function workspaceTool(
     ? { workspaceId: "workspace-1", kind: "subagent", task: "Schema audit" }
     : { agentId: "agent-session-1" };
   return toolCallItem({
-    nativeToolName: `mcp__workspace__${action}`,
+    nativeToolName: `mcp__proliferate_workspace__${action}`,
     rawInput,
     rawOutput: agentView(),
     ...overrides,
@@ -74,3 +75,15 @@ export function agentView(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+/** Shape of the recorded agent-operations transcript contract fixture. The
+ * JSON itself is imported by the test file (test files may reach the repo
+ * fixtures directory; this shared fixture module may not). */
+export type AgentOperationsTranscriptFixture = {
+  sessionId: string;
+  turnId: string;
+  createIds: string[];
+  sendId: string;
+  readId: string;
+  events: SessionEventEnvelope[];
+};

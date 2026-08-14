@@ -11,7 +11,7 @@ const workspaceReceipt = toolCallItem({
   toolCallId: "create-workspace",
   turnId: TURN_ID,
   title: "Create workspace",
-  nativeToolName: "mcp__workspace__create_workspace",
+  nativeToolName: "mcp__proliferate_workspace__create_workspace",
   status: "completed",
   rawInput: {
     repositoryId: "repo-root-playground",
@@ -45,7 +45,7 @@ const sendReceipt = toolCallItem({
   toolCallId: "send-message",
   turnId: TURN_ID,
   title: "Send message",
-  nativeToolName: "mcp__workspace__send_message",
+  nativeToolName: "mcp__proliferate_workspace__send_message",
   status: "completed",
   rawInput: {
     agentId: REVIEW_SESSION_ID,
@@ -66,7 +66,7 @@ const failedInterruptReceipt = toolCallItem({
   toolCallId: "interrupt-agent-failed",
   turnId: TURN_ID,
   title: "Interrupt agent",
-  nativeToolName: "mcp__workspace__interrupt_agent",
+  nativeToolName: "mcp__proliferate_workspace__interrupt_agent",
   status: "failed",
   rawInput: { agentId: REVIEW_SESSION_ID },
   rawOutput: { error: "The agent finished before the interrupt was applied." },
@@ -80,7 +80,7 @@ const closeReceipt = toolCallItem({
   toolCallId: "close-subagent",
   turnId: TURN_ID,
   title: "Close subagent",
-  nativeToolName: "mcp__workspace__close_subagent",
+  nativeToolName: "mcp__proliferate_workspace__close_subagent",
   status: "completed",
   rawInput: { agentId: REVIEW_SESSION_ID },
   rawOutput: agentView({

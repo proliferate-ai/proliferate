@@ -227,13 +227,17 @@ async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_availab
         .get("dismissedAt")
         .map(|v| v.is_null())
         .unwrap_or(true));
-    assert!(state
-        .subagent_service
-        .subagent_context(&sid)
-        .expect("subagent context")
-        .children
-        .iter()
-        .all(|child| !child.wake_scheduled));
+    let wake_schedule_count = state
+        .db
+        .with_conn(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM session_link_wake_schedules",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+        })
+        .expect("count wake schedules");
+    assert_eq!(wake_schedule_count, 0);
 
     // Reads stay available while controlled.
     let (status, _) = call(&state, "GET", format!("/v1/sessions/{sid}/events"), None).await;

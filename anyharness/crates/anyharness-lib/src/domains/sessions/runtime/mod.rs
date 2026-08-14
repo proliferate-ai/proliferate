@@ -14,6 +14,7 @@ use super::links::service::SessionLinkService;
 use super::mcp_bindings::crypto::SessionDataCipher;
 use super::mcp_bindings::model::SessionMcpServer;
 use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
+use super::mcp_bindings::workspace_attachment::WorkspaceMcpAttachmentError;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
@@ -46,10 +47,12 @@ mod prompt_message_cold_start_tests;
 mod prompt_message_tests;
 mod replay;
 mod startup;
+mod startup_errors;
 mod subagent_lifecycle;
 #[cfg(test)]
 mod tests;
 pub(crate) mod view;
+mod workspace_mcp_attachment;
 
 pub use agent_creation::{CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError};
 pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
@@ -118,6 +121,7 @@ pub enum CreateAndStartSessionError {
         session_id: String,
     },
     MissingDataKey,
+    WorkspaceMcpAttachmentFailed(WorkspaceMcpAttachmentError),
     /// Agent-auth route resolution refused the launch (fail-closed selection
     /// missing, malformed state file, unsupported route, ...). Typed so the
     /// API layer surfaces the stable machine code (`AGENT_ROUTE_*`).
@@ -139,6 +143,7 @@ pub enum EnsureLiveSessionError {
         path: String,
     },
     MissingDataKey,
+    WorkspaceMcpAttachmentFailed(WorkspaceMcpAttachmentError),
     /// See [`CreateAndStartSessionError::RouteAuth`].
     RouteAuth(RouteAuthError),
     /// A9 Scope C: the common live-start seam (`start_live_session`) now
@@ -187,6 +192,11 @@ pub enum SendPromptError {
         path: String,
     },
     InvalidPrompt(crate::domains::sessions::prompt::PromptValidationError),
+    WorkspaceMcpAttachmentFailed(WorkspaceMcpAttachmentError),
+    ProductContextUnavailable {
+        incident_id: String,
+        error: crate::live::sessions::product_context::AgentProductContextResolutionError,
+    },
     Internal(anyhow::Error),
 }
 
@@ -364,6 +374,7 @@ pub(super) enum StartSessionError {
     Closed,
     MissingDataKey,
     RestartRequired(String),
+    WorkspaceMcpAttachmentFailed(WorkspaceMcpAttachmentError),
     /// Agent-auth route resolution refused the launch (fail-closed, spec §3).
     RouteAuth(RouteAuthError),
     /// A9 Scope C: `resolve_launch_agent`'s status was resolved at this seam

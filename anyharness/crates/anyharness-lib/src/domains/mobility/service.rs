@@ -264,6 +264,24 @@ mod tests {
 
         assert!(matches!(error, MobilityError::Invalid(_)));
     }
+
+    #[test]
+    fn mobility_wake_schedules_are_cowork_only() {
+        use crate::domains::sessions::links::model::SessionLinkRelation;
+
+        assert!(relation_owns_mobility_wake_schedule(
+            SessionLinkRelation::CoworkCodingSession
+        ));
+        assert!(!relation_owns_mobility_wake_schedule(
+            SessionLinkRelation::Subagent
+        ));
+        assert!(!relation_owns_mobility_wake_schedule(
+            SessionLinkRelation::ReviewAgent
+        ));
+        assert!(!relation_owns_mobility_wake_schedule(
+            SessionLinkRelation::Fork
+        ));
+    }
 }
 
 pub(super) fn write_workspace_file(
@@ -432,7 +450,7 @@ pub(super) fn validate_delegated_archive_graph(
         .iter()
         .map(|bundle| bundle.session.id.as_str())
         .collect::<HashSet<_>>();
-    let mut link_ids = HashSet::new();
+    let mut link_relations = std::collections::HashMap::new();
 
     for link in &archive.session_links {
         if !session_ids.contains(link.parent_session_id.as_str()) {
@@ -447,7 +465,10 @@ pub(super) fn validate_delegated_archive_graph(
                 link.id, link.child_session_id
             )));
         }
-        if !link_ids.insert(link.id.as_str()) {
+        if link_relations
+            .insert(link.id.as_str(), link.relation)
+            .is_some()
+        {
             return Err(MobilityError::Invalid(format!(
                 "archive contains duplicate session link {}",
                 link.id
@@ -456,7 +477,7 @@ pub(super) fn validate_delegated_archive_graph(
     }
 
     for completion in &archive.session_link_completions {
-        if !link_ids.contains(completion.session_link_id.as_str()) {
+        if !link_relations.contains_key(completion.session_link_id.as_str()) {
             return Err(MobilityError::Invalid(format!(
                 "archive completion {} references missing session link {}",
                 completion.completion_id, completion.session_link_id
@@ -465,15 +486,27 @@ pub(super) fn validate_delegated_archive_graph(
     }
 
     for schedule in &archive.session_link_wake_schedules {
-        if !link_ids.contains(schedule.session_link_id.as_str()) {
+        let Some(relation) = link_relations.get(schedule.session_link_id.as_str()) else {
             return Err(MobilityError::Invalid(format!(
                 "archive wake schedule references missing session link {}",
+                schedule.session_link_id
+            )));
+        };
+        if !relation_owns_mobility_wake_schedule(*relation) {
+            return Err(MobilityError::Invalid(format!(
+                "archive wake schedule references non-Cowork session link {}",
                 schedule.session_link_id
             )));
         }
     }
 
     validate_completion_deliveries(archive, &session_ids)
+}
+
+pub(super) fn relation_owns_mobility_wake_schedule(
+    relation: crate::domains::sessions::links::model::SessionLinkRelation,
+) -> bool {
+    relation == crate::domains::sessions::links::model::SessionLinkRelation::CoworkCodingSession
 }
 
 pub(super) fn validate_archive_size(

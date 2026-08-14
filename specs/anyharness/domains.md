@@ -430,9 +430,9 @@ mod.rs
 Examples:
 
 ```text
+domains/agent_operations/mcp/
 domains/cowork/mcp/
 domains/reviews/mcp/
-domains/sessions/subagents/mcp/
 ```
 
 Generic MCP protocol/server mechanics do not belong in domains:

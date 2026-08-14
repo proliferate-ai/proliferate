@@ -3,8 +3,9 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
-use super::{CompletionDeliveryRecord, CompletionDeliveryStore};
+use super::{CompletionDeliveryRecord, CompletionDeliveryState, CompletionDeliveryStore};
 use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::sessions::runtime_event::{RuntimeInjectedSessionEvent, SubagentTurnCompletion};
 use crate::domains::sessions::store::completion_deliveries::enqueue::ClaimedDeliveryEnqueueOutcome;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -136,6 +137,7 @@ impl CompletionDeliveryWorker {
         // unresolved acknowledgement path therefore converges through the
         // same capped backoff instead of the one-second poll cadence.
         let next_attempt = retry_at(&now, delivery.attempt_count);
+        let claimed_state = delivery.state;
         let (delivery, pending) = match self.delivery_store.enqueue_claimed_canonical(
             &delivery.delivery_id,
             lease_token,
@@ -155,6 +157,16 @@ impl CompletionDeliveryWorker {
         let Some(session_runtime) = self.session_runtime.upgrade() else {
             anyhow::bail!("session_runtime_unavailable");
         };
+        // Pending -> Enqueued is the one delivery transition that happens
+        // exactly once: state only moves forward, the lease serializes
+        // competing claims, and the canonical prompt insert commits in the
+        // same transaction as the state change. Injecting the parent-visible
+        // completion event here therefore yields exactly one event per
+        // delivery, ordered ahead of the wake turn the parent admits from the
+        // queued prompt.
+        if claimed_state == CompletionDeliveryState::Pending {
+            inject_completion_event(&session_runtime, &delivery).await;
+        }
         session_runtime
             .activate_durable_prompt_consumer(
                 &delivery.parent_session_id,
@@ -168,6 +180,44 @@ impl CompletionDeliveryWorker {
 
 fn dead_letter_threshold_reached(attempt_count: i64) -> bool {
     attempt_count >= MAX_DELIVERY_ATTEMPTS
+}
+
+/// Publish the completion metadata the parent transcript indexes for wake
+/// receipts and roster invalidation.
+///
+/// Injection is best effort on purpose: the delivery is already committed as
+/// Enqueued, so failing the attempt would only defer the parent's wake prompt
+/// without ever re-running this once-per-delivery transition.
+async fn inject_completion_event(
+    session_runtime: &SessionRuntime,
+    delivery: &CompletionDeliveryRecord,
+) {
+    let completion = SubagentTurnCompletion {
+        completion_id: delivery.completion_id.clone(),
+        session_link_id: delivery.session_link_id.clone(),
+        parent_session_id: delivery.parent_session_id.clone(),
+        child_session_id: delivery.child_session_id.clone(),
+        child_turn_id: delivery.child_turn_id.clone(),
+        child_last_event_seq: delivery.child_last_event_seq,
+        outcome: delivery.outcome,
+        label: delivery.label.clone(),
+    };
+    if let Err(error) = session_runtime
+        .emit_runtime_event(
+            &delivery.parent_session_id,
+            RuntimeInjectedSessionEvent::subagent_turn_completed(completion),
+        )
+        .await
+    {
+        tracing::warn!(
+            delivery_id = %delivery.delivery_id,
+            parent_session_id = %delivery.parent_session_id,
+            child_session_id = %delivery.child_session_id,
+            result_class = "completion_event_injection_failed",
+            error = %error,
+            "subagent completion event was not injected into the parent transcript"
+        );
+    }
 }
 
 fn retry_at(now: &chrono::DateTime<chrono::Utc>, attempt_count: i64) -> String {
@@ -189,8 +239,7 @@ fn error_chain_class(error: &anyhow::Error) -> &'static str {
 }
 
 fn log_delivered(delivery: &CompletionDeliveryRecord, delivered_at: &str) {
-    let queue_age_ms = timestamp_age_ms(&delivery.created_at, delivered_at);
-    let delivery_latency_ms = timestamp_age_ms(&delivery.created_at, delivered_at);
+    let (queue_age_ms, delivery_latency_ms) = delivery_timing_ms(delivery, delivered_at);
     tracing::info!(
         delivery_id = %delivery.delivery_id,
         attempt_count = delivery.attempt_count,
@@ -199,6 +248,17 @@ fn log_delivered(delivery: &CompletionDeliveryRecord, delivered_at: &str) {
         delivery_latency_ms,
         "completion delivery visible in parent transcript"
     );
+}
+
+fn delivery_timing_ms(delivery: &CompletionDeliveryRecord, delivered_at: &str) -> (i64, i64) {
+    let queue_started_at = delivery
+        .enqueued_at
+        .as_deref()
+        .unwrap_or(&delivery.created_at);
+    (
+        timestamp_age_ms(queue_started_at, delivered_at),
+        timestamp_age_ms(&delivery.created_at, delivered_at),
+    )
 }
 
 fn timestamp_age_ms(start: &str, end: &str) -> i64 {

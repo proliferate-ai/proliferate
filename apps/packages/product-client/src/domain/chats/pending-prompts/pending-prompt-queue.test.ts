@@ -168,9 +168,12 @@ describe("derivePendingPromptQueueRow", () => {
   it("hides subagent wake prompt bodies and exposes no controls", () => {
     const row = derivePendingPromptQueueRow(entry({
       text: [
-        'Subagent "runtime-server-sdk-survey" completed a turn.',
-        "Child session: child-1",
-        "Use the subagent tools to inspect the child session before continuing.",
+        "Subagent update",
+        "Agent: runtime-server-sdk-survey (subagent-runtime-server-sdk-survey)",
+        "Outcome: completed",
+        "",
+        "Final output:",
+        "Mapped the runtime, server, and SDK seams.",
       ].join("\n"),
       promptProvenance: {
         type: "subagentWake",

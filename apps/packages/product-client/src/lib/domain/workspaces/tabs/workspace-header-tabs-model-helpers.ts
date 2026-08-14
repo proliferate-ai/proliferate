@@ -107,6 +107,40 @@ export function buildHeaderLiveVisibilityCandidates(args: {
   return Array.from(candidatesBySessionId.values());
 }
 
+export function filterPaneOnlyHeaderVisibility(args: {
+  activeSessionId: string | null;
+  knownSessionIds: readonly string[];
+  hierarchyVisibilityCandidates: readonly ChatVisibilityCandidate[];
+  rowsBySessionId: ReadonlyMap<string, HeaderHierarchyChildRow>;
+  paneOnlySubagentSessionIds: ReadonlySet<string>;
+}): {
+  activeSessionId: string | null;
+  knownSessionIds: string[];
+  hierarchyVisibilityCandidates: ChatVisibilityCandidate[];
+  paneOnlySessionIds: Set<string>;
+} {
+  const paneOnlySessionIds = new Set(args.paneOnlySubagentSessionIds);
+  for (const child of args.rowsBySessionId.values()) {
+    if (paneOnlySessionIds.has(child.parentSessionId)) {
+      paneOnlySessionIds.add(child.sessionId);
+    }
+  }
+  return {
+    activeSessionId: args.activeSessionId
+      && !paneOnlySessionIds.has(args.activeSessionId)
+      ? args.activeSessionId
+      : null,
+    knownSessionIds: args.knownSessionIds.filter(
+      (sessionId) => !paneOnlySessionIds.has(sessionId),
+    ),
+    hierarchyVisibilityCandidates: args.hierarchyVisibilityCandidates.filter(
+      (candidate) => !paneOnlySessionIds.has(candidate.sessionId)
+        && !paneOnlySessionIds.has(candidate.parentSessionId ?? ""),
+    ),
+    paneOnlySessionIds,
+  };
+}
+
 export function resolveHierarchyMaterializedSessionId(input: {
   sessionId: string;
   materializedSessionId: string | null;

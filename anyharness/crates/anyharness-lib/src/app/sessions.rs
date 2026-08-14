@@ -26,6 +26,7 @@ use crate::domains::sessions::subagents::delivery::{
 };
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::live::sessions::model::{ActorCapabilities, PermissionAdvisor, SessionEventObserver};
+use crate::live::sessions::product_context::AgentProductContextResolver;
 use crate::live::sessions::LiveSessionManager;
 use crate::persistence::Db;
 
@@ -37,6 +38,7 @@ pub(super) struct LiveSessionsWiringDeps {
     pub goal_service: Arc<GoalService>,
     pub loop_service: Arc<LoopService>,
     pub activity_service: Arc<ActivityService>,
+    pub product_context: Arc<dyn AgentProductContextResolver>,
 }
 
 /// Registration order is the observer dispatch order: plans must run before
@@ -69,6 +71,7 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
         background: Arc::new(store.clone()),
         state: Arc::new(store.clone()),
         attachments: Arc::new(SessionAttachmentSource::new(store, attachment_storage)),
+        product_context: deps.product_context.clone(),
         observers,
         permission_advisor,
     };

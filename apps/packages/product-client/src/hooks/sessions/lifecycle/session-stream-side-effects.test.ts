@@ -307,7 +307,7 @@ function workspacePromotionToolCall(): ToolCallItem {
     sourceAgentKind: "codex",
     messageId: null,
     title: "Promote subagent",
-    nativeToolName: "mcp__workspace__promote_subagent",
+    nativeToolName: "mcp__proliferate_workspace__promote_subagent",
     parentToolCallId: null,
     rawInput: { agentId: "durable-session" },
     rawOutput: {
@@ -341,7 +341,7 @@ function workspaceCreateToolCall(): ToolCallItem {
     ...item,
     itemId: "tool-create",
     title: "Create subagent",
-    nativeToolName: "mcp__workspace__create_agent",
+    nativeToolName: "mcp__proliferate_workspace__create_agent",
     rawInput: {
       kind: "subagent",
       task: "Inspect schemas",

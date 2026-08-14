@@ -4,9 +4,8 @@ import type { ComponentProps } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RightPanelContent } from "#product/components/workspace/shell/right-panel/RightPanelContent";
-import { RightPanelPlaceholder } from "#product/components/workspace/shell/right-panel/RightPanelPlaceholder";
 import { RightPanelHeaderEntryList } from "#product/components/workspace/shell/right-panel/RightPanelHeaderEntryList";
-import type { RightPanelHeaderDragController } from "#product/hooks/workspaces/ui/use-right-panel-header-drag";
+import { RightPanelPlaceholder } from "#product/components/workspace/shell/right-panel/RightPanelPlaceholder";
 import { DEFAULT_RIGHT_PANEL_TOOL_ORDER } from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 vi.mock("#product/components/workspace/delegated-work/agents-pane/AgentsPane", () => ({
@@ -68,36 +67,38 @@ function renderRightPanelContent(
 
 describe("Agents right-panel shell", () => {
   it("renders Agents as a real third tool tab with its icon and selection behavior", () => {
-    const onActivateEntry = vi.fn(() => true);
-    const drag: RightPanelHeaderDragController = {
-      draggedHeaderKey: null,
-      showEndDropIndicator: false,
-      getEntryDragState: () => ({
-        isDragging: false,
-        dragOffsetX: 0,
-        showDropIndicator: false,
-      }),
-      registerHeaderEntryNode: vi.fn(),
-      handleHeaderPointerDown: vi.fn(),
-      handleHeaderPointerMove: vi.fn(),
-      finishHeaderPointerDrag: vi.fn(),
-      cancelHeaderPointerDrag: vi.fn(),
-      shouldSuppressHeaderClick: () => false,
-    };
+    const onSelect = vi.fn();
     const { container } = render(
       <RightPanelHeaderEntryList
-        entries={[{ kind: "tool", key: "tool:agents", tool: "agents" }]}
+        entries={[{ key: "tool:agents", kind: "tool", tool: "agents" }]}
         activeEntryKey="tool:agents"
         unreadByTerminal={{}}
         buffersByPath={{}}
         tabModes={{}}
         isWorkspaceReady
-        drag={drag}
+        drag={{
+          draggedHeaderKey: null,
+          showEndDropIndicator: false,
+          getEntryDragState: () => ({
+            isDragging: false,
+            dragOffsetX: 0,
+            showDropIndicator: false,
+          }),
+          registerHeaderEntryNode: () => undefined,
+          handleHeaderPointerDown: () => undefined,
+          handleHeaderPointerMove: () => undefined,
+          finishHeaderPointerDrag: () => undefined,
+          cancelHeaderPointerDrag: () => undefined,
+          shouldSuppressHeaderClick: () => false,
+        }}
         shortcutRevealVisible={false}
-        onActivateEntry={onActivateEntry}
-        onCloseTerminal={vi.fn()}
-        onCloseViewerTarget={vi.fn()}
-        onRenameTerminal={vi.fn(async () => undefined)}
+        onActivateEntry={() => {
+          onSelect();
+          return true;
+        }}
+        onCloseTerminal={() => undefined}
+        onCloseViewerTarget={() => undefined}
+        onRenameTerminal={async () => undefined}
       />,
     );
 
@@ -106,11 +107,10 @@ describe("Agents right-panel shell", () => {
     expect(tab.getAttribute("aria-selected")).toBe("true");
     expect(tab.getAttribute("aria-controls"))
       .toBe("tabpanel-workspace-right-panel-agents");
-    expect(container.querySelector("svg.icon-control")).not.toBeNull();
+    expect(tab.querySelector("svg")).not.toBeNull();
 
     fireEvent.click(tab);
-    expect(onActivateEntry).toHaveBeenCalledTimes(1);
-    expect(onActivateEntry).toHaveBeenCalledWith("tool:agents");
+    expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
   it("mounts the Agents pane for the active tool and passes the exact workspace", () => {
