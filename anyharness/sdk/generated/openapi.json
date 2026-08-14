@@ -2002,6 +2002,227 @@
         }
       }
     },
+    "/v1/sessions/{parent_session_id}/subagents": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "get_session_subagents",
+        "parameters": [
+          {
+            "name": "parent_session_id",
+            "in": "path",
+            "description": "Parent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Parent and current durable subagents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSubagentsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{parent_session_id}/subagents/{child_session_id}/close": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "close_subagent",
+        "parameters": [
+          {
+            "name": "parent_session_id",
+            "in": "path",
+            "description": "Parent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "child_session_id",
+            "in": "path",
+            "description": "Child subagent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subagent relationship is Closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubagentLifecycleResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Subagent lifecycle conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{parent_session_id}/subagents/{child_session_id}/open": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "open_subagent",
+        "parameters": [
+          {
+            "name": "parent_session_id",
+            "in": "path",
+            "description": "Parent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "child_session_id",
+            "in": "path",
+            "description": "Child subagent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subagent relationship is Open",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubagentLifecycleResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Subagent lifecycle conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{parent_session_id}/subagents/{child_session_id}/promote": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "promote_subagent",
+        "parameters": [
+          {
+            "name": "parent_session_id",
+            "in": "path",
+            "description": "Parent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "child_session_id",
+            "in": "path",
+            "description": "Child subagent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subagent promoted to an ordinary agent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubagentLifecycleResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Open the subagent before promotion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}": {
       "get": {
         "tags": [
@@ -2349,6 +2570,95 @@
           },
           "400": {
             "description": "Unsupported event history window",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/events/support-window": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "list_session_events_support_window",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "timestamp_from",
+            "in": "query",
+            "description": "Required UTC RFC3339 inclusive lower timestamp",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "timestamp_to",
+            "in": "query",
+            "description": "Required UTC RFC3339 inclusive upper timestamp, at most 15 minutes after timestamp_from",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Required item limit from 1 through 200",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "max_response_bytes",
+            "in": "query",
+            "description": "Required response limit from 16384 through 4194304 bytes",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded newest matching session events in sequence order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnyHarnessEventSupportWindowV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid support-window query",
             "content": {
               "application/json": {
                 "schema": {
@@ -3128,7 +3438,7 @@
             }
           },
           "409": {
-            "description": "Session execution is controlled by an active workflow run",
+            "description": "Pending prompt is protected or session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -3197,7 +3507,7 @@
             }
           },
           "409": {
-            "description": "Session execution is controlled by an active workflow run",
+            "description": "Pending prompt is protected or session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -3304,6 +3614,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PromptSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or reserved prompt id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -3428,6 +3748,95 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/raw-notifications/support-window": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "list_session_raw_notifications_support_window",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "timestamp_from",
+            "in": "query",
+            "description": "Required UTC RFC3339 inclusive lower timestamp",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "timestamp_to",
+            "in": "query",
+            "description": "Required UTC RFC3339 inclusive upper timestamp, at most 15 minutes after timestamp_from",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Required item limit from 1 through 100",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "max_response_bytes",
+            "in": "query",
+            "description": "Required response limit from 16384 through 2097152 bytes",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded newest matching raw notifications in sequence order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnyHarnessRawNotificationSupportWindowV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid support-window query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/resume": {
       "post": {
         "tags": [
@@ -3525,127 +3934,6 @@
           },
           "404": {
             "description": "Session not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/sessions/{session_id}/subagents": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "operationId": "get_session_subagents",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Session ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Subagent parent/child context",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionSubagentsResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Session not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/sessions/{session_id}/subagents/{child_session_id}/wake": {
-      "post": {
-        "tags": [
-          "sessions"
-        ],
-        "operationId": "schedule_subagent_wake",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Parent session ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "child_session_id",
-            "in": "path",
-            "description": "Child subagent session ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ScheduleSubagentWakeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Scheduled a one-shot parent wake for the child subagent",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScheduleSubagentWakeResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid subagent wake request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Session not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Workspace or subagent state blocks wake scheduling",
             "content": {
               "application/json": {
                 "schema": {
@@ -6939,6 +7227,103 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/sessions/support-window": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "list_sessions_support_window",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "description": "Required exact or recent selection mode",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Required only for exact mode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "updated_at_from",
+            "in": "query",
+            "description": "Required UTC RFC3339 inclusive lower timestamp only for recent mode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "updated_at_to",
+            "in": "query",
+            "description": "Required UTC RFC3339 inclusive upper timestamp",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Required limit: 1 for exact mode, 1 through 3 for recent mode",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "max_response_bytes",
+            "in": "query",
+            "description": "Required response limit from 16384 through 1048576 bytes",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded newest matching durable sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnyHarnessSessionSupportWindowV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid support-window query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/setup-rerun": {
       "post": {
         "tags": [
@@ -7081,6 +7466,47 @@
           },
           "404": {
             "description": "No setup execution found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/subagents": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "get_workspace_subagents",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current durable subagent roster",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSubagentsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -7874,6 +8300,185 @@
           "failed"
         ]
       },
+      "AgentOperationsAgent": {
+        "type": "object",
+        "required": [
+          "identity",
+          "workspace",
+          "role",
+          "configuration",
+          "status",
+          "capabilities",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentOperationsCapability"
+            }
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/AgentOperationsConfiguration"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/AgentOperationsIdentity"
+          },
+          "parent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentOperationsIdentity"
+              }
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/AgentOperationsRole"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentOperationsStatus"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/AgentOperationsWorkspaceIdentity"
+          }
+        }
+      },
+      "AgentOperationsCapability": {
+        "type": "string",
+        "enum": [
+          "whoami",
+          "list_workspaces",
+          "list_workspace_options",
+          "create_workspace",
+          "list_agents",
+          "get_agent",
+          "list_subagents",
+          "list_agent_launch_options",
+          "list_agent_config_options",
+          "get_task_output",
+          "create_agent",
+          "configure_agent",
+          "resume_agent",
+          "send_message",
+          "interrupt_agent",
+          "close_subagent",
+          "open_subagent",
+          "promote_subagent"
+        ]
+      },
+      "AgentOperationsConfiguration": {
+        "type": "object",
+        "required": [
+          "agentKind"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AgentOperationsExecutionStatus": {
+        "type": "string",
+        "enum": [
+          "starting",
+          "running",
+          "awaiting_interaction",
+          "idle",
+          "errored",
+          "closed"
+        ]
+      },
+      "AgentOperationsIdentity": {
+        "type": "object",
+        "required": [
+          "runtimeId",
+          "sessionId"
+        ],
+        "properties": {
+          "runtimeId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        }
+      },
+      "AgentOperationsPresentationStatus": {
+        "type": "string",
+        "enum": [
+          "running",
+          "available",
+          "closed"
+        ]
+      },
+      "AgentOperationsRole": {
+        "type": "string",
+        "enum": [
+          "ordinary",
+          "subagent"
+        ]
+      },
+      "AgentOperationsStatus": {
+        "type": "object",
+        "required": [
+          "presentation",
+          "execution",
+          "hasLiveActor"
+        ],
+        "properties": {
+          "execution": {
+            "$ref": "#/components/schemas/AgentOperationsExecutionStatus"
+          },
+          "hasLiveActor": {
+            "type": "boolean"
+          },
+          "presentation": {
+            "$ref": "#/components/schemas/AgentOperationsPresentationStatus"
+          }
+        }
+      },
+      "AgentOperationsWorkspaceIdentity": {
+        "type": "object",
+        "required": [
+          "runtimeId",
+          "workspaceId"
+        ],
+        "properties": {
+          "runtimeId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
       "AgentReadinessState": {
         "type": "string",
         "enum": [
@@ -8127,6 +8732,129 @@
           }
         }
       },
+      "AnyHarnessBoundedWindowCompletenessV1": {
+        "type": "string",
+        "enum": [
+          "complete",
+          "limit_uncertain"
+        ]
+      },
+      "AnyHarnessBoundedWindowMetaV1": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "selection",
+          "presentationOrder",
+          "itemLimit",
+          "responseByteLimit",
+          "returnedItems",
+          "omittedOversizedItems",
+          "completeness"
+        ],
+        "properties": {
+          "completeness": {
+            "$ref": "#/components/schemas/AnyHarnessBoundedWindowCompletenessV1"
+          },
+          "itemLimit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "omittedOversizedItems": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "presentationOrder": {
+            "$ref": "#/components/schemas/AnyHarnessBoundedWindowPresentationOrderV1"
+          },
+          "responseByteLimit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "returnedItems": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "selection": {
+            "$ref": "#/components/schemas/AnyHarnessBoundedWindowSelectionV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AnyHarnessBoundedWindowPresentationOrderV1": {
+        "type": "string",
+        "enum": [
+          "updated_desc_id_asc",
+          "seq_asc"
+        ]
+      },
+      "AnyHarnessBoundedWindowSelectionV1": {
+        "type": "string",
+        "enum": [
+          "newest_matching"
+        ]
+      },
+      "AnyHarnessEventSupportWindowV1": {
+        "type": "object",
+        "required": [
+          "window",
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionEventEnvelope"
+            }
+          },
+          "window": {
+            "$ref": "#/components/schemas/AnyHarnessBoundedWindowMetaV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AnyHarnessRawNotificationSupportWindowV1": {
+        "type": "object",
+        "required": [
+          "window",
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionRawNotificationEnvelope"
+            }
+          },
+          "window": {
+            "$ref": "#/components/schemas/AnyHarnessBoundedWindowMetaV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AnyHarnessSessionSupportWindowV1": {
+        "type": "object",
+        "required": [
+          "window",
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session"
+            }
+          },
+          "window": {
+            "$ref": "#/components/schemas/AnyHarnessBoundedWindowMetaV1"
+          }
+        },
+        "additionalProperties": false
+      },
       "ApplyAgentAuthStateResponse": {
         "type": "object",
         "description": "Outcome of pushing an agent-auth state document into the runtime.",
@@ -8274,87 +9002,6 @@
           },
           "url": {
             "type": "string"
-          }
-        }
-      },
-      "ChildSubagentSummary": {
-        "type": "object",
-        "required": [
-          "sessionLinkId",
-          "childSessionId",
-          "status",
-          "agentKind",
-          "linkCreatedAt",
-          "childCreatedAt",
-          "wakeScheduled"
-        ],
-        "properties": {
-          "agentKind": {
-            "type": "string"
-          },
-          "childCreatedAt": {
-            "type": "string"
-          },
-          "childSessionId": {
-            "type": "string"
-          },
-          "label": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "latestCompletion": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SubagentCompletionSummary"
-              }
-            ]
-          },
-          "linkClosedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "linkCreatedAt": {
-            "type": "string"
-          },
-          "modeId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "modelId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sessionLinkId": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/SessionStatus"
-          },
-          "subagentId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "wakeScheduled": {
-            "type": "boolean"
           }
         }
       },
@@ -12621,6 +13268,12 @@
               "null"
             ]
           },
+          "provenanceJson": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "queuedAt": {
             "type": "string"
           },
@@ -12743,6 +13396,119 @@
           }
         }
       },
+      "MobilitySessionLinkCompletionDeliveryRecord": {
+        "type": "object",
+        "required": [
+          "deliveryId",
+          "completionId",
+          "sessionLinkId",
+          "parentSessionId",
+          "childSessionId",
+          "childTurnId",
+          "childLastEventSeq",
+          "outcome",
+          "notificationText",
+          "state",
+          "nextAttemptAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "assistantText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attemptCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "childLastEventSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "childSessionId": {
+            "type": "string"
+          },
+          "childTurnId": {
+            "type": "string"
+          },
+          "completionId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "deliveredAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deliveryId": {
+            "type": "string"
+          },
+          "enqueuedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastErrorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nextAttemptAt": {
+            "type": "string"
+          },
+          "notificationText": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "parentPromptSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "parentTurnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionLinkId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "subagentPublicId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
       "MobilitySessionLinkCompletionRecord": {
         "type": "object",
         "required": [
@@ -12848,6 +13614,12 @@
           },
           "relation": {
             "type": "string"
+          },
+          "subagentClosedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "workspaceRelation": {
             "type": "string"
@@ -13379,59 +14151,6 @@
           "api",
           "system"
         ]
-      },
-      "ParentSubagentLinkSummary": {
-        "type": "object",
-        "required": [
-          "sessionLinkId",
-          "parentSessionId",
-          "parentAgentKind",
-          "linkCreatedAt"
-        ],
-        "properties": {
-          "label": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "linkClosedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "linkCreatedAt": {
-            "type": "string"
-          },
-          "parentAgentKind": {
-            "type": "string"
-          },
-          "parentModelId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "parentSessionId": {
-            "type": "string"
-          },
-          "parentTitle": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sessionLinkId": {
-            "type": "string"
-          },
-          "subagentId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
       },
       "PendingInteractionPayloadSummary": {
         "oneOf": [
@@ -16325,42 +17044,6 @@
           }
         }
       },
-      "ScheduleSubagentWakeRequest": {
-        "type": "object"
-      },
-      "ScheduleSubagentWakeResponse": {
-        "type": "object",
-        "required": [
-          "parentSessionId",
-          "childSessionId",
-          "sessionLinkId",
-          "wakeScheduled",
-          "alreadyScheduled"
-        ],
-        "properties": {
-          "alreadyScheduled": {
-            "type": "boolean"
-          },
-          "childSessionId": {
-            "type": "string"
-          },
-          "parentSessionId": {
-            "type": "string"
-          },
-          "sessionLinkId": {
-            "type": "string"
-          },
-          "subagentId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "wakeScheduled": {
-            "type": "boolean"
-          }
-        }
-      },
       "SearchWorkspaceFilesResponse": {
         "type": "object",
         "required": [
@@ -17833,24 +18516,18 @@
       "SessionSubagentsResponse": {
         "type": "object",
         "required": [
+          "parent",
           "children"
         ],
         "properties": {
           "children": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ChildSubagentSummary"
+              "$ref": "#/components/schemas/SubagentRosterEntry"
             }
           },
           "parent": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ParentSubagentLinkSummary"
-              }
-            ]
+            "$ref": "#/components/schemas/AgentOperationsAgent"
           }
         }
       },
@@ -18288,8 +18965,9 @@
           "cancelled"
         ]
       },
-      "SubagentCompletionSummary": {
+      "SubagentLatestCompletion": {
         "type": "object",
+        "description": "Outcome metadata for the child's latest committed terminal turn.\n\nThis is not proof that the attributed parent notification was delivered.",
         "required": [
           "completionId",
           "childTurnId",
@@ -18313,20 +18991,113 @@
           },
           "outcome": {
             "$ref": "#/components/schemas/SubagentTurnOutcome"
+          }
+        }
+      },
+      "SubagentLifecycleResponse": {
+        "type": "object",
+        "required": [
+          "agent",
+          "relationship"
+        ],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentOperationsAgent"
           },
-          "parentEventSeq": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
+          "relationship": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubagentRelationship",
+                "description": "The current reversible subagent relationship after the mutation.\nPromotion returns this field explicitly as `null`."
+              }
+            ]
+          }
+        }
+      },
+      "SubagentParentRoster": {
+        "type": "object",
+        "required": [
+          "parent",
+          "children"
+        ],
+        "properties": {
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubagentRosterEntry"
+            }
           },
-          "parentPromptSeq": {
+          "parent": {
+            "$ref": "#/components/schemas/AgentOperationsAgent"
+          }
+        }
+      },
+      "SubagentRelationship": {
+        "type": "object",
+        "required": [
+          "sessionLinkId",
+          "parentSessionId",
+          "childSessionId",
+          "createdAt"
+        ],
+        "properties": {
+          "childSessionId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "label": {
             "type": [
-              "integer",
+              "string",
               "null"
-            ],
-            "format": "int64"
+            ]
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "sessionLinkId": {
+            "type": "string"
+          },
+          "subagentClosedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subagentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SubagentRosterEntry": {
+        "type": "object",
+        "required": [
+          "agent",
+          "relationship"
+        ],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentOperationsAgent"
+          },
+          "latestCompletion": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubagentLatestCompletion"
+              }
+            ]
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/SubagentRelationship"
           }
         }
       },
@@ -20350,6 +21121,12 @@
           "repoRootPath": {
             "type": "string"
           },
+          "sessionLinkCompletionDeliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilitySessionLinkCompletionDeliveryRecord"
+            }
+          },
           "sessionLinkCompletions": {
             "type": "array",
             "items": {
@@ -20916,6 +21693,24 @@
           },
           "workspace": {
             "$ref": "#/components/schemas/Workspace"
+          }
+        }
+      },
+      "WorkspaceSubagentsResponse": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "parents"
+        ],
+        "properties": {
+          "parents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubagentParentRoster"
+            }
+          },
+          "workspaceId": {
+            "type": "string"
           }
         }
       },

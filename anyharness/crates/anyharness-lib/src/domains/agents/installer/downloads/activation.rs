@@ -173,7 +173,12 @@ impl Drop for ArchiveTreeActivation {
             // Drop cannot return an error. The prepared journal is intentionally
             // retained on failure so the next install retries recovery instead
             // of silently accepting a partial activation.
-            eprintln!("archive activation rollback failed; recovery journal retained: {error}");
+            tracing::error!(
+                error_classification = "archive_activation_rollback_failed",
+                error = %error,
+                recovery_journal_retained = true,
+                "archive activation rollback failed"
+            );
         }
     }
 }

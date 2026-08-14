@@ -20,6 +20,10 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_limited_user, optional_current_active_user
+from proliferate.auth.desktop.pages import (
+    make_desktop_handoff_page,
+    make_desktop_provider_error_page,
+)
 from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.models import (
     AppleMobileCompleteRequest,
@@ -48,13 +52,16 @@ from proliferate.auth.identity.sessions import (
     refresh_auth_session,
     revoke_sessions_for_refresh_token,
 )
-from proliferate.auth.identity.types import AuthProviderName
+from proliferate.auth.identity.types import AuthCallbackRedirect, AuthProviderName
 from proliferate.auth.identity.web_beta import (
     WebBetaAccessDenied,
     ensure_web_beta_email_allowed,
 )
 from proliferate.config import settings
-from proliferate.constants.auth import REFRESH_TOKEN_LIFETIME_SECONDS
+from proliferate.constants.auth import (
+    DESKTOP_DEEP_LINK_LAUNCH_ENABLED,
+    REFRESH_TOKEN_LIFETIME_SECONDS,
+)
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.accounts.identity.service import (
@@ -65,6 +72,25 @@ from proliferate.server.accounts.identity.service import (
 )
 
 router = APIRouter(tags=["auth"])
+
+
+def _provider_callback_response(
+    redirect: AuthCallbackRedirect, provider: AuthProviderName
+) -> Response:
+    if redirect.surface != "desktop":
+        return RedirectResponse(redirect.url, status_code=status.HTTP_302_FOUND)
+    if redirect.error is None:
+        return make_desktop_handoff_page(
+            provider=provider,
+            deep_link_url=redirect.url,
+            launch_deep_link=DESKTOP_DEEP_LINK_LAUNCH_ENABLED,
+        )
+    return make_desktop_provider_error_page(
+        provider=provider,
+        deep_link_url=redirect.url,
+        launch_deep_link=DESKTOP_DEEP_LINK_LAUNCH_ENABLED,
+        error=redirect.error,
+    )
 
 
 @router.post("/github/link/start", response_model=StartAuthResponse)
@@ -140,11 +166,11 @@ async def oauth_callback(
     code: str | None = None,
     error: str | None = None,
     db: AsyncSession = Depends(get_async_session),
-) -> RedirectResponse:
+) -> Response:
     if error is not None:
         if state is not None:
             try:
-                redirect_url = await complete_oauth_provider_error_callback(
+                redirect = await complete_oauth_provider_error_callback(
                     db,
                     provider=provider,
                     surface=surface,
@@ -152,14 +178,14 @@ async def oauth_callback(
                     error=error,
                 )
                 await db.commit()
-                return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
+                return _provider_callback_response(redirect, provider)
             except AuthFlowError:
                 await db.rollback()
         return RedirectResponse(_auth_error_url(error), status_code=status.HTTP_302_FOUND)
     if state is None or code is None:
         return RedirectResponse(_auth_error_url("missing_callback_params"), status_code=302)
     try:
-        redirect_url = await complete_oauth_provider_callback(
+        redirect = await complete_oauth_provider_callback(
             db,
             request,
             provider=provider,
@@ -171,7 +197,7 @@ async def oauth_callback(
         await db.rollback()
         return RedirectResponse(_auth_error_url(exc.code), status_code=status.HTTP_302_FOUND)
     await db.commit()
-    return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
+    return _provider_callback_response(redirect, provider)
 
 
 @router.get("/{provider}/callback")
@@ -182,13 +208,13 @@ async def oauth_shared_provider_callback(
     code: str | None = None,
     error: str | None = None,
     db: AsyncSession = Depends(get_async_session),
-) -> RedirectResponse:
+) -> Response:
     if provider != "github":
         raise HTTPException(status_code=404, detail="Unknown auth callback.")
     if error is not None:
         if state is not None:
             try:
-                redirect_url = await complete_oauth_provider_error_callback(
+                redirect = await complete_oauth_provider_error_callback(
                     db,
                     provider=provider,
                     surface=None,
@@ -196,14 +222,14 @@ async def oauth_shared_provider_callback(
                     error=error,
                 )
                 await db.commit()
-                return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
+                return _provider_callback_response(redirect, provider)
             except AuthFlowError:
                 await db.rollback()
         return RedirectResponse(_auth_error_url(error), status_code=status.HTTP_302_FOUND)
     if state is None or code is None:
         return RedirectResponse(_auth_error_url("missing_callback_params"), status_code=302)
     try:
-        redirect_url = await complete_oauth_provider_callback(
+        redirect = await complete_oauth_provider_callback(
             db,
             request,
             provider=provider,
@@ -215,7 +241,7 @@ async def oauth_shared_provider_callback(
         await db.rollback()
         return RedirectResponse(_auth_error_url(exc.code), status_code=status.HTTP_302_FOUND)
     await db.commit()
-    return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
+    return _provider_callback_response(redirect, provider)
 
 
 @router.post("/web/apple/callback")

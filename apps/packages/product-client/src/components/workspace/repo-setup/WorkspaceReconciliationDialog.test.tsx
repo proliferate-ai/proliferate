@@ -34,7 +34,7 @@ vi.mock("#product/hooks/workspaces/workflows/use-materialization-health-pass", (
 vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({ selectWorkspace: vi.fn(async () => {}) }),
 }));
-vi.mock("#product/components/workspace/shell/providers/WorkspaceShellActionsContext", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-shell-actions", () => ({
   useWorkspaceShellActions: () => null,
 }));
 vi.mock("#product/stores/toast/toast-store", () => ({

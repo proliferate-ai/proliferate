@@ -1,16 +1,20 @@
-import { forwardRef, type MouseEventHandler, type ReactNode } from "react";
+import {
+  forwardRef,
+  type ButtonHTMLAttributes,
+  type MouseEventHandler,
+  type ReactNode,
+} from "react";
 import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 
 export type SidebarActionButtonVariant = "default" | "section";
 
-export interface SidebarActionButtonProps {
+export interface SidebarActionButtonProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "title" | "aria-label" | "onClick"> {
   children: ReactNode;
   title: string;
   onClick?: MouseEventHandler<HTMLButtonElement>;
-  className?: string;
   alwaysVisible?: boolean;
   active?: boolean;
-  disabled?: boolean;
   variant?: SidebarActionButtonVariant;
 }
 
@@ -42,10 +46,20 @@ export interface SidebarActionButtonProps {
  * plain class on the child in the cascade, so no consumer's own icon-size
  * class was ever actually winning. That produced a glyph that read 50-60%
  * too big on screen even though the token ratio looked correct in isolation.
- * `[&_svg]:icon-tight` here is the same shape of selector, so it wins the
+ * `[&_svg]:icon-compact` here is the same shape of selector, so it wins the
  * same twMerge `icon-size` group as the base's `[&_svg]:icon-control` and
- * actually reaches the child glyph — landing at 10.5px against the sidebar
- * row's 12px text, the reference's tighter trailing-control proportion.
+ * actually reaches the child glyph — landing at 13px inside the same 24px
+ * hit box, matching the sidebar row's 13px text 1:1. The earlier
+ * `icon-tight` (10.5px) tier read too small beside the 16px leading nav
+ * glyphs; the hit box is unchanged, only the glyph inside it.
+ *
+ * Rest props are forwarded through to the base's `<button>` so that when this
+ * adapter is a Radix trigger (`PopoverTrigger asChild`), the injected
+ * `data-state`/aria attributes actually reach the DOM — the adapter's own
+ * `data-[state=open]:*` classes (and the base's reveal contract) are inert
+ * without them. The open state mirrors the hover ink (`text-sidebar-foreground`
+ * + full opacity, no background chip) so a trigger stays highlighted while its
+ * menu is open even after the cursor leaves (PRO-133).
  */
 export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionButtonProps>(
   function SidebarActionButton({
@@ -57,6 +71,7 @@ export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionBu
     active = false,
     disabled = false,
     variant = "default",
+    ...rest
   }, ref) {
     const isAlwaysVisible = alwaysVisible || variant === "section";
 
@@ -67,13 +82,14 @@ export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionBu
         onClick={onClick}
         disabled={disabled}
         visibility={isAlwaysVisible ? "always" : "hover"}
-        className={`size-6 border border-transparent text-sidebar-muted-foreground [font-size:var(--text-sidebar-row)] [&_svg]:icon-tight hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[state=open]:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring ${
+        className={`size-6 border border-transparent text-sidebar-muted-foreground [font-size:var(--text-sidebar-row)] [&_svg]:icon-compact hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[state=open]:bg-transparent data-[state=open]:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring ${
           active ? "bg-selected text-sidebar-accent-foreground" : ""
         } ${
           variant === "section"
-            ? "opacity-75 hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+            ? "opacity-75 hover:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
             : ""
         } ${className}`}
+        {...rest}
       >
         {children}
       </RowActionIconButton>

@@ -25,6 +25,8 @@ interface RightPanelFrameProps {
   workspaceUiKey: string | null;
   activeEntryKey: RightPanelActiveEntryKey;
   activeTool: RightPanelTool | null;
+  /** Whether the right panel is actually open/visible (not just mounted). */
+  isOpen: boolean;
   activeTerminalId: string | null;
   activeViewerTarget: ViewerTarget | null;
   entries: readonly RightPanelHeaderEntry[];
@@ -61,6 +63,7 @@ export function RightPanelFrame({
   workspaceUiKey,
   activeEntryKey,
   activeTool,
+  isOpen,
   activeTerminalId,
   activeViewerTarget,
   entries,
@@ -119,6 +122,7 @@ export function RightPanelFrame({
         workspaceUiKey={workspaceUiKey}
         activeEntryKey={activeEntryKey}
         activeTool={activeTool}
+        isOpen={isOpen}
         activeTerminalId={activeTerminalId}
         activeViewerTarget={activeViewerTarget}
         orderedTerminals={orderedTerminals}

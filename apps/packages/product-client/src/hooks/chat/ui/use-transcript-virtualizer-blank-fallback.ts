@@ -3,6 +3,7 @@ import {
   hashMeasurementScope,
   isMainThreadMeasurementEnabled,
 } from "#product/lib/infra/measurement/measurement-port";
+import { recordTranscriptVirtualizerBlank } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 
 const BLANK_VIEWPORT_MIN_SCROLLABLE_PX = 32;
 const BLANK_VIEWPORT_LOGICAL_CONFIRMATION_FRAMES = 2;
@@ -152,6 +153,15 @@ export function useTranscriptVirtualizerBlankFallback({
       lastBlankReportSignatureRef.current = signature;
 
       if (import.meta.env.DEV && isMainThreadMeasurementEnabled()) {
+        recordTranscriptVirtualizerBlank({
+          sessionId: activeSessionId,
+          workspaceId: selectedWorkspaceId,
+          rowCount,
+          renderableRowCount,
+          virtualItemCount,
+          firstVirtualItemIndex,
+          lastVirtualItemIndex,
+        });
         console.error("[transcript-virtualizer] blank viewport detected; falling back to full render", {
           activeSessionHash: hashMeasurementScope(activeSessionId),
           selectedWorkspaceHash: selectedWorkspaceId ? hashMeasurementScope(selectedWorkspaceId) : null,

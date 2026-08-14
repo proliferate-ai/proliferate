@@ -17,6 +17,7 @@ export type {
   AnyHarnessTimingObserver,
   AnyHarnessTimingScope,
 } from "./client/core.js";
+export { supportWindowResponseBytes } from "./client/support-window-response-bytes.js";
 
 export type {
   HealthResponse,
@@ -213,6 +214,12 @@ export type {
   SessionExecutionSummary,
   SessionActionCapabilities,
   Session,
+  AnyHarnessBoundedWindowMetaV1,
+  AnyHarnessSessionSupportWindowV1,
+  AnyHarnessEventSupportWindowV1,
+  AnyHarnessRawNotificationSupportWindowV1,
+  ListSupportSessionWindowOptions,
+  ListSupportEvidenceWindowOptions,
   SessionLinkSummary,
   SessionMcpEnvVar,
   RawSessionConfigValue,
@@ -251,12 +258,6 @@ export type {
   PendingPromptSummary,
   EditPendingPromptRequest,
   ReorderPendingPromptsRequest,
-  SessionSubagentsResponse,
-  ScheduleSubagentWakeRequest,
-  ScheduleSubagentWakeResponse,
-  ParentSubagentLinkSummary,
-  ChildSubagentSummary,
-  SubagentCompletionSummary,
   InteractionDecision,
   ListSessionEventsOptions,
   McpElicitationUrlRevealResponse,
@@ -285,6 +286,24 @@ export type {
   FeedRef,
   FeedKind,
 } from "./types/sessions.js";
+export type {
+  AgentOperationsIdentity,
+  AgentOperationsWorkspaceIdentity,
+  AgentOperationsRole,
+  AgentOperationsPresentationStatus,
+  AgentOperationsExecutionStatus,
+  AgentOperationsStatus,
+  AgentOperationsCapability,
+  AgentOperationsConfiguration,
+  AgentOperationsAgent,
+  SubagentRelationship,
+  SubagentLatestCompletion,
+  SubagentRosterEntry,
+  SubagentParentRoster,
+  SessionSubagentsResponse,
+  WorkspaceSubagentsResponse,
+  SubagentLifecycleResponse,
+} from "./types/subagents.js";
 
 export type {
   ProposedPlanSummary,

@@ -2,16 +2,18 @@ use crate::persistence::Db;
 
 mod attachments;
 mod background_work;
+pub(crate) mod completion_deliveries;
 mod events;
 pub(crate) mod idempotent_create;
 pub(crate) mod link_completions;
 mod links;
 mod live_config;
-mod mobility;
+pub(crate) mod mobility;
 mod notifications;
-mod pending_prompts;
+pub(in crate::domains::sessions) mod pending_prompts;
 pub(crate) mod persisted_payloads;
 pub(crate) mod sessions;
+pub(crate) mod support_windows;
 mod titles;
 
 #[cfg(test)]

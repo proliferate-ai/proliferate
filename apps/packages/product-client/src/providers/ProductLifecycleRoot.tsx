@@ -3,7 +3,6 @@
 // never reuses lifecycle hook cells from the module's previous topology.
 import { Suspense, lazy, useEffect, useRef, type ReactNode } from "react"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
-import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge"
 
 import { useConnectivityListeners } from "#product/hooks/app/lifecycle/use-connectivity-listeners"
 import { useDebugSessionActivity } from "#product/hooks/app/lifecycle/use-debug-session-activity"
@@ -25,8 +24,8 @@ import { useProductStoragePersistenceLifecycle } from "#product/hooks/persistenc
 import { useSessionIntentDispatcher } from "#product/hooks/sessions/lifecycle/use-session-intent-dispatcher"
 import { useSessionSelectionLifecycle } from "#product/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
-import { useSupportReportUploadQueue } from "#product/hooks/support/lifecycle/use-support-report-upload-queue"
 import { useCrashRecoverySupportAction } from "#product/hooks/support/workflows/use-crash-recovery-support-action"
+import { useSupportReportRetentionLifecycle } from "#product/hooks/support/lifecycle/use-support-report-retention"
 import { useTurnEndSound } from "#product/hooks/sessions/lifecycle/use-turn-end-sound"
 import { useWorkspaceGitStatusPersistence } from "#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence"
 import {
@@ -42,6 +41,10 @@ import { AppCommandActionsProvider } from "#product/providers/AppCommandActionsP
 import { DesktopProductLifecycleRoot } from "#product/providers/DesktopProductLifecycleRoot"
 import { AppErrorBoundary } from "#product/components/app/AppErrorBoundary"
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth"
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port"
 
 // The restart offer can only exist for an authenticated user (it follows an
 // acked auth switch), so the modal + session-restart machinery is lazy-loaded
@@ -53,12 +56,21 @@ const AuthRestartOfferRoot = lazy(() =>
   })),
 )
 
+// The support-report upload owner needs a Cloud session on both ends (the modal
+// cannot open without one, and every drain step is an authenticated call), so it
+// is authenticated-only + lazy for the same reason: the login shell fetches zero
+// bytes of the queue, artifact-verification, and upload modules.
+const SupportReportQueueRoot = lazy(() =>
+  import("#product/providers/SupportReportQueueRoot").then((m) => ({
+    default: m.SupportReportQueueRoot,
+  })),
+)
+
 const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
 
 let appRuntimeRenderCount = 0
 
 function recordAppRendererEvent(
-  diagnostics: DesktopDiagnosticsBridge | null,
   message: string,
   elapsedMs?: number,
 ): void {
@@ -66,12 +78,14 @@ function recordAppRendererEvent(
     `app_bootstrap.${message}`,
     elapsedMs === undefined ? undefined : { elapsedMs },
   )
-  void diagnostics?.logEvent({
-    source: "app_bootstrap",
-    message,
-    elapsedMs,
-  }).catch(() => {
-    // Native logging is diagnostic-only; app startup should never depend on it.
+  recordRendererDiagnostic({
+    name: `renderer.app_bootstrap.${message}`,
+    severity: "info",
+    kind: "milestone",
+    privacy: "operational",
+    fields: elapsedMs === undefined
+      ? undefined
+      : { elapsed_ms: diagnosticField(elapsedMs, "operational") },
   })
 }
 
@@ -124,7 +138,6 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_auth_bootstrap")
   const productHost = useProductHost()
   const bootstrapAuth = productHost.auth.restoreSession
-  const diagnostics = productHost.desktop?.diagnostics ?? null
   recordBootDiagnosticOnce("app_runtime.render.after.use_auth_bootstrap")
   recordBootDiagnosticOnce("app_runtime.render.before.auth_status")
   const authStatus = useProductAuthStatus()
@@ -186,22 +199,25 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_session_selection_lifecycle")
   useSessionSelectionLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_session_selection_lifecycle")
-  recordBootDiagnosticOnce("app_runtime.render.before.use_support_report_upload_queue")
-  useSupportReportUploadQueue()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_support_report_upload_queue")
   recordBootDiagnosticOnce("app_runtime.render.before.use_product_storage_persistence_lifecycle")
   useProductStoragePersistenceLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_product_storage_persistence_lifecycle")
+  // Deliberately above the auth gate. The queue owner below drains and needs a
+  // Cloud session; retention does not, and the account that never signs in
+  // again is exactly the one whose queue document and staged report bytes
+  // would otherwise never be reaped.
+  recordBootDiagnosticOnce("app_runtime.render.before.use_support_report_retention_lifecycle")
+  useSupportReportRetentionLifecycle()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_support_report_retention_lifecycle")
 
   useEffect(() => {
-    recordAppRendererEvent(diagnostics, "app.bootstrap.start")
+    recordAppRendererEvent("app.bootstrap.start")
     logStartupDebug("app.bootstrap.start")
     const authBootstrapStartedAt = startStartupTimer()
-    recordAppRendererEvent(diagnostics, "app.auth_bootstrap.start")
+    recordAppRendererEvent("app.auth_bootstrap.start")
     logStartupDebug("app.auth_bootstrap.start")
     void bootstrapAuth().finally(() => {
       recordAppRendererEvent(
-        diagnostics,
         "app.auth_bootstrap.completed",
         elapsedStartupMs(authBootstrapStartedAt),
       )
@@ -210,7 +226,7 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
         authStatus: authStatusRef.current,
       })
     })
-  }, [bootstrapAuth, diagnostics])
+  }, [bootstrapAuth])
 
   recordBootDiagnosticOnce("app_runtime.render.before_return", { authStatus })
 
@@ -223,6 +239,11 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
       {authStatus === "authenticated" && (
         <Suspense fallback={null}>
           <AuthRestartOfferRoot />
+        </Suspense>
+      )}
+      {authStatus === "authenticated" && (
+        <Suspense fallback={null}>
+          <SupportReportQueueRoot />
         </Suspense>
       )}
       {children}

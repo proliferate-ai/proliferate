@@ -19,7 +19,11 @@ describe("SidebarNavRow", () => {
     const icon = container.querySelector('[data-testid="nav-icon"]');
     const well = icon?.parentElement;
     expect(well?.className).toContain("w-[var(--icon-paired)]");
-    expect(well?.className).toContain("[&>svg]:icon-indicator");
+    // Well and glyph are the SAME tier: the well's compound selector beats any
+    // plain size class on the child SVG, so this is what the nav (and the
+    // settings sidebar, which passes its own `icon-paired`) actually renders.
+    expect(well?.className).toContain("[&>svg]:icon-paired");
+    expect(well?.className).not.toContain("[&>svg]:icon-indicator");
   });
 
   it("mounts the shortcut badge only while shortcut reveal is active", () => {

@@ -4,6 +4,11 @@ use anyharness_lib::{
     app::default_runtime_home,
     observability::{AGENT_STDERR_TRACING_TARGET, RUNTIME_INCIDENT_TRACING_TARGET},
 };
+use proliferate_diagnostics_client::{
+    install_desktop_producer, BundledDesktopDiagnosticsBootstrap, DesktopDiagnosticsActivation,
+    DiagnosticsComponent, DiagnosticsProducerGuard, TargetMapping, TargetMappingConfig,
+};
+use proliferate_diagnostics_protocol::v1::types::StandardStreamV1;
 use tracing::Subscriber;
 use tracing_subscriber::{
     layer::{Context as LayerContext, SubscriberExt},
@@ -61,6 +66,15 @@ impl sentry::Transport for ScrubbedTransport {
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
     _file_log: Option<tracing_appender::non_blocking::WorkerGuard>,
+    diagnostics: Option<DiagnosticsProducerGuard>,
+}
+
+impl TelemetryGuards {
+    pub async fn shutdown(mut self, deadline: Duration) {
+        if let Some(guard) = self.diagnostics.take() {
+            let _ = guard.shutdown(deadline).await;
+        }
+    }
 }
 
 fn env_or_default(key: &str, default: &str) -> String {
@@ -183,7 +197,31 @@ fn log_path_for_command(command: &Commands) -> Option<PathBuf> {
     }
 }
 
-pub fn init(command: &Commands) -> TelemetryGuards {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BundledActivation {
+    Ready,
+    Degraded,
+}
+
+/// Pure: whether a bundled `serve` run suppresses the legacy `anyharness.log`
+/// sink.
+///
+/// A degraded bootstrap suppresses unconditionally: the Desktop bridge still
+/// owns this run's diagnostics authority, and the producer refuses to install
+/// at all unless it holds a validated fallback family. A collector-ready
+/// bootstrap suppresses only once its producer is actually installed, because
+/// installation can still fail on the bridge runtime or the record factory.
+/// Suppressing there would leave a packaged run with no diagnostics whatsoever:
+/// no diagnostics layer, no `anyharness.log`, and an inherited stdio the
+/// console layer is discarded into.
+fn suppresses_legacy_file_sink(activation: BundledActivation, installed: bool) -> bool {
+    match activation {
+        BundledActivation::Ready => installed,
+        BundledActivation::Degraded => true,
+    }
+}
+
+pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> TelemetryGuards {
     let dsn = std::env::var("ANYHARNESS_SENTRY_DSN")
         .ok()
         .filter(|value| !value.trim().is_empty());
@@ -210,8 +248,37 @@ pub fn init(command: &Commands) -> TelemetryGuards {
         ))
     });
 
-    let file_sink =
-        log_path_for_command(command).and_then(|path| match create_file_log_sink(&path) {
+    let serve_mode = matches!(command, Commands::Serve(_));
+    let (bundled, installation) = if serve_mode {
+        match activation {
+            DesktopDiagnosticsActivation::Disabled => (false, None),
+            DesktopDiagnosticsActivation::Bundled(bootstrap) => {
+                let installation =
+                    install_local(BundledDesktopDiagnosticsBootstrap::Ready(bootstrap));
+                (
+                    suppresses_legacy_file_sink(BundledActivation::Ready, installation.is_some()),
+                    installation,
+                )
+            }
+            DesktopDiagnosticsActivation::BundledDegraded(bootstrap) => {
+                let installation =
+                    install_local(BundledDesktopDiagnosticsBootstrap::Degraded(bootstrap));
+                (
+                    suppresses_legacy_file_sink(
+                        BundledActivation::Degraded,
+                        installation.is_some(),
+                    ),
+                    installation,
+                )
+            }
+        }
+    } else {
+        (false, None)
+    };
+    let file_sink = (!bundled)
+        .then(|| log_path_for_command(command))
+        .flatten()
+        .and_then(|path| match create_file_log_sink(&path) {
             Ok(sink) => Some(sink),
             Err(error) => {
                 eprintln!(
@@ -224,9 +291,31 @@ pub fn init(command: &Commands) -> TelemetryGuards {
 
     let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
 
+    let (diagnostics_layer, diagnostics) = match installation {
+        Some(installation) => {
+            let mappings = TargetMappingConfig::new(vec![
+                TargetMapping::stdio(
+                    AGENT_STDERR_TRACING_TARGET,
+                    "anyharness.agent.stderr",
+                    StandardStreamV1::Stderr,
+                ),
+                TargetMapping::span_event(
+                    RUNTIME_INCIDENT_TRACING_TARGET,
+                    "anyharness.runtime.incident",
+                ),
+            ]);
+            (
+                Some(installation.layer.with_target_mappings(mappings)),
+                Some(installation.guard),
+            )
+        }
+        None => (None, None),
+    };
+
     tracing_subscriber::registry()
         .with(console_layer)
         .with(sentry_tracing::layer().event_mapper(sentry_event_mapper))
+        .with(diagnostics_layer)
         .with(file_sink.as_ref().map(|sink| {
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)
@@ -253,6 +342,28 @@ pub fn init(command: &Commands) -> TelemetryGuards {
     TelemetryGuards {
         _sentry: telemetry,
         _file_log: file_sink.map(|sink| sink.guard),
+        diagnostics,
+    }
+}
+
+fn install_local(
+    activation: BundledDesktopDiagnosticsBootstrap,
+) -> Option<proliferate_diagnostics_client::DiagnosticsInstallation> {
+    let environment = std::env::var("PROLIFERATE_RUNTIME_ENV")
+        .ok()
+        .filter(|value| !value.is_empty() && value.len() <= 128)
+        .unwrap_or_else(|| "local".to_owned());
+    match install_desktop_producer(
+        DiagnosticsComponent::AnyHarness,
+        activation,
+        &default_release(),
+        &environment,
+    ) {
+        Ok(installation) => Some(installation),
+        Err(_) => {
+            eprintln!("[desktop-diagnostics] anyharness adapter unavailable");
+            None
+        }
     }
 }
 

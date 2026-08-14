@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ComponentType } from "react";
-import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { APP_ROUTES } from "#product/config/app-routes";
+import { setAppNavigate } from "#product/lib/workflows/app/app-navigate-handoff";
 import { DesktopWorkspaceDeepLinkPage } from "#product/pages/DesktopWorkspaceDeepLinkPage";
 import { MainPage } from "#product/pages/MainPage";
 import { SettingsPage } from "#product/pages/SettingsPage";
@@ -23,8 +24,14 @@ export function AuthenticatedAppHost({
 }: AuthenticatedAppHostProps = {}) {
   useOrganizationSelectionLifecycle();
   const location = useLocation();
+  const navigate = useNavigate();
   const isSettingsRoute = location.pathname === APP_ROUTES.settings;
   const lastNonSettingsHrefRef = useRef<string>(APP_ROUTES.home);
+
+  useEffect(() => {
+    setAppNavigate(navigate);
+    return () => setAppNavigate(null);
+  }, [navigate]);
 
   useEffect(() => {
     if (isSettingsRoute) {

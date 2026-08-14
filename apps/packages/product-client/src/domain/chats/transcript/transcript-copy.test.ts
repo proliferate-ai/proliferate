@@ -117,6 +117,26 @@ describe("buildTranscriptCopyText", () => {
     expect(copied).not.toContain("Hidden wake instructions");
   });
 
+  it("copies an unresolved wake without inventing a completion outcome", () => {
+    const user = {
+      ...userItem("wake", "turn-1", 1),
+      text: "Hidden wake instructions with child session IDs",
+      promptProvenance: {
+        type: "subagentWake",
+        completionId: "completion-pending",
+        sessionLinkId: "link-1",
+        label: "Typo finder",
+      } satisfies PromptProvenance,
+    };
+    const transcript = makeTranscript([user], ["wake"]);
+
+    const copied = copyText({ transcript });
+
+    expect(copied).toBe("Typo finder updated");
+    expect(copied).not.toContain("finished");
+    expect(copied).not.toContain("Hidden wake instructions");
+  });
+
   it("copies review-feedback provenance as transcript chrome instead of raw feedback prompt text", () => {
     const user = {
       ...userItem("review", "turn-1", 1),

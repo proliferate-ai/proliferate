@@ -37,6 +37,51 @@ impl SessionService {
         subagents_enabled: bool,
         origin: OriginContext,
     ) -> Result<CreateSessionOutcome, CreateSessionError> {
+        self.create_session_with_persist(
+            workspace_id,
+            agent_kind,
+            preselected_session_id,
+            reuse_existing,
+            model_id,
+            mode_id,
+            mcp_bindings_ciphertext,
+            mcp_binding_summaries_json,
+            mcp_binding_policy,
+            system_prompt_append,
+            subagents_enabled,
+            origin,
+            |record| {
+                self.session_store
+                    .insert(record)
+                    .map_err(CreateSessionError::Internal)
+            },
+        )
+    }
+
+    /// Runs the common create validation and record assembly, then delegates
+    /// the first durable insert to one caller-owned transaction. Subagent
+    /// creation uses this seam to make the child row and relationship visible
+    /// atomically; ordinary and idempotent creation keep the default store
+    /// path above.
+    pub(crate) fn create_session_with_persist<F>(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        preselected_session_id: Option<&str>,
+        reuse_existing: bool,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        mcp_bindings_ciphertext: Option<String>,
+        mcp_binding_summaries_json: Option<String>,
+        mcp_binding_policy: SessionMcpBindingPolicy,
+        system_prompt_append: Option<String>,
+        subagents_enabled: bool,
+        origin: OriginContext,
+        persist_new: F,
+    ) -> Result<CreateSessionOutcome, CreateSessionError>
+    where
+        F: FnOnce(&SessionRecord) -> Result<(), CreateSessionError>,
+    {
         let started = Instant::now();
         tracing::info!(
             workspace_id = %workspace_id,
@@ -233,9 +278,7 @@ impl SessionService {
                 }
             }
         } else {
-            self.session_store
-                .insert(&record)
-                .map_err(CreateSessionError::Internal)?;
+            persist_new(&record)?;
             CreateSessionOutcome::Created(record)
         };
         let record = match &outcome {

@@ -16,7 +16,7 @@ import { createPortal } from "react-dom";
 import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
-import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
+import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGlyph";
 import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
 
 /**
@@ -133,9 +133,10 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
     const card = (
       <div>
         <div className="flex min-w-0 items-center gap-2">
-          <DelegatedAgentIdenticon
+          <AgentIdentityGlyph
             identity={agent.identity}
-            className={`size-4 shrink-0 ${agent.identity.textColorClassName}`}
+            closed={agent.statusCategory === "closed"}
+            className={`icon-paired shrink-0 text-ui ${agent.identity.textColorClassName}`}
           />
           <div className="min-w-0">
             <div className="truncate text-ui font-medium text-foreground">

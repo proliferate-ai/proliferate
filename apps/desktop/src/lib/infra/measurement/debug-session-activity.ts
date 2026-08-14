@@ -1,4 +1,8 @@
 import { isLatencyDebugLoggingEnabled } from "@/lib/infra/measurement/debug-latency";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostics-port";
 
 function browserFlagEnabled(): boolean {
   if (typeof window === "undefined") {
@@ -48,6 +52,33 @@ export function logSessionActivityTransition(
     return;
   }
   lastBySessionId.set(sessionId, next);
+
+  recordRendererDiagnostic({
+    name: "renderer.measurement.session_activity",
+    severity: "debug",
+    kind: "progress",
+    privacy: "sensitive",
+    correlation: { sessionId },
+    fields: {
+      previous_view_state: diagnosticField(previous?.viewState ?? "none", "operational"),
+      view_state: diagnosticField(next.viewState, "operational"),
+      execution_phase: diagnosticField(next.executionPhase ?? "none", "operational"),
+      status: diagnosticField(next.status ?? "none", "operational"),
+      transcript_is_streaming: diagnosticField(next.transcriptIsStreaming, "operational"),
+      stream_connection_state: diagnosticField(
+        next.streamConnectionState ?? "none",
+        "operational",
+      ),
+      pending_interaction_count: diagnosticField(
+        next.pendingInteractionCount,
+        "operational",
+      ),
+      execution_summary_updated_at: diagnosticField(
+        next.executionSummaryUpdatedAt ?? "none",
+        "sensitive",
+      ),
+    },
+  });
 
   console.info(`[session-activity] ${sessionId} ${previous?.viewState ?? "∅"} -> ${next.viewState}`, {
     sessionId,

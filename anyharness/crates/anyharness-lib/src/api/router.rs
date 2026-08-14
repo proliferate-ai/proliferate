@@ -13,12 +13,11 @@ use url::form_urlencoded;
 use super::http::{
     agent_auth::{delete_agent_auth_state, put_agent_auth_state},
     agent_gateway_catalog, agent_model_snapshot, agents, auth as http_auth, catalogs, cowork,
-    files, git, goals, health,
-    hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
-    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
-    sessions_prompt, sessions_resume, subagents, terminals, workflow_runs, workflow_workspaces,
-    workspaces, workspaces_lifecycle, workspaces_purge, workspaces_restore, workspaces_setup,
-    workspaces_worktrees, worktrees,
+    files, git, goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay,
+    repo_roots, reviews, sessions, sessions_config, sessions_events, sessions_fork,
+    sessions_interactions, sessions_lifecycle, sessions_prompt, sessions_resume, subagents,
+    terminals, workflow_runs, workflow_workspaces, workspaces, workspaces_lifecycle,
+    workspaces_purge, workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
@@ -28,9 +27,8 @@ use super::ws::terminals as ws_terminals;
 use crate::api::auth::{user_route_allowed, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-
 mod pending_prompt_routes;
-
+mod support_window_routes;
 pub fn build_router(state: AppState) -> Router {
     let v1 = Router::new()
         // Agents
@@ -409,14 +407,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/sessions", post(sessions::create_session))
         .route("/sessions", get(sessions::list_sessions))
         .route("/sessions/{session_id}", get(sessions::get_session))
-        .route(
-            "/sessions/{session_id}/subagents",
-            get(subagents::get_session_subagents),
-        )
-        .route(
-            "/sessions/{session_id}/subagents/{child_session_id}/wake",
-            post(subagents::schedule_subagent_wake),
-        )
+        .merge(subagents::routes())
         .route(
             "/sessions/{session_id}/reviews",
             get(reviews::get_session_reviews),
@@ -459,6 +450,7 @@ pub fn build_router(state: AppState) -> Router {
             post(sessions_fork::fork_session),
         )
         .merge(pending_prompt_routes::router())
+        .merge(support_window_routes::router())
         .route(
             "/sessions/{session_id}/goal",
             put(goals::set_session_goal).delete(goals::clear_session_goal),

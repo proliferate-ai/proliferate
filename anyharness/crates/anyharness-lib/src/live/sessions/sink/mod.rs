@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use self::state::{PlanItemState, StreamingItemState, ToolItemState};
-use crate::live::sessions::model::EventPersist;
+use crate::live::sessions::model::{EventPersist, TerminalTurnOutcome};
 use crate::observability::transcript_phase::TranscriptPhaseDebugState;
 use anyharness_contract::v1::{GoalStatus, SessionEvent, SessionEventEnvelope};
 
@@ -23,6 +23,8 @@ pub(crate) mod publish;
 mod reasoning;
 mod runtime_events;
 mod state;
+mod subagent_wakes;
+mod terminal;
 mod tools;
 mod turns;
 
@@ -34,6 +36,10 @@ pub use state::{
 };
 
 pub(in crate::live::sessions) use ingest::{ActorBoundUpdate, SinkObservation};
+pub(in crate::live::sessions) use subagent_wakes::SubagentWakeTurnStartOutcome;
+pub(in crate::live::sessions) use terminal::{
+    PromptTerminalEvent, StagedTerminalTurn, TerminalTurnCommit,
+};
 
 pub struct SessionEventSink {
     session_id: String,
@@ -57,6 +63,9 @@ pub struct SessionEventSink {
     open_reasoning_item: Option<StreamingItemState>,
     open_plan_item: Option<PlanItemState>,
     tool_items: HashMap<String, ToolItemState>,
+    turn_assistant_messages: Vec<String>,
+    staged_terminal: Option<StagedTerminalTurn>,
+    engine_terminal_outcome: Option<TerminalTurnOutcome>,
     transcript_phase_debug: TranscriptPhaseDebugState,
 }
 
@@ -82,6 +91,9 @@ impl SessionEventSink {
             open_reasoning_item: None,
             open_plan_item: None,
             tool_items: HashMap::new(),
+            turn_assistant_messages: Vec::new(),
+            staged_terminal: None,
+            engine_terminal_outcome: None,
             transcript_phase_debug: TranscriptPhaseDebugState::default(),
         }
     }
@@ -108,6 +120,9 @@ impl SessionEventSink {
             open_reasoning_item: None,
             open_plan_item: None,
             tool_items: HashMap::new(),
+            turn_assistant_messages: Vec::new(),
+            staged_terminal: None,
+            engine_terminal_outcome: None,
             transcript_phase_debug: TranscriptPhaseDebugState::default(),
         }
     }
@@ -131,9 +146,10 @@ impl SessionEventSink {
         // turn id. A quiescent goal ends the engine-initiated turn its
         // pursuit opened (see `ensure_open_turn`); prompt-begun turns are
         // never auto-closed — their lifecycle ends them.
-        let goal_reached_quiescence = envelopes
+        let engine_terminal_outcome = envelopes
             .iter()
-            .any(|envelope| goal_event_quiesces_turn(&envelope.event));
+            .filter_map(|envelope| goal_event_terminal_outcome(&envelope.event))
+            .last();
         if self.engine_initiated_turn
             && envelopes
                 .iter()
@@ -147,8 +163,10 @@ impl SessionEventSink {
             }
             let _ = self.event_tx.send(envelope);
         }
-        if goal_reached_quiescence {
-            self.end_engine_initiated_turn_if_open();
+        if let Some(outcome) = engine_terminal_outcome {
+            if self.engine_initiated_turn && self.engine_turn_has_events {
+                self.engine_terminal_outcome = Some(outcome);
+            }
         }
     }
 
@@ -187,10 +205,16 @@ impl SessionEventSink {
 /// or any update whose status is no longer `active` (paused, blocked, failed).
 /// Active-status ticks (accounting updates between continuation steps) do not
 /// quiesce the turn.
-fn goal_event_quiesces_turn(event: &SessionEvent) -> bool {
+fn goal_event_terminal_outcome(event: &SessionEvent) -> Option<TerminalTurnOutcome> {
     match event {
-        SessionEvent::GoalMet(_) | SessionEvent::GoalCleared(_) => true,
-        SessionEvent::GoalUpdated(payload) => payload.goal.status != GoalStatus::Active,
-        _ => false,
+        SessionEvent::GoalMet(_) => Some(TerminalTurnOutcome::Completed),
+        SessionEvent::GoalCleared(_) => Some(TerminalTurnOutcome::Cancelled),
+        SessionEvent::GoalUpdated(payload) => match payload.goal.status {
+            GoalStatus::Active => None,
+            GoalStatus::Met => Some(TerminalTurnOutcome::Completed),
+            GoalStatus::Failed | GoalStatus::Blocked => Some(TerminalTurnOutcome::Failed),
+            GoalStatus::Cleared | GoalStatus::Paused => Some(TerminalTurnOutcome::Cancelled),
+        },
+        _ => None,
     }
 }

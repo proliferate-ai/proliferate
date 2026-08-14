@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
+use proliferate_diagnostics_client::{
+    install_desktop_producer, BundledDesktopDiagnosticsBootstrap, DesktopDiagnosticsActivation,
+    DiagnosticsComponent, DiagnosticsProducerGuard,
+};
 use sentry::protocol::{Breadcrumb, Event, Frame, Log, LogEntry, Stacktrace, Value};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
@@ -17,6 +21,15 @@ const RUNTIME_ENV_TAG: &str = "runtime_env";
 
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
+    diagnostics: Option<DiagnosticsProducerGuard>,
+}
+
+impl TelemetryGuards {
+    pub async fn shutdown(mut self, deadline: std::time::Duration) {
+        if let Some(guard) = self.diagnostics.take() {
+            let _ = guard.shutdown(deadline).await;
+        }
+    }
 }
 
 fn env_or_default(key: &str, default: &str) -> String {
@@ -337,7 +350,7 @@ fn scrub_log(mut log: Log) -> Option<Log> {
     Some(log)
 }
 
-pub fn init() -> TelemetryGuards {
+pub fn init(activation: DesktopDiagnosticsActivation) -> TelemetryGuards {
     let dsn = std::env::var(TARGET_SENTRY_DSN_ENV)
         .ok()
         .filter(|value| !value.trim().is_empty());
@@ -360,10 +373,24 @@ pub fn init() -> TelemetryGuards {
         ))
     });
 
+    let installation = match activation {
+        DesktopDiagnosticsActivation::Disabled => None,
+        DesktopDiagnosticsActivation::Bundled(bootstrap) => {
+            install_local(BundledDesktopDiagnosticsBootstrap::Ready(bootstrap))
+        }
+        DesktopDiagnosticsActivation::BundledDegraded(bootstrap) => {
+            install_local(BundledDesktopDiagnosticsBootstrap::Degraded(bootstrap))
+        }
+    };
+    let (diagnostics_layer, diagnostics) = match installation {
+        Some(installation) => (Some(installation.layer), Some(installation.guard)),
+        None => (None, None),
+    };
     let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
     let _ = tracing_subscriber::registry()
         .with(console_layer)
         .with(sentry_tracing::layer())
+        .with(diagnostics_layer)
         .try_init();
 
     if telemetry.is_some() {
@@ -371,8 +398,8 @@ pub fn init() -> TelemetryGuards {
             scope.set_tag("surface", "proliferate_worker");
             scope.set_tag("telemetry_mode", "hosted_product");
 
-            let runtime_env = std::env::var("PROLIFERATE_RUNTIME_ENV")
-                .unwrap_or_else(|_| "local".to_string());
+            let runtime_env =
+                std::env::var("PROLIFERATE_RUNTIME_ENV").unwrap_or_else(|_| "local".to_string());
             scope.set_tag(RUNTIME_ENV_TAG, &runtime_env);
 
             if let Ok(org_id) = std::env::var("PROLIFERATE_ORG_ID") {
@@ -396,7 +423,31 @@ pub fn init() -> TelemetryGuards {
         });
     }
 
-    TelemetryGuards { _sentry: telemetry }
+    TelemetryGuards {
+        _sentry: telemetry,
+        diagnostics,
+    }
+}
+
+fn install_local(
+    activation: BundledDesktopDiagnosticsBootstrap,
+) -> Option<proliferate_diagnostics_client::DiagnosticsInstallation> {
+    let environment = std::env::var("PROLIFERATE_RUNTIME_ENV")
+        .ok()
+        .filter(|value| !value.is_empty() && value.len() <= 128)
+        .unwrap_or_else(|| "local".to_owned());
+    match install_desktop_producer(
+        DiagnosticsComponent::DesktopWorker,
+        activation,
+        &default_release(),
+        &environment,
+    ) {
+        Ok(installation) => Some(installation),
+        Err(_) => {
+            eprintln!("[desktop-diagnostics] worker adapter unavailable");
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -415,7 +466,10 @@ mod tests {
         let expected = match stamped_git_sha() {
             Some(sha) => {
                 assert_eq!(sha.len(), 12, "stamped sha is exactly 12 chars");
-                format!("proliferate-worker@{}+{sha}", env!("PROLIFERATE_STAMPED_VERSION"))
+                format!(
+                    "proliferate-worker@{}+{sha}",
+                    env!("PROLIFERATE_STAMPED_VERSION")
+                )
             }
             None => format!("proliferate-worker@{}", env!("PROLIFERATE_STAMPED_VERSION")),
         };
@@ -499,14 +553,22 @@ mod tests {
                 tracing::error!("sentry emission regression probe");
             });
         });
-        assert_eq!(events.len(), 1, "tracing ERROR must reach the Sentry client");
+        assert_eq!(
+            events.len(),
+            1,
+            "tracing ERROR must reach the Sentry client"
+        );
     }
 
     #[test]
     fn runtime_env_tag_survives_while_other_env_tags_are_redacted() {
         let mut event = Event::new();
-        event.tags.insert("runtime_env".to_string(), "e2b".to_string());
-        event.tags.insert("deploy_env".to_string(), "prod".to_string());
+        event
+            .tags
+            .insert("runtime_env".to_string(), "e2b".to_string());
+        event
+            .tags
+            .insert("deploy_env".to_string(), "prod".to_string());
         event
             .tags
             .insert("environment_name".to_string(), "prod".to_string());
@@ -514,7 +576,10 @@ mod tests {
         let scrubbed = scrub_event(event).expect("event should remain");
 
         // Bounded deployment identity is preserved; other env-like tags are not.
-        assert_eq!(scrubbed.tags.get("runtime_env").map(String::as_str), Some("e2b"));
+        assert_eq!(
+            scrubbed.tags.get("runtime_env").map(String::as_str),
+            Some("e2b")
+        );
         assert_eq!(
             scrubbed.tags.get("deploy_env").map(String::as_str),
             Some("[redacted]")

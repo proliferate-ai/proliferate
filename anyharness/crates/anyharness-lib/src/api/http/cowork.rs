@@ -273,6 +273,12 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
             crate::domains::sessions::runtime::CreateAndStartSessionError::MissingDataKey => {
                 ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
             }
+            crate::domains::sessions::runtime::CreateAndStartSessionError::WorkspaceMcpAttachmentFailed(_) => {
+                ApiError::internal_runtime_incident(
+                    crate::domains::sessions::mcp_bindings::workspace_attachment::WORKSPACE_MCP_ATTACHMENT_DETAIL,
+                    crate::domains::sessions::mcp_bindings::workspace_attachment::WORKSPACE_MCP_ATTACHMENT_CODE,
+                )
+            }
             crate::domains::sessions::runtime::CreateAndStartSessionError::RouteAuth(error) => {
                 // Malformed-state / materialization IO are 500s; selection/route
                 // shape problems are 409s — same split as the sessions API.

@@ -1,0 +1,352 @@
+{
+  "records": [
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:00:00.000Z",
+      "producer_sequence": 1,
+      "producer_boot_id": "boot-renderer-01",
+      "component": "desktop_renderer",
+      "source": "renderer",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-renderer-detail-01",
+      "parent_operation_id": "op-prompt-01",
+      "trace_id": "trace-01",
+      "workspace_id": "workspace-01",
+      "session_id": "session-01",
+      "turn_id": "turn-01",
+      "item_id": "item-01",
+      "request_id": "request-01",
+      "target_id": "target-01",
+      "prompt_id": "prompt-01",
+      "workflow_id": "workflow-01",
+      "name": "renderer.console.error",
+      "severity": "error",
+      "arguments": [
+        {
+          "name": "attempt",
+          "privacy": "operational",
+          "value": { "type": "integer", "value": 2 }
+        },
+        {
+          "name": "modes",
+          "privacy": "operational",
+          "value": {
+            "type": "list",
+            "value": [
+              { "type": "enum", "value": "streaming" },
+              { "type": "boolean", "value": true }
+            ]
+          }
+        },
+        {
+          "name": "context",
+          "privacy": "customer_content",
+          "value": {
+            "type": "object",
+            "value": {
+              "stage": { "type": "enum", "value": "render" },
+              "summary": { "type": "string", "value": "synthetic local detail" }
+            }
+          }
+        }
+      ],
+      "error_classification": "renderer_state_mismatch",
+      "record_class": "detailed",
+      "privacy": "customer_content",
+      "redaction": "structural",
+      "detailed": {
+        "kind": "message",
+        "message": "Synthetic customer-visible diagnostic detail."
+      }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:00:01.000Z",
+      "producer_sequence": 2,
+      "producer_boot_id": "boot-renderer-01",
+      "component": "desktop_renderer",
+      "source": "renderer",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-prompt-01",
+      "trace_id": "trace-01",
+      "workspace_id": "workspace-01",
+      "session_id": "session-01",
+      "prompt_id": "prompt-01",
+      "name": "desktop.prompt.submit",
+      "severity": "info",
+      "arguments": [],
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": { "phase": "started", "finalizer": "producer" }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:00:02.000Z",
+      "producer_sequence": 3,
+      "producer_boot_id": "boot-renderer-01",
+      "component": "desktop_renderer",
+      "source": "renderer",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-prompt-01",
+      "trace_id": "trace-01",
+      "workspace_id": "workspace-01",
+      "session_id": "session-01",
+      "prompt_id": "prompt-01",
+      "name": "desktop.prompt.submit",
+      "severity": "info",
+      "arguments": [],
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": {
+        "phase": "terminal",
+        "outcome": "succeeded",
+        "finalizer": "producer"
+      }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:00:03.000Z",
+      "producer_sequence": 4,
+      "producer_boot_id": "boot-renderer-01",
+      "component": "desktop_renderer",
+      "source": "renderer",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-prompt-01",
+      "trace_id": "trace-01",
+      "workspace_id": "workspace-01",
+      "session_id": "session-01",
+      "prompt_id": "prompt-01",
+      "name": "desktop.prompt.submit",
+      "severity": "error",
+      "arguments": [],
+      "error_classification": "prompt_handoff_failed",
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": {
+        "phase": "terminal",
+        "outcome": "failed",
+        "finalizer": "producer"
+      }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:01:00.000Z",
+      "producer_sequence": 5,
+      "producer_boot_id": "boot-anyharness-dead-01",
+      "component": "anyharness",
+      "source": "anyharness",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-turn-death-01",
+      "session_id": "session-02",
+      "turn_id": "turn-02",
+      "name": "anyharness.turn.execute",
+      "severity": "info",
+      "arguments": [],
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": { "phase": "started", "finalizer": "producer" }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:01:10.000Z",
+      "producer_sequence": 6,
+      "producer_boot_id": "boot-anyharness-dead-01",
+      "component": "anyharness",
+      "source": "anyharness",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-turn-death-01",
+      "session_id": "session-02",
+      "turn_id": "turn-02",
+      "name": "anyharness.turn.execute",
+      "severity": "warn",
+      "arguments": [],
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": {
+        "phase": "terminal",
+        "outcome": "abandoned",
+        "finalizer": "collector"
+      }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:02:00.000Z",
+      "producer_sequence": 7,
+      "producer_boot_id": "boot-worker-01",
+      "component": "desktop_worker",
+      "source": "worker",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-worker-orphan-01",
+      "name": "desktop_worker.command_execute",
+      "severity": "info",
+      "arguments": [],
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": {
+        "phase": "terminal",
+        "outcome": "cancelled",
+        "finalizer": "producer"
+      }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:03:00.000Z",
+      "producer_sequence": 8,
+      "producer_boot_id": "boot-tauri-01",
+      "component": "desktop_tauri",
+      "source": "tauri",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-update-failed-01",
+      "name": "desktop.update.download",
+      "severity": "error",
+      "arguments": [],
+      "error_classification": "update_network_failed",
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": {
+        "phase": "terminal",
+        "outcome": "failed",
+        "finalizer": "producer"
+      }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:04:00.000Z",
+      "producer_sequence": 9,
+      "producer_boot_id": "boot-tauri-01",
+      "component": "desktop_tauri",
+      "source": "tauri",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-update-timeout-01",
+      "name": "desktop.update.verify",
+      "severity": "warn",
+      "arguments": [],
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": {
+        "phase": "terminal",
+        "outcome": "timed_out",
+        "finalizer": "producer"
+      }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:05:00.000Z",
+      "producer_sequence": 10,
+      "producer_boot_id": "boot-tauri-01",
+      "component": "desktop_tauri",
+      "source": "tauri",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-target-rejected-01",
+      "name": "desktop.target.connect",
+      "severity": "info",
+      "arguments": [],
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": {
+        "phase": "terminal",
+        "outcome": "rejected",
+        "finalizer": "producer"
+      }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:06:00.000Z",
+      "producer_sequence": 11,
+      "producer_boot_id": "boot-tauri-01",
+      "component": "desktop_tauri",
+      "source": "tauri",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-update-skipped-01",
+      "name": "desktop.update.relaunch",
+      "severity": "info",
+      "arguments": [],
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": {
+        "phase": "terminal",
+        "outcome": "skipped",
+        "finalizer": "producer"
+      }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:07:00.000Z",
+      "producer_sequence": 12,
+      "producer_boot_id": "boot-anyharness-01",
+      "component": "anyharness",
+      "source": "anyharness",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-model-01",
+      "name": "anyharness.model.request",
+      "severity": "info",
+      "arguments": [],
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": {
+        "phase": "terminal",
+        "outcome": "succeeded",
+        "finalizer": "producer",
+        "model": {
+          "model_id": "model-safe-01",
+          "provider_kind": "hosted",
+          "phase": "complete",
+          "input_tokens": 120,
+          "output_tokens": 45,
+          "duration_ms": 930
+        }
+      }
+    },
+    {
+      "schema_version": { "major": 1, "minor": 1 },
+      "source_timestamp": "2026-08-10T12:08:00.000Z",
+      "producer_sequence": 13,
+      "producer_boot_id": "boot-anyharness-01",
+      "component": "anyharness",
+      "source": "anyharness",
+      "release": "2026.08.10-rc1",
+      "environment": "dogfood",
+      "operation_id": "op-plugin-01",
+      "name": "anyharness.plugin.invoke",
+      "severity": "info",
+      "arguments": [],
+      "record_class": "lifecycle",
+      "privacy": "operational",
+      "redaction": "none",
+      "lifecycle": {
+        "phase": "terminal",
+        "outcome": "succeeded",
+        "finalizer": "producer",
+        "plugin": {
+          "plugin_id": "plugin-safe-01",
+          "kind": "local",
+          "phase": "complete",
+          "duration_ms": 41
+        }
+      }
+    }
+  ]
+}

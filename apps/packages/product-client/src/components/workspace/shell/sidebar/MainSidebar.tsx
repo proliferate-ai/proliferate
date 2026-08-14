@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { useRemoveCloudRepoEnvironment, useRepositories } from "@proliferate/cloud-sdk-react";
@@ -6,7 +6,9 @@ import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDia
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
 import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
-import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
+import { SidebarPinnedNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
+import { SidebarScrollingNavigationSection } from "#product/components/workspace/shell/sidebar/SidebarScrollingNavigationSection";
+import { SidebarPinnedSection } from "#product/components/workspace/shell/sidebar/SidebarPinnedSection";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceContent";
 import { WorkspaceCleanupAttentionSection } from "#product/components/workspace/shell/sidebar/WorkspaceCleanupAttentionSection";
@@ -33,12 +35,11 @@ import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/s
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
-import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "#product/hooks/workspaces/workflows/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-actions";
-import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
+import { useWorkspaceSidebarArchiveActions } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-archive-actions";
 import { useSidebarRepoGroupState } from "#product/hooks/workspaces/facade/use-sidebar-repo-group-state";
 import { useWorkspaceSidebarState } from "#product/hooks/workspaces/derived/use-workspace-sidebar-state";
 import { useSessionActivityReconciler } from "#product/hooks/sessions/lifecycle/use-session-activity-reconciler";
@@ -46,27 +47,23 @@ import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
 } from "#product/lib/domain/settings/navigation";
-import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import { buildShortcutRangeLabelById } from "#product/lib/domain/shortcuts/presentation";
 import { startMeasurementOperation } from "#product/lib/infra/measurement/measurement-port";
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
-import { useToastStore } from "#product/stores/toast/toast-store";
 import { useReleaseNotice } from "#product/hooks/updates/facade/use-release-notice";
 import { useRepositoryHeaderNewChat } from "#product/hooks/workspaces/ui/use-repository-header-new-chat";
 
-interface ArchiveConfirmationState {
-  workspaceId: string;
-  cloudWorkspaceId: string | null;
-  name: string;
-}
+// Platform cannot change at runtime, so the label is resolved once rather
+// than on every render of the sidebar.
+const NEW_CHAT_SHORTCUT_LABEL = getShortcutDisplayLabel(SHORTCUTS.newDefault);
+
 
 export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }: { showRightBorder?: boolean }) {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const { notice, dismissNotice, openChangelog } = useReleaseNotice();
   const actions = useWorkspaceSidebarActions();
-  const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "sidebar" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
   const {
@@ -80,7 +77,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     data: repoConfigs,
     isPending: isRepoConfigsPending,
   } = useRepositories(cloudActive);
-  const showToast = useToastStore((state) => state.show);
   const removeCloudRepoEnvironment = useRemoveCloudRepoEnvironment();
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {
@@ -98,6 +94,7 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
   })));
   const {
     groups,
+    pinnedItems,
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,
     cleanupAttentionWorkspaces,
@@ -109,19 +106,23 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
   });
   const navigate = useNavigate();
   const location = useLocation();
-  const [archiveConfirmation, setArchiveConfirmation] =
-    useState<ArchiveConfirmationState | null>(null);
   const {
-    archiveCloudWorkspace: archiveCloudWorkspaceRequest,
-    restoreCloudWorkspace: restoreCloudWorkspaceRequest,
-  } = useCloudWorkspaceActions();
+    archiveConfirmation,
+    closeArchiveConfirmation,
+    confirmArchiveWorkspace,
+    handleArchiveWorkspace,
+    handleUnarchiveWorkspace,
+  } = useWorkspaceSidebarArchiveActions({
+    groups,
+    selectedWorkspaceId,
+    selectedLogicalWorkspaceId,
+    onLeaveWorkspace: actions.handleGoHome,
+  });
 
-  const isOnWorkflows = location.pathname.startsWith(APP_ROUTES.workflows);
-  const isOnWorkspaces = location.pathname === APP_ROUTES.workspaces;
   const isOnHome = location.pathname === APP_ROUTES.home;
-  const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
-  const unarchiveWorkspace = useWorkspaceUiStore((s) => s.unarchiveWorkspace);
+  const pinWorkspace = useWorkspaceUiStore((s) => s.pinWorkspace);
+  const unpinWorkspace = useWorkspaceUiStore((s) => s.unpinWorkspace);
   const { updateWorkspaceDisplayName } = useWorkspaceDisplayNameActions();
   const handleRenameWorkspace = useCallback(
     (workspaceId: string, displayName: string | null) =>
@@ -177,86 +178,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     groups,
     hideRepoRoot,
     removeCloudRepoEnvironment,
-  ]);
-
-  const resolveArchiveTargetForSidebarItem = useCallback((
-    workspaceId: string,
-  ): ArchiveConfirmationState => {
-    for (const group of groups) {
-      const item = group.items.find((candidate) => candidate.id === workspaceId);
-      if (item) {
-        return {
-          workspaceId,
-          cloudWorkspaceId: item.cloudWorkspaceId,
-          name: item.name,
-        };
-      }
-    }
-    return {
-      workspaceId,
-      cloudWorkspaceId: null,
-      name: "this workspace",
-    };
-  }, [groups]);
-
-  const handleArchiveWorkspace = useCallback((workspaceId: string) => {
-    setArchiveConfirmation(resolveArchiveTargetForSidebarItem(workspaceId));
-  }, [resolveArchiveTargetForSidebarItem]);
-
-  const confirmArchiveWorkspace = useCallback(() => {
-    const target = archiveConfirmation;
-    if (!target) {
-      return;
-    }
-    setArchiveConfirmation(null);
-    const shouldLeaveWorkspace = selectedLogicalWorkspaceId === target.workspaceId
-      || selectedWorkspaceId === target.workspaceId
-      || (
-        target.cloudWorkspaceId
-        ? selectedWorkspaceId === cloudWorkspaceSyntheticId(target.cloudWorkspaceId)
-        : false
-      );
-    const cloudWorkspaceId = target.cloudWorkspaceId;
-    if (!cloudWorkspaceId) {
-      archiveWorkspace(target.workspaceId);
-      if (shouldLeaveWorkspace) {
-        actions.handleGoHome();
-      }
-      return;
-    }
-    if (shouldLeaveWorkspace) {
-      actions.handleGoHome();
-    }
-    void archiveCloudWorkspaceRequest(cloudWorkspaceId)
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : "Failed to archive workspace.";
-        showToast(message);
-      });
-  }, [
-    actions,
-    archiveConfirmation,
-    archiveWorkspace,
-    archiveCloudWorkspaceRequest,
-    selectedLogicalWorkspaceId,
-    selectedWorkspaceId,
-    showToast,
-  ]);
-
-  const handleUnarchiveWorkspace = useCallback((workspaceId: string) => {
-    const cloudWorkspaceId = resolveArchiveTargetForSidebarItem(workspaceId).cloudWorkspaceId;
-    if (!cloudWorkspaceId) {
-      unarchiveWorkspace(workspaceId);
-      return;
-    }
-    void restoreCloudWorkspaceRequest(cloudWorkspaceId).catch((error) => {
-      const message = error instanceof Error ? error.message : "Failed to restore workspace.";
-      showToast(message);
-    });
-  }, [
-    resolveArchiveTargetForSidebarItem,
-    restoreCloudWorkspaceRequest,
-    showToast,
-    unarchiveWorkspace,
   ]);
 
   const handleOpenRepoSettings = useCallback((sourceRoot: string) => {
@@ -317,10 +238,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
     [sidebarShortcutTargetIds],
   );
-  const primaryNavShortcutLabels = useMemo(() => ({
-    newChat: getShortcutDisplayLabel(SHORTCUTS.newDefault),
-    support: getShortcutDisplayLabel(SHORTCUTS.openSupport),
-  }), []);
 
   return (
     <DebugProfiler id="workspace-sidebar">
@@ -338,25 +255,43 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
         )}>
         <ProductSidebarBody>
           <ProductSidebarBrandRow label="Proliferate" />
+          {/* Only the brand row and New chat stay pinned. Everything below
+              scrolls with the repository list. */}
           <DebugProfiler id="workspace-sidebar-primary-nav">
-            <SidebarPrimaryNavigation
+            <SidebarPinnedNavigation
               homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
-              workspacesActive={isOnWorkspaces}
-              workflowsActive={isOnWorkflows}
-              supportActive={false}
               onGoHome={actions.handleGoHome}
-              onGoWorkspaces={actions.handleGoWorkspaces}
-              onGoWorkflows={actions.handleGoWorkflows}
-              onOpenSupport={handleOpenSupport}
               shortcutRevealVisible={shortcutRevealVisible}
-              shortcutLabels={primaryNavShortcutLabels}
+              newChatShortcutLabel={NEW_CHAT_SHORTCUT_LABEL}
             />
           </DebugProfiler>
 
         <ProductSidebarScrollableContent>
+          <SidebarScrollingNavigationSection
+            onGoWorkspaces={actions.handleGoWorkspaces}
+            onGoWorkflows={actions.handleGoWorkflows}
+          />
+
           <WorkspaceCleanupAttentionSection
             workspaces={cleanupAttentionWorkspaces}
             onRetryCleanup={actions.handleRetryWorkspaceCleanup}
+          />
+
+          <SidebarPinnedSection
+            items={pinnedItems}
+            shortcutLabelByWorkspaceId={sidebarShortcutLabelById}
+            shortcutRevealVisible={shortcutRevealVisible}
+            onSelectWorkspace={actions.handleSelectWorkspace}
+            onIndicatorAction={actions.handleSidebarIndicatorAction}
+            onOpenPullRequest={actions.handleOpenPullRequest}
+            onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
+            onWorkspaceAvailabilityCommand={handleWorkspaceAvailabilityCommand}
+            onWorkspaceHover={handleWorkspaceHover}
+            onArchiveWorkspace={handleArchiveWorkspace}
+            onUnarchiveWorkspace={handleUnarchiveWorkspace}
+            onPinWorkspace={pinWorkspace}
+            onUnpinWorkspace={unpinWorkspace}
+            onRenameWorkspace={handleRenameWorkspace}
           />
 
           <SidebarRepositoriesHeader
@@ -398,6 +333,8 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
                 shortcutRevealVisible={shortcutRevealVisible}
                 onArchiveWorkspace={handleArchiveWorkspace}
                 onUnarchiveWorkspace={handleUnarchiveWorkspace}
+                onPinWorkspace={pinWorkspace}
+                onUnpinWorkspace={unpinWorkspace}
                 onRenameWorkspace={handleRenameWorkspace}
                 onRemoveRepo={handleRemoveRepo}
                 onOpenRepoSettings={handleOpenRepoSettings}
@@ -417,7 +354,7 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
           title="Archive workspace?"
           description={`Move ${archiveConfirmation?.name ?? "this workspace"} out of the main sidebar. It will remain available in Settings -> Archived chats, and safe worktree cleanup may run in the background.`}
           confirmLabel="Archive"
-          onClose={() => setArchiveConfirmation(null)}
+          onClose={closeArchiveConfirmation}
           onConfirm={confirmArchiveWorkspace}
         />
       </ProductSidebarFrame>

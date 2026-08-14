@@ -103,6 +103,7 @@ fn link_record(
         created_by_turn_id: None,
         created_by_tool_call_id: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
+        subagent_closed_at: None,
         closed_at: None,
     }
 }
@@ -1016,4 +1017,3 @@ exit 0
     let _ = std::fs::remove_dir_all(&runtime_home);
     let _ = std::fs::remove_dir_all(&empty_home);
 }
-

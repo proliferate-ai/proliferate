@@ -6,6 +6,9 @@ Scope:
 - `anyharness/crates/anyharness-credential-discovery/**`
 - `anyharness/crates/anyharness-contract/**`
 - `anyharness/crates/anyharness-lib/**`
+- `anyharness/crates/proliferate-diagnostics-client/**`
+- `anyharness/crates/proliferate-diagnostics-collector/**`
+- `anyharness/crates/proliferate-diagnostics-protocol/**`
 
 Use this doc first to understand AnyHarness ownership. Then read the focused
 guide or spec for the layer or subsystem you are changing.
@@ -152,7 +155,7 @@ Example:
 
 ```text
 domains/sessions/extensions::SessionExtension
-  implemented by cowork, reviews, subagents
+  implemented by cowork, reviews, and delegated-agent completion delivery
   wired by app/
   consumed by SessionRuntime at launch/prompt boundaries
 ```
@@ -211,7 +214,8 @@ Guides:
   parameter test, proportionality, and the placement algorithm.
 - [crates.md](crates.md) for crate ownership:
   `anyharness`, `anyharness-contract`, `anyharness-credential-discovery`, and
-  `anyharness-lib`.
+  `anyharness-lib`, plus the Desktop-owned provider-neutral diagnostics
+  protocol, producer-client, and collector crates.
 - [api.md](api.md) for HTTP/SSE/WS handler ownership, contract
   mapping, and transport-boundary rules.
 - [app.md](app.md) for `AppState`, dependency construction,
@@ -256,8 +260,7 @@ Specs:
   MCP server pattern: definition, auth, injection, context, tools, calls, UI
   exposure, and session MCP selection.
 - [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md) for the concrete product
-  MCP definitions currently being standardized: subagents, artifacts, and
-  reviews.
+  MCP definitions: Workspace, Cowork, and Reviews.
 
 Subsystem docs at the top level of `specs/anyharness/**` own
 behavior for runtime areas that do not yet have a focused guide or spec:
@@ -300,6 +303,9 @@ which guide to read and where the code belongs.
 | --- | --- | --- | --- |
 | Binary startup, CLI flags, runtime-home selection, command dispatch | `anyharness/crates/anyharness/src/**` | `anyharness` thin binary | [crates.md](crates.md) |
 | Public HTTP/SSE/WS schemas, OpenAPI-visible request/response types | `anyharness-contract/src/v1/**` | `anyharness-contract` | [crates.md](crates.md), [contract.md](contract.md) |
+| Provider-neutral Desktop diagnostics wire types, bounds, and pure validation | `proliferate-diagnostics-protocol/src/v1/**` | `proliferate-diagnostics-protocol` | [crates.md](crates.md), [../OBSERVABILITY.md](../OBSERVABILITY.md) |
+| Standalone loopback diagnostics collection, bounded in-memory state, query/tail/export/health transport, and process resource profiling | `proliferate-diagnostics-collector/src/**` | `proliferate-diagnostics-collector` | [crates.md](crates.md), [../OBSERVABILITY.md](../OBSERVABILITY.md), [collector README](../../anyharness/crates/proliferate-diagnostics-collector/README.md) |
+| Bounded Desktop-owned producer adapter: tracing layer, secret filtering, admission queue/receipts, bridge activation, component fallback files | `proliferate-diagnostics-client/src/**` | `proliferate-diagnostics-client` | [crates.md](crates.md), [../OBSERVABILITY.md](../OBSERVABILITY.md) |
 | Provider credential file discovery or portable credential export/import | `anyharness-credential-discovery/src/**` | `anyharness-credential-discovery` | [crates.md](crates.md) |
 | HTTP handlers, routers, auth headers, SSE/WS transport, OpenAPI wiring | `anyharness-lib/src/api/**` | `api/**` | [api.md](api.md) |
 | AppState, dependency construction, wiring extension implementations, product MCP endpoint registration | `anyharness-lib/src/app/**` | `app/**` | [app.md](app.md) |
@@ -315,7 +321,7 @@ which guide to read and where the code belongs.
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [adapters.md](adapters.md) |
 | Terminal durable records, PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/domains/terminals/**`, `anyharness-lib/src/live/terminals/**` | durable `domains/terminals/**` plus live `live/terminals/**` | [live-runtime.md](live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/domains/sessions/mcp_bindings/**` | `domains/sessions/mcp_bindings/**` | [../codebase/platforms/product/mcp-runtime.md](../codebase/platforms/product/mcp-runtime.md), [domains.md](domains.md) |
-| Product MCP tool servers for artifacts, reviews, subagents | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/subagents/**` | owning product domain | [../codebase/platforms/product/agent-features/servers.md](../codebase/platforms/product/agent-features/servers.md), [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md), [domains.md](domains.md) |
+| Product MCP tool servers for Workspace, reviews, and Cowork | `domains/agent_operations/mcp/**`, `domains/reviews/mcp/**`, `domains/cowork/mcp/**` | owning product domain | [../codebase/platforms/product/agent-features/servers.md](../codebase/platforms/product/agent-features/servers.md), [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md), [domains.md](domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [integrations.md](integrations.md), [../codebase/platforms/product/mcp-runtime.md](../codebase/platforms/product/mcp-runtime.md) |
 | Artifact durable model, manifest, protection, or runtime behavior | `anyharness-lib/src/domains/artifacts/**` | `domains/artifacts/**` | [domains.md](domains.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [domains.md](domains.md), [../codebase/systems/product/agents/cowork-artifacts.md](../codebase/systems/product/agents/cowork-artifacts.md) |
@@ -326,9 +332,9 @@ which guide to read and where the code belongs.
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [repo-shape.md](repo-shape.md) |
 
 If a task appears to belong in two places, split by ownership. Example: a new
-subagent MCP tool puts product behavior in `domains/sessions/subagents/**`,
-shared JSON-RPC/capability helpers in `integrations/mcp/**`, and the HTTP route
-adapter in `api/http/**`.
+Workspace MCP operation puts product behavior in
+`domains/agent_operations/**`, shared JSON-RPC/capability helpers in
+`integrations/mcp/**`, and the HTTP route adapter in `api/http/**`.
 
 ## Target Shape
 
@@ -342,6 +348,12 @@ anyharness/crates/
     src/v1/                      # public wire schemas
   anyharness-credential-discovery/
     src/                         # shared provider credential discovery
+  proliferate-diagnostics-protocol/
+    src/v1/                      # contract only; no collector or producer runtime
+  proliferate-diagnostics-client/
+    src/                         # bounded producer adapter for Desktop-owned Rust children
+  proliferate-diagnostics-collector/
+    src/                         # standalone memory-only collector process
   anyharness-lib/
     src/
       api/
@@ -405,6 +417,18 @@ owning layer instead of growing a new global bucket.
 - `anyharness-contract` owns wire schemas only. It must not grow runtime logic.
 - `anyharness-credential-discovery` owns shared provider credential parsing and
   portable auth-file normalization. It must not own runtime orchestration.
+- `proliferate-diagnostics-protocol` owns only the versioned provider-neutral
+  diagnostics wire contract, bounds, and pure validation. It must not own
+  collection, transport, files, processes, export, or product orchestration.
+- `proliferate-diagnostics-client` owns only the bounded local producer
+  adapter linked into Desktop-owned Rust children: tracing capture, secret
+  filtering, the admission queue and receipts, descriptor-possession bridge
+  activation, and per-component fallback files. It must not own collector
+  state, Desktop/Tauri wiring, product behavior, persistence, or replay.
+- `proliferate-diagnostics-collector` owns only the standalone bounded
+  in-memory collector and its loopback process boundary. It must not own
+  Desktop/Tauri wiring, producer queues, AnyHarness runtime behavior, Worker
+  behavior, server/cloud integration, persistence, or export destinations.
 - `anyharness-lib` owns runtime behavior, durable domain rules, live
   orchestration, workspace adapters, and protocol integrations.
 - `api/` is transport. It parses requests, calls the owning domain/runtime, and
@@ -453,5 +477,5 @@ persistence -> domains
 Core domains should not import product surface domains. When a product surface
 needs to plug into a core lifecycle, use an extension point wired in `app/`.
 For example, the session engine owns the `SessionExtension` trait; cowork,
-reviews, and subagents implement it; `app` wires them into
-`SessionRuntime`.
+reviews, and delegated-agent completion delivery implement it; `app` wires
+them into `SessionRuntime`.

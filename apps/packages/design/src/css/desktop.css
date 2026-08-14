@@ -26,3 +26,22 @@
 .app-region-no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* ---- Zoom-stable hairline frames ---- */
+/* WKWebView drops sub-device-pixel hairlines (outward or inset rings, and
+   even 0.5px/1px borders) to zero on individual edges depending on zoom
+   and subpixel position, so a surface that keeps a hairline frame under
+   native window zoom paints its stroke from --proliferate-device-px — one
+   physical device pixel, published by the Desktop device-pixel lifecycle
+   from 1 / devicePixelRatio, which folds window zoom and display density
+   together (0.5px on 2x glass, 1.25px on a 1x display at 80% zoom).
+   WebKit pixel-snaps the band, so one whole device pixel renders as one
+   crisp full-ink row at every subpixel position. Unlayered on purpose so
+   it beats the surface's layered ring/shadow utilities, which remain the
+   Web rendering of the same frame; window zoom only exists in the native
+   webview (PRO-117). */
+.zoom-stable-hairline-frame {
+  box-shadow:
+    0 0 0 var(--proliferate-device-px, 0.5px) var(--color-border-heavy),
+    var(--elevation-subtle);
+}

@@ -18,7 +18,7 @@ export function ChatComposerSurface({
       data-chat-composer-surface="true"
       className={twMerge(
         // [CHAT-01]/[RAD-04]: the composer owns its own radius role
-        // (--radius-composer, 20px — softer than rounded-xl's 12px). Routing
+        // (--radius-composer, 28px — softer than rounded-xl's 12px). Routing
         // through the dedicated token is what lets a consumer retune
         // just the composer (AgentHarnessConfigComposer overrides
         // --radius-composer locally) without moving every rounded-xl surface.

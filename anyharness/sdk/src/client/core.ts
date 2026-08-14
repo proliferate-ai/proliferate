@@ -1,4 +1,5 @@
 import type { ProblemDetails } from "../types/runtime.js";
+import { requestBoundedJson } from "./bounded-json.js";
 import { AgentAuthClient } from "./agent-auth.js";
 import { AgentGatewayCatalogClient } from "./agent-gateway-catalog.js";
 import { AgentsClient } from "./agents.js";
@@ -8,6 +9,9 @@ import { GitClient } from "./git.js";
 import { MobilityClient } from "./mobility.js";
 import { ModelSnapshotClient } from "./model-snapshot.js";
 import { PlansClient } from "./plans.js";
+import {
+  normalizeProblemDetails,
+} from "./problem-details.js";
 import { ProcessesClient } from "./processes.js";
 import { PullRequestsClient } from "./pull-requests.js";
 import { RepoRootsClient } from "./repo-roots.js";
@@ -188,6 +192,7 @@ const TELEMETRY_SAFE_PROBLEM_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
 const ANYHARNESS_RUNTIME_INCIDENT_INSTANCE =
   /^urn:proliferate:anyharness:incident:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const MAX_ERROR_CAUSE_CHAIN_DEPTH = 8;
+const MAX_BOUNDED_ERROR_RESPONSE_BYTES = 65_536;
 
 /**
  * Whether an AnyHarness request error (or an Error wrapping one) carries the
@@ -316,6 +321,29 @@ export class AnyHarnessTransport {
     });
   }
 
+  // The owning transport keeps auth, headers, timing, and lifecycle intact.
+  // requestBoundedJson owns the status-specific stream/body byte boundary.
+  async getBoundedJson<T>(
+    path: string,
+    maxResponseBytes: number,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<{ body: T; bodyBytes: number }> {
+    const result = await requestBoundedJson(
+      (signal) => this.fetchWithTiming(
+        "GET", path, undefined, options, { accept: "application/json" }, signal,
+      ),
+      {
+        successBytes: maxResponseBytes,
+        errorBytes: MAX_BOUNDED_ERROR_RESPONSE_BYTES,
+      },
+      options?.signal,
+    );
+    if (!result.response.ok) {
+      throw toAnyHarnessErrorBody(result.response, result.body);
+    }
+    return { body: result.body as T, bodyBytes: result.bodyBytes };
+  }
+
   async getBlob(path: string, options?: AnyHarnessRequestOptions): Promise<Blob> {
     const res = await this.fetchWithTiming("GET", path, undefined, options, {});
     if (!res.ok) {
@@ -378,6 +406,7 @@ export class AnyHarnessTransport {
     body: unknown,
     options: AnyHarnessRequestOptions | undefined,
     headers: HeadersInit,
+    signal: AbortSignal | undefined = options?.signal,
   ): Promise<Response> {
     const startedAt = timingNow();
     const finishRequestLifecycle = this.startRequestLifecycle(method, options);
@@ -385,7 +414,7 @@ export class AnyHarnessTransport {
       const res = await this.fetch(`${this.baseUrl}${path}`, {
         method,
         headers: this.buildHeaders(headers, options),
-        signal: options?.signal,
+        signal,
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       this.emitRequestTiming(method, options, res.status, timingNow() - startedAt);
@@ -552,6 +581,10 @@ async function toAnyHarnessError(res: Response): Promise<AnyHarnessError> {
     body = undefined;
   }
 
+  return toAnyHarnessErrorBody(res, body);
+}
+
+function toAnyHarnessErrorBody(res: Response, body: unknown): AnyHarnessError {
   const details = isJsonObject(body) && isJsonObject(body.detail)
     ? { ...body.detail }
     : undefined;
@@ -565,39 +598,6 @@ async function toAnyHarnessError(res: Response): Promise<AnyHarnessError> {
   );
 }
 
-interface ProblemDetailsFallback {
-  title: string;
-  status: number;
-}
-
-function normalizeProblemDetails(
-  value: unknown,
-  fallback: ProblemDetailsFallback,
-): ProblemDetails {
-  const source = isJsonObject(value) ? value : {};
-  const problem: ProblemDetails = {
-    type: typeof source.type === "string" ? source.type : "about:blank",
-    title: typeof source.title === "string" ? source.title : fallback.title,
-    status: isHttpStatus(source.status) ? source.status : fallback.status,
-  };
-
-  if (typeof source.code === "string" || source.code === null) {
-    problem.code = source.code;
-  }
-  if (typeof source.detail === "string" || source.detail === null) {
-    problem.detail = source.detail;
-  }
-  if (typeof source.instance === "string" || source.instance === null) {
-    problem.instance = source.instance;
-  }
-
-  return problem;
-}
-
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isHttpStatus(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 100 && value <= 599;
 }

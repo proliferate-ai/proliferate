@@ -1,7 +1,11 @@
 [package]
 name = "proliferate"
-version = "0.4.9"
+version = "0.4.10"
 edition.workspace = true
+
+[features]
+default = []
+internal-diagnostics-artifact = []
 
 [build-dependencies]
 tauri-build.workspace = true
@@ -20,12 +24,10 @@ tauri-plugin-dialog.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-reqwest = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, features = ["json", "stream"] }
 rusqlite.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-tracing-appender.workspace = true
-file-rotate.workspace = true
 chrono.workspace = true
 fs2.workspace = true
 sha2.workspace = true
@@ -41,6 +43,10 @@ getrandom = "0.4"
 which = "7"
 window-vibrancy = "0.6"
 uuid.workspace = true
+libc.workspace = true
+proliferate-diagnostics-client.workspace = true
+proliferate-diagnostics-protocol.workspace = true
+zeroize.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"
@@ -49,10 +55,12 @@ objc2-app-kit = { version = "0.3.2", features = [
   "NSDockTile",
   "NSMenu",
   "NSMenuItem",
+  "NSPasteboard",
   "NSView",
   "NSWindow",
 ] }
 objc2-foundation = { version = "0.3.2", features = [
+  "NSArray",
   "NSProcessInfo",
   "NSString",
 ] }

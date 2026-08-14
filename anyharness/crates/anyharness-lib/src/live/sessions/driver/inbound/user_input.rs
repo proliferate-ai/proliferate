@@ -6,7 +6,7 @@ use anyharness_contract::v1::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{raw_ext_response, InboundDoor};
+use super::{raw_ext_response, terminal_mutation_rejected, InboundDoor};
 use crate::live::sessions::rendezvous::broker::UserInputOutcome;
 
 impl InboundDoor {
@@ -43,6 +43,9 @@ impl InboundDoor {
 
         let pending_wait = {
             let mut sink = self.event_sink.lock().await;
+            if !sink.event_mutations_admitted() {
+                return Err(terminal_mutation_rejected());
+            }
             let pending_wait = self
                 .interaction_broker
                 .register_user_input(&self.session_id, &request_id, &questions)
@@ -136,6 +139,9 @@ impl InboundDoor {
 
         let pending_wait = {
             let mut sink = self.event_sink.lock().await;
+            if !sink.event_mutations_admitted() {
+                return Err(terminal_mutation_rejected());
+            }
             let pending_wait = self
                 .interaction_broker
                 .register_user_input(&self.session_id, &request_id, &questions)

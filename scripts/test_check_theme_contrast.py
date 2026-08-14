@@ -231,6 +231,7 @@ class PlaneCoverage(unittest.TestCase):
             "--color-surface-under",
             "--color-muted",
             "--color-sidebar",
+            "--color-composer-background",
         }
         self.assertEqual(set(TEXT_PLANES), expected)
 

@@ -9,6 +9,9 @@ impl SessionActor {
         &self,
         update: BackgroundWorkUpdate,
     ) {
+        if !self.event_mutations_admitted().await {
+            return;
+        }
         let marked_terminal = match self
             .background_work_registry
             .mark_terminal(&update, &chrono::Utc::now().to_rfc3339())

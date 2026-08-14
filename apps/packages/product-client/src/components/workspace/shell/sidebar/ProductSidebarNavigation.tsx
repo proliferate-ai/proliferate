@@ -16,15 +16,22 @@ export function ProductSidebarPrimaryNavigation({
   navItems,
   onNavSelect,
   shortcutRevealVisible = false,
+  gutter = true,
   className = "",
 }: {
   navItems: SidebarNavItemView[];
   onNavSelect: (id: string) => void;
   shortcutRevealVisible?: boolean;
+  /**
+   * The sidebar's own horizontal gutter. Turn it off when the nav renders
+   * inside a container that already carries one (the scrollable content's
+   * viewport), so its rows stay flush with the rows around them.
+   */
+  gutter?: boolean;
   className?: string;
 }) {
   return (
-    <nav className={`px-2 ${className}`}>
+    <nav className={`${gutter ? "px-2" : ""} ${className}`}>
       <div className="flex flex-col gap-px">
         {navItems.map((item) => (
           <ProductSidebarNavRow

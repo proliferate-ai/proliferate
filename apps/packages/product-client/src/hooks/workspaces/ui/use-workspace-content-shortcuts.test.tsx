@@ -58,6 +58,7 @@ describe("useWorkspaceContentShortcuts", () => {
       activeMatchId: null,
       unitsById: {},
       nextUnitOrder: 0,
+      surfaceAvailability: { file: false, review: false },
     });
   });
 
@@ -264,5 +265,75 @@ describe("useWorkspaceContentShortcuts", () => {
 
     expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(false);
     expect(useContentSearchStore.getState().open).toBe(false);
+  });
+
+  it("routes content search to the review surface when the git review document owns focus", () => {
+    const actions = createActions();
+    const zone = document.createElement("div");
+    zone.tabIndex = 0;
+    zone.setAttribute("data-focus-zone", "right-panel");
+    const reviewDocument = document.createElement("div");
+    reviewDocument.setAttribute("data-git-review-document", "true");
+    const focusTarget = document.createElement("button");
+    reviewDocument.append(focusTarget);
+    zone.append(reviewDocument);
+    document.body.append(zone);
+    focusTarget.focus();
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
+    expect(useContentSearchStore.getState().open).toBe(true);
+    expect(useContentSearchStore.getState().surface).toBe("review");
+  });
+
+  it("declines content search when the right panel owns focus but neither file viewer nor review document is present", () => {
+    const actions = createActions();
+    const zone = document.createElement("div");
+    zone.tabIndex = 0;
+    zone.setAttribute("data-focus-zone", "right-panel");
+    document.body.append(zone);
+    zone.focus();
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(false);
+    expect(useContentSearchStore.getState().open).toBe(false);
+  });
+
+  it("cycles chat and review scope when the search pill owns focus and review is available", () => {
+    const actions = createActions();
+    useContentSearchStore.getState().setSurfaceAvailability("review", true);
+    const overlay = document.createElement("div");
+    overlay.setAttribute("data-content-search-overlay", "true");
+    const focusTarget = document.createElement("input");
+    overlay.append(focusTarget);
+    document.body.append(overlay);
+    focusTarget.focus();
+    useContentSearchStore.getState().openSearch("chat");
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
+    expect(useContentSearchStore.getState().surface).toBe("review");
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
+    expect(useContentSearchStore.getState().surface).toBe("chat");
+  });
+
+  it("does not cycle scope when the search pill owns focus but review is unavailable", () => {
+    const actions = createActions();
+    const overlay = document.createElement("div");
+    overlay.setAttribute("data-content-search-overlay", "true");
+    const focusTarget = document.createElement("input");
+    overlay.append(focusTarget);
+    document.body.append(overlay);
+    focusTarget.focus();
+    useContentSearchStore.getState().openSearch("chat");
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
+    expect(useContentSearchStore.getState().surface).toBe("chat");
   });
 });
