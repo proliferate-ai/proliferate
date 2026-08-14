@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SubagentParentRoster } from "@anyharness/sdk";
 import {
-  useSessionSubagentsQuery,
-  useWorkspaceSessionsQuery,
-  useWorkspaceSubagentsQuery,
-} from "@anyharness/sdk-react";
-import {
   useAgentsPaneRosterProjection,
 } from "#product/hooks/agents/derived/use-agents-pane-roster-projection";
 import {
@@ -28,15 +23,8 @@ import {
   useAgentsPaneNavigationStore,
 } from "#product/stores/agents/agents-pane-navigation-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useAgentsPaneRosterQueries } from "#product/hooks/agents/facade/use-agents-pane-roster-queries";
 import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
-
-// The roster is fetch-once React Query with event-driven invalidation, which
-// only covers sessions this client happens to stream. A parent's own actor
-// (a different client, a background actor swap) can update the roster with
-// nothing here to invalidate it. This modest poll is a backstop, not the
-// primary freshness mechanism, and only runs while the pane is genuinely
-// open/visible to a user who could see the staleness.
-const AGENTS_PANE_ROSTER_POLL_MS = 15_000;
 
 function rosterHasChild(
   rosters: readonly SubagentParentRoster[] | undefined,
@@ -101,25 +89,9 @@ export function useAgentsPane({
     setLifecycleError(null);
   }, [workspaceId]);
 
-  const workspaceRosterQuery = useWorkspaceSubagentsQuery({
-    workspaceId,
-    enabled: true,
-    refetchInterval: isOpen ? AGENTS_PANE_ROSTER_POLL_MS : false,
-    refetchOnWindowFocus: isOpen,
-  });
   const parentSessionId = route.kind === "overview" ? null : route.parentDurableId;
-  const parentRosterQuery = useSessionSubagentsQuery(parentSessionId, {
-    workspaceId,
-    enabled: parentSessionId !== null,
-    refetchInterval: isOpen ? AGENTS_PANE_ROSTER_POLL_MS : false,
-    refetchOnWindowFocus: isOpen,
-  });
-  // Kept dormant until Promote-404 convergence needs an authoritative second
-  // source. A 404 is never treated as success from roster absence alone.
-  const workspaceSessionsQuery = useWorkspaceSessionsQuery({
-    workspaceId,
-    enabled: false,
-  });
+  const { workspaceRosterQuery, parentRosterQuery, workspaceSessionsQuery } =
+    useAgentsPaneRosterQueries({ workspaceId, parentSessionId, isOpen });
 
   const hiddenChildIds = useMemo(() => new Set([
     ...suppressedChildIds,
