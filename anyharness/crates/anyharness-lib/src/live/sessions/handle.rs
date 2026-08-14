@@ -447,6 +447,16 @@ impl LiveSessionHandle {
             .map_err(anyhow_command_error)
     }
 
+    /// Workspace-wide stop: detaches the live actor exactly like `dismiss`,
+    /// but the returned future does not resolve until the agent's process
+    /// group has been signaled (TERM, then KILL after a 5s grace) and
+    /// reaped. Returns the `(total, git)` kill census taken before signaling.
+    pub async fn stop_and_await(&self) -> anyhow::Result<(usize, usize)> {
+        self.send_request(|respond_to| SessionCommand::Stop { respond_to })
+            .await
+            .map_err(anyhow_command_error)
+    }
+
     pub async fn close(&self) -> anyhow::Result<()> {
         self.send_request(|respond_to| SessionCommand::Close { respond_to })
             .await

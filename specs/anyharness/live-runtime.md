@@ -689,6 +689,43 @@ Sink
   normalizes ACP notifications into durable/broadcast session events
 ```
 
+### Workspace-wide stop
+
+`SessionRuntime::stop_all_for_workspace` (`domains/sessions/runtime/lifecycle.rs`)
+is the one workspace-wide kill for the sessions plane. It is distinct from
+`dismiss`: a dismiss reply fires before the actor loop even finishes, so it
+proves nothing about the agent process. The stop path is backed by
+`LiveSessionHandle::stop_and_await`, a private `SessionCommand::Stop` the
+actor stores and answers only from `run()`'s exit sequence, after the agent's
+whole process GROUP (`spawn_agent_process` gives it its own group) has gone
+through the crate-root `process_kill` module's TERM -> 5s grace -> KILL
+escalation and been reaped. The census - total processes reaped and how many
+were `git` - travels back as the `PlaneKills` pair every stop primitive on
+every plane returns; the domain folds it and moves the session row to its
+stopped (`idle`, never `closed` or `dismissed`) state so unarchive/resume
+still works. `process_kill` itself lives at the crate root, not under
+`live/**` or `domains/**`, because both `live/terminals::manager` and
+`domains/workspaces::setup_runtime` need to name `PlaneKills` and either
+domain-side placement would force a second `live::` import in one of them.
+
+Two timing rules make the stop fit an archive's quiesce budget:
+
+- The 5s grace is a DEADLINE, not a fixed cost. Each escalation polls for its
+  target's death and returns the moment the group (or PTY session) is
+  confirmed empty, so a target that honors the TERM costs milliseconds.
+- Every plane fans its per-target kills out CONCURRENTLY -
+  `stop_all_for_workspace` across sessions, `close_all_for_workspace` across
+  terminals. The worst case for a whole plane is ONE grace window, never one
+  per target.
+
+A `Stop` that arrives during an ACTIVE turn races the ACP cancel against a
+short bound (`ACTIVE_TURN_STOP_BOUND`, `actor/turn/active.rs`). The cancel is
+cooperative and nothing obliges an agent to honor it, so when the bound
+expires the turn is abandoned (its transcript turn is closed as `Cancelled`)
+and the exit sequence's group escalation runs regardless. The worst case for
+one session is therefore the bound plus the grace, never the length of the
+agent's turn.
+
 ## Product Hooks
 
 Product domains react to a live session through four mechanisms, all declared
@@ -804,6 +841,47 @@ driver
 output_sink
   ordered terminal output/status stream
 ```
+
+### Workspace-wide stop and the archive-script run
+
+`TerminalService` carries three workspace-wide primitives, split out of
+`manager.rs` into the sibling `command_runs/workspace_stop.rs` to stay under
+the line cap:
+
+- `close_all_for_workspace` walks the `TerminalRegistry` directly (not
+  through `TerminalHandle::close()`, whose setup-terminal guard would refuse
+  while a sibling `kill_setup_run` running in parallel has not yet marked the
+  active run interrupted) and kills every terminal by PTY SESSION, not just
+  the shell's own pid - portable-pty's PTY child is already a session
+  leader, so a session-wide kill is what reaches a `&`-backgrounded job an
+  interactive shell's job control put in its own process group. The
+  per-terminal kills run CONCURRENTLY, so a workspace with several open
+  terminals pays one grace window, not one per terminal.
+- `kill_active_run_for_workspace` (`WorkspaceSetupRuntime::kill_setup_run`'s
+  mechanism) kills whatever setup or archive-script run is active for a
+  workspace by process GROUP and marks the command run interrupted, so
+  `is_setup_running` stops lying the moment it returns.
+- `run_blocking_command_for_workspace`
+  (`WorkspaceSetupRuntime::run_archive_script`'s mechanism) is an
+  await-to-exit mode layered onto the same spawn/stream/timeout body
+  `start_setup_command` already used for start-and-poll. It records with
+  `TerminalPurpose::Run`, registers in the same in-memory active-run registry
+  so `kill_active_run_for_workspace` can cancel-and-await it, but never calls
+  `set_latest_setup_run` - an archive script must never become the
+  workspace's durable setup pointer that `rerun_setup` replays. Unlike
+  `start_setup_command`, it OWNS the terminal it creates and closes it on
+  every exit path (success, failure, and the `ArchiveRunGuard::drop` backstop
+  for a caller that walked away): the terminal is rooted in the workspace
+  being archived, so no live PTY - and no blocking PTY-reader thread - may
+  survive the run.
+
+All three return or compose the crate-root `process_kill` module's
+`PlaneKills` census and await confirmed process death before returning;
+none of them closes or kills the other resource in its pair - killing the
+setup terminal does not kill the setup script, and killing the setup script
+does not close the terminal. They are the mechanism only: no operation-gate
+lease, no access-gate assertion, and no parallel composition across planes -
+that composition is quiesce's, layered on top.
 
 ## Composite Live Resources
 

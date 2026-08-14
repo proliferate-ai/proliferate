@@ -63,7 +63,7 @@ DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/retire
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/setup_runtime.rs 1 workspace setup holds live terminals directly; target = workspaces runtime valve (grid plan PR 6b)
 
 # Rule: live/** never fetches from domain stores/services.
-# 6 files, 18 occurrences.
+# 7 files, 20 occurrences.
 #
 # live/sessions/probe.rs dropped out entirely (grid plan PR 7): its
 # resolve_agent_unrouted call moved to the callers (AcpProbeRunner::run in
@@ -78,6 +78,7 @@ DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/setup_
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/sessions/background_work/mod.rs 2 both inside the inline cfg(test) mod the engine cannot see (1 import + 1 SessionStore::new in a fixture); target = none, engine-invisible cfg boundary
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/command_runs/pty.rs 5 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/command_runs/setup_process.rs 3 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
+LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/command_runs/workspace_stop.rs 2 R3: split from manager.rs to stay under the line cap (spec Scope section F); carries forward manager.rs's own already-allowlisted occurrence of this same live/terminals-uses-the-older-lock-based-doctrine exception for the TerminalCommandService/new_command_run_record calls the three workspace-wide stop primitives need; ratchet only, do not fix
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/driver/pty.rs 3 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/handle.rs 1 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/manager.rs 4 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
