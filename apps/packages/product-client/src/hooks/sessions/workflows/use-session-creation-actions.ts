@@ -4,7 +4,6 @@ import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product
 import { hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input";
 import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import {
-  formatSessionCreateCause,
   isWorkspaceDirectoryMissingError,
   toSessionCreateFailureDisplayError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
@@ -54,7 +53,10 @@ import {
   type ReplacementShellPreferencesTransaction,
 } from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
 import { adoptRecoveredSessionIdentity } from "#product/hooks/sessions/workflows/session-creation-recovered-identity";
-import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
+import {
+  announceQueuedPromptFailure,
+  cleanupSessionCreationFailure,
+} from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { resolveRecoveryWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
@@ -393,27 +395,7 @@ export function useSessionCreationActions() {
     if (hasPrompt) {
       void createPromise.catch((error) => {
         cleanupCreateFailure(error);
-        // A caller that launched this send unattended announces it itself: it
-        // knows which workspace the prompt was for, which the composer copy
-        // below cannot say (PRO-230).
-        if (options.onQueuedPromptFailure) {
-          options.onQueuedPromptFailure(error);
-          return;
-        }
-        // The missing-worktree composer panel owns that condition — no toast.
-        // WORKSPACE_ARCHIVED is the same "server is right, client was stale"
-        // shape — no toast there either.
-        if (!isWorkspaceDirectoryMissingError(error) && !isWorkspaceArchivedRefusal(error)) {
-          // This path had a prompt, so the thing the user lost is the message,
-          // not just the chat — say which, and where the draft went. No retry:
-          // the composer still holds the text, and re-sending from a toast
-          // would race the user typing into it.
-          showErrorToast({
-            headline: "Message not sent",
-            consequence: "No chat was opened. Your message is still in the composer.",
-            cause: formatSessionCreateCause(error),
-          });
-        }
+        announceQueuedPromptFailure(error, options.onQueuedPromptFailure, showErrorToast);
       }).finally(cleanupInFlight);
       return pendingSessionId;
     }
