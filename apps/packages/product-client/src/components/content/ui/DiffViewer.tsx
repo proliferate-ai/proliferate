@@ -6,6 +6,7 @@ import { UnifiedDiffViewer, type UnifiedDiffHunkActions } from "#product/compone
 import { useDiffHighlight } from "#product/hooks/ui/highlighting/use-diff-highlight";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { useChatDiffPreferencesStore } from "#product/stores/chat/chat-diff-preferences-store";
+import type { ContentSearchSurface } from "#product/stores/search/content-search-store";
 
 interface DiffViewerProps {
   patch: string;
@@ -17,6 +18,8 @@ interface DiffViewerProps {
   layout?: "unified" | "split";
   operationId?: MeasurementOperationId | null;
   contentSearchUnitId?: string;
+  contentSearchSurface?: ContentSearchSurface;
+  contentSearchOrderKey?: number;
   overscrollBehavior?: CSSProperties["overscrollBehavior"];
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
@@ -53,6 +56,8 @@ export function DiffViewer({
   layout = "unified",
   operationId,
   contentSearchUnitId,
+  contentSearchSurface,
+  contentSearchOrderKey,
   overscrollBehavior,
   overscrollBehaviorX,
   overscrollBehaviorY,
@@ -78,6 +83,8 @@ export function DiffViewer({
           wrapLongLines={effectiveWrapLongLines}
           filePath={filePath}
           contentSearchUnitId={contentSearchUnitId}
+          contentSearchSurface={contentSearchSurface}
+          contentSearchOrderKey={contentSearchOrderKey}
           overscrollBehavior={overscrollBehavior}
           overscrollBehaviorX={overscrollBehaviorX}
           overscrollBehaviorY={overscrollBehaviorY}

@@ -40,13 +40,12 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
         <section className="space-y-2">
           <Textarea
             id="support-prompt-message"
-            variant="code"
             autoFocus
             data-telemetry-mask
             value={message}
             onChange={(event) => setMessage(event.target.value)}
             placeholder="Prompt a coding agent to build what you want to see in Proliferate. If we like it, we'll run it and merge the result."
-            className="min-h-[140px]"
+            className="min-h-[140px] resize-y"
           />
         </section>
 

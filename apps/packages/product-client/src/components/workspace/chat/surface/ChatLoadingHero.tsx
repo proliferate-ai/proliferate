@@ -1,5 +1,5 @@
 import { useChatLoadingSubstep } from "#product/hooks/chat/derived/use-chat-loading-substep";
-import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { DotCellLoader } from "#product/primitives/DotCellLoader";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
@@ -15,10 +15,11 @@ export function ChatLoadingHero() {
         {showThinking ? (
           <ThinkingText />
         ) : (
-          <div className="flex w-36 flex-col items-center gap-2" aria-hidden="true">
-            <SkeletonBlock className="h-2 w-24" />
-            <SkeletonBlock className="h-2 w-36 bg-muted/45" />
-          </div>
+          <DotCellLoader
+            aria-hidden="true"
+            className="text-muted-foreground"
+            variant="wave"
+          />
         )}
         {caption && (
           <p className="mt-4 text-chat font-medium text-muted-foreground">
