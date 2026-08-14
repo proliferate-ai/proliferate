@@ -10,7 +10,7 @@ import { useSessionSelectionStore } from "@proliferate/product-client/internal/s
 import { useSessionTranscriptStore } from "@proliferate/product-client/internal/stores/sessions/session-transcript-store";
 import { useToastStore } from "@proliferate/product-client/internal/stores/toast/toast-store";
 import { dismissToast } from "@proliferate/product-client/internal/primitives/utils/show-toast";
-import { REPO_ADDED_TOAST_ID } from "@proliferate/product-client/internal/components/workspace/repo-setup/use-repo-added-toast";
+import { REPO_ADDED_TOAST_ID } from "@proliferate/product-client/internal/hooks/workspaces/ui/use-repo-added-toast";
 
 // Owns auth orchestration's store/runtime effect wiring. Does not own the auth network flow.
 export function useAuthOrchestrationEffects(): AuthOrchestrationDeps {
