@@ -50,6 +50,18 @@ export interface CreateSessionWithResolvedConfigOptions {
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
   /**
+   * Own the announcement of a create that fails after the prompt was enqueued.
+   *
+   * A create carrying a prompt resolves at enqueue, so the caller's own `await`
+   * never sees this failure and the default announcement is the composer one:
+   * "your message is still in the composer". True for a person who just typed,
+   * false for a background promotion into a workspace nobody is looking at —
+   * there is no composer holding that text and the toast names no workspace.
+   * Callers that launch unattended pass this and announce it themselves, with
+   * the workspace they know about (PRO-230 review finding 3).
+   */
+  onQueuedPromptFailure?: (error: unknown) => void;
+  /**
    * When set, the creation workflow immediately hides this unused session
    * after activating the optimistic replacement. Destructive cleanup and
    * runtime dismissal commit only after the replacement materializes; failure

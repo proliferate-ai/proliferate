@@ -2,7 +2,9 @@ import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { isCloudWorkspaceId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import {
+  type CloudWorkspaceStatusFields,
   isCloudWorkspacePostReadyPending,
+  isCloudWorkspaceTerminallyUnavailable,
   resolveCloudWorkspaceStatus,
   shouldPollCloudWorkspaceForUpdates,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
@@ -38,7 +40,10 @@ export function resolveCloudWorkspacePollAction(input: {
     return "refresh";
   }
   const status = resolveCloudWorkspaceStatus(cachedWorkspace);
-  if (status === "error") {
+  // `lost` and `archived` are as final as `error` for an attempt that never
+  // reached ready: refreshing them forever would park the entry and its queued
+  // prompt until the hour-long staleness timer (PRO-230 review finding 4).
+  if (status === "error" || isCloudWorkspaceTerminallyUnavailable(cachedWorkspace)) {
     return "fail-cached";
   }
   if (shouldPollCloudWorkspaceForUpdates(cachedWorkspace)) {
@@ -50,7 +55,10 @@ export function resolveCloudWorkspacePollAction(input: {
 export function resolveCloudWorkspacePollOutcome(
   workspace: CloudWorkspaceSummary,
 ): CloudWorkspacePollOutcome {
-  if (resolveCloudWorkspaceStatus(workspace) === "error") {
+  if (
+    resolveCloudWorkspaceStatus(workspace) === "error"
+    || isCloudWorkspaceTerminallyUnavailable(workspace)
+  ) {
     return "failed";
   }
   if (resolveCloudWorkspaceStatus(workspace) === "ready" && !isCloudWorkspacePostReadyPending(workspace)) {
@@ -60,11 +68,22 @@ export function resolveCloudWorkspacePollOutcome(
 }
 
 export function resolveCloudWorkspaceFailureMessage(
-  workspace: Pick<CloudWorkspaceSummary, "lastError" | "statusDetail">,
+  workspace: CloudWorkspaceStatusFields & Pick<CloudWorkspaceSummary, "lastError" | "statusDetail">,
 ): string {
-  return workspace.lastError
-    ?? workspace.statusDetail
-    ?? "Cloud workspace provisioning failed.";
+  const reportedMessage = workspace.lastError ?? workspace.statusDetail;
+  if (reportedMessage) {
+    return reportedMessage;
+  }
+  // A terminal status usually carries no error text of its own, so say what
+  // happened instead of claiming a provisioning error.
+  switch (resolveCloudWorkspaceStatus(workspace)) {
+    case "lost":
+      return "Cloud workspace was lost before it became ready.";
+    case "archived":
+      return "Cloud workspace was archived before it became ready.";
+    default:
+      return "Cloud workspace provisioning failed.";
+  }
 }
 
 export interface CloudWorkspacePollBatch<T> {

@@ -393,6 +393,13 @@ export function useSessionCreationActions() {
     if (hasPrompt) {
       void createPromise.catch((error) => {
         cleanupCreateFailure(error);
+        // A caller that launched this send unattended announces it itself: it
+        // knows which workspace the prompt was for, which the composer copy
+        // below cannot say (PRO-230).
+        if (options.onQueuedPromptFailure) {
+          options.onQueuedPromptFailure(error);
+          return;
+        }
         // The missing-worktree composer panel owns that condition — no toast.
         // WORKSPACE_ARCHIVED is the same "server is right, client was stale"
         // shape — no toast there either.

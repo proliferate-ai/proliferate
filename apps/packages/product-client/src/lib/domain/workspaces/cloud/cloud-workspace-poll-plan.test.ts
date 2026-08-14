@@ -1,20 +1,22 @@
 import { describe, expect, it } from "vitest";
-import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
-  buildSubmittingPendingWorkspaceEntry,
-  type PendingWorkspaceEntry,
-} from "#product/lib/domain/workspaces/creation/pending-entry";
+  awaitingCloudWorkspaceEntryFixture,
+  cloudWorkspaceFixture as cloudWorkspace,
+} from "#product/test/cloud-workspace-fixtures";
 import {
+  resolveCloudWorkspaceFailureMessage,
   resolveCloudWorkspacePollAction,
   resolveCloudWorkspacePollOutcome,
   selectCloudWorkspacePollBatch,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-poll-plan";
 
+const awaitingEntry = () => awaitingCloudWorkspaceEntryFixture("attempt-1", "cloud:cloud-1");
+
 describe("resolveCloudWorkspacePollAction", () => {
   it("skips an entry that is not awaiting cloud readiness", () => {
     expect(resolveCloudWorkspacePollAction({
       entry: { ...awaitingEntry(), stage: "submitting" },
-      cachedWorkspace: cloudWorkspace("pending"),
+      cachedWorkspace: cloudWorkspace({ status: "pending" }),
     })).toBe("skip");
   });
 
@@ -28,37 +30,66 @@ describe("resolveCloudWorkspacePollAction", () => {
   it("fails from the cache without a round trip when provisioning already errored", () => {
     expect(resolveCloudWorkspacePollAction({
       entry: awaitingEntry(),
-      cachedWorkspace: cloudWorkspace("error"),
+      cachedWorkspace: cloudWorkspace({ status: "error" }),
     })).toBe("fail-cached");
   });
 
   it("still refreshes a cached-ready workspace so finalization sees the same payload", () => {
     expect(resolveCloudWorkspacePollAction({
       entry: awaitingEntry(),
-      cachedWorkspace: cloudWorkspace("ready"),
+      cachedWorkspace: cloudWorkspace({ status: "ready" }),
     })).toBe("refresh");
   });
 
-  it("skips a workspace that can no longer become ready", () => {
+  it("fails a workspace that can no longer become ready", () => {
+    // Terminal and not ready: refreshing it would park the attempt and its
+    // queued prompt until the hour-long staleness sweep.
     expect(resolveCloudWorkspacePollAction({
       entry: awaitingEntry(),
-      cachedWorkspace: cloudWorkspace("lost"),
-    })).toBe("skip");
+      cachedWorkspace: cloudWorkspace({ status: "lost" }),
+    })).toBe("fail-cached");
+    expect(resolveCloudWorkspacePollAction({
+      entry: awaitingEntry(),
+      cachedWorkspace: cloudWorkspace({ status: "archived" }),
+    })).toBe("fail-cached");
   });
 });
 
 describe("resolveCloudWorkspacePollOutcome", () => {
   it("holds a ready workspace that is still applying files", () => {
     expect(resolveCloudWorkspacePollOutcome({
-      ...cloudWorkspace("ready"),
+      ...cloudWorkspace({ status: "ready" }),
       postReadyPhase: "applying_files",
     })).toBe("pending");
   });
 
   it("reads ready and error straight off the status", () => {
-    expect(resolveCloudWorkspacePollOutcome(cloudWorkspace("ready"))).toBe("ready");
-    expect(resolveCloudWorkspacePollOutcome(cloudWorkspace("error"))).toBe("failed");
-    expect(resolveCloudWorkspacePollOutcome(cloudWorkspace("pending"))).toBe("pending");
+    expect(resolveCloudWorkspacePollOutcome(cloudWorkspace({ status: "ready" }))).toBe("ready");
+    expect(resolveCloudWorkspacePollOutcome(cloudWorkspace({ status: "error" }))).toBe("failed");
+    expect(resolveCloudWorkspacePollOutcome(cloudWorkspace({ status: "pending" }))).toBe("pending");
+  });
+
+  it("treats a terminal non-ready status as a failure, not as waiting", () => {
+    expect(resolveCloudWorkspacePollOutcome(cloudWorkspace({ status: "lost" }))).toBe("failed");
+    expect(resolveCloudWorkspacePollOutcome(cloudWorkspace({ status: "archived" }))).toBe("failed");
+  });
+});
+
+describe("resolveCloudWorkspaceFailureMessage", () => {
+  it("prefers what the workspace reported", () => {
+    expect(resolveCloudWorkspaceFailureMessage({
+      ...cloudWorkspace({ status: "error" }),
+      lastError: "Sandbox never started",
+    })).toBe("Sandbox never started");
+  });
+
+  it("says what a terminal status means when it carries no error text", () => {
+    expect(resolveCloudWorkspaceFailureMessage(cloudWorkspace({ status: "lost" })))
+      .toBe("Cloud workspace was lost before it became ready.");
+    expect(resolveCloudWorkspaceFailureMessage(cloudWorkspace({ status: "archived" })))
+      .toBe("Cloud workspace was archived before it became ready.");
+    expect(resolveCloudWorkspaceFailureMessage(cloudWorkspace({ status: "error" })))
+      .toBe("Cloud workspace provisioning failed.");
   });
 });
 
@@ -81,46 +112,3 @@ describe("selectCloudWorkspacePollBatch", () => {
     expect(selectCloudWorkspacePollBatch([], 2, 3)).toEqual({ batch: [], nextCursor: 0 });
   });
 });
-
-function awaitingEntry(): PendingWorkspaceEntry {
-  return {
-    ...buildSubmittingPendingWorkspaceEntry({
-      attemptId: "attempt-1",
-      selectedWorkspaceId: null,
-      source: "cloud-created",
-      displayName: "feature-branch",
-      request: { kind: "select-existing", workspaceId: "cloud:cloud-1" },
-    }),
-    stage: "awaiting-cloud-ready",
-    workspaceId: "cloud:cloud-1",
-  };
-}
-
-function cloudWorkspace(status: CloudWorkspaceSummary["status"]): CloudWorkspaceSummary {
-  return {
-    id: "cloud-1",
-    displayName: "feature-branch",
-    repo: {
-      provider: "github",
-      owner: "proliferate-ai",
-      name: "proliferate",
-      branch: "feature-branch",
-      baseBranch: "main",
-    },
-    status,
-    workspaceStatus: status,
-    runtime: undefined,
-    statusDetail: null,
-    lastError: null,
-    templateVersion: null,
-    updatedAt: null,
-    createdAt: null,
-    readyAt: status === "ready" ? "2026-04-14T00:00:00Z" : null,
-    postReadyPhase: "",
-    postReadyFilesTotal: 0,
-    postReadyFilesApplied: 0,
-    postReadyStartedAt: null,
-    postReadyCompletedAt: null,
-    visibility: "private",
-  };
-}

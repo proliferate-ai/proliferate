@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   buildPendingWorkspaceUiKey,
-  buildSubmittingPendingWorkspaceEntry,
   type PendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
@@ -20,7 +19,11 @@ import {
   upsertPendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
-import { useCloudWorkspacePolling } from "#product/hooks/chat/lifecycle/use-cloud-workspace-polling";
+import { useCloudWorkspacePolling } from "#product/hooks/workspaces/lifecycle/use-cloud-workspace-polling";
+import {
+  awaitingCloudWorkspaceEntryFixture as awaitingEntry,
+  cloudWorkspaceFixture as cloudWorkspace,
+} from "#product/test/cloud-workspace-fixtures";
 
 const mocks = vi.hoisted(() => ({
   refreshCloudWorkspace: vi.fn(),
@@ -52,8 +55,11 @@ vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
 }));
 
 vi.mock("#product/hooks/cloud/workflows/use-cloud-workspace-actions", () => ({
+  // A fresh callback identity per render, exactly like the real hook: its
+  // identity chains through the collections cache that every successful poll
+  // invalidates. The loop must not restart on that churn (review finding 2).
   useCloudWorkspaceActions: () => ({
-    refreshCloudWorkspace: mocks.refreshCloudWorkspace,
+    refreshCloudWorkspace: (workspaceId: string) => mocks.refreshCloudWorkspace(workspaceId),
   }),
 }));
 
@@ -109,22 +115,7 @@ describe("useCloudWorkspacePolling", () => {
   it("preserves the active projected session when a pending cloud workspace becomes ready", async () => {
     const workspaceId = "cloud:cloud-1";
     const projectedSessionId = "client-session:claude:1";
-    const pendingEntry = {
-      ...buildSubmittingPendingWorkspaceEntry({
-        attemptId: "attempt-1",
-        selectedWorkspaceId: null,
-        source: "cloud-created",
-        displayName: "feature-branch",
-        repoLabel: "proliferate-ai/proliferate",
-        baseBranchName: "main",
-        request: {
-          kind: "select-existing" as const,
-          workspaceId,
-        },
-      }),
-      stage: "awaiting-cloud-ready" as const,
-      workspaceId,
-    };
+    const pendingEntry = awaitingEntry("attempt-1", workspaceId);
     const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(pendingEntry);
     putSessionRecord(createEmptySessionRecord(projectedSessionId, "claude", {
       workspaceId: pendingWorkspaceUiKey,
@@ -179,22 +170,7 @@ describe("useCloudWorkspacePolling", () => {
 
   it("marks the current awaiting cloud workspace as failed when polling returns error", async () => {
     const workspaceId = "cloud:cloud-1";
-    const pendingEntry = {
-      ...buildSubmittingPendingWorkspaceEntry({
-        attemptId: "attempt-1",
-        selectedWorkspaceId: null,
-        source: "cloud-created",
-        displayName: "feature-branch",
-        repoLabel: "proliferate-ai/proliferate",
-        baseBranchName: "main",
-        request: {
-          kind: "select-existing" as const,
-          workspaceId,
-        },
-      }),
-      stage: "awaiting-cloud-ready" as const,
-      workspaceId,
-    };
+    const pendingEntry = awaitingEntry("attempt-1", workspaceId);
     useSessionSelectionStore.setState({
       pendingWorkspaces: upsertPendingWorkspaceEntry(
         EMPTY_PENDING_WORKSPACE_REGISTRY,
@@ -223,22 +199,7 @@ describe("useCloudWorkspacePolling", () => {
 
   it("finalizes an awaiting pending entry when the cached cloud workspace is already ready", async () => {
     const workspaceId = "cloud:cloud-1";
-    const pendingEntry = {
-      ...buildSubmittingPendingWorkspaceEntry({
-        attemptId: "attempt-1",
-        selectedWorkspaceId: null,
-        source: "cloud-created",
-        displayName: "feature-branch",
-        repoLabel: "proliferate-ai/proliferate",
-        baseBranchName: "main",
-        request: {
-          kind: "select-existing" as const,
-          workspaceId,
-        },
-      }),
-      stage: "awaiting-cloud-ready" as const,
-      workspaceId,
-    };
+    const pendingEntry = awaitingEntry("attempt-1", workspaceId);
     mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({ status: "ready" })];
     useSessionSelectionStore.setState({
       pendingWorkspaces: upsertPendingWorkspaceEntry(
@@ -276,22 +237,7 @@ describe("useCloudWorkspacePolling", () => {
 
   it("marks the current awaiting cloud workspace as failed when the cached cloud workspace is already error", async () => {
     const workspaceId = "cloud:cloud-1";
-    const pendingEntry = {
-      ...buildSubmittingPendingWorkspaceEntry({
-        attemptId: "attempt-1",
-        selectedWorkspaceId: null,
-        source: "cloud-created",
-        displayName: "feature-branch",
-        repoLabel: "proliferate-ai/proliferate",
-        baseBranchName: "main",
-        request: {
-          kind: "select-existing" as const,
-          workspaceId,
-        },
-      }),
-      stage: "awaiting-cloud-ready" as const,
-      workspaceId,
-    };
+    const pendingEntry = awaitingEntry("attempt-1", workspaceId);
     mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({
       status: "error",
       lastError: "Provisioning failed before poll",
@@ -424,6 +370,127 @@ describe("useCloudWorkspacePolling", () => {
     }
   });
 
+  it("keeps one tick per interval while the poll's own writes churn its callbacks", async () => {
+    vi.useFakeTimers();
+    try {
+      seedRegistry([awaitingEntry("attempt-1", "cloud:cloud-1")]);
+      mocks.refreshCloudWorkspace.mockResolvedValue(cloudWorkspace({ status: "pending" }));
+
+      const { rerender } = renderHook(() => useCloudWorkspacePolling());
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(mocks.refreshCloudWorkspace).toHaveBeenCalledTimes(1);
+
+      // Five renders' worth of churn inside one interval — each one hands the
+      // hook a new `refreshCloudWorkspace` identity, as an invalidated
+      // collections query does. None of them may buy an extra refresh.
+      for (let renderPass = 0; renderPass < 5; renderPass += 1) {
+        rerender();
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(500);
+        });
+      }
+      expect(mocks.refreshCloudWorkspace).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(600);
+      });
+      expect(mocks.refreshCloudWorkspace).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("spaces the first tick after an attempt joins the set", async () => {
+    vi.useFakeTimers();
+    try {
+      seedRegistry([awaitingEntry("attempt-1", "cloud:cloud-1")]);
+      mocks.workspaceCollections.cloudWorkspaces = [
+        cloudWorkspace({ status: "pending" }),
+        cloudWorkspace({ id: "cloud-2", status: "pending" }),
+      ];
+      mocks.refreshCloudWorkspace.mockResolvedValue(cloudWorkspace({ status: "pending" }));
+
+      const { rerender } = renderHook(() => useCloudWorkspacePolling());
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(mocks.refreshCloudWorkspace).toHaveBeenCalledTimes(1);
+
+      // A second launch restarts the interval. The restart re-schedules against
+      // the last tick rather than firing one immediately, so the interval stays
+      // the floor no matter how often the set changes.
+      await act(async () => {
+        seedRegistry([
+          awaitingEntry("attempt-1", "cloud:cloud-1"),
+          awaitingEntry("attempt-2", "cloud:cloud-2"),
+        ]);
+        await vi.advanceTimersByTimeAsync(500);
+      });
+      rerender();
+      expect(mocks.refreshCloudWorkspace).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2600);
+      });
+      expect(mocks.refreshCloudWorkspace.mock.calls.map(([id]) => id)).toEqual([
+        "cloud:cloud-1",
+        "cloud:cloud-1",
+        "cloud:cloud-2",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fails an awaiting entry whose cloud workspace reached a terminal status", async () => {
+    const workspaceId = "cloud:cloud-1";
+    seedRegistry([awaitingEntry("attempt-1", workspaceId)]);
+    useSessionSelectionStore.setState({
+      selectedWorkspaceId: "cloud:other",
+      selectedLogicalWorkspaceId: "cloud:other",
+    });
+    mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({ status: "lost" })];
+
+    renderHook(() => useCloudWorkspacePolling());
+
+    await waitFor(() => {
+      expect(readPendingEntry()).toMatchObject({
+        stage: "failed",
+        workspaceId,
+        errorMessage: "Cloud workspace was lost before it became ready.",
+        request: { kind: "select-existing", workspaceId },
+      });
+    });
+    // Terminal means terminal: no round trip, and the attempt stops occupying a
+    // rotation slot instead of waiting out the staleness timer.
+    expect(mocks.refreshCloudWorkspace).not.toHaveBeenCalled();
+    expect(mocks.notifyUnattendedPendingWorkspaceFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ attemptId: "attempt-1" }),
+      "Cloud workspace was lost before it became ready.",
+    );
+  });
+
+  it("fails an awaiting entry when a refresh reports a terminal status", async () => {
+    const workspaceId = "cloud:cloud-1";
+    seedRegistry([awaitingEntry("attempt-1", workspaceId)]);
+    mocks.refreshCloudWorkspace.mockResolvedValue(cloudWorkspace({ status: "archived" }));
+
+    renderHook(() => useCloudWorkspacePolling());
+
+    await waitFor(() => {
+      expect(readPendingEntry()).toMatchObject({
+        stage: "failed",
+        workspaceId,
+        errorMessage: "Cloud workspace was archived before it became ready.",
+      });
+    });
+    expect(mocks.materializePendingWorkspaceSessions).not.toHaveBeenCalled();
+  });
+
   it("marks an unattended awaiting entry failed and announces it when readiness fails", async () => {
     const workspaceId = "cloud:cloud-1";
     const pendingEntry = awaitingEntry("attempt-1", workspaceId);
@@ -455,22 +522,6 @@ describe("useCloudWorkspacePolling", () => {
   });
 });
 
-function awaitingEntry(attemptId: string, workspaceId: string) {
-  return {
-    ...buildSubmittingPendingWorkspaceEntry({
-      attemptId,
-      selectedWorkspaceId: null,
-      source: "cloud-created",
-      displayName: "feature-branch",
-      repoLabel: "proliferate-ai/proliferate",
-      baseBranchName: "main",
-      request: { kind: "select-existing" as const, workspaceId },
-    }),
-    stage: "awaiting-cloud-ready" as const,
-    workspaceId,
-  };
-}
-
 function seedRegistry(entries: readonly PendingWorkspaceEntry[]) {
   useSessionSelectionStore.setState({
     pendingWorkspaces: entries.reduce(
@@ -478,43 +529,6 @@ function seedRegistry(entries: readonly PendingWorkspaceEntry[]) {
       EMPTY_PENDING_WORKSPACE_REGISTRY,
     ),
   });
-}
-
-function cloudWorkspace(
-  input: Partial<CloudWorkspaceSummary> & {
-    status: CloudWorkspaceSummary["status"];
-  },
-): CloudWorkspaceSummary {
-  return {
-    id: input.id ?? "cloud-1",
-    displayName: "feature-branch",
-    repo: {
-      provider: "github",
-      owner: "proliferate-ai",
-      name: "proliferate",
-      branch: "feature-branch",
-      baseBranch: "main",
-    },
-    status: input.status,
-    workspaceStatus: input.status,
-    runtime: undefined,
-    statusDetail: input.statusDetail ?? null,
-    lastError: input.lastError ?? null,
-    templateVersion: null,
-    updatedAt: null,
-    createdAt: null,
-    readyAt: "readyAt" in input
-      ? input.readyAt ?? null
-      : input.status === "ready"
-        ? "2026-04-14T00:00:00Z"
-        : null,
-    postReadyPhase: "",
-    postReadyFilesTotal: 0,
-    postReadyFilesApplied: 0,
-    postReadyStartedAt: null,
-    postReadyCompletedAt: null,
-    visibility: "private",
-  };
 }
 
 function readPendingEntry() {

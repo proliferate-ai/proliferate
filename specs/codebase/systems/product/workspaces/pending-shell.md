@@ -241,6 +241,20 @@ responses, and queued prompt edit/delete actions.
    behind the user, and `use-home-deferred-launch-runner` sends the queued
    prompt off the same per-attempt readiness.
 
+   Both drivers are mounted by `ProductLifecycleRoot`, not by the workspace
+   shell, and that placement is load-bearing: the shell unmounts whenever
+   nothing is selected, which is where Home, Workflows and Workspaces put the
+   user. A registry-wide driver mounted under the shell would stop for every
+   parked attempt the moment the user leaves a workspace, which is the same
+   stall by another route.
+
+   The root mounts them through `AuthenticatedLaunchLifecycles`, a lazy
+   component rendered only once auth status is `authenticated` (the same
+   treatment `AuthRestartOfferRoot` gets). A signed-out viewer has no registry
+   and no attempts, so nothing is lost, and the login shell — which has a
+   fail-closed first-load JS budget — never pulls the launch, session-creation
+   or cloud-polling graph into its entry chunk.
+
 10. Liveness gates the pipeline; attendance gates presentation.
     Pipeline work (patch the entry, remap and materialize projected sessions,
     clear the entry) is gated on `isAttemptLive`. Presentation side effects
@@ -788,6 +802,15 @@ Pending failures must preserve enough state to retry or exit cleanly:
   one toast announces it. The deferred launch behind it releases its queued
   prompt through the launch intent instead of raising a second notice for the
   same failure
+- a workspace that reaches a terminal status other than ready (`error`, but
+  also `lost` and `archived`) fails its attempt on the spot. Waiting is only
+  correct while the outcome can still change; a terminal status means the
+  attempt would otherwise hold its entry and its queued prompt until the
+  hour-long staleness sweep
+- a queued prompt that fails to send after the create resolved is announced by
+  whoever launched it, not by the creation workflow's composer copy: a
+  background promotion has no composer holding the text, so its notice names
+  the workspace and offers a way to open it
 
 If materialization fails after a projected session exists, do not create a new
 session automatically. The user should see the failed workspace shell and keep
@@ -832,12 +855,16 @@ Minimum coverage by concern:
   attempt) leaves every other live attempt in the registry
 - cloud polling: an unattended attempt is polled and finalized, several parked
   attempts are polled, one tick refreshes at most the batch cap, an attempt
-  that leaves the awaiting state stops being polled, and a failed provision
-  marks that attempt's own entry
+  that leaves the awaiting state stops being polled, a failed provision marks
+  that attempt's own entry, a terminal non-error status fails the attempt
+  instead of parking it, the loop is mounted by the lifecycle root rather than
+  the shell (and off the signed-out shell entirely), and cache churn does not
+  make it tick faster than its interval
 - deferred launch promotion: a launch promotes on its own workspace's
   readiness, an unattended promotion leaves the active session and the selected
-  workspace untouched, an attended one still activates the created session, and
-  two launches promote independently
+  workspace untouched, an attended one still activates the created session, two
+  launches promote independently, and a queued prompt that fails to send
+  unattended is announced with its workspace instead of the composer copy
 - home launch: initial prompt remains attached to the projected session and
   does not create a second fresh session
 - interrupted empty-session creation: persistence precedes the create request,

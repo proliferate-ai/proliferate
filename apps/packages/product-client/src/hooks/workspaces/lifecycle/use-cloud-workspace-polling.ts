@@ -64,6 +64,16 @@ function findCloudWorkspace(
  * one. A cloud launch the user switched away from finishes behind them: it
  * provisions, materializes, and clears its own entry without moving selection
  * or the active session (PRO-230).
+ *
+ * Residency requirement: this must be mounted by `ProductLifecycleRoot`, beside
+ * `useHomeDeferredLaunchRunner`, and nowhere inside the workspace shell. The
+ * shell unmounts whenever nothing is selected — which is exactly where Home,
+ * Workflows and Workspaces put the user, since `goToTopLevelRoute` and
+ * `returnHome` null both selection ids. Mounted under the shell, every parked
+ * attempt would stop being polled the moment the user sits on Home, while the
+ * resident deferred-launch runner still promotes off the collections
+ * self-refetch and sends the prompt against an entry nothing will finalize
+ * (PRO-230 review finding 1).
  */
 export function useCloudWorkspacePolling() {
   const awaitingEntries = useAwaitingCloudWorkspaceEntries();
@@ -234,9 +244,17 @@ export function useCloudWorkspacePolling() {
     }
   }, [failAwaitingEntry, finalizeAwaitingEntry, refreshCloudWorkspace]);
 
+  // The tick calls the newest poll through a ref rather than depending on it.
+  // `pollAwaitingEntry`'s identity chains through the collections cache that
+  // every successful poll invalidates, so depending on it would restart the
+  // interval on the churn the polling itself causes (PRO-230 review finding 2).
+  const pollAwaitingEntryRef = useRef(pollAwaitingEntry);
+  pollAwaitingEntryRef.current = pollAwaitingEntry;
+
   // Restarting on the attempt set alone keeps one interval alive across the
   // status churn the polling itself causes.
   const awaitingAttemptKey = awaitingEntries.map((entry) => entry.attemptId).join("|");
+  const lastTickStartedAtRef = useRef(0);
 
   useEffect(() => {
     if (!awaitingAttemptKey) {
@@ -247,13 +265,14 @@ export function useCloudWorkspacePolling() {
     let timer: number | null = null;
 
     const runTick = async () => {
+      lastTickStartedAtRef.current = Date.now();
       const { batch, nextCursor } = selectCloudWorkspacePollBatch(
         awaitingEntriesRef.current,
         pollCursorRef.current,
         CLOUD_WORKSPACE_POLL_BATCH_SIZE,
       );
       pollCursorRef.current = nextCursor;
-      await Promise.all(batch.map((entry) => pollAwaitingEntry(entry.attemptId)));
+      await Promise.all(batch.map((entry) => pollAwaitingEntryRef.current(entry.attemptId)));
       if (!cancelled) {
         timer = window.setTimeout(() => {
           void runTick();
@@ -261,7 +280,20 @@ export function useCloudWorkspacePolling() {
       }
     };
 
-    void runTick();
+    // A restart still happens whenever an attempt joins or leaves the set, so
+    // the first tick after one is spaced off the previous tick rather than
+    // firing immediately: the interval is the floor, restarts included.
+    const remainingMs = Math.max(
+      0,
+      CLOUD_WORKSPACE_POLL_INTERVAL_MS - (Date.now() - lastTickStartedAtRef.current),
+    );
+    if (remainingMs === 0) {
+      void runTick();
+    } else {
+      timer = window.setTimeout(() => {
+        void runTick();
+      }, remainingMs);
+    }
 
     return () => {
       cancelled = true;
@@ -269,5 +301,5 @@ export function useCloudWorkspacePolling() {
         window.clearTimeout(timer);
       }
     };
-  }, [awaitingAttemptKey, pollAwaitingEntry]);
+  }, [awaitingAttemptKey]);
 }
