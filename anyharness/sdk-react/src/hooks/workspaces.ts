@@ -29,6 +29,7 @@ import {
   anyHarnessWorkspaceDetectSetupKey,
   anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspaceSetupStatusKey,
+  anyHarnessWorkspaceSubagentsKey,
 } from "../lib/query-keys.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 
@@ -41,6 +42,13 @@ interface WorkspaceQueryOptions {
   workspaceId?: string | null;
   enabled?: boolean;
   requestOptions?: AnyHarnessRequestOptions;
+}
+
+interface WorkspaceSubagentsQueryOptions extends WorkspaceQueryOptions {
+  /** Passthrough to React Query; omit to keep the default (no polling). */
+  refetchInterval?: number | false;
+  /** Passthrough to React Query; omit to keep the client's default. */
+  refetchOnWindowFocus?: boolean;
 }
 
 export function useRuntimeWorkspacesQuery(options?: RuntimeQueryOptions) {
@@ -72,6 +80,33 @@ export function useWorkspaceQuery(options: WorkspaceQueryOptions) {
       return client.workspaces.get(
         resolved.connection.anyharnessWorkspaceId,
         requestOptionsWithSignal(options.requestOptions, signal),
+      );
+    },
+  });
+}
+
+export function useWorkspaceSubagentsQuery(options?: WorkspaceSubagentsQueryOptions) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useQuery({
+    queryKey: anyHarnessWorkspaceSubagentsKey(cacheScopeKey, workspaceId),
+    enabled: (options?.enabled ?? true) && !!workspaceId,
+    // Spread conditionally: an explicit `undefined` would override the host
+    // QueryClient's global defaults, silently changing every omitted-option caller.
+    ...(options?.refetchInterval !== undefined
+      ? { refetchInterval: options.refetchInterval }
+      : {}),
+    ...(options?.refetchOnWindowFocus !== undefined
+      ? { refetchOnWindowFocus: options.refetchOnWindowFocus }
+      : {}),
+    queryFn: async ({ signal }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.workspaces.listSubagents(
+        resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(options?.requestOptions, signal),
       );
     },
   });

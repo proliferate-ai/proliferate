@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { findReusableRunTerminalId } from "#product/lib/domain/terminals/run-terminal";
+import {
+  findLiveSetupTerminalId,
+  findReusableRunTerminalId,
+} from "#product/lib/domain/terminals/run-terminal";
 
 describe("run terminal helpers", () => {
   it("reuses a running or starting Run terminal in the same workspace", () => {
@@ -64,5 +67,47 @@ describe("run terminal helpers", () => {
     ];
 
     expect(findReusableRunTerminalId(tabs, "workspace-1")).toBeNull();
+  });
+
+  it("finds a live setup terminal in the same workspace", () => {
+    const tabs = [
+      {
+        id: "run",
+        workspaceId: "workspace-1",
+        title: "Run command",
+        purpose: "run",
+        status: "running",
+      },
+      {
+        id: "setup",
+        workspaceId: "workspace-1",
+        title: "Setup",
+        purpose: "setup",
+        status: "running",
+      },
+    ];
+
+    expect(findLiveSetupTerminalId(tabs, "workspace-1")).toBe("setup");
+  });
+
+  it("ignores exited setup terminals and other workspaces", () => {
+    const tabs = [
+      {
+        id: "exited-setup",
+        workspaceId: "workspace-1",
+        title: "Setup",
+        purpose: "setup",
+        status: "exited",
+      },
+      {
+        id: "other-workspace",
+        workspaceId: "workspace-2",
+        title: "Setup",
+        purpose: "setup",
+        status: "running",
+      },
+    ];
+
+    expect(findLiveSetupTerminalId(tabs, "workspace-1")).toBeNull();
   });
 });

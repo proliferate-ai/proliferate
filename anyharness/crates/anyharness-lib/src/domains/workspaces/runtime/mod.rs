@@ -21,10 +21,13 @@ mod workflow_placement;
 mod worktrees;
 
 pub use exact_ref::{ExactRefOutcome, ExactRefWorkspace};
+pub(crate) use lifecycle::normalize_workspace_display_name;
 pub use restore::{RestoreWorktreeError, RestoreWorktreeResult};
 
 #[cfg(test)]
 mod exact_ref_tests;
+#[cfg(test)]
+mod options_tests;
 #[cfg(test)]
 mod restore_tests;
 #[cfg(test)]

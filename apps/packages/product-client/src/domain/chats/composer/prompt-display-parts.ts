@@ -1,6 +1,8 @@
 import type { ContentPart } from "@anyharness/sdk";
 import {
   formatPromptFileSize,
+  PROMPT_FOLDER_MIME_TYPE,
+  type PromptAttachmentPathKind,
   type PromptAttachmentSource,
   type PromptDraftAttachmentDescriptor,
 } from "./prompt-attachment-rules";
@@ -30,6 +32,8 @@ export interface PromptDisplayPartBase {
   objectUrl?: string | null;
   uri?: string;
   source?: PromptAttachmentSource;
+  /** Set when the part references a local path (no uploaded bytes to preview). */
+  pathKind?: PromptAttachmentPathKind;
 }
 
 export interface PromptDisplayTextPart extends PromptDisplayPartBase {
@@ -127,7 +131,8 @@ export function normalizeContentParts(
         }];
       }
 
-      case "resource_link":
+      case "resource_link": {
+        const pathKind = resourceLinkPathKind(part.uri, part.mimeType);
         return [{
           type: "link",
           id: part.uri || `link-${index}`,
@@ -137,7 +142,9 @@ export function normalizeContentParts(
           sizeLabel: formatPromptFileSize(part.size),
           preview: part.description ?? undefined,
           uri: part.uri,
+          ...(pathKind ? { pathKind } : {}),
         }];
+      }
 
       case "plan_reference":
         return [{
@@ -205,11 +212,32 @@ export function normalizeDraftAttachments(
       };
     }
 
+    if (attachment.kind === "local_ref") {
+      const pathKind = attachment.pathKind ?? "file";
+      return {
+        ...base,
+        type: "file" as const,
+        pathKind,
+        uri: attachment.localPath,
+        sizeLabel: pathKind === "directory" ? undefined : base.sizeLabel,
+      };
+    }
+
     return {
       ...base,
       type: "file" as const,
     };
   });
+}
+
+function resourceLinkPathKind(
+  uri: string,
+  mimeType: string | null | undefined,
+): PromptAttachmentPathKind | undefined {
+  if (mimeType === PROMPT_FOLDER_MIME_TYPE) {
+    return "directory";
+  }
+  return uri.startsWith("file://") ? "file" : undefined;
 }
 
 export function promptPartSummary(part: PromptDisplayPart): string {

@@ -125,7 +125,7 @@ export function CommandPaletteRoot({
   return createPortal(
     <CommandPaletteContext.Provider value={contextValue}>
       <div
-        className="fixed inset-0 z-overlay bg-overlay/50"
+        className="fixed inset-0 z-overlay flex items-center justify-center bg-overlay/50"
         data-telemetry-block
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) {
@@ -140,7 +140,7 @@ export function CommandPaletteRoot({
           aria-label={label}
           // Canonical modal surface (matches ModalShell / Dialog): bg-background
           // with a border-token hairline, not the lighter popover tint.
-          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[min(520px,92vw)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-background p-1 text-foreground shadow-modal ring-[0.5px] ring-border"
+          className="flex max-h-[calc(100vh-4rem)] w-[min(520px,92vw)] flex-col overflow-hidden rounded-2xl bg-background p-1 text-foreground shadow-modal ring-[0.5px] ring-border"
           onKeyDown={onKeyDown}
         >
           <Command
@@ -210,7 +210,9 @@ export function CommandPaletteItem({
 }: CommandPaletteItemProps) {
   return (
     <Command.Item
-      className={`flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-[5px] text-body text-foreground outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-45 data-[selected=true]:bg-hover ${className ?? ""}`}
+      // Fixed 32px row with the label's line box locked to the 16px icon box
+      // (leading-4) so glyph and text edges stay parallel.
+      className={`flex h-8 cursor-default select-none items-center gap-2.5 rounded-lg px-2 text-ui leading-4 text-foreground outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-45 data-[selected=true]:bg-hover ${className ?? ""}`}
       {...props}
     />
   );

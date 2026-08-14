@@ -4,14 +4,12 @@ import type { PendingPromptQueueEntry } from "#product/domain/chats/pending-prom
 export const PLAYGROUND_SUBAGENT_WAKE_QUEUE: PendingPromptQueueEntry[] = [{
   seq: 7,
   text: [
-    'Subagent "runtime-server-sdk-survey" completed a turn.',
-    "",
-    "Child session: b5870e25-f4f7-a08b-61d6e703177b",
-    "Session link: link-runtime-server-sdk-survey",
+    "Subagent update",
+    "Agent: runtime-server-sdk-survey (subagent-runtime-server-sdk-survey)",
     "Outcome: completed",
-    "Last child event seq: 184",
     "",
-    "Use the subagent tools to inspect the child session before continuing.",
+    "Final output:",
+    "Mapped the runtime, server, and SDK seams and reported the relevant findings.",
   ].join("\n"),
   contentParts: [],
   isBeingEdited: false,
@@ -35,7 +33,7 @@ export const PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT: TranscriptState = {
   turnsById: {
     "turn-subagent-wake": {
       turnId: "turn-subagent-wake",
-      itemOrder: ["assistant-before-wake", "scheduled-wake-message"],
+      itemOrder: ["assistant-before-wake", "completion-delivery-message"],
       startedAt: "2026-04-21T02:31:45Z",
       completedAt: "2026-04-21T02:34:00Z",
       stopReason: "end_turn",
@@ -61,12 +59,12 @@ export const PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT: TranscriptState = {
       lastUpdatedSeq: 1,
       completedSeq: 1,
       completedAt: "2026-04-21T02:31:45Z",
-      text: "I scheduled a wake for the runtime survey child and continued the main investigation.",
+      text: "I delegated the runtime survey and continued the main investigation.",
       isStreaming: false,
     },
-    "scheduled-wake-message": {
+    "completion-delivery-message": {
       kind: "user_message",
-      itemId: "scheduled-wake-message",
+      itemId: "completion-delivery-message",
       turnId: "turn-subagent-wake",
       status: "completed",
       sourceAgentKind: "system",

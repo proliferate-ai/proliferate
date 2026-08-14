@@ -7,13 +7,19 @@ import {
   PENDING_PROMPTS_WITH_EDITING,
 } from "#product/lib/domain/chat/__fixtures__/playground/outbound-slot-fixtures";
 import {
+  PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_WAKE_QUEUE,
 } from "#product/lib/domain/chat/__fixtures__/playground/subagent-wake-transcript-fixtures";
 import {
   derivePendingPromptQueueRow,
+  derivePendingPromptQueueRows,
   type PendingPromptQueueEntry,
 } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
+import {
+  PLAYGROUND_AGENT_OPERATIONS_PENDING_COMPLETIONS,
+  PLAYGROUND_AGENT_OPERATIONS_PENDING_ENTRIES,
+} from "#product/lib/domain/chat/__fixtures__/playground/agent-operations-transcript-fixtures";
 
 export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
@@ -61,7 +67,26 @@ export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
     case "subagents-queued-wake-with-approval":
       return (
         <PendingPromptList
-          entries={pendingQueueRows(PLAYGROUND_SUBAGENT_WAKE_QUEUE)}
+          entries={derivePendingPromptQueueRows(
+            PLAYGROUND_SUBAGENT_WAKE_QUEUE,
+            PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT.linkCompletionsByCompletionId,
+          )}
+          steeringSeq={null}
+          sessionMaterialized
+          queueMutationInFlight={false}
+          onBeginEdit={noop}
+          onDelete={noop}
+          onSteer={noop}
+          onReorder={noop}
+        />
+      );
+    case "agent-operations-pending-aggregate":
+      return (
+        <PendingPromptList
+          entries={derivePendingPromptQueueRows(
+            PLAYGROUND_AGENT_OPERATIONS_PENDING_ENTRIES,
+            PLAYGROUND_AGENT_OPERATIONS_PENDING_COMPLETIONS,
+          )}
           steeringSeq={null}
           sessionMaterialized
           queueMutationInFlight={false}

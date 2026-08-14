@@ -33,6 +33,10 @@ pub struct LoopRecord {
 }
 
 impl LoopRecord {
+    pub fn is_active(&self) -> bool {
+        self.status == LoopStatus::Active
+    }
+
     pub fn to_contract(&self) -> Loop {
         Loop {
             loop_id: self.loop_id.clone(),

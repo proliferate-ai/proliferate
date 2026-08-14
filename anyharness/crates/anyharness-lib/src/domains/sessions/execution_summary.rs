@@ -3,42 +3,88 @@ use anyharness_contract::v1::{
     WorkspaceExecutionSummary,
 };
 
-use super::model::SessionRecord;
+use super::model::{SessionExecutionState, SessionExecutionStatePhase, SessionRecord};
 use crate::live::sessions::handle::LiveSessionExecutionSnapshot;
 
 pub fn summarize_session_record(
     record: &SessionRecord,
     live_snapshot: Option<&LiveSessionExecutionSnapshot>,
 ) -> SessionExecutionSummary {
-    match record.status.as_str() {
-        "closed" => SessionExecutionSummary {
-            phase: SessionExecutionPhase::Closed,
-            has_live_handle: false,
-            pending_interactions: Vec::new(),
-            updated_at: record.updated_at.clone(),
+    let state = session_execution_state(record, live_snapshot);
+    SessionExecutionSummary {
+        phase: execution_phase_to_contract(state.phase),
+        has_live_handle: state.has_live_handle,
+        pending_interactions: if state.has_live_handle {
+            live_snapshot
+                .map(|snapshot| snapshot.pending_interactions.clone())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
         },
-        "errored" => SessionExecutionSummary {
-            phase: SessionExecutionPhase::Errored,
+        updated_at: if state.has_live_handle {
+            live_snapshot
+                .map(|snapshot| snapshot.updated_at.clone())
+                .unwrap_or_else(|| record.updated_at.clone())
+        } else {
+            record.updated_at.clone()
+        },
+    }
+}
+
+pub fn session_execution_state(
+    record: &SessionRecord,
+    live_snapshot: Option<&LiveSessionExecutionSnapshot>,
+) -> SessionExecutionState {
+    match record.status.as_str() {
+        "closed" => SessionExecutionState {
+            phase: SessionExecutionStatePhase::Closed,
             has_live_handle: false,
-            pending_interactions: Vec::new(),
-            updated_at: record.updated_at.clone(),
+        },
+        "errored" => SessionExecutionState {
+            phase: SessionExecutionStatePhase::Errored,
+            has_live_handle: false,
         },
         "starting" => live_snapshot
-            .map(|snapshot| snapshot.to_contract_summary(true))
-            .unwrap_or_else(|| SessionExecutionSummary {
-                phase: SessionExecutionPhase::Starting,
+            .map(live_execution_state)
+            .unwrap_or(SessionExecutionState {
+                phase: SessionExecutionStatePhase::Starting,
                 has_live_handle: false,
-                pending_interactions: Vec::new(),
-                updated_at: record.updated_at.clone(),
             }),
         _ => live_snapshot
-            .map(|snapshot| snapshot.to_contract_summary(true))
-            .unwrap_or_else(|| SessionExecutionSummary {
-                phase: SessionExecutionPhase::Idle,
+            .map(live_execution_state)
+            .unwrap_or(SessionExecutionState {
+                phase: SessionExecutionStatePhase::Idle,
                 has_live_handle: false,
-                pending_interactions: Vec::new(),
-                updated_at: record.updated_at.clone(),
             }),
+    }
+}
+
+fn live_execution_state(snapshot: &LiveSessionExecutionSnapshot) -> SessionExecutionState {
+    SessionExecutionState {
+        phase: match snapshot.phase {
+            SessionExecutionPhase::Starting => SessionExecutionStatePhase::Starting,
+            SessionExecutionPhase::Running => SessionExecutionStatePhase::Running,
+            SessionExecutionPhase::AwaitingInteraction => {
+                SessionExecutionStatePhase::AwaitingInteraction
+            }
+            SessionExecutionPhase::Idle => SessionExecutionStatePhase::Idle,
+            SessionExecutionPhase::Errored => SessionExecutionStatePhase::Errored,
+            SessionExecutionPhase::Closed => SessionExecutionStatePhase::Closed,
+        },
+        has_live_handle: true,
+    }
+}
+
+fn execution_phase_to_contract(phase: SessionExecutionStatePhase) -> SessionExecutionPhase {
+    match phase {
+        SessionExecutionStatePhase::Starting => SessionExecutionPhase::Starting,
+        SessionExecutionStatePhase::Running => SessionExecutionPhase::Running,
+        SessionExecutionStatePhase::AwaitingInteraction => {
+            SessionExecutionPhase::AwaitingInteraction
+        }
+        SessionExecutionStatePhase::Idle => SessionExecutionPhase::Idle,
+        SessionExecutionStatePhase::Errored => SessionExecutionPhase::Errored,
+        SessionExecutionStatePhase::Closed => SessionExecutionPhase::Closed,
     }
 }
 

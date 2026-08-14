@@ -19,7 +19,7 @@ import type {
   ComposerWorkspaceActivityModel,
   WorkspaceActivityFact,
 } from "#product/lib/domain/workspaces/activity/composer-workspace-activity";
-import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import { useWorkspaceShellActions } from "#product/hooks/workspaces/workflows/use-workspace-shell-actions";
 import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use-workspace-copy-actions";
 
 export function ConnectedWorkspaceActivityComposerCard() {

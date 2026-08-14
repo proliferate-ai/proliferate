@@ -1,7 +1,25 @@
 use anyharness_contract::v1::{
     ReviewRunUpdatedPayload, SessionEvent, SessionEventEnvelope, SessionInfoUpdatePayload,
-    SessionLinkTurnCompletedPayload, SubagentTurnCompletedPayload,
+    SessionLinkTurnCompletedPayload, SubagentTurnCompletedPayload, SubagentTurnOutcome,
 };
+
+use crate::domains::sessions::extensions::SessionTurnOutcome;
+
+/// Domain-side description of a completed subagent turn. Runtime code below
+/// the mapper boundary hands this to
+/// [`RuntimeInjectedSessionEvent::subagent_turn_completed`], which owns the
+/// one mapping onto the wire payload.
+#[derive(Debug, Clone)]
+pub(crate) struct SubagentTurnCompletion {
+    pub completion_id: String,
+    pub session_link_id: String,
+    pub parent_session_id: String,
+    pub child_session_id: String,
+    pub child_turn_id: String,
+    pub child_last_event_seq: i64,
+    pub outcome: SessionTurnOutcome,
+    pub label: Option<String>,
+}
 
 /// Curated event variants that runtime code may inject outside ACP
 /// notification handling.
@@ -23,6 +41,23 @@ pub(crate) enum RuntimeInjectedSessionEvent {
 }
 
 impl RuntimeInjectedSessionEvent {
+    pub(crate) fn subagent_turn_completed(completion: SubagentTurnCompletion) -> Self {
+        Self::SubagentTurnCompleted(SubagentTurnCompletedPayload {
+            completion_id: completion.completion_id,
+            session_link_id: completion.session_link_id,
+            parent_session_id: completion.parent_session_id,
+            child_session_id: completion.child_session_id,
+            child_turn_id: completion.child_turn_id,
+            child_last_event_seq: completion.child_last_event_seq,
+            outcome: match completion.outcome {
+                SessionTurnOutcome::Completed => SubagentTurnOutcome::Completed,
+                SessionTurnOutcome::Failed => SubagentTurnOutcome::Failed,
+                SessionTurnOutcome::Cancelled => SubagentTurnOutcome::Cancelled,
+            },
+            label: completion.label,
+        })
+    }
+
     pub(crate) fn updates_session_activity_at(&self) -> bool {
         matches!(
             self,

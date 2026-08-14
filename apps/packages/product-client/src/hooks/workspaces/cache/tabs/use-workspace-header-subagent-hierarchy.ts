@@ -57,6 +57,9 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
   const recordSessionRelationshipHint = useSessionDirectoryStore(
     (state) => state.recordRelationshipHint,
   );
+  const promotedRootSessionIds = useSessionDirectoryStore(
+    (state) => state.promotedRootSessionIds,
+  );
   const uniqueSessionIds = useMemo(
     () => [...new Set(args.sessionIds)].filter(Boolean),
     [args.sessionIds],
@@ -85,11 +88,11 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     queries: uniqueSessionIds.map((sessionId, index) => {
       const materializedSessionId = materializedSessionIds[index];
       return {
-        queryKey: anyHarnessSessionSubagentsKey(
+        queryKey: buildHeaderSessionSubagentsQueryKey({
           cacheScopeKey,
-          args.workspaceId,
-          sessionId,
-        ),
+          workspaceId: args.workspaceId,
+          materializedSessionId,
+        }),
         enabled: shouldEnableHeaderSessionScopedQuery({
           workspaceId: args.workspaceId,
           sessionId,
@@ -175,7 +178,16 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       };
     }),
   });
-  const subagentRelationshipHintRows = subagentQueries.flatMap((query, index) => {
+  const filteredSubagentQueries = subagentQueries.map((query, index) => ({
+    data: filterPromotedHeaderSubagents({
+      sessionId: uniqueSessionIds[index] ?? null,
+      response: query.data,
+      promotedRootSessionIds,
+      resolveClientSessionId,
+    }) ?? undefined,
+    isSuccess: query.isSuccess,
+  }));
+  const subagentRelationshipHintRows = filteredSubagentQueries.flatMap((query, index) => {
     const sessionId = uniqueSessionIds[index];
     return sessionId
       ? collectSubagentSessionRelationshipHints(sessionId, query.data)
@@ -241,7 +253,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
   );
   const hierarchyQuerySignature = buildHierarchyQuerySignature({
     sessionIds: uniqueSessionIds,
-    subagentQueries,
+    subagentQueries: filteredSubagentQueries,
     reviewQueries,
     coworkQueries,
   });
@@ -249,7 +261,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     () => uniqueSessionIds.map((sessionId, index) => ({
       sessionId,
       subagentSuccess: subagentQueries[index]?.isSuccess === true,
-      subagentData: subagentQueries[index]?.data ?? null,
+      subagentData: filteredSubagentQueries[index]?.data ?? null,
       reviewSuccess: reviewQueries[index]?.isSuccess === true,
       reviewData: reviewQueries[index]?.data ?? null,
       coworkSuccess: coworkQueries[index]?.isSuccess === true,
@@ -330,4 +342,50 @@ export function shouldEnableHeaderSessionScopedQuery(input: {
     && !!input.materializedSessionId
     && input.enabledByBatch
     && !isReplacedSessionTombstoned(input.workspaceId, input.materializedSessionId);
+}
+
+export function buildHeaderSessionSubagentsQueryKey(input: {
+  cacheScopeKey: string | null | undefined;
+  workspaceId: string | null | undefined;
+  materializedSessionId: string | null | undefined;
+}) {
+  return anyHarnessSessionSubagentsKey(
+    input.cacheScopeKey,
+    input.workspaceId,
+    input.materializedSessionId,
+  );
+}
+
+export function filterPromotedHeaderSubagents(input: {
+  sessionId: string | null | undefined;
+  response: SessionSubagentsResponse | null | undefined;
+  promotedRootSessionIds: ReadonlySet<string>;
+  resolveClientSessionId: (sessionId: string) => string;
+}): SessionSubagentsResponse | null | undefined {
+  const { response } = input;
+  if (!response) {
+    return response;
+  }
+
+  const isPromoted = (sessionId: string | null | undefined) => !!sessionId && (
+    input.promotedRootSessionIds.has(sessionId)
+    || input.promotedRootSessionIds.has(input.resolveClientSessionId(sessionId))
+  );
+  const shouldDetachParent = isPromoted(input.sessionId)
+    || isPromoted(response.parent.identity.sessionId);
+  const children = response.children.filter(
+    (child) => !isPromoted(child.agent.identity.sessionId),
+  );
+
+  if (!shouldDetachParent && children.length === response.children.length) {
+    return response;
+  }
+
+  return {
+    ...response,
+    children,
+    parent: shouldDetachParent
+      ? { ...response.parent, parent: null }
+      : response.parent,
+  };
 }

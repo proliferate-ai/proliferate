@@ -13,6 +13,11 @@ use crate::live::sessions::actor::state::SessionActorConfig;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::{SessionHooks, SessionLaunch};
 
+#[cfg(not(test))]
+const SHARED_STARTUP_READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+#[cfg(test)]
+const SHARED_STARTUP_READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
 impl LiveSessionManager {
     #[tracing::instrument(skip_all, fields(session_id = %launch.session.id))]
     pub async fn start_session(
@@ -60,9 +65,23 @@ impl LiveSessionManager {
             );
         }
 
+        // The absence check, crash repair, last-sequence read, and handle
+        // installation are one manager-owned critical section. A concurrent
+        // start therefore either installs the sole pending actor or observes
+        // that actor above and joins its readiness; it can never repair a
+        // turn after another actor has taken ownership of event sequencing.
+        let repaired_turns = self.caps.state.repair_unclosed_turns(&session_id)?;
+        if repaired_turns > 0 {
+            tracing::info!(
+                session_id = %session_id,
+                repaired_turns,
+                "repaired unclosed turns before actor installation"
+            );
+        }
+
         // The manager owns the last-seq read: it must happen under the
-        // live-sessions write lock (start/inject critical section), so any
-        // caller-provided value is overwritten here.
+        // same start/inject critical section as repair and installation, so
+        // any caller-provided value is overwritten here.
         launch.last_seq = self.caps.events.last_event_seq(&session_id)?;
 
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4096);
@@ -172,16 +191,24 @@ async fn wait_for_new_startup_readiness(
 async fn wait_for_startup_readiness(
     receiver: &mut watch::Receiver<StartupReadinessState>,
 ) -> anyhow::Result<ActorReadyResult> {
-    loop {
-        if let Some(result) = receiver.borrow().clone() {
-            return result
-                .map(|native_session_id| ActorReadyResult { native_session_id })
-                .map_err(anyhow::Error::msg);
-        }
+    tokio::time::timeout(SHARED_STARTUP_READINESS_TIMEOUT, async {
+        loop {
+            if let Some(result) = receiver.borrow().clone() {
+                return result
+                    .map(|native_session_id| ActorReadyResult { native_session_id })
+                    .map_err(anyhow::Error::msg);
+            }
 
-        receiver
-            .changed()
-            .await
-            .map_err(|_| anyhow::anyhow!("actor startup readiness channel closed before ready"))?;
-    }
+            receiver.changed().await.map_err(|_| {
+                anyhow::anyhow!("actor startup readiness channel closed before ready")
+            })?;
+        }
+    })
+    .await
+    .map_err(|_| {
+        anyhow::anyhow!(
+            "actor startup readiness wait timed out after {}s",
+            SHARED_STARTUP_READINESS_TIMEOUT.as_secs()
+        )
+    })?
 }

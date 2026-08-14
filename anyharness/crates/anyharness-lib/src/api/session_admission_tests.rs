@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use tower::util::ServiceExt;
 
 use super::router::build_router;
-use super::workflow_runs_tests::{get as get_run, test_state};
+use super::workflow_runs_tests::test_state;
 use crate::app::{test_support, AppState};
 use crate::domains::sessions::admission::{
     SessionMutationConflict, SessionMutationKind, SessionMutationSource,
@@ -23,6 +23,13 @@ use crate::domains::workflows::service::WorkflowRunService;
 use crate::domains::workflows::store::WorkflowRunStore;
 
 const WS: &str = "20000000-0000-4000-8000-000000000002";
+
+#[path = "session_admission_lock_order_tests.rs"]
+mod lock_order_tests;
+#[path = "subagent_http_tests.rs"]
+mod subagent_http_tests;
+#[path = "session_admission_subagent_tests.rs"]
+mod subagent_operability_tests;
 
 fn insert_session_row(state: &AppState, workspace_id: &str) -> String {
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -59,7 +66,7 @@ async fn call(
     uri: String,
     body: Option<Value>,
 ) -> (StatusCode, Value) {
-    let mut builder = Request::builder().method(method).uri(uri);
+    let builder = Request::builder().method(method).uri(uri);
     let request = match body {
         Some(value) => builder
             .header(header::CONTENT_TYPE, "application/json")
@@ -196,11 +203,6 @@ async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_availab
             Some(json!({"prompt": "loop", "schedule": {"kind": "interval", "expr": "1h"}})),
         ),
         ("DELETE", format!("/v1/sessions/{sid}/loops"), None),
-        (
-            "POST",
-            format!("/v1/sessions/{sid}/subagents/child-1/wake"),
-            Some(json!({})),
-        ),
     ];
     for (method, uri, body) in cases {
         let (status, payload) = call(&state, method, uri.clone(), body).await;
@@ -225,6 +227,17 @@ async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_availab
         .get("dismissedAt")
         .map(|v| v.is_null())
         .unwrap_or(true));
+    let wake_schedule_count = state
+        .db
+        .with_conn(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM session_link_wake_schedules",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+        })
+        .expect("count wake schedules");
+    assert_eq!(wake_schedule_count, 0);
 
     // Reads stay available while controlled.
     let (status, _) = call(&state, "GET", format!("/v1/sessions/{sid}/events"), None).await;
@@ -410,7 +423,10 @@ async fn permit_then_write_camp(
 /// waits on B's read, B waits on A's permit — and wedges. Returns `Err(())` on
 /// the bounded-timeout wedge (deadlock signature), `Ok(())` if it completes.
 async fn reversed_order_deadlocks() -> Result<(), ()> {
-    let admission = Arc::new(SessionMutationAdmission::new(Arc::new(NoControllerPolicy)));
+    let admission = Arc::new(SessionMutationAdmission::new(
+        Arc::new(NoControllerPolicy),
+        Arc::new(crate::domains::sessions::admission::AllSessionsOperable),
+    ));
     let gate = WorkspaceOperationGate::new();
     let (a_held_tx, a_held_rx) = tokio::sync::oneshot::channel::<()>();
     let (a_proceed_tx, a_proceed_rx) = tokio::sync::oneshot::channel::<()>();
@@ -469,7 +485,10 @@ async fn reversed_order_deadlocks() -> Result<(), ()> {
 /// under permit-first serialization neither camp can hold the workspace lock
 /// while waiting on the permit).
 async fn canonical_order_completes() -> Result<(), ()> {
-    let admission = Arc::new(SessionMutationAdmission::new(Arc::new(NoControllerPolicy)));
+    let admission = Arc::new(SessionMutationAdmission::new(
+        Arc::new(NoControllerPolicy),
+        Arc::new(crate::domains::sessions::admission::AllSessionsOperable),
+    ));
     let gate = WorkspaceOperationGate::new();
 
     let camp_a = {
@@ -541,110 +560,5 @@ async fn reversed_read_then_permit_order_deadlocks() {
     assert!(
         reversed_order_deadlocks().await.is_err(),
         "reversed read-then-permit order must deadlock (bounded timeout must trip)"
-    );
-}
-
-/// Extract a single handler function body from a source file under the crate,
-/// from its `pub async fn <name>(` signature to the next top-level `pub` item.
-fn handler_body(rel_path: &str, fn_name: &str) -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel_path);
-    let text =
-        std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("read {rel_path}: {error}"));
-    let signature = format!("pub async fn {fn_name}(");
-    let start = text
-        .find(&signature)
-        .unwrap_or_else(|| panic!("{rel_path}: handler {fn_name} not found"));
-    let rest = &text[start..];
-    let end = rest[signature.len()..]
-        .find("\npub ")
-        .map(|idx| idx + signature.len())
-        .unwrap_or(rest.len());
-    rest[..end].to_string()
-}
-
-/// Assert `first` textually precedes `second` within one function's body. Both
-/// tokens must be BODY-resident: a token that appears in the signature (a
-/// parameter name, say) precedes every statement and makes the check vacuous.
-fn assert_source_order(rel_path: &str, fn_name: &str, first: &str, second: &str, why: &str) {
-    let body = handler_body(rel_path, fn_name);
-    let first_at = body
-        .find(first)
-        .unwrap_or_else(|| panic!("{rel_path}::{fn_name}: token '{first}' missing"));
-    let second_at = body
-        .find(second)
-        .unwrap_or_else(|| panic!("{rel_path}::{fn_name}: token '{second}' missing"));
-    assert!(
-        first_at < second_at,
-        "{rel_path}::{fn_name}: '{first}' must come BEFORE '{second}' — {why}"
-    );
-}
-
-const LOCK_01_ORDER: &str =
-    "canonical LOCK-01 order: session mutation permit -> workspace operation lease";
-
-fn assert_admit_before_lease(rel_path: &str, fn_name: &str, admit: &str, lease: &str) {
-    assert_source_order(rel_path, fn_name, admit, lease, LOCK_01_ORDER);
-}
-
-#[test]
-fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
-    // Per-handler source-order guard for every handler that holds BOTH the
-    // session mutation permit and a workspace operation lease. Under the old
-    // reversed order (lease first) each row fails; the fix makes the admit_*
-    // call outermost. Retire's lease is no longer in its handler (see below).
-    const ADMIT: &str = "admit_session_mutation(";
-    const ADMIT_ALL: &str = "admit_all_workspace_sessions(";
-    const PLAN: &str = "admit_plan_session(";
-    const SHARED: &str = ".acquire_shared(";
-    const EXCLUSIVE: &str = ".acquire_exclusive(";
-    const FORK_LEASE: &str = "acquire_session_exclusive_operation_lease(";
-    for (file, handler, admit, lease) in [
-        // idempotent create: caller-selected id admission before SessionStart.
-        ("sessions.rs", "create_session", ADMIT, SHARED),
-        // plans: admit_plan_session before the PlanWrite shared lease.
-        ("plans.rs", "approve_plan", PLAN, SHARED),
-        ("plans.rs", "reject_plan", PLAN, SHARED),
-        ("plans.rs", "handoff_plan", PLAN, SHARED),
-        // reviews: admit_session_mutation before the ReviewWrite shared lease.
-        ("reviews.rs", "start_plan_review", ADMIT, SHARED),
-        ("reviews.rs", "start_code_review", ADMIT, SHARED),
-        // fork: admit before the exclusive session operation lease.
-        ("sessions_fork.rs", "fork_session", ADMIT, FORK_LEASE),
-        // subagent wake: admit before the SubagentWrite shared lease.
-        ("subagents.rs", "schedule_subagent_wake", ADMIT, SHARED),
-        // retire HALF 1: the handler admits before it calls the facade.
-        ("workspaces_lifecycle.rs", "retire_workspace", ADMIT_ALL, ".retire("),
-        // mobility export: admit-all before the MobilityWrite shared lease.
-        ("mobility.rs", "export_workspace_mobility_archive", ADMIT_ALL, SHARED),
-        // mobility destroy-source: admit-all before the exclusive workspace lease.
-        ("mobility.rs", "destroy_workspace_mobility_source", ADMIT_ALL, EXCLUSIVE),
-    ] {
-        assert_admit_before_lease(&format!("src/api/http/{file}"), handler, admit, lease);
-    }
-    // Retire HALF 2. Grid PR 9 moved the retire state machine (and with it the
-    // exclusive lease) into `domains/workspaces/retire.rs`, so the one LOCK-01
-    // ordering now spans two files: half 1 above pins admit-before-facade-call,
-    // and these two links pin the facade's own chain. BODY-RESIDENT tokens only:
-    // an earlier version used the `admitted_session_ids:` PARAMETER, which
-    // precedes every statement, so the check was vacuous. Both links are needed
-    // — either alone still passes with the lease hoisted to the top of the fn.
-    let retire = "src/domains/workspaces/retire.rs";
-    assert_source_order(
-        retire,
-        "retire",
-        ".blocked_if_preflight_refuses(",
-        EXCLUSIVE,
-        "the advisory preflight (and the FENCE-01 proof seam sitting in its gap) \
-         must run BEFORE the exclusive lease, or a refused retire serializes on \
-         the workspace and the pre-lease proof window disappears",
-    );
-    assert_source_order(
-        retire,
-        "retire",
-        EXCLUSIVE,
-        ".reject_if_workflow_controlled(",
-        "PR1227-WORKSPACE-FENCE-01/02: the exclusive lease must be held before \
-         the admitted-set re-check runs, or the fence re-enumerates sessions in \
-         a window that still admits workflow session creation",
     );
 }
