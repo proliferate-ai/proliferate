@@ -83,7 +83,7 @@ function DropdownMenuContent({
           }
         }}
         className={cn(
-          `z-50 min-w-[220px] overflow-hidden p-1 ${POPOVER_FRAME_CLASS} animate-popover-in [transform-origin:var(--radix-dropdown-menu-content-transform-origin)]`,
+          `z-50 min-w-[220px] overflow-hidden p-1 ${POPOVER_FRAME_CLASS} data-[state=open]:animate-popover-in [transform-origin:var(--radix-dropdown-menu-content-transform-origin)]`,
           className,
         )}
         {...openAutoFocus}
@@ -276,7 +276,7 @@ function DropdownMenuSubContent({
       <DropdownMenuPrimitive.SubContent
         data-slot="dropdown-menu-sub-content"
         className={cn(
-          `z-50 min-w-[220px] overflow-hidden p-1 ${POPOVER_FRAME_CLASS} animate-popover-in [transform-origin:var(--radix-dropdown-menu-content-transform-origin)]`,
+          `z-50 min-w-[220px] overflow-hidden p-1 ${POPOVER_FRAME_CLASS} data-[state=open]:animate-popover-in [transform-origin:var(--radix-dropdown-menu-content-transform-origin)]`,
           className,
         )}
         {...props}

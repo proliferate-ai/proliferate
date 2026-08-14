@@ -172,7 +172,13 @@ export function PopoverButton({
           // back to the trigger.
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
-          className={`z-50 outline-none animate-popover-in [transform-origin:var(--radix-popover-content-transform-origin)] ${className}`}
+          // The enter animation is scoped to `data-[state=open]`: an
+          // unconditional `animate-popover-in` leaves the animation declared on
+          // the CLOSED element too, and Radix Presence reads a non-`none`
+          // animation name as "an exit animation is running" and waits for an
+          // `animationend` that already fired — so the closed popover never
+          // unmounts and stays painted over the app.
+          className={`z-50 outline-none data-[state=open]:animate-popover-in [transform-origin:var(--radix-popover-content-transform-origin)] ${className}`}
         >
           {children(close)}
         </PopoverPrimitive.Content>

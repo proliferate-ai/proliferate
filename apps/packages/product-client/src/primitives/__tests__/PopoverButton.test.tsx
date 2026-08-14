@@ -73,4 +73,19 @@ describe("PopoverButton", () => {
       expect(screen.queryByText("Workspace move details")).toBeNull();
     });
   });
+
+  it("scopes the enter animation to the open state so Presence can unmount the closed content", () => {
+    // A bare `animate-popover-in` leaves the animation declared on the closed
+    // element; Radix Presence reads any non-`none` animation name as a running
+    // exit animation and waits for an `animationend` that already fired, so the
+    // closed popover stays painted. jsdom computes no Tailwind styles, so the
+    // contract is asserted on the class the content actually wears.
+    render(<ControlledPopoverHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Location" }));
+    const content = document.querySelector("[data-slot=popover-content]");
+
+    expect(content?.className).toContain("data-[state=open]:animate-popover-in");
+    expect(content?.className).not.toMatch(/(^|\s)animate-popover-in(\s|$)/);
+  });
 });
