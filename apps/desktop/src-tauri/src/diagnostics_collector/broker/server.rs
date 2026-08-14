@@ -20,8 +20,8 @@ use super::discovery::{
 use super::protocol::{
     parse_exact_request, DiagnosticsBrokerErrorV1, DiagnosticsBrokerPayloadV1,
     DiagnosticsBrokerRequestV1, DiagnosticsBrokerResponseV1, BROKER_PROTOCOL_VERSION,
-    MAX_BROKER_CONNECTIONS, MAX_BROKER_EXPORTS, MAX_BROKER_FINITE_REQUESTS,
-    MAX_BROKER_REQUEST_FRAME_BYTES, MAX_BROKER_RESPONSE_FRAME_BYTES, MAX_BROKER_TAILS,
+    MAX_BROKER_CONNECTIONS, MAX_BROKER_FINITE_REQUESTS, MAX_BROKER_REQUEST_FRAME_BYTES,
+    MAX_BROKER_RESPONSE_FRAME_BYTES, MAX_BROKER_TAILS,
 };
 use crate::diagnostics_collector::artifact::DiagnosticsArtifactKind;
 use crate::diagnostics_collector::supervisor::{
@@ -53,7 +53,7 @@ struct BrokerLimits {
     connections: Arc<Semaphore>,
     finite: Arc<Semaphore>,
     tails: Arc<Semaphore>,
-    exports: Arc<Semaphore>,
+    exports: Arc<super::super::export_admission::ExportAdmission>,
     /// Number of `accept` calls the test harness still wants to fail before the
     /// listener is touched, so the retry path can be driven without exhausting
     /// real descriptors.
@@ -136,7 +136,7 @@ impl DiagnosticsBrokerServer {
             connections: Arc::new(Semaphore::new(MAX_BROKER_CONNECTIONS)),
             finite: Arc::new(Semaphore::new(MAX_BROKER_FINITE_REQUESTS)),
             tails: Arc::new(Semaphore::new(MAX_BROKER_TAILS)),
-            exports: Arc::new(Semaphore::new(MAX_BROKER_EXPORTS)),
+            exports: supervisor.export_admission(),
             #[cfg(test)]
             forced_accept_failures: Arc::new(std::sync::atomic::AtomicU32::new(
                 forced_accept_failures,

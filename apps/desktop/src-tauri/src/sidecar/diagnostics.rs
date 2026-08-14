@@ -180,12 +180,26 @@ impl super::SidecarProcess {
     /// The bounded per-component state for PR 6 consumption; never fabricates
     /// a producer snapshot.
     pub(crate) async fn child_diagnostics_state(&mut self) -> DesktopChildDiagnosticsState {
+        self.child_diagnostics_state_until(
+            tokio::time::Instant::now()
+                + proliferate_diagnostics_client::bridge::wire::CHILD_STATUS_RESPONSE_DEADLINE,
+        )
+        .await
+    }
+
+    /// Uses the caller's absolute deadline for owner inspection and the
+    /// protected status request so a joined support capture cannot create a
+    /// second per-child 100 ms window.
+    pub(crate) async fn child_diagnostics_state_until(
+        &mut self,
+        deadline: tokio::time::Instant,
+    ) -> DesktopChildDiagnosticsState {
         let process = match self.child.as_mut() {
             None => ChildProcessPresence::Missing,
             Some(child) => ChildProcessPresence::from_observation(child.try_wait()),
         };
         match self.diagnostics_bridge.as_ref() {
-            Some(bridge) => bridge.diagnostics_state(process).await,
+            Some(bridge) => bridge.diagnostics_state_until(process, deadline).await,
             None => DesktopChildDiagnosticsState::without_bridge(process),
         }
     }

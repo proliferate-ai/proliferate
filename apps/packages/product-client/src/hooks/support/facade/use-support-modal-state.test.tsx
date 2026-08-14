@@ -38,8 +38,10 @@ vi.mock("#product/stores/sessions/session-selection-store", () => ({
 
 function captureDispatchedJob(): { current: SupportReportJob | null } {
   const captured: { current: SupportReportJob | null } = { current: null };
-  window.addEventListener(SUPPORT_REPORT_JOB_EVENT, ((event: CustomEvent<SupportReportJob>) => {
-    captured.current = event.detail;
+  window.addEventListener(SUPPORT_REPORT_JOB_EVENT, ((event: CustomEvent<{
+    job: SupportReportJob;
+  }>) => {
+    captured.current = event.detail.job;
   }) as EventListener);
   return captured;
 }
@@ -70,7 +72,7 @@ describe("useSupportModalState", () => {
     });
   });
 
-  it("carries urgent, notifyMe, includeLogs, and credit fields on the bug job", async () => {
+  it("carries bug fields with an explicit no-snapshot intent", async () => {
     const captured = captureDispatchedJob();
     const rendered = renderHook(() =>
       useSupportModalState({ kind: "bug", onClose: vi.fn() })
@@ -84,7 +86,6 @@ describe("useSupportModalState", () => {
     });
     act(() => {
       rendered.result.current.setCreditName("Ada Lovelace");
-      rendered.result.current.setIncludeLogs(false);
     });
     await act(async () => {
       await rendered.result.current.handleSend();
@@ -95,13 +96,13 @@ describe("useSupportModalState", () => {
       kind: "bug",
       urgent: true,
       notifyMe: true,
-      includeLogs: false,
+      supportSnapshot: { kind: "none" },
       creditConsent: true,
       creditName: "Ada Lovelace",
     });
   });
 
-  it("defaults the bug job to logs-on, not urgent, no notify", async () => {
+  it("defaults the bug job to no snapshot, not urgent, and no notify", async () => {
     const captured = captureDispatchedJob();
     const rendered = renderHook(() =>
       useSupportModalState({ kind: "bug", onClose: vi.fn() })
@@ -117,13 +118,39 @@ describe("useSupportModalState", () => {
     expect(captured.current).toMatchObject({
       urgent: false,
       notifyMe: false,
-      includeLogs: true,
+      supportSnapshot: { kind: "none" },
       creditConsent: false,
       creditName: null,
     });
   });
 
-  it("keeps prompt jobs non-urgent with logs included while carrying notifyMe", async () => {
+  it("authors no includeLogs key and exposes no log-attachment control", async () => {
+    const captured = captureDispatchedJob();
+    const rendered = renderHook(() =>
+      useSupportModalState({ kind: "bug", onClose: vi.fn() })
+    );
+
+    // The hook must not offer the flag at all. A surviving setter is what let a
+    // pre-ticked "Include app logs" box render over a job that never carried
+    // the field, so the box silently did nothing.
+    expect(rendered.result.current).not.toHaveProperty("includeLogs");
+    expect(rendered.result.current).not.toHaveProperty("setIncludeLogs");
+
+    act(() => {
+      rendered.result.current.setMessage("It broke");
+    });
+    await act(async () => {
+      await rendered.result.current.handleSend();
+    });
+
+    // Log attachment is now owned by prepared-snapshot consent, so a freshly
+    // authored job carries the explicit no-snapshot intent and no legacy flag.
+    expect(captured.current).not.toBeNull();
+    expect(Object.hasOwn(captured.current!, "includeLogs")).toBe(false);
+    expect(captured.current).toMatchObject({ supportSnapshot: { kind: "none" } });
+  });
+
+  it("keeps prompt jobs non-urgent and no-snapshot while carrying notifyMe", async () => {
     const captured = captureDispatchedJob();
     const rendered = renderHook(() =>
       useSupportModalState({ kind: "feature", onClose: vi.fn() })
@@ -142,7 +169,7 @@ describe("useSupportModalState", () => {
       kind: "feature",
       urgent: false,
       notifyMe: true,
-      includeLogs: true,
+      supportSnapshot: { kind: "none" },
     });
   });
 });

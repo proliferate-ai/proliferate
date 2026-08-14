@@ -17,6 +17,7 @@ export type {
   AnyHarnessTimingObserver,
   AnyHarnessTimingScope,
 } from "./client/core.js";
+export { supportWindowResponseBytes } from "./client/support-window-response-bytes.js";
 
 export type {
   HealthResponse,
@@ -213,6 +214,12 @@ export type {
   SessionExecutionSummary,
   SessionActionCapabilities,
   Session,
+  AnyHarnessBoundedWindowMetaV1,
+  AnyHarnessSessionSupportWindowV1,
+  AnyHarnessEventSupportWindowV1,
+  AnyHarnessRawNotificationSupportWindowV1,
+  ListSupportSessionWindowOptions,
+  ListSupportEvidenceWindowOptions,
   SessionLinkSummary,
   SessionMcpEnvVar,
   RawSessionConfigValue,

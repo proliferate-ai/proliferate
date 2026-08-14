@@ -44,13 +44,19 @@ vi.mock("#product/hooks/persistence/lifecycle/use-product-storage-persistence-li
 vi.mock("#product/hooks/sessions/lifecycle/use-session-intent-dispatcher", () => ({ useSessionIntentDispatcher: vi.fn() }));
 vi.mock("#product/hooks/sessions/lifecycle/use-session-selection-lifecycle", () => ({ useSessionSelectionLifecycle: vi.fn() }));
 vi.mock("#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher", () => ({ useShortcutDispatcher: vi.fn() }));
-vi.mock("#product/hooks/support/lifecycle/use-support-report-upload-queue", () => ({ useSupportReportUploadQueue: vi.fn() }));
 vi.mock("#product/hooks/support/workflows/use-crash-recovery-support-action", () => ({
   useCrashRecoverySupportAction: () => null,
 }));
 vi.mock("#product/hooks/sessions/lifecycle/use-turn-end-sound", () => ({ useTurnEndSound: vi.fn() }));
 vi.mock("#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence", () => ({ useWorkspaceGitStatusPersistence: vi.fn() }));
-vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({ useProductAuthStatus: () => "loading" }));
+// Mutable so one test can drive the authenticated-only lazy mounts; every other
+// test keeps the pre-session status the login shell renders under.
+const authStatus = vi.hoisted(() => ({
+  value: "loading" as "loading" | "anonymous" | "authenticated",
+}));
+vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({
+  useProductAuthStatus: () => authStatus.value,
+}));
 vi.mock("#product/lib/infra/measurement/measurement-port", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("#product/lib/infra/measurement/measurement-port")
@@ -64,6 +70,19 @@ vi.mock("#product/lib/infra/measurement/measurement-port", async (importOriginal
 
 vi.mock("#product/components/agents/AuthRestartOfferRoot", () => ({
   AuthRestartOfferRoot: () => null,
+}));
+
+vi.mock("#product/providers/SupportReportQueueRoot", () => ({
+  SupportReportQueueRoot: () => <div data-testid="support-report-queue-root" />,
+}));
+
+// Counted rather than stubbed away: where this hook runs relative to the auth
+// gate is the behaviour under test, not an implementation detail.
+const retentionSweepCount = vi.hoisted(() => ({ value: 0 }));
+vi.mock("#product/hooks/support/lifecycle/use-support-report-retention", () => ({
+  useSupportReportRetentionLifecycle: () => {
+    retentionSweepCount.value += 1;
+  },
 }));
 
 const desktopLifecycleMountCount = vi.hoisted(() => ({ value: 0 }));
@@ -91,7 +110,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   desktopLifecycleMountCount.value = 0;
+  retentionSweepCount.value = 0;
   lifecycleThrow.value = false;
+  authStatus.value = "loading";
   resetRendererDiagnosticsSinkForTest();
   vi.clearAllMocks();
 });
@@ -171,6 +192,63 @@ describe("ProductLifecycleRoot", () => {
     expect(screen.queryByTestId("app-tree")).toBeNull();
 
     consoleError.mockRestore();
+  });
+
+  it("mounts the support-report upload owner only once authenticated", async () => {
+    const host = makeTestProductHost({
+      auth: { restoreSession: vi.fn().mockResolvedValue(undefined) },
+    });
+    // A fresh element per render: re-rendering the identical element object
+    // lets React bail out, and the auth-status change would never be read.
+    const tree = () => (
+      <ProductHostProvider host={host}>
+        <ProductLifecycleRoot>
+          <div data-testid="app-tree">app</div>
+        </ProductLifecycleRoot>
+      </ProductHostProvider>
+    );
+
+    // Pre-session: the owner is behind both an auth gate and a lazy import, so
+    // the login shell parses none of the queue/upload modules. Waiting on the
+    // Desktop root first proves a Suspense flush happened and the absence below
+    // is a real gate rather than an unresolved lazy chunk.
+    const { rerender } = render(tree());
+    await waitFor(() => expect(screen.getByTestId("desktop-lifecycle-root")).toBeTruthy());
+    expect(screen.queryByTestId("support-report-queue-root")).toBeNull();
+
+    authStatus.value = "authenticated";
+    rerender(tree());
+
+    expect(await screen.findByTestId("support-report-queue-root")).toBeTruthy();
+  });
+
+  it("sweeps support-report retention with no session, where the queue owner never mounts", async () => {
+    const host = makeTestProductHost({
+      auth: { restoreSession: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    for (const status of ["loading", "anonymous"] as const) {
+      authStatus.value = status;
+      retentionSweepCount.value = 0;
+
+      render(
+        <ProductHostProvider host={host}>
+          <ProductLifecycleRoot>
+            <div data-testid="app-tree">app</div>
+          </ProductLifecycleRoot>
+        </ProductHostProvider>,
+      );
+      await waitFor(() => expect(screen.getByTestId("desktop-lifecycle-root")).toBeTruthy());
+
+      // The two halves of the same claim. The owner that drains the queue and
+      // reconciles staged bytes needs a Cloud session, so it is absent here --
+      // and the account that signs out and never returns is exactly the one
+      // whose queue document and staged bytes nothing would ever reap. So
+      // retention has to run on the side of the gate the owner cannot reach.
+      expect(screen.queryByTestId("support-report-queue-root")).toBeNull();
+      expect(retentionSweepCount.value).toBeGreaterThan(0);
+      cleanup();
+    }
   });
 
   it("keeps a single Desktop lifecycle mount under StrictMode", () => {

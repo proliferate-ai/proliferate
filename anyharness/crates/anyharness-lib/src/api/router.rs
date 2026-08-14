@@ -27,9 +27,8 @@ use super::ws::terminals as ws_terminals;
 use crate::api::auth::{user_route_allowed, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-
 mod pending_prompt_routes;
-
+mod support_window_routes;
 pub fn build_router(state: AppState) -> Router {
     let v1 = Router::new()
         // Agents
@@ -451,6 +450,7 @@ pub fn build_router(state: AppState) -> Router {
             post(sessions_fork::fork_session),
         )
         .merge(pending_prompt_routes::router())
+        .merge(support_window_routes::router())
         .route(
             "/sessions/{session_id}/goal",
             put(goals::set_session_goal).delete(goals::clear_session_goal),

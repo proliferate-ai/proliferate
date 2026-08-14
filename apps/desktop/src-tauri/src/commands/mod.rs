@@ -11,5 +11,6 @@ pub mod runtime;
 pub mod shell;
 pub mod ssh_tunnel;
 pub mod support;
+pub mod support_snapshot;
 pub mod window_chrome;
 pub mod workspace_scratch;

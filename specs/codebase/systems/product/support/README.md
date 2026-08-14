@@ -1,5 +1,10 @@
 # Support reporting
 
+Status: target. This document describes the accepted destination for private
+support reporting and the consented Desktop diagnostic snapshot. The body is
+written in the ideal state. Every difference from `main` today is listed in
+[Current gaps](#current-gaps).
+
 Support reporting captures private customer feedback and diagnostic evidence.
 It does not own issue triage, automated repair, release tracking, or reporter
 outreach. The authoritative downstream issue, attribution, release, and
@@ -7,17 +12,21 @@ changelog contract lives in [`../../engineering/issue-lifecycle/support-loop.md`
 
 ## Product boundary
 
-The current contract ends here:
+The product contract ends here:
 
 ```text
-Desktop/Web -> authenticated support API -> support_report + private S3 bundle
-                                            -> best-effort Slack receipt
+Desktop/Web report intent ---------------------> authenticated support API
+Hosted Desktop explicit snapshot consent
+  -> bounded native preparation
+  -> durable scrubbed diagnostics.json --------> support_report + private S3 bundle
+                                                  -> best-effort Slack receipt
 ```
 
-There is no active server tracker reconciler, GitHub/Linear projection,
-completed-report feed, issue queue, resolution state, or notification-on-fix
-worker. Legacy tracker columns, integrations, configuration, and historical S3
-objects may still exist; they are not part of the active product behavior.
+The private completed-report feed is the downstream handoff. Tracker
+reconciliation, public issue projection, issue-queue state, resolution state,
+and notification-on-fix are outside this system. Legacy tracker columns,
+integrations, configuration, and historical S3 objects do not grant authority
+to publish current report content.
 
 ## Availability and entry points
 
@@ -47,154 +56,194 @@ Hosted Desktop has two private in-app modals:
 - **Submit a prompt** for feature ideas expressed as an agent prompt.
 
 The modals are rendered inside the main app. There is no dedicated Tauri
-support webview window in the current implementation.
+support webview window. Web retains its ordinary support path; neither Web nor
+Mobile can prepare a Desktop snapshot.
 
-## Feedback modal
+## Consent and scope
 
-The feedback modal contains:
+Both hosted Desktop modals offer the same choice:
 
-- a `What happened?` textarea;
-- attachment picker, paste, and drop support;
-- `This is urgent`;
-- `Let me know when you fix this`;
-- `Credit me`, with a name field when selected;
-- `Include app logs`, enabled by default;
-- the current outreach address and an inline way to change it;
-- `Cancel` and `Send`.
+```text
+Include a diagnostic snapshot
+May include the selected session's prompts, transcript, tool and terminal
+output, file paths, and provider errors. Detected secrets are removed before
+upload.
+```
 
-Send is enabled when the user supplies text or at least one attachment.
+The choice is unchecked every time either modal opens. It is specific to one
+report, one selected scope, and one consent epoch. It is not remembered and is
+not granted by credit, outreach, urgency, notification, public-content,
+Sentry, PostHog, or anonymous-telemetry settings. Merely opening the modal,
+rendering or checking the choice, or changing scope performs no customer-detail
+read, collector export, native staging, or upload-intent mutation.
 
-`urgent` and `notifyMe` are capture intent only. The current system does not
-enforce an urgent response SLA and does not send a fix notification. Copy must
-not imply an automated outcome that does not exist.
+The scope control appears only after consent:
 
-Turning off `Include app logs` sets the immutable upload intent to
-`diagnostics=false`. If there are no attachments, the client completes the
-report without requesting upload targets.
+- **Current session** is the default only when the active UI session maps
+  through the session directory to an exact materialized session in the
+  selected bundled-local workspace.
+- **Recent activity (15 minutes)** is always available and is the default when
+  that mapping is unavailable. With no selected bundled-local workspace it
+  collects native collector, fallback, and status evidence only and records
+  that the session ledger was omitted.
 
-## Prompt modal
+There is no arbitrary date or workspace picker. Cloud, standalone, SSH,
+Supervisor-owned, remote, and merely most-recent alternate runtimes are never
+substituted. A binding or scope change supersedes the consent epoch and cancels
+in-flight preparation. Consent becomes durable only after the exact staged
+artifact and job are acknowledged by the queue.
 
-The prompt modal contains:
+The existing report fields remain unchanged. **Send feedback** accepts message
+or attachment content plus urgency, notification, and credit intent. **Submit
+a prompt** uses `kind=feature`, never sets urgency, and has no implied
+notify-on-merge promise. A report without snapshot consent declares diagnostics
+false and can complete with zero uploads. Urgency and notification remain
+capture intent, not an enforced response SLA or automatic fix notification.
+Client workspace references remain claims; the server derives trusted cloud
+correlation only from resources the reporter is authorized to access.
 
-- a prompt textarea;
-- `Credit me if this merges`, with a name field when selected;
-- the current outreach address and an inline way to change it;
-- `Cancel` and `Send`.
+## Preparation and artifact
 
-Prompt reports use `kind=feature`, never set `urgent`, and include diagnostics.
-The current UI has no notify-on-merge control. A hidden/default `notifyMe=false`
-value is not a user promise.
+Only an explicit **Send** or **Save a copy…** action while consent remains true
+can start preparation. The main-window Desktop bridge passes the immutable
+consent epoch and exact workspace/session binding to a narrow native
+coordinator. Native validates caller, consent, disclosure version, identifiers,
+and binding before reading customer-detail sources.
+
+One preparation fixes a native capture time and the preceding fifteen-minute
+window. It uses a move-only, native-only support permit and the same
+capacity-one export admission owner as internal diagnostic export. The permit
+is not a collector credential, cannot cross the bridge, and cannot authorize
+the internal-dogfood artifact purpose. The collector request covers renderer,
+Tauri, collector, bundled AnyHarness, and Desktop Worker detailed and lifecycle
+records without a session filter. Collector output remains accepted-order
+evidence; when the accepted collector cap returns only an oldest matching
+prefix, the manifest says coverage is uncertain and never claims the unseen
+newest edge.
+
+Selected session evidence is collected separately through bounded,
+cancellable, local-only AnyHarness windows: one exact active summary even when
+that session predates the window, or at most three recent summaries updated
+inside it, plus at most 200 normalized events and 100 raw notifications per
+session inside the fixed window. It is never converted into collector records
+or lifecycle conclusions. Native also samples collector/supervisor health,
+bundled child-producer status, the finite active fallback families, and finite
+read-only legacy compatibility tails. It never globs, walks customer
+directories, follows symlinks, or accepts a renderer-supplied path.
+
+Native assembles canonical `schemaVersion: 3` JSON with an explicit source,
+gap, omission, truncation, scrub, and degradation manifest. Optional evidence
+degrades in a deterministic fixed priority until the exact uncompressed bytes
+fit the existing 26,214,400-byte diagnostics cap. A valid no-evidence skeleton
+still succeeds. The artifact is atomically staged under an owner-only root with
+a durable job-bound opaque ID, exact size, and SHA-256; no path or capability is
+returned to JavaScript.
+
+**Save a copy…** writes a user-chosen ZIP containing exactly those staged
+`diagnostics.json` bytes. The archive is never enqueued as an attachment and is
+not removed by queue cleanup.
 
 ## Privacy
 
-Support reports are private by default and in the current Desktop flow
-`publicContentConsent` is always false.
+Support reports, diagnostics, and attachments are private by default.
+`publicContentConsent` remains false. A diagnostic snapshot deliberately
+preserves selected bounded non-secret prompts, transcript, tool and terminal
+output, file content and paths, ordinary URLs, provider responses and errors,
+and correlation metadata because those are the evidence the disclosure names.
 
-Rules:
+A purpose-specific Rust scrub runs over every collector, fallback, legacy, and
+session value before staging. Structural rules remove secret keys and
+credential containers; bounded regex rules remove authorization and cookie
+values, access/refresh/identity tokens, API keys and provider credentials,
+passwords, private keys, secret environment values, signed-URL secrets, URL
+userinfo, and high-confidence opaque credentials. Matches become typed
+redaction markers without retaining a secret prefix, suffix, length, or hash.
+Home-directory prefixes normalize to `~`; non-secret paths and URL detail
+remain useful.
 
-- user text lives in the private `request.json` object;
-- diagnostics and attachments are private;
-- presigned URLs, AWS credentials, S3 object contents, prompts, tool I/O,
-  transcript bodies, tokens, and signed URLs never enter public issues,
-  telemetry, or ordinary logs;
-- an old `public_content_consent` column does not authorize publishing current
-  report content;
-- introducing a public issue projection requires a new explicit consent and
-  privacy contract.
+The artifact excludes the report message, email, account name, tenant/device
+identity, hostname, username, environment maps, keychain material, collector
+connection material, support permits, staging paths, presigned URLs, and
+Sentry/PostHog payloads. It is never copied into public issues, product
+telemetry, ordinary logs, or the local collector/fallback stores. A scrub or
+mandatory-manifest invariant that cannot prove all candidate values were
+bounded fails preparation closed.
 
-## Desktop job and queue
+## Durable job and queue
 
 Both modals create the same `SupportReportJob` shape and dispatch it to the
-single upload queue owner.
-
-Important fields:
+single upload queue owner. Snapshot intent is explicit:
 
 ```text
-jobId, createdAt
-message
-kind                         bug | feature
-urgent, notifyMe
-creditConsent, creditName
-includeLogs
-scope, workspace references
-source context and telemetry references
-attachments
-active workspace/session and report-opened timestamp
+none
+prepared(consent, opaque artifact ID, snapshot ID, size, SHA-256, manifest summary)
 ```
 
-The job is persisted locally before upload and retried across app restarts.
-Report creation is idempotent on the server by authenticated user and
-`clientJobId`.
+Missing or truthy legacy `includeLogs` is never new consent. Legacy jobs migrate
+to no snapshot and diagnostics false; an already-created server report whose
+immutable intent expected old diagnostics ends terminally with resubmit
+guidance rather than capturing new customer evidence.
 
-Retry behavior distinguishes:
+Queue persistence is a checksummed, revisioned document plus write-ahead
+journal, serialized by one in-process owner. Each mutation writes the journal,
+writes the full target document, reads and verifies the target, and only then
+acknowledges. Hydration reconciles both documents before listening or draining.
+The queue keeps at most ten jobs and 2,097,152 canonical document bytes. A full
+queue rejects the new job visibly; it never uses truncating array operations or
+silently evicts old work. Existing message, attachment-count, filename,
+credit-name, and byte limits are validated before enqueue.
 
-- blocked states such as auth or server storage configuration;
-- transient transport/provider failures;
-- terminal local payload failures;
-- terminal server upload conflicts or rejected payloads;
-- an already-completed response, which is treated as successful cleanup.
+At startup, settled queue hydration supplies the complete bounded artifact and
+attachment reference set to native reconciliation. Verified references survive;
+missing or mismatched artifacts become visible terminal resubmit states; stale
+partials and proven-unreferenced staged files are removed. A corrupt or
+ambiguous queue blocks readiness rather than pretending it is empty. The modal
+closes only after `queued` or byte-identical `duplicate`; full, conflicting, or
+failed persistence keeps the report visible.
 
-The client must validate the server's message, attachment count, filename,
-credit-name, and byte limits before enqueue. HTTP validation responses are
-terminal for the unchanged payload, not background-retry candidates.
+## Upload and stable retry
 
-The queue must never silently evict a report. Any capacity limit must reject a
-new enqueue explicitly or durably archive an old terminal job, and staged
-attachment files must be deleted only after success or an explicit terminal
-outcome.
+A prepared snapshot is staged before the first server create call. Every
+attempt rereads it by opaque ID, verifies native metadata, Blob size, and
+SHA-256, and holds that same bounded Blob through create, upload-target, PUT,
+and complete. The existing API receives one optional `application/json`
+`diagnostics.json` object; it is not a user attachment and does not change
+attachment counts. Target URLs may be refreshed, but the Desktop job's artifact
+bytes, size, checksum, snapshot ID, and preparation parent remain stable for
+all retries. A retry never recollects or silently substitutes newer evidence.
 
-## Workspace scope
+Report creation remains idempotent by authenticated user and `clientJobId`.
+Already-completed is successful cleanup. Auth/configuration and transient
+failures retain the exact queued bytes for a later attempt; invalid local
+payloads, upload conflicts, and rejected payloads are terminal. Queue removal
+is journalled before idempotent deletion of the artifact and attachments, so a
+cleanup failure cannot replay a completed upload or delete another job's data.
 
-The current modals automatically use the active/default workspace when one is
-available and otherwise use `app_only`. The current UI does not present the old
-`Most recent workspace / Choose workspace / App only` radio group.
+## Failure and lifecycle behavior
 
-Client workspace references are treated as claims. The server derives trusted
-cloud correlation only from authorized resources. Unknown or unauthorized
-cloud IDs must not become trusted correlation identifiers.
+Unavailable collectors or child processes, capped or unreadable optional
+sources, malformed optional records, and session endpoint failures produce
+typed omissions or truncations while other evidence continues. They do not
+affect the active session, runtime, Worker, collector, support draft,
+attachments, or telemetry. Fatal consent, scrub, manifest, staging, or artifact
+verification failure keeps the modal open and lets the user retry or explicitly
+send without a snapshot; it never changes intent silently.
 
-## Diagnostics
+Native emits one `desktop.support_snapshot.prepare` lifecycle for each admitted
+preparation and one child `desktop.support_snapshot.submit` lifecycle for each
+admitted upload attempt. Every admitted operation has exactly one closed,
+typed terminal. Snapshot-missing, snapshot-mismatch, and legacy-consent-required
+paths happen before submit admission and emit no synthetic submit pair.
+Snapshot-missing and snapshot-mismatch make no server call. A migrated legacy
+job still attempts ordinary report creation with diagnostics false; only a
+server-side immutable-intent conflict concludes
+`consent_required_for_legacy_job`. Cancellation, timeout, window/app teardown,
+and retry are bounded; late results from a superseded consent epoch cannot
+enqueue.
 
-Native diagnostics may include:
-
-- app/runtime version and health metadata;
-- bounded Desktop native and AnyHarness log tails;
-- platform and runtime-home metadata;
-- recent sessions and summaries for selected workspaces;
-- bounded normalized events;
-- live config metadata;
-- raw notification metadata with bodies removed.
-
-Native log collection scrubs home paths, bearer tokens, env-style
-key/token/secret values, signed URL query parameters, and long opaque strings.
-
-The Desktop diagnostic package uses `schemaVersion: 2`. It does not duplicate
-the report message. It includes only:
-
-```text
-messagePresent
-messageLength
-```
-
-The schema-v2 package omits the later active-workspace/session fields. Structured
-identifiers, customer-provided names/paths, and runtime URLs are represented only
-by length placeholders; trusted correlation remains in the server-owned request
-record. Package assembly uses bounded, explicit projections; malformed scalar or
-container values and revoked proxies fail closed. Timestamps, versions, runtime
-states, platforms, and attachment media types must match their audited field
-contracts. Only bounded diagnostic log text receives credential, signed-URL,
-and opaque-token scrubbing; ordinary diagnostic text remains useful. Native
-collection failures use fixed `desktop`, `anyharness`, or generic diagnostic
-classes and never include paths or operating-system error text.
-
-The package runs session data through the session-debug sanitizer. Prompt and
-message bodies, raw tool input/output, event content, notification bodies, and
-sensitive live-config values are represented by redacted shape/length
-placeholders.
-
-Server-side `cloud-diagnostics.json` collection is disabled. The current server
-returns `cloudDiagnosticsStatus=not_applicable`; `diagnostics.py` is a no-op
-guard left after the cloud target/sandbox model cutover.
+Server-side `cloud-diagnostics.json` collection remains disabled and reports
+`cloudDiagnosticsStatus=not_applicable`. Session SQLite remains replay truth;
+the snapshot neither mutates it nor restores cloud diagnostics.
 
 ## HTTP contract
 
@@ -257,8 +306,9 @@ must not contain a presigned URL.
 - may be called again to refresh expired URLs and refreshed content metadata;
 - rejects a changed object set, diagnostics intent, or attachment count.
 
-Re-captured diagnostics may legitimately have new size and SHA-256 metadata on
-a re-issue. The latest target manifest is the completion contract.
+The generic endpoint can accept refreshed content metadata on a re-issue. A
+consented Desktop snapshot always reissues its original staged size and SHA-256;
+it does not recapture. The latest target manifest is the completion contract.
 
 ### Complete
 
@@ -340,14 +390,60 @@ outreach_email ?? account_email
 Capture stores reporter identity and notify intent; it does not send an email.
 Only an authorized future outreach step may resolve and snapshot the address.
 
+## Current gaps
+
+These are the differences from the target state above that remain in the tree.
+The consented-capture pipeline itself is built: schema-3 snapshot assembly, the
+manifest, the second scrub, opaque staging, the checksummed v2 queue with its
+verified one-way migration, the shared native export permit with fixed support
+prepare/submit lifecycle operations, and the SQL-bounded AnyHarness support
+windows with their generated SDK reads all exist. What is missing is the
+consent surface in front of that pipeline, and the two exports that sit beside
+it.
+
+- [ ] No snapshot-consent surface exists, so nothing reaches the consented
+      capture pipeline from the UI. Neither modal offers the explicit
+      disclosure, the unchecked consent epoch, or the active/recent scope
+      control, so a freshly authored job is unconditionally
+      `supportSnapshot: { kind: "none" }`. The old default-on `includeLogs`
+      control is gone and the flag survives only where legacy jobs are read
+      ([SendFeedbackModal.tsx](../../../../../apps/packages/product-client/src/components/support/SendFeedbackModal.tsx),
+      [SubmitPromptModal.tsx](../../../../../apps/packages/product-client/src/components/support/SubmitPromptModal.tsx),
+      [use-support-modal-state.ts](../../../../../apps/packages/product-client/src/hooks/support/facade/use-support-modal-state.ts)).
+- [ ] **Save a copy…** has no caller. The native command, its Tauri wrapper and
+      the `saveArchive` bridge method all exist and write the user-chosen ZIP,
+      but no UI action invokes them, so a user still cannot read what a send
+      would have transmitted. It arrives with the consent surface above
+      ([commands/support_snapshot/mod.rs](../../../../../apps/desktop/src-tauri/src/commands/support_snapshot/mod.rs),
+      [desktop-bridge-support.ts](../../../../../apps/packages/product-client/src/host/desktop-bridge-support.ts)).
+- [ ] The legacy debug-bundle export is untouched by the snapshot work. It is
+      no longer on the Desktop bridge and the upload path never calls it, but
+      the Tauri command still assembles bounded log tails through the old
+      generic scrub rather than the snapshot scrub, so the weaker rules stay
+      reachable from the Help menu
+      ([commands/diagnostics.rs](../../../../../apps/desktop/src-tauri/src/commands/diagnostics.rs),
+      [bundle.rs](../../../../../apps/desktop/src-tauri/src/diagnostics/bundle.rs),
+      [scrub.rs](../../../../../apps/desktop/src-tauri/src/diagnostics/scrub.rs)).
+
 ## Code map
 
 ```text
-apps/desktop/src/components/support/**
-apps/desktop/src/hooks/support/**
-apps/desktop/src/lib/domain/support/**
-apps/desktop/src/lib/workflows/support/**
-apps/desktop/src/stores/support/**
+apps/packages/product-client/src/components/support/**
+apps/packages/product-client/src/hooks/support/**
+apps/packages/product-client/src/lib/access/{anyharness,browser}/**
+apps/packages/product-client/src/lib/domain/support/**
+apps/packages/product-client/src/lib/workflows/support/**
+apps/packages/product-client/src/host/desktop-bridge.ts
+
+apps/desktop/src/lib/access/tauri/{diagnostics,support,desktop-bridge}.ts
+apps/desktop/src-tauri/src/commands/{diagnostics,support,support_snapshot}.rs
+apps/desktop/src-tauri/src/diagnostics/**
+apps/desktop/src-tauri/src/diagnostics_collector/**
+
+anyharness/crates/anyharness-contract/src/v1/{events,sessions}.rs
+anyharness/crates/anyharness-lib/src/api/**
+anyharness/crates/anyharness-lib/src/domains/sessions/store/**
+anyharness/sdk/src/client/sessions.ts
 
 cloud/sdk/src/client/support.ts
 cloud/sdk-react/src/hooks/support.ts
@@ -362,20 +458,48 @@ server/infra/main.tf
 specs/developing/reference/env-vars.yaml
 ```
 
-## Verification
+## Proof
 
-Changes to this feature require focused coverage for the guarantee they alter:
+Changes to this feature require focused proof for the guarantee they alter:
 
-- diagnostic fixtures seeded with report, prompt, tool, notification, and
-  live-config secrets must prove none survive serialization;
-- report creation retries must prove immutable idempotency;
-- upload-target re-issue must prove stable object identity with refreshed
-  content metadata;
+- modal and bridge tests must prove the exact disclosure is visible while
+  unchecked, consent resets on every open, scope binding is exact, and no
+  customer-detail source is touched before explicit Send or Save;
+- capability tests must prove only the main-window coordinator can consume one
+  support permit, support and internal export share one admission slot, and no
+  permit or collector connection material crosses the bridge or enters bytes;
+- AnyHarness route/store/SDK tests must prove SQL item bounds, response-byte
+  bounds before JSON parsing, honest uncertainty, cancellation, active-session
+  identity, ascending presentation order, and zero calls without a selected
+  bundled-local workspace;
+- adversarial Rust fixtures must prove credential, cookie, token, secret-env,
+  private-key, signed-URL, provider-key, and opaque-secret canaries never
+  survive JSON, ZIP, manifest, status, error, or lifecycle output; positive
+  fixtures must prove disclosed non-secret customer evidence remains useful;
+- golden manifest and generated cap fixtures must prove exact schema, honest
+  gaps/omissions/status, deterministic ordering and degradation, and an exact
+  uncompressed package no larger than 26,214,400 bytes;
+- owned-file and crash fixtures must prove finite no-follow reads, atomic
+  staging, exact size/SHA, partial cleanup, queue hydration before sweep, and
+  preservation of every verified queued reference;
+- queue tests must prove journal/readback acknowledgement, restart recovery,
+  serialized concurrent mutations, byte-identical duplicate handling, conflict
+  rejection, and explicit rejection of an eleventh or oversized job without
+  evicting existing work;
+- upload mocks must prove no-consent zero-diagnostics behavior and byte-identical
+  staged retries: verification precedes create, one Blob is held through the
+  whole attempt, missing/mismatched artifacts do not call the server, and the
+  hosted API/Cloud SDK shapes remain unchanged;
+- lifecycle tests must prove one typed terminal per admitted prepare/submit,
+  no start before consent, a separate child submit for every retry, and no fake
+  submit pair for pre-submit artifact or legacy-consent failures;
+- existing Sentry, PostHog, anonymous telemetry, session replay, support API,
+  capability, Slack, and cloud-diagnostics-disabled tests must remain green;
 - completion tests must cover missing, duplicate, unknown, out-of-prefix,
   size-mismatched, and checksum-mismatched objects;
 - Slack success, missing configuration, and provider failure must prove the
   correct `slack_notified_at` state;
-- capability tests must cover `vendor`, `operator`, and `none` for every entry
+- availability tests must cover `vendor`, `operator`, and `none` for every entry
   point;
 - a staging smoke must create a real report, inspect safe DB/S3 summaries, and
   visibly confirm the Slack message.

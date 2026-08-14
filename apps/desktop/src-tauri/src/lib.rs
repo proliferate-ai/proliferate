@@ -14,7 +14,7 @@ mod workspace_activity_indicator;
 use commands::{
     anonymous_telemetry, cloud_worker, config, desktop_identity,
     diagnostics as diagnostics_commands, drag_drop, google_workspace_mcp, keychain, process,
-    runtime, shell, ssh_tunnel, support, window_chrome, workspace_scratch,
+    runtime, shell, ssh_tunnel, support, support_snapshot, window_chrome, workspace_scratch,
 };
 use quit_flow::QuitFlowState;
 use tauri::Manager;
@@ -214,6 +214,13 @@ pub fn run() {
                 "production".to_string()
             },
         );
+    let support_snapshot_coordinator =
+        diagnostics::support_snapshot::coordinator::SupportSnapshotCoordinator::new(
+            diagnostics_supervisor.clone(),
+            diagnostics_producer.clone(),
+            cloud_worker_state.clone(),
+            sc.clone(),
+        );
     let broker_state = diagnostics_collector::shutdown::create_broker_server_state();
     let shutdown_coordinator = diagnostics_collector::shutdown::DiagnosticsShutdownCoordinator::new(
         diagnostics_supervisor.clone(),
@@ -222,6 +229,7 @@ pub fn run() {
         broker_state.clone(),
         cloud_worker_state.clone(),
         sc.clone(),
+        support_snapshot_coordinator.clone(),
     );
 
     let builder = tauri::Builder::default()
@@ -247,6 +255,7 @@ pub fn run() {
         .manage(cloud_worker_state)
         .manage(diagnostics_supervisor.clone())
         .manage(diagnostics_producer.clone())
+        .manage(support_snapshot_coordinator)
         .manage(shutdown_coordinator.clone())
         .manage(QuitFlowState::default())
         .manage(workspace_activity_indicator::WorkspaceActivityIndicatorStore::default())
@@ -258,10 +267,18 @@ pub fn run() {
             config::get_app_config,
             config::set_app_config,
             diagnostics_commands::export_debug_bundle,
-            diagnostics_commands::collect_support_diagnostics,
             diagnostics_commands::ingest_renderer_diagnostics,
             diagnostics_commands::save_diagnostic_json,
             diagnostics_commands::save_diagnostic_json_to_absolute_path,
+            support_snapshot::begin_support_snapshot_preparation,
+            support_snapshot::finish_support_snapshot_preparation,
+            support_snapshot::cancel_support_snapshot_preparation,
+            support_snapshot::save_support_snapshot_archive,
+            support_snapshot::read_staged_support_snapshot,
+            support_snapshot::delete_staged_support_snapshot,
+            support_snapshot::reconcile_staged_support_snapshots,
+            support_snapshot::begin_support_snapshot_submission,
+            support_snapshot::finish_support_snapshot_submission,
             runtime::get_runtime_info,
             runtime::restart_runtime,
             cloud_worker::ensure_desktop_dispatch_worker,

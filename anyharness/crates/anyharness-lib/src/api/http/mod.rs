@@ -42,6 +42,7 @@ pub mod sessions_resume;
 pub mod subagents;
 mod subagents_contract;
 mod subagents_errors;
+pub mod support_windows;
 pub mod terminals;
 pub mod workflow_runs;
 mod workflow_runs_contract;

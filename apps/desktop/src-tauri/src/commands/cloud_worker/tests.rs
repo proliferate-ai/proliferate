@@ -1,5 +1,6 @@
 use std::{
     env, fs,
+    path::PathBuf,
     process::Stdio,
     sync::{atomic::Ordering, Arc},
     thread,
@@ -245,19 +246,11 @@ async fn v2_worker_namespace_converges_while_a_legacy_worker_holds_its_lock() {
     fs::create_dir_all(&root).expect("create temporary worker root");
     let legacy = worker_paths_in_namespace(&root, LEGACY_WORKER_STATE_NAMESPACE, "install-1");
     let current = worker_paths_in_namespace(&root, WORKER_STATE_NAMESPACE, "install-1");
-    // Historical `worker.log` files are customer data at a fixed path in each
-    // namespace; the bundled launch no longer models that path, so this test
-    // derives it directly.
-    let legacy_log_path = legacy
-        .config
-        .parent()
-        .expect("legacy Worker parent")
-        .join("worker.log");
-    let current_log_path = current
-        .config
-        .parent()
-        .expect("current Worker parent")
-        .join("worker.log");
+    let compatibility = spawn::worker_legacy_log_paths(&root, "install-1");
+    let legacy_log_path = compatibility.v1;
+    let current_log_path = compatibility.v2;
+    assert_eq!(legacy_log_path.parent(), legacy.config.parent());
+    assert_eq!(current_log_path.parent(), current.config.parent());
     fs::create_dir_all(legacy.database.parent().expect("legacy Worker parent"))
         .expect("create legacy Worker namespace");
     let legacy_config = b"legacy-config-sentinel";
@@ -326,6 +319,20 @@ async fn v2_worker_namespace_converges_while_a_legacy_worker_holds_its_lock() {
         .await
         .expect("stop legacy lock-holder fixture");
     fs::remove_dir_all(root).expect("remove temporary worker root");
+}
+
+#[test]
+fn legacy_log_helper_exposes_only_fixed_v2_and_v1_paths() {
+    let root = PathBuf::from("/app");
+    let paths = spawn::worker_legacy_log_paths(&root, "target/with spaces");
+    assert_eq!(
+        paths.v2,
+        root.join("cloud-worker-v2/target_with_spaces/worker.log")
+    );
+    assert_eq!(
+        paths.v1,
+        root.join("cloud-worker/target_with_spaces/worker.log")
+    );
 }
 
 #[test]

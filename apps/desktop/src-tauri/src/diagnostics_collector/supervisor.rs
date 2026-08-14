@@ -19,6 +19,8 @@ use proliferate_diagnostics_protocol::v1::validation::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::{watch, Mutex as AsyncMutex};
 
+use super::export_admission::ExportAdmission;
+
 use terminal_control::TerminalControlState;
 
 use super::artifact::DiagnosticsArtifactKind;
@@ -181,6 +183,7 @@ pub(crate) struct DiagnosticsCollectorSupervisor {
     startup_tx: watch::Sender<StartupBarrierResult>,
     generation_tx: watch::Sender<u64>,
     shutdown_tx: watch::Sender<bool>,
+    export_admission: Arc<ExportAdmission>,
     shutdown_armed: AtomicBool,
     terminal_control: TerminalControlState,
 }

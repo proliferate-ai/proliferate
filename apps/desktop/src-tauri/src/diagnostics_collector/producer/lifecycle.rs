@@ -4,25 +4,31 @@ use std::sync::atomic::Ordering;
 use proliferate_diagnostics_protocol::v1::limits::MAX_MESSAGE_BYTES;
 use proliferate_diagnostics_protocol::v1::types::{
     CanonicalLifecycleV1, LifecycleFinalizerV1, LifecyclePhaseV1, RecordClassV1, SeverityV1,
-    TerminalOutcomeV1,
+    TerminalOutcomeV1, TypedArgumentV1,
 };
 
-use super::{LifecycleCorrelation, TauriDiagnosticsProducer, PR3_CLASSIFICATIONS};
+use super::{
+    LifecycleCorrelation, TauriDiagnosticsProducer, PR3_CLASSIFICATIONS, PR3_LIFECYCLE_NAMES,
+};
 
 pub(crate) struct LifecycleOperation {
     producer: TauriDiagnosticsProducer,
     name: &'static str,
     operation_id: String,
     correlation: LifecycleCorrelation,
+    arguments: Vec<TypedArgumentV1>,
+    classifications: &'static [&'static str],
     terminal: bool,
 }
 
 impl LifecycleOperation {
-    pub(super) fn new(
+    fn new(
         producer: TauriDiagnosticsProducer,
         name: &'static str,
         operation_id: String,
         correlation: LifecycleCorrelation,
+        arguments: Vec<TypedArgumentV1>,
+        classifications: &'static [&'static str],
         terminal: bool,
     ) -> Self {
         Self {
@@ -30,8 +36,14 @@ impl LifecycleOperation {
             name,
             operation_id,
             correlation,
+            arguments,
+            classifications,
             terminal,
         }
+    }
+
+    fn operation_id(&self) -> &str {
+        &self.operation_id
     }
 }
 
@@ -54,7 +66,7 @@ impl LifecycleOperation {
             return;
         }
         let classification =
-            classification.filter(|classification| PR3_CLASSIFICATIONS.contains(classification));
+            classification.filter(|classification| self.classifications.contains(classification));
         let outcome = if outcome == TerminalOutcomeV1::Failed && classification.is_none() {
             self.producer.inner.fallback.note_drop(1);
             TerminalOutcomeV1::Abandoned
@@ -76,6 +88,7 @@ impl LifecycleOperation {
             classification.map(str::to_owned),
             None,
             &self.correlation,
+            self.arguments.clone(),
             Some(CanonicalLifecycleV1 {
                 phase: LifecyclePhaseV1::Terminal,
                 outcome: Some(outcome),
@@ -90,6 +103,85 @@ impl LifecycleOperation {
         self.terminal = true;
     }
 }
+
+impl TauriDiagnosticsProducer {
+    pub(crate) fn begin_lifecycle(&self, name: &'static str) -> LifecycleOperation {
+        self.begin_lifecycle_with_correlation(name, LifecycleCorrelation::default())
+    }
+
+    pub(crate) fn begin_lifecycle_with_correlation(
+        &self,
+        name: &'static str,
+        correlation: LifecycleCorrelation,
+    ) -> LifecycleOperation {
+        if !PR3_LIFECYCLE_NAMES.contains(&name) {
+            return LifecycleOperation::new(
+                self.clone(),
+                name,
+                uuid::Uuid::new_v4().to_string(),
+                correlation,
+                Vec::new(),
+                &PR3_CLASSIFICATIONS,
+                true,
+            );
+        }
+        self.begin_admitted_lifecycle(name, correlation, Vec::new(), &PR3_CLASSIFICATIONS)
+    }
+
+    fn begin_admitted_lifecycle(
+        &self,
+        name: &'static str,
+        correlation: LifecycleCorrelation,
+        arguments: Vec<TypedArgumentV1>,
+        classifications: &'static [&'static str],
+    ) -> LifecycleOperation {
+        let operation_id = uuid::Uuid::new_v4().to_string();
+        if self.inner.closed.load(Ordering::Acquire) {
+            self.inner.fallback.note_drop(1);
+            return LifecycleOperation::new(
+                self.clone(),
+                name,
+                operation_id,
+                correlation,
+                arguments,
+                classifications,
+                true,
+            );
+        }
+        let record = self.next_record_with_operation(
+            name,
+            &operation_id,
+            SeverityV1::Info,
+            RecordClassV1::Lifecycle,
+            None,
+            None,
+            &correlation,
+            arguments.clone(),
+            Some(CanonicalLifecycleV1 {
+                phase: LifecyclePhaseV1::Started,
+                outcome: None,
+                finalizer: LifecycleFinalizerV1::Producer,
+                model: None,
+                plugin: None,
+            }),
+        );
+        if let Some(record) = record {
+            self.enqueue(record, true);
+        }
+        LifecycleOperation::new(
+            self.clone(),
+            name,
+            operation_id,
+            correlation,
+            arguments,
+            classifications,
+            false,
+        )
+    }
+}
+
+#[path = "support_lifecycle.rs"]
+pub(crate) mod support_lifecycle;
 
 impl Drop for LifecycleOperation {
     fn drop(&mut self) {

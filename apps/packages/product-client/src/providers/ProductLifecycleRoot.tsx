@@ -24,8 +24,8 @@ import { useProductStoragePersistenceLifecycle } from "#product/hooks/persistenc
 import { useSessionIntentDispatcher } from "#product/hooks/sessions/lifecycle/use-session-intent-dispatcher"
 import { useSessionSelectionLifecycle } from "#product/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
-import { useSupportReportUploadQueue } from "#product/hooks/support/lifecycle/use-support-report-upload-queue"
 import { useCrashRecoverySupportAction } from "#product/hooks/support/workflows/use-crash-recovery-support-action"
+import { useSupportReportRetentionLifecycle } from "#product/hooks/support/lifecycle/use-support-report-retention"
 import { useTurnEndSound } from "#product/hooks/sessions/lifecycle/use-turn-end-sound"
 import { useWorkspaceGitStatusPersistence } from "#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence"
 import {
@@ -53,6 +53,16 @@ import {
 const AuthRestartOfferRoot = lazy(() =>
   import("#product/components/agents/AuthRestartOfferRoot").then((m) => ({
     default: m.AuthRestartOfferRoot,
+  })),
+)
+
+// The support-report upload owner needs a Cloud session on both ends (the modal
+// cannot open without one, and every drain step is an authenticated call), so it
+// is authenticated-only + lazy for the same reason: the login shell fetches zero
+// bytes of the queue, artifact-verification, and upload modules.
+const SupportReportQueueRoot = lazy(() =>
+  import("#product/providers/SupportReportQueueRoot").then((m) => ({
+    default: m.SupportReportQueueRoot,
   })),
 )
 
@@ -189,12 +199,16 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_session_selection_lifecycle")
   useSessionSelectionLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_session_selection_lifecycle")
-  recordBootDiagnosticOnce("app_runtime.render.before.use_support_report_upload_queue")
-  useSupportReportUploadQueue()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_support_report_upload_queue")
   recordBootDiagnosticOnce("app_runtime.render.before.use_product_storage_persistence_lifecycle")
   useProductStoragePersistenceLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_product_storage_persistence_lifecycle")
+  // Deliberately above the auth gate. The queue owner below drains and needs a
+  // Cloud session; retention does not, and the account that never signs in
+  // again is exactly the one whose queue document and staged report bytes
+  // would otherwise never be reaped.
+  recordBootDiagnosticOnce("app_runtime.render.before.use_support_report_retention_lifecycle")
+  useSupportReportRetentionLifecycle()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_support_report_retention_lifecycle")
 
   useEffect(() => {
     recordAppRendererEvent("app.bootstrap.start")
@@ -225,6 +239,11 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
       {authStatus === "authenticated" && (
         <Suspense fallback={null}>
           <AuthRestartOfferRoot />
+        </Suspense>
+      )}
+      {authStatus === "authenticated" && (
+        <Suspense fallback={null}>
+          <SupportReportQueueRoot />
         </Suspense>
       )}
       {children}

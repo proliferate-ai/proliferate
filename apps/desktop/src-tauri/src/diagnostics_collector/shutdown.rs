@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 use tokio::time::Instant;
 
 use crate::commands::cloud_worker::{self, SharedCloudWorkerState};
+use crate::diagnostics::support_snapshot::coordinator::SupportSnapshotCoordinator;
 use crate::sidecar::{self, SharedSidecar};
 
 use super::broker::server::DiagnosticsBrokerServer;
@@ -16,6 +17,7 @@ use super::supervisor::DiagnosticsCollectorSupervisor;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ShutdownPhase {
     Arm,
+    CancelSupport,
     CancelBrokerSessions,
     DrainProducer,
     StopWorker,
@@ -24,8 +26,9 @@ enum ShutdownPhase {
     CloseArtifacts,
 }
 
-const SHUTDOWN_PHASE_ORDER: [ShutdownPhase; 7] = [
+const SHUTDOWN_PHASE_ORDER: [ShutdownPhase; 8] = [
     ShutdownPhase::Arm,
+    ShutdownPhase::CancelSupport,
     ShutdownPhase::CancelBrokerSessions,
     ShutdownPhase::DrainProducer,
     ShutdownPhase::StopWorker,
@@ -69,6 +72,7 @@ pub(crate) struct DiagnosticsShutdownCoordinator {
     broker: SharedBrokerServerState,
     worker: SharedCloudWorkerState,
     anyharness: SharedSidecar,
+    support: Arc<SupportSnapshotCoordinator>,
     #[cfg(test)]
     phase_trace: std::sync::Mutex<Vec<ShutdownPhase>>,
     #[cfg(test)]
@@ -92,6 +96,7 @@ impl DiagnosticsShutdownCoordinator {
         broker: SharedBrokerServerState,
         worker: SharedCloudWorkerState,
         anyharness: SharedSidecar,
+        support: Arc<SupportSnapshotCoordinator>,
     ) -> Arc<Self> {
         Arc::new(Self {
             armed: AtomicBool::new(false),
@@ -102,6 +107,7 @@ impl DiagnosticsShutdownCoordinator {
             broker,
             worker,
             anyharness,
+            support,
             #[cfg(test)]
             phase_trace: std::sync::Mutex::new(Vec::new()),
             #[cfg(test)]
@@ -157,6 +163,8 @@ impl DiagnosticsShutdownCoordinator {
         self.supervisor.arm_shutdown();
         cloud_worker::lifecycle::arm_terminal_shutdown(&self.worker);
         sidecar::arm_terminal_shutdown(&self.anyharness);
+        self.enter_phase(&mut order, ShutdownPhase::CancelSupport);
+        self.support.cancel_support().await;
         self.enter_phase(&mut order, ShutdownPhase::CancelBrokerSessions);
         let broker = self.broker.lock().await.clone();
         if let Some(broker) = &broker {

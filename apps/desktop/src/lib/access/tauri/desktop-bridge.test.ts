@@ -31,11 +31,19 @@ const mocks = vi.hoisted(() => ({
   readWorkspaceScratchPad: vi.fn(),
   writeWorkspaceScratchPad: vi.fn(),
   reportReactRenderError: vi.fn(),
-  collectSupportDiagnostics: vi.fn(),
   saveDiagnosticJson: vi.fn(),
   stageSupportReportAttachment: vi.fn(),
   readStagedSupportReportAttachment: vi.fn(),
   deleteStagedSupportReportAttachment: vi.fn(),
+  beginSupportSnapshotPreparation: vi.fn(),
+  finishSupportSnapshotPreparation: vi.fn(),
+  cancelSupportSnapshotPreparation: vi.fn(),
+  saveSupportSnapshotArchive: vi.fn(),
+  readStagedSupportSnapshot: vi.fn(),
+  deleteStagedSupportSnapshot: vi.fn(),
+  reconcileStagedSupportSnapshots: vi.fn(),
+  beginSupportSnapshotSubmission: vi.fn(),
+  finishSupportSnapshotSubmission: vi.fn(),
   fetchServerMeta: vi.fn(),
   isTauriRuntimeAvailable: vi.fn(() => true),
 }));
@@ -97,7 +105,6 @@ vi.mock("@/lib/access/tauri/workspace-scratch", () => ({
   writeWorkspaceScratchPad: mocks.writeWorkspaceScratchPad,
 }));
 vi.mock("@/lib/access/tauri/diagnostics", () => ({
-  collectSupportDiagnostics: mocks.collectSupportDiagnostics,
   saveDiagnosticJson: mocks.saveDiagnosticJson,
 }));
 vi.mock("@/lib/infra/diagnostics/renderer-error-diagnostics", () => ({
@@ -107,6 +114,15 @@ vi.mock("@/lib/access/tauri/support", () => ({
   stageSupportReportAttachment: mocks.stageSupportReportAttachment,
   readStagedSupportReportAttachment: mocks.readStagedSupportReportAttachment,
   deleteStagedSupportReportAttachment: mocks.deleteStagedSupportReportAttachment,
+  beginSupportSnapshotPreparation: mocks.beginSupportSnapshotPreparation,
+  finishSupportSnapshotPreparation: mocks.finishSupportSnapshotPreparation,
+  cancelSupportSnapshotPreparation: mocks.cancelSupportSnapshotPreparation,
+  saveSupportSnapshotArchive: mocks.saveSupportSnapshotArchive,
+  readStagedSupportSnapshot: mocks.readStagedSupportSnapshot,
+  deleteStagedSupportSnapshot: mocks.deleteStagedSupportSnapshot,
+  reconcileStagedSupportSnapshots: mocks.reconcileStagedSupportSnapshots,
+  beginSupportSnapshotSubmission: mocks.beginSupportSnapshotSubmission,
+  finishSupportSnapshotSubmission: mocks.finishSupportSnapshotSubmission,
 }));
 vi.mock("@/lib/access/tauri/connect-server", () => ({
   fetchServerMeta: mocks.fetchServerMeta,
@@ -508,12 +524,6 @@ describe("scratch", () => {
 });
 
 describe("diagnostics", () => {
-  it("delegates collectSupportBundle", async () => {
-    mocks.collectSupportDiagnostics.mockResolvedValue(null);
-
-    await expect(desktopBridge.diagnostics.collectSupportBundle()).resolves.toBeNull();
-  });
-
   it("passes render errors through without string coercion", async () => {
     const error = Object.create(null, {
       toString: { value: () => { throw new Error("must not run"); } },
@@ -560,5 +570,22 @@ describe("diagnostics", () => {
 
     await desktopBridge.diagnostics.deleteAttachment("/staged");
     expect(mocks.deleteStagedSupportReportAttachment).toHaveBeenCalledWith("/staged");
+  });
+
+  it("exposes the supportSnapshot subgroup only through the native host", () => {
+    // Full invoke/output/unavailable behavior is pinned in support.test.ts.
+    const group = desktopBridge.diagnostics.supportSnapshot;
+    if (!group) throw new Error("native support snapshot bridge is missing");
+    expect(group.beginPreparation).toBe(mocks.beginSupportSnapshotPreparation);
+    expect(group.finishPreparation).toBe(mocks.finishSupportSnapshotPreparation);
+    expect(group.cancelPreparation).toBe(mocks.cancelSupportSnapshotPreparation);
+    expect(group.saveArchive).toBe(mocks.saveSupportSnapshotArchive);
+    expect(group.readArtifact).toBe(mocks.readStagedSupportSnapshot);
+    expect(group.deleteArtifact).toBe(mocks.deleteStagedSupportSnapshot);
+    expect(group.reconcileArtifacts).toBe(mocks.reconcileStagedSupportSnapshots);
+    expect(group.beginSubmission).toBe(mocks.beginSupportSnapshotSubmission);
+    expect(group.finishSubmission).toBe(mocks.finishSupportSnapshotSubmission);
+    mocks.isTauriRuntimeAvailable.mockReturnValue(false);
+    expect(desktopBridge.diagnostics.supportSnapshot).toBeNull();
   });
 });

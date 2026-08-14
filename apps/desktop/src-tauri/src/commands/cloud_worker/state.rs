@@ -35,6 +35,19 @@ pub(crate) struct DesktopWorkerDiagnosticsState {
 }
 
 impl CloudWorkerState {
+    /// Takes the finite Worker compatibility-log binding before support file
+    /// capture starts. The lifecycle mutex is held only long enough to clone
+    /// the current owned target identifier; no file read or status RPC runs
+    /// under Worker process authority.
+    pub(crate) fn support_evidence_target_id(&self) -> Option<String> {
+        self.lifecycle
+            .try_lock()
+            .ok()?
+            .process
+            .as_ref()
+            .map(|process| process.target_id.clone())
+    }
+
     /// Returns only a cloned target identifier and classified child status;
     /// the identity-stable process and bridge owners never escape the mutex.
     #[cfg(all(
@@ -43,6 +56,19 @@ impl CloudWorkerState {
     ))]
     pub(crate) async fn child_diagnostics_state(&self) -> DesktopWorkerDiagnosticsState {
         let deadline = tokio::time::Instant::now() + CHILD_STATUS_RESPONSE_DEADLINE;
+        self.child_diagnostics_state_until(deadline).await
+    }
+
+    /// Uses the support coordinator's absolute joined deadline rather than
+    /// granting the Worker a fresh status window after AnyHarness completes.
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    pub(crate) async fn child_diagnostics_state_until(
+        &self,
+        deadline: tokio::time::Instant,
+    ) -> DesktopWorkerDiagnosticsState {
         let Ok(mut lifecycle) = tokio::time::timeout_at(deadline, self.lifecycle.lock()).await
         else {
             return DesktopWorkerDiagnosticsState {

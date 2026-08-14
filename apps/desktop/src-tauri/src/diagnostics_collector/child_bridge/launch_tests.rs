@@ -34,11 +34,12 @@ fn prepared_endpoints_have_expected_roles_and_are_cloexec() {
 fn dropping_prepared_launch_closes_every_endpoint() {
     let prepared = PreparedChildDiagnosticsLaunch::create().expect("prepare descriptors");
     let descriptors = all_descriptors(prepared.raw_descriptors());
+    let identities = descriptors.map(descriptor_identity);
 
     drop(prepared);
 
-    for descriptor in descriptors {
-        assert_descriptor_closed(descriptor);
+    for (descriptor, opened) in descriptors.into_iter().zip(identities) {
+        assert_descriptor_closed(descriptor, opened);
     }
 }
 
@@ -46,12 +47,13 @@ fn dropping_prepared_launch_closes_every_endpoint() {
 fn failed_spawn_closes_every_endpoint() {
     let prepared = PreparedChildDiagnosticsLaunch::create().expect("prepare descriptors");
     let descriptors = all_descriptors(prepared.raw_descriptors());
+    let identities = descriptors.map(descriptor_identity);
     let command = Command::new("/definitely/not/a/proliferate/executable");
 
     assert!(prepared.spawn(command).is_err(), "spawn must fail");
 
-    for descriptor in descriptors {
-        assert_descriptor_closed(descriptor);
+    for (descriptor, opened) in descriptors.into_iter().zip(identities) {
+        assert_descriptor_closed(descriptor, opened);
     }
 }
 
@@ -340,10 +342,32 @@ fn descriptor_is_closed(descriptor: RawFd) -> bool {
     unsafe { libc::fcntl(descriptor, libc::F_GETFD) < 0 }
 }
 
-fn assert_descriptor_closed(descriptor: RawFd) {
-    assert!(
-        descriptor_is_closed(descriptor),
-        "fd {descriptor} remained open"
+/// `(st_dev, st_ino)` identity of a live descriptor, or `None` once it is closed.
+///
+/// Closure has to be proven by identity rather than by descriptor *number*: the
+/// kernel hands out the lowest free number, so between the drop under test and
+/// the probe, any other thread in this parallel test binary can open something
+/// that lands on the same number. Asserting only that the number is invalid made
+/// these two tests fail intermittently with "fd 16 remained open" when the
+/// number had in fact been closed and immediately recycled by an unrelated test.
+fn descriptor_identity(descriptor: RawFd) -> Option<(u64, u64)> {
+    // SAFETY: a zeroed stat is a valid fstat output buffer.
+    let mut stat: libc::stat = unsafe { mem::zeroed() };
+    // SAFETY: fstat only reads `descriptor` and writes `stat`.
+    if unsafe { libc::fstat(descriptor, &mut stat) } != 0 {
+        return None;
+    }
+    Some((stat.st_dev as u64, stat.st_ino as u64))
+}
+
+fn assert_descriptor_closed(descriptor: RawFd, opened: Option<(u64, u64)>) {
+    if descriptor_is_closed(descriptor) {
+        return;
+    }
+    let current = descriptor_identity(descriptor);
+    assert_ne!(
+        current, opened,
+        "fd {descriptor} still refers to the endpoint it owned before the drop"
     );
 }
 
