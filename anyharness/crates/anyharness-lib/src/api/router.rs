@@ -16,8 +16,8 @@ use super::http::{
     files, git, goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay,
     repo_roots, reviews, sessions, sessions_config, sessions_events, sessions_fork,
     sessions_interactions, sessions_lifecycle, sessions_prompt, sessions_resume, subagents,
-    terminals, workspaces, workspaces_lifecycle, workspaces_purge, workspaces_restore,
-    workspaces_setup, workspaces_worktrees, worktrees,
+    terminals, workflow_runs, workspaces, workspaces_lifecycle, workspaces_purge,
+    workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
@@ -82,6 +82,39 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/catalogs/agents/version",
             get(catalogs::get_agent_catalog_version),
+        )
+        // Workflow runs (gen-2)
+        .route(
+            "/workflow-runs",
+            get(workflow_runs::list_workflow_runs),
+        )
+        .route(
+            "/workflow-runs/{run_id}",
+            get(workflow_runs::get_workflow_run).put(workflow_runs::put_workflow_run),
+        )
+        .route(
+            "/workflow-runs/{run_id}/nodes/{node_row_id}/approve",
+            post(workflow_runs::approve_workflow_node),
+        )
+        .route(
+            "/workflow-runs/{run_id}/nodes/{node_row_id}/fail-redo",
+            post(workflow_runs::fail_redo_workflow_node),
+        )
+        .route(
+            "/workflow-runs/{run_id}/nodes/{node_row_id}/type",
+            post(workflow_runs::flip_workflow_node_type),
+        )
+        .route(
+            "/workflow-runs/{run_id}/undo-advance",
+            post(workflow_runs::undo_workflow_advance),
+        )
+        .route(
+            "/workflow-runs/{run_id}/resume",
+            post(workflow_runs::resume_workflow_run),
+        )
+        .route(
+            "/workflow-runs/{run_id}/adhoc-nodes",
+            post(workflow_runs::add_workflow_adhoc_node),
         )
         // Workspaces
         .route(

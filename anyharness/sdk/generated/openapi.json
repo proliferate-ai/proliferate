@@ -4293,6 +4293,395 @@
         }
       }
     },
+    "/v1/workflow-runs": {
+      "get": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "list_workflow_runs",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "description": "Restrict to one workspace",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run rows, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunsListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}": {
+      "get": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "get_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The run projected from rows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "put_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Client-minted run id; the PUT is idempotent on it",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunPutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent replay: the existing run, untouched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Run placed and started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "WORKFLOW_SNAPSHOT_INVALID"
+          },
+          "503": {
+            "description": "WORKFLOW_WORKSPACE_MATERIALIZATION_FAILED, zero rows inserted"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/adhoc-nodes": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "add_workflow_adhoc_node",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunAddAdhocNodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Adhoc row running beside the chain; the fresh projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND (anchor)"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/approve": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "approve_workflow_node",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gate approved; the fresh projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/fail-redo": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "fail_redo_workflow_node",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunFailRedoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Replacement row running; the fresh projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/type": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "flip_workflow_node_type",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunFlipTypeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Node type flipped; the fresh projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/resume": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "resume_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run resumed; the fresh projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/undo-advance": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "undo_workflow_advance",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Advance undone; the fresh projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
     "/v1/workspaces": {
       "get": {
         "tags": [
@@ -10229,6 +10618,77 @@
           }
         }
       },
+      "DefinitionEdge": {
+        "type": "object",
+        "required": [
+          "from",
+          "to"
+        ],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DefinitionInput": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DefinitionNode": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "title",
+          "prompt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "model": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NodeModel"
+              }
+            ]
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/WorkflowNodeType"
+          }
+        },
+        "additionalProperties": false
+      },
       "DeleteWorkspaceFileEntryResponse": {
         "type": "object",
         "required": [
@@ -10285,6 +10745,69 @@
             "items": {
               "$ref": "#/components/schemas/SetupHint"
             }
+          }
+        }
+      },
+      "DocTemplate": {
+        "type": "object",
+        "required": [
+          "slug",
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "producingNodeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DocView": {
+        "type": "object",
+        "required": [
+          "id",
+          "runId",
+          "slug",
+          "filename",
+          "seededFromTemplate",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "producingNodeRowId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runId": {
+            "type": "string"
+          },
+          "seededFromTemplate": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
           }
         }
       },
@@ -11867,6 +12390,21 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "InvocationPlacement": {
+        "type": "object",
+        "required": [
+          "repoConfigId",
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/PlacementMode"
+          },
+          "repoConfigId": {
+            "type": "string"
           }
         }
       },
@@ -13505,6 +14043,124 @@
           }
         }
       },
+      "NodeModel": {
+        "type": "object",
+        "required": [
+          "agentKind"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "NodeView": {
+        "type": "object",
+        "required": [
+          "id",
+          "runId",
+          "kind",
+          "nodeType",
+          "title",
+          "prompt",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "anchorNodeRowId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "chainIndex": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "definitionNodeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WorkflowNodeKind"
+          },
+          "nodeType": {
+            "$ref": "#/components/schemas/WorkflowNodeType"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "promptId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "replacesNodeRowId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowNodeStatus"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
       "NormalizedSessionControl": {
         "type": "object",
         "description": "A product-normalized live session control derived from raw ACP config options.\n\nThis is the product semantics layer used by clients to render consistent\ncontrols such as model, mode, reasoning, effort, and fast mode across\ndifferent harnesses.",
@@ -14070,6 +14726,13 @@
           "rawInput": {},
           "rawOutput": {}
         }
+      },
+      "PlacementMode": {
+        "type": "string",
+        "enum": [
+          "worktree",
+          "repo_root"
+        ]
       },
       "PlanDecisionRequest": {
         "type": "object",
@@ -16269,6 +16932,96 @@
             "type": "string"
           },
           "stdout": {
+            "type": "string"
+          }
+        }
+      },
+      "RunProjection": {
+        "type": "object",
+        "description": "The full projection every read and every command returns.",
+        "required": [
+          "run",
+          "nodes",
+          "docs"
+        ],
+        "properties": {
+          "docs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocView"
+            }
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NodeView"
+            }
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunView"
+          }
+        }
+      },
+      "RunView": {
+        "type": "object",
+        "required": [
+          "id",
+          "invocationId",
+          "definitionJson",
+          "argumentsJson",
+          "workspaceId",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "argumentsJson": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "currentNodeRowId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "definitionJson": {
+            "type": "string",
+            "description": "The verbatim definition snapshot, exactly as frozen at PUT time."
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "interruptionCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "invocationId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStatus"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
             "type": "string"
           }
         }
@@ -19250,6 +20003,178 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "WorkflowDefinition": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "nodes",
+          "edges"
+        ],
+        "properties": {
+          "docTemplates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocTemplate"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DefinitionEdge"
+            }
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DefinitionInput"
+            }
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DefinitionNode"
+            }
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowNodeKind": {
+        "type": "string",
+        "enum": [
+          "defined",
+          "replacement",
+          "adhoc"
+        ]
+      },
+      "WorkflowNodeStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "needs_attention",
+          "awaiting_human",
+          "completed",
+          "failed"
+        ]
+      },
+      "WorkflowNodeType": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "human_in_loop"
+        ]
+      },
+      "WorkflowRunAddAdhocNodeRequest": {
+        "type": "object",
+        "required": [
+          "anchorNodeRowId",
+          "prompt"
+        ],
+        "properties": {
+          "anchorNodeRowId": {
+            "type": "string"
+          },
+          "model": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NodeModel"
+              }
+            ]
+          },
+          "prompt": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunFailRedoRequest": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "WorkflowRunFlipTypeRequest": {
+        "type": "object",
+        "required": [
+          "nodeType"
+        ],
+        "properties": {
+          "nodeType": {
+            "$ref": "#/components/schemas/WorkflowNodeType"
+          }
+        }
+      },
+      "WorkflowRunPutRequest": {
+        "type": "object",
+        "description": "The PUT body: the frozen invocation snapshot the courier reconstitutes\nfrom the control plane's flat invocation response. Extra fields a future\ncourier might forward verbatim (`title`, `definitionRevision`, ...) are\ntolerated and ignored; `id`, when present, is the frozen invocation's own\nid and becomes the run row's `invocation_id`.",
+        "required": [
+          "schemaVersion",
+          "workflowDefinitionId",
+          "definition",
+          "placement"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "object"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowDefinition"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "placement": {
+            "$ref": "#/components/schemas/InvocationPlacement"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "workflowDefinitionId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunStatus": {
+        "type": "string",
+        "enum": [
+          "running",
+          "awaiting_human",
+          "interrupted",
+          "completed",
+          "failed"
+        ]
+      },
+      "WorkflowRunsListResponse": {
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunView"
+            }
           }
         }
       },

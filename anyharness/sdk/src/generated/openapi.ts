@@ -1156,6 +1156,134 @@ export interface paths {
         patch: operations["update_terminal_title"];
         trace?: never;
     };
+    "/v1/workflow-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_workflow_runs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_workflow_run"];
+        put: operations["put_workflow_run"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}/adhoc-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["add_workflow_adhoc_node"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approve_workflow_node"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/fail-redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["fail_redo_workflow_node"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["flip_workflow_node_type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resume_workflow_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}/undo-advance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["undo_workflow_advance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces": {
         parameters: {
             query?: never;
@@ -2712,6 +2840,22 @@ export interface components {
         CurrentPullRequestResponse: {
             pullRequest?: null | components["schemas"]["PullRequestSummary"];
         };
+        DefinitionEdge: {
+            from: string;
+            to: string;
+        };
+        DefinitionInput: {
+            description?: string | null;
+            name: string;
+            required?: boolean;
+        };
+        DefinitionNode: {
+            id: string;
+            model?: null | components["schemas"]["NodeModel"];
+            prompt: string;
+            title: string;
+            type: components["schemas"]["WorkflowNodeType"];
+        };
         DeleteWorkspaceFileEntryResponse: {
             kind: components["schemas"]["WorkspaceFileKind"];
             path: string;
@@ -2725,6 +2869,21 @@ export interface components {
         };
         DetectProjectSetupResponse: {
             hints: components["schemas"]["SetupHint"][];
+        };
+        DocTemplate: {
+            body: string;
+            producingNodeId?: string | null;
+            slug: string;
+        };
+        DocView: {
+            createdAt: string;
+            filename: string;
+            id: string;
+            producingNodeRowId?: string | null;
+            runId: string;
+            seededFromTemplate: boolean;
+            slug: string;
+            updatedAt: string;
         };
         EditPendingPromptRequest: {
             blocks?: components["schemas"]["PromptInputBlock"][] | null;
@@ -3140,6 +3299,10 @@ export interface components {
             toolCallId?: string | null;
             toolKind?: string | null;
             toolStatus?: string | null;
+        };
+        InvocationPlacement: {
+            mode: components["schemas"]["PlacementMode"];
+            repoConfigId: string;
         };
         ItemCompletedEvent: {
             item: components["schemas"]["TranscriptItemPayload"];
@@ -3574,6 +3737,31 @@ export interface components {
             stateRevision?: number | null;
             warnings?: string[];
         };
+        NodeModel: {
+            agentKind: string;
+            modeId?: string | null;
+            modelId?: string | null;
+        };
+        NodeView: {
+            anchorNodeRowId?: string | null;
+            /** Format: int64 */
+            chainIndex?: number | null;
+            completedAt?: string | null;
+            createdAt: string;
+            definitionNodeId?: string | null;
+            failureCode?: string | null;
+            id: string;
+            kind: components["schemas"]["WorkflowNodeKind"];
+            nodeType: components["schemas"]["WorkflowNodeType"];
+            prompt: string;
+            promptId?: string | null;
+            replacesNodeRowId?: string | null;
+            runId: string;
+            sessionId?: string | null;
+            startedAt?: string | null;
+            status: components["schemas"]["WorkflowNodeStatus"];
+            title: string;
+        };
         /**
          * @description A product-normalized live session control derived from raw ACP config options.
          *
@@ -3732,6 +3920,8 @@ export interface components {
             rawInput?: unknown;
             rawOutput?: unknown;
         };
+        /** @enum {string} */
+        PlacementMode: "worktree" | "repo_root";
         PlanDecisionRequest: {
             /** Format: int64 */
             expectedDecisionVersion: number;
@@ -4293,6 +4483,27 @@ export interface components {
             exitCode: number;
             stderr: string;
             stdout: string;
+        };
+        /** @description The full projection every read and every command returns. */
+        RunProjection: {
+            docs: components["schemas"]["DocView"][];
+            nodes: components["schemas"]["NodeView"][];
+            run: components["schemas"]["RunView"];
+        };
+        RunView: {
+            argumentsJson: string;
+            completedAt?: string | null;
+            createdAt: string;
+            currentNodeRowId?: string | null;
+            /** @description The verbatim definition snapshot, exactly as frozen at PUT time. */
+            definitionJson: string;
+            failureCode?: string | null;
+            id: string;
+            interruptionCode?: string | null;
+            invocationId: string;
+            status: components["schemas"]["WorkflowRunStatus"];
+            updatedAt: string;
+            workspaceId: string;
         };
         RuntimeCapabilities: {
             replay: boolean;
@@ -4984,6 +5195,52 @@ export interface components {
             questionId: string;
             selectedOptionLabel?: string | null;
             text?: string | null;
+        };
+        WorkflowDefinition: {
+            docTemplates?: components["schemas"]["DocTemplate"][];
+            edges: components["schemas"]["DefinitionEdge"][];
+            inputs?: components["schemas"]["DefinitionInput"][];
+            nodes: components["schemas"]["DefinitionNode"][];
+            /** Format: int32 */
+            schemaVersion: number;
+        };
+        /** @enum {string} */
+        WorkflowNodeKind: "defined" | "replacement" | "adhoc";
+        /** @enum {string} */
+        WorkflowNodeStatus: "pending" | "running" | "needs_attention" | "awaiting_human" | "completed" | "failed";
+        /** @enum {string} */
+        WorkflowNodeType: "agent" | "human_in_loop";
+        WorkflowRunAddAdhocNodeRequest: {
+            anchorNodeRowId: string;
+            model?: null | components["schemas"]["NodeModel"];
+            prompt: string;
+        };
+        WorkflowRunFailRedoRequest: {
+            prompt?: string | null;
+        };
+        WorkflowRunFlipTypeRequest: {
+            nodeType: components["schemas"]["WorkflowNodeType"];
+        };
+        /**
+         * @description The PUT body: the frozen invocation snapshot the courier reconstitutes
+         *     from the control plane's flat invocation response. Extra fields a future
+         *     courier might forward verbatim (`title`, `definitionRevision`, ...) are
+         *     tolerated and ignored; `id`, when present, is the frozen invocation's own
+         *     id and becomes the run row's `invocation_id`.
+         */
+        WorkflowRunPutRequest: {
+            arguments?: Record<string, never>;
+            definition: components["schemas"]["WorkflowDefinition"];
+            id?: string | null;
+            placement: components["schemas"]["InvocationPlacement"];
+            /** Format: int32 */
+            schemaVersion: number;
+            workflowDefinitionId: string;
+        };
+        /** @enum {string} */
+        WorkflowRunStatus: "running" | "awaiting_human" | "interrupted" | "completed" | "failed";
+        WorkflowRunsListResponse: {
+            runs: components["schemas"]["RunView"][];
         };
         Workspace: {
             /**
@@ -8583,6 +8840,339 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
+            };
+        };
+    };
+    list_workflow_runs: {
+        parameters: {
+            query?: {
+                /** @description Restrict to one workspace */
+                workspace_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run rows, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunsListResponse"];
+                };
+            };
+        };
+    };
+    get_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run projected from rows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunProjection"];
+                };
+            };
+            /** @description WORKFLOW_RUN_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Client-minted run id; the PUT is idempotent on it */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowRunPutRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay: the existing run, untouched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunProjection"];
+                };
+            };
+            /** @description Run placed and started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunProjection"];
+                };
+            };
+            /** @description WORKFLOW_SNAPSHOT_INVALID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WORKFLOW_WORKSPACE_MATERIALIZATION_FAILED, zero rows inserted */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_workflow_adhoc_node: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowRunAddAdhocNodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Adhoc row running beside the chain; the fresh projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunProjection"];
+                };
+            };
+            /** @description WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND (anchor) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WORKFLOW_TRANSITION_ILLEGAL */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    approve_workflow_node: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                node_row_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Gate approved; the fresh projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunProjection"];
+                };
+            };
+            /** @description WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WORKFLOW_TRANSITION_ILLEGAL */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    fail_redo_workflow_node: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                node_row_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowRunFailRedoRequest"];
+            };
+        };
+        responses: {
+            /** @description Replacement row running; the fresh projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunProjection"];
+                };
+            };
+            /** @description WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WORKFLOW_TRANSITION_ILLEGAL */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    flip_workflow_node_type: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                node_row_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowRunFlipTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description Node type flipped; the fresh projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunProjection"];
+                };
+            };
+            /** @description WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WORKFLOW_TRANSITION_ILLEGAL */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resume_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run resumed; the fresh projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunProjection"];
+                };
+            };
+            /** @description WORKFLOW_RUN_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WORKFLOW_TRANSITION_ILLEGAL */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    undo_workflow_advance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Advance undone; the fresh projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunProjection"];
+                };
+            };
+            /** @description WORKFLOW_RUN_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WORKFLOW_TRANSITION_ILLEGAL */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

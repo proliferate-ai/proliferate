@@ -680,7 +680,23 @@ impl WorkflowStore {
         Ok(docs)
     }
 
-    pub fn runs_for_workspace(&self, workspace_id: &str) -> anyhow::Result<Vec<WorkflowRunRecord>> {
+    /// Every run row, newest first — the unfiltered list route.
+    pub fn all_runs(&self) -> anyhow::Result<Vec<WorkflowRunRecord>> {
+        self.db.with_tx_anyhow(|tx| {
+            let mut statement = tx.prepare(
+                "SELECT * FROM workflow_runs ORDER BY created_at DESC, rowid DESC",
+            )?;
+            let runs = statement
+                .query_map([], map_run)?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok(runs)
+        })
+    }
+
+    pub fn runs_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Vec<WorkflowRunRecord>> {
         self.db.with_tx_anyhow(|tx| {
             let mut statement = tx.prepare(
                 "SELECT * FROM workflow_runs WHERE workspace_id = ?1

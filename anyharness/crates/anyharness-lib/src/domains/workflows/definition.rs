@@ -16,12 +16,13 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::model::WorkflowNodeType;
 
 pub const DEFINITION_SCHEMA_VERSION: u32 = 2;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkflowDefinition {
     pub schema_version: u32,
@@ -33,7 +34,7 @@ pub struct WorkflowDefinition {
     pub doc_templates: Vec<DocTemplate>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DefinitionNode {
     pub id: String,
@@ -45,7 +46,7 @@ pub struct DefinitionNode {
     pub model: Option<NodeModel>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NodeModel {
     pub agent_kind: String,
@@ -55,14 +56,14 @@ pub struct NodeModel {
     pub mode_id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DefinitionEdge {
     pub from: String,
     pub to: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DefinitionInput {
     pub name: String,
@@ -72,7 +73,7 @@ pub struct DefinitionInput {
     pub required: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DocTemplate {
     pub slug: String,
@@ -85,25 +86,26 @@ pub struct DocTemplate {
 
 /// The frozen `invocation_json` the courier PUTs to the runtime, verbatim from
 /// CP. The runtime revalidates the whole snapshot regardless of server checks.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InvocationSnapshot {
     pub schema_version: u32,
     pub workflow_definition_id: String,
     pub definition: WorkflowDefinition,
     #[serde(default)]
+    #[schema(value_type = Object)]
     pub arguments: serde_json::Map<String, serde_json::Value>,
     pub placement: InvocationPlacement,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InvocationPlacement {
     pub repo_config_id: String,
     pub mode: PlacementMode,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PlacementMode {
     Worktree,

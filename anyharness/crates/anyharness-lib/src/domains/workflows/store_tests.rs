@@ -1192,15 +1192,29 @@ fn projection_serializes_camel_case_from_rows() {
         .expect("create run");
     let projection = super::projection::project(&created.state, &created.docs);
     let json = serde_json::to_value(&projection).expect("serialize projection");
-    assert_eq!(json["id"], "run-1");
-    assert_eq!(json["workspaceId"], "workspace-1");
-    assert_eq!(json["status"], "running");
-    assert_eq!(json["definition"]["schemaVersion"], 2);
-    assert_eq!(json["arguments"]["ticket"], "PRO-9");
+    assert_eq!(json["run"]["id"], "run-1");
+    assert_eq!(json["run"]["workspaceId"], "workspace-1");
+    assert_eq!(json["run"]["status"], "running");
+    // The definition rides the wire as the verbatim frozen string.
+    let definition_json = json["run"]["definitionJson"].as_str().expect("raw string");
+    let definition: serde_json::Value =
+        serde_json::from_str(definition_json).expect("parseable");
+    assert_eq!(definition["schemaVersion"], 2);
+    let arguments: serde_json::Value =
+        serde_json::from_str(json["run"]["argumentsJson"].as_str().expect("raw string"))
+            .expect("parseable");
+    assert_eq!(arguments["ticket"], "PRO-9");
+    // Nullable wire fields are explicit nulls, never omitted (the TS side
+    // declares `string | null`).
+    assert!(json["run"]["completedAt"].is_null());
+    assert!(json["nodes"][0]["sessionId"].is_null());
+    assert!(json["nodes"][0]["promptId"].is_null());
+    assert_eq!(json["nodes"][0]["runId"], "run-1");
     assert_eq!(json["nodes"][0]["definitionNodeId"], "plan");
     assert_eq!(json["nodes"][0]["nodeType"], "agent");
     assert_eq!(json["nodes"][0]["status"], "running");
     assert_eq!(json["nodes"][1]["nodeType"], "human_in_loop");
+    assert_eq!(json["docs"][0]["runId"], "run-1");
     assert_eq!(json["docs"][0]["filename"], "00-plan-doc.md");
     // The rendered envelope never leaves the runtime.
     assert!(json["nodes"][0].get("renderedEnvelope").is_none());
