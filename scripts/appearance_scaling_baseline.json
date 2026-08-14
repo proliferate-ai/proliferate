@@ -147,7 +147,6 @@
     "apps/packages/product-client/src/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl.tsx|arbitrary-bracket-geometry": 1,
     "apps/packages/product-client/src/components/workspace/chat/plans/PlanHandoffDialog.tsx|foreground-alpha-foundation": 2,
     "apps/packages/product-client/src/components/workspace/chat/surface/SessionContentSearchOverlay.tsx|arbitrary-bracket-geometry": 3,
-    "apps/packages/product-client/src/components/workspace/chat/surface/TranscriptSwitchingPlaceholder.tsx|arbitrary-bracket-geometry": 3,
     "apps/packages/product-client/src/components/workspace/chat/transcript/ProviderLinkMention.tsx|arbitrary-bracket-geometry": 2,
     "apps/packages/product-client/src/components/workspace/cowork/CoworkWorkspaceShell.tsx|arbitrary-bracket-geometry": 1,
     "apps/packages/product-client/src/components/workspace/cowork/sidebar/CoworkManagedWorkspaceList.tsx|arbitrary-bracket-geometry": 2,
