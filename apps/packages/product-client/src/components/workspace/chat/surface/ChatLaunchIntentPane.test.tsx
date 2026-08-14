@@ -26,7 +26,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  useChatLaunchIntentStore.setState({ activeIntent: null });
+  useChatLaunchIntentStore.setState({ intentsById: {}, intentOrder: [] });
 });
 
 describe("ChatLaunchIntentPane", () => {

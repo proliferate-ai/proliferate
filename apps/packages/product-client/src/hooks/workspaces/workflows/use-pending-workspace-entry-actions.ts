@@ -57,29 +57,64 @@ export function usePendingWorkspaceEntryActions() {
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
 
+  /**
+   * End one attempt: its registry entry and the launch intent that owns it.
+   *
+   * Dismissal and retry both need this. Retry needs it because the replacement
+   * mints a fresh attempt id, so without it the failed attempt keeps its
+   * sidebar row — with plural rows that row is a corpse nothing ever collects
+   * (PRO-230 review finding 2).
+   */
+  const endAttempt = useCallback((entry: PendingWorkspaceEntry) => {
+    clearPendingWorkspaceEntry(entry.attemptId);
+    const linkedIntent = launchIntentForAttempt(
+      useChatLaunchIntentStore.getState(),
+      entry.attemptId,
+    );
+    if (linkedIntent) {
+      useChatLaunchIntentStore.getState().clear(linkedIntent.id);
+    }
+  }, [clearPendingWorkspaceEntry]);
+
   const handleRetry = useCallback(async (entry: PendingWorkspaceEntry) => {
     switch (entry.request.kind) {
-      case "local":
-        await createLocalWorkspaceAndEnter(entry.request.sourceRoot);
+      // The three create retries start the replacement first and end the failed
+      // attempt second: every create registers its new pending entry in its
+      // synchronous prefix, so by the time the old row goes the new one is
+      // already there and the sidebar swaps rather than blinks.
+      case "local": {
+        const replacement = createLocalWorkspaceAndEnter(entry.request.sourceRoot);
+        endAttempt(entry);
+        await replacement;
         return;
-      case "worktree":
-        await createWorktreeAndEnter(resolvePendingWorktreeRetryInput(entry.request), {
-          latencyFlowId: startLatencyFlow({
-            flowKind: "worktree_enter",
-            source: "retry",
-            attemptId: entry.attemptId,
-            targetWorkspaceId: entry.workspaceId,
-          }),
-        });
+      }
+      case "worktree": {
+        const replacement = createWorktreeAndEnter(
+          resolvePendingWorktreeRetryInput(entry.request),
+          {
+            latencyFlowId: startLatencyFlow({
+              flowKind: "worktree_enter",
+              source: "retry",
+              attemptId: entry.attemptId,
+              targetWorkspaceId: entry.workspaceId,
+            }),
+          },
+        );
+        endAttempt(entry);
+        await replacement;
         return;
-      case "cloud":
-        await retryCloudWorkspaceAndEnter(entry.request.input);
+      }
+      case "cloud": {
+        const replacement = retryCloudWorkspaceAndEnter(entry.request.input);
+        endAttempt(entry);
+        await replacement;
         return;
+      }
       case "cowork":
         // Cowork retry isn't wired up yet — start a fresh thread from the
-        // cowork sidebar. Clearing the pending entry sends the user back.
+        // cowork sidebar. Ending the attempt sends the user back.
         showToast("Start a new cowork thread from the sidebar.", "info");
-        clearPendingWorkspaceEntry(entry.attemptId);
+        endAttempt(entry);
         return;
       case "select-existing":
         {
@@ -147,6 +182,7 @@ export function usePendingWorkspaceEntryActions() {
     clearPendingWorkspaceEntry,
     createLocalWorkspaceAndEnter,
     createWorktreeAndEnter,
+    endAttempt,
     materializePendingWorkspaceSessions,
     retryCloudWorkspaceAndEnter,
     selectWorkspace,
@@ -163,14 +199,7 @@ export function usePendingWorkspaceEntryActions() {
     // this is what ends the attempt. It ends exactly one attempt — the entry
     // and the launch intent that owns it — and leaves every other launch in
     // flight (PRO-230).
-    clearPendingWorkspaceEntry(entry.attemptId);
-    const linkedIntent = launchIntentForAttempt(
-      useChatLaunchIntentStore.getState(),
-      entry.attemptId,
-    );
-    if (linkedIntent) {
-      useChatLaunchIntentStore.getState().clear(linkedIntent.id);
-    }
+    endAttempt(entry);
     if (entry.originTarget.kind === "home") {
       const selectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
       if (selectedWorkspaceId) {
@@ -189,9 +218,9 @@ export function usePendingWorkspaceEntryActions() {
       showToast(message);
     }
   }, [
-    clearPendingWorkspaceEntry,
     clearWorkspaceRuntimeState,
     clearDeferredLaunchesForWorkspace,
+    endAttempt,
     navigate,
     selectWorkspace,
     showToast,

@@ -4,7 +4,11 @@ import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-crea
 import { useHomeNextLaunchPromptActions } from "#product/hooks/home/workflows/use-home-next-launch-prompt-actions";
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
-import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import type {
+  HomeLaunchTarget,
+  HomeNextLaunchOutcome,
+  HomeNextModelSelection,
+} from "#product/lib/domain/home/home-next-launch";
 import {
   createPendingWorkspaceAttemptId,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
@@ -17,6 +21,9 @@ import {
 import {
   pendingWorkspaceEntries,
 } from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import {
+  pendingWorkspaceFailureNoticeOwnsFailure,
+} from "#product/hooks/workspaces/workflows/pending-workspace-failure-notice";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
@@ -44,7 +51,10 @@ interface HomeNextLaunchInput {
 // Owns the Home Next submit action. Does not own read-only selection state or deferred launch replay.
 export function useHomeNextLaunch() {
   const navigate = useNavigate();
-  const [isLaunching, setIsLaunching] = useState(false);
+  // A count, not a flag: with several launches in flight the first one to
+  // settle used to clear the send spinner and re-enable Escape-to-clear while
+  // the others were still running (PRO-230 review nit).
+  const [launchingCount, setLaunchingCount] = useState(0);
   // Was an in-flight lock, which refused every second launch. Now it only
   // remembers the last submit, so the identical prompt sent twice in a
   // keystroke still collapses into one launch while two different prompts
@@ -78,21 +88,23 @@ export function useHomeNextLaunch() {
     modeId,
     launchControlValues,
     target,
-  }: HomeNextLaunchInput): Promise<boolean> => {
+  }: HomeNextLaunchInput): Promise<HomeNextLaunchOutcome> => {
     const prompt = text.trim();
     if (!prompt) {
-      return false;
+      return "refused";
     }
-    const submit = launchSubmitFingerprint(prompt, Date.now());
+    const submit = launchSubmitFingerprint(prompt, target, Date.now());
     if (isDuplicateLaunchSubmit(lastSubmitRef.current, submit)) {
-      return false;
+      // The launch this collapsed into is running, so the prompt must not come
+      // back to the composer as if nothing had happened.
+      return "duplicate";
     }
     if (!desktopTargetsAvailable && target.kind !== "cloud") {
       const message = target.kind === "cowork"
         ? "Cowork threads are available in the Desktop app."
         : "Local launch targets are available in the Desktop app.";
       showToast(message, "info");
-      return false;
+      return "refused";
     }
     // Prompting an existing workspace starts no workspace, so it takes no
     // launch slot and the cap does not apply to it.
@@ -104,11 +116,11 @@ export function useHomeNextLaunch() {
       )
     ) {
       showToast("Too many workspaces starting. Wait for one to finish.", "info");
-      return false;
+      return "refused";
     }
 
     lastSubmitRef.current = submit;
-    setIsLaunching(true);
+    setLaunchingCount((count) => count + 1);
     const launchIntentId = newHomeNextLaunchId();
     const promptId = newHomeNextLaunchId();
     const resolvedLaunchControlValues = buildResolvedHomeLaunchControlValues({
@@ -194,7 +206,7 @@ export function useHomeNextLaunch() {
           // launch stops quietly instead of raising a "not started" toast,
           // matching the local and worktree branches below.
           clearLaunchIntent(launchIntentId);
-          return false;
+          return "not-started";
         }
         if (!queuedProjectedSessionId) {
           navigate("/");
@@ -216,7 +228,7 @@ export function useHomeNextLaunch() {
           });
         }
         clearLaunchIntent(launchIntentId);
-        return true;
+        return "launched";
       }
 
       if (target.kind === "local") {
@@ -256,7 +268,7 @@ export function useHomeNextLaunch() {
           // The user dismissed the pending workspace. Nothing failed, so the
           // launch stops quietly instead of raising a "not started" toast.
           clearLaunchIntent(launchIntentId);
-          return false;
+          return "not-started";
         }
         const workspaceId = target.existingWorkspaceId ?? createdWorkspace?.workspaceId;
         if (!workspaceId) {
@@ -290,7 +302,7 @@ export function useHomeNextLaunch() {
           });
         }
         clearLaunchIntent(launchIntentId);
-        return true;
+        return "launched";
       }
 
       if (target.kind === "worktree") {
@@ -325,7 +337,7 @@ export function useHomeNextLaunch() {
           // The user dismissed the pending worktree. Nothing failed, so the
           // launch stops quietly instead of raising a "not started" toast.
           clearLaunchIntent(launchIntentId);
-          return false;
+          return "not-started";
         }
         const { workspaceId, projectedSessionId: createdProjectedSessionId } = createdWorkspace;
         if (!queuedProjectedSessionId) {
@@ -350,11 +362,19 @@ export function useHomeNextLaunch() {
           });
         }
         clearLaunchIntent(launchIntentId);
-        return true;
+        return "launched";
       }
 
+      // The cloud branch mints its attempt id here like the other three rather
+      // than letting the cloud flow mint its own: without it the catch below
+      // had no attempt to scope this launch's failure to, and fell back to
+      // whatever attempt the user happened to be attending — which under
+      // concurrency is another launch's (PRO-230 review finding 1).
+      const cloudAttemptId = createPendingWorkspaceAttemptId();
+      launchAttemptId = cloudAttemptId;
       return await launchHomeCloudTarget({
         target,
+        attemptId: cloudAttemptId,
         prompt,
         promptId,
         launchIntentId,
@@ -380,17 +400,24 @@ export function useHomeNextLaunch() {
         retryMode: homeLaunchFailureRetryMode(launchIntentId, launchAttemptId),
       });
       // No Retry here: the Home composer puts the prompt back in the editor
-      // when `launch` returns false, so the composer's own send button is the
-      // retry. A second entry point would leave a duplicate draft behind.
-      showErrorToast({
-        headline: "Work not started",
-        consequence:
-          `Nothing was started on ${describeHomeLaunchTarget(target)}. Your prompt is back in the composer.`,
-        cause: homeNextLaunchErrorMessage(error),
-      });
-      return false;
+      // when the launch does not start, so the composer's own send button is
+      // the retry. A second entry point would leave a duplicate draft behind.
+      //
+      // And no toast at all when the attempt's own failure notice already
+      // raised one: an unattended failure otherwise stacked two error toasts
+      // for one event, the second of which claims the prompt is back in a
+      // composer the user is not looking at (PRO-230 review finding 5).
+      if (!pendingWorkspaceFailureNoticeOwnsFailure(launchAttemptId)) {
+        showErrorToast({
+          headline: "Work not started",
+          consequence:
+            `Nothing was started on ${describeHomeLaunchTarget(target)}. Your prompt is back in the composer.`,
+          cause: homeNextLaunchErrorMessage(error),
+        });
+      }
+      return "not-started";
     } finally {
-      setIsLaunching(false);
+      setLaunchingCount((count) => count - 1);
     }
   }, [
     beginLaunchIntent,
@@ -412,5 +439,5 @@ export function useHomeNextLaunch() {
     showToast,
   ]);
 
-  return { isLaunching, launch };
+  return { isLaunching: launchingCount > 0, launch };
 }

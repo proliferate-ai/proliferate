@@ -761,8 +761,9 @@ Pending failures must preserve enough state to retry or exit cleanly:
   - the sidebar row carries the error indicator until the attempt is dismissed
   - one toast per attempt announces it, with a Show action that re-enters that
     attempt's pending shell
-  - an attended failure keeps the inline presentation only, so nothing is
-    announced twice
+  - an attended failure keeps the inline presentation only, and an unattended
+    one suppresses the launch-level "work not started" toast, so one failure is
+    announced once either way
 - queued session intents remain visible and owned by the projected session
 - setup/create errors render in the workspace status panel
 - retry uses the original deterministic request unless the user explicitly
@@ -772,8 +773,13 @@ Pending failures must preserve enough state to retry or exit cleanly:
   workspaces no longer ends an attempt. It clears exactly one attempt and the
   launch intent linked to it, and leaves the other attempts running: the
   full-registry reset belongs to app-level paths (sign-out) only
-- failed attempts are swept on app start once they are older than a day, so an
-  ignored failure does not accumulate a row forever
+- a retry of a failed create replaces the attempt: the replacement starts first,
+  then the failed entry and its launch intent are dropped, so the sidebar swaps
+  one row for another instead of keeping both
+- failed attempts are swept on an hourly interval, and on mount, once they are
+  older than a day, so an ignored failure does not accumulate a row for the rest
+  of the session. The registry is in-memory, so app start is never when a stale
+  row is found
 - an interrupted empty-session create remains resumable under its original
   client id and runtime UUID until the runtime acknowledges that create
 - a cloud attempt left at `awaiting-cloud-ready` while the user is looking

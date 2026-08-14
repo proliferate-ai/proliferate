@@ -84,14 +84,17 @@ export function useHomeNextComposerState({
     });
 
     try {
-      const succeeded = await launch({
+      const outcome = await launch({
         text: submittedDraft.value,
         modelSelection,
         modeId,
         launchControlValues,
         target: launchTarget,
       });
-      if (!succeeded) {
+      // A duplicate submit collapsed into a launch that is running, so the
+      // draft stays gone: putting it back would offer the user a re-send of a
+      // prompt already on its way (PRO-230 review finding 7).
+      if (outcome !== "launched" && outcome !== "duplicate") {
         restoreSubmittedDraft();
       }
     } catch {
