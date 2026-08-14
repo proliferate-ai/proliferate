@@ -52,7 +52,6 @@ import { buildShortcutRangeLabelById } from "#product/lib/domain/shortcuts/prese
 import { startMeasurementOperation } from "#product/lib/infra/measurement/measurement-port";
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
 import { useReleaseNotice } from "#product/hooks/updates/facade/use-release-notice";
-import { useRepositoryHeaderNewChat } from "#product/hooks/workspaces/ui/use-repository-header-new-chat";
 
 export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }: { showRightBorder?: boolean }) {
   useDebugRenderCount("workspace-sidebar");
@@ -231,7 +230,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
     setRepositoriesCollapsed(!repositoriesCollapsed);
   }, [repositoriesCollapsed, setRepositoriesCollapsed]);
   const filtersActive = !isDefaultSidebarWorkspaceTypes(workspaceTypes);
-  const handleStartRepositoryHeaderChat = useRepositoryHeaderNewChat(groups, actions);
   const sidebarShortcutLabelById = useMemo(
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
     [sidebarShortcutTargetIds],
@@ -301,7 +299,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
             workspaceTypes={workspaceTypes}
             onToggleRepositoriesCollapsed={handleToggleRepositoriesCollapsed}
             onToggleWorkspaceType={toggleSidebarWorkspaceType}
-            onNewChat={handleStartRepositoryHeaderChat}
             onAddRepo={actions.handleAddRepo}
           />
 

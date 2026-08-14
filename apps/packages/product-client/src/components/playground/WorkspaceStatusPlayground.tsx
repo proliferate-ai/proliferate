@@ -331,7 +331,6 @@ function FullSidebarPane() {
             workspaceTypes={["local", "worktree", "cloud", "ssh"]}
             onToggleRepositoriesCollapsed={() => setRepositoriesCollapsed((value) => !value)}
             onToggleWorkspaceType={() => {}}
-            onNewChat={() => {}}
             onAddRepo={() => {}}
           />
           {!repositoriesCollapsed && SIDEBAR_FIXTURE_GROUPS.map((group) => (

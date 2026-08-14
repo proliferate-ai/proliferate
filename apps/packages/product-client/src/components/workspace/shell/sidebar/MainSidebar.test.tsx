@@ -131,6 +131,13 @@ vi.mock("#product/primitives/patterns/AutoHideScrollArea", () => ({
   AutoHideScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
+// The PopoverButton mock below renders every popover body eagerly, so the
+// Repositories header's add-repository flow would mount its whole data layer
+// in a sidebar test.
+vi.mock("#product/components/workspace/repo-setup/AddRepositoryFlowPanel", () => ({
+  AddRepositoryFlowPanel: () => null,
+}));
+
 vi.mock("#product/primitives/PopoverButton", () => ({
   POPOVER_SURFACE_CLASS: "",
   PopoverButton: ({
@@ -343,18 +350,6 @@ function renderMainSidebar() {
   );
 }
 
-function getRepositoriesHeaderNewChatButton(): HTMLButtonElement {
-  const button = screen
-    .getAllByRole("button", { name: "New chat" })
-    .find((element): element is HTMLButtonElement => element.tagName === "BUTTON");
-
-  if (!button) {
-    throw new Error("Expected the repositories header New chat button");
-  }
-
-  return button;
-}
-
 describe("MainSidebar host capabilities", () => {
   it("omits Desktop-only Cowork threads on Web", () => {
     renderMainSidebar();
@@ -385,25 +380,18 @@ describe("MainSidebar support modal", () => {
 });
 
 describe("MainSidebar new chat entry points", () => {
-  it("starts the shared new-chat flow from the repositories header", () => {
+  it("no longer starts a new chat from the Repositories header", () => {
     renderMainSidebar();
 
-    fireEvent.click(getRepositoriesHeaderNewChatButton());
-    expect(sidebarActionMocks.handleGoHome).toHaveBeenCalledTimes(1);
-  });
-
-  it("carries the active repository into a header-started new chat", () => {
-    workspaceSidebarState.groups = [{
-      sourceRoot: "/repo-current",
-      items: [{ active: true }],
-    }];
-    renderMainSidebar();
-
-    fireEvent.click(getRepositoriesHeaderNewChatButton());
-
-    expect(sidebarActionMocks.handleGoHomeForRepository)
-      .toHaveBeenCalledWith("/repo-current");
-    expect(sidebarActionMocks.handleGoHome).not.toHaveBeenCalled();
+    // The header's "+" adds a repository now; the nav above owns New chat,
+    // and that nav row is the only "New chat" left (it is not a <button>).
+    expect(
+      screen
+        .getAllByRole("button", { name: "New chat" })
+        .filter((element) => element.tagName === "BUTTON"),
+    ).toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: "Add repository" }).length)
+      .toBeGreaterThan(0);
   });
 
   it("starts a repository-scoped new chat from a repo action", () => {

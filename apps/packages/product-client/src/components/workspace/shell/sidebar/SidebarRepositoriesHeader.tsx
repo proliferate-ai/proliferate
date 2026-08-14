@@ -8,6 +8,8 @@ import { PopoverButton } from "#product/primitives/PopoverButton";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
+import { AddRepositoryFlowPanel } from "#product/components/workspace/repo-setup/AddRepositoryFlowPanel";
+import { ADD_REPOSITORY_SURFACE_CLASS } from "#product/components/workspace/repo-setup/AddRepositoryPopover";
 import { ProductSidebarSectionHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
 import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 
@@ -27,7 +29,6 @@ interface SidebarRepositoriesHeaderProps {
   workspaceTypes: SidebarWorkspaceVariant[];
   onToggleRepositoriesCollapsed: () => void;
   onToggleWorkspaceType: (variant: SidebarWorkspaceVariant) => void;
-  onNewChat: () => void;
   onAddRepo: () => void;
 }
 
@@ -37,7 +38,6 @@ export function SidebarRepositoriesHeader({
   workspaceTypes,
   onToggleRepositoriesCollapsed,
   onToggleWorkspaceType,
-  onNewChat,
   onAddRepo,
 }: SidebarRepositoriesHeaderProps) {
   const header = (
@@ -69,14 +69,25 @@ export function SidebarRepositoriesHeader({
                 />
               )}
             </PopoverButton>
-            <SidebarActionButton
-              onClick={onNewChat}
-              title="New chat"
-              variant="section"
-              className="size-4.5 [&_svg]:icon-compact"
+            {/* The section's "+" adds a repository — the thing this section
+                is a list of. It used to start a new chat, which the nav above
+                already offers, so the Repositories header had no control for
+                its own subject at all. */}
+            <PopoverButton
+              align="end"
+              className={ADD_REPOSITORY_SURFACE_CLASS}
+              trigger={(
+                <SidebarActionButton
+                  title="Add repository"
+                  variant="section"
+                  className="size-4.5 [&_svg]:icon-compact"
+                >
+                  <Plus className="icon-compact" />
+                </SidebarActionButton>
+              )}
             >
-              <Plus className="icon-compact" />
-            </SidebarActionButton>
+              {(close) => <AddRepositoryFlowPanel onClose={close} />}
+            </PopoverButton>
           </div>
         )}
       />
