@@ -1,9 +1,11 @@
-import { showProductErrorToast } from "#product/components/feedback/product-toast";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
 import {
   enterPendingWorkspaceAttemptShell,
+  getPendingWorkspaceEntry,
   isAttemptAttended,
 } from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
  * Tell the user about a launch that failed while they were looking elsewhere.
@@ -23,7 +25,7 @@ export function notifyUnattendedPendingWorkspaceFailure(
   if (isAttemptAttended(entry.attemptId)) {
     return;
   }
-  showProductErrorToast({
+  useToastStore.getState().showError({
     // Keyed by attempt so a second failing launch raises its own toast rather
     // than replacing the first one's.
     id: `pending-workspace-failure:${entry.attemptId}`,
@@ -34,8 +36,34 @@ export function notifyUnattendedPendingWorkspaceFailure(
       kind: "navigate",
       label: "Show",
       onNavigate: () => {
+        // Selection alone is invisible from /workflows, /workspaces or
+        // /settings, where the workspace host is hidden or inert. Every other
+        // way into a shell routes first (selectWorkspaceFromSurface calls
+        // navigateToWorkspaceShell), so this one does too (PRO-230 review
+        // finding 6).
+        navigateApp("/");
         enterPendingWorkspaceAttemptShell(entry.attemptId);
       },
     },
   });
+}
+
+/**
+ * Whether the per-attempt notice above is the announcement of this failure.
+ *
+ * The launch-level "Work not started" toast and this notice describe the same
+ * event, so exactly one of them may speak: the notice when the user is looking
+ * elsewhere, the shell's own inline receipt (and the launch toast beside it)
+ * when they are watching (PRO-230 review finding 5).
+ */
+export function pendingWorkspaceFailureNoticeOwnsFailure(
+  attemptId: string | null | undefined,
+): boolean {
+  if (!attemptId) {
+    return false;
+  }
+  const entry = getPendingWorkspaceEntry(attemptId);
+  return entry !== null
+    && entry.stage === "failed"
+    && !isAttemptAttended(attemptId);
 }

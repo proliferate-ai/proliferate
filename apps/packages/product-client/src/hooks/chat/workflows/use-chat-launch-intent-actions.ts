@@ -28,8 +28,21 @@ export function useChatLaunchIntentActions() {
       return;
     }
 
-    void launch(activeIntent.retryInput);
-  }, [activeIntent, launch]);
+    const retried = activeIntent;
+    // The replacement launch owns this shell from the moment it begins (it is
+    // the newer intent), so the failed one is cleared once the replacement has
+    // settled rather than before it exists — otherwise the pane blinks empty on
+    // the way out, and left alone the stale intent re-mounts "Couldn't start
+    // work" over Home after the replacement succeeds (PRO-230 review finding
+    // 4). A launch that never started (cap, unavailable target) minted no
+    // replacement, so the failed intent stays: it is still the only place the
+    // user's prompt lives.
+    void launch(retried.retryInput).then((outcome) => {
+      if (outcome === "launched" || outcome === "not-started") {
+        clearLaunchIntent(retried.id);
+      }
+    });
+  }, [activeIntent, clearLaunchIntent, launch]);
 
   const returnHome = useCallback(() => {
     if (!activeIntent) {

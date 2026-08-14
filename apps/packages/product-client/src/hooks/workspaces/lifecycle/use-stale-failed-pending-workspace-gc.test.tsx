@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildSubmittingPendingWorkspaceEntry,
   type PendingWorkspaceEntry,
@@ -57,5 +57,33 @@ describe("useStaleFailedPendingWorkspaceGc", () => {
 
     expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
       .toEqual(["recent-failure", "old-launch"]);
+  });
+
+  // PR #1870 review finding 3: the registry is in-memory and the host that
+  // mounts this hook lives for the whole authenticated session, so a sweep that
+  // only ran at mount would only ever see an empty registry. The failure has to
+  // become collectable while the app is already running.
+  it("collects a failure that goes stale during the session", () => {
+    vi.useFakeTimers();
+    try {
+      renderHook(() => useStaleFailedPendingWorkspaceGc());
+
+      // Registered after mount, exactly as a launch that fails mid-session is.
+      useSessionSelectionStore.setState({
+        pendingWorkspaces: upsertPendingWorkspaceEntry(
+          EMPTY_PENDING_WORKSPACE_REGISTRY,
+          entry({ attemptId: "mid-session-failure", stage: "failed", ageMs: 0 }),
+        ),
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(DAY_MS + 60 * 60 * 1000);
+      });
+
+      expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
+        .toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

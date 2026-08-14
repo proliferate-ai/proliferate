@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   selectWorkspace: vi.fn(),
   clearWorkspaceRuntimeState: vi.fn(),
   showToast: vi.fn(),
+  createLocalWorkspaceAndEnter: vi.fn(),
+  createWorktreeAndEnter: vi.fn(),
+  retryCloudWorkspaceAndEnter: vi.fn(),
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -34,13 +37,15 @@ vi.mock("#product/stores/editor/workspace-editor-state", () => ({
 }));
 
 vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
-  useCreateCloudWorkspace: () => ({ retryCloudWorkspaceAndEnter: vi.fn() }),
+  useCreateCloudWorkspace: () => ({
+    retryCloudWorkspaceAndEnter: mocks.retryCloudWorkspaceAndEnter,
+  }),
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
   useWorkspaceEntryActions: () => ({
-    createLocalWorkspaceAndEnter: vi.fn(),
-    createWorktreeAndEnter: vi.fn(),
+    createLocalWorkspaceAndEnter: mocks.createLocalWorkspaceAndEnter,
+    createWorktreeAndEnter: mocks.createWorktreeAndEnter,
   }),
 }));
 
@@ -123,6 +128,65 @@ describe("usePendingWorkspaceEntryActions", () => {
       await result.current.handleBack(dismissed);
     });
 
+    expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
+      .toEqual([other.attemptId]);
+    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual(["launch-other"]);
+  });
+
+  // PR #1870 review finding 2: retry mints a fresh attempt, so leaving the
+  // failed one behind left a permanent "Couldn't create workspace" row beside
+  // the retry that succeeded — with plural rows, nothing ever collected it.
+  it("replaces the retried attempt instead of leaving it in the sidebar", async () => {
+    const failed = { ...dismissed, stage: "failed" as const, errorMessage: "boom" };
+    // The real create registers its replacement entry synchronously, before the
+    // first await — which is what makes ending the failed attempt afterwards a
+    // swap rather than an empty sidebar.
+    const replacement = entry("attempt-replacement");
+    mocks.createLocalWorkspaceAndEnter.mockImplementation(async () => {
+      useSessionSelectionStore.setState((state) => ({
+        pendingWorkspaces: upsertPendingWorkspaceEntry(state.pendingWorkspaces, replacement),
+      }));
+    });
+
+    const { result } = renderHook(() => usePendingWorkspaceEntryActions());
+
+    await act(async () => {
+      await result.current.handleRetry(failed);
+    });
+
+    expect(mocks.createLocalWorkspaceAndEnter).toHaveBeenCalledWith("/tmp/landing");
+    expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
+      .toEqual([other.attemptId, replacement.attemptId]);
+    // The intent that owned the retried attempt goes with it, so no stale
+    // "Couldn't start work" pane outlives the replacement.
+    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual(["launch-other"]);
+  });
+
+  it("replaces the retried attempt for cloud retries too", async () => {
+    const cloudEntry: PendingWorkspaceEntry = {
+      ...dismissed,
+      stage: "failed",
+      errorMessage: "boom",
+      request: {
+        kind: "cloud",
+        input: {
+          gitOwner: "proliferate-ai",
+          gitRepoName: "proliferate",
+          baseBranch: "main",
+          branchName: "pablo/retry",
+          generatedName: false,
+        },
+      },
+    };
+    mocks.retryCloudWorkspaceAndEnter.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => usePendingWorkspaceEntryActions());
+
+    await act(async () => {
+      await result.current.handleRetry(cloudEntry);
+    });
+
+    expect(mocks.retryCloudWorkspaceAndEnter).toHaveBeenCalledTimes(1);
     expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
       .toEqual([other.attemptId]);
     expect(useChatLaunchIntentStore.getState().intentOrder).toEqual(["launch-other"]);

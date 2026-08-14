@@ -1,3 +1,4 @@
+import type { HomeLaunchTarget } from "#product/lib/domain/home/home-next-launch";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 /**
@@ -48,13 +49,24 @@ export const DUPLICATE_LAUNCH_SUBMIT_WINDOW_MS = 1000;
 
 export interface LaunchSubmitFingerprint {
   prompt: string;
+  target: string;
   at: number;
 }
 
-/** Whitespace and case are not what makes two submits different. */
-export function launchSubmitFingerprint(text: string, at: number): LaunchSubmitFingerprint {
+/**
+ * Whitespace and case are not what makes two submits different — where the
+ * prompt was sent is. "Run the tests" aimed at one repository and then at
+ * another is two launches however fast the second one follows, so the target's
+ * identity is part of the fingerprint rather than the prompt alone.
+ */
+export function launchSubmitFingerprint(
+  text: string,
+  target: HomeLaunchTarget,
+  at: number,
+): LaunchSubmitFingerprint {
   return {
     prompt: text.trim().replace(/\s+/g, " ").toLowerCase(),
+    target: launchTargetIdentity(target),
     at,
   };
 }
@@ -65,5 +77,25 @@ export function isDuplicateLaunchSubmit(
 ): boolean {
   return previous !== null
     && previous.prompt === next.prompt
+    && previous.target === next.target
     && next.at - previous.at < DUPLICATE_LAUNCH_SUBMIT_WINDOW_MS;
+}
+
+/** Everything about a target that decides it is a different place to run work. */
+function launchTargetIdentity(target: HomeLaunchTarget): string {
+  switch (target.kind) {
+    case "cowork":
+      return "cowork";
+    case "local":
+      return `local:${target.sourceRoot}:${target.existingWorkspaceId ?? ""}`;
+    case "worktree":
+      return [
+        "worktree",
+        target.repoRootId,
+        target.sourceWorkspaceId ?? "",
+        target.baseBranch,
+      ].join(":");
+    case "cloud":
+      return `cloud:${target.gitOwner}/${target.gitRepoName}:${target.baseBranch}`;
+  }
 }
