@@ -80,6 +80,7 @@ export function FullTranscriptRowList({
     notifyUserScrollIntent,
     scrollToBottom,
     handleScrollToBottomClick,
+    pinToBottom,
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
@@ -219,6 +220,20 @@ export function FullTranscriptRowList({
       window.cancelAnimationFrame(frame);
     };
   }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
+
+  // Submitting a prompt is an explicit return-to-bottom intent. Re-pin on the
+  // optimistic prompt's arrival — before the pinned snap effect below reads
+  // the pin — so a pin silently lost during typing cannot leave the sent
+  // bubble clipped behind the dock. Only the null -> non-null transition
+  // qualifies; the prompt materializing (clearing the text) must not re-pin.
+  const previousPendingPromptTextRef = useRef(pendingPromptText);
+  useLayoutEffect(() => {
+    const hadPendingPrompt = previousPendingPromptTextRef.current != null;
+    previousPendingPromptTextRef.current = pendingPromptText;
+    if (!hadPendingPrompt && pendingPromptText != null) {
+      pinToBottom();
+    }
+  }, [pendingPromptText, pinToBottom]);
 
   useLayoutEffect(() => {
     if (!pinnedRef.current) {

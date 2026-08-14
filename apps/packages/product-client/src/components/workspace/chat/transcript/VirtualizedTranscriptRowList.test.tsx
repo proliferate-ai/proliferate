@@ -169,6 +169,31 @@ describe("VirtualizedTranscriptRowList", () => {
     expect(button?.getAttribute("aria-hidden")).toBe("false");
   });
 
+  it("re-pins to the bottom on prompt submit even if the pin was already lost", () => {
+    const props = makeProps();
+    const { container, rerender } = render(<VirtualizedTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    const button = container.querySelector('[aria-label="Scroll to bottom"]');
+    Object.defineProperty(viewport, "scrollHeight", { value: 2000, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+    // Short of the reachable bottom (2000 - 300 = 1700) so the re-pin below
+    // has an actual scrollTop write to assert on, not a same-position no-op.
+    viewport.scrollTop = 1_400;
+
+    act(() => {
+      fireEvent.wheel(viewport, { deltaY: -80 });
+    });
+    expect(button?.getAttribute("aria-hidden")).toBe("false");
+
+    // pendingPromptText's null -> non-null transition is an explicit
+    // return-to-bottom intent; it must re-pin even though the user scrolled
+    // away and the pin was never re-earned.
+    rerender(<VirtualizedTranscriptRowList {...props} pendingPromptText="hello" />);
+
+    expect(viewport.scrollTop).toBe(2000);
+    expect(button?.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("adds an overlay spacer without changing the current scroll position", () => {
     const props = makeProps();
     const { container, rerender } = render(

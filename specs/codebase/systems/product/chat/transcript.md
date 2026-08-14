@@ -502,6 +502,13 @@ re-show while pinned, a short pre-paint rAF "glue" loop holds the viewport at th
 true bottom until row measurement settles, collapsing the resume backlog into one
 jump instead of a visible crawl.
 
+Submitting a prompt is an explicit return-to-bottom intent. The optimistic
+prompt's arrival (`pendingPromptText` transitioning null -> non-null) re-pins
+through the engine's `pinToBottom` — even when the pin was silently lost
+earlier — then snaps and runs the same glue loop so the composer collapse and
+new-row measurement settle land as one silent jump. Materialization clearing
+the pending text must not re-pin, and a queued send produces no transition.
+
 When the transcript is shorter than the viewport, both row-list paths
 top-align the conversation (no `mt-auto` bottom anchor): a fresh conversation
 reads from the top, and unused viewport height sits below it,
@@ -530,7 +537,11 @@ if another card stacks, only its newly added height remains manual-only. If a
 consumed overlay shrinks or disappears, the browser's upward clamp to the new
 hard bottom is layout movement, not user intent, and must preserve the pinned
 state. Composer-surface height remains structural and continues to re-stick
-promptly when the input itself grows.
+promptly when the input itself grows. A dock shrink (clearing the draft at
+submit) flushes its inset re-measure synchronously inside the ResizeObserver
+callback — still pre-paint — instead of deferring a frame, so the collapse
+frame never paints against the stale taller inset and then drops the whole
+transcript a notch; growth keeps the rAF-coalesced next-frame path.
 
 A send intent with `placement: "queue"` is represented by the composer's
 outbound queue and must not also produce a transcript row. A queued send that

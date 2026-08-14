@@ -121,6 +121,25 @@ describe("FullTranscriptRowList", () => {
     expect(viewport.scrollTop).toBe(600);
   });
 
+  it("re-pins to the bottom on prompt submit even if the pin was already lost", () => {
+    const props = makeProps(vi.fn(), 50);
+    const { container, rerender } = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    const button = container.querySelector('[aria-label="Scroll to bottom"]');
+    Object.defineProperty(viewport, "scrollHeight", { value: 1_000, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 0, configurable: true });
+    fireEvent.scroll(viewport, { target: { scrollTop: 400 } });
+    expect(button?.getAttribute("aria-hidden")).toBe("false");
+
+    // pendingPromptText's null -> non-null transition is an explicit
+    // return-to-bottom intent; it must re-pin even though the user scrolled
+    // away and the pin was never re-earned.
+    rerender(<FullTranscriptRowList {...props} pendingPromptText="hello" />);
+
+    expect(viewport.scrollTop).toBe(1_000);
+    expect(button?.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("adds manual scroll range for composer cards without moving the transcript", () => {
     const notifyResize = stubCapturingResizeObserver();
     const props = makeProps(vi.fn(), 50);

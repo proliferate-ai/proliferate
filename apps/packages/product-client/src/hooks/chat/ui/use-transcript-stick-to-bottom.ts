@@ -43,6 +43,8 @@ export interface TranscriptStickToBottom {
   scrollToBottom: () => void;
   /** Snap + re-pin, for the scroll-to-bottom button. */
   handleScrollToBottomClick: () => void;
+  /** Snap + re-pin + glue for an explicit prompt submit (send = return-to-bottom intent). */
+  pinToBottom: () => void;
   /** Wrap ANY external scrollTop/scrollToOffset write so its scroll event is excluded from pin/direction. */
   notifyProgrammaticScroll: (write: () => void) => void;
   /** Force the pin state (history prepend / anchor restore intentionally unpin to hold the user's position). */
@@ -282,6 +284,18 @@ export function useTranscriptStickToBottom({
     glueFrameRef.current = requestAnimationFrame(tick);
   }, [scrollRef, scrollToBottom]);
 
+  // A prompt submit is an explicit return-to-bottom intent: re-pin even when
+  // the pin was silently lost earlier (so the sent bubble can never render
+  // clipped behind the dock), and glue across the composer-collapse /
+  // row-measurement settle so the multi-frame geometry change lands as one
+  // silent jump, exactly like session re-entry.
+  const pinToBottom = useCallback(() => {
+    consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
+    setPinned(true);
+    scrollToBottom();
+    startGlueLoop();
+  }, [scrollToBottom, setPinned, startGlueLoop]);
+
   // Session re-entry: snap instantly, then glue for a few frames so the
   // measurement backlog of freshly mounted rows (virtualizer estimates
   // correcting to real heights) lands as one silent jump instead of a visible
@@ -344,6 +358,7 @@ export function useTranscriptStickToBottom({
     notifyUserScrollIntent,
     scrollToBottom,
     handleScrollToBottomClick,
+    pinToBottom,
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   computeChatDockLowerBackdropTopPx,
   computeChatStableBottomInsetPx,
@@ -8,6 +9,7 @@ import {
 
 export function useChatDockInset() {
   const dockRef = useRef<HTMLDivElement>(null);
+  const lastMeasuredDockHeightRef = useRef(0);
   const [metrics, setMetrics] = useState({
     composerSurfaceHeightPx: 0,
     composerSurfaceOffsetTopPx: 0,
@@ -37,6 +39,7 @@ export function useChatDockInset() {
         composerFooterHeightPx: footerRect ? Math.max(0, Math.ceil(footerRect.height)) : 0,
         dockHeightPx: Math.max(0, Math.ceil(dockRect.height)),
       };
+      lastMeasuredDockHeightRef.current = nextMetrics.dockHeightPx;
       setMetrics((current) =>
         current.composerSurfaceHeightPx === nextMetrics.composerSurfaceHeightPx
         && current.composerSurfaceOffsetTopPx === nextMetrics.composerSurfaceOffsetTopPx
@@ -67,6 +70,25 @@ export function useChatDockInset() {
     };
 
     const observer = new ResizeObserver(() => {
+      // A dock shrink is the submit-collapse path: clearing the draft drops
+      // the dock's height in the same frame the optimistic prompt row mounts.
+      // The rAF-deferred measure would let that frame paint against the stale
+      // (taller) inset, then drop the whole transcript a notch when the
+      // correction lands. ResizeObserver fires after layout and before paint,
+      // so flushing the measure synchronously commits the corrected inset —
+      // and the pinned snap that depends on it — before the collapse frame
+      // paints. Growth keeps the rAF coalescing path: next-frame is prompt
+      // enough for typing, and a sync flush per keystroke would tax input
+      // latency.
+      const dockHeightPx = Math.ceil(dock.getBoundingClientRect().height);
+      if (dockHeightPx < lastMeasuredDockHeightRef.current) {
+        if (frameId !== null) {
+          window.cancelAnimationFrame(frameId);
+          frameId = null;
+        }
+        flushSync(measure);
+        return;
+      }
       scheduleMeasure();
     });
 
