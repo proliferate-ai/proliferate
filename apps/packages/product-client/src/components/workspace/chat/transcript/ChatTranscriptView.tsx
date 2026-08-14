@@ -112,7 +112,10 @@ export function ChatTranscriptView({
           onDone={() => setPendingAnnotation(null)}
         />
       ) : null}
-      <ConnectedSelectedResponseAnnotationMarkers rootRef={selectionRootRef} />
+      <ConnectedSelectedResponseAnnotationMarkers
+        rootRef={selectionRootRef}
+        suppressedAnnotationId={pendingAnnotation?.id ?? null}
+      />
     </ChatContentSearchQueryContext.Provider>
   );
 }

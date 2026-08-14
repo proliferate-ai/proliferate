@@ -130,6 +130,14 @@ body {
   color: inherit;
 }
 
+/* SelectedResponseAnnotationMarkers.tsx paints each annotated excerpt through
+   the custom-highlight registry for as long as its annotation stays attached
+   to the composer. One-off color-mix per the PRO-243 review: promote to a
+   token only if a second translucent --color-special use appears. */
+::highlight(annotation-highlight) {
+  background-color: color-mix(in oklab, var(--color-special) 30%, transparent);
+}
+
 /* Spinner.tsx keeps the wrapper box stationary while the shared theme rotates
    only its centered SVG. Neutralize legacy wrapper animation classes so
    transforms never compound. The square box is the second half of "rotates in
