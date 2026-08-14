@@ -49,8 +49,10 @@ vi.mock("#product/hooks/support/workflows/use-crash-recovery-support-action", ()
 }));
 vi.mock("#product/hooks/sessions/lifecycle/use-turn-end-sound", () => ({ useTurnEndSound: vi.fn() }));
 vi.mock("#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence", () => ({ useWorkspaceGitStatusPersistence: vi.fn() }));
-// Mutable so one test can drive the authenticated-only lazy mounts; every other
-// test keeps the pre-session status the login shell renders under.
+// Mutable so tests can drive the authenticated-only lazy mounts (the support
+// report queue, the launch lifecycles) by moving the shell between the
+// signed-out and signed-in states; every other test keeps the pre-session
+// status the login shell renders under.
 const authStatus = vi.hoisted(() => ({
   value: "loading" as "loading" | "anonymous" | "authenticated",
 }));
@@ -95,6 +97,7 @@ vi.mock("#product/providers/DesktopProductLifecycleRoot", () => ({
 
 import { ProductLifecycleRoot } from "#product/providers/ProductLifecycleRoot";
 import { useAppCommandActionsContext } from "#product/providers/AppCommandActionsProvider";
+import { useHomeDeferredLaunchRunner } from "#product/hooks/home/lifecycle/use-home-deferred-launch-runner";
 
 function CommandContextProbe() {
   const actions = useAppCommandActionsContext();
@@ -249,6 +252,35 @@ describe("ProductLifecycleRoot", () => {
       expect(retentionSweepCount.value).toBeGreaterThan(0);
       cleanup();
     }
+  });
+
+  it("keeps the launch lifecycles off the signed-out shell and mounts them once authenticated", async () => {
+    // Residency AND reachability. The launch registry only exists for a
+    // signed-in viewer, so the runner is mounted behind the authenticated gate
+    // as a lazy chunk — the login first-load graph never pulls the launch /
+    // session-creation modules it depends on (PRO-230, login JS budget). It
+    // still lives above the route tree, so a launch survives navigating away.
+    authStatus.value = "anonymous";
+    const host = makeTestProductHost({
+      auth: { restoreSession: vi.fn().mockResolvedValue(undefined) },
+    });
+    const tree = () => (
+      <ProductHostProvider host={host}>
+        <ProductLifecycleRoot>
+          <div data-testid="app-tree">app</div>
+        </ProductLifecycleRoot>
+      </ProductHostProvider>
+    );
+
+    const { rerender } = render(tree());
+
+    expect(screen.getByTestId("app-tree")).toBeTruthy();
+    expect(useHomeDeferredLaunchRunner).not.toHaveBeenCalled();
+
+    authStatus.value = "authenticated";
+    rerender(tree());
+
+    await waitFor(() => expect(useHomeDeferredLaunchRunner).toHaveBeenCalled());
   });
 
   it("keeps a single Desktop lifecycle mount under StrictMode", () => {
