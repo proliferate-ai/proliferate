@@ -5,7 +5,6 @@ describe("deriveDelegatedWorkSummary", () => {
   it("uses the highest-priority mixed delegated-work state", () => {
     expect(deriveDelegatedWorkSummary([
       { priority: "running", label: "running", count: 3 },
-      { priority: "wake_scheduled", label: "wake scheduled", count: 1 },
       { priority: "needs_action", label: "needs action", count: 2 },
     ])).toEqual({ label: "2 needs action", active: true });
   });

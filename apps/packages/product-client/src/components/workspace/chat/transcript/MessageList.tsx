@@ -90,6 +90,13 @@ interface MessageListProps {
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   onOpenSession?: TranscriptOpenSessionHandler;
   canOpenSession?: (sessionId: string, role?: TranscriptOpenSessionRole) => boolean;
+  /**
+   * Default-on global content-search (Cmd+F) participation. Embedded
+   * transcripts (Agents-pane detail) pass false: they must not register
+   * index units, paint match highlights, or steal jump-to-match scrolls
+   * from the main chat surface.
+   */
+  contentSearchEnabled?: boolean;
 }
 
 export function MessageList({
@@ -110,6 +117,7 @@ export function MessageList({
   onHandOffPlanToNewSession,
   onOpenSession,
   canOpenSession,
+  contentSearchEnabled = true,
 }: MessageListProps) {
   useDebugRenderCount("transcript-list");
   const {
@@ -179,7 +187,8 @@ export function MessageList({
   const contentSearchSurface = useContentSearchStore((state) => state.surface);
   const contentSearchQuery = useContentSearchStore((state) => state.query);
   const contentSearchActiveMatchId = useContentSearchStore((state) => state.activeMatchId);
-  const chatSearchActive = contentSearchOpen && contentSearchSurface === "chat";
+  const chatSearchActive =
+    contentSearchEnabled && contentSearchOpen && contentSearchSurface === "chat";
   const deferredContentSearchQuery = useDeferredValue(contentSearchQuery);
   const transcriptScrollHandleRef = useRef<ChatTranscriptScrollHandle | null>(null);
 
@@ -189,6 +198,7 @@ export function MessageList({
     optimisticPrompt,
     outboxEntries,
     goalEvents,
+    enabled: contentSearchEnabled,
   });
 
   const contentSearchPaint = useMemo(
@@ -257,6 +267,8 @@ export function MessageList({
   const renderPendingPromptRow = useCallback((input: ChatTranscriptPendingPromptRenderInput) => (
     <TranscriptPendingPromptRow
       activeSessionId={input.activeSessionId}
+      transcript={input.transcript}
+      workspaceId={input.selectedWorkspaceId}
       rowIndex={input.rowIndex}
       prompt={input.prompt}
       outboxEntry={input.outboxEntry}

@@ -105,6 +105,14 @@ const COLOR_IDENTITIES = [
   },
 ] as const;
 
+const PROVISIONAL_COLOR_IDENTITY = {
+  token: "neutral",
+  colorClassName: "bg-muted",
+  textColorClassName: "text-muted-foreground",
+  borderColorClassName: "border-border",
+  colorVar: "var(--color-muted-foreground)",
+} as const;
+
 export interface DelegatedWorkVisualIdentity {
   generatedName: string;
   initial: string;
@@ -113,7 +121,7 @@ export interface DelegatedWorkVisualIdentity {
   borderColorClassName: string;
   colorToken: string;
   colorVar: string;
-  iconSeedHash: number;
+  glyphSeedHash: number;
 }
 
 export function delegatedWorkVisualIdentity(id: string): DelegatedWorkVisualIdentity {
@@ -132,7 +140,7 @@ export function delegatedWorkVisualIdentity(id: string): DelegatedWorkVisualIden
     borderColorClassName: color.borderColorClassName,
     colorToken: color.token,
     colorVar: color.colorVar,
-    iconSeedHash: seedHash,
+    glyphSeedHash: seedHash,
   };
 }
 
@@ -149,12 +157,38 @@ export function buildDelegatedAgentIdentity({
   sessionId?: string | null;
   sessionLinkId?: string | null;
 }): DelegatedAgentIdentity {
-  const seed = sessionLinkId?.trim() || sessionId?.trim() || id;
-  const visual = delegatedWorkVisualIdentity(seed);
+  // A relationship row is mutable metadata around a session, not the agent's
+  // identity. Durable sessions therefore keep one name, color, and glyph when
+  // a link is recreated, closed, or removed.
+  const durableSessionId = sessionId?.trim() || null;
   const resolvedTitle = normalizeTitle(title);
-  const shortId = shortDelegatedWorkId(seed);
+  if (!durableSessionId) {
+    // Before the runtime returns its durable identity, show only the real task
+    // title with one invariant neutral treatment. Tool-call, link, and client
+    // IDs are routing handles and may never mint a visible agent identity.
+    return {
+      id,
+      sessionId: null,
+      generatedName: resolvedTitle,
+      initial: resolvedTitle.slice(0, 1).toUpperCase(),
+      title: resolvedTitle,
+      shortId: "",
+      displayName: resolvedTitle,
+      colorToken: PROVISIONAL_COLOR_IDENTITY.token,
+      colorClassName: PROVISIONAL_COLOR_IDENTITY.colorClassName,
+      textColorClassName: PROVISIONAL_COLOR_IDENTITY.textColorClassName,
+      borderColorClassName: PROVISIONAL_COLOR_IDENTITY.borderColorClassName,
+      colorVar: PROVISIONAL_COLOR_IDENTITY.colorVar,
+      glyphSeedHash: 0,
+      openTarget: null,
+    };
+  }
+
+  const visual = delegatedWorkVisualIdentity(durableSessionId);
+  const shortId = shortDelegatedWorkId(durableSessionId);
   return {
     id,
+    sessionId: durableSessionId,
     generatedName: visual.generatedName,
     initial: visual.initial,
     title: resolvedTitle,
@@ -165,11 +199,11 @@ export function buildDelegatedAgentIdentity({
     textColorClassName: visual.textColorClassName,
     borderColorClassName: visual.borderColorClassName,
     colorVar: visual.colorVar,
-    iconSeedHash: visual.iconSeedHash,
-    openTarget: sessionId
+    glyphSeedHash: visual.glyphSeedHash,
+    openTarget: durableSessionId
       ? {
         workspaceId: workspaceId ?? null,
-        sessionId,
+        sessionId: durableSessionId,
         sessionLinkId: sessionLinkId ?? null,
       } satisfies DelegatedAgentOpenTarget
       : null,

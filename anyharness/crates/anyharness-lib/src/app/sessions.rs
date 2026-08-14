@@ -19,8 +19,14 @@ use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::session_observer::ReviewSessionObserver;
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::live_ports::SessionAttachmentSource;
+use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::subagents::delivery::{
+    CompletionDeliveryStore, CompletionDeliveryWorker,
+};
+use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::live::sessions::model::{ActorCapabilities, PermissionAdvisor, SessionEventObserver};
+use crate::live::sessions::product_context::AgentProductContextResolver;
 use crate::live::sessions::LiveSessionManager;
 use crate::persistence::Db;
 
@@ -32,6 +38,7 @@ pub(super) struct LiveSessionsWiringDeps {
     pub goal_service: Arc<GoalService>,
     pub loop_service: Arc<LoopService>,
     pub activity_service: Arc<ActivityService>,
+    pub product_context: Arc<dyn AgentProductContextResolver>,
 }
 
 /// Registration order is the observer dispatch order: plans must run before
@@ -64,8 +71,31 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
         background: Arc::new(store.clone()),
         state: Arc::new(store.clone()),
         attachments: Arc::new(SessionAttachmentSource::new(store, attachment_storage)),
+        product_context: deps.product_context.clone(),
         observers,
         permission_advisor,
     };
     LiveSessionManager::new(caps)
+}
+
+pub(super) struct CompletionDeliveryWiring {
+    pub session_hooks: Arc<SubagentSessionHooks>,
+    store: CompletionDeliveryStore,
+    nudge_rx: tokio::sync::mpsc::UnboundedReceiver<()>,
+}
+
+impl CompletionDeliveryWiring {
+    pub fn spawn(self, session_runtime: &Arc<SessionRuntime>) {
+        CompletionDeliveryWorker::spawn(self.store, Arc::downgrade(session_runtime), self.nudge_rx);
+    }
+}
+
+pub(super) fn wire_completion_delivery_before_sessions(db: &Db) -> CompletionDeliveryWiring {
+    let (nudge_tx, nudge_rx) = tokio::sync::mpsc::unbounded_channel();
+    let store = CompletionDeliveryStore::new(db.clone());
+    CompletionDeliveryWiring {
+        session_hooks: Arc::new(SubagentSessionHooks::new(nudge_tx)),
+        store,
+        nudge_rx,
+    }
 }

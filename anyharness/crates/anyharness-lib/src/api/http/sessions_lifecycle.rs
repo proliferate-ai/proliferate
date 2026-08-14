@@ -110,11 +110,6 @@ pub async fn dismiss_session(
     ),
     tag = "sessions"
 )]
-// Spec 2b classification (admission:derived-safe): restore targets the
-// workspace's latest DISMISSED session. A workflow-controlled session cannot
-// be dismissed (dismissal is fenced 409 while controlled, and control binds
-// at creation by the executor), so restore can never target a controlled
-// session; no admission permit is required here.
 pub async fn restore_dismissed_session(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthContext>,
@@ -129,15 +124,31 @@ pub async fn restore_dismissed_session(
             workspace_id = %workspace_id,
             "[workspace-latency] session.http.restore.request_received"
         );
-        let _lease = state
-            .workspace_operation_gate
-            .acquire_shared(&workspace_id, WorkspaceOperationKind::SessionResume)
-            .await;
-        let restored = state
-            .session_runtime
-            .restore_dismissed_session(&workspace_id)
-            .await
-            .map_err(map_session_lifecycle_error)?;
+        let restored = loop {
+            let Some(candidate) = state
+                .session_service
+                .find_last_dismissed_in_workspace(&workspace_id)
+                .map_err(|error| ApiError::internal(error.to_string()))?
+            else {
+                break None;
+            };
+            let _permit =
+                admit_session_mutation(&state, &candidate.id, SessionMutationKind::Restore).await?;
+            let _lease = state
+                .workspace_operation_gate
+                .acquire_shared(&workspace_id, WorkspaceOperationKind::SessionResume)
+                .await;
+            if let Some(restored) = state
+                .session_runtime
+                .restore_dismissed_session(&workspace_id, &candidate.id)
+                .await
+                .map_err(map_session_lifecycle_error)?
+            {
+                break Some(restored);
+            }
+            // The dismissed stack changed while this request waited for the
+            // candidate's permit. Drop both guards and retry the new head.
+        };
         tracing::info!(
             workspace_id = %workspace_id,
             restored = restored.is_some(),

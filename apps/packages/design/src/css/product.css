@@ -307,13 +307,14 @@ body {
   box-shadow: var(--shadow-user-message);
 }
 
-/* Composer chrome: no border — a 0.5px stroke painted in
-   the shadow stack plus the elevation shadow. */
+/* Composer chrome: fill only. No stroke and no elevation — the composer is
+   read by its own fill against the pane and by its 28px radius, so the 0.5px
+   shadow-stroke and the elevation stack that used to sit here are both gone.
+   This is a replacement of the chrome, not a variant: every
+   .chat-composer-surface instance is borderless and shadowless, so the
+   composer's own elevation token went with the elevation it described. */
 .chat-composer-surface {
   background-color: var(--color-composer-background);
-  box-shadow:
-    0 0 0 0.5px var(--color-border),
-    var(--color-composer-shadow);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
@@ -323,11 +324,13 @@ body {
    so it takes the identical translucent fill and backdrop treatment — a cap
    that skipped the blur would be translucent over an unblurred transcript one
    pixel above a surface translucent over a blurred one, reading as two
-   different greys at the seam. It carries no elevation shadow (it is not the
-   floating edge); its 1px stroke is painted outside the border-box by the
-   consumer (ring-*) to line up with the surface's 0.5px shadow stroke, and the
-   bottom of that stroke is clipped here because the surface below is no longer
-   opaque enough to cover the bleed at 96% alpha. */
+   different greys at the seam. It carries no elevation shadow and no stroke of
+   its own; the 1px stroke that outlines the cap is painted outside the
+   border-box by the consumer (ring-*), and the bottom of it is clipped here
+   because the surface below is no longer opaque enough to cover the bleed at
+   96% alpha. The surface's own 0.5px shadow-stroke that this used to line up
+   with is gone (see .chat-composer-surface above); the cap's ring is the
+   activity card's chrome and is out of the composer-input scope. */
 .chat-composer-surface--cap {
   background-color: var(--color-composer-background);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
@@ -1140,131 +1143,6 @@ body {
   }
 }
 
-/* ---- Reasoning-effort emphasis ----
-   "max": the session sits at the highest reasoning level its model offers —
-   the bars take the app accent, nothing else changes. "ultra": that top level
-   is the ultra tier, which only frontier models expose (GPT-5.6 Sol/Terra
-   today) — the chip names the tier ("Ultra") in foreground-weight text, the
-   bars keep the accent, and the lit bars run the compositor-only wave. The
-   word is the signal: no gradient paints, no composer-wide ring.
-   Non-ultra models never get the ultra treatment, even at their own max. */
-.composer-level-bars-max,
-.composer-level-bars-ultra {
-  color: var(--color-special);
-}
-
-.composer-level-bars-button-ultra {
-  color: var(--color-foreground);
-}
-
-/* Bars are plain HTML spans now (see LevelBarsIcon in LevelBarsButton.tsx) —
-   transform/opacity here run on the compositor instead of forcing a repaint
-   of SVG child elements every frame in WKWebView. */
-/* activity-motion */
-/* Ambient, not urgent: the wave says "this model is thinking hard", so it
-   breathes rather than pulsing the way the original 1.1s cycle did (which read
-   as a loading spinner).
-   The rise is the slow, deliberate half and gets most of the cycle: the peak
-   sits at 62% of 8.6s, so the bar climbs for ~5.3s and drains in ~3.3s.
-   Deliberately NOT --ease-out-quint: that curve covers ~93% of the distance in
-   its first tenth and then parks at the extreme, which turns a long duration
-   into a fast snap plus dead air rather than a long climb. --ease-standard is
-   the in-out on the token scale, so the bar is still visibly travelling for
-   most of each leg instead of idling at the top and bottom. */
-.composer-level-bar-wave {
-  transform-origin: bottom;
-  animation: composer-level-bar-wave 8.6s var(--ease-standard) infinite;
-}
-
-@keyframes composer-level-bar-wave {
-  0%,
-  100% {
-    transform: scaleY(0.72);
-    opacity: 0.78;
-  }
-  62% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .composer-level-bar-wave {
-    animation: none;
-  }
-}
-
-/* Step transitions: stepping the reasoning-effort control up lights bars
-   bottom-to-top in a slight stagger (LevelBarsButton.tsx computes the
-   per-bar delay); stepping down drains them the same way. Wrapping past the
-   top level back to the bottom plays a quick transform-based "flip" on the
-   whole icon instead — a deliberate reset, not an error. Compositor-only
-   (transform/opacity), disabled under reduced motion. */
-.composer-level-bar-fill-in,
-.composer-level-bar-drain-out {
-  transform-origin: bottom;
-}
-
-/* Paced by the activity scale, not the hover role: this is the motion you are
-   meant to watch a bar make, so it needs a duration you can follow rather than
-   the ~120ms of pointer feedback. --ease-out-cubic spends that budget on a
-   quick departure that decelerates into the top -- not --ease-out-quint, which
-   is so front-loaded it arrives almost immediately and then visibly idles. */
-.composer-level-bar-fill-in {
-  animation: composer-level-bar-fill-in var(--activity-level-bar-step) var(--ease-out-cubic) both;
-}
-
-.composer-level-bar-drain-out {
-  animation: composer-level-bar-drain-out var(--activity-level-bar-step) var(--ease-out-cubic) both;
-}
-
-/* The fill travels the bar's whole height: it is clipped by the track above it,
-   so scaling from 0 reads as ink rising inside a bar that stays where it is,
-   not as the bar itself growing. Opacity is left alone -- the fill is fully
-   opaque the entire way, and the unfilled remainder is the track's own dim
-   tone showing through. */
-@keyframes composer-level-bar-fill-in {
-  0% {
-    transform: scaleY(0);
-  }
-  100% {
-    transform: scaleY(1);
-  }
-}
-
-@keyframes composer-level-bar-drain-out {
-  0% {
-    transform: scaleY(1);
-  }
-  100% {
-    transform: scaleY(0);
-  }
-}
-
-.composer-level-bars-wrap {
-  animation: composer-level-bars-wrap var(--duration-disclosure) var(--ease-spring) both;
-}
-
-@keyframes composer-level-bars-wrap {
-  0% {
-    transform: rotate(0deg);
-  }
-  50% {
-    transform: rotate(-16deg) scaleY(0.85);
-  }
-  100% {
-    transform: rotate(0deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .composer-level-bar-fill-in,
-  .composer-level-bar-drain-out,
-  .composer-level-bars-wrap {
-    animation: none;
-  }
-}
-
 /* Composer control value swap: when a selection changes, the new value slides
    in from above while the old value slides out below, clipped by the swap
    container. Compositor rule: transform/opacity only. */
@@ -1312,14 +1190,49 @@ body {
   }
 }
 
-/* Ultra "on": a filled purple chip behind the level control (same idea as the
-   fast-mode zap's active background), pinned through hover so it stays lit. */
-.composer-reasoning-ultra-chip {
-  background-color: color-mix(in oklab, var(--color-pr-merged) 15%, transparent);
+/* Composer effort ladder: the six bars only ever change opacity between lit
+   (1) and unlit (0.3), and ComposerEffortStepper.tsx supplies the per-bar
+   transition-delay that makes the lit edge travel up the ladder rather than
+   the whole glyph flipping at once. The ruled 240ms is --duration-panel. */
+.composer-effort-ladder-bar {
+  transition: opacity var(--duration-panel) var(--ease-standard);
 }
 
-.composer-reasoning-ultra-chip:hover {
-  background-color: color-mix(in oklab, var(--color-pr-merged) 22%, transparent) !important;
+@media (prefers-reduced-motion: reduce) {
+  .composer-effort-ladder-bar {
+    transition: none;
+  }
+}
+
+/* Composer mode badge glyph swap: the badge is icon-only, so the mode change
+   has nothing but the glyph to carry it. The new mode drops in from above
+   instead of crossfading — a crossfade of two 18px glyphs reads as a redraw,
+   the drop reads as a different mode arriving. Compositor-only
+   (transform/opacity); the element is keyed on the mode value in
+   ComposerModeBadge.tsx so the animation replays per step.
+   The ruled 200ms lands exactly on --duration-disclosure, and the curve is
+   --ease-out-quint off the existing ease scale: a one-consumer curve is not
+   worth a token of its own, and the drop is short enough that quint's
+   front-loaded departure reads as the same arrival. */
+.composer-mode-badge-glyph {
+  animation: composer-mode-badge-glyph-in var(--duration-disclosure) var(--ease-out-quint) both;
+}
+
+@keyframes composer-mode-badge-glyph-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-7px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-mode-badge-glyph {
+    animation: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1360,6 +1273,31 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .chip-enter {
+    animation: none;
+  }
+}
+
+/* A newly settled subagent identity joins an already-mounted horizontal run.
+   Its receipt-specific registry key makes the pop one-shot; replay and
+   virtualization remounts stay static. Compositor-only: opacity/scale. */
+@keyframes subagent-spawn-chip-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.subagent-spawn-chip-enter {
+  transform-origin: 50% 50%;
+  animation: subagent-spawn-chip-enter var(--duration-pop) var(--ease-pop) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subagent-spawn-chip-enter {
     animation: none;
   }
 }
@@ -1609,6 +1547,12 @@ body {
   padding-right: calc(
     var(--workspace-shell-tab-status-size) + var(--workspace-shell-tab-content-gap)
   );
+}
+
+/* A revealed shortcut participates in the button's flex row, so its own
+   width replaces the status reservation and the title truncates before it. */
+.workspace-shell-tab[data-has-shortcut="true"] .workspace-shell-tab__label {
+  padding-right: 0;
 }
 
 .workspace-shell-tab__status {

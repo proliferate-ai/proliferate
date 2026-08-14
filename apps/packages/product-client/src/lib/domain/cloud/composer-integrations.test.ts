@@ -109,8 +109,27 @@ describe("composerIntegrationHealthDot", () => {
     });
   });
 
-  it("maps needs_reauth to a warning dot", () => {
+  it("maps needs_reauth to a warning dot off the composer", () => {
     expect(composerIntegrationHealthDot("needs_reauth").className).toBe("bg-warning-foreground");
+    expect(composerIntegrationHealthDot("needs_reauth", { surface: "default" }).className)
+      .toBe("bg-warning-foreground");
+  });
+
+  it("steps needs_reauth down to neutral ink on the composer surface", () => {
+    // The composer bans every --color-warning* token, its popover included, so
+    // the one verdict that would paint yellow resolves to the foreground ink
+    // there instead. Nothing else about the dot changes.
+    const dot = composerIntegrationHealthDot("needs_reauth", { surface: "composer" });
+    expect(dot.className).toBe("bg-foreground");
+    expect(dot.className).not.toContain("warning");
+    expect(dot.label).toBe("Needs re-authentication");
+  });
+
+  it("leaves every other verdict identical across surfaces", () => {
+    for (const health of ["ready", "error", "needs_auth", "disabled_by_user", "disabled_by_org"] as const) {
+      expect(composerIntegrationHealthDot(health, { surface: "composer" }))
+        .toEqual(composerIntegrationHealthDot(health));
+    }
   });
 
   it("maps error to a destructive dot", () => {

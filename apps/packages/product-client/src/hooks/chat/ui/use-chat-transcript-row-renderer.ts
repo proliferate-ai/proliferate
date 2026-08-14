@@ -67,6 +67,8 @@ export function useChatTranscriptRowRenderer({
       }
       return renderPendingPromptRow({
         activeSessionId,
+        transcript,
+        selectedWorkspaceId,
         row,
         rowIndex,
         prompt: target.prompt,
@@ -144,6 +146,8 @@ export function useChatTranscriptRowRenderer({
     optimisticPromptTrailingStatus,
     outboxActions,
     renderPendingPromptRow,
+    selectedWorkspaceId,
+    transcript.linkCompletionsByCompletionId,
     visibleOptimisticPrompt,
     visibleOutboxEntries,
   ]);

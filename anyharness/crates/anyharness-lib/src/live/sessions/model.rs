@@ -49,7 +49,14 @@ use crate::domains::sessions::model::{
 use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError, ResolvedParts};
 use crate::live::sessions::actor::command::{Resolution, ResolveInteractionCommandError};
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
+use crate::live::sessions::product_context::AgentProductContextResolver;
+use crate::live::sessions::queue_durable::{
+    PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
+};
 use crate::live::sessions::sink::SessionEventSink;
+use crate::live::sessions::subagent_wake::{
+    SubagentWakeTurnPersistenceInput, SubagentWakeTurnPersistenceOutcome,
+};
 // Re-exported: the normalized-payload vocabulary observers consume. The sink
 // module itself stays private to live; these shapes are part of the doorstep.
 pub use crate::live::sessions::sink::{AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage};
@@ -157,6 +164,39 @@ pub trait EventPersist: Send + Sync {
         timestamp: &str,
         payload_json: &str,
     ) -> anyhow::Result<()>;
+    fn persist_subagent_wake_turn(
+        &self,
+        input: &SubagentWakeTurnPersistenceInput,
+    ) -> anyhow::Result<SubagentWakeTurnPersistenceOutcome>;
+    fn persist_terminal_turn(&self, input: &TerminalTurnPersistenceInput) -> anyhow::Result<()>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalTurnOutcome {
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+impl TerminalTurnOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TerminalTurnPersistenceInput {
+    pub terminal_id: String,
+    pub session_id: String,
+    pub turn_id: String,
+    pub outcome: TerminalTurnOutcome,
+    pub assistant_text: Option<String>,
+    pub events: Vec<SessionEventEnvelope>,
+    pub completed_at: String,
 }
 
 /// Durable pending-prompt queue rows.
@@ -182,13 +222,13 @@ pub trait QueueDurable: Send + Sync {
         session_id: &str,
         seq: i64,
         payload: &PromptPayload,
-    ) -> anyhow::Result<bool>;
+    ) -> anyhow::Result<PendingPromptUpdateOutcome>;
     fn delete_pending_prompt(&self, session_id: &str, seq: i64) -> anyhow::Result<bool>;
     fn delete_pending_prompt_record(
         &self,
         session_id: &str,
         seq: i64,
-    ) -> anyhow::Result<Option<PendingPromptRecord>>;
+    ) -> anyhow::Result<PendingPromptDeleteOutcome>;
     fn reorder_pending_prompts(
         &self,
         session_id: &str,
@@ -310,6 +350,9 @@ pub struct ActorCapabilities {
     pub background: Arc<dyn BackgroundWorkDurable>,
     pub state: Arc<dyn SessionStateDurable>,
     pub attachments: Arc<dyn AttachmentSource>,
+    /// Resolved afresh immediately before every prompt render. Absence is not
+    /// representable: product-context failure is a fail-closed turn outcome.
+    pub product_context: Arc<dyn AgentProductContextResolver>,
     /// Product reactors, registration order = dispatch order (plans before
     /// reviews). See the dispatch contract on [`SessionEventObserver`].
     pub observers: Vec<Arc<dyn SessionEventObserver>>,

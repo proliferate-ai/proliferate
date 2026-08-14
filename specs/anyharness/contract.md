@@ -159,9 +159,11 @@ whether those refreshed bindings are persisted. An explicit empty
 `pluginBundle` is a clear request and must be sent with an MCP refresh; this
 keeps the clear self-contained after a runtime process restart.
 
-`CreateSessionRequest.subagentsEnabled` is a create-time session policy.
-Omitted values default to enabled for compatibility. Resume requests do not
-carry this flag; resumed sessions use their persisted policy.
+`CreateSessionRequest.subagentsEnabled` remains accepted and persisted for
+wire and mobility compatibility. Omitted values default to enabled. Workspace
+attachment and current Agent Operations authority do not consult this legacy
+flag. Resume requests do not carry it; resumed sessions retain the persisted
+compatibility value.
 
 ### Cloud Access And Optional Worker Interaction
 
@@ -225,11 +227,15 @@ Owns the normalized session event stream:
 This file is the public transcript/event contract and must remain stable and
 well-structured.
 
-`SessionEvent::SubagentTurnCompleted` is a metadata notification, not a
-transcript item. SDK reducers and UI consumers should not render it as assistant
-or user content by default. It tells a parent session that one owned child
-session completed a turn and carries the durable `completionId`, `sessionLinkId`,
-child identifiers, child last event seq, outcome, and optional label.
+`SessionEvent::SubagentTurnCompleted` is retained legacy relationship-completion
+metadata, not a transcript item and not the automatic parent delivery or
+delivery acknowledgement. SDK reducers and UI consumers should not render it as
+assistant or user content by default or infer that a parent notification became
+visible from its presence. Automatic parent delivery is represented by the
+attributed user-message transcript item whose `promptProvenance` is
+`subagentWake`; the legacy event only carries the durable `completionId`,
+`sessionLinkId`, child identifiers, child last event seq, outcome, and optional
+label.
 
 Interaction payloads should expose only typed, UI-safe fields. Adapter-specific
 metadata that becomes stable UI behavior must be promoted into a typed contract
@@ -282,8 +288,22 @@ behavior, it does not belong here.
 ## Mobility Archive Rule
 
 Workspace mobility archives are public transport. If a workspace contains a
-subagent graph, the archive must preserve `session_links` and
-`session_link_completions` plus pending `session_link_wake_schedules` when both
-linked sessions are included. Export must block with a clear preflight error
-when only one side of a subagent link would be moved, because importing a
-partial graph would break child ownership and parent wake behavior.
+delegated-session graph, the archive must preserve `session_links` and
+`session_link_completions` when both linked sessions are included. Pending
+`session_link_wake_schedules` travel only for Cowork links; delegated-agent
+links neither export nor import them. Export must block with a clear preflight
+error when only one side of a live link would be moved, because importing a
+partial graph would break durable relationship ownership.
+The optional `subagentClosedAt` field preserves reversible Closed state across
+mobility; absence remains backward-compatible and means Open.
+
+Pending prompts preserve their stable prompt identity, structured content, and
+read-only `provenanceJson`, including canonical `subagentWake` attribution.
+Pending or enqueued automatic completion deliveries travel in
+`sessionLinkCompletionDeliveries` with their stable delivery/completion/link and
+parent/child/turn identities, outcome and notification content, delivery state,
+`parentPromptSeq`, retry count/schedule/error, and enqueue timestamps. Ephemeral
+lease token and lease-expiry fields never travel. Export must read session,
+prompt, event, subagent-graph, and completion-delivery rows from one coherent
+durable snapshot so an archive is entirely before or entirely after atomic
+completion admission, never a mixture of the two states.

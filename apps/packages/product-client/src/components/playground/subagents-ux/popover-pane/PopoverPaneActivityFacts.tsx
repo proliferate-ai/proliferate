@@ -7,7 +7,6 @@ export interface SubagentAggregate {
   total: number;
   working: number;
   idle: number;
-  wakeScheduled: number;
   failed: number;
   done: number;
 }
@@ -17,7 +16,6 @@ export function buildSubagentAggregate(agents: readonly PrototypeAgent[]): Subag
     total: agents.length,
     working: agents.filter((agent) => agent.status === "running" || agent.status === "starting").length,
     idle: agents.filter((agent) => agent.status === "idle").length,
-    wakeScheduled: agents.filter((agent) => agent.wakeScheduled).length,
     failed: agents.filter((agent) => agent.status === "errored").length,
     done: agents.filter((agent) => agent.status === "completed").length,
   };

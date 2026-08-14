@@ -1,6 +1,6 @@
 import { Button } from "#product/primitives/Button";
 import { ExternalLink } from "#product/primitives/icons/core";
-import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
+import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGlyph";
 import type {
   DelegatedWorkComposerViewModel,
 } from "#product/hooks/chat/facade/use-delegated-work-composer";
@@ -19,7 +19,15 @@ export function AgentsPopoverSubagentSection({
   onClose: () => void;
 }) {
   return (
-    <PopoverSection title="Subagents" detail={detail}>
+    <PopoverSection
+      title="Subagents"
+      detail={detail}
+      headerAriaLabel="Open subagents in Agents"
+      onHeaderClick={() => {
+        subagents.openCluster();
+        onClose();
+      }}
+    >
       {subagents.parent && (
         <Button
           type="button"
@@ -27,7 +35,7 @@ export function AgentsPopoverSubagentSection({
           size="sm"
           className="mb-1 flex h-auto w-full justify-between gap-2 rounded-md px-2 py-1 text-left hover:bg-muted/40"
           onClick={() => {
-            subagents.openParent(subagents.parent!.parentSessionId);
+            subagents.openParent();
             onClose();
           }}
         >
@@ -45,12 +53,10 @@ export function AgentsPopoverSubagentSection({
           <SubagentPopoverRow
             key={row.sessionLinkId}
             row={row}
-            isSchedulingWake={subagents.isSchedulingWake}
             onOpen={() => {
               subagents.openSubagent(row.childSessionId);
               onClose();
             }}
-            onScheduleWake={() => subagents.scheduleWake(row.childSessionId)}
           />
         ))}
       </div>
@@ -60,21 +66,15 @@ export function AgentsPopoverSubagentSection({
 
 function SubagentPopoverRow({
   row,
-  isSchedulingWake,
   onOpen,
-  onScheduleWake,
 }: {
   row: SubagentRow;
-  isSchedulingWake: boolean;
   onOpen: () => void;
-  onScheduleWake: () => void;
 }) {
-  const secondaryLabel = row.wakeScheduled
-    ? "Wake scheduled"
-    : row.latestCompletionLabel ?? row.statusLabel;
+  const secondaryLabel = row.latestCompletionLabel ?? row.statusLabel;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1 py-0.5 hover:bg-muted/40">
+    <div className="rounded-md px-1 py-0.5 hover:bg-muted/40">
       <Button
         type="button"
         variant="ghost"
@@ -82,9 +82,10 @@ function SubagentPopoverRow({
         className="h-auto w-full min-w-0 justify-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-transparent"
         onClick={onOpen}
       >
-        <DelegatedAgentIdenticon
+        <AgentIdentityGlyph
           identity={row.identity}
-          className={`size-3.5 shrink-0 ${row.identity.textColorClassName}`}
+          closed={row.statusCategory === "closed"}
+          className={`icon-compact shrink-0 text-chat ${row.identity.textColorClassName}`}
         />
         <span className="min-w-0">
           <span className="block truncate text-ui font-medium text-foreground">
@@ -95,19 +96,6 @@ function SubagentPopoverRow({
           </span>
         </span>
       </Button>
-      {!row.wakeScheduled && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2"
-          loading={isSchedulingWake}
-          aria-label={`Schedule wake for ${row.identity.displayName}`}
-          onClick={onScheduleWake}
-        >
-          Wake
-        </Button>
-      )}
     </div>
   );
 }

@@ -175,7 +175,8 @@ async fn run_plan_decision_op(
         "claude",
         op,
     )
-    .await;
+    .await
+    .expect("domain operation admitted");
     *reply
         .downcast::<PlanDecisionOpOutput>()
         .expect("plan decision op output")

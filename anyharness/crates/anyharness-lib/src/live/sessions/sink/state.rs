@@ -131,7 +131,7 @@ pub(super) const ASSISTANT_MESSAGE_COMPLETED_EVENT: &str = "assistant_message_co
 pub(super) const TRANSIENT_STATUS_EVENT: &str = "transient_status";
 pub(super) const BACKGROUND_WORK_TRACKER_KIND: &str = "claude_async_agent";
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SessionEventSinkDebugSnapshot {
     pub current_turn_id: Option<String>,
     pub open_assistant_item_id: Option<String>,
