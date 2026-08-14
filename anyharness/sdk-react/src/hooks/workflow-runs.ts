@@ -28,13 +28,45 @@ interface RuntimeQueryOptions {
   enabled?: boolean;
 }
 
+interface WorkflowRunsQueryOptions extends RuntimeQueryOptions {
+  /**
+   * Keep the roster fresh while it can still change under the reader: refetch
+   * on window focus, and poll while any run in it is worth watching.
+   *
+   * Opt-in rather than always-on because the two consumers want opposite
+   * things: the startup resume scan wants one read of every run this runtime
+   * knows about, while a workspace whose panel is mounted has to notice a run
+   * triggered from another tab, device, or automation — the trigger's cache
+   * write-through only covers runs this client started itself.
+   */
+  watchActiveRuns?: boolean;
+}
+
 /** Runs actively progressing or waiting on a human decision; every other status is parked or terminal. */
 const WORKFLOW_RUN_POLLING_STATUSES: ReadonlySet<WorkflowRunV2["status"]> = new Set([
   "running",
   "awaiting_human",
 ]);
 
+/**
+ * Runs whose row can still change without this client asking: the two active
+ * statuses plus `interrupted`, which a resume from anywhere else moves out of.
+ * A list of only `completed`/`failed` runs stays quiet — nothing in it moves
+ * again, and a *new* run arriving is what focus refetch is for.
+ */
+const WORKFLOW_RUNS_LIST_WATCH_STATUSES: ReadonlySet<WorkflowRunV2["status"]> = new Set([
+  ...WORKFLOW_RUN_POLLING_STATUSES,
+  "interrupted",
+]);
+
 export const WORKFLOW_RUN_ACTIVE_INTERVAL_MS = 3000;
+/**
+ * Polling cadence for `GET /v1/workflow-runs`. Deliberately slower than the
+ * run detail's 3s: the list answers only *which* runs exist (and so whether
+ * the workflow tool is offered at all), while the run's own churn — node
+ * status, current node, docs — rides the detail projection.
+ */
+export const WORKFLOW_RUNS_LIST_ACTIVE_INTERVAL_MS = 5000;
 
 /**
  * Polling cadence for `GET /v1/workflow-runs/{run_id}`. The run detail has no
@@ -49,6 +81,20 @@ export function resolveWorkflowRunRefetchInterval(
   const status = state.data?.run.status;
   return status != null && WORKFLOW_RUN_POLLING_STATUSES.has(status)
     ? WORKFLOW_RUN_ACTIVE_INTERVAL_MS
+    : false;
+}
+
+/**
+ * Polling cadence for `GET /v1/workflow-runs`, from the rows the list already
+ * holds: any run worth watching keeps the list polling, a list of only
+ * finished runs (or an empty one) stops it.
+ */
+export function resolveWorkflowRunsListRefetchInterval(
+  state: { data?: WorkflowRunsListResponseV2 },
+): number | false {
+  const runs = state.data?.runs ?? [];
+  return runs.some((run) => WORKFLOW_RUNS_LIST_WATCH_STATUSES.has(run.status))
+    ? WORKFLOW_RUNS_LIST_ACTIVE_INTERVAL_MS
     : false;
 }
 
@@ -84,12 +130,13 @@ export function useWorkflowRunQuery(
  */
 export function useWorkflowRunsQuery(
   workspaceId?: string | null,
-  options?: RuntimeQueryOptions,
+  options?: WorkflowRunsQueryOptions,
 ) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
   const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
   const trimmedWorkspaceId = workspaceId?.trim() || undefined;
+  const watchActiveRuns = options?.watchActiveRuns ?? false;
 
   return useQuery({
     queryKey: anyHarnessWorkflowRunsListKey(runtimeUrl, cacheScopeKey, trimmedWorkspaceId ?? null),
@@ -101,6 +148,13 @@ export function useWorkflowRunsQuery(
         requestOptionsWithSignal(undefined, signal),
       );
     },
+    refetchInterval: (query) => (
+      watchActiveRuns ? resolveWorkflowRunsListRefetchInterval(query.state) : false
+    ),
+    refetchIntervalInBackground: false,
+    // Only set when watching: an unwatched caller keeps the app's own default
+    // rather than having this hook decide focus behaviour for it.
+    ...(watchActiveRuns ? { refetchOnWindowFocus: true } : {}),
   });
 }
 

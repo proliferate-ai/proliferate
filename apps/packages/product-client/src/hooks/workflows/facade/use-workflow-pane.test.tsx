@@ -10,11 +10,10 @@ import type {
 } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "#product/domain/sessions/activity";
 import {
-  isWorkflowTransitionRace,
   resolveWorkflowPaneStatus,
-  selectNewestWorkflowRun,
   useWorkflowPane,
 } from "#product/hooks/workflows/facade/use-workflow-pane";
+import { isWorkflowTransitionRace } from "#product/hooks/workflows/workflows/use-workflow-run-command";
 
 const mocks = vi.hoisted(() => {
   const mutation = () => ({ mutateAsync: vi.fn(async () => ({})), isPending: false });
@@ -59,6 +58,12 @@ vi.mock("#product/hooks/workspaces/workflows/use-workspace-activation-workflow",
 
 vi.mock("#product/hooks/workspaces/derived/use-workspace-sidebar-activities", () => ({
   useWorkspaceSidebarActivityStates: () => mocks.activityStates,
+}));
+
+// Gate on, so "this hook raises no auto-advance toast" is a real control: were
+// the watcher still mounted here, it would fire under this mock.
+vi.mock("#product/lib/domain/capabilities/workflows-v2", () => ({
+  isWorkflowsV2Enabled: () => true,
 }));
 
 vi.mock("#product/primitives/utils/show-toast", () => ({
@@ -150,31 +155,6 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-});
-
-describe("selectNewestWorkflowRun", () => {
-  it("returns null when the workspace has no runs", () => {
-    expect(selectNewestWorkflowRun([])).toBeNull();
-    expect(selectNewestWorkflowRun(undefined)).toBeNull();
-  });
-
-  it("returns the newest run by createdAt regardless of list order", () => {
-    const newest = selectNewestWorkflowRun([
-      run({ id: "old", createdAt: "2026-08-14T00:00:00Z" }),
-      run({ id: "new", createdAt: "2026-08-14T09:00:00Z" }),
-      run({ id: "middle", createdAt: "2026-08-14T04:00:00Z" }),
-    ]);
-
-    expect(newest?.id).toBe("new");
-  });
-
-  it("breaks a createdAt tie by row id so the winner never flickers", () => {
-    const sameInstant = "2026-08-14T00:00:00Z";
-    expect(selectNewestWorkflowRun([
-      run({ id: "a", createdAt: sameInstant }),
-      run({ id: "b", createdAt: sameInstant }),
-    ])?.id).toBe("b");
-  });
 });
 
 describe("isWorkflowTransitionRace", () => {
@@ -397,13 +377,22 @@ describe("useWorkflowPane", () => {
 
     expect(mocks.toastError).toHaveBeenCalledWith({
       headline: "Workflow action failed",
-      consequence: "The run is unchanged.",
+      consequence: "That action may not have been applied. The pane keeps following the run.",
       cause: "runtime unreachable",
     });
     expect(mocks.showToast).not.toHaveBeenCalled();
   });
 
-  it("stays quiet on first load, then offers Undo once the run advances by itself", async () => {
+  it("watches the runs roster so a run triggered elsewhere reaches the pane", () => {
+    render();
+
+    expect(mocks.useWorkflowRunsQuery).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      { watchActiveRuns: true },
+    );
+  });
+
+  it("raises no auto-advance toast itself: the watcher above the tool switch owns it", async () => {
     mocks.runQuery.data = projection(
       [
         node({ id: "a", chainIndex: 0, status: "running" }),
@@ -411,77 +400,12 @@ describe("useWorkflowPane", () => {
       ],
       { currentNodeRowId: "a" },
     );
-
     const { rerender } = render();
-    expect(mocks.showToast).not.toHaveBeenCalled();
 
     mocks.runQuery.data = projection(
       [
         node({ id: "a", chainIndex: 0, status: "completed", title: "Draft" }),
         node({ id: "b", chainIndex: 1, status: "running", title: "Review" }),
-      ],
-      { currentNodeRowId: "b" },
-    );
-    await act(async () => {
-      rerender();
-    });
-
-    expect(mocks.showToast).toHaveBeenCalledTimes(1);
-    const raised = mocks.showToast.mock.calls[0]![0];
-    expect(raised).toMatchObject({
-      title: "1. Draft done, 2. Review started",
-      commit: { label: "Undo" },
-    });
-
-    await act(async () => {
-      raised.commit.onClick();
-    });
-    expect(mocks.mutations.undoAdvance.mutateAsync).toHaveBeenCalled();
-  });
-
-  it("offers the undo at most once per started node across repeated polls", async () => {
-    mocks.runQuery.data = projection(
-      [node({ id: "a", chainIndex: 0, status: "running" }), node({ id: "b", chainIndex: 1 })],
-      { currentNodeRowId: "a" },
-    );
-    const { rerender } = render();
-
-    const advanced = () => projection(
-      [
-        node({ id: "a", chainIndex: 0, status: "completed" }),
-        node({ id: "b", chainIndex: 1, status: "running" }),
-      ],
-      { currentNodeRowId: "b" },
-    );
-
-    mocks.runQuery.data = advanced();
-    await act(async () => {
-      rerender();
-    });
-    // A later poll re-delivers a fresh object for the same advance; the run
-    // did not move again, but even a detector hit must not re-offer it.
-    mocks.runQuery.data = advanced();
-    await act(async () => {
-      rerender();
-    });
-
-    expect(mocks.showToast).toHaveBeenCalledTimes(1);
-  });
-
-  it("raises no undo offer when a human approval moved the run on", async () => {
-    mocks.runQuery.data = projection(
-      [
-        node({ id: "a", chainIndex: 0, status: "awaiting_human", nodeType: "human_in_loop" }),
-        node({ id: "b", chainIndex: 1 }),
-      ],
-      { currentNodeRowId: "a" },
-    );
-    const { rerender } = render();
-
-    mocks.runQuery.data = projection(
-      [
-        node({ id: "a", chainIndex: 0, status: "completed", nodeType: "human_in_loop" }),
-        node({ id: "b", chainIndex: 1, status: "running" }),
       ],
       { currentNodeRowId: "b" },
     );

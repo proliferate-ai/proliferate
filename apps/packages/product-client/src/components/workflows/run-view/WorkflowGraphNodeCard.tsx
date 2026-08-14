@@ -13,7 +13,6 @@ import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { RosterRow } from "#product/primitives/patterns/RosterRow";
 import { StatusDot, type StatusDotTone } from "#product/primitives/StatusDot";
 import { Textarea } from "#product/primitives/Textarea";
-import { twMerge } from "#product/primitives/utils/tw-merge";
 
 /**
  * Maps the domain's node tone onto `StatusDot`'s tone axis — a local
@@ -31,6 +30,20 @@ const WORKFLOW_NODE_STATUS_DOT_TONE: Record<WorkflowNodeTone, StatusDotTone> = {
   warning: "warning",
   danger: "danger",
 };
+
+/**
+ * Declared total above so a new tone is a compile error here, read partially
+ * here so an unknown one is a muted dot rather than a crash. `StatusDot`
+ * indexes its own tone map without a fallback, so an `undefined` tone throws
+ * during render, and the client's single root `AppErrorBoundary` turns that
+ * into whole-app crash recovery. The domain layer already lands an unknown node
+ * status on `muted`; this is the same floor one layer up, for a `vm.tone` that
+ * arrives from anywhere else.
+ */
+function statusDotToneFor(tone: WorkflowNodeTone): StatusDotTone {
+  const byTone: Partial<Record<string, StatusDotTone>> = WORKFLOW_NODE_STATUS_DOT_TONE;
+  return byTone[tone] ?? "muted";
+}
 
 export interface WorkflowGraphNodeCardProps {
   vm: WorkflowGraphNodeVM;
@@ -73,18 +86,88 @@ export function WorkflowGraphNodeCard({
     || controls.flipToHuman
     || controls.addAdhoc;
 
+  // The controls row is the card's footer slot, so `Card` draws the hairline
+  // above it with the shared `border-t border-border` — the card owns its
+  // internal edges, and a hand-drawn one here drifted to `border-border/60`.
+  // Padding stays at the call site, which is `Card`'s contract.
+  const controlsFooter = hasControls
+    ? (
+        <div className="flex flex-wrap items-center gap-2 px-3 pb-2.5 pt-2">
+          {controls.approve ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              disabled={busy}
+              onClick={() => onApprove(node.id)}
+            >
+              {WORKFLOW_NODE_CARD_COPY.approveLabel}
+            </Button>
+          ) : null}
+          {controls.failRedo ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => setFailRedoOpen(true)}
+            >
+              {WORKFLOW_NODE_CARD_COPY.failRedoLabel}
+            </Button>
+          ) : null}
+          {controls.flipToAgent ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => onFlipType(node.id, "agent")}
+            >
+              {WORKFLOW_NODE_CARD_COPY.flipToAgentLabel}
+            </Button>
+          ) : null}
+          {controls.flipToHuman ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => onFlipType(node.id, "human_in_loop")}
+            >
+              {WORKFLOW_NODE_CARD_COPY.flipToHumanLabel}
+            </Button>
+          ) : null}
+          {controls.addAdhoc ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => setAddAdhocOpen(true)}
+            >
+              {WORKFLOW_NODE_CARD_COPY.addAdhocLabel}
+            </Button>
+          ) : null}
+        </div>
+      )
+    : undefined;
+
   return (
     <>
+      {/*
+        `className` on `Card` is layout only. The current node's emphasis is
+        carried by its title weight (structure, not color, and not a shadow
+        smuggled through a layout prop): `Card` owns elevation and exposes no
+        shadow axis, so there is nothing sanctioned to pass it through.
+      */}
       <Card
         surface={secondary ? "tint" : "opaque"}
-        className={twMerge(
-          secondary && "ml-6",
-          isCurrent && !secondary && "shadow-subtle",
-        )}
+        className={secondary ? "ml-6" : undefined}
+        footer={controlsFooter}
       >
         <RosterRow
           density="comfortable"
-          leading={<StatusDot tone={WORKFLOW_NODE_STATUS_DOT_TONE[tone]} />}
+          leading={<StatusDot tone={statusDotToneFor(tone)} />}
           title={(
             <span className={isCurrent ? "font-semibold" : undefined}>
               {WORKFLOW_NODE_CARD_COPY.nodeIndexTitle(node.chainIndex, node.title)}
@@ -102,65 +185,6 @@ export function WorkflowGraphNodeCard({
           )}
           onSelect={() => onFocusSession(node.id)}
         />
-        {hasControls ? (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-3 pb-2.5 pt-2">
-            {controls.approve ? (
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                disabled={busy}
-                onClick={() => onApprove(node.id)}
-              >
-                {WORKFLOW_NODE_CARD_COPY.approveLabel}
-              </Button>
-            ) : null}
-            {controls.failRedo ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={busy}
-                onClick={() => setFailRedoOpen(true)}
-              >
-                {WORKFLOW_NODE_CARD_COPY.failRedoLabel}
-              </Button>
-            ) : null}
-            {controls.flipToAgent ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() => onFlipType(node.id, "agent")}
-              >
-                {WORKFLOW_NODE_CARD_COPY.flipToAgentLabel}
-              </Button>
-            ) : null}
-            {controls.flipToHuman ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() => onFlipType(node.id, "human_in_loop")}
-              >
-                {WORKFLOW_NODE_CARD_COPY.flipToHumanLabel}
-              </Button>
-            ) : null}
-            {controls.addAdhoc ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={busy}
-                onClick={() => setAddAdhocOpen(true)}
-              >
-                {WORKFLOW_NODE_CARD_COPY.addAdhocLabel}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
       </Card>
 
       <WorkflowFailRedoDialog

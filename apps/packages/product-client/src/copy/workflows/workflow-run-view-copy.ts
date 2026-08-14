@@ -58,7 +58,16 @@ export const WORKFLOW_RUN_VIEW_COPY = {
   raceTitle: "The run already moved on",
   raceDescription: "That step changed before the action reached it. The pane is now up to date.",
 
-  /** Any other command failure. The exception itself rides in `cause`. */
+  /**
+   * Any other command failure. The exception itself rides in `cause`.
+   *
+   * The consequence says only what the client knows. A failure that is not a
+   * 409 can be a transport error after the runtime already applied the command,
+   * so "the run is unchanged" is a promise this side cannot keep; what is true
+   * is that the projection query polls, so the pane converges on the run's real
+   * state either way.
+   */
   commandFailedHeadline: "Workflow action failed",
-  commandFailedConsequence: "The run is unchanged.",
+  commandFailedConsequence:
+    "That action may not have been applied. The pane keeps following the run.",
 } as const;

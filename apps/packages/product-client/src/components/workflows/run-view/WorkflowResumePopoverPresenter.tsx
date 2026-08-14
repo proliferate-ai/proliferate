@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { WorkflowRunV2 } from "@anyharness/sdk";
 import { Button } from "#product/primitives/Button";
+import { ActionRow } from "#product/primitives/patterns/ActionRow";
 import { Popover, PopoverAnchor, PopoverContent } from "#product/primitives/Popover";
 import { WORKFLOW_RESUME_COPY } from "#product/copy/workflows/workflow-resume-copy";
 import { useWorkflowResumePopover } from "#product/hooks/workflows/lifecycle/use-workflow-resume-popover";
@@ -37,7 +38,14 @@ function parseWorkflowRunDefinitionTitle(definitionJson: string): string {
  * Mounted globally (beside `HarnessUpdateToastPresenter` in
  * `AuthenticatedProductClient.tsx`): surfaces every interrupted workflow run
  * this runtime knows about, across every workspace, as a floating card
- * anchored to the bottom-right corner.
+ * anchored to the bottom-left corner.
+ *
+ * Left, not right, and not a preference: the `Toaster` is pinned
+ * `position="bottom-right"` (`Sonner.tsx`), and this feature raises its own
+ * toasts there — the resume-failed report, and the run view's undo offer. A
+ * nudge card in that corner covers the very message that explains why the nudge
+ * is still on screen. Opposite corners is the only arrangement where both can be
+ * read at once.
  *
  * Composes the real `Popover` primitive against a fixed, invisible virtual
  * anchor rather than a visible trigger — there is no click that opens this;
@@ -74,11 +82,11 @@ export function WorkflowResumePopoverPresenter() {
   return (
     <Popover open onOpenChange={() => {}}>
       <PopoverAnchor asChild>
-        <span aria-hidden="true" className="fixed bottom-4 right-4 h-px w-px" />
+        <span aria-hidden="true" className="fixed bottom-4 left-4 h-px w-px" />
       </PopoverAnchor>
       <PopoverContent
         side="top"
-        align="end"
+        align="start"
         onOpenAutoFocus={(event) => event.preventDefault()}
         className="flex w-80 flex-col p-0"
       >
@@ -131,39 +139,25 @@ function InterruptedRunRow({
   const secondary = workspaceName ? `${workspaceName} · ${interruptedLabel}` : interruptedLabel;
 
   return (
-    // Recorded exclusion (DESIGN_SYSTEM.md UI-conformance review, check 7) —
-    // second instance of the shape `PromptRecoveryPanel` already carries for
-    // the same documented reason: `RosterRow` ties its hover wash to
-    // `onSelect`, but this row is never selectable (its two actions ARE the
-    // row) and still wants the hover wash, and its secondary line has no tone
-    // axis to spare for a two-line workspace+time caption. Flag for
-    // promotion into `RosterRow` alongside `PromptRecoveryPanel`'s row rather
-    // than re-deriving a third bespoke instance.
-    <div className="flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-hover">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-ui font-medium text-foreground">{title}</div>
-        <div className="truncate text-ui-sm text-muted-foreground">{secondary}</div>
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-ui-sm"
-          onClick={onDismiss}
-        >
-          {WORKFLOW_RESUME_COPY.dismissLabel}
-        </Button>
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          className="h-7 px-2.5 text-ui-sm"
-          onClick={onResume}
-        >
-          {WORKFLOW_RESUME_COPY.resumeLabel}
-        </Button>
-      </div>
-    </div>
+    // `ActionRow`, the pattern this row and `PromptRecoveryPanel`'s unsent-message
+    // row were both promoted into (rule of two): a row that is never selectable
+    // — its two controls ARE the row — and still carries the hover wash, which is
+    // the pair of things `RosterRow` cannot do. Buttons stay at their sanctioned
+    // `sm` geometry with no height override: a seventh height on the scale needs a
+    // recorded cause, and "slightly denser popover" is not one.
+    <ActionRow
+      title={title}
+      secondary={secondary}
+      actions={
+        <>
+          <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
+            {WORKFLOW_RESUME_COPY.dismissLabel}
+          </Button>
+          <Button type="button" variant="primary" size="sm" onClick={onResume}>
+            {WORKFLOW_RESUME_COPY.resumeLabel}
+          </Button>
+        </>
+      }
+    />
   );
 }

@@ -33,10 +33,24 @@ const NODE_STATUS_TONE: Record<WorkflowRunNodeStatusV2, WorkflowNodeTone> = {
   failed: "danger",
 };
 
+/**
+ * The map above is declared total over the union so adding a status to the
+ * contract is a compile error here rather than a hole. The *read* is partial on
+ * purpose: the union is the contract, not a guarantee about the bytes on the
+ * wire. A runtime ahead of this client (or a stale prebuilt binary behind it)
+ * can serialize a status this build has never heard of, and an undefined tone
+ * would travel to `StatusDot`'s own tone map, index it with `undefined`, and
+ * throw inside render — which the single root `AppErrorBoundary` escalates from
+ * "one odd node card" to the whole client dropping into crash recovery. So the
+ * lookup goes through a partial view (TypeScript would otherwise insist the
+ * `??` is dead code) and an unknown status reads as `muted`: an inert dot, the
+ * same tone `pending` already uses.
+ */
 export function workflowNodeStatusTone(
   status: WorkflowRunNodeStatusV2,
 ): WorkflowNodeTone {
-  return NODE_STATUS_TONE[status];
+  const byStatus: Partial<Record<string, WorkflowNodeTone>> = NODE_STATUS_TONE;
+  return byStatus[status] ?? "muted";
 }
 
 export interface WorkflowNodeControlSet {
@@ -57,18 +71,90 @@ export function workflowRunIsActive(run: WorkflowRunV2): boolean {
 }
 
 /**
- * The transition table, verbatim, as control eligibility:
+ * Narrower than `workflowRunIsActive`, and only for the side-node affordance:
+ * an interrupted run is parked, so offering "add side node" there invites the
+ * user to grow a run that is not moving. The runtime would accept the command
+ * (only `completed`/`failed` are terminal there, per the command wall in
+ * `transition.rs`), so this is a deliberate product narrowing rather than a
+ * legality claim — withholding a legal control cannot produce a 409, it just
+ * declines to offer one. Split from `workflowRunIsActive` rather than narrowing
+ * it, because "the run is still live" is the right reading for the resume
+ * banner and for anything else that asks whether the run has finished.
+ */
+export function workflowRunTakesSideNode(run: WorkflowRunV2): boolean {
+  return run.status === "running" || run.status === "awaiting_human";
+}
+
+/**
+ * Whether a row hangs off the chain instead of sitting on it. Ad hoc rows
+ * "never advance or block the run" (ADR), and the runtime enforces exactly
+ * that: every chain-shaped command is rejected for `kind == Adhoc`
+ * (`transition.rs` — FlipType "adhoc nodes have no gate semantics to flip",
+ * FailAndRedo "adhoc nodes are re-run by creating another adhoc node",
+ * UndoAdvance, and AddAdhocNode "adhoc nodes anchor to the chain, not to each
+ * other"), while ApproveGate additionally requires the row to be the run's
+ * current node, which an ad hoc row never becomes.
+ *
+ * `kind` alone decides it. A replacement is always a chain row: the only
+ * producer of `kind: "replacement"` is the Redo transition on a chain row,
+ * which mints it with `anchor_node_row_id: None` and the failed row's
+ * inherited `chain_index`; redoing an ad hoc row mints another ad hoc row
+ * (fix-wave Ruling K), never a replacement — so no replacement can descend
+ * from a side node. The `anchorNodeRowId` clause is a belt on a
+ * contract that cannot break today: if some future runtime does mint an
+ * anchored replacement, reading it as a side node withholds chain controls
+ * instead of offering an advance from a copied `chainIndex`, which is the safe
+ * direction to be wrong in.
+ */
+export function workflowNodeIsSideNode(node: WorkflowRunNodeV2): boolean {
+  return (
+    node.kind === "adhoc" ||
+    (node.kind === "replacement" && node.anchorNodeRowId !== null)
+  );
+}
+
+/**
+ * A side node's card carries exactly one control: Fail & redo. Gate, flip, and
+ * advance semantics are chain-only (an ad hoc row never becomes
+ * `current_node_row_id`, has no gate to flip, and cannot anchor another ad hoc
+ * row — the runtime refuses all three), so rendering them would turn this
+ * module's one invariant inside out: a 409 would stop being a race with the
+ * run and become a button that cannot ever work. Redo is the ruled recovery
+ * path for a wedged or failed side node (fix-wave Ruling K: FailAndRedo is
+ * legal on ad hoc rows and mints an ad hoc replacement anchored the same);
+ * the runtime side of that ruling lands in the same wave as this gate.
+ */
+function sideNodeControls(node: WorkflowRunNodeV2): WorkflowNodeControlSet {
+  return {
+    approve: false,
+    failRedo:
+      node.status === "failed" || node.status === "needs_attention",
+    flipToAgent: false,
+    flipToHuman: false,
+    addAdhoc: false,
+  };
+}
+
+/**
+ * The transition table, verbatim, as control eligibility — for chain rows,
+ * which are the only rows any of these commands accept:
  * - ApproveGate and FlipType-to-agent are legal only on awaiting_human.
  * - FlipType-to-human_in_loop is legal only on a running agent node.
  * - FailAndRedo is legal from failed, needs_attention, and awaiting_human.
- * - AddAdhocNode is legal on any active (non-terminal) run; it anchors to a
- *   node card but is run-scoped, so every card on an active run offers it.
+ * - AddAdhocNode anchors to a node card but is run-scoped, so every chain card
+ *   on a run that takes side nodes offers it.
+ *
+ * Status and node type do not decide alone: `kind` gates first, because a side
+ * node copies its anchor's `chainIndex` and would otherwise render chain
+ * controls that read as legal and are not.
  */
 export function workflowNodeControls(
   run: WorkflowRunV2,
   node: WorkflowRunNodeV2,
 ): WorkflowNodeControlSet {
-  const active = workflowRunIsActive(run);
+  if (workflowNodeIsSideNode(node)) {
+    return sideNodeControls(node);
+  }
   return {
     approve: node.status === "awaiting_human",
     failRedo:
@@ -78,7 +164,7 @@ export function workflowNodeControls(
     flipToAgent:
       node.status === "awaiting_human" && node.nodeType === "human_in_loop",
     flipToHuman: node.status === "running" && node.nodeType === "agent",
-    addAdhoc: active,
+    addAdhoc: workflowRunTakesSideNode(run),
   };
 }
 
@@ -138,8 +224,11 @@ export function buildWorkflowGraph(
   };
 
   const FALLBACK_INDEX = Number.MAX_SAFE_INTEGER;
-  const chainRows = nodes.filter((node) => node.kind !== "adhoc");
-  const adhocRows = nodes.filter((node) => node.kind === "adhoc");
+  // Placement reads the same predicate the controls do: a row rendered with a
+  // side node's (empty) control set must sit off the chain too, or the graph
+  // would show a chain-positioned card that silently offers nothing.
+  const chainRows = nodes.filter((node) => !workflowNodeIsSideNode(node));
+  const adhocRows = nodes.filter((node) => workflowNodeIsSideNode(node));
 
   for (const node of [...chainRows].sort(byCreatedAt)) {
     slotFor(node.chainIndex ?? FALLBACK_INDEX).attempts.push(toNodeVM(run, node));

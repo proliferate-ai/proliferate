@@ -2,7 +2,7 @@
 
 import type { WorkflowRunProjectionV2, WorkflowRunV2, WorkflowRunsListResponseV2 } from "@anyharness/sdk";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnyHarnessRuntime } from "../context/AnyHarnessRuntime.js";
@@ -12,9 +12,12 @@ import {
 } from "../lib/query-keys-workflow-runs.js";
 import {
   WORKFLOW_RUN_ACTIVE_INTERVAL_MS,
+  WORKFLOW_RUNS_LIST_ACTIVE_INTERVAL_MS,
   resolveWorkflowRunRefetchInterval,
+  resolveWorkflowRunsListRefetchInterval,
   useWorkflowRunMutations,
   useWorkflowRunProjectionWriter,
+  useWorkflowRunsQuery,
 } from "./workflow-runs.js";
 
 const RUNTIME_URL = "http://runtime.test";
@@ -23,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   approve: vi.fn(),
   flipType: vi.fn(),
   getRun: vi.fn(),
+  listRuns: vi.fn(),
 }));
 
 vi.mock("../lib/client-cache.js", () => ({
@@ -31,6 +35,7 @@ vi.mock("../lib/client-cache.js", () => ({
       approve: mocks.approve,
       flipType: mocks.flipType,
       getRun: mocks.getRun,
+      listRuns: mocks.listRuns,
     },
   }),
 }));
@@ -272,6 +277,88 @@ describe("resolveWorkflowRunRefetchInterval", () => {
     expect(resolveWorkflowRunRefetchInterval({})).toBe(false);
   });
 });
+
+describe("resolveWorkflowRunsListRefetchInterval", () => {
+  it("polls while any run in the list is still worth watching", () => {
+    for (const status of ["running", "awaiting_human", "interrupted"] as const) {
+      expect(resolveWorkflowRunsListRefetchInterval({
+        data: { runs: [run({ id: "done", status: "completed" }), run({ status })] },
+      })).toBe(WORKFLOW_RUNS_LIST_ACTIVE_INTERVAL_MS);
+    }
+  });
+
+  it("stays quiet for a list of only finished runs, an empty list, or no list at all", () => {
+    expect(resolveWorkflowRunsListRefetchInterval({
+      data: { runs: [run({ status: "completed" }), run({ id: "run-2", status: "failed" })] },
+    })).toBe(false);
+    expect(resolveWorkflowRunsListRefetchInterval({ data: { runs: [] } })).toBe(false);
+    expect(resolveWorkflowRunsListRefetchInterval({})).toBe(false);
+  });
+});
+
+describe("useWorkflowRunsQuery freshness", () => {
+  afterEach(() => {
+    cleanup();
+    mocks.listRuns.mockReset();
+  });
+
+  it("watches focus and polls the list while a non-terminal run is in it", async () => {
+    mocks.listRuns.mockResolvedValue({ runs: [run({ status: "running" })] });
+    const queryClient = createQueryClient();
+
+    const { result } = renderHook(
+      () => useWorkflowRunsQuery("workspace-1", { watchActiveRuns: true }),
+      { wrapper: createWrapper(queryClient) },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const observerOptions = queryClient.getQueryCache().getAll()[0]?.observers[0]?.options;
+    expect(observerOptions?.refetchOnWindowFocus).toBe(true);
+    expect(resolveListInterval(queryClient)).toBe(WORKFLOW_RUNS_LIST_ACTIVE_INTERVAL_MS);
+  });
+
+  it("stops the interval once every run in the watched list is terminal", async () => {
+    mocks.listRuns.mockResolvedValue({ runs: [run({ status: "completed" })] });
+    const queryClient = createQueryClient();
+
+    const { result } = renderHook(
+      () => useWorkflowRunsQuery("workspace-1", { watchActiveRuns: true }),
+      { wrapper: createWrapper(queryClient) },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(resolveListInterval(queryClient)).toBe(false);
+  });
+
+  it("leaves an unwatched list unpolled, whatever its runs say (negative control)", async () => {
+    mocks.listRuns.mockResolvedValue({ runs: [run({ status: "running" })] });
+    const queryClient = createQueryClient();
+
+    const { result } = renderHook(() => useWorkflowRunsQuery("workspace-1"), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const observerOptions = queryClient.getQueryCache().getAll()[0]?.observers[0]?.options;
+    // Omitted rather than `false`: the app's own default decides focus refetch
+    // for a caller that did not ask to watch.
+    expect(observerOptions?.refetchOnWindowFocus).toBeUndefined();
+    expect(resolveListInterval(queryClient)).toBe(false);
+  });
+});
+
+/** The hook wires `refetchInterval` as a callback; evaluate it against the live query. */
+function resolveListInterval(queryClient: QueryClient): number | false | undefined {
+  const query = queryClient.getQueryCache().getAll()[0];
+  const refetchInterval = query?.observers[0]?.options.refetchInterval;
+  if (typeof refetchInterval !== "function") {
+    return refetchInterval;
+  }
+  return refetchInterval(query as never);
+}
 
 function createQueryClient(): QueryClient {
   return new QueryClient({

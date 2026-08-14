@@ -80,7 +80,7 @@ function renderCard(props: Partial<WorkflowGraphNodeCardProps> & { vm: WorkflowG
   const onFailRedo = vi.fn();
   const onFlipType = vi.fn();
   const onAddAdhoc = vi.fn();
-  render(
+  const { container } = render(
     <WorkflowGraphNodeCard
       onFocusSession={onFocusSession}
       onApprove={onApprove}
@@ -90,7 +90,16 @@ function renderCard(props: Partial<WorkflowGraphNodeCardProps> & { vm: WorkflowG
       {...props}
     />,
   );
-  return { onFocusSession, onApprove, onFailRedo, onFlipType, onAddAdhoc };
+  return { container, onFocusSession, onApprove, onFailRedo, onFlipType, onAddAdhoc };
+}
+
+/** The StatusDot the card draws as the row's leading glyph. */
+function statusDotOf(container: HTMLElement): HTMLElement {
+  const dot = container.querySelector(".icon-status.rounded-full");
+  if (!(dot instanceof HTMLElement)) {
+    throw new Error("no status dot in the card");
+  }
+  return dot;
 }
 
 function rowOf(text: string): HTMLElement {
@@ -214,6 +223,42 @@ describe("WorkflowGraphNodeCard", () => {
   it("omits the needs-input badge when the needsInput prop is unset", () => {
     renderCard({ vm: buildVm() });
     expect(screen.queryByText("Needs input")).toBeNull();
+  });
+
+  it("paints the dot from the vm's tone", () => {
+    const { container } = renderCard({ vm: buildVm({ tone: "danger" }) });
+    expect(statusDotOf(container).className).toContain("bg-destructive");
+  });
+
+  // A tone outside the closed set reaches StatusDot's own unguarded tone map,
+  // where an undefined entry throws mid-render; the client mounts one root
+  // AppErrorBoundary, so that throw takes the whole app to crash recovery. The
+  // card floors it at muted instead.
+  it("renders a tone outside the union as a muted dot instead of throwing", () => {
+    const unknownTone = "verifying" as WorkflowNodeTone;
+    const { container } = renderCard({ vm: buildVm({ tone: unknownTone }) });
+
+    expect(screen.getByText("03 · Research the topic")).toBeTruthy();
+    expect(statusDotOf(container).className).toContain("bg-muted-foreground");
+  });
+
+  // The hairline over the controls row belongs to Card's footer slot, not to a
+  // hand-drawn border on a div inside the body (which had drifted to a
+  // border-border/60 token nothing else in the card uses).
+  it("puts the controls row in Card's footer slot, hairline and all", () => {
+    const { container } = renderCard({
+      vm: buildVm({ controls: { approve: true } }),
+    });
+
+    const footer = screen.getByRole("button", { name: "Approve" }).parentElement?.parentElement;
+    expect(footer?.className).toContain("border-t");
+    expect(footer?.className).toContain("border-border");
+    expect(container.innerHTML).not.toContain("border-border/60");
+  });
+
+  it("draws no footer hairline on a card with no controls", () => {
+    const { container } = renderCard({ vm: buildVm() });
+    expect(container.querySelector(".border-t")).toBeNull();
   });
 
   it("gives the current node's title extra weight (structure, not color) instead of the rest", () => {

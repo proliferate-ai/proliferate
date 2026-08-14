@@ -8,10 +8,11 @@ import type {
 } from "@anyharness/sdk";
 import {
   buildWorkflowGraph,
-  detectWorkflowAutoAdvance,
   workflowNodeControls,
+  workflowNodeIsSideNode,
   workflowNodeStatusTone,
   workflowRunIsActive,
+  workflowRunTakesSideNode,
 } from "./run-view-model";
 
 const NODE_STATUSES: WorkflowRunNodeStatusV2[] = [
@@ -91,6 +92,33 @@ describe("workflowNodeStatusTone", () => {
       "danger",
     ]);
   });
+
+  // A status the union does not know about is not hypothetical: a runtime ahead
+  // of this build (or a stale prebuilt binary behind it) serializes exactly
+  // this. An undefined tone reaches StatusDot's own tone map and throws inside
+  // render, and the client's single root error boundary escalates that to
+  // whole-app crash recovery — so the floor is a muted dot, never a throw.
+  const UNKNOWN_STATUS = "verifying" as WorkflowRunNodeStatusV2;
+
+  it("falls back to muted for a status outside the union instead of throwing", () => {
+    expect(() => workflowNodeStatusTone(UNKNOWN_STATUS)).not.toThrow();
+    expect(workflowNodeStatusTone(UNKNOWN_STATUS)).toBe("muted");
+  });
+
+  it("carries the muted fallback through the graph a node card renders from", () => {
+    const slots = buildWorkflowGraph(projection([
+      node({ id: "a", chainIndex: 0, status: UNKNOWN_STATUS }),
+    ]));
+
+    expect(slots[0]!.attempts[0]!.tone).toBe("muted");
+    expect(slots[0]!.attempts[0]!.controls).toEqual({
+      approve: false,
+      failRedo: false,
+      flipToAgent: false,
+      flipToHuman: false,
+      addAdhoc: true,
+    });
+  });
 });
 
 describe("workflowRunIsActive", () => {
@@ -98,6 +126,43 @@ describe("workflowRunIsActive", () => {
     expect(
       RUN_STATUSES.map((status) => workflowRunIsActive(run({ status }))),
     ).toEqual([true, true, true, false, false]);
+  });
+});
+
+describe("workflowRunTakesSideNode", () => {
+  // Narrower than "active": a parked (interrupted) run is not growing, so the
+  // side-node affordance is withheld even though the runtime would accept it.
+  it("excludes interrupted, which workflowRunIsActive includes", () => {
+    expect(
+      RUN_STATUSES.map((status) => workflowRunTakesSideNode(run({ status }))),
+    ).toEqual([true, true, false, false, false]);
+    expect(workflowRunIsActive(run({ status: "interrupted" }))).toBe(true);
+  });
+});
+
+describe("workflowNodeIsSideNode", () => {
+  it("reads adhoc rows as side nodes and defined/replacement chain rows as chain", () => {
+    expect(workflowNodeIsSideNode(node({ id: "s", kind: "adhoc", anchorNodeRowId: "a" }))).toBe(true);
+    expect(workflowNodeIsSideNode(node({ id: "d" }))).toBe(false);
+    expect(
+      workflowNodeIsSideNode(
+        node({ id: "r", kind: "replacement", replacesNodeRowId: "d" }),
+      ),
+    ).toBe(false);
+  });
+
+  // Contractually impossible today (the runtime's Redo mints a replacement
+  // with no anchor, and redoing an ad hoc row mints another ad hoc row), so
+  // this pins the safe direction rather than a live shape: an anchored
+  // replacement reads
+  // as off-chain, which withholds chain controls instead of offering an advance
+  // from a copied chainIndex.
+  it("reads an anchored replacement as a side node", () => {
+    expect(
+      workflowNodeIsSideNode(
+        node({ id: "r", kind: "replacement", replacesNodeRowId: "s", anchorNodeRowId: "a" }),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -172,11 +237,107 @@ describe("workflowNodeControls — the transition table, row by row", () => {
     ).toBe(false);
   });
 
-  // AddAdhocNode: run-scoped, offered on every card of an active run.
-  it.each(RUN_STATUSES)("gates addAdhoc on the run being active (%s)", (status) => {
+  // AddAdhocNode: run-scoped, offered on every chain card of a run that is
+  // actually moving — an interrupted run is parked, so it is withheld there.
+  it.each(RUN_STATUSES)("gates addAdhoc on the run taking side nodes (%s)", (status) => {
     expect(
       workflowNodeControls(run({ status }), node({ id: "n", status: "running" })).addAdhoc,
-    ).toBe(status === "running" || status === "awaiting_human" || status === "interrupted");
+    ).toBe(status === "running" || status === "awaiting_human");
+  });
+
+  it("withholds addAdhoc on an interrupted (parked) run", () => {
+    expect(
+      workflowNodeControls(
+        run({ status: "interrupted" }),
+        node({ id: "n", status: "needs_attention" }),
+      ),
+    ).toEqual({
+      approve: false,
+      failRedo: true,
+      flipToAgent: false,
+      flipToHuman: false,
+      addAdhoc: false,
+    });
+  });
+
+  // ADR: adhoc rows "never advance or block the run" — gate, flip, and anchor
+  // semantics are chain-only (approve requires being the current node, which
+  // an adhoc row never is; flip has "no gate semantics"; adhoc rows are
+  // rejected as anchors). A side node copies its anchor's chainIndex, so
+  // keying on status/nodeType alone would render chain controls on it. Redo
+  // alone survives: fix-wave Ruling K makes FailAndRedo legal on an ad hoc row
+  // in needs_attention/failed, minting an ad hoc replacement anchored the
+  // same.
+  it("offers no controls on a running adhoc side node", () => {
+    expect(
+      workflowNodeControls(
+        run(),
+        node({
+          id: "side",
+          kind: "adhoc",
+          definitionNodeId: null,
+          anchorNodeRowId: "n",
+          status: "running",
+          nodeType: "agent",
+        }),
+      ),
+    ).toEqual({
+      approve: false,
+      failRedo: false,
+      flipToAgent: false,
+      flipToHuman: false,
+      addAdhoc: false,
+    });
+  });
+
+  it.each(NODE_STATUSES)("offers redo and only redo on an adhoc side node in %s", (status) => {
+    expect(
+      workflowNodeControls(
+        run(),
+        node({ id: "side", kind: "adhoc", definitionNodeId: null, anchorNodeRowId: "n", status }),
+      ),
+    ).toEqual({
+      approve: false,
+      failRedo: status === "failed" || status === "needs_attention",
+      flipToAgent: false,
+      flipToHuman: false,
+      addAdhoc: false,
+    });
+  });
+
+  // Positive control for the same gate: the defined chain node the side node
+  // hangs off is untouched by it.
+  it("leaves a running defined agent node's controls exactly as they were", () => {
+    expect(
+      workflowNodeControls(run(), node({ id: "n", status: "running", nodeType: "agent" })),
+    ).toEqual({
+      approve: false,
+      failRedo: false,
+      flipToAgent: false,
+      flipToHuman: true,
+      addAdhoc: true,
+    });
+  });
+
+  it("treats a replacement of a chain node as the chain node it replaces", () => {
+    expect(
+      workflowNodeControls(
+        run(),
+        node({
+          id: "n2",
+          kind: "replacement",
+          replacesNodeRowId: "n",
+          status: "awaiting_human",
+          nodeType: "human_in_loop",
+        }),
+      ),
+    ).toEqual({
+      approve: true,
+      failRedo: true,
+      flipToAgent: true,
+      flipToHuman: false,
+      addAdhoc: true,
+    });
   });
 
   // Negative control: a finished node offers no node-scoped control at all,
@@ -248,6 +409,25 @@ describe("buildWorkflowGraph", () => {
     expect(slots[0]!.adhoc).toEqual([]);
   });
 
+  // Placement and controls read the same predicate, so a row that renders with
+  // a side node's redo-only control set is never drawn as a chain attempt.
+  it("places an anchored replacement off the chain, beside the adhoc rows", () => {
+    const slots = buildWorkflowGraph(projection([
+      node({ id: "a", chainIndex: 0 }),
+      node({
+        id: "side-2",
+        kind: "replacement",
+        replacesNodeRowId: "side-1",
+        anchorNodeRowId: "a",
+        chainIndex: 0,
+        createdAt: "2026-08-14T00:00:09Z",
+      }),
+    ]));
+
+    expect(slots[0]!.attempts.map((vm) => vm.node.id)).toEqual(["a"]);
+    expect(slots[0]!.adhoc.map((vm) => vm.node.id)).toEqual(["side-2"]);
+  });
+
   it("orders attempts inside a slot by createdAt, not by projection order", () => {
     const slots = buildWorkflowGraph(projection([
       node({ id: "third", chainIndex: 0, createdAt: "2026-08-14T00:00:03Z" }),
@@ -305,124 +485,5 @@ describe("buildWorkflowGraph", () => {
       tone: "info",
       controls: { approve: true, flipToAgent: true },
     });
-  });
-});
-
-describe("detectWorkflowAutoAdvance", () => {
-  const previous = projection(
-    [
-      node({ id: "a", chainIndex: 0, status: "running" }),
-      node({ id: "b", chainIndex: 1 }),
-    ],
-    { currentNodeRowId: "a" },
-  );
-
-  it("fires when an agent node completed and the run moved on by itself", () => {
-    const next = projection(
-      [
-        node({ id: "a", chainIndex: 0, status: "completed" }),
-        node({ id: "b", chainIndex: 1, status: "running" }),
-      ],
-      { currentNodeRowId: "b" },
-    );
-
-    expect(detectWorkflowAutoAdvance(previous, next)).toEqual({
-      completedNode: next.nodes[0],
-      startedNode: next.nodes[1],
-    });
-  });
-
-  it("returns null on first load, when there is no previous projection", () => {
-    const next = projection(
-      [
-        node({ id: "a", chainIndex: 0, status: "completed" }),
-        node({ id: "b", chainIndex: 1, status: "running" }),
-      ],
-      { currentNodeRowId: "b" },
-    );
-
-    expect(detectWorkflowAutoAdvance(undefined, next)).toBeNull();
-  });
-
-  it("returns null when the current node did not move", () => {
-    expect(detectWorkflowAutoAdvance(previous, previous)).toBeNull();
-  });
-
-  it("returns null when the finished node is human_in_loop (a deliberate approve)", () => {
-    const approvedPrevious = projection(
-      [
-        node({ id: "a", chainIndex: 0, status: "awaiting_human", nodeType: "human_in_loop" }),
-        node({ id: "b", chainIndex: 1 }),
-      ],
-      { currentNodeRowId: "a" },
-    );
-    const next = projection(
-      [
-        node({ id: "a", chainIndex: 0, status: "completed", nodeType: "human_in_loop" }),
-        node({ id: "b", chainIndex: 1, status: "running" }),
-      ],
-      { currentNodeRowId: "b" },
-    );
-
-    expect(detectWorkflowAutoAdvance(approvedPrevious, next)).toBeNull();
-  });
-
-  it("returns null when the finished agent node was awaiting a human (an approve gate)", () => {
-    const gatedPrevious = projection(
-      [
-        node({ id: "a", chainIndex: 0, status: "awaiting_human" }),
-        node({ id: "b", chainIndex: 1 }),
-      ],
-      { currentNodeRowId: "a" },
-    );
-    const next = projection(
-      [
-        node({ id: "a", chainIndex: 0, status: "completed" }),
-        node({ id: "b", chainIndex: 1, status: "running" }),
-      ],
-      { currentNodeRowId: "b" },
-    );
-
-    expect(detectWorkflowAutoAdvance(gatedPrevious, next)).toBeNull();
-  });
-
-  it("returns null when the previous node did not actually complete", () => {
-    const next = projection(
-      [
-        node({ id: "a", chainIndex: 0, status: "failed" }),
-        node({ id: "b", chainIndex: 1, status: "running" }),
-      ],
-      { currentNodeRowId: "b" },
-    );
-
-    expect(detectWorkflowAutoAdvance(previous, next)).toBeNull();
-  });
-
-  it("returns null when the new current node is missing from the projection", () => {
-    const next = projection(
-      [node({ id: "a", chainIndex: 0, status: "completed" })],
-      { currentNodeRowId: "b" },
-    );
-
-    expect(detectWorkflowAutoAdvance(previous, next)).toBeNull();
-  });
-
-  it("returns null when the finished node is missing from the projection", () => {
-    const next = projection(
-      [node({ id: "b", chainIndex: 1, status: "running" })],
-      { currentNodeRowId: "b" },
-    );
-
-    expect(detectWorkflowAutoAdvance(previous, next)).toBeNull();
-  });
-
-  it("returns null when either side has no current node at all", () => {
-    const parked = projection(
-      [node({ id: "a", chainIndex: 0, status: "completed" })],
-      { currentNodeRowId: null },
-    );
-
-    expect(detectWorkflowAutoAdvance(previous, parked)).toBeNull();
-    expect(detectWorkflowAutoAdvance(parked, previous)).toBeNull();
   });
 });

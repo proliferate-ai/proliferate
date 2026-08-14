@@ -208,7 +208,9 @@ export {
   useWorkflowRunMutations,
   useWorkflowRunProjectionWriter,
   resolveWorkflowRunRefetchInterval,
+  resolveWorkflowRunsListRefetchInterval,
   WORKFLOW_RUN_ACTIVE_INTERVAL_MS,
+  WORKFLOW_RUNS_LIST_ACTIVE_INTERVAL_MS,
 } from "./hooks/workflow-runs.js";
 export {
   useWorkspacePlansQuery,

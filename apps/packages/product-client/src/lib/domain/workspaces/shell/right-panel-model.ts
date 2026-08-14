@@ -190,6 +190,47 @@ export function availableRightPanelTools(
     : DEFAULT_RIGHT_PANEL_TOOL_ORDER;
 }
 
+/** What a runs list's current state says about the workflow tool. */
+export interface WorkflowToolAvailability {
+  /** Whether the header renders the workflow tool entry. */
+  showTab: boolean;
+  /**
+   * What normalization reconciles an active `tool:workflow` entry against.
+   * `undefined` means "not known yet — leave the active entry alone".
+   */
+  activeEntryAvailability: boolean | undefined;
+}
+
+/**
+ * The run-scoped half of the gen-2 workflow tool's visibility, read off the
+ * runs list's own loading state (`availableRightPanelTools` above owns the
+ * build-gate half).
+ *
+ * Two answers, deliberately different, because a list that has not settled is
+ * not evidence of anything:
+ * - `showTab` — a settled empty list hides the tool, but an unsettled one keeps
+ *   it while the user is standing on it, so the loading tick during boot never
+ *   strips the tab out from under a pane that is rendering.
+ * - `activeEntryAvailability` — `undefined` while unsettled leaves the active
+ *   entry exactly where it is; `false` once a settled list (success *or* error)
+ *   shows no run retires an active workflow entry through the same fallback the
+ *   launch gate uses. Never touches the persisted header order: a run appearing
+ *   or finishing must not rewrite the user's stored header.
+ */
+export function resolveWorkflowToolAvailability(input: {
+  runsSettled: boolean;
+  hasRun: boolean;
+  isActiveTool: boolean;
+}): WorkflowToolAvailability {
+  if (!input.runsSettled) {
+    return {
+      showTab: input.hasRun || input.isActiveTool,
+      activeEntryAvailability: undefined,
+    };
+  }
+  return { showTab: input.hasRun, activeEntryAvailability: input.hasRun };
+}
+
 /**
  * Clamps to the panel's floor and an optional ceiling. The default ceiling is
  * unbounded: persistence and restore keep a width chosen on a larger window,
