@@ -89,22 +89,22 @@ describe("ConnectedSelectedResponseAnnotationMarkers", () => {
       <ConnectedSelectedResponseAnnotationMarkers rootRef={{ current: root }} />,
     );
     await waitFor(() => {
-      expect(highlightRegistry().get("annotation-highlight")?.ranges).toHaveLength(1);
+      expect(highlightRegistry().get("annotation")?.ranges).toHaveLength(1);
     });
 
     mocks.contexts = [];
     rerender(<ConnectedSelectedResponseAnnotationMarkers rootRef={{ current: root }} />);
     await waitFor(() => {
-      expect(highlightRegistry().has("annotation-highlight")).toBe(false);
+      expect(highlightRegistry().has("annotation")).toBe(false);
     });
 
     mocks.contexts = [{ id: "a1", text: "alpha passage" }];
     rerender(<ConnectedSelectedResponseAnnotationMarkers rootRef={{ current: root }} />);
     await waitFor(() => {
-      expect(highlightRegistry().has("annotation-highlight")).toBe(true);
+      expect(highlightRegistry().has("annotation")).toBe(true);
     });
     unmount();
-    expect(highlightRegistry().has("annotation-highlight")).toBe(false);
+    expect(highlightRegistry().has("annotation")).toBe(false);
   });
 
   it("previews the comment on hover, or a muted no-comment note", async () => {
@@ -163,7 +163,7 @@ describe("ConnectedSelectedResponseAnnotationMarkers", () => {
     expect(document.querySelectorAll("[data-annotation-marker]")).toHaveLength(1);
     // The suppressed excerpt keeps its highlight — only the badge yields to
     // the editor floating above it.
-    expect(highlightRegistry().get("annotation-highlight")?.ranges).toHaveLength(2);
+    expect(highlightRegistry().get("annotation")?.ranges).toHaveLength(2);
   });
 
   it("skips annotations whose text left the transcript and renders nothing when empty", async () => {

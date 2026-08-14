@@ -18,13 +18,13 @@ interface AnnotationMarker {
   top: number;
 }
 
-const ANNOTATION_HIGHLIGHT_NAME = "annotation-highlight";
+const ANNOTATION_HIGHLIGHT_NAME = "annotation";
 
 /**
  * Numbered badges pinned astride the top-left corner of each annotated
  * excerpt for as long as the annotation stays attached to the composer, with
  * the excerpt itself painted through the custom-highlight registry
- * (`::highlight(annotation-highlight)` in the shared product stylesheet).
+ * (`::highlight(annotation)` in the shared product stylesheet).
  * Hovering a badge previews the annotation's comment and offers a × that
  * removes just that annotation (the rest renumber; the composer pill count
  * follows). Anchors are re-located from the excerpt TEXT on every
