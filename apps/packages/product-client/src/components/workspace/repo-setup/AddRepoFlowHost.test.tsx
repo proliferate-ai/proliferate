@@ -266,6 +266,39 @@ describe("AddRepoFlowHost cloud gating (PR2-GATING-01)", () => {
     });
   });
 
+  it("keeps the completion callback alive across the cloud handoff", () => {
+    // Regression: the handoff used to run the store's close(), which nulls
+    // `onCompleted` — so the callback was already gone by the time
+    // CloudRepoActionDialogHost finished the registration and read it.
+    const onCompleted = vi.fn();
+    render(<AddRepoFlowHost />);
+    act(() => {
+      useAddRepoFlowStore.getState().openFlow({ onCompleted });
+      useAddRepoFlowStore.getState().setStep({ kind: "cloud" });
+    });
+
+    act(() => {
+      cloudHook.onRepositorySelected?.({ gitOwner: "Acme", gitRepoName: "Rocket" });
+    });
+
+    expect(useAddRepoFlowStore.getState().open).toBe(false);
+    expect(useAddRepoFlowStore.getState().onCompleted).toBe(onCompleted);
+  });
+
+  it("keeps the completion callback alive across the clone handoff", () => {
+    const onCompleted = vi.fn();
+    render(<AddRepoFlowHost />);
+    act(() => {
+      useAddRepoFlowStore.getState().openFlow({ onCompleted });
+      useAddRepoFlowStore.getState().setStep({ kind: "clone" });
+    });
+
+    act(() => cloudHook.clonePicker?.onAddManual());
+
+    expect(useAddRepoFlowStore.getState().open).toBe(false);
+    expect(useAddRepoFlowStore.getState().onCompleted).toBe(onCompleted);
+  });
+
   it("gates Clone on GitHub repository access, not managed Cloud", () => {
     capabilities.value = {
       githubRepositoryAccessStatus: "ready",

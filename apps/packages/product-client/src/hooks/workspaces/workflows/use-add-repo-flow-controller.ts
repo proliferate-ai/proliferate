@@ -49,6 +49,16 @@ export interface AddRepoFlowControllerInput {
   setStep: (step: AddRepoFlowStep) => void;
   /** Close the hosting surface (a completed add, or a step that must dismiss). */
   onClose: () => void;
+  /**
+   * Hide the hosting surface because the flow has been handed to ANOTHER owner
+   * (the cloud/clone intent host) that finishes it — and, critically, that reads
+   * the completion callback the store still holds. Distinct from `onClose`
+   * because the app-level host's close() clears `onCompleted`: closing on a
+   * handoff destroys the callback the later completion needs (the surface is
+   * already hidden by `handoffToCloud`). Surfaces that do not own the store's
+   * callback (anchored popovers) pass their own close for both.
+   */
+  onHandoff: () => void;
 }
 
 export interface AddRepoFlowControllerResult {
@@ -79,6 +89,7 @@ export function useAddRepoFlowController({
   step,
   setStep,
   onClose,
+  onHandoff,
 }: AddRepoFlowControllerInput): AddRepoFlowControllerResult {
   const handoffToCloud = useAddRepoFlowStore((state) => state.handoffToCloud);
   const beginCloudIntent = useCloudRepositoryIntentStore((state) => state.begin);
@@ -276,8 +287,10 @@ export function useAddRepoFlowController({
     onOpenExternalUrl: host.links.openExternal,
     onCopyText: host.clipboard.writeText,
     onRepositorySelected: (repo) => {
+      // Handoff, not close: CloudRepoActionDialogHost finishes this add later
+      // and reads the store's `onCompleted`, which close() would have nulled.
       handoffToCloud();
-      onClose();
+      onHandoff();
       beginCloudIntent({
         kind: "add_cloud_repository",
         repo: { gitProvider: "github", ...repo },
@@ -336,8 +349,10 @@ export function useAddRepoFlowController({
       return;
     }
     setFlowError(null);
+    // Handoff, not close: the clone completes in CloudRepoActionDialogHost,
+    // which still needs the store's `onCompleted`.
     handoffToCloud();
-    onClose();
+    onHandoff();
     beginCloudIntent({
       kind: "clone_from_github",
       repo: {
@@ -346,7 +361,7 @@ export function useAddRepoFlowController({
         gitRepoName: identity.gitRepoName,
       },
     });
-  }, [beginCloudIntent, handoffToCloud, onClose]);
+  }, [beginCloudIntent, handoffToCloud, onHandoff]);
 
   const clonePicker = useMemo<CloudRepoPickerProps>(() => ({
     ...clonePickerBase,

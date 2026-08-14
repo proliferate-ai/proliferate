@@ -32,7 +32,16 @@ export function AddRepositoryFlowPanel({
   entryTitle,
 }: AddRepositoryFlowPanelProps) {
   const [step, setStep] = useState<AddRepoFlowStep>({ kind: "entry" });
-  const flow = useAddRepoFlowController({ open: true, step, setStep, onClose });
+  // An anchored popover does not own the add-repo-flow store's completion
+  // callback, so hiding it on a handoff destroys nothing: close and handoff are
+  // the same motion here.
+  const flow = useAddRepoFlowController({
+    open: true,
+    step,
+    setStep,
+    onClose,
+    onHandoff: onClose,
+  });
 
   return (
     <AddRepositoryPopover

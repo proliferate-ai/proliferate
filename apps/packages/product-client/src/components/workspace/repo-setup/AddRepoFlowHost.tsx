@@ -10,13 +10,25 @@ import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
  * shared controller's, which is also what the anchored entry points mount, so
  * the three surfaces cannot drift into three different flows.
  */
+/** Stable identity so the controller's callbacks are not rebuilt every render. */
+const NOOP_HANDOFF = () => {};
+
 export function AddRepoFlowHost() {
   const open = useAddRepoFlowStore((state) => state.open);
   const step = useAddRepoFlowStore((state) => state.step);
   const setStep = useAddRepoFlowStore((state) => state.setStep);
   const closeFlow = useAddRepoFlowStore((state) => state.close);
 
-  const flow = useAddRepoFlowController({ open, step, setStep, onClose: closeFlow });
+  const flow = useAddRepoFlowController({
+    open,
+    step,
+    setStep,
+    onClose: closeFlow,
+    // A handoff must NOT run the store's close(): `handoffToCloud` has already
+    // hidden this surface, and close() nulls `onCompleted` — the callback the
+    // cloud/clone intent host reads when the add actually finishes.
+    onHandoff: NOOP_HANDOFF,
+  });
 
   const handleDismiss = useCallback(() => {
     // Ignore Escape/outside-click while a local add is committing. Completion
