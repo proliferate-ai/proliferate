@@ -47,12 +47,12 @@ export function WorkspaceShellRightRail({
         // rather than a disappearance: the same panel duration that animates an
         // explicit toggle animates the collapse the drag triggered, and
         // `prefers-reduced-motion` zeroes `--duration-panel` so the panel snaps
-        // shut instead.
+        // shut instead. Live drags zero the geometry duration instead of
+        // easing, so the edge lands on the cursor every frame.
         // The min() clamp keeps MAIN_PANE_MIN_WIDTH of this flex row for the
         // chat pane: the rail yields before the composer collapses. 100%
-        // resolves against the row, and the registered width property still
-        // animates inside the clamp.
-        className="relative isolate shrink-0 overflow-hidden bg-sidebar-background"
+        // resolves against the row.
+        className="relative isolate shrink-0 overflow-hidden bg-sidebar-background transition-[width] ease-out-cubic [transition-duration:var(--workspace-right-geometry-duration)]"
         style={{ width: `min(var(--workspace-right-width), calc(100% - ${MAIN_PANE_MIN_WIDTH}px))` }}
         data-right-panel-rail
       >

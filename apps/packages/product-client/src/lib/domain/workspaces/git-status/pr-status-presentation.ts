@@ -2,6 +2,7 @@ import { formatRelativeTime } from "#product/lib/domain/workspaces/display/works
 import type { StatusDotFill, StatusDotTone } from "#product/primitives/StatusDot";
 import type {
   WorkspaceGitStatus,
+  WorkspacePrChecks,
   WorkspacePrStatus,
 } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
@@ -90,6 +91,24 @@ function prStatusKind(pr: WorkspacePrStatus): PrStatusKind | null {
 }
 
 /**
+ * The one phrasing of a PR's check state, shared by every surface that names
+ * it. Null for "none": a PR with no checks has nothing to say here, and each
+ * caller decides whether that silence needs its own words.
+ */
+export function prChecksLabel(checks: WorkspacePrChecks): string | null {
+  switch (checks) {
+    case "failing":
+      return "Checks failing";
+    case "pending":
+      return "Checks pending";
+    case "passing":
+      return "Checks passing";
+    case "none":
+      return null;
+  }
+}
+
+/**
  * Full tooltip for a PR row ("PR #805 · Open · Checks failing"). Draft rows
  * include checks/review segments too; merged/closed rows carry only the state.
  * Snapshot-sourced statuses get an "as of {rel}" suffix so stale data reads as
@@ -109,10 +128,11 @@ export function prStatusCompoundLabel(
   ];
 
   if (pr.state === "open" || pr.state === "draft") {
-    if (pr.checks === "failing") {
-      parts.push("Checks failing");
-    } else if (pr.checks === "pending") {
-      parts.push("Checks pending");
+    // Passing checks stay silent: a green PR reads as "PR #805 · Open", not
+    // as a tooltip that spends a segment saying nothing is wrong.
+    const checksLabel = pr.checks === "passing" ? null : prChecksLabel(pr.checks);
+    if (checksLabel) {
+      parts.push(checksLabel);
     }
     if (pr.reviewDecision === "changes_requested") {
       parts.push("Changes requested");

@@ -13,12 +13,11 @@ use url::form_urlencoded;
 use super::http::{
     agent_auth::{delete_agent_auth_state, put_agent_auth_state},
     agent_gateway_catalog, agent_model_snapshot, agents, auth as http_auth, catalogs, cowork,
-    files, git, goals, health,
-    hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
-    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
-    sessions_prompt, sessions_resume, subagents, terminals, workflow_runs, workflow_workspaces,
-    workspaces, workspaces_lifecycle, workspaces_purge, workspaces_restore, workspaces_setup,
-    workspaces_worktrees, worktrees,
+    files, git, goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay,
+    repo_roots, reviews, sessions, sessions_config, sessions_events, sessions_fork,
+    sessions_interactions, sessions_lifecycle, sessions_prompt, sessions_resume, subagents,
+    terminals, workflow_runs, workflow_workspaces, workspaces, workspaces_lifecycle,
+    workspaces_purge, workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
@@ -99,16 +98,16 @@ pub fn build_router(state: AppState) -> Router {
             get(workspaces::get_workspace).delete(workspaces_purge::purge_workspace),
         )
         .route(
+            "/workspaces/{workspace_id}/archive",
+            post(workspaces_lifecycle::archive_workspace),
+        )
+        .route(
+            "/workspaces/{workspace_id}/unarchive",
+            post(workspaces_lifecycle::unarchive_workspace),
+        )
+        .route(
             "/workspaces/{workspace_id}/worktree/restore",
             post(workspaces_restore::restore_worktree),
-        )
-        .route(
-            "/workspaces/{workspace_id}/purge/preflight",
-            get(workspaces_purge::purge_workspace_preflight),
-        )
-        .route(
-            "/workspaces/{workspace_id}/purge/retry",
-            post(workspaces_purge::retry_purge_workspace),
         )
         .route(
             "/worktrees/inventory",
@@ -117,27 +116,6 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/worktrees/orphans/prune",
             post(worktrees::prune_orphan_worktree),
-        )
-        .route(
-            "/worktrees/retention-policy",
-            get(worktrees::get_worktree_retention_policy)
-                .put(worktrees::update_worktree_retention_policy),
-        )
-        .route(
-            "/worktrees/retention/run",
-            post(worktrees::run_worktree_retention),
-        )
-        .route(
-            "/workspaces/{workspace_id}/retire/preflight",
-            get(workspaces_lifecycle::retire_workspace_preflight),
-        )
-        .route(
-            "/workspaces/{workspace_id}/retire",
-            post(workspaces_lifecycle::retire_workspace),
-        )
-        .route(
-            "/workspaces/{workspace_id}/retire/cleanup-retry",
-            post(workspaces_lifecycle::retry_retire_cleanup),
         )
         .route(
             "/repo-roots",
@@ -408,14 +386,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/sessions", post(sessions::create_session))
         .route("/sessions", get(sessions::list_sessions))
         .route("/sessions/{session_id}", get(sessions::get_session))
-        .route(
-            "/sessions/{session_id}/subagents",
-            get(subagents::get_session_subagents),
-        )
-        .route(
-            "/sessions/{session_id}/subagents/{child_session_id}/wake",
-            post(subagents::schedule_subagent_wake),
-        )
+        .merge(subagents::routes())
         .route(
             "/sessions/{session_id}/reviews",
             get(reviews::get_session_reviews),

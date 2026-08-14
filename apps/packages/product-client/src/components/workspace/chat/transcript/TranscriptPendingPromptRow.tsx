@@ -3,9 +3,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { PendingPromptEntry } from "@anyharness/sdk";
+import type { PendingPromptEntry, TranscriptState } from "@anyharness/sdk";
 import { Button } from "#product/primitives/Button";
-import { SubagentWakeBadge } from "#product/components/workspace/chat/transcript/SubagentWakeBadge";
+import { AgentOriginPromptReceipt } from "#product/components/workspace/chat/transcript/AgentOriginPromptReceipt";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
 import {
   TURN_ITEM_GAP_CLASS,
@@ -13,6 +13,7 @@ import {
   TurnShell,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 import {
+  isAgentSessionProvenance,
   isSubagentWakeProvenance,
 } from "#product/domain/chats/subagents/provenance";
 import {
@@ -34,6 +35,8 @@ interface OutboxActionHandlers {
 
 export function TranscriptPendingPromptRow({
   activeSessionId,
+  transcript,
+  workspaceId,
   rowIndex,
   prompt,
   outboxEntry,
@@ -42,6 +45,8 @@ export function TranscriptPendingPromptRow({
   workspaceReceipt = null,
 }: {
   activeSessionId: string;
+  transcript: TranscriptState;
+  workspaceId: string | null;
   rowIndex: number;
   prompt: PendingPromptEntry;
   outboxEntry: PromptOutboxEntry | null;
@@ -101,6 +106,8 @@ export function TranscriptPendingPromptRow({
         <PendingPromptBody
           activeSessionId={activeSessionId}
           prompt={prompt}
+          transcript={transcript}
+          workspaceId={workspaceId}
         />
         {/* Recovery controls are completion-adjacent UI. Keep them above the
             frontier so their disappearance cannot move the frontier/footer. */}
@@ -120,17 +127,26 @@ export function TranscriptPendingPromptRow({
 function PendingPromptBody({
   activeSessionId,
   prompt,
+  transcript,
+  workspaceId,
 }: {
   activeSessionId: string;
   prompt: PendingPromptEntry;
+  transcript: TranscriptState;
+  workspaceId: string | null;
 }) {
-  if (isSubagentWakeProvenance(prompt.promptProvenance)) {
+  if (
+    isSubagentWakeProvenance(prompt.promptProvenance)
+    || isAgentSessionProvenance(prompt.promptProvenance)
+  ) {
     return (
-      <div className="flex justify-end">
-        <SubagentWakeBadge
-          label={prompt.promptProvenance.label ?? null}
-        />
-      </div>
+      <AgentOriginPromptReceipt
+        provenance={prompt.promptProvenance}
+        exactMessage={prompt.text}
+        transcript={transcript}
+        parentSessionId={activeSessionId}
+        workspaceId={workspaceId}
+      />
     );
   }
   return (

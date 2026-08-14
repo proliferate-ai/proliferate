@@ -25,7 +25,6 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     displayName: overrides.displayName,
     executionSummary: overrides.executionSummary,
     lifecycleState: overrides.lifecycleState ?? "active",
-    cleanupState: overrides.cleanupState ?? "none",
     createdAt: overrides.createdAt ?? "2026-04-13T10:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-13T10:00:00.000Z",
   };
@@ -61,7 +60,6 @@ function sidebarSourceRootForWorkspace(
     logicalWorkspaces,
     showArchived: false,
     workspaceTypes: DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-    archivedSet: new Set(),
     hiddenRepoRootIds: new Set(),
     selectedLogicalWorkspaceId: null,
     selectedWorkspaceId: null,

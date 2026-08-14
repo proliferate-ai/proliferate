@@ -4,13 +4,19 @@ use anyharness_contract::v1::{PendingPromptRemovalReason, PendingPromptRemovedPa
 use crate::domains::agents::model::AgentKind;
 use crate::domains::sessions::model::PromptAttachmentState;
 use crate::domains::sessions::prompt::render::{render, TurnPromptExtras};
-use crate::domains::sessions::prompt::PromptPayload;
+use crate::domains::sessions::prompt::{PromptPayload, ResolvedParts};
 use crate::live::sessions::actor::command::PromptAcceptError;
 use crate::live::sessions::actor::state::SessionActor;
+use crate::live::sessions::sink::SubagentWakeTurnStartOutcome;
 
 pub(in crate::live::sessions::actor) struct StartedPromptTurn {
     pub acp_blocks: Vec<acp::schema::ContentBlock>,
     pub turn_id: String,
+}
+
+pub(in crate::live::sessions::actor) enum BeginPromptTurnOutcome {
+    Started(StartedPromptTurn),
+    Skipped(SubagentWakeTurnStartOutcome),
 }
 
 impl SessionActor {
@@ -19,25 +25,10 @@ impl SessionActor {
         payload: &PromptPayload,
         prompt_id: Option<String>,
         queue_seq: Option<i64>,
-    ) -> Result<StartedPromptTurn, PromptAcceptError> {
-        // Resolve: load every referenced attachment (store rows + stored bytes,
-        // legacy-content fallback included) through the attachments capability.
-        let parts = match self.caps.attachments.load(&self.session_id, payload) {
-            Ok(parts) => parts,
-            Err(error) => {
-                tracing::warn!(
-                    session_id = %self.session_id,
-                    code = error.code,
-                    detail = %error.detail,
-                    "failed to build ACP prompt blocks",
-                );
-                return Err(PromptAcceptError::EnqueueFailed(error.detail));
-            }
-        };
-
+    ) -> Result<BeginPromptTurnOutcome, PromptAcceptError> {
         // Decide the codex first-prompt append. The durable turn-history gate
         // stays exactly here: it needs the events capability, so the decision
-        // happens before the pure render and rides in as an extra.
+        // happens before admission/render and rides in as an extra.
         let mut first_prompt_system_prompt_append = None;
         match self.caps.events.has_turn_started_event(&self.session_id) {
             Ok(has_turn_started) => {
@@ -58,12 +49,75 @@ impl SessionActor {
             }
         }
 
-        // Render: pure payload + loaded parts -> ACP blocks; the first-prompt
-        // append folds in here instead of mutating the blocks afterwards.
+        let queued_subagent_wake = queue_seq.filter(|_| payload.has_subagent_wake_provenance());
+
+        // Canonical completion wakes are exactly one text block. They render
+        // against no attachments only after durable admission has validated
+        // the row.
+        let parts = if queued_subagent_wake.is_some() {
+            ResolvedParts::default()
+        } else {
+            match self.caps.attachments.load(&self.session_id, payload) {
+                Ok(parts) => parts,
+                Err(error) => {
+                    tracing::warn!(
+                        session_id = %self.session_id,
+                        code = error.code,
+                        detail = %error.detail,
+                        "failed to build ACP prompt blocks",
+                    );
+                    return Err(PromptAcceptError::EnqueueFailed(error.detail));
+                }
+            }
+        };
+
+        // Resolve current durable role/relationship truth at the last
+        // effect-free boundary before render. Never log the internal resolver
+        // error: the bounded incident receipt is the only public/debug handle.
+        let product_context = match self.caps.product_context.resolve(&self.session_id) {
+            Ok(context) => context,
+            Err(error) => {
+                let incident_id = uuid::Uuid::new_v4().to_string();
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    incident_id,
+                    failure_code = crate::domains::sessions::prompt::AGENT_PRODUCT_CONTEXT_UNAVAILABLE_CODE,
+                    "agent product context resolution failed"
+                );
+                return Err(PromptAcceptError::ProductContextUnavailable { incident_id, error });
+            }
+        };
+
+        // Completion-wake admission is the first durable turn effect. It stays
+        // after product-context resolution so a context failure has no
+        // TurnStarted or user item, but before render so the existing
+        // canonical gate silently discards forged attachment-bearing rows.
+        let admitted_subagent_turn = if let Some(seq) = queued_subagent_wake {
+            let mut sink = self.event_sink.lock().await;
+            let outcome = sink
+                .persist_subagent_wake_turn(
+                    payload.text_summary.clone(),
+                    prompt_id.clone(),
+                    payload.content_parts(),
+                    payload.public_provenance(),
+                    seq,
+                )
+                .map_err(|error| PromptAcceptError::EnqueueFailed(error.to_string()))?;
+            match outcome {
+                SubagentWakeTurnStartOutcome::Admitted { turn_id } => Some(turn_id),
+                other => return Ok(BeginPromptTurnOutcome::Skipped(other)),
+            }
+        } else {
+            None
+        };
+
+        // Render: pure payload + loaded parts + separately resolved system
+        // context -> ACP blocks. Authored payload blocks remain untouched.
         let acp_blocks = match render(
             payload,
             &parts,
             &TurnPromptExtras {
+                product_context: Some(product_context.instruction().to_string()),
                 first_prompt_system_prompt_append,
             },
         ) {
@@ -79,6 +133,13 @@ impl SessionActor {
             }
         };
 
+        if let Some(turn_id) = admitted_subagent_turn {
+            return Ok(BeginPromptTurnOutcome::Started(StartedPromptTurn {
+                acp_blocks,
+                turn_id,
+            }));
+        }
+
         // Effects: begin_turn durably persists the replacement turn events first;
         // attachment hygiene and the queue-row removal follow in the same order
         // as before, all under one sink lock hold.
@@ -86,12 +147,18 @@ impl SessionActor {
         {
             let mut sink = self.event_sink.lock().await;
             let content_parts = payload.content_parts();
-            turn_id = sink.begin_turn(
-                payload.text_summary.clone(),
-                prompt_id.clone(),
-                content_parts,
-                payload.public_provenance(),
-            );
+            turn_id = sink
+                .begin_turn(
+                    payload.text_summary.clone(),
+                    prompt_id.clone(),
+                    content_parts,
+                    payload.public_provenance(),
+                )
+                .map_err(|_| {
+                    PromptAcceptError::EnqueueFailed(
+                        "prior turn could not be durably finalized".to_string(),
+                    )
+                })?;
             tracing::info!(
                 target: "anyharness.turn.started",
                 session_id = %self.session_id,
@@ -130,10 +197,10 @@ impl SessionActor {
             }
         }
 
-        Ok(StartedPromptTurn {
+        Ok(BeginPromptTurnOutcome::Started(StartedPromptTurn {
             acp_blocks,
             turn_id,
-        })
+        }))
     }
 }
 

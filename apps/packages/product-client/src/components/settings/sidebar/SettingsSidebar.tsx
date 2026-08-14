@@ -1,5 +1,6 @@
 import { Fragment, useMemo, type ComponentType, type ReactNode } from "react";
 import {
+  Archive,
   KeyRound,
   LifeBuoy,
   Link2,
@@ -14,7 +15,6 @@ import {
   Gauge,
   MousePointerClick,
   RefreshCw,
-  Scissors,
   Settings2,
   Users,
 } from "#product/primitives/icons/platform";
@@ -88,6 +88,7 @@ const SETTINGS_NAV_ICONS = {
   "agent-grok": harnessNavIcon("grok"),
   "agent-opencode": harnessNavIcon("opencode"),
   appearance: Palette,
+  "archived-workspaces": Archive,
   billing: CreditCard,
   "check-for-updates": RefreshCw,
   environments: SlidersHorizontal,
@@ -104,7 +105,6 @@ const SETTINGS_NAV_ICONS = {
   "repo-actions": MousePointerClick,
   "repo-environment": KeyRound,
   support: LifeBuoy,
-  worktrees: Scissors,
 } satisfies Record<SettingsNavIconId, ComponentType<{ className?: string }>>;
 
 function isSettingsItemActive(item: SettingsNavItem, activeSection: SettingsSection) {

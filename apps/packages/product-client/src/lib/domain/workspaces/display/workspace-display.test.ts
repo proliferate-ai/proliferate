@@ -19,7 +19,6 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
     displayName: null,
     executionSummary: null,
     lifecycleState: "active",
-    cleanupState: "none",
     origin: null,
     createdAt: "2026-04-20T00:00:00Z",
     updatedAt: "2026-04-20T00:00:00Z",

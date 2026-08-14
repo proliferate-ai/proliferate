@@ -55,7 +55,9 @@ impl SessionStore {
     }
 }
 
-fn map_raw_notification(row: &rusqlite::Row) -> rusqlite::Result<SessionRawNotificationRecord> {
+pub(super) fn map_raw_notification(
+    row: &rusqlite::Row,
+) -> rusqlite::Result<SessionRawNotificationRecord> {
     Ok(SessionRawNotificationRecord {
         id: row.get("id")?,
         session_id: row.get("session_id")?,

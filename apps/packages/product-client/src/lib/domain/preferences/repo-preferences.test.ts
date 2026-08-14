@@ -13,6 +13,8 @@ describe("repo preferences", () => {
       defaultBranch: "main",
       setupScript: "pnpm install",
       runCommand: "",
+      archiveScript: "",
+      rerunSetupOnUnarchive: true,
     });
   });
 
@@ -24,6 +26,8 @@ describe("repo preferences", () => {
       defaultBranch: null,
       setupScript: "",
       runCommand: "pnpm dev",
+      archiveScript: "",
+      rerunSetupOnUnarchive: true,
     });
   });
 
@@ -36,11 +40,15 @@ describe("repo preferences", () => {
         defaultBranch: "main",
         setupScript: "",
         runCommand: "",
+        archiveScript: "",
+        rerunSetupOnUnarchive: true,
       },
       "/repo-b": {
         defaultBranch: null,
         setupScript: "uv sync",
         runCommand: "uv run pytest",
+        archiveScript: "",
+        rerunSetupOnUnarchive: true,
       },
     });
   });
@@ -52,10 +60,46 @@ describe("repo preferences", () => {
       defaultBranch: "main",
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
+      archiveScript: "scripts/archive.sh",
+      rerunSetupOnUnarchive: false,
     })).toEqual({
       defaultBranch: "release",
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
+      archiveScript: "scripts/archive.sh",
+      rerunSetupOnUnarchive: false,
+    });
+  });
+
+  it("normalizes a persisted blob missing the archiving knobs to the defaults", () => {
+    expect(normalizeRepoConfig({
+      defaultBranch: "main",
+      setupScript: "pnpm install",
+      runCommand: "pnpm dev",
+    })).toEqual({
+      defaultBranch: "main",
+      setupScript: "pnpm install",
+      runCommand: "pnpm dev",
+      archiveScript: "",
+      rerunSetupOnUnarchive: true,
+    });
+  });
+
+  it("leaves existing archiving knobs intact when a patch omits them", () => {
+    expect(normalizeRepoConfig({
+      setupScript: "pnpm build",
+    }, {
+      defaultBranch: "main",
+      setupScript: "pnpm install",
+      runCommand: "pnpm dev",
+      archiveScript: "scripts/archive.sh",
+      rerunSetupOnUnarchive: false,
+    })).toEqual({
+      defaultBranch: "main",
+      setupScript: "pnpm build",
+      runCommand: "pnpm dev",
+      archiveScript: "scripts/archive.sh",
+      rerunSetupOnUnarchive: false,
     });
   });
 });

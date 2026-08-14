@@ -84,6 +84,63 @@ describe("prompt content normalization", () => {
       sizeLabel: "5 MB",
       preview: "Design spec",
       uri: "file:///workspace/docs/spec.pdf",
+      pathKind: "file",
+    });
+  });
+
+  it("marks folder resource links and draft local references with path kinds", () => {
+    const [folderLink] = normalizeContentParts([{
+      type: "resource_link",
+      uri: "file:///Users/dev/logo",
+      name: "logo",
+      mimeType: "inode/directory",
+    }]);
+    expect(folderLink).toMatchObject({
+      type: "link",
+      name: "logo",
+      pathKind: "directory",
+    });
+    expect(folderLink && "sizeLabel" in folderLink ? folderLink.sizeLabel : null)
+      .toBeUndefined();
+
+    const drafts = normalizeDraftAttachments([
+      {
+        id: "ref-1",
+        name: "logo",
+        mimeType: "inode/directory",
+        size: 0,
+        kind: "local_ref",
+        source: "upload",
+        objectUrl: null,
+        localPath: "/Users/dev/logo",
+        pathKind: "directory",
+      },
+      {
+        id: "ref-2",
+        name: "archive.zip",
+        mimeType: "",
+        size: 2048,
+        kind: "local_ref",
+        source: "upload",
+        objectUrl: null,
+        localPath: "/Users/dev/archive.zip",
+        pathKind: "file",
+      },
+    ]);
+
+    expect(drafts[0]).toMatchObject({
+      type: "file",
+      name: "logo",
+      pathKind: "directory",
+      uri: "/Users/dev/logo",
+    });
+    expect(drafts[0]?.sizeLabel).toBeUndefined();
+    expect(drafts[1]).toMatchObject({
+      type: "file",
+      name: "archive.zip",
+      pathKind: "file",
+      uri: "/Users/dev/archive.zip",
+      sizeLabel: "2 KB",
     });
   });
 

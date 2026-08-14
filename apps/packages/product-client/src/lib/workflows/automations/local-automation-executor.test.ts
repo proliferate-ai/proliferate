@@ -48,7 +48,6 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
     originalBranch: "main",
     surface: "standard",
     lifecycleState: "active",
-    cleanupState: "none",
     origin: null,
     executionSummary: null,
     createdAt: "2026-04-20T00:00:00Z",

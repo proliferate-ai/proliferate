@@ -458,6 +458,35 @@ CREATE TABLE session_events (
     payload_json TEXT NOT NULL
 , item_id TEXT);
 
+-- table: session_link_completion_deliveries
+CREATE TABLE session_link_completion_deliveries (
+    delivery_id TEXT PRIMARY KEY,
+    completion_id TEXT NOT NULL UNIQUE,
+    session_link_id TEXT NOT NULL,
+    parent_session_id TEXT NOT NULL,
+    child_session_id TEXT NOT NULL,
+    subagent_public_id TEXT,
+    label TEXT,
+    child_turn_id TEXT NOT NULL,
+    child_last_event_seq INTEGER NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome IN ('completed', 'failed', 'cancelled')),
+    assistant_text TEXT,
+    notification_text TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('pending', 'enqueued', 'delivered', 'abandoned', 'failed')),
+    parent_prompt_seq INTEGER,
+    parent_turn_id TEXT,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL,
+    lease_token TEXT,
+    lease_expires_at TEXT,
+    last_error_code TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    enqueued_at TEXT,
+    delivered_at TEXT,
+    UNIQUE(child_session_id, child_turn_id)
+);
+
 -- table: session_link_completions
 CREATE TABLE session_link_completions (
     completion_id TEXT PRIMARY KEY,
@@ -486,7 +515,7 @@ CREATE TABLE session_links (
     workspace_relation TEXT NOT NULL,
     created_by_turn_id TEXT,
     created_by_tool_call_id TEXT,
-    created_at TEXT NOT NULL, label TEXT, public_id TEXT, closed_at TEXT,
+    created_at TEXT NOT NULL, label TEXT, public_id TEXT, closed_at TEXT, subagent_closed_at TEXT,
     UNIQUE(relation, parent_session_id, child_session_id),
     CHECK(parent_session_id != child_session_id)
 );
@@ -675,12 +704,11 @@ CREATE TABLE "workspaces" (
             display_name TEXT,
             origin_json TEXT,
             creator_context_json TEXT,
-            lifecycle_state TEXT NOT NULL DEFAULT 'active' CHECK (lifecycle_state IN ('active', 'retired')),
-            cleanup_state TEXT NOT NULL DEFAULT 'none' CHECK (cleanup_state IN ('none', 'pending', 'complete', 'failed')),
-            cleanup_operation TEXT CHECK (cleanup_operation IS NULL OR cleanup_operation IN ('retire', 'purge')),
-            cleanup_error_message TEXT,
-            cleanup_failed_at TEXT,
-            cleanup_attempted_at TEXT,
+            lifecycle_state TEXT NOT NULL DEFAULT 'active' CHECK (lifecycle_state IN ('active', 'archived')),
+            archived_head_sha TEXT,
+            archived_branch TEXT,
+            archived_at TEXT,
+            partial_capture_json TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -700,6 +728,14 @@ CREATE INDEX idx_agent_model_registry_snapshots_kind
 -- index: idx_agent_model_registry_snapshots_workspace
 CREATE INDEX idx_agent_model_registry_snapshots_workspace
     ON agent_model_registry_snapshots(workspace_scope);
+
+-- index: idx_completion_deliveries_due
+CREATE INDEX idx_completion_deliveries_due
+    ON session_link_completion_deliveries(state, next_attempt_at, lease_expires_at);
+
+-- index: idx_completion_deliveries_parent_state
+CREATE INDEX idx_completion_deliveries_parent_state
+    ON session_link_completion_deliveries(parent_session_id, state);
 
 -- index: idx_cowork_managed_workspaces_open_parent
 CREATE INDEX idx_cowork_managed_workspaces_open_parent
@@ -902,12 +938,12 @@ CREATE UNIQUE INDEX idx_workflow_runs_active_session_controller
 CREATE INDEX idx_workflow_workspace_materializations_workspace_id
     ON workflow_workspace_materializations(workspace_id);
 
+-- index: idx_workspaces_lifecycle
+CREATE INDEX idx_workspaces_lifecycle
+            ON workspaces(repo_root_id, kind, lifecycle_state, surface);
+
 -- index: idx_workspaces_path
 CREATE INDEX idx_workspaces_path ON workspaces(path);
 
 -- index: idx_workspaces_repo_root_id
 CREATE INDEX idx_workspaces_repo_root_id ON workspaces(repo_root_id);
-
--- index: idx_workspaces_retention
-CREATE INDEX idx_workspaces_retention
-            ON workspaces(repo_root_id, kind, lifecycle_state, surface);

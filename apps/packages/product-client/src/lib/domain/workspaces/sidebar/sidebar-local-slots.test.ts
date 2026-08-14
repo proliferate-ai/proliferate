@@ -7,7 +7,7 @@ import {
 } from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 describe("local-slot sidebar aliases", () => {
-  it("uses local-slot aliases for active, archived, and queued sidebar state", () => {
+  it("uses local-slot aliases for active and queued sidebar state", () => {
     const logicalWorkspace = makeLocalLogicalWorkspace({
       id: "remote:github:proliferate-ai:repo-a:main",
       workspaceId: "workspace-local",
@@ -19,8 +19,6 @@ describe("local-slot sidebar aliases", () => {
     const groups = buildGroups({
       logicalWorkspaces: [logicalWorkspace],
       selectedLogicalWorkspaceId: slotId,
-      showArchived: true,
-      archivedIds: [slotId],
       pendingPromptCounts: {
         [slotId]: 2,
       },
@@ -29,7 +27,7 @@ describe("local-slot sidebar aliases", () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]?.items[0]?.id).toBe("remote:github:proliferate-ai:repo-a:main");
     expect(groups[0]?.items[0]?.active).toBe(true);
-    expect(groups[0]?.items[0]?.archived).toBe(true);
+    expect(groups[0]?.items[0]?.archived).toBe(false);
     expect(groups[0]?.items[0]?.statusIndicator).toEqual({
       kind: "queued_prompt",
       tooltip: "2 queued Home prompts",

@@ -1,6 +1,6 @@
 [package]
 name = "proliferate"
-version = "0.4.9"
+version = "0.4.11"
 edition.workspace = true
 
 [features]
@@ -55,10 +55,12 @@ objc2-app-kit = { version = "0.3.2", features = [
   "NSDockTile",
   "NSMenu",
   "NSMenuItem",
+  "NSPasteboard",
   "NSView",
   "NSWindow",
 ] }
 objc2-foundation = { version = "0.3.2", features = [
+  "NSArray",
   "NSProcessInfo",
   "NSString",
 ] }

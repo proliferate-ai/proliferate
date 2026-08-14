@@ -412,12 +412,12 @@ describe("settings navigation", () => {
     });
   });
 
-  it("resolves the worktrees settings section", () => {
+  it("falls retired pruning settings links back to general", () => {
     expect(resolveSettingsSelection({
       rawSection: "worktrees",
       repositories: [],
     })).toEqual({
-      activeSection: "worktrees",
+      activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,

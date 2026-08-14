@@ -146,23 +146,6 @@ impl TerminalStore {
         })
     }
 
-    pub(crate) fn list_workspace_command_run_activity(
-        &self,
-    ) -> anyhow::Result<Vec<(String, String)>> {
-        self.db.with_conn(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT workspace_id,
-                        MAX(MAX(COALESCE(completed_at, ''), COALESCE(updated_at, ''), COALESCE(created_at, ''))) AS terminal_at
-                   FROM terminal_command_runs
-                  GROUP BY workspace_id",
-            )?;
-            let rows = stmt.query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })?;
-            rows.collect()
-        })
-    }
-
     pub fn set_latest_setup_run(
         &self,
         workspace_id: &str,

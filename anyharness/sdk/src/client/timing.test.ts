@@ -107,7 +107,7 @@ describe("AnyHarness timing observer", () => {
       fetch: fetch as typeof globalThis.fetch,
     });
 
-    await client.workspaces.list({
+    await client.workspaces.list(undefined, {
       headers: {
         "x-trace": "trace-1",
         "x-proliferate-measurement-operation-id": "mop_test",
@@ -141,7 +141,7 @@ describe("AnyHarness timing observer", () => {
       fetch: fetch as typeof globalThis.fetch,
     });
 
-    await client.workspaces.list({
+    await client.workspaces.list(undefined, {
       measurementOperationId: "mop_test",
       timingLifecycle: {
         onRequestStart: (event) => {

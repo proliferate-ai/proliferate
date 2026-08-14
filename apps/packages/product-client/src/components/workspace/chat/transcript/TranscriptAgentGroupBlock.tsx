@@ -19,21 +19,14 @@ import {
   ScopedTranscriptBlocks,
 } from "#product/components/workspace/chat/transcript/ScopedTranscriptBlocks";
 import {
-  parseSubagentLaunchResult,
-  parseSubagentProvisioningStatus,
   resolveSubagentExecutionState,
   resolveSubagentLaunchDisplay,
   isSubagentExecutionStateRunning,
   isSubagentWorkComplete,
 } from "#product/domain/chats/subagents/subagent-launch";
 import {
-  formatSubagentHeaderVerb,
-  isSubagentProvisioningAction,
-} from "#product/domain/chats/subagents/subagent-tool-presentation";
-import {
   buildTranscriptDisplayBlocks,
 } from "#product/domain/chats/transcript/transcript-presentation";
-import { useTranscriptOpenSession } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import {
   collectDescendantItems,
   formatCollapsedSummary,
@@ -53,9 +46,6 @@ export function TranscriptAgentGroupBlock({
   renderChild: (childId: string) => ReactNode;
 }) {
   const executionState = resolveSubagentExecutionState(item);
-  const provisioningStatus = parseSubagentProvisioningStatus(item);
-  const launchResult = parseSubagentLaunchResult(item);
-  const openSession = useTranscriptOpenSession();
   const isRunning = isSubagentExecutionStateRunning(executionState);
   const isWorkComplete = isSubagentWorkComplete(item);
 
@@ -75,8 +65,7 @@ export function TranscriptAgentGroupBlock({
   const normalizedPrompt = subagentDisplay.prompt?.trim() ?? "";
 
   // Only ever surface the structured `rawOutput.summary` — the clean result
-  // the parent agent received (identical to SubagentFinishedRow in the MCP
-  // create_subagent path). NEVER the raw tool_result_text content parts:
+  // the parent agent received. NEVER the raw tool_result_text content parts:
   // those can carry the internal orchestration launch receipt ("Async agent
   // launched successfully… agentId… output_file… Do NOT Read or tail this
   // file…") which must never reach the human transcript.
@@ -84,8 +73,7 @@ export function TranscriptAgentGroupBlock({
   const summaryText = typeof rawOutputRecord?.summary === "string"
     ? rawOutputRecord.summary.trim()
     : "";
-  const hasProvisioningLedger = isSubagentProvisioningAction(item) && !!provisioningStatus;
-  const normalizedAgentResult = hasProvisioningLedger ? "" : summaryText;
+  const normalizedAgentResult = summaryText;
 
   const descendants = collectDescendantItems(childIds, transcript, childrenByParentId);
   const toolCallCount = descendants.filter(
@@ -104,7 +92,7 @@ export function TranscriptAgentGroupBlock({
   const shouldShowDescription = description.length > 0
     && description.toLowerCase() !== "subagent";
   const hasWork = childIds.length > 0;
-  const hasLaunchLedger = !!normalizedPrompt || hasProvisioningLedger;
+  const hasLaunchLedger = !!normalizedPrompt;
   const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
   // The activity roster is a session-level summary. This durable transcript
   // item is the canonical place to inspect the native subagent's nested work.
@@ -116,7 +104,11 @@ export function TranscriptAgentGroupBlock({
       renderItem={renderChild}
     />
   );
-  const headerVerb = formatSubagentHeaderVerb({ item, executionState, isRunning });
+  const headerVerb = executionState === "failed"
+    ? "Subagent launch failed"
+    : isRunning
+      ? "Creating subagent"
+      : "Subagent created";
   const collapsedSummary =
     workSummary
     || (executionState === "expired_background"
@@ -162,12 +154,7 @@ export function TranscriptAgentGroupBlock({
         {hasLaunchLedger && (
           <SubagentLaunchLedger
             prompt={normalizedPrompt || null}
-            provisioningStatus={provisioningStatus}
             executionState={executionState}
-            childSessionId={launchResult?.childSessionId ?? null}
-            onOpenChild={openSession
-              ? (childSessionId) => openSession(childSessionId, "linked-child")
-              : undefined}
           />
         )}
 

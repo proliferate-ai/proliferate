@@ -25,13 +25,11 @@ export function useSidebarShortcutTargets(): string[] {
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const { repoRoots } = useStandardRepoProjection();
   const {
-    archivedWorkspaceIds,
     hiddenRepoRootIds,
     collapsedRepoGroups,
     workspaceTypes,
     workspaceLastInteracted,
   } = useWorkspaceUiStore(useShallow((state) => ({
-    archivedWorkspaceIds: state.archivedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     collapsedRepoGroups: state.collapsedRepoGroups,
     workspaceTypes: state.workspaceTypes,
@@ -41,10 +39,6 @@ export function useSidebarShortcutTargets(): string[] {
     (state) => state.repoGroupsShownMore,
   );
 
-  const archivedSet = useMemo(
-    () => new Set(archivedWorkspaceIds),
-    [archivedWorkspaceIds],
-  );
   const hiddenRepoRootSet = useMemo(
     () => new Set(hiddenRepoRootIds),
     [hiddenRepoRootIds],
@@ -63,7 +57,6 @@ export function useSidebarShortcutTargets(): string[] {
     logicalWorkspaces,
     showArchived: false,
     workspaceTypes,
-    archivedSet,
     hiddenRepoRootIds: hiddenRepoRootSet,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
@@ -74,7 +67,6 @@ export function useSidebarShortcutTargets(): string[] {
     lastViewedAt: EMPTY_LAST_VIEWED_AT,
     workspaceLastInteracted,
   }), [
-    archivedSet,
     hiddenRepoRootSet,
     logicalWorkspaces,
     repoRoots,

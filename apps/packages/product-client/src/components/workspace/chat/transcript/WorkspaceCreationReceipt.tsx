@@ -15,8 +15,11 @@ import {
   type WorkspaceCreationReceiptState,
 } from "#product/hooks/workspaces/derived/use-workspace-creation-receipt";
 import { usePendingWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-pending-workspace-entry-actions";
-import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import { useWorkspaceShellActions } from "#product/hooks/workspaces/workflows/use-workspace-shell-actions";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { isWorkspaceArchivedRefusal } from "#product/lib/domain/workspaces/archived/workspace-archived-refusal";
 
 const LINE_TONE_CLASS = {
   default: "",
@@ -184,6 +187,8 @@ function ConnectedWorkspaceCreationReceipt({ state }: { state: WorkspaceCreation
   const shellActions = useWorkspaceShellActions();
   const rerunSetup = useRerunSetupMutation();
   const { handleRetry, handleBack } = usePendingWorkspaceEntryActions();
+  const runtimeUrl = useHarnessConnectionStore((store) => store.runtimeUrl);
+  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
 
   // Failure summary of the run a rerun replaced — renders as the dimmed
   // "(previous run)" log line. Component-local: reruns are an in-session
@@ -220,8 +225,22 @@ function ConnectedWorkspaceCreationReceipt({ state }: { state: WorkspaceCreation
     // dismissal recorded against this workspace so legacy state can't
     // linger once the rerun resolves.
     useWorkspaceUiStore.getState().clearSetupFailureDismissal(state.receiptKey);
-    void rerunSetup.mutateAsync(materializedWorkspaceId);
-  }, [materializedWorkspaceId, rerunSetup, setup?.failureSummary, state.receiptKey]);
+    void rerunSetup.mutateAsync(materializedWorkspaceId).catch((error: unknown) => {
+      // WORKSPACE_ARCHIVED (§3.11): the server is correct, only the client
+      // was stale — refresh the listing and raise no failure toast. Every
+      // other rerun failure is already surfaced through the mutation's own
+      // error state.
+      if (isWorkspaceArchivedRefusal(error)) {
+        void invalidateWorkspaceCollections();
+      }
+    });
+  }, [
+    invalidateWorkspaceCollections,
+    materializedWorkspaceId,
+    rerunSetup,
+    setup?.failureSummary,
+    state.receiptKey,
+  ]);
 
   const handleSeeTerminal = useCallback(() => {
     if (setup?.terminalId) {

@@ -14,6 +14,8 @@ fn openapi_registers_workspace_and_session_paths() {
         "/v1/workspaces",
         "/v1/workspaces/worktrees",
         "/v1/workspaces/{workspace_id}/worktree/restore",
+        "/v1/workspaces/{workspace_id}/archive",
+        "/v1/workspaces/{workspace_id}/unarchive",
         "/v1/workspaces/{workspace_id}",
         "/v1/workspaces/{workspace_id}/display-name",
         "/v1/workspaces/{workspace_id}/detect-setup",
@@ -35,8 +37,11 @@ fn openapi_registers_workspace_and_session_paths() {
         "/v1/sessions/{session_id}/cancel",
         "/v1/sessions/{session_id}/close",
         "/v1/sessions/{session_id}/dismiss",
-        "/v1/sessions/{session_id}/subagents",
-        "/v1/sessions/{session_id}/subagents/{child_session_id}/wake",
+        "/v1/workspaces/{workspace_id}/subagents",
+        "/v1/sessions/{parent_session_id}/subagents",
+        "/v1/sessions/{parent_session_id}/subagents/{child_session_id}/close",
+        "/v1/sessions/{parent_session_id}/subagents/{child_session_id}/open",
+        "/v1/sessions/{parent_session_id}/subagents/{child_session_id}/promote",
         "/v1/workspaces/{workspace_id}/sessions/restore",
         "/v1/sessions/{session_id}/events",
         "/v1/sessions/{session_id}/raw-notifications",
@@ -49,8 +54,6 @@ fn openapi_registers_workspace_and_session_paths() {
         "/v1/repo-roots/{repo_root_id}/hosting/pull-requests",
         "/v1/worktrees/inventory",
         "/v1/worktrees/orphans/prune",
-        "/v1/worktrees/retention-policy",
-        "/v1/worktrees/retention/run",
         "/v1/workspaces/{workspace_id}/terminals",
         "/v1/workspaces/{workspace_id}/git/diff/base-worktree-files",
         "/v1/terminals/{terminal_id}",
@@ -67,6 +70,10 @@ fn openapi_registers_workspace_and_session_paths() {
     assert!(
         !paths.contains_key("/v1/catalogs/agents"),
         "the runtime must publish no catalog push route"
+    );
+    assert!(
+        !paths.contains_key("/v1/sessions/{session_id}/subagents/{child_session_id}/wake"),
+        "the public wake route must not remain in the contract"
     );
 }
 
@@ -120,8 +127,23 @@ fn openapi_registers_workspace_session_and_event_schemas() {
         "SessionMcpBindingOutcome",
         "SessionMcpBindingNotAppliedReason",
         "SessionMcpBindingSummary",
-        "ScheduleSubagentWakeRequest",
-        "ScheduleSubagentWakeResponse",
+        "AgentOperationsAgent",
+        "AgentOperationsCapability",
+        "AgentOperationsConfiguration",
+        "AgentOperationsExecutionStatus",
+        "AgentOperationsIdentity",
+        "AgentOperationsPresentationStatus",
+        "AgentOperationsRole",
+        "AgentOperationsStatus",
+        "AgentOperationsWorkspaceIdentity",
+        "SubagentLatestCompletion",
+        "SubagentLifecycleResponse",
+        "SubagentParentRoster",
+        "SubagentRelationship",
+        "SubagentRosterEntry",
+        "SubagentTurnOutcome",
+        "SessionSubagentsResponse",
+        "WorkspaceSubagentsResponse",
         "CreateSessionRequest",
         "ResumeSessionRequest",
         "UpdateSessionTitleRequest",
@@ -251,13 +273,42 @@ fn openapi_registers_workspace_session_and_event_schemas() {
             "missing OpenAPI schema: {schema}"
         );
     }
+
+    let lifecycle = &schemas["SubagentLifecycleResponse"];
+    assert!(lifecycle["required"]
+        .as_array()
+        .expect("lifecycle required fields")
+        .iter()
+        .any(|field| field == "relationship"));
+    let relationship_union = lifecycle["properties"]["relationship"]["oneOf"]
+        .as_array()
+        .expect("relationship union");
+    assert_eq!(relationship_union.len(), 2);
+    assert!(relationship_union
+        .iter()
+        .any(|branch| branch["type"] == "null"));
+    assert!(relationship_union.iter().any(|branch| {
+        branch["$ref"] == "#/components/schemas/SubagentRelationship"
+    }));
+    for removed in [
+        "ScheduleSubagentWakeRequest",
+        "ScheduleSubagentWakeResponse",
+        "ParentSubagentLinkSummary",
+        "ChildSubagentSummary",
+        "SubagentCompletionSummary",
+    ] {
+        assert!(
+            !schemas.contains_key(removed),
+            "removed public wake/legacy roster schema remains: {removed}"
+        );
+    }
 }
 
 #[test]
 fn destroy_source_documents_workflow_controlled_409() {
     // PR1227-MOBILITY-CONTRACT-01: the destroy-source handler fails closed with
     // 409 SESSION_CONTROLLED_BY_WORKFLOW exactly like the other fenced routes
-    // (retire, purge, mobility export), so its published contract MUST document
+    // (purge, mobility export), so its published contract MUST document
     // the 409 response. Pin it against the generated OpenAPI document.
     let spec: Value = serde_json::from_str(&openapi_json()).expect("parse OpenAPI JSON");
     let responses = &spec["paths"]["/v1/workspaces/{workspace_id}/mobility/destroy-source"]["post"]

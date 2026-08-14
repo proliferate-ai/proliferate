@@ -1418,19 +1418,6 @@ function deriveToolCallSemanticKind(
   ) {
     return "cowork_coding";
   }
-  if (
-    normalizedEffectiveToolName === "mcp__subagents__create_subagent"
-    || normalizedEffectiveToolName === "mcp__subagents__send_subagent_message"
-    || normalizedEffectiveToolName === "mcp__subagents__schedule_subagent_wake"
-    || normalizedEffectiveToolName === "mcp__subagents__get_subagent_status"
-    || normalizedEffectiveToolName === "mcp__subagents__read_subagent_events"
-    || normalizedEffectiveToolName === "mcp__subagents__read_subagent_latest_turns"
-    || normalizedEffectiveToolName === "mcp__subagents__search_subagent_transcript"
-    || normalizedEffectiveToolName === "mcp__subagents__close_subagent"
-  ) {
-    return "subagent";
-  }
-
   if (nativeToolName === "Agent" || nativeToolName === "Task" || normalizedToolKind === "think") {
     return "subagent";
   }

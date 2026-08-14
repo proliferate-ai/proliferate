@@ -42,10 +42,10 @@ export function GeneralPane() {
     defaultOpenInTargetId: state.defaultOpenInTargetId,
     branchPrefixType: state.branchPrefixType,
     turnEndSoundEnabled: state.turnEndSoundEnabled,
-    subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     pasteAttachmentsEnabled: state.pasteAttachmentsEnabled,
     autoUpdateEnabled: state.autoUpdateEnabled,
+    deleteBranchOnArchive: state.deleteBranchOnArchive,
     set: state.set,
   })));
 
@@ -138,6 +138,22 @@ export function GeneralPane() {
           </SettingsRow>
       </SettingsSection>
 
+      {/* A standing preference belongs with the preferences, not on the page
+          that lists the workspaces it already archived. Kept as a single
+          direct SettingsRow child so SettingsGroup's divider logic sees one
+          real child rather than a fragment. */}
+      <SettingsSection title="Archiving">
+          <SettingsRow
+            label="Delete branch on archive"
+            description="Also delete the local git branch when archiving a workspace."
+          >
+            <Switch
+              checked={preferences.deleteBranchOnArchive}
+              onChange={(value) => preferences.set("deleteBranchOnArchive", value)}
+            />
+          </SettingsRow>
+      </SettingsSection>
+
       <SettingsSection title="Sounds">
           <SettingsRow
             label="Turn end sound"
@@ -164,15 +180,6 @@ export function GeneralPane() {
       </SettingsSection>
 
       <SettingsSection title="Session policy">
-          <SettingsRow
-            label="Allow coding agents to spin up subagents"
-            description="Applies to new sessions. Existing sessions keep their saved delegation policy."
-          >
-            <Switch
-              checked={preferences.subagentsEnabled}
-              onChange={(value) => preferences.set("subagentsEnabled", value)}
-            />
-          </SettingsRow>
           <SettingsRow
             label="Allow cowork agents to create coding workspaces"
             description="Applies to new cowork sessions. Existing cowork sessions keep their saved workspace policy."

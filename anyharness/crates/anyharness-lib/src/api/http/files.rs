@@ -26,7 +26,7 @@ use crate::adapters::files::types::{
 use crate::adapters::git::file_search::WorkspaceFileSearchMatch;
 use crate::app::AppState;
 
-use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
+use super::access::{assert_workspace_exists, assert_workspace_mutable};
 use super::error::ApiError;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
@@ -133,7 +133,7 @@ pub async fn list_entries(
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
         .await;
-    assert_workspace_not_retired(&state, &workspace_id)?;
+    assert_workspace_exists(&state, &workspace_id)?;
     let path = query.path;
     let files_runtime = state.files_runtime.clone();
     let response = run_files_task("list files", move || {
@@ -165,7 +165,7 @@ pub async fn read_file(
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
         .await;
-    assert_workspace_not_retired(&state, &workspace_id)?;
+    assert_workspace_exists(&state, &workspace_id)?;
     let path = query.path;
     let files_runtime = state.files_runtime.clone();
     let response = run_files_task("read file", move || {
@@ -198,7 +198,7 @@ pub async fn search_files(
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
         .await;
-    assert_workspace_not_retired(&state, &workspace_id)?;
+    assert_workspace_exists(&state, &workspace_id)?;
     let files_runtime = state.files_runtime.clone();
     let search_query = query.q;
     let limit = query.limit.clamp(1, 200);
@@ -360,7 +360,7 @@ pub async fn stat_file(
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
         .await;
-    assert_workspace_not_retired(&state, &workspace_id)?;
+    assert_workspace_exists(&state, &workspace_id)?;
     let path = query.path;
     let files_runtime = state.files_runtime.clone();
     let response = run_files_task("stat file", move || {

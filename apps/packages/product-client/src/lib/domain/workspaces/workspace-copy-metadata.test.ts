@@ -41,7 +41,6 @@ describe("workspaceCopyMetadataForLogicalWorkspace", () => {
         originalBranch: "main",
         currentBranch: "pablo/feature",
         lifecycleState: "active",
-        cleanupState: "none",
         createdAt: "2026-05-22T00:00:00Z",
         updatedAt: "2026-05-22T00:00:00Z",
       } as unknown as LogicalWorkspace["localWorkspace"],

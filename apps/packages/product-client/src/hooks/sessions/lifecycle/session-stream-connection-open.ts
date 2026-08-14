@@ -303,7 +303,13 @@ export async function openSessionStreamConnection({
       useSessionDirectoryStore.getState().patchEntry(sessionId, {
         streamConnectionState: "ended",
       });
-      if (shouldReconnectStream(sessionId)) {
+      // The server ends a session's stream after a live-handle wait (or on an
+      // actor swap) independent of whether the session is actively
+      // working/needs_input. shouldReconnectStream only covers the internal
+      // auto-reconnect policy; external owners (e.g. the Agents pane) must
+      // still be told the stream ended so they can apply their own policy —
+      // otherwise an idle child's stream never comes back without a reload.
+      if (shouldReconnectStream(sessionId) || options?.reconnectOwner === "external") {
         useSessionIngestStore.getState().markStale(sessionId, {
           lastAppliedSeq: getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,
           lastObservedSeq: getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,

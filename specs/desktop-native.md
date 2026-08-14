@@ -32,6 +32,7 @@ apps/desktop/src-tauri/
       keychain.rs              # local secret storage (auth + env creds as 0600 files; data key in keychain) and sidecar launch secrets
       process.rs               # shell command helpers
       shell.rs                 # OS shell, editor, picker, and open actions
+      drag_drop.rs             # drag-pasteboard path recovery for webview drops
       diagnostics.rs           # renderer diagnostics bridge
 ```
 
@@ -297,7 +298,6 @@ anyharness serve --host 127.0.0.1 --port <port>
 ```
 
 8. Launch env also includes:
-   - `ANYHARNESS_DEFER_STARTUP_RETENTION=1`
    - the user's login-shell `PATH`
    - hosted-product Sentry env when applicable
 9. The native shell polls `<runtime-url>/health` until healthy, failed, exited,

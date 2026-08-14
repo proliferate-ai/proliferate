@@ -13,8 +13,25 @@ use crate::live::sessions::actor::fork::handle::reject_busy_close_native_child_s
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::diagnostics::{age_ms, PromptDiagnostics};
-use crate::live::sessions::actor::turn::start::StartedPromptTurn;
+use crate::live::sessions::actor::turn::start::{BeginPromptTurnOutcome, StartedPromptTurn};
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
+
+#[cfg(not(test))]
+const UNLOAD_CANCEL_GRACE: Duration = Duration::from_secs(5);
+#[cfg(test)]
+const UNLOAD_CANCEL_GRACE: Duration = Duration::from_millis(100);
+
+/// How long an active-turn `Stop` waits for the agent to unwind its turn in
+/// response to the ACP cancel before abandoning the turn outright and letting
+/// `run()`'s exit sequence kill the agent's process group.
+///
+/// The cancel is cooperative and nothing obliges an agent to honor it, so
+/// without this bound `stop_and_await` (and with it `stop_all_for_workspace`
+/// and R4's whole quiesce) would block for as long as the turn lasts. Racing
+/// the cancel against a short bound and then escalating regardless is safe:
+/// the escalation reaps the child either way, and the worst case (bound + the
+/// kill path's 5s grace) still fits R4's 8s `QUIESCE_DEADLINE`.
+const ACTIVE_TURN_STOP_BOUND: Duration = Duration::from_secs(2);
 
 pub(in crate::live::sessions::actor) struct ActivePromptRequest {
     pub payload: PromptPayload,
@@ -53,10 +70,8 @@ impl SessionActor {
                 prompt_id = current_prompt_id.as_deref(),
                 "[workspace-latency] session.actor.prompt.received"
             );
-            let StartedPromptTurn {
-                acp_blocks,
-                turn_id,
-            } = match self
+            let draining_queued_prompt = current_queue_seq.is_some();
+            let start = match self
                 .begin_prompt_turn(
                     &current_payload,
                     current_prompt_id.clone(),
@@ -66,9 +81,46 @@ impl SessionActor {
             {
                 Ok(started) => started,
                 Err(error) => {
+                    if draining_queued_prompt {
+                        if let PromptAcceptError::ProductContextUnavailable {
+                            incident_id, ..
+                        } = &error
+                        {
+                            let persisted = {
+                                let mut sink = self.event_sink.lock().await;
+                                sink.product_context_unavailable(incident_id.clone())
+                            };
+                            if persisted.is_err() {
+                                tracing::error!(
+                                    session_id = %self.session_id,
+                                    incident_id,
+                                    failure_code = "agent_product_context_receipt_persist_failed",
+                                    "queued product-context failure receipt was not persisted"
+                                );
+                            }
+                            // Retain the durable queue head and retire this
+                            // actor. Only a later explicit activation may
+                            // re-resolve context and retry it.
+                            exit_after_prompt = Some(ActorExitDisposition::Unload);
+                        }
+                    }
                     if let Some(respond_to) = current_respond_to.take() {
                         let _ = respond_to.send(Err(error));
                     }
+                    break 'drain;
+                }
+            };
+            let StartedPromptTurn {
+                acp_blocks,
+                turn_id,
+            } = match start {
+                BeginPromptTurnOutcome::Started(started) => started,
+                BeginPromptTurnOutcome::Skipped(outcome) => {
+                    tracing::info!(
+                        session_id = %self.session_id,
+                        outcome = subagent_wake_skip_class(&outcome),
+                        "completion wake stopped before ACP dispatch"
+                    );
                     break 'drain;
                 }
             };
@@ -99,6 +151,9 @@ impl SessionActor {
             let req = acp::schema::PromptRequest::new(self.native_session_id.clone(), acp_blocks);
 
             let mut prompt_result = None;
+            let unload_deadline = tokio::time::sleep(UNLOAD_CANCEL_GRACE);
+            tokio::pin!(unload_deadline);
+            let mut unload_requested = false;
             let mut prompt_diagnostics = PromptDiagnostics::new(current_prompt_id.clone());
             tracing::info!(
                 session_id = %self.session_id,
@@ -115,8 +170,27 @@ impl SessionActor {
             prompt_pending_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             prompt_pending_interval.tick().await;
 
-            while prompt_result.is_none() {
+            // Armed only by `SessionCommand::Stop`; see
+            // `ACTIVE_TURN_STOP_BOUND`. Same shape as `run.rs`'s
+            // `queue_drain_not_before` arm: an absolute instant plus an `if`
+            // precondition, so the disabled arm costs nothing.
+            let mut stop_bound_at: Option<tokio::time::Instant> = None;
+            let mut abandoned_for_stop = false;
+
+            while prompt_result.is_none() && !abandoned_for_stop {
+                let stop_bound_armed = stop_bound_at.is_some();
+                let stop_bound_deadline =
+                    stop_bound_at.unwrap_or_else(tokio::time::Instant::now);
                 tokio::select! {
+                    _ = tokio::time::sleep_until(stop_bound_deadline), if stop_bound_armed => {
+                        tracing::warn!(
+                            session_id = %self.session_id,
+                            prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
+                            bound_ms = ACTIVE_TURN_STOP_BOUND.as_millis() as u64,
+                            "session.actor.stop.turn_unwind_bound_exceeded"
+                        );
+                        abandoned_for_stop = true;
+                    }
                     _ = prompt_pending_interval.tick() => {
                         let sink_snapshot = {
                             let sink = self.event_sink.lock().await;
@@ -152,6 +226,9 @@ impl SessionActor {
                     }
                     result = &mut prompt_fut => {
                         prompt_result = Some(result);
+                    }
+                    _ = &mut unload_deadline, if unload_requested => {
+                        break;
                     }
                     notification = notification_rx.recv() => {
                         if let Some(notif) = notification {
@@ -192,13 +269,46 @@ impl SessionActor {
                                 let _ = respond_to.send(Ok(()));
                                 exit_after_prompt = Some(ActorExitDisposition::Dismiss);
                             }
+                            Some(SessionCommand::Unload { respond_to }) => {
+                                self.resolve_pending_interactions(Resolution::Cancelled).await;
+                                let _ = self.conn
+                                    .send_notification(acp::schema::CancelNotification::new(self.native_session_id.clone()));
+                                let _ = respond_to.send(Ok(()));
+                                unload_requested = true;
+                                unload_deadline.as_mut().reset(tokio::time::Instant::now() + UNLOAD_CANCEL_GRACE);
+                                exit_after_prompt = Some(ActorExitDisposition::Unload);
+                            }
+                            Some(SessionCommand::Stop { respond_to }) => {
+                                self.resolve_pending_interactions(Resolution::Dismissed).await;
+                                let _ = self.conn
+                                    .send_notification(acp::schema::CancelNotification::new(self.native_session_id.clone()));
+                                // Stored, not sent: `run()`'s exit sequence
+                                // fires this only after the process-group
+                                // kill escalation confirms death.
+                                self.pending_stop_response = Some(respond_to);
+                                exit_after_prompt = Some(ActorExitDisposition::Dismiss);
+                                // Race the cooperative cancel against a short
+                                // bound; an agent that ignores it must not be
+                                // able to hold the stop open for the length
+                                // of its turn.
+                                stop_bound_at = Some(
+                                    tokio::time::Instant::now() + ACTIVE_TURN_STOP_BOUND,
+                                );
+                            }
                             Some(SessionCommand::ResolveInteraction { request_id, resolution, respond_to }) => {
                                 let result = self.resolve_interaction(request_id, resolution).await;
                                 let _ = respond_to.send(result);
                             }
                             Some(SessionCommand::RunDomainOp { op, respond_to }) => {
-                                let result = self.run_domain_op_cmd(op).await;
-                                let _ = respond_to.send(result);
+                                if let Some(result) = self.run_domain_op_cmd(op).await {
+                                    let _ = respond_to.send(result);
+                                } else {
+                                    unload_requested = true;
+                                    unload_deadline.as_mut().reset(
+                                        tokio::time::Instant::now() + UNLOAD_CANCEL_GRACE,
+                                    );
+                                    exit_after_prompt = Some(ActorExitDisposition::Unload);
+                                }
                             }
                             Some(SessionCommand::CallAgentExtMethod { method, params, respond_to }) => {
                                 // Dispatched off the actor loop (see
@@ -280,18 +390,51 @@ impl SessionActor {
                 }
             }
 
-            let result = prompt_result.expect("prompt_result must be set");
-            let broken_session = self
-                .finish_prompt_result(
-                    result,
+            if abandoned_for_stop {
+                // The agent never unwound within the bound. Close the turn in
+                // the transcript so it does not hang open forever, then fall
+                // straight through to `run()`'s exit sequence, whose group
+                // escalation reaps the agent process regardless of whether
+                // the cancel was ever honored. `finish_prompt_result` is
+                // deliberately skipped: there is no prompt result, and the
+                // agent it would have reported on is about to be killed.
+                {
+                    let mut sink = self.event_sink.lock().await;
+                    sink.turn_ended(anyharness_contract::v1::StopReason::Cancelled);
+                }
+                self.resume_replay_filter.disable();
+                break 'drain;
+            }
+
+            let broken_session = if unload_requested {
+                self.finish_forced_unload_cancel(
                     &mut prompt_diagnostics,
                     notification_rx,
                     background_work_rx,
                 )
                 .await;
+                false
+            } else {
+                let result = prompt_result.expect("prompt_result must be set");
+                self.finish_prompt_result(
+                    result,
+                    &mut prompt_diagnostics,
+                    notification_rx,
+                    background_work_rx,
+                )
+                .await
+            };
 
             self.resume_replay_filter.disable();
 
+            if broken_session && exit_after_prompt.is_none() {
+                // Terminal persistence exhausted its bounded retry while the
+                // exact frozen batch remains in the sink. Retire this actor
+                // before it can re-enter idle and accept any event-producing
+                // work; the no-live-handle subagent recovery pass owns the
+                // durable open turn from here.
+                exit_after_prompt = Some(ActorExitDisposition::Unload);
+            }
             if exit_after_prompt.is_some() || broken_session {
                 break 'drain;
             }
@@ -313,5 +456,18 @@ impl SessionActor {
         while let Ok(notif) = notification_rx.try_recv() {
             self.handle_notification(&notif).await;
         }
+    }
+}
+
+fn subagent_wake_skip_class(
+    outcome: &crate::live::sessions::sink::SubagentWakeTurnStartOutcome,
+) -> &'static str {
+    match outcome {
+        crate::live::sessions::sink::SubagentWakeTurnStartOutcome::Admitted { .. } => "admitted",
+        crate::live::sessions::sink::SubagentWakeTurnStartOutcome::AlreadyVisible => {
+            "already_visible"
+        }
+        crate::live::sessions::sink::SubagentWakeTurnStartOutcome::Discarded => "discarded",
+        crate::live::sessions::sink::SubagentWakeTurnStartOutcome::Stale => "stale",
     }
 }

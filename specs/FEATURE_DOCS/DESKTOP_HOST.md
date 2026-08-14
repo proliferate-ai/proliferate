@@ -80,7 +80,7 @@ The bridge groups are:
 | Group | Why ProductClient needs it |
 | --- | --- |
 | `runtime` | Discover or restart the local AnyHarness runtime and return its base URL/token connection. |
-| `files` | Pick a local directory, inspect basic path availability, list/open editor/finder/terminal/copy targets, reveal paths, and open terminals. |
+| `files` | Pick a local directory, inspect basic path availability, recover absolute paths for the drag session just dropped onto the webview, list/open editor/finder/terminal/copy targets, reveal paths, and open terminals. |
 | `localCredentials` | Read and update local agent/provider credentials; never Proliferate login credentials. |
 | `nativeUi` | Render native context menus, receive native commands, set running-agent quit protection, update Dock attention, and control WebView zoom. |
 | `updater` | Report updater support/version, check, download with progress, install, and relaunch while preserving the opaque native update handle. |

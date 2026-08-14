@@ -17,4 +17,3 @@
 # surface — FAILS the ratchet. A listed owner whose function no longer exists is
 # a STALE entry and also fails (mirrors the HTTP checker's stale-entry teeth).
 
-domains/workspaces/retention.rs::run_pass admit_retention_sessions acquire_exclusive,WorkspaceLifecycleState::Retired,retire_worktree_materialization

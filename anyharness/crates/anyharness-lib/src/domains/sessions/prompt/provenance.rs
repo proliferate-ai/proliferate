@@ -1,6 +1,23 @@
 use anyharness_contract::v1::PromptProvenance as PublicPromptProvenance;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentSessionPromptSource {
+    pub source_session_id: String,
+    pub session_link_id: Option<String>,
+    pub label: String,
+}
+
+impl AgentSessionPromptSource {
+    pub(crate) fn into_provenance(self) -> PromptProvenance {
+        PromptProvenance::AgentSession {
+            source_session_id: self.source_session_id,
+            session_link_id: self.session_link_id,
+            label: Some(self.label),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum PromptProvenance {

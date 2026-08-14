@@ -8,3 +8,4 @@ pub mod observability;
 pub mod origin;
 pub mod persistence;
 mod process_env;
+pub mod process_kill;

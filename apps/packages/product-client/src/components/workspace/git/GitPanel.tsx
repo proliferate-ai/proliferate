@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { GitPanelHeader } from "./GitPanelHeader";
 import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
@@ -22,10 +22,12 @@ import {
   countUniqueReviewPatchPaths,
   resolveLastTurnUndoDisabledReason,
   resolvePermittedGitPanelDiffFetchKeys,
+  shouldAutoExpandForReviewSearch,
   summarizeGitPanelSectionStats,
   toggleReviewSetValue,
 } from "#product/lib/domain/workspaces/changes/git-panel-review-model";
 import { useGitPanelUiStore } from "#product/stores/editor/git-panel-ui-store";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 const EMPTY_LAST_TURN_REVERT_PATCHES = {
@@ -214,6 +216,15 @@ function GitPanelContent({
     setChangesFilter(modeRequest.mode);
     setCollapsedFiles(new Set());
   }, [modeRequest]);
+
+  const reviewSearchOpen = useContentSearchStore((state) => state.open && state.surface === "review");
+  const previousReviewSearchOpenRef = useRef(reviewSearchOpen);
+  useEffect(() => {
+    if (shouldAutoExpandForReviewSearch(previousReviewSearchOpenRef.current, reviewSearchOpen)) {
+      setCollapsedFiles(new Set());
+    }
+    previousReviewSearchOpenRef.current = reviewSearchOpen;
+  }, [reviewSearchOpen]);
 
   const handleToggleLayout = useCallback(() => {
     setLayout((value) => value === "split" ? "unified" : "split");

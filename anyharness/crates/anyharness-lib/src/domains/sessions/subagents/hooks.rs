@@ -1,163 +1,26 @@
-use std::sync::Arc;
+use tokio::sync::mpsc;
 
-use anyharness_contract::v1::{SubagentTurnCompletedPayload, SubagentTurnOutcome};
-use uuid::Uuid;
-
-use super::model::SubagentCompletionRecord;
-use super::service::SubagentService;
-use crate::domains::sessions::extensions::{
-    SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
-};
-use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
-use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
-use crate::live::sessions::LiveSessionManager;
+use crate::domains::sessions::extensions::{SessionExtension, SessionTurnFinishedContext};
 
 #[derive(Clone)]
 pub struct SubagentSessionHooks {
-    service: Arc<SubagentService>,
-    acp_manager: LiveSessionManager,
+    delivery_nudge: mpsc::UnboundedSender<()>,
 }
 
 impl SubagentSessionHooks {
-    pub fn new(service: Arc<SubagentService>, acp_manager: LiveSessionManager) -> Self {
-        Self {
-            service,
-            acp_manager,
-        }
+    pub fn new(delivery_nudge: mpsc::UnboundedSender<()>) -> Self {
+        Self { delivery_nudge }
     }
 }
 
 impl SessionExtension for SubagentSessionHooks {
     fn on_turn_finished(&self, ctx: SessionTurnFinishedContext) {
-        let service = self.service.clone();
-        let acp_manager = self.acp_manager.clone();
-        tokio::spawn(async move {
-            if let Err(error) = deliver_subagent_completion(service, acp_manager, ctx).await {
-                tracing::warn!(error = %error, "failed to process subagent completion");
-            }
-        });
-    }
-}
-
-async fn deliver_subagent_completion(
-    service: Arc<SubagentService>,
-    acp_manager: LiveSessionManager,
-    ctx: SessionTurnFinishedContext,
-) -> anyhow::Result<()> {
-    if ctx.turn_id.trim().is_empty() {
-        return Ok(());
-    }
-    let Some(link) = service.find_subagent_parent(&ctx.session_id)? else {
-        return Ok(());
-    };
-
-    let now = chrono::Utc::now().to_rfc3339();
-    let completion = SubagentCompletionRecord {
-        completion_id: Uuid::new_v4().to_string(),
-        session_link_id: link.id.clone(),
-        child_turn_id: ctx.turn_id.clone(),
-        child_last_event_seq: ctx.last_event_seq,
-        outcome: ctx.outcome,
-        parent_event_seq: None,
-        parent_prompt_seq: None,
-        created_at: now.clone(),
-        updated_at: now,
-    };
-    // Spec 2b classification (admission:derived-safe): workflow-controlled
-    // sessions are created InternalOnly with subagents DISABLED, so no
-    // session link can exist whose parent is controlled; this wake path
-    // cannot target a controlled session and takes no admission permit
-    // (threading one here would also wait on the actor callback context,
-    // which the spec forbids).
-    let prompt = wake_prompt_text(
-        link.label.as_deref(),
-        link.public_id.as_deref(),
-        ctx.outcome,
-    );
-    let prompt_payload =
-        PromptPayload::text(prompt).with_provenance(PromptProvenance::SubagentWake {
-            session_link_id: link.id.clone(),
-            completion_id: completion.completion_id.clone(),
-            label: link.label.clone(),
-        });
-    let Some(inserted) = service.insert_completion_and_consume_schedule(
-        &completion,
-        &link.parent_session_id,
-        &prompt_payload,
-    )?
-    else {
-        return Ok(());
-    };
-
-    let payload = SubagentTurnCompletedPayload {
-        completion_id: inserted.completion.completion_id.clone(),
-        session_link_id: link.id.clone(),
-        parent_session_id: link.parent_session_id.clone(),
-        child_session_id: link.child_session_id.clone(),
-        child_turn_id: ctx.turn_id.clone(),
-        child_last_event_seq: ctx.last_event_seq,
-        outcome: to_contract_outcome(ctx.outcome),
-        label: link.label.clone(),
-    };
-    match acp_manager
-        .emit_runtime_event(
-            &link.parent_session_id,
-            RuntimeInjectedSessionEvent::SubagentTurnCompleted(payload),
-        )
-        .await
-    {
-        Ok(envelope) => {
-            tracing::info!(
-                target: "anyharness.subagent.turn_completed",
-                child_session_id = %link.child_session_id,
-                parent_session_id = %link.parent_session_id,
-                completion_id = %inserted.completion.completion_id,
-                outcome = ctx.outcome.as_str(),
-                parent_event_seq = envelope.seq,
-                "subagent: child turn completion delivered to parent"
-            );
-            let _ = service.mark_parent_event_seq(&inserted.completion.completion_id, envelope.seq);
+        if ctx.turn_id.trim().is_empty() {
+            return;
         }
-        Err(error) => {
-            tracing::warn!(
-                parent_session_id = %link.parent_session_id,
-                child_session_id = %link.child_session_id,
-                completion_id = %inserted.completion.completion_id,
-                error = %error,
-                "failed to inject subagent turn event"
-            );
-        }
+        // Terminal persistence already captured any child delivery intent in
+        // the same transaction as the terminal event batch. This is only a
+        // latency hint; the periodic worker remains the crash-safe backstop.
+        let _ = self.delivery_nudge.send(());
     }
-
-    if let (Some(record), Some(handle)) = (
-        inserted.wake_prompt.as_ref(),
-        acp_manager.get_handle(&link.parent_session_id).await,
-    ) {
-        let _ = handle
-            .send_queued_prompt(prompt_payload, record.seq)
-            .await
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-    }
-    Ok(())
-}
-
-fn to_contract_outcome(outcome: SessionTurnOutcome) -> SubagentTurnOutcome {
-    match outcome {
-        SessionTurnOutcome::Completed => SubagentTurnOutcome::Completed,
-        SessionTurnOutcome::Failed => SubagentTurnOutcome::Failed,
-        SessionTurnOutcome::Cancelled => SubagentTurnOutcome::Cancelled,
-    }
-}
-
-fn wake_prompt_text(
-    label: Option<&str>,
-    subagent_id: Option<&str>,
-    outcome: SessionTurnOutcome,
-) -> String {
-    let label = label.unwrap_or("subagent");
-    let subagent_id = subagent_id.unwrap_or("unknown");
-    format!(
-        "Subagent \"{label}\" completed a turn.\n\nsubagentId: {subagent_id}\nOutcome: {}\n\nUse read_subagent_latest_turns or search_subagent_transcript with this subagentId before relying on the result.",
-        outcome.as_str()
-    )
 }

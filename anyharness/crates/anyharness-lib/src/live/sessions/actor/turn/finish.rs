@@ -12,7 +12,14 @@ use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::diagnostics::{age_ms, PromptDiagnostics};
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
-use crate::live::sessions::sink::SessionEventSinkDebugSnapshot;
+use crate::live::sessions::model::TerminalTurnOutcome;
+use crate::live::sessions::sink::{
+    PromptTerminalEvent, SessionEventSinkDebugSnapshot, TerminalTurnCommit,
+};
+
+const TERMINAL_PERSIST_ATTEMPTS: u32 = 4;
+const TERMINAL_PERSIST_BASE_DELAY_MS: u64 = 25;
+const TERMINAL_PERSIST_MAX_DELAY_MS: u64 = 200;
 
 pub(in crate::live::sessions::actor) const EMPTY_TURN_ERROR_CODE: &str = "empty_turn";
 pub(in crate::live::sessions::actor) const EMPTY_TURN_ERROR_MESSAGE: &str = "The agent ended the turn without producing a response. The selected model or provider may need additional configuration or credentials.";
@@ -50,6 +57,77 @@ pub(in crate::live::sessions::actor) fn map_stop_reason(
 }
 
 impl SessionActor {
+    async fn persist_prompt_terminal(
+        &self,
+        outcome: SessionTurnOutcome,
+        terminal: PromptTerminalEvent,
+    ) -> anyhow::Result<TerminalTurnCommit> {
+        {
+            let mut sink = self.event_sink.lock().await;
+            sink.stage_prompt_terminal(map_terminal_outcome(outcome), terminal)?;
+        }
+        commit_staged_terminal_with_retry(&self.event_sink, &self.session_id).await
+    }
+
+    /// Finalize a turn when a non-terminal actor unload has waited its bounded
+    /// cancellation grace period and the ACP peer still has not resolved the
+    /// prompt request. Notifications already received remain durable; this
+    /// closes their open sink items as a cancelled turn without fabricating a
+    /// provider error or terminal session state.
+    pub(in crate::live::sessions::actor) async fn finish_forced_unload_cancel(
+        &mut self,
+        prompt_diagnostics: &mut PromptDiagnostics,
+        notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
+        background_work_rx: &mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
+    ) {
+        while let Ok(notif) = notification_rx.try_recv() {
+            prompt_diagnostics.observe_notification(&notif);
+            self.handle_notification(&notif).await;
+        }
+        while let Ok(update) = background_work_rx.try_recv() {
+            self.handle_background(update).await;
+        }
+
+        let committed = match self
+            .persist_prompt_terminal(
+                SessionTurnOutcome::Cancelled,
+                PromptTerminalEvent::TurnEnded(StopReason::Cancelled),
+            )
+            .await
+        {
+            Ok(committed) => committed,
+            Err(error) => {
+                tracing::error!(
+                    session_id = %self.session_id,
+                    failure_code = "terminal_persist_exhausted",
+                    error_class = terminal_persist_error_class(&error),
+                    "forced unload left a durable open turn for startup repair"
+                );
+                return;
+            }
+        };
+        let now = chrono::Utc::now().to_rfc3339();
+        self.handle
+            .set_execution_phase(SessionExecutionPhase::Idle)
+            .await;
+        let _ = self
+            .caps
+            .state
+            .update_status(&self.session_id, "idle", &now);
+
+        if let Some(callback) = self.hooks.on_turn_finish.as_ref() {
+            callback(SessionTurnFinishResult {
+                session_id: self.session_id.clone(),
+                turn_id: committed.turn_id,
+                prompt_id: prompt_diagnostics.prompt_id.clone(),
+                outcome: SessionTurnOutcome::Cancelled,
+                stop_reason: Some(StopReason::Cancelled.to_string()),
+                last_event_seq: committed.last_event_seq,
+                error_details: None,
+            });
+        }
+    }
+
     /// Settles a resolved prompt request: drains straggler notifications and
     /// background updates, emits turn end (or the error), writes the durable
     /// status row, and fires the turn-finish hook. Returns `true` when the
@@ -123,16 +201,28 @@ impl SessionActor {
                     SessionTurnOutcome::Completed
                 };
                 let stop_reason = stop.to_string();
-                let mut sink = self.event_sink.lock().await;
-                if emit_empty_turn_error {
-                    sink.error(
-                        EMPTY_TURN_ERROR_MESSAGE.to_string(),
-                        Some(EMPTY_TURN_ERROR_CODE.to_string()),
-                    );
-                }
-                sink.turn_ended(stop);
-                let last_event_seq = sink.debug_snapshot().next_seq - 1;
-                drop(sink);
+                let terminal = if emit_empty_turn_error {
+                    PromptTerminalEvent::ErrorAndTurnEnded {
+                        message: EMPTY_TURN_ERROR_MESSAGE.to_string(),
+                        code: Some(EMPTY_TURN_ERROR_CODE.to_string()),
+                        details: None,
+                        stop_reason: stop,
+                    }
+                } else {
+                    PromptTerminalEvent::TurnEnded(stop)
+                };
+                let committed = match self.persist_prompt_terminal(outcome, terminal).await {
+                    Ok(committed) => committed,
+                    Err(error) => {
+                        tracing::error!(
+                            session_id = %self.session_id,
+                            failure_code = "terminal_persist_exhausted",
+                            error_class = terminal_persist_error_class(&error),
+                            "provider result left a durable open turn for startup repair"
+                        );
+                        return true;
+                    }
+                };
                 tracing::info!(
                     session_id = %self.session_id,
                     prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
@@ -157,14 +247,11 @@ impl SessionActor {
                 if let Some(callback) = self.hooks.on_turn_finish.as_ref() {
                     callback(SessionTurnFinishResult {
                         session_id: self.session_id.clone(),
-                        turn_id: sink_snapshot_before_turn_end
-                            .current_turn_id
-                            .clone()
-                            .unwrap_or_default(),
+                        turn_id: committed.turn_id.clone(),
                         prompt_id: prompt_diagnostics.prompt_id.clone(),
                         outcome,
                         stop_reason: Some(stop_reason),
-                        last_event_seq,
+                        last_event_seq: committed.last_event_seq,
                         error_details: None,
                     });
                 }
@@ -227,10 +314,28 @@ impl SessionActor {
                     background_work_count = self.background_work_registry.tracker_count(),
                     "session.actor.prompt.conn_failed"
                 );
-                let mut sink = self.event_sink.lock().await;
-                sink.error_with_details(error_message, error_code, error_details.clone());
-                let last_event_seq = sink.debug_snapshot().next_seq - 1;
-                drop(sink);
+                let committed = match self
+                    .persist_prompt_terminal(
+                        SessionTurnOutcome::Failed,
+                        PromptTerminalEvent::Error {
+                            message: error_message,
+                            code: error_code,
+                            details: error_details.clone(),
+                        },
+                    )
+                    .await
+                {
+                    Ok(committed) => committed,
+                    Err(error) => {
+                        tracing::error!(
+                            session_id = %self.session_id,
+                            failure_code = "terminal_persist_exhausted",
+                            error_class = terminal_persist_error_class(&error),
+                            "provider failure left a durable open turn for startup repair"
+                        );
+                        return true;
+                    }
+                };
                 let now = chrono::Utc::now().to_rfc3339();
                 self.handle
                     .set_execution_phase(SessionExecutionPhase::Errored)
@@ -242,19 +347,64 @@ impl SessionActor {
                 if let Some(callback) = self.hooks.on_turn_finish.as_ref() {
                     callback(SessionTurnFinishResult {
                         session_id: self.session_id.clone(),
-                        turn_id: sink_snapshot_on_error
-                            .current_turn_id
-                            .clone()
-                            .unwrap_or_default(),
+                        turn_id: committed.turn_id,
                         prompt_id: prompt_diagnostics.prompt_id.clone(),
                         outcome: SessionTurnOutcome::Failed,
                         stop_reason: None,
-                        last_event_seq,
+                        last_event_seq: committed.last_event_seq,
                         error_details,
                     });
                 }
                 true
             }
         }
+    }
+}
+
+fn map_terminal_outcome(outcome: SessionTurnOutcome) -> TerminalTurnOutcome {
+    match outcome {
+        SessionTurnOutcome::Completed => TerminalTurnOutcome::Completed,
+        SessionTurnOutcome::Failed => TerminalTurnOutcome::Failed,
+        SessionTurnOutcome::Cancelled => TerminalTurnOutcome::Cancelled,
+    }
+}
+
+pub(in crate::live::sessions::actor) async fn commit_staged_terminal_with_retry(
+    event_sink: &std::sync::Arc<tokio::sync::Mutex<crate::live::sessions::sink::SessionEventSink>>,
+    session_id: &str,
+) -> anyhow::Result<TerminalTurnCommit> {
+    for attempt in 0..TERMINAL_PERSIST_ATTEMPTS {
+        let result = {
+            let mut sink = event_sink.lock().await;
+            sink.commit_staged_prompt_terminal()
+        };
+        match result {
+            Ok(committed) => return Ok(committed),
+            Err(error) if attempt + 1 < TERMINAL_PERSIST_ATTEMPTS => {
+                let delay_ms = TERMINAL_PERSIST_BASE_DELAY_MS
+                    .saturating_mul(1_u64 << attempt)
+                    .min(TERMINAL_PERSIST_MAX_DELAY_MS);
+                tracing::warn!(
+                    session_id,
+                    attempt = attempt + 1,
+                    failure_code = "terminal_persist_retry",
+                    error_class = terminal_persist_error_class(&error),
+                    "terminal turn persistence deferred"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    unreachable!("terminal persistence loop returns on its final attempt")
+}
+
+pub(in crate::live::sessions::actor) fn terminal_persist_error_class(
+    error: &anyhow::Error,
+) -> &'static str {
+    if error.downcast_ref::<rusqlite::Error>().is_some() {
+        "sqlite"
+    } else {
+        "runtime"
     }
 }

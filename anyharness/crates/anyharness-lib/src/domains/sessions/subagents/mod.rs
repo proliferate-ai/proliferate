@@ -1,8 +1,5 @@
-pub mod error;
+pub mod delivery;
 pub mod hooks;
-pub mod mcp;
 pub mod model;
 pub mod service;
-pub mod store;
-mod summary;
-mod transcript;
+pub(in crate::domains::sessions) mod transcript;

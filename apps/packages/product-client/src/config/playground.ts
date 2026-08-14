@@ -84,6 +84,9 @@ export type ScenarioKey =
   | "subagents-queued-wake"
   | "subagents-queued-wake-with-approval"
   | "subagent-wake-card"
+  | "agent-operations-receipts"
+  | "agent-operations-grouping-insertion"
+  | "agent-operations-pending-aggregate"
   | "goal-active-short"
   | "goal-active-long"
   | "goal-active-pause-disabled"
@@ -202,6 +205,9 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "subagents-queued-wake": { label: "Subagent queued wake" },
   "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
   "subagent-wake-card": { label: "Subagent wake card" },
+  "agent-operations-receipts": { label: "Agent operation receipts" },
+  "agent-operations-grouping-insertion": { label: "Agent receipt insertion" },
+  "agent-operations-pending-aggregate": { label: "Agent pending aggregate" },
   "goal-active-short": { label: "Goal active (codex)" },
   "goal-active-long": { label: "Goal long objective" },
   "goal-active-pause-disabled": { label: "Goal active (claude)" },

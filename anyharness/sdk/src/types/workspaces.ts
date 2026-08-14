@@ -5,8 +5,6 @@ export type WorkspaceAvailability = components["schemas"]["WorkspaceAvailability
 export type WorkspaceSurface = components["schemas"]["WorkspaceSurface"];
 export type WorkspaceExecutionPhase = components["schemas"]["WorkspaceExecutionPhase"];
 export type WorkspaceExecutionSummary = components["schemas"]["WorkspaceExecutionSummary"];
-export type WorkspaceCleanupOperation =
-  components["schemas"]["WorkspaceCleanupOperation"];
 export type OriginKind = components["schemas"]["OriginKind"];
 export type OriginEntrypoint = components["schemas"]["OriginEntrypoint"];
 export type OriginContext = components["schemas"]["OriginContext"];
@@ -44,14 +42,36 @@ export type WorkspaceRetireBlockerSeverity =
   components["schemas"]["WorkspaceRetireBlockerSeverity"];
 export type WorkspaceRetireBlocker =
   components["schemas"]["WorkspaceRetireBlocker"];
-export type WorkspaceRetireOutcome =
-  components["schemas"]["WorkspaceRetireOutcome"];
-export type WorkspaceRetirePreflightResponse =
-  components["schemas"]["WorkspaceRetirePreflightResponse"];
-export type WorkspaceRetireResponse =
-  components["schemas"]["WorkspaceRetireResponse"];
 export type WorkspacePurgeOutcome = components["schemas"]["WorkspacePurgeOutcome"];
-export type WorkspacePurgePreflightResponse =
-  components["schemas"]["WorkspacePurgePreflightResponse"];
 export type WorkspacePurgeResponse =
   components["schemas"]["WorkspacePurgeResponse"];
+
+// ── archiving (R4) ──
+export type WorkspaceLifecycleFilter =
+  components["schemas"]["WorkspaceLifecycleFilter"];
+export type ArchiveWorkspaceRequest =
+  components["schemas"]["ArchiveWorkspaceRequest"];
+export type WorkspaceArchiveNoticeKind =
+  components["schemas"]["WorkspaceArchiveNoticeKind"];
+export type WorkspaceArchiveNotice =
+  components["schemas"]["WorkspaceArchiveNotice"];
+export type ArchiveWorkspaceResponse =
+  components["schemas"]["ArchiveWorkspaceResponse"];
+export type WorkspaceUnarchiveBranchStrategy =
+  components["schemas"]["WorkspaceUnarchiveBranchStrategy"];
+export type UnarchiveWorkspaceRequest =
+  components["schemas"]["UnarchiveWorkspaceRequest"];
+export type WorkspaceUnarchiveNoticeKind =
+  components["schemas"]["WorkspaceUnarchiveNoticeKind"];
+export type WorkspaceUnarchiveNotice =
+  components["schemas"]["WorkspaceUnarchiveNotice"];
+export type UnarchiveWorkspaceResponse =
+  components["schemas"]["UnarchiveWorkspaceResponse"];
+export type WorkspaceUnarchiveScenario =
+  components["schemas"]["WorkspaceUnarchiveScenario"];
+export type WorkspaceUnarchiveStrategy =
+  components["schemas"]["WorkspaceUnarchiveStrategy"];
+export type WorkspaceUnarchiveScenarioBody =
+  components["schemas"]["WorkspaceUnarchiveScenarioBody"];
+export type WorkspaceGitLockedBody =
+  components["schemas"]["WorkspaceGitLockedBody"];

@@ -28,6 +28,23 @@ export function pressureProgressPercent(
   return Math.max(0, Math.min(100, (percent / limitPercent) * 100));
 }
 
+/**
+ * Where the composer's pressure ring stops being neutral — its single colored
+ * signal, and deliberately a two-step ladder rather than the three
+ * `pressureTone` uses: there is no warning rung, because a yellow ring in the
+ * control row is exactly the ambient alarm the composer redesign removed. The
+ * ring escalates straight to destructive.
+ *
+ * Stated in ring-progress terms, which is what the indicator carries. Since
+ * `pressureProgressPercent` is `(percent / limitPercent) * 100`, this is
+ * algebraically `percent >= 0.85 * limitPercent` — 85% of the way to the
+ * target's OWN limit, so a cloud target whose ideal max is 70% escalates at
+ * 59.5% actual, not at a flat 85% of the axis.
+ */
+export function isComposerRingDestructive(ringProgressPercent: number): boolean {
+  return ringProgressPercent >= 85;
+}
+
 export function cloudPressureLimitPercent(
   pressure: RuntimeResourcePressure | null,
 ): number {

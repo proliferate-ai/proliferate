@@ -1,20 +1,8 @@
 import { useState } from "react";
-import { SHORTCUTS } from "#product/config/shortcuts/registry";
-import {
-  Archive,
-  Pencil,
-  Trash,
-} from "#product/primitives/icons/core";
-import { Folder } from "#product/primitives/icons/workspace";
-import {
-  GitBranchIcon,
-  GitPullRequest,
-} from "#product/primitives/icons/workspace-git";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
-import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
-import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { Archive } from "#product/primitives/icons/core";
+import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 import { useWorkspaceSidebarNativeContextMenu } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
-import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {
   SidebarIndicatorAction,
   SidebarStatusIndicator,
@@ -25,11 +13,9 @@ import type {
   WorkspaceAvailabilityCommandKind,
 } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
-import {
-  SidebarStatusIndicatorView,
-} from "#product/components/workspace/shell/sidebar/SidebarIndicators";
-import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
-import { WorkspaceItemMenu } from "#product/components/workspace/shell/sidebar/WorkspaceItemMenu";
+import { WorkspaceItemContextMenu } from "#product/components/workspace/shell/sidebar/WorkspaceItemContextMenu";
+import { resolveWorkspaceItemTrailingCells } from "#product/components/workspace/shell/sidebar/WorkspaceItemTrailing";
+import { useWorkspacePeek } from "#product/components/workspace/shell/sidebar/WorkspacePeekCard";
 import { WorkspaceRenamePopover } from "#product/components/workspace/shell/sidebar/WorkspaceRenamePopover";
 import { ProductSidebarWorkspaceRow } from "#product/components/workspace/shell/sidebar/ProductSidebarRepositories";
 
@@ -48,6 +34,8 @@ interface WorkspaceItemProps {
   variant?: SidebarWorkspaceVariant;
   active?: boolean;
   archived?: boolean;
+  /** Whether the workspace sits in the sidebar's Pinned section. */
+  pinned?: boolean;
   /**
    * Activity indicator (spinner / waiting / error). Rendered in the row's
    * RIGHT slot; hover affordances (shortcut reveal, menu trigger) still win
@@ -58,9 +46,14 @@ interface WorkspaceItemProps {
   shortcutRevealVisible?: boolean;
   /** Current git branch, shown read-only in the three-dot menu git section. */
   branchName?: string | null;
+  /** Owning repository, shown in the hover peek card. */
+  repoName?: string | null;
+  /** Relative last-activity label ("38m ago") for the hover peek card. */
+  lastActivityLabel?: string | null;
   /**
-   * Composed git/PR status. Drives the persistent PR glyph tone, its tooltip,
-   * the separate attention alert, and the "Open pull request" menu item.
+   * Composed git/PR status. Together with `variant` it decides the trailing
+   * identity glyph and its tooltip; it also drives the conflicts alert in the
+   * status cell and the "Open pull request" menu item.
    */
   gitStatus?: WorkspaceGitStatus | null;
   /** Renders the trailing unseen-activity dot. */
@@ -73,6 +66,8 @@ interface WorkspaceItemProps {
   onCopyBranchName?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
+  onPin?: () => void;
+  onUnpin?: () => void;
   onMarkDone?: () => void;
   /** Workspace-copy availability commands (PR 5), rendered in both the DOM and
    * native `…` menus. */
@@ -96,16 +91,21 @@ export function WorkspaceItem({
   variant = "local",
   active = false,
   archived = false,
+  pinned = false,
   statusIndicator = null,
   shortcutLabel = null,
   shortcutRevealVisible = false,
   branchName = null,
+  repoName = null,
+  lastActivityLabel = null,
   gitStatus = null,
   needsReview = false,
   onSelect,
   onOpenPullRequest,
   onArchive,
   onUnarchive,
+  onPin,
+  onUnpin,
   onMarkDone,
   availabilityCommands = [],
   onAvailabilityCommand,
@@ -116,7 +116,6 @@ export function WorkspaceItem({
   onCopyBranchName,
   onRename,
 }: WorkspaceItemProps) {
-  const hasArchiveAction = !!(onArchive || onUnarchive);
   const [renameOpen, setRenameOpen] = useState(false);
   const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
   const handleRenameCommand = () => setRenameOpen(true);
@@ -124,14 +123,31 @@ export function WorkspaceItem({
   const handleCopyBranchNameCommand = () => onCopyBranchName?.();
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
+  const handlePinCommand = () => onPin?.();
+  const handleUnpinCommand = () => onUnpin?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
-  const trailingIdentity = <SidebarWorkspaceGitGlyph status={gitStatus} />;
+  // The context menu closes the popover itself before either of these runs,
+  // so they carry only the state and the command.
+  const handleConfirmDoneCommand = () => {
+    setDoneConfirmOpen(false);
+    onMarkDone?.();
+  };
+  const handleCancelDoneCommand = () => setDoneConfirmOpen(false);
+  const {
+    identity: trailingIdentity,
+    status: trailingStatus,
+  } = resolveWorkspaceItemTrailingCells({
+    gitStatus,
+    variant,
+    statusIndicator,
+    onIndicatorAction,
+  });
   const pullRequestUrl = gitStatus?.pr?.url ?? null;
   const pullRequestNumber = gitStatus?.pr?.number ?? null;
   const handleOpenPullRequestCommand = pullRequestUrl && onOpenPullRequest
     ? () => onOpenPullRequest(pullRequestUrl)
     : undefined;
-  const { onContextMenuCapture, showNativeMenu } = useWorkspaceSidebarNativeContextMenu({
+  const { onContextMenuCapture } = useWorkspaceSidebarNativeContextMenu({
     canRename: !!onRename,
     canCopyWorkspaceLocation: !!onCopyWorkspaceLocation,
     copyWorkspaceLocationLabel: workspaceLocationCopyLabel ?? "Copy workspace location",
@@ -142,6 +158,9 @@ export function WorkspaceItem({
     archived,
     canArchive: !!onArchive,
     canUnarchive: !!onUnarchive,
+    pinned,
+    canPin: !!onPin,
+    canUnpin: !!onUnpin,
     canMarkDone: !!onMarkDone,
     onRename: handleRenameCommand,
     onCopyWorkspaceLocation: handleCopyWorkspaceLocationCommand,
@@ -149,59 +168,55 @@ export function WorkspaceItem({
     onOpenPullRequest: () => handleOpenPullRequestCommand?.(),
     onArchive: handleArchiveCommand,
     onUnarchive: handleUnarchiveCommand,
+    onPin: handlePinCommand,
+    onUnpin: handleUnpinCommand,
     onMarkDone: handleMarkDoneCommand,
     availabilityCommands,
     onAvailabilityCommand,
   });
-  const hasMenuActions = hasArchiveAction
-    || !!onRename
-    || !!onCopyWorkspaceLocation
-    || !!onCopyBranchName
-    || !!onMarkDone
-    || !!branchName
-    || !!handleOpenPullRequestCommand
-    || availabilityCommands.length > 0;
-
-  const workspaceMenu = hasMenuActions ? (
-    <WorkspaceItemMenu
-      archived={archived}
-      branchName={branchName}
-      workspaceLocationCopyLabel={workspaceLocationCopyLabel}
-      pullRequestNumber={pullRequestNumber}
-      onShowNativeMenu={showNativeMenu}
-      onOpenPullRequest={handleOpenPullRequestCommand}
-      onRename={onRename ? handleRenameCommand : undefined}
-      onArchive={onArchive ? handleArchiveCommand : undefined}
-      onUnarchive={onUnarchive ? handleUnarchiveCommand : undefined}
-      onCopyWorkspaceLocation={
-        onCopyWorkspaceLocation ? handleCopyWorkspaceLocationCommand : undefined
-      }
-      onCopyBranchName={onCopyBranchName ? handleCopyBranchNameCommand : undefined}
-      onMarkDone={onMarkDone ? handleMarkDoneCommand : undefined}
-      availabilityCommands={availabilityCommands}
-      onAvailabilityCommand={onAvailabilityCommand}
-    />
+  // Archive rides the row's hover-action slot directly (no three-dot menu):
+  // every other action the old menu carried is already on the DOM context
+  // menu below and the native menu (`useWorkspaceSidebarNativeContextMenu`).
+  // Not offered on an already-archived (cloud) entry — that row's exit is
+  // Unarchive, reachable from either context menu.
+  const archiveHoverAction = onArchive && !archived ? (
+    <SidebarActionButton
+      title="Archive workspace (⌘⇧A)"
+      onClick={(event) => {
+        event.stopPropagation();
+        handleArchiveCommand();
+      }}
+    >
+      <Archive />
+    </SidebarActionButton>
   ) : null;
+
+  const { onPointerEnter, onPointerLeave, peekCard } = useWorkspacePeek({
+    name,
+    time: lastActivityLabel,
+    repo: repoName,
+    branch: branchName ?? gitStatus?.branch ?? null,
+    gitStatus,
+  });
 
   const row = (
     <ProductSidebarWorkspaceRow
       active={active}
       archived={archived}
-      trailingStatus={statusIndicator ? (
-        <SidebarStatusIndicatorView
-          indicator={statusIndicator}
-          onAction={onIndicatorAction}
-        />
-      ) : null}
+      trailingStatus={trailingStatus}
       trailingIdentity={trailingIdentity}
       label={name}
       unreadDot={needsReview}
       shortcutLabel={shortcutLabel}
       shortcutRevealVisible={shortcutRevealVisible}
-      hoverAction={workspaceMenu}
+      hoverAction={archiveHoverAction}
       onSelect={onSelect}
       onContextMenuCapture={onContextMenuCapture}
-      onPointerEnter={onHover}
+      onPointerEnter={(event) => {
+        onHover?.();
+        onPointerEnter(event);
+      }}
+      onPointerLeave={onPointerLeave}
       data-sidebar-workspace-item={workspaceId ?? ""}
       data-sidebar-workspace-variant={variant}
     />
@@ -223,135 +238,35 @@ export function WorkspaceItem({
       className={`w-64 ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
-        <>
-          {doneConfirmOpen ? (
-            <>
-              <div className="px-2.5 py-2 text-ui text-foreground">
-                <div className="font-medium">Delete workspace?</div>
-                <div className="mt-1 text-ui-sm leading-4 text-muted-foreground">
-                  This removes the local worktree, workspace record, chat history, and local agent
-                  artifacts for this workspace. Commits, branches, and pull requests are not deleted.
-                </div>
-                <div className="mt-1 text-ui-sm leading-4 text-muted-foreground">
-                  This cannot be undone from Proliferate.
-                </div>
-              </div>
-              <PopoverMenuItem
-                icon={<Trash className="icon-paired shrink-0 text-muted-foreground" />}
-                label="Delete workspace"
-                onClick={() => {
-                  close();
-                  setDoneConfirmOpen(false);
-                  onMarkDone?.();
-                }}
-              />
-              <PopoverMenuItem
-                label="Cancel"
-                onClick={() => {
-                  close();
-                  setDoneConfirmOpen(false);
-                }}
-              />
-            </>
-          ) : (
-            <>
-              {onRename && (
-                <PopoverMenuItem
-                  icon={<Pencil className="icon-paired shrink-0 text-muted-foreground" />}
-                  label="Rename"
-                  onClick={() => {
-                    close();
-                    handleRenameCommand();
-                  }}
-                />
-              )}
-              {onCopyWorkspaceLocation && (
-                <PopoverMenuItem
-                  icon={<Folder className="icon-paired shrink-0 text-muted-foreground" />}
-                  label={workspaceLocationCopyLabel ?? "Copy workspace location"}
-                  trailing={(
-                    <ShortcutBadge
-                      label={getShortcutDisplayLabel(SHORTCUTS.copyWorkspacePath)}
-                      className="text-muted-foreground"
-                    />
-                  )}
-                  onClick={() => {
-                    close();
-                    handleCopyWorkspaceLocationCommand();
-                  }}
-                />
-              )}
-              {handleOpenPullRequestCommand && (
-                <PopoverMenuItem
-                  icon={<GitPullRequest className="icon-paired shrink-0 text-muted-foreground" />}
-                  label={pullRequestNumber !== null
-                    ? `Open pull request #${pullRequestNumber}`
-                    : "Open pull request"}
-                  onClick={() => {
-                    close();
-                    handleOpenPullRequestCommand();
-                  }}
-                />
-              )}
-              {onCopyBranchName && (
-                <PopoverMenuItem
-                  icon={<GitBranchIcon className="icon-paired shrink-0 text-muted-foreground [font-size:var(--text-sidebar-row)]" />}
-                  label="Copy branch name"
-                  trailing={(
-                    <ShortcutBadge
-                      label={getShortcutDisplayLabel(SHORTCUTS.copyBranchName)}
-                      className="text-muted-foreground"
-                    />
-                  )}
-                  onClick={() => {
-                    close();
-                    handleCopyBranchNameCommand();
-                  }}
-                />
-              )}
-              {onMarkDone && (
-                <PopoverMenuItem
-                  icon={<Trash className="icon-paired shrink-0 text-muted-foreground" />}
-                  label="Delete workspace..."
-                  onClick={() => {
-                    handleMarkDoneCommand();
-                  }}
-                />
-              )}
-              {onArchive && !archived && (
-                <PopoverMenuItem
-                  icon={<Archive className="icon-paired shrink-0 text-muted-foreground" />}
-                  label="Archive..."
-                  onClick={() => { close(); handleArchiveCommand(); }}
-                />
-              )}
-              {onUnarchive && archived && (
-                <PopoverMenuItem
-                  icon={<Archive className="icon-paired shrink-0 text-muted-foreground" />}
-                  label="Unarchive"
-                  onClick={() => { close(); handleUnarchiveCommand(); }}
-                />
-              )}
-              {availabilityCommands.map((command) => (
-                <PopoverMenuItem
-                  key={command.kind}
-                  icon={<GitBranchIcon className="icon-paired shrink-0 text-muted-foreground" />}
-                  label={command.blocker ? `${command.label} — ${command.blocker}` : command.label}
-                  onClick={() => {
-                    close();
-                    onAvailabilityCommand?.(command.kind);
-                  }}
-                />
-              ))}
-            </>
-          )}
-        </>
+        <WorkspaceItemContextMenu
+          close={close}
+          archived={archived}
+          pinned={pinned}
+          workspaceLocationCopyLabel={workspaceLocationCopyLabel}
+          pullRequestNumber={pullRequestNumber}
+          doneConfirmOpen={doneConfirmOpen}
+          onConfirmDone={handleConfirmDoneCommand}
+          onCancelDone={handleCancelDoneCommand}
+          onRename={onRename ? handleRenameCommand : undefined}
+          onPin={onPin ? handlePinCommand : undefined}
+          onUnpin={onUnpin ? handleUnpinCommand : undefined}
+          onCopyWorkspaceLocation={
+            onCopyWorkspaceLocation ? handleCopyWorkspaceLocationCommand : undefined
+          }
+          onOpenPullRequest={handleOpenPullRequestCommand}
+          onCopyBranchName={onCopyBranchName ? handleCopyBranchNameCommand : undefined}
+          onMarkDone={onMarkDone ? handleMarkDoneCommand : undefined}
+          onArchive={onArchive ? handleArchiveCommand : undefined}
+          onUnarchive={onUnarchive ? handleUnarchiveCommand : undefined}
+          availabilityCommands={availabilityCommands}
+          onAvailabilityCommand={onAvailabilityCommand}
+        />
       )}
     </PopoverButton>
   );
 
   if (!onRename) {
-    return contextMenu;
+    return <>{contextMenu}{peekCard}</>;
   }
 
   // Wrap with a controlled rename popover. The trigger is a span containing
@@ -360,16 +275,19 @@ export function WorkspaceItem({
   // bonus affordance. Using doubleClick avoids conflicting with onSelect
   // (single click) and the existing right-click context menu.
   return (
-    <WorkspaceRenamePopover
-      currentName={name}
-      defaultName={defaultName ?? name}
-      hasOverride={hasDisplayNameOverride}
-      onRename={onRename}
-      externalOpen={renameOpen}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) setRenameOpen(false);
-      }}
-      trigger={<div>{contextMenu}</div>}
-    />
+    <>
+      <WorkspaceRenamePopover
+        currentName={name}
+        defaultName={defaultName ?? name}
+        hasOverride={hasDisplayNameOverride}
+        onRename={onRename}
+        externalOpen={renameOpen}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setRenameOpen(false);
+        }}
+        trigger={<div>{contextMenu}</div>}
+      />
+      {peekCard}
+    </>
   );
 }
