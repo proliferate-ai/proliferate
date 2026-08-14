@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
-  pendingWorkspaceEntryForWorkspaceId,
-} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
-import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
+  useAwaitingCloudWorkspaceEntries,
+} from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
@@ -15,12 +16,21 @@ import {
   resolveActiveProjectedSessionForPendingWorkspace,
 } from "#product/hooks/workspaces/workflows/pending-workspace-projected-session";
 import {
-  isCloudWorkspacePostReadyPending,
-  resolveCloudWorkspaceStatus,
-  shouldPollCloudWorkspaceForUpdates,
-  shouldShowCloudWorkspaceStatusScreen,
-} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
+  getPendingWorkspaceEntry,
+  isAttemptAttended,
+  patchAttempt,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
+import {
+  notifyUnattendedPendingWorkspaceFailure,
+} from "#product/hooks/workspaces/workflows/pending-workspace-failure-notice";
+import {
+  resolveCloudWorkspaceFailureMessage,
+  resolveCloudWorkspacePollAction,
+  resolveCloudWorkspacePollOutcome,
+  selectCloudWorkspacePollBatch,
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-poll-plan";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { trackWorkspaceInteraction } from "#product/stores/preferences/workspace-ui-store";
 import {
   elapsedMs,
@@ -30,223 +40,228 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 
 const CLOUD_WORKSPACE_POLL_INTERVAL_MS = 3000;
+/**
+ * Per tick, not in total: the loop rotates through the parked attempts, so a
+ * burst of launches cannot fan out into one refresh per launch per tick.
+ */
+const CLOUD_WORKSPACE_POLL_BATCH_SIZE = 3;
 
+const EMPTY_CLOUD_WORKSPACES: readonly CloudWorkspaceSummary[] = [];
+
+function findCloudWorkspace(
+  cloudWorkspaces: readonly CloudWorkspaceSummary[],
+  workspaceId: string,
+): CloudWorkspaceSummary | null {
+  const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
+  if (!cloudWorkspaceId) {
+    return null;
+  }
+  return cloudWorkspaces.find((workspace) => workspace.id === cloudWorkspaceId) ?? null;
+}
+
+/**
+ * Drives every attempt parked at `awaiting-cloud-ready`, not just the selected
+ * one. A cloud launch the user switched away from finishes behind them: it
+ * provisions, materializes, and clears its own entry without moving selection
+ * or the active session (PRO-230).
+ */
 export function useCloudWorkspacePolling() {
-  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
-  const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
-  const clearPendingWorkspaceEntry = useSessionSelectionStore((state) => state.clearPendingWorkspaceEntry);
-  const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
+  const awaitingEntries = useAwaitingCloudWorkspaceEntries();
   const { data: workspaceCollections } = useWorkspaces();
   const { refreshCloudWorkspace } = useCloudWorkspaceActions();
   const { selectWorkspace } = useWorkspaceSelection();
   const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
+  const clearPendingWorkspaceEntry = useSessionSelectionStore((state) => state.clearPendingWorkspaceEntry);
+  const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
 
-  const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
-  const cloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
-    (workspace) => workspace.id === cloudWorkspaceId,
-  ) ?? null;
-  const cloudWorkspaceStatus = resolveCloudWorkspaceStatus(cloudWorkspace);
-  const selectedPendingCloudWorkspaceIsAwaiting = pendingWorkspaceEntry?.workspaceId === selectedWorkspaceId
-    && pendingWorkspaceEntry.stage === "awaiting-cloud-ready";
-  const shouldHandleCachedCloudWorkspaceFailure = Boolean(
-    cloudWorkspace
-    && cloudWorkspaceStatus === "error"
-    && selectedPendingCloudWorkspaceIsAwaiting,
-  );
-  const shouldHandleCachedCloudWorkspaceReady = Boolean(
-    cloudWorkspace
-    && cloudWorkspaceStatus === "ready"
-    && !isCloudWorkspacePostReadyPending(cloudWorkspace)
-    && selectedPendingCloudWorkspaceIsAwaiting,
-  );
-  const shouldPollCloudWorkspace = Boolean(
-    cloudWorkspace
-    && (
-      shouldPollCloudWorkspaceForUpdates(cloudWorkspace)
-      || shouldHandleCachedCloudWorkspaceFailure
-      || shouldHandleCachedCloudWorkspaceReady
-    ),
-  );
+  // The tick reads the newest attempt list and the newest cloud records rather
+  // than closing over them, so a status change cannot restart the interval
+  // mid-flight.
+  const awaitingEntriesRef = useRef<readonly PendingWorkspaceEntry[]>(awaitingEntries);
+  awaitingEntriesRef.current = awaitingEntries;
+  const cloudWorkspacesRef = useRef<readonly CloudWorkspaceSummary[]>(EMPTY_CLOUD_WORKSPACES);
+  cloudWorkspacesRef.current = workspaceCollections?.cloudWorkspaces ?? EMPTY_CLOUD_WORKSPACES;
+  const pollCursorRef = useRef(0);
+
+  const failAwaitingEntry = useCallback((
+    entry: PendingWorkspaceEntry,
+    workspaceId: string,
+    errorMessage: string,
+  ) => {
+    patchAttempt(entry.attemptId, {
+      stage: "failed",
+      workspaceId,
+      request: { kind: "select-existing", workspaceId },
+      errorMessage,
+    });
+    logLatency("workspace.cloud_polling.failed", {
+      workspaceId,
+      pendingAttemptId: entry.attemptId,
+      errorMessage,
+    });
+    // An unattended provisioning failure has no shell to render into, so it
+    // lands on the attempt's own sidebar row plus one toast, exactly as a
+    // create-time failure does.
+    notifyUnattendedPendingWorkspaceFailure(entry, errorMessage);
+  }, []);
+
+  const finalizeAwaitingEntry = useCallback(async (
+    attemptId: string,
+    workspaceId: string,
+  ) => {
+    const entry = getPendingWorkspaceEntry(attemptId);
+    if (!entry || entry.stage !== "awaiting-cloud-ready") {
+      return;
+    }
+    // Attendance is read once, before the force-selection below moves
+    // selection onto the real workspace and makes every later read look
+    // attended.
+    const attended = isAttemptAttended(attemptId);
+    patchAttempt(attemptId, { workspaceId, errorMessage: null });
+    logLatency("workspace.cloud_polling.ready_selection.start", {
+      workspaceId,
+      pendingAttemptId: attemptId,
+      attended,
+    });
+
+    if (attended) {
+      const initialActiveSessionId = resolveActiveProjectedSessionForPendingWorkspace(
+        workspaceId,
+        entry,
+      );
+      try {
+        await selectWorkspace(workspaceId, {
+          force: true,
+          preservePending: true,
+          ...(initialActiveSessionId ? { initialActiveSessionId } : {}),
+        });
+      } catch (error) {
+        const current = getPendingWorkspaceEntry(attemptId);
+        if (current && current.stage !== "failed") {
+          failAwaitingEntry(
+            current,
+            workspaceId,
+            error instanceof Error ? error.message : "Failed to connect the cloud workspace.",
+          );
+        }
+        return;
+      }
+    }
+
+    const current = getPendingWorkspaceEntry(attemptId);
+    if (!current || current.stage !== "awaiting-cloud-ready") {
+      return;
+    }
+    const projectedSessionMaterialization = materializePendingWorkspaceSessions(
+      current,
+      workspaceId,
+      { eventPrefix: "workspace.cloud_polling", attended },
+    );
+    trackWorkspaceInteraction(workspaceId, new Date().toISOString());
+    clearPendingWorkspaceEntry(attemptId);
+    if (attended) {
+      setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
+        workspaceId,
+        source: current.source,
+        setupScript: current.setupScript,
+        baseBranchName: current.baseBranchName,
+      }));
+    }
+    logLatency("workspace.cloud_polling.ready", {
+      workspaceId,
+      pendingAttemptId: attemptId,
+      attended,
+      totalElapsedMs: elapsedSince(current.createdAt),
+      projectedSessionCount: projectedSessionMaterialization.projectedSessionCount,
+      projectedSessionIds: projectedSessionMaterialization.projectedSessionIds,
+    });
+  }, [
+    clearPendingWorkspaceEntry,
+    failAwaitingEntry,
+    materializePendingWorkspaceSessions,
+    selectWorkspace,
+    setWorkspaceArrivalEvent,
+  ]);
+
+  const pollAwaitingEntry = useCallback(async (attemptId: string) => {
+    // Re-read by id: the attempt may have been dismissed, failed, or finalized
+    // between the tick being scheduled and it running.
+    const entry = getPendingWorkspaceEntry(attemptId);
+    const workspaceId = entry?.workspaceId ?? null;
+    if (!entry || !workspaceId) {
+      return;
+    }
+    const cachedWorkspace = findCloudWorkspace(cloudWorkspacesRef.current, workspaceId);
+    const action = resolveCloudWorkspacePollAction({ entry, cachedWorkspace });
+    if (action === "skip") {
+      return;
+    }
+    if (action === "fail-cached" && cachedWorkspace) {
+      failAwaitingEntry(entry, workspaceId, resolveCloudWorkspaceFailureMessage(cachedWorkspace));
+      return;
+    }
+
+    const pollStartedAt = startLatencyTimer();
+    logLatency("workspace.cloud_polling.start", {
+      workspaceId,
+      pendingAttemptId: attemptId,
+      status: resolveCloudWorkspaceStatus(cachedWorkspace),
+      pendingElapsedMs: elapsedSince(entry.createdAt),
+    });
+
+    // Keep polling even if a refresh fails: the next tick retries.
+    const workspace = await refreshCloudWorkspace(workspaceId).catch(() => null);
+    if (!workspace) {
+      return;
+    }
+    const outcome = resolveCloudWorkspacePollOutcome(workspace);
+    logLatency("workspace.cloud_polling.refreshed", {
+      workspaceId,
+      pendingAttemptId: attemptId,
+      outcome,
+      pollElapsedMs: elapsedMs(pollStartedAt),
+    });
+
+    if (outcome === "failed") {
+      const current = getPendingWorkspaceEntry(attemptId);
+      if (current && current.stage === "awaiting-cloud-ready") {
+        failAwaitingEntry(current, workspaceId, resolveCloudWorkspaceFailureMessage(workspace));
+      }
+      return;
+    }
+    if (outcome === "ready") {
+      await finalizeAwaitingEntry(attemptId, workspaceId);
+    }
+  }, [failAwaitingEntry, finalizeAwaitingEntry, refreshCloudWorkspace]);
+
+  // Restarting on the attempt set alone keeps one interval alive across the
+  // status churn the polling itself causes.
+  const awaitingAttemptKey = awaitingEntries.map((entry) => entry.attemptId).join("|");
 
   useEffect(() => {
-    const shouldPauseForFailedPending = pendingWorkspaceEntry?.workspaceId === selectedWorkspaceId
-      && pendingWorkspaceEntry.stage === "failed";
-
-    if (
-      !selectedWorkspaceId
-      || !cloudWorkspaceId
-      || !shouldPollCloudWorkspace
-      || shouldPauseForFailedPending
-    ) {
+    if (!awaitingAttemptKey) {
       return;
     }
 
     let cancelled = false;
     let timer: number | null = null;
-    logLatency("workspace.cloud_polling.start", {
-      workspaceId: selectedWorkspaceId,
-      status: cloudWorkspaceStatus,
-      pendingStage: pendingWorkspaceEntry?.stage ?? null,
-      pendingElapsedMs: pendingWorkspaceEntry ? elapsedSince(pendingWorkspaceEntry.createdAt) : null,
-    });
 
-    if (shouldHandleCachedCloudWorkspaceFailure && cloudWorkspace && pendingWorkspaceEntry) {
-      setPendingWorkspaceEntry({
-        ...pendingWorkspaceEntry,
-        stage: "failed",
-        request: { kind: "select-existing", workspaceId: selectedWorkspaceId },
-        errorMessage: cloudWorkspace.lastError
-          ?? cloudWorkspace.statusDetail
-          ?? "Cloud workspace provisioning failed.",
-      });
-      logLatency("workspace.cloud_polling.failed", {
-        workspaceId: selectedWorkspaceId,
-        pendingAttemptId: pendingWorkspaceEntry.attemptId,
-        errorMessage: cloudWorkspace.lastError ?? cloudWorkspace.statusDetail ?? null,
-      });
-      return;
-    }
-
-    const poll = async () => {
-      let shouldScheduleNextPoll = true;
-      const pollStartedAt = startLatencyTimer();
-
-      try {
-        const workspace = await refreshCloudWorkspace(selectedWorkspaceId);
-        const refreshedStatus = resolveCloudWorkspaceStatus(workspace);
-        logLatency("workspace.cloud_polling.refreshed", {
-          workspaceId: selectedWorkspaceId,
-          status: refreshedStatus,
-          pollElapsedMs: elapsedMs(pollStartedAt),
-          pendingElapsedMs: pendingWorkspaceEntry ? elapsedSince(pendingWorkspaceEntry.createdAt) : null,
-        });
-        if (cancelled) {
-          return;
-        }
-
-        if (refreshedStatus === "error") {
-          shouldScheduleNextPoll = false;
-          const pending = pendingWorkspaceEntryForWorkspaceId(
-            useSessionSelectionStore.getState().pendingWorkspaces,
-            selectedWorkspaceId,
-          );
-          if (
-            pending
-            && pending.workspaceId === selectedWorkspaceId
-            && pending.stage === "awaiting-cloud-ready"
-          ) {
-            setPendingWorkspaceEntry({
-              ...pending,
-              stage: "failed",
-              request: { kind: "select-existing", workspaceId: selectedWorkspaceId },
-              errorMessage: workspace.lastError
-                ?? workspace.statusDetail
-                ?? "Cloud workspace provisioning failed.",
-            });
-          }
-          logLatency("workspace.cloud_polling.failed", {
-            workspaceId: selectedWorkspaceId,
-            pendingAttemptId: pending?.attemptId ?? null,
-            errorMessage: workspace.lastError ?? workspace.statusDetail ?? null,
-          });
-          return;
-        }
-
-        if (refreshedStatus === "ready" && !isCloudWorkspacePostReadyPending(workspace)) {
-          shouldScheduleNextPoll = false;
-          const pending = pendingWorkspaceEntryForWorkspaceId(
-            useSessionSelectionStore.getState().pendingWorkspaces,
-            selectedWorkspaceId,
-          );
-          const shouldPreservePending = pending?.workspaceId === selectedWorkspaceId
-            && pending.stage === "awaiting-cloud-ready";
-          const initialActiveSessionId = shouldPreservePending
-            ? resolveActiveProjectedSessionForPendingWorkspace(selectedWorkspaceId, pending)
-            : null;
-          logLatency("workspace.cloud_polling.ready_selection.start", {
-            workspaceId: selectedWorkspaceId,
-            pendingAttemptId: pending?.attemptId ?? null,
-            shouldPreservePending,
-            initialActiveSessionId,
-          });
-
-          try {
-            await selectWorkspace(selectedWorkspaceId, {
-              force: true,
-              preservePending: shouldPreservePending,
-              ...(initialActiveSessionId ? { initialActiveSessionId } : {}),
-            });
-          } catch (error) {
-            if (
-              pending
-              && pending.workspaceId === selectedWorkspaceId
-              && pending.stage !== "failed"
-            ) {
-              setPendingWorkspaceEntry({
-                ...pending,
-                stage: "failed",
-                request: { kind: "select-existing", workspaceId: selectedWorkspaceId },
-                errorMessage: error instanceof Error
-                  ? error.message
-                  : "Failed to connect the cloud workspace.",
-              });
-            }
-            logLatency("workspace.cloud_polling.ready_selection.failed", {
-              workspaceId: selectedWorkspaceId,
-              pendingAttemptId: pending?.attemptId ?? null,
-              errorMessage: error instanceof Error ? error.message : String(error),
-            });
-            return;
-          }
-
-          const currentPending = pendingWorkspaceEntryForWorkspaceId(
-            useSessionSelectionStore.getState().pendingWorkspaces,
-            selectedWorkspaceId,
-          );
-          if (
-            currentPending
-            && currentPending.workspaceId === selectedWorkspaceId
-            && currentPending.stage === "awaiting-cloud-ready"
-          ) {
-            const projectedSessionMaterialization = materializePendingWorkspaceSessions(
-              currentPending,
-              selectedWorkspaceId,
-              { eventPrefix: "workspace.cloud_polling" },
-            );
-            trackWorkspaceInteraction(selectedWorkspaceId, new Date().toISOString());
-            clearPendingWorkspaceEntry(currentPending.attemptId);
-            setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
-              workspaceId: selectedWorkspaceId,
-              source: currentPending.source,
-              setupScript: currentPending.setupScript,
-              baseBranchName: currentPending.baseBranchName,
-            }));
-            logLatency("workspace.cloud_polling.ready", {
-              workspaceId: selectedWorkspaceId,
-              totalElapsedMs: elapsedSince(currentPending.createdAt),
-              projectedSessionCount: projectedSessionMaterialization.projectedSessionCount,
-              projectedSessionIds: projectedSessionMaterialization.projectedSessionIds,
-            });
-          }
-          return;
-        }
-
-        if (!shouldShowCloudWorkspaceStatusScreen(workspace)) {
-          shouldScheduleNextPoll = false;
-        }
-      } catch {
-        // Keep polling even if a refresh fails.
-      } finally {
-        if (!cancelled && shouldScheduleNextPoll) {
-          timer = window.setTimeout(() => {
-            void poll();
-          }, CLOUD_WORKSPACE_POLL_INTERVAL_MS);
-        }
+    const runTick = async () => {
+      const { batch, nextCursor } = selectCloudWorkspacePollBatch(
+        awaitingEntriesRef.current,
+        pollCursorRef.current,
+        CLOUD_WORKSPACE_POLL_BATCH_SIZE,
+      );
+      pollCursorRef.current = nextCursor;
+      await Promise.all(batch.map((entry) => pollAwaitingEntry(entry.attemptId)));
+      if (!cancelled) {
+        timer = window.setTimeout(() => {
+          void runTick();
+        }, CLOUD_WORKSPACE_POLL_INTERVAL_MS);
       }
     };
 
-    void poll();
+    void runTick();
 
     return () => {
       cancelled = true;
@@ -254,19 +269,5 @@ export function useCloudWorkspacePolling() {
         window.clearTimeout(timer);
       }
     };
-  }, [
-    cloudWorkspace,
-    cloudWorkspaceId,
-    materializePendingWorkspaceSessions,
-    pendingWorkspaceEntry,
-    refreshCloudWorkspace,
-    selectWorkspace,
-    selectedWorkspaceId,
-    clearPendingWorkspaceEntry,
-    setPendingWorkspaceEntry,
-    setWorkspaceArrivalEvent,
-    shouldHandleCachedCloudWorkspaceFailure,
-    shouldHandleCachedCloudWorkspaceReady,
-    shouldPollCloudWorkspace,
-  ]);
+  }, [awaitingAttemptKey, pollAwaitingEntry]);
 }

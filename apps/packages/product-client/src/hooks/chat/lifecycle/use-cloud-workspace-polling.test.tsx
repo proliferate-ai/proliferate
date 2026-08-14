@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry,
+  type PendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   createEmptySessionRecord,
@@ -26,9 +27,14 @@ const mocks = vi.hoisted(() => ({
   selectWorkspace: vi.fn(),
   materializePendingWorkspaceSessions: vi.fn(),
   trackWorkspaceInteraction: vi.fn(),
+  notifyUnattendedPendingWorkspaceFailure: vi.fn(),
   workspaceCollections: {
     cloudWorkspaces: [] as CloudWorkspaceSummary[],
   },
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/pending-workspace-failure-notice", () => ({
+  notifyUnattendedPendingWorkspaceFailure: mocks.notifyUnattendedPendingWorkspaceFailure,
 }));
 
 vi.mock("#product/stores/preferences/workspace-ui-store", async (importOriginal) => {
@@ -74,6 +80,12 @@ describe("useCloudWorkspacePolling", () => {
     mocks.selectWorkspace.mockReset();
     mocks.materializePendingWorkspaceSessions.mockReset();
     mocks.trackWorkspaceInteraction.mockReset();
+    mocks.notifyUnattendedPendingWorkspaceFailure.mockReset();
+    mocks.materializePendingWorkspaceSessions.mockReturnValue({
+      pendingWorkspaceUiKey: "pending-workspace:attempt-1",
+      projectedSessionCount: 0,
+      projectedSessionIds: [],
+    });
     mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({ status: "pending" })];
     useSessionDirectoryStore.getState().clearEntries();
     useSessionTranscriptStore.getState().clearEntries();
@@ -153,7 +165,7 @@ describe("useCloudWorkspacePolling", () => {
     expect(mocks.materializePendingWorkspaceSessions).toHaveBeenCalledWith(
       pendingEntry,
       workspaceId,
-      { eventPrefix: "workspace.cloud_polling" },
+      { eventPrefix: "workspace.cloud_polling", attended: true },
     );
     await waitFor(() => {
       expect(mocks.trackWorkspaceInteraction).toHaveBeenCalledWith(
@@ -257,7 +269,7 @@ describe("useCloudWorkspacePolling", () => {
     expect(mocks.materializePendingWorkspaceSessions).toHaveBeenCalledWith(
       pendingEntry,
       workspaceId,
-      { eventPrefix: "workspace.cloud_polling" },
+      { eventPrefix: "workspace.cloud_polling", attended: true },
     );
     expect(readPendingEntry()).toBeNull();
   });
@@ -306,7 +318,167 @@ describe("useCloudWorkspacePolling", () => {
     expect(mocks.selectWorkspace).not.toHaveBeenCalled();
     expect(mocks.materializePendingWorkspaceSessions).not.toHaveBeenCalled();
   });
+
+  it("finalizes an unattended awaiting entry without moving selection", async () => {
+    const workspaceId = "cloud:cloud-1";
+    const pendingEntry = awaitingEntry("attempt-1", workspaceId);
+    seedRegistry([pendingEntry]);
+    useSessionSelectionStore.setState({
+      selectedWorkspaceId: "cloud:other",
+      selectedLogicalWorkspaceId: "cloud:other",
+      activeSessionId: "session-in-other-workspace",
+    });
+    mocks.refreshCloudWorkspace.mockResolvedValue(cloudWorkspace({ status: "ready" }));
+
+    renderHook(() => useCloudWorkspacePolling());
+
+    await waitFor(() => {
+      expect(readPendingEntry()).toBeNull();
+    });
+    expect(mocks.refreshCloudWorkspace).toHaveBeenCalledWith(workspaceId);
+    expect(mocks.selectWorkspace).not.toHaveBeenCalled();
+    expect(mocks.materializePendingWorkspaceSessions).toHaveBeenCalledWith(
+      pendingEntry,
+      workspaceId,
+      { eventPrefix: "workspace.cloud_polling", attended: false },
+    );
+    const selection = useSessionSelectionStore.getState();
+    expect(selection.selectedWorkspaceId).toBe("cloud:other");
+    expect(selection.activeSessionId).toBe("session-in-other-workspace");
+    expect(selection.workspaceArrivalEvent).toBeNull();
+  });
+
+  it("polls every awaiting entry, not just the selected one", async () => {
+    mocks.workspaceCollections.cloudWorkspaces = [
+      cloudWorkspace({ status: "pending" }),
+      cloudWorkspace({ id: "cloud-2", status: "pending" }),
+    ];
+    seedRegistry([
+      awaitingEntry("attempt-1", "cloud:cloud-1"),
+      awaitingEntry("attempt-2", "cloud:cloud-2"),
+    ]);
+    mocks.refreshCloudWorkspace.mockResolvedValue(cloudWorkspace({ status: "pending" }));
+
+    renderHook(() => useCloudWorkspacePolling());
+
+    await waitFor(() => {
+      expect(mocks.refreshCloudWorkspace).toHaveBeenCalledWith("cloud:cloud-1");
+      expect(mocks.refreshCloudWorkspace).toHaveBeenCalledWith("cloud:cloud-2");
+    });
+  });
+
+  it("polls at most three workspaces per tick", async () => {
+    const workspaceIds = ["cloud-1", "cloud-2", "cloud-3", "cloud-4"];
+    mocks.workspaceCollections.cloudWorkspaces = workspaceIds.map((id) =>
+      cloudWorkspace({ id, status: "pending" })
+    );
+    seedRegistry(workspaceIds.map((id, index) =>
+      awaitingEntry(`attempt-${index + 1}`, `cloud:${id}`)
+    ));
+    mocks.refreshCloudWorkspace.mockResolvedValue(cloudWorkspace({ status: "pending" }));
+
+    renderHook(() => useCloudWorkspacePolling());
+
+    await waitFor(() => {
+      expect(mocks.refreshCloudWorkspace).toHaveBeenCalledTimes(3);
+    });
+    expect(mocks.refreshCloudWorkspace.mock.calls.map(([id]) => id)).toEqual([
+      "cloud:cloud-1",
+      "cloud:cloud-2",
+      "cloud:cloud-3",
+    ]);
+  });
+
+  it("stops polling an entry once it leaves the awaiting state", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.workspaceCollections.cloudWorkspaces = [
+        cloudWorkspace({ status: "pending" }),
+        cloudWorkspace({ id: "cloud-2", status: "pending" }),
+      ];
+      seedRegistry([
+        awaitingEntry("attempt-1", "cloud:cloud-1"),
+        awaitingEntry("attempt-2", "cloud:cloud-2"),
+      ]);
+      mocks.refreshCloudWorkspace.mockImplementation(async (workspaceId: string) =>
+        workspaceId === "cloud:cloud-1"
+          ? cloudWorkspace({ status: "ready" })
+          : cloudWorkspace({ id: "cloud-2", status: "pending" })
+      );
+
+      renderHook(() => useCloudWorkspacePolling());
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(readPendingEntry()).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(9000);
+      });
+      const polledWorkspaceIds = mocks.refreshCloudWorkspace.mock.calls.map(([id]) => id);
+      expect(polledWorkspaceIds.filter((id) => id === "cloud:cloud-1")).toHaveLength(1);
+      expect(polledWorkspaceIds.filter((id) => id === "cloud:cloud-2").length).toBeGreaterThan(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("marks an unattended awaiting entry failed and announces it when readiness fails", async () => {
+    const workspaceId = "cloud:cloud-1";
+    const pendingEntry = awaitingEntry("attempt-1", workspaceId);
+    seedRegistry([pendingEntry]);
+    useSessionSelectionStore.setState({
+      selectedWorkspaceId: "cloud:other",
+      selectedLogicalWorkspaceId: "cloud:other",
+    });
+    mocks.refreshCloudWorkspace.mockResolvedValue(cloudWorkspace({
+      status: "error",
+      lastError: "Provisioning timed out",
+    }));
+
+    renderHook(() => useCloudWorkspacePolling());
+
+    await waitFor(() => {
+      expect(readPendingEntry()).toMatchObject({
+        stage: "failed",
+        workspaceId,
+        errorMessage: "Provisioning timed out",
+        request: { kind: "select-existing", workspaceId },
+      });
+    });
+    expect(mocks.notifyUnattendedPendingWorkspaceFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ attemptId: "attempt-1" }),
+      "Provisioning timed out",
+    );
+    expect(mocks.selectWorkspace).not.toHaveBeenCalled();
+  });
 });
+
+function awaitingEntry(attemptId: string, workspaceId: string) {
+  return {
+    ...buildSubmittingPendingWorkspaceEntry({
+      attemptId,
+      selectedWorkspaceId: null,
+      source: "cloud-created",
+      displayName: "feature-branch",
+      repoLabel: "proliferate-ai/proliferate",
+      baseBranchName: "main",
+      request: { kind: "select-existing" as const, workspaceId },
+    }),
+    stage: "awaiting-cloud-ready" as const,
+    workspaceId,
+  };
+}
+
+function seedRegistry(entries: readonly PendingWorkspaceEntry[]) {
+  useSessionSelectionStore.setState({
+    pendingWorkspaces: entries.reduce(
+      (registry, entry) => upsertPendingWorkspaceEntry(registry, entry),
+      EMPTY_PENDING_WORKSPACE_REGISTRY,
+    ),
+  });
+}
 
 function cloudWorkspace(
   input: Partial<CloudWorkspaceSummary> & {
@@ -314,7 +486,7 @@ function cloudWorkspace(
   },
 ): CloudWorkspaceSummary {
   return {
-    id: "cloud-1",
+    id: input.id ?? "cloud-1",
     displayName: "feature-branch",
     repo: {
       provider: "github",

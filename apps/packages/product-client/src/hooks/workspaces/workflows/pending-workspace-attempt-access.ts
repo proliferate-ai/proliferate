@@ -4,7 +4,9 @@ import {
   type PendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
+  isPendingWorkspaceAttemptAttended,
   isPendingWorkspaceEntryAttended,
+  type PendingWorkspaceAttemptIdentity,
 } from "#product/lib/domain/workspaces/creation/pending-attention";
 import {
   pendingWorkspaceEntry,
@@ -45,6 +47,22 @@ export function isAttemptAttended(attemptId: string): boolean {
       selectedWorkspaceId: selection.selectedWorkspaceId,
     },
   );
+}
+
+/**
+ * The same camera question for an attempt whose registry entry is already
+ * gone. A deferred launch promotes after finalization cleared the entry, so
+ * `isAttemptAttended` would read null and call every promotion unattended;
+ * this reads the two ids straight off selection instead (PRO-230).
+ */
+export function isLaunchAttemptAttended(
+  attempt: PendingWorkspaceAttemptIdentity,
+): boolean {
+  const selection = useSessionSelectionStore.getState();
+  return isPendingWorkspaceAttemptAttended(attempt, {
+    selectedLogicalWorkspaceId: selection.selectedLogicalWorkspaceId,
+    selectedWorkspaceId: selection.selectedWorkspaceId,
+  });
 }
 
 /**
