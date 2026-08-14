@@ -5,6 +5,9 @@
  *
  * Stages (each also runnable standalone):
  *   0. pnpm --filter @proliferate/design build   (token authority -> dist)
+ *   0b. dump-registry.mjs    -> .out/.ds-registry-manifest.json (compiles and
+ *                               executes LIBRARY_TIERS; every later stage
+ *                               reads the registry from this dump)
  *   1. make-entry.mjs        -> .out/.ds-entry.tsx
  *   2. build-vendor-react.mjs-> .out/_vendor/react.js (+ stub)
  *   3. build-bundle.mjs      -> .out/_ds_bundle.js
@@ -39,6 +42,7 @@ run("pnpm", ["--filter", "@proliferate/design", "build"], {
   env: { ...process.env, COREPACK_ENABLE_STRICT: "0" },
 });
 
+run("node", [join(here, "dump-registry.mjs")]);
 run("node", [join(here, "make-entry.mjs")]);
 run("node", [join(here, "build-vendor-react.mjs")]);
 run("node", [join(here, "build-bundle.mjs")]);

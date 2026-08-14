@@ -9,9 +9,11 @@
  */
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { loadRegistryManifest } from "./registry-manifest.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, "..", "..");
@@ -19,13 +21,14 @@ const productClientDir = join(repo, "apps/packages/product-client");
 const srcDir = join(productClientDir, "src");
 const outDir = join(here, ".out");
 const entryPath = join(outDir, ".ds-entry.tsx");
-const manifestSidecarPath = join(outDir, ".ds-registry-manifest.json");
 
-if (!existsSync(entryPath) || !existsSync(manifestSidecarPath)) {
-  throw new Error(
-    "build-bundle: missing .out/.ds-entry.tsx or .out/.ds-registry-manifest.json — run make-entry.mjs first.",
-  );
+if (!existsSync(entryPath)) {
+  throw new Error("build-bundle: missing .out/.ds-entry.tsx — run make-entry.mjs first.");
 }
+
+// Group/displayName/srcFile all come from registry-manifest.mjs, which loads
+// the evaluated registry dump — this script re-derives none of it.
+const registryEntries = await loadRegistryManifest();
 
 const pcRequire = createRequire(join(productClientDir, "package.json"));
 const viteMain = pcRequire.resolve("vite");
@@ -103,30 +106,6 @@ if (warnings.some((w) => /from "react"|from 'react'/.test(w.message ?? ""))) {
 }
 
 // --- Manifest comment (first line) -----------------------------------
-const registryEntries = JSON.parse(readFileSync(manifestSidecarPath, "utf8"));
-
-function groupFor(name, tierId) {
-  if (name.startsWith("Composer") || name === "LevelBarsButton") return "composer";
-  if (name === "ToastHost" || name === "Sonner" || name.startsWith("Toast")) return "toast";
-  if (name.startsWith("Sidebar")) return "sidebar";
-  if (name.startsWith("Settings")) return "settings";
-  return tierId;
-}
-
-function resolveSourceFile(subpath) {
-  const rest = subpath.replace(/^#product\//, "");
-  const candidates = [
-    `${join(srcDir, rest)}.tsx`,
-    `${join(srcDir, rest)}.ts`,
-    join(srcDir, rest, "index.tsx"),
-    join(srcDir, rest, "index.ts"),
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
-  }
-  throw new Error(`build-bundle: could not resolve source file for subpath "${subpath}" (tried: ${candidates.join(", ")})`);
-}
-
 function sha256_12(buffer) {
   return createHash("sha256").update(buffer).digest("hex").slice(0, 12);
 }
@@ -134,15 +113,14 @@ function sha256_12(buffer) {
 const components = [];
 const sourceHashes = {};
 for (const entry of registryEntries) {
-  // Slash-bearing registry names (secrets/SecretManagementPanel) sanitize to
-  // their last segment for file paths — must match emit-cards/make-meta.
-  const displayName = entry.name.split("/").pop();
-  const group = groupFor(displayName, entry.tierId);
+  // displayName/group/srcFile are the manifest's (slash-bearing registry names
+  // like secrets/SecretManagementPanel sanitize to their last segment) — the
+  // same values emit-cards/make-meta lay the payload out with.
+  const { displayName, group, srcFile } = entry;
   const sourcePath = `components/${group}/${displayName}/${displayName}.jsx`;
   components.push({ name: entry.name, sourcePath });
 
-  const resolved = resolveSourceFile(entry.subpath);
-  sourceHashes[sourcePath] = sha256_12(readFileSync(resolved));
+  sourceHashes[sourcePath] = sha256_12(readFileSync(srcFile));
 }
 
 const manifest = {

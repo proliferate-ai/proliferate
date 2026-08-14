@@ -10,10 +10,12 @@ import {
   buildSidebarGroupStates,
   resolveSidebarEmptyState,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-groups";
+import { collectPinnedSidebarItems } from "#product/lib/domain/workspaces/sidebar/sidebar-pinned";
 import { logicalWorkspaceRelatedIds } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import type {
   SidebarEmptyState,
   SidebarGroupState,
+  SidebarWorkspaceItemState,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
   isDocumentVisibleAndFocused,
@@ -40,6 +42,8 @@ interface UseWorkspaceSidebarStateArgs {
 
 interface WorkspaceSidebarState {
   groups: SidebarGroupState[];
+  /** Pinned workspaces' items in pin order, for the sidebar Pinned section. */
+  pinnedItems: SidebarWorkspaceItemState[];
   workspaceActivities: Record<string, SidebarSessionActivityState>;
   archivedCount: number;
   selectedWorkspaceId: string | null;
@@ -107,6 +111,7 @@ export function useWorkspaceSidebarState({
 
   const {
     archivedWorkspaceIds,
+    pinnedWorkspaceIds,
     hiddenRepoRootIds,
     lastViewedAt,
     sessionLastInteracted,
@@ -115,6 +120,7 @@ export function useWorkspaceSidebarState({
     workspaceTypes,
   } = useWorkspaceUiStore(useShallow((state) => ({
     archivedWorkspaceIds: state.archivedWorkspaceIds,
+    pinnedWorkspaceIds: state.pinnedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     lastViewedAt: state.lastViewedAt,
     sessionLastInteracted: state.sessionLastInteracted,
@@ -148,6 +154,10 @@ export function useWorkspaceSidebarState({
   const archivedSet = useMemo(
     () => new Set(archivedWorkspaceIds),
     [archivedWorkspaceIds],
+  );
+  const pinnedSet = useMemo(
+    () => new Set(pinnedWorkspaceIds),
+    [pinnedWorkspaceIds],
   );
   const hiddenRepoRootSet = useMemo(
     () => new Set(hiddenRepoRootIds),
@@ -190,6 +200,7 @@ export function useWorkspaceSidebarState({
       showArchived,
       workspaceTypes,
       archivedSet,
+      pinnedSet,
       hiddenRepoRootIds: hiddenRepoRootSet,
       selectedLogicalWorkspaceId,
       selectedWorkspaceId,
@@ -217,6 +228,7 @@ export function useWorkspaceSidebarState({
     logicalWorkspaces,
     pendingWorkspaceEntry,
     pendingPromptCounts,
+    pinnedSet,
     repoConfigs,
     repoRoots,
     workspaceTypes,
@@ -231,9 +243,14 @@ export function useWorkspaceSidebarState({
     workspaceLastInteracted,
   ]);
   const emptyState = resolveSidebarEmptyState(logicalWorkspaces.length, groups.length);
+  const pinnedItems = useMemo(
+    () => collectPinnedSidebarItems(groups, pinnedWorkspaceIds),
+    [groups, pinnedWorkspaceIds],
+  );
 
   return {
     groups,
+    pinnedItems,
     workspaceActivities,
     archivedCount,
     selectedWorkspaceId,

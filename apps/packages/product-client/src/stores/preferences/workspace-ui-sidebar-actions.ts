@@ -12,6 +12,8 @@ type WorkspaceUiSidebarActions = Pick<
   | "archiveWorkspaces"
   | "unarchiveWorkspace"
   | "unarchiveWorkspaces"
+  | "pinWorkspace"
+  | "unpinWorkspace"
   | "hideRepoRoot"
   | "unhideRepoRoot"
   | "toggleRepoGroupCollapsed"
@@ -68,6 +70,26 @@ export function createWorkspaceUiSidebarActions(
         return;
       }
       set({ archivedWorkspaceIds: next });
+    },
+
+    pinWorkspace: (id) => {
+      const current = get().pinnedWorkspaceIds;
+      if (current.includes(id)) {
+        return;
+      }
+      set({ pinnedWorkspaceIds: [...current, id] });
+    },
+
+    // Removes every id the workspace answers to, so a pin recorded under a
+    // former identity (alias/local-slot/materialization id) cannot survive.
+    unpinWorkspace: (ids) => {
+      const idSet = new Set(ids);
+      const current = get().pinnedWorkspaceIds;
+      const next = current.filter((workspaceId) => !idSet.has(workspaceId));
+      if (next.length === current.length) {
+        return;
+      }
+      set({ pinnedWorkspaceIds: next });
     },
 
     hideRepoRoot: (repoRootId) => {

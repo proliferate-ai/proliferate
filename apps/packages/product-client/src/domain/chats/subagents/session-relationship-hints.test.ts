@@ -5,28 +5,23 @@ import { collectSubagentSessionRelationshipHints } from "./session-relationship-
 describe("collectSubagentSessionRelationshipHints", () => {
   it("records the queried session as a child when parent metadata exists", () => {
     const hints = collectSubagentSessionRelationshipHints("child-session", {
-      parent: {
-        parentSessionId: "parent-session",
-        parentAgentKind: "codex",
-        parentModelId: null,
-        parentTitle: "Parent",
-        label: null,
-        linkCreatedAt: "2026-04-04T00:00:00Z",
-        sessionLinkId: "parent-link",
-      },
+      parent: agent("child-session", {
+        runtimeId: "runtime-1",
+        sessionId: "parent-session",
+      }),
       children: [],
     });
 
     expect(hints).toEqual([{
       sessionId: "child-session",
       parentSessionId: "parent-session",
-      sessionLinkId: "parent-link",
+      sessionLinkId: null,
     }]);
   });
 
   it("records each returned child under the queried parent session", () => {
     const hints = collectSubagentSessionRelationshipHints("parent-session", {
-      parent: null,
+      parent: agent("parent-session", null),
       children: [
         child("child-a", "link-a"),
         child("child-b", "link-b"),
@@ -50,16 +45,34 @@ describe("collectSubagentSessionRelationshipHints", () => {
 
 function child(childSessionId: string, sessionLinkId: string): SessionSubagentsResponse["children"][number] {
   return {
-    childSessionId,
-    sessionLinkId,
-    agentKind: "codex",
-    childCreatedAt: "2026-04-04T00:00:00Z",
-    modelId: null,
-    title: childSessionId,
-    label: null,
-    status: "idle",
-    wakeScheduled: false,
+    agent: agent(childSessionId, {
+      runtimeId: "runtime-1",
+      sessionId: "parent-session",
+    }),
+    relationship: {
+      childSessionId,
+      createdAt: "2026-04-04T00:00:00Z",
+      parentSessionId: "parent-session",
+      sessionLinkId,
+    },
     latestCompletion: null,
-    linkCreatedAt: "2026-04-04T00:00:00Z",
+  };
+}
+
+function agent(
+  sessionId: string,
+  parent: { runtimeId: string; sessionId: string } | null,
+): SessionSubagentsResponse["parent"] {
+  return {
+    identity: { runtimeId: "runtime-1", sessionId },
+    workspace: { runtimeId: "runtime-1", workspaceId: "workspace-1" },
+    role: parent ? "subagent" : "ordinary",
+    parent,
+    title: sessionId,
+    configuration: { agentKind: "codex", modelId: null, modeId: null },
+    status: { presentation: "available", execution: "idle", hasLiveActor: true },
+    capabilities: [],
+    createdAt: "2026-04-04T00:00:00Z",
+    updatedAt: "2026-04-04T00:00:00Z",
   };
 }

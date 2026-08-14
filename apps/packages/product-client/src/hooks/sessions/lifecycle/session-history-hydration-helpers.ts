@@ -7,11 +7,13 @@ import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   recordMeasurementMetric,
+  recordMeasurementWorkflowStep,
 } from "#product/lib/infra/measurement/measurement-port";
 import type {
   MeasurementOperationId,
   MeasurementOperationKind,
   MeasurementSurface,
+  MeasurementWorkflowStep,
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
 import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
@@ -157,4 +159,41 @@ export function recordHistoryStateCounts(
     target: isBefore ? "session.history.items_before" : "session.history.items_after",
     count: Object.keys(transcript.itemsById).length,
   });
+}
+
+export function recordHistoryApplyStepMetrics(
+  operationIds: readonly MeasurementOperationId[],
+  input: {
+    phase: "replay" | "store" | "mount_subagents";
+    startedAt: number;
+    count?: number;
+  },
+): void {
+  for (const operationId of operationIds) {
+    if (input.phase === "replay") {
+      recordMeasurementMetric({
+        type: "reducer",
+        category: "session.events.list",
+        operationId,
+        durationMs: performance.now() - input.startedAt,
+        count: input.count ?? 0,
+      });
+    } else if (input.phase === "store") {
+      recordMeasurementMetric({
+        type: "store",
+        category: "session.events.list",
+        operationId,
+        durationMs: performance.now() - input.startedAt,
+      });
+    }
+    recordMeasurementWorkflowStep({
+      operationId,
+      step: `session.history.${input.phase}` as MeasurementWorkflowStep,
+      startedAt: input.startedAt,
+      ...(input.count !== undefined ? { count: input.count } : {}),
+    });
+    if (input.phase === "mount_subagents") {
+      markSessionApplyForNextCommit(operationId);
+    }
+  }
 }

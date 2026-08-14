@@ -1,5 +1,6 @@
 import type { AnyHarnessClientConnection } from "@anyharness/sdk-react";
 import type { ServerMeta } from "#product/lib/domain/auth/connect-server";
+import type { DroppedPathsSnapshot } from "./desktop-file-drop-bridge";
 import type { DesktopUpdaterBridge } from "./desktop-updater-bridge";
 
 /**
@@ -80,6 +81,7 @@ export type DirectoryPickerUnavailableReason =
   | "native_host_required"
   | "picker_failed";
 
+
 /** A directory-picker outcome with cancellation kept distinct from a missing
  * or failed native transport. Product workflows decide how to present the
  * unavailable reason; a normal user cancellation remains silent. */
@@ -96,6 +98,22 @@ export interface DesktopFilesBridge {
   pickDirectory(): Promise<DirectoryPickerResult>;
   getHomeDirectory(): Promise<string>;
   isDirectory(path: string): Promise<boolean>;
+
+  /**
+   * The drag pasteboard's current change count, captured while a drag is over
+   * the webview to identify the session that later delivers the DOM drop.
+   * -1 when the platform has no drag pasteboard.
+   */
+  getDragPasteboardChangeCount(): Promise<number>;
+
+  /**
+   * Absolute paths for the files/folders of the drag session that just
+   * dropped onto the webview (HTML5 drops never expose paths), with the
+   * change count the snapshot was read under. Resolves with empty entries
+   * when the platform cannot recover paths, so callers fall back to
+   * byte-based `File` handling.
+   */
+  readDroppedPaths(): Promise<DroppedPathsSnapshot>;
 
   listAvailableEditors(): Promise<EditorInfo[]>;
   listOpenTargets(pathKind?: PathKind): Promise<OpenTarget[]>;

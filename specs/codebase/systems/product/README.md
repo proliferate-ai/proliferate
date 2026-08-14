@@ -48,7 +48,7 @@ new system spec or Product MCP definition:
 | --- | --- |
 | Browser | No concrete system spec or Product MCP definition yet; create one before user-visible browser workflow or permission changes. |
 | Artifacts | [agents/cowork-artifacts.md](agents/cowork-artifacts.md). |
-| Sub Agents | [agents/delegated-work.md](agents/delegated-work.md) and [Subagents MCP](../../platforms/product/agent-features/definitions/subagents.md). |
+| Sub Agents | [agents/delegated-work.md](agents/delegated-work.md) and [Workspace MCP](../../platforms/product/agent-features/definitions/workspace.md). |
 | Computer Use | No concrete system spec or Product MCP definition yet; create one before user-visible Computer Use workflow, permission, or QA changes. |
 | Plugins | No current platform document owns runtime/config expansion; create a system spec only for catalog/install/manage UX. |
 

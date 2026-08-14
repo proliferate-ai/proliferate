@@ -19,6 +19,7 @@ export interface DelegatedAgentOpenTarget {
 
 export interface DelegatedAgentIdentity {
   id: string;
+  sessionId: string | null;
   generatedName: string;
   initial: string;
   title: string;
@@ -29,9 +30,10 @@ export interface DelegatedAgentIdentity {
   textColorClassName: string;
   borderColorClassName: string;
   colorVar: string;
-  // Seed for the identicon cells. Derived from the same seed as name/color so
-  // the same subagent draws the same shape on every surface.
-  iconSeedHash: number;
+  // Seed for the identity glyph. Once a durable session exists this is derived
+  // only from that session ID, so relationship-link churn cannot change the
+  // agent's shape or color between surfaces.
+  glyphSeedHash: number;
   openTarget: DelegatedAgentOpenTarget | null;
 }
 

@@ -20,6 +20,7 @@ import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-sessi
 
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 const EMPTY_EVENTS: readonly SessionEventEnvelope[] = [];
+const EMPTY_LINK_COMPLETIONS: TranscriptState["linkCompletionsByCompletionId"] = {};
 
 export function useActiveSessionTranscript(): TranscriptState | null {
   const activeSessionId = useActiveSessionId();
@@ -28,7 +29,22 @@ export function useActiveSessionTranscript(): TranscriptState | null {
   );
 }
 
-export function useActiveTranscriptPaneState(): {
+/**
+ * Completion-only transcript projection for composer surfaces. The completion
+ * index is structurally shared across ordinary stream batches, so subscribers
+ * stay inert until a link-completion event actually changes the index.
+ */
+export function useActiveSessionLinkCompletions(): TranscriptState["linkCompletionsByCompletionId"] {
+  const activeSessionId = useActiveSessionId();
+  return useSessionTranscriptStore((state) =>
+    activeSessionId
+      ? state.entriesById[activeSessionId]?.transcript.linkCompletionsByCompletionId
+        ?? EMPTY_LINK_COMPLETIONS
+      : EMPTY_LINK_COMPLETIONS
+  );
+}
+
+export interface TranscriptPaneState {
   activeSessionId: string | null;
   transcript: TranscriptState | null;
   optimisticPrompt: PendingPromptEntry | null;
@@ -36,8 +52,22 @@ export function useActiveTranscriptPaneState(): {
   sessionViewState: SessionViewState;
   oldestLoadedEventSeq: number | null;
   goalEvents: readonly GoalTranscriptEvent[];
-} {
-  const activeSessionId = useActiveSessionId();
+}
+
+export function useActiveTranscriptPaneState(): TranscriptPaneState {
+  return useTranscriptPaneStateForSession(useActiveSessionId());
+}
+
+/**
+ * Explicit-session variant of the transcript pane state, for surfaces that
+ * render a session other than the main active one (Agents-pane detail). The
+ * returned `activeSessionId` is the session this state describes — the
+ * requested id — never the global selection. Selector bodies are shared with
+ * the active wrapper so structural sharing is preserved.
+ */
+export function useTranscriptPaneStateForSession(
+  activeSessionId: string | null,
+): TranscriptPaneState {
   const sessionViewState = useSessionDirectoryStore((state) =>
     activeSessionId
       ? resolveSessionViewState(

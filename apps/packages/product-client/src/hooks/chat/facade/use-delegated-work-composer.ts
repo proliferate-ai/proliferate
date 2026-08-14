@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useScheduleSubagentWakeMutation } from "@anyharness/sdk-react";
 import { useSubagentComposerStrip } from "#product/hooks/chat/facade/subagents/use-subagent-composer-strip";
 import {
   deriveDelegatedWorkSummary,
@@ -12,32 +11,15 @@ import {
   selectSingleDelegatedAgentTriggerIdentity,
   shouldShowDelegatedWorkInComposer,
 } from "#product/lib/domain/delegated-work/presentation";
-import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import { useToastStore } from "#product/stores/toast/toast-store";
 
 export interface DelegatedWorkComposerViewModel {
   summary: DelegatedWorkSummary;
   singleAgent: DelegatedAgentIdentity | null;
-  subagents: (ReturnType<typeof useSubagentComposerStrip> & {
-    scheduleWake: (childSessionId: string) => void;
-    isSchedulingWake: boolean;
-  }) | null;
+  subagents: ReturnType<typeof useSubagentComposerStrip>;
 }
 
 export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | null {
   const subagents = useSubagentComposerStrip();
-  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
-  const activeWorkspaceId = useSessionDirectoryStore((state) => (
-    activeSessionId ? state.entriesById[activeSessionId]?.workspaceId ?? null : null
-  ));
-  const showToast = useToastStore((state) => state.show);
-  const showErrorToast = useToastStore((state) => state.showError);
-  const scheduleWakeMutation = useScheduleSubagentWakeMutation({
-    workspaceId: activeWorkspaceId ?? selectedWorkspaceId,
-  });
-
   const subagentModel = useMemo<DelegatedWorkComposerViewModel["subagents"]>(() => {
     if (!subagents) {
       return null;
@@ -51,27 +33,8 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
     return {
       ...subagents,
       rows: visibleRows,
-      isSchedulingWake: scheduleWakeMutation.isPending,
-      scheduleWake: function scheduleWake(childSessionId) {
-        const parentSessionId = subagents.parent?.parentSessionId ?? activeSessionId;
-        if (!parentSessionId) {
-          showToast("Select a parent session before scheduling a wake.");
-          return;
-        }
-        void scheduleWakeMutation.mutateAsync({
-          sessionId: parentSessionId,
-          childSessionId,
-        }).catch((error) => {
-          showErrorToast({
-            headline: "Wake not scheduled",
-            consequence: "The delegated session is still asleep.",
-            cause: errorMessage(error),
-            retry: () => scheduleWake(childSessionId),
-          });
-        });
-      },
     };
-  }, [activeSessionId, scheduleWakeMutation, showErrorToast, showToast, subagents]);
+  }, [subagents]);
 
   const summary = useMemo(() => deriveDelegatedWorkSummary([
     ...subagentSummaryCandidates(subagentModel),
@@ -101,10 +64,8 @@ function subagentSummaryCandidates(
   if (!subagents) return [];
   const failed = subagents.rows.filter((row) => row.statusLabel === "Failed").length;
   const running = subagents.rows.filter((row) => row.statusLabel === "Working").length;
-  const wake = subagents.rows.filter((row) => row.wakeScheduled).length;
   if (failed > 0) return [{ priority: "failed", label: "failed", count: failed }];
   if (running > 0) return [{ priority: "running", label: "running", count: running }];
-  if (wake > 0) return [{ priority: "wake_scheduled", label: "wake scheduled", count: wake }];
   return [{ priority: "finished", label: subagents.summary.label }];
 }
 
@@ -115,8 +76,4 @@ function subagentVisibleAgents(
     identity: row.identity,
     statusCategory: row.statusCategory,
   })) ?? [];
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

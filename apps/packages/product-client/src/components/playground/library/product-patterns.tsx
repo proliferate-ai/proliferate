@@ -1,12 +1,42 @@
+import { AgentIdentityChip } from "#product/components/patterns/AgentIdentityChip";
+import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGlyph";
 import {
   BillingBalanceNotice,
   BillingGateState,
 } from "#product/components/patterns/BillingGateState";
 import { billingGateView } from "#product/lib/domain/billing/billing-gate-presentation";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { PrStatusDot } from "#product/components/patterns/PrStatusBadge";
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import type { LibraryEntry, LibraryTier } from "./types";
+
+const DEMO_AGENT_IDENTITY = buildDelegatedAgentIdentity({
+  id: "library-agent-link",
+  title: "Explore dotfiles",
+  workspaceId: "library-workspace",
+  sessionId: "library-agent-session",
+  sessionLinkId: "library-agent-link",
+});
+
+function AgentIdentityChipDemo() {
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <AgentIdentityChip identity={DEMO_AGENT_IDENTITY} onOpen={noop} />
+      <AgentIdentityChip identity={DEMO_AGENT_IDENTITY} closed />
+    </div>
+  );
+}
+
+function AgentIdentityGlyphDemo() {
+  return (
+    <div className="flex items-center gap-2">
+      <AgentIdentityGlyph identity={DEMO_AGENT_IDENTITY} dimension={16} />
+      <AgentIdentityGlyph identity={DEMO_AGENT_IDENTITY} dimension={18} />
+      <AgentIdentityGlyph identity={DEMO_AGENT_IDENTITY} dimension={20} closed />
+    </div>
+  );
+}
 
 function SecretManagementPanelDemo() {
   return (
@@ -51,6 +81,8 @@ function BillingGateStateDemo() {
 }
 
 export const PRODUCT_PATTERNS_ENTRIES: LibraryEntry[] = [
+  { name: "AgentIdentityChip", subpath: "#product/components/patterns/AgentIdentityChip", render: AgentIdentityChipDemo },
+  { name: "AgentIdentityGlyph", subpath: "#product/components/patterns/AgentIdentityGlyph", render: AgentIdentityGlyphDemo },
   { name: "BillingGateState", subpath: "#product/components/patterns/BillingGateState", render: BillingGateStateDemo },
   { name: "PrStatusBadge", subpath: "#product/components/patterns/PrStatusBadge", render: () => (
     <PrStatusDot status={{ kind: "open", number: 42 }} />

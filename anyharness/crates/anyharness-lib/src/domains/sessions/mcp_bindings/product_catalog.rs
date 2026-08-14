@@ -5,10 +5,10 @@ use crate::domains::sessions::mcp_bindings::model::{
     SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
 };
 use crate::domains::sessions::mcp_bindings::product_launch::{
-    ProductMcpLaunchRegistration, ProductMcpSelectionContext,
+    ProductMcpLaunchError, ProductMcpLaunchRegistration, ProductMcpSelectionContext,
 };
-use crate::domains::sessions::model::SessionRecord;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+use crate::domains::workspaces::model::{WorkspaceRecord, WorkspaceSurface};
 use crate::integrations::mcp::product_server::{
     ProductMcpDefinition, PRODUCT_MCP_TOKEN_HEADER_NAME,
 };
@@ -22,11 +22,16 @@ pub struct SelectedProductMcp<'a> {
     pub registration: &'a ProductMcpLaunchRegistration,
 }
 
+pub fn workspace_mcp_should_attach(ctx: ProductMcpSelectionContext<'_>) -> bool {
+    ctx.workspace.surface == WorkspaceSurface::Standard
+        && ctx.session.mcp_binding_policy != SessionMcpBindingPolicy::InternalOnly
+}
+
 pub fn select_product_mcps<'a>(
     workspace: &'a WorkspaceRecord,
     session: &'a SessionRecord,
     registrations: &'a [ProductMcpLaunchRegistration],
-) -> anyhow::Result<Vec<SelectedProductMcp<'a>>> {
+) -> Result<Vec<SelectedProductMcp<'a>>, ProductMcpLaunchError> {
     let mut selected = Vec::new();
     for registration in registrations {
         if registration.should_attach(ProductMcpSelectionContext { workspace, session })? {
@@ -68,7 +73,7 @@ pub struct ProductMcpInjectionContext<'a> {
 pub fn inject_product_mcps(
     selected: &[SelectedProductMcp<'_>],
     ctx: ProductMcpInjectionContext<'_>,
-) -> anyhow::Result<SessionLaunchExtras> {
+) -> Result<SessionLaunchExtras, ProductMcpLaunchError> {
     let mut extras = product_mcp_prompt_extras(selected);
     for product in selected {
         let registration = product.registration;
@@ -142,11 +147,25 @@ impl ProductMcpLaunchCatalog {
         Self { inner: None }
     }
 
+    #[cfg(test)]
+    pub(crate) fn registered_product_ids(&self) -> Vec<&'static str> {
+        self.inner
+            .as_ref()
+            .map(|inner| {
+                inner
+                    .registrations
+                    .iter()
+                    .map(|registration| registration.definition().id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub fn resolve_launch_extras(
         &self,
         workspace: &WorkspaceRecord,
         session: &SessionRecord,
-    ) -> anyhow::Result<SessionLaunchExtras> {
+    ) -> Result<SessionLaunchExtras, ProductMcpLaunchError> {
         let Some(inner) = self.inner.as_ref() else {
             return Ok(SessionLaunchExtras::default());
         };
@@ -165,8 +184,10 @@ impl ProductMcpLaunchCatalog {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
+    use crate::domains::sessions::mcp_bindings::product_launch::ProductMcpLaunchPhase;
     use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
     use crate::domains::workspaces::model::{
         WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
@@ -307,6 +328,65 @@ mod tests {
     }
 
     #[test]
+    fn workspace_selection_is_exactly_standard_and_not_internal_only() {
+        let standard = workspace("workspace-standard", "standard");
+        let cowork = workspace("workspace-cowork", "cowork");
+
+        let ordinary = session("ordinary", &standard.id);
+        assert!(workspace_mcp_should_attach(ProductMcpSelectionContext {
+            workspace: &standard,
+            session: &ordinary,
+        }));
+
+        let mut delegated = session("delegated", &standard.id);
+        delegated.subagents_enabled = false;
+        assert!(workspace_mcp_should_attach(ProductMcpSelectionContext {
+            workspace: &standard,
+            session: &delegated,
+        }));
+
+        let mut promoted_after_restart = delegated.clone();
+        promoted_after_restart.id = "promoted".to_string();
+        assert!(workspace_mcp_should_attach(ProductMcpSelectionContext {
+            workspace: &standard,
+            session: &promoted_after_restart,
+        }));
+
+        let mut internal_only = session("review", &standard.id);
+        internal_only.mcp_binding_policy = SessionMcpBindingPolicy::InternalOnly;
+        assert!(!workspace_mcp_should_attach(ProductMcpSelectionContext {
+            workspace: &standard,
+            session: &internal_only,
+        }));
+
+        let cowork_session = session("cowork", &cowork.id);
+        assert!(!workspace_mcp_should_attach(ProductMcpSelectionContext {
+            workspace: &cowork,
+            session: &cowork_session,
+        }));
+    }
+
+    #[test]
+    fn selector_failure_keeps_product_identity_and_phase_without_partial_selection() {
+        let workspace = workspace("workspace-1", "standard");
+        let session = session("session-1", &workspace.id);
+        let registration = ProductMcpLaunchRegistration::new(
+            &TEST_DEFINITION,
+            Arc::new(|_ctx| Err(anyhow::anyhow!("private selector detail"))),
+            Arc::new(|_, _| Ok("unused".to_string())),
+        );
+        let registrations = [registration];
+
+        let Err(error) = select_product_mcps(&workspace, &session, &registrations) else {
+            panic!("selector failure must fail closed");
+        };
+
+        assert_eq!(error.product_mcp_id(), TEST_DEFINITION.id);
+        assert_eq!(error.phase(), ProductMcpLaunchPhase::Selection);
+        assert!(!error.to_string().contains("private selector detail"));
+    }
+
+    #[test]
     fn selected_product_extras_merge_in_launch_order() {
         let workspace = workspace("workspace-1", "standard");
         let session = session("session-1", &workspace.id);
@@ -379,5 +459,42 @@ mod tests {
             .headers
             .iter()
             .any(|header| header.name == PRODUCT_MCP_TOKEN_HEADER_NAME));
+    }
+
+    #[test]
+    fn token_mint_failure_returns_no_launch_extras_and_a_later_retry_remints() {
+        let workspace = workspace("workspace-1", "standard");
+        let session = session("session-1", &workspace.id);
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let attempt_counter = attempts.clone();
+        let registration = ProductMcpLaunchRegistration::new(
+            &INJECTION_TEST_DEFINITION,
+            Arc::new(|_ctx| Ok(true)),
+            Arc::new(move |_, _| {
+                if attempt_counter.fetch_add(1, Ordering::SeqCst) == 0 {
+                    Err(anyhow::anyhow!("private token detail"))
+                } else {
+                    Ok("retry-token".to_string())
+                }
+            }),
+        );
+        let catalog = ProductMcpLaunchCatalog::new(
+            "http://127.0.0.1:4317".to_string(),
+            None,
+            vec![registration],
+        );
+
+        let Err(error) = catalog.resolve_launch_extras(&workspace, &session) else {
+            panic!("first mint must fail closed without launch extras");
+        };
+        assert_eq!(error.product_mcp_id(), INJECTION_TEST_DEFINITION.id);
+        assert_eq!(error.phase(), ProductMcpLaunchPhase::TokenMint);
+        assert!(!error.to_string().contains("private token detail"));
+
+        let retry = catalog
+            .resolve_launch_extras(&workspace, &session)
+            .expect("explicit retry must rerun token mint");
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(retry.mcp_servers.len(), 1);
     }
 }

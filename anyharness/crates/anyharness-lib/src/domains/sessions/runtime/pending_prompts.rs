@@ -89,6 +89,14 @@ impl SessionRuntime {
                     );
                     PendingPromptMutationError::NotFound
                 }
+                LiveSessionCommandError::Rejected(QueueMutationError::Protected) => {
+                    let _ = prepared.cleanup_attachments(
+                        self.session_service.store(),
+                        self.session_service.attachment_storage(),
+                        session_id,
+                    );
+                    PendingPromptMutationError::Protected
+                }
                 LiveSessionCommandError::Rejected(QueueMutationError::StaleOrder { .. }) => {
                     PendingPromptMutationError::Internal(anyhow::anyhow!(
                         "unexpected reorder conflict while editing a pending prompt"
@@ -151,6 +159,9 @@ impl SessionRuntime {
                 ),
                 LiveSessionCommandError::Rejected(QueueMutationError::NotFound) => {
                     PendingPromptMutationError::NotFound
+                }
+                LiveSessionCommandError::Rejected(QueueMutationError::Protected) => {
+                    PendingPromptMutationError::Protected
                 }
                 LiveSessionCommandError::Rejected(QueueMutationError::StaleOrder { .. }) => {
                     PendingPromptMutationError::Internal(anyhow::anyhow!(
@@ -260,6 +271,11 @@ fn map_queue_command_error(
         ),
         LiveSessionCommandError::Rejected(QueueMutationError::NotFound) => {
             PendingPromptQueueError::NotFound
+        }
+        LiveSessionCommandError::Rejected(QueueMutationError::Protected) => {
+            PendingPromptQueueError::Internal(anyhow::anyhow!(
+                "unexpected protected-row rejection for reorder or steer"
+            ))
         }
         LiveSessionCommandError::Rejected(QueueMutationError::StaleOrder { current_seqs }) => {
             PendingPromptQueueError::StaleOrder { current_seqs }

@@ -19,19 +19,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyharness_contract::v1::{Loop, SessionEventEnvelope, SetSessionLoopRequest};
-use async_trait::async_trait;
 use tokio::sync::broadcast;
 
 use super::model::LoopRecord;
-use super::scheduler::{LoopFireExecutor, LoopFireReport, LoopScheduler, LoopSessionLiveness};
+use super::scheduler::{LoopFireReport, LoopScheduler};
 use super::service::{EmulatedLoopSpec, LoopEventContext, LoopService, MAX_LOOP_PROMPT_BYTES};
 use super::wire::{
     LoopClearedWireResult, LoopListWireResult, LOOP_CLEAR_EXT_METHOD, LOOP_LIST_EXT_METHOD,
     LOOP_SET_EXT_METHOD,
 };
 use crate::domains::sessions::model::{parse_action_capabilities, SessionRecord};
-use crate::domains::sessions::prompt::provenance::PromptProvenance;
-use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::live::sessions::model::{
@@ -40,6 +37,9 @@ use crate::live::sessions::model::{
 use crate::live::sessions::{
     AgentExtMethodError, LiveSessionCommandError, LiveSessionHandle, LiveSessionManager,
 };
+
+mod fire_executor;
+pub use fire_executor::SessionLoopFireExecutor;
 
 /// How long a native loop mutation waits for its `loop_*` notification to
 /// round-trip before reporting the write unconfirmed.
@@ -489,71 +489,6 @@ fn schedule_kind_wire(request: &SetSessionLoopRequest) -> &'static str {
     match request.schedule.kind {
         anyharness_contract::v1::LoopScheduleKind::Interval => "interval",
         anyharness_contract::v1::LoopScheduleKind::Cron => "cron",
-    }
-}
-
-/// The scheduler's session-facing half: liveness + the actual emulated fire
-/// (prompt enqueue tagged loop-fired, then fire accounting under the sink
-/// lock). Kept separate from [`LoopRuntime`] so it satisfies the
-/// [`LoopFireExecutor`] object-safe trait the scheduler owns.
-pub struct SessionLoopFireExecutor {
-    loop_service: Arc<LoopService>,
-    acp_manager: LiveSessionManager,
-}
-
-impl SessionLoopFireExecutor {
-    pub fn new(loop_service: Arc<LoopService>, acp_manager: LiveSessionManager) -> Self {
-        Self {
-            loop_service,
-            acp_manager,
-        }
-    }
-}
-
-#[async_trait]
-impl LoopFireExecutor for SessionLoopFireExecutor {
-    async fn liveness(&self, session_id: &str) -> LoopSessionLiveness {
-        match self.acp_manager.get_handle(session_id).await {
-            None => LoopSessionLiveness::Dead,
-            Some(handle) if handle.is_busy() => LoopSessionLiveness::Busy,
-            Some(_) => LoopSessionLiveness::Idle,
-        }
-    }
-
-    // Spec 2b classification (admission:derived-safe): an ACTIVE loop row can
-    // never exist on a workflow-controlled session — control binds at
-    // creation, and every loop acquisition route (set/edit) is fenced 409
-    // before insert — so the emulated fire cannot target a controlled
-    // session and takes no admission permit.
-    async fn fire(&self, session_id: &str, loop_id: &str) -> Option<LoopFireReport> {
-        let handle = self.acp_manager.get_handle(session_id).await?;
-        let record = self
-            .loop_service
-            .store()
-            .find_one(session_id, loop_id)
-            .ok()
-            .flatten()?;
-        if record.status != anyharness_contract::v1::LoopStatus::Active || record.native {
-            return None;
-        }
-        // Enqueue the loop's prompt as an ordinary user turn — faithful
-        // mirroring of a human retyping it, never a synthetic wake.
-        let payload =
-            PromptPayload::text(record.prompt.clone()).with_provenance(PromptProvenance::System {
-                label: Some(LOOP_FIRED_PROVENANCE_LABEL.to_string()),
-            });
-        if handle.send_prompt(payload, None).await.is_err() {
-            return None;
-        }
-        let fired_at_ms = chrono::Utc::now().timestamp_millis();
-        let op = Box::new(LoopFireRecordOp {
-            loop_service: self.loop_service.clone(),
-            loop_id: loop_id.to_string(),
-            fired_at_ms,
-        });
-        let reply = handle.run_domain_op(op).await.ok()?;
-        let output = reply.downcast::<LoopFireRecordOutput>().ok()?;
-        output.report
     }
 }
 

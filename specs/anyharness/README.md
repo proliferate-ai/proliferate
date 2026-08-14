@@ -153,7 +153,7 @@ Example:
 
 ```text
 domains/sessions/extensions::SessionExtension
-  implemented by cowork, reviews, subagents
+  implemented by cowork, reviews, and delegated-agent completion delivery
   wired by app/
   consumed by SessionRuntime at launch/prompt boundaries
 ```
@@ -258,8 +258,7 @@ Specs:
   MCP server pattern: definition, auth, injection, context, tools, calls, UI
   exposure, and session MCP selection.
 - [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md) for the concrete product
-  MCP definitions currently being standardized: subagents, artifacts, and
-  reviews.
+  MCP definitions: Workspace, Cowork, and Reviews.
 
 Subsystem docs at the top level of `specs/anyharness/**` own
 behavior for runtime areas that do not yet have a focused guide or spec:
@@ -318,7 +317,7 @@ which guide to read and where the code belongs.
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [adapters.md](adapters.md) |
 | Terminal durable records, PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/domains/terminals/**`, `anyharness-lib/src/live/terminals/**` | durable `domains/terminals/**` plus live `live/terminals/**` | [live-runtime.md](live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/domains/sessions/mcp_bindings/**` | `domains/sessions/mcp_bindings/**` | [../codebase/platforms/product/mcp-runtime.md](../codebase/platforms/product/mcp-runtime.md), [domains.md](domains.md) |
-| Product MCP tool servers for artifacts, reviews, subagents | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/subagents/**` | owning product domain | [../codebase/platforms/product/agent-features/servers.md](../codebase/platforms/product/agent-features/servers.md), [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md), [domains.md](domains.md) |
+| Product MCP tool servers for Workspace, reviews, and Cowork | `domains/agent_operations/mcp/**`, `domains/reviews/mcp/**`, `domains/cowork/mcp/**` | owning product domain | [../codebase/platforms/product/agent-features/servers.md](../codebase/platforms/product/agent-features/servers.md), [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md), [domains.md](domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [integrations.md](integrations.md), [../codebase/platforms/product/mcp-runtime.md](../codebase/platforms/product/mcp-runtime.md) |
 | Artifact durable model, manifest, protection, or runtime behavior | `anyharness-lib/src/domains/artifacts/**` | `domains/artifacts/**` | [domains.md](domains.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [domains.md](domains.md), [../codebase/systems/product/agents/cowork-artifacts.md](../codebase/systems/product/agents/cowork-artifacts.md) |
@@ -329,9 +328,9 @@ which guide to read and where the code belongs.
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [repo-shape.md](repo-shape.md) |
 
 If a task appears to belong in two places, split by ownership. Example: a new
-subagent MCP tool puts product behavior in `domains/sessions/subagents/**`,
-shared JSON-RPC/capability helpers in `integrations/mcp/**`, and the HTTP route
-adapter in `api/http/**`.
+Workspace MCP operation puts product behavior in
+`domains/agent_operations/**`, shared JSON-RPC/capability helpers in
+`integrations/mcp/**`, and the HTTP route adapter in `api/http/**`.
 
 ## Target Shape
 
@@ -461,5 +460,5 @@ persistence -> domains
 Core domains should not import product surface domains. When a product surface
 needs to plug into a core lifecycle, use an extension point wired in `app/`.
 For example, the session engine owns the `SessionExtension` trait; cowork,
-reviews, and subagents implement it; `app` wires them into
-`SessionRuntime`.
+reviews, and delegated-agent completion delivery implement it; `app` wires
+them into `SessionRuntime`.

@@ -23,7 +23,6 @@ export interface PrototypeAgent {
   label: string;
   harness: string;
   status: PrototypeAgentStatus;
-  wakeScheduled: boolean;
   /** Secondary status line, already composed ("Working · 4m"). */
   detail: string;
 }
@@ -90,7 +89,6 @@ function overflowAgents(): PrototypeAgent[] {
       label,
       harness: index % 2 === 0 ? "Claude" : "Codex",
       status,
-      wakeScheduled: index % 4 === 1,
       detail: status === "errored"
         ? "Failed · tool error"
         : status === "starting"
@@ -124,7 +122,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "API Surface Check",
         harness: "Claude",
         status: "running",
-        wakeScheduled: false,
         detail: "Working · 4m",
       },
       {
@@ -132,7 +129,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "SDK Types Sync",
         harness: "Codex",
         status: "running",
-        wakeScheduled: false,
         detail: "Working · 2m",
       },
       {
@@ -140,15 +136,13 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Migration Dry Run",
         harness: "Claude",
         status: "running",
-        wakeScheduled: true,
-        detail: "Working · Wake scheduled",
+        detail: "Working · 5m",
       },
       {
         id: "run-perf-trace",
         label: "Perf Trace Sweep",
         harness: "Codex",
         status: "starting",
-        wakeScheduled: false,
         detail: "Starting",
       },
     ],
@@ -165,7 +159,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "API Surface Check",
         harness: "Claude",
         status: "starting",
-        wakeScheduled: false,
         detail: "Starting",
       },
       {
@@ -173,7 +166,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Flaky Test Hunt",
         harness: "Codex",
         status: "errored",
-        wakeScheduled: false,
         detail: "Failed · tool error",
       },
       {
@@ -181,7 +173,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "SDK Types Sync",
         harness: "Claude",
         status: "running",
-        wakeScheduled: false,
         detail: "Working · 6m",
       },
       {
@@ -189,15 +180,13 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Migration Dry Run",
         harness: "Codex",
         status: "idle",
-        wakeScheduled: true,
-        detail: "Idle · Wake scheduled",
+        detail: "Idle · Completed turn",
       },
       {
         id: "mix-changelog",
         label: "Changelog Draft",
         harness: "Claude",
         status: "completed",
-        wakeScheduled: false,
         detail: "Done · Completed turn",
       },
       {
@@ -205,7 +194,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Docs Truth Pass",
         harness: "Codex",
         status: "completed",
-        wakeScheduled: false,
         detail: "Done · Completed turn",
       },
     ],
@@ -215,7 +203,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Repo Shape Audit",
         harness: "Claude",
         status: "closed",
-        wakeScheduled: false,
         detail: "Closed · Yesterday",
       },
       {
@@ -223,7 +210,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Fixture Backfill",
         harness: "Codex",
         status: "closed",
-        wakeScheduled: false,
         detail: "Closed · 2 days ago",
       },
     ],
@@ -239,7 +225,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Flaky Test Hunt",
         harness: "Codex",
         status: "errored",
-        wakeScheduled: false,
         detail: "Failed · exit 1",
       },
       {
@@ -247,7 +232,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Catalog Probe",
         harness: "Claude",
         status: "errored",
-        wakeScheduled: false,
         detail: "Failed · sandbox lost",
       },
       {
@@ -255,7 +239,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "API Surface Check",
         harness: "Claude",
         status: "starting",
-        wakeScheduled: false,
         detail: "Starting",
       },
       {
@@ -263,7 +246,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "SDK Types Sync",
         harness: "Codex",
         status: "running",
-        wakeScheduled: false,
         detail: "Working · 1m",
       },
     ],
@@ -281,7 +263,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Release Dry Run",
         harness: "Claude",
         status: "closed",
-        wakeScheduled: false,
         detail: "Closed · Yesterday",
       },
       {
@@ -289,7 +270,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Seed Script Repair",
         harness: "Codex",
         status: "closed",
-        wakeScheduled: false,
         detail: "Closed · 3 days ago",
       },
       {
@@ -297,7 +277,6 @@ export const POPOVER_PANE_SCENARIOS: readonly PopoverPaneScenario[] = [
         label: "Lint Debt Sweep",
         harness: "Claude",
         status: "closed",
-        wakeScheduled: false,
         detail: "Closed · Last week",
       },
     ],

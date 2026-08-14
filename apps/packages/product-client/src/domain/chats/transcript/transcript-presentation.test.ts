@@ -158,7 +158,7 @@ describe("buildTurnPresentation", () => {
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
       {
         kind: "subagent_creations",
-        blockId: "create1-create2",
+        blockId: "create1",
         itemIds: ["create1", "create2"],
       },
       { kind: "item", itemId: "final" },
@@ -270,13 +270,13 @@ describe("buildTurnPresentation", () => {
     ]);
   });
 
-  it("does not group creation receipts with subagent communication calls", () => {
+  it("does not group Workspace creation receipts across agent communication calls", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       create1: subagentCreationItem("create1", 1),
       send: {
-        ...toolItem("send", "turn-1", 2, "subagent"),
-        nativeToolName: "mcp__subagents__send_subagent_message",
+        ...toolItem("send", "turn-1", 2, "other"),
+        nativeToolName: "mcp__proliferate_workspace__send_message",
       },
       create2: subagentCreationItem("create2", 3),
     };
@@ -285,13 +285,13 @@ describe("buildTurnPresentation", () => {
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
       {
         kind: "subagent_creations",
-        blockId: "create1-create1",
+        blockId: "create1",
         itemIds: ["create1"],
       },
       { kind: "item", itemId: "send" },
       {
         kind: "subagent_creations",
-        blockId: "create2-create2",
+        blockId: "create2",
         itemIds: ["create2"],
       },
     ]);
@@ -853,16 +853,12 @@ describe("buildTurnPresentation", () => {
 
 function subagentCreationItem(itemId: string, startedSeq: number): ToolCallItem {
   return {
-    ...toolItem(itemId, "turn-1", startedSeq, "subagent"),
-    title: "Create subagent",
-    nativeToolName: "mcp__subagents__create_subagent",
+    ...toolItem(itemId, "turn-1", startedSeq, "other"),
+    title: "Create agent",
+    nativeToolName: "mcp__proliferate_workspace__create_agent",
     rawInput: {
-      label: `Subagent ${itemId}`,
-      prompt: `Prompt for ${itemId}`,
-    },
-    rawOutput: {
-      sessionLinkId: `link-${itemId}`,
-      childSessionId: `child-${itemId}`,
+      kind: "subagent",
+      task: `Prompt for ${itemId}`,
     },
   };
 }
