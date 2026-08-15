@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 from fastapi.exceptions import RequestValidationError
@@ -18,8 +17,22 @@ from proliferate.server.workflows.domain.invocation import (
 )
 from proliferate.server.workflows.models import WorkflowInvocationCreateRequest
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-FIXTURE = REPO_ROOT / "fixtures/contracts/workflow-portable-execution/v1.json"
+# Inlined from the retired fixtures/contracts/workflow-portable-execution/v1.json
+# (the gen-1 portable-execution contract is superseded; the canonical-number rules
+# still govern v1 invocation arguments).
+CANONICAL_NUMBER_CASES = [
+    {"source": "1", "canonical": "1", "portable": True},
+    {"source": "1.0", "canonical": "1", "portable": True},
+    {"source": "1e0", "canonical": "1", "portable": True},
+    {"source": "-0", "canonical": "0", "portable": True},
+    {"source": "0.0", "canonical": "0", "portable": True},
+    {"source": "1.5", "canonical": "1.5", "portable": True},
+    {"source": "9007199254740991", "canonical": "9007199254740991", "portable": True},
+    {"source": "-9007199254740991", "canonical": "-9007199254740991", "portable": True},
+    {"source": "9007199254740992", "canonical": "9007199254740992", "portable": False},
+    {"source": "9007199254740992.0", "canonical": "9007199254740992", "portable": False},
+    {"source": "9.007199254740992e15", "canonical": "9007199254740992", "portable": False},
+]
 
 
 def _catalog() -> AgentCatalogResponse:
@@ -79,8 +92,7 @@ def _number_definition() -> dict[str, object]:
 
 
 def test_shared_number_fixture_is_canonical_and_portable() -> None:
-    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    for case in fixture["canonicalNumberCases"]:
+    for case in CANONICAL_NUMBER_CASES:
         value = json.loads(case["source"])
         if case["portable"]:
             assert canonical_json(value) == case["canonical"]
@@ -91,7 +103,6 @@ def test_shared_number_fixture_is_canonical_and_portable() -> None:
 
 
 def test_invocation_wire_requires_arguments_but_leaves_portability_to_domain() -> None:
-    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
     body = {
         "schemaVersion": 1,
         "workflowDefinitionId": "10000000-0000-4000-8000-000000000001",
@@ -104,12 +115,6 @@ def test_invocation_wire_requires_arguments_but_leaves_portability_to_domain() -
     body.pop("arguments")
     with pytest.raises(ValidationError):
         WorkflowInvocationCreateRequest.model_validate(body)
-    assert (
-        fixture["anyHarnessRequest"]["definition"]["stages"][0]["harnessConfig"]["modelSelection"][
-            "modelId"
-        ]
-        == "claude-sonnet-4-5"
-    )
 
 
 @pytest.mark.parametrize("value", [True, 1.0, "1"])
@@ -300,18 +305,28 @@ def test_invocation_request_rejects_unknown_top_level_and_target_fields(
 def test_invocation_openapi_pins_exact_request_and_response_shapes() -> None:
     schema = create_app().openapi()
     operation = schema["paths"]["/v1/workflow-invocations/{invocation_id}"]
-    assert operation["put"]["requestBody"]["content"]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/WorkflowInvocationCreateRequest"
-    }
-    assert operation["put"]["responses"]["200"]["content"]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/WorkflowInvocationResponse"
-    }
-    assert operation["get"]["responses"]["200"]["content"]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/ManagedWorkflowInvocationResponse"
-    }
-    assert operation["put"]["responses"]["201"]["content"]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/WorkflowInvocationResponse"
-    }
+    assert operation["put"]["requestBody"]["content"]["application/json"]["schema"]["anyOf"] == [
+        {"$ref": "#/components/schemas/WorkflowInvocationCreateRequestV2"},
+        {"$ref": "#/components/schemas/WorkflowInvocationCreateRequest"},
+    ]
+    assert operation["put"]["responses"]["200"]["content"]["application/json"]["schema"][
+        "anyOf"
+    ] == [
+        {"$ref": "#/components/schemas/WorkflowInvocationResponse"},
+        {"$ref": "#/components/schemas/WorkflowInvocationResponseV2"},
+    ]
+    assert operation["get"]["responses"]["200"]["content"]["application/json"]["schema"][
+        "anyOf"
+    ] == [
+        {"$ref": "#/components/schemas/ManagedWorkflowInvocationResponse"},
+        {"$ref": "#/components/schemas/WorkflowInvocationResponseV2"},
+    ]
+    assert operation["put"]["responses"]["201"]["content"]["application/json"]["schema"][
+        "anyOf"
+    ] == [
+        {"$ref": "#/components/schemas/WorkflowInvocationResponse"},
+        {"$ref": "#/components/schemas/WorkflowInvocationResponseV2"},
+    ]
 
     components = schema["components"]["schemas"]
     request = components["WorkflowInvocationCreateRequest"]
@@ -349,6 +364,44 @@ def test_invocation_openapi_pins_exact_request_and_response_shapes() -> None:
     assert components["ManagedCloudWorkflowTarget"]["properties"]["kind"]["const"] == (
         "managedCloud"
     )
+
+    request_v2 = components["WorkflowInvocationCreateRequestV2"]
+    assert request_v2["additionalProperties"] is False
+    assert request_v2["required"] == [
+        "schemaVersion",
+        "workflowDefinitionId",
+        "arguments",
+        "placement",
+    ]
+    assert set(request_v2["properties"]) == set(request_v2["required"])
+    assert request_v2["properties"]["schemaVersion"]["const"] == 2
+    assert request_v2["properties"]["placement"] == {
+        "$ref": "#/components/schemas/WorkflowInvocationPlacementV2"
+    }
+
+    placement_v2 = components["WorkflowInvocationPlacementV2"]
+    assert placement_v2["additionalProperties"] is False
+    assert set(placement_v2["required"]) == {"repoConfigId", "mode"}
+    assert set(placement_v2["properties"]["mode"]["enum"]) == {"worktree", "repo_root"}
+
+    response_v2 = components["WorkflowInvocationResponseV2"]
+    assert response_v2["additionalProperties"] is False
+    assert set(response_v2["properties"]) == {
+        "id",
+        "schemaVersion",
+        "workflowDefinitionId",
+        "definitionRevision",
+        "title",
+        "description",
+        "definition",
+        "arguments",
+        "placement",
+        "createdAt",
+    }
+    assert set(response_v2["required"]) == set(response_v2["properties"])
+    assert response_v2["properties"]["definition"] == {
+        "$ref": "#/components/schemas/WorkflowDefinitionDocumentV2"
+    }
 
 
 def test_managed_workflow_openapi_pins_required_nullable_and_status_contracts() -> None:

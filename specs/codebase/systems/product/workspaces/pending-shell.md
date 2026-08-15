@@ -666,7 +666,19 @@ Intent statuses are:
 
 Rules:
 
-- Dispatch in client order. Do not coalesce config changes in v1.
+- Dispatch in client order. Do not coalesce config changes across other
+  intents. One exception, scoped to the queue tail: while the newest intent in
+  a session's ordered list is still a queued `update_config` for the same
+  config option, a follow-up selection supersedes it in place (same intent id
+  and queue position) instead of appending. A fast cycling burst therefore
+  dispatches at most the already-in-flight value plus the latest requested
+  value, never the intermediate steps, and a prompt enqueued mid-burst still
+  runs under exactly the config that preceded it.
+- A `config_option_update` echo reconciles only intents whose API call is at
+  least in flight (`dispatching` or `accepted`). A still-`queued` intent must
+  survive echoes of earlier requests: fast cycling wraps through repeated
+  values, so an earlier request's echo can match a later click's value, and
+  terminating that click before dispatch silently drops it (PRO-261).
 - A session with no materialized AnyHarness id keeps intents queued.
 - A config update may unblock later intents after AnyHarness accepts it as
   `applied` or `queued`; runtime config ordering is authoritative after that.

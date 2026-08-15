@@ -3,7 +3,6 @@ import {
   useState,
   type CSSProperties,
   type ReactNode,
-  type WheelEvent as ReactWheelEvent,
 } from "react";
 import { DiffLineContent } from "#product/components/content/ui/diff/DiffLineContent";
 import {
@@ -19,7 +18,10 @@ import { HunkActionPill } from "#product/components/content/ui/diff/HunkActionPi
 import type { UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
 import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
 import { Button } from "#product/primitives/Button";
-import { chainVerticalWheelScroll } from "#product/primitives/utils/scroll-chain";
+import {
+  buildOverscrollStyle,
+  useChainedVerticalWheel,
+} from "#product/primitives/utils/use-chained-vertical-wheel";
 import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "#product/lib/domain/files/diff-parser";
 import {
   getChatDiffRows,
@@ -334,8 +336,6 @@ export function ChatDiffViewer({
   overscrollBehavior = "none",
   overscrollBehaviorX,
   overscrollBehaviorY,
-  // Chained by default: overscroll-behavior none otherwise traps vertical
-  // wheel whenever the cursor rests on a diff, freezing the page scroll.
   chainVerticalWheel = true,
   fileLines,
   onRequestFileLines,
@@ -417,11 +417,7 @@ export function ChatDiffViewer({
     [lineNumberDigits, rowCount],
   );
   const viewportStyle = useMemo(
-    () => ({
-      overscrollBehavior,
-      ...(overscrollBehaviorX ? { overscrollBehaviorX } : {}),
-      ...(overscrollBehaviorY ? { overscrollBehaviorY } : {}),
-    }) as CSSProperties,
+    () => buildOverscrollStyle(overscrollBehavior, overscrollBehaviorX, overscrollBehaviorY),
     [overscrollBehavior, overscrollBehaviorX, overscrollBehaviorY],
   );
 
@@ -432,14 +428,7 @@ export function ChatDiffViewer({
       return next;
     });
   };
-  const handleViewportWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
-    if (!chainVerticalWheel) {
-      return;
-    }
-    if (chainVerticalWheelScroll(event.currentTarget, event.deltaY)) {
-      event.preventDefault();
-    }
-  };
+  const handleViewportWheel = useChainedVerticalWheel(chainVerticalWheel);
 
   const viewport = (
     <div

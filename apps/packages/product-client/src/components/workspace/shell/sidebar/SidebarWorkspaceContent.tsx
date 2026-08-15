@@ -74,8 +74,6 @@ interface SidebarWorkspaceContentProps {
   onOpenCloudRepoSettingsForGroup: (target: CloudWorkspaceRepoTarget) => void;
   /** Begins the connected Cloud action intent (readiness → set up in Cloud). */
   onSetUpCloudForGroup: (target: CloudWorkspaceRepoTarget) => void;
-  /** Desktop-only: register an existing local folder for a Cloud repo. */
-  onAddToThisMac: (target: CloudWorkspaceRepoTarget) => void;
 }
 
 function SidebarLoadingState() {
@@ -125,7 +123,6 @@ export function SidebarWorkspaceContent({
   managedCloudAvailable,
   onOpenCloudRepoSettingsForGroup,
   onSetUpCloudForGroup,
-  onAddToThisMac,
 }: SidebarWorkspaceContentProps) {
   if (isLoading && emptyState === "noWorkspaces") {
     return <SidebarLoadingState />;
@@ -219,7 +216,11 @@ export function SidebarWorkspaceContent({
           action: cloudRepoAction,
           localWorkspacesAvailable,
         })}
-        onCloudWorkspaceAction={cloudRepoTarget
+        // Cloud is culled from Desktop (PRO-10, FR-3): the Desktop sidebar
+        // offers no cloud-workspace creation, no "Set up Cloud"/GitHub App
+        // authorize, no "Add to this Mac", and no cloud settings. Web keeps its
+        // cloud affordances, gated by the host capability (`!isDesktopHost`).
+        onCloudWorkspaceAction={!isDesktopHost && cloudRepoTarget
           ? () => {
             if (cloudRepoAction.kind === "create") {
               onCreateCloudWorkspace(cloudRepoTarget, group.sourceRoot);
@@ -233,14 +234,11 @@ export function SidebarWorkspaceContent({
         onRemoveRepo={() => onRemoveRepo(group.sourceRoot)}
         onOpenSettings={() => onOpenRepoSettings(group.sourceRoot)}
         isGitHubRepo={Boolean(cloudRepoTarget)}
-        canSetUpCloud={isDesktopHost && managedCloudAvailable}
-        onSetUpCloud={cloudRepoTarget
+        canSetUpCloud={!isDesktopHost && managedCloudAvailable}
+        onSetUpCloud={!isDesktopHost && cloudRepoTarget
           ? () => onSetUpCloudForGroup(cloudRepoTarget)
           : undefined}
-        onAddToThisMac={isDesktopHost && cloudRepoTarget
-          ? () => onAddToThisMac(cloudRepoTarget)
-          : undefined}
-        onOpenCloudSettings={cloudRepoTarget
+        onOpenCloudSettings={!isDesktopHost && cloudRepoTarget
           ? () => onOpenCloudRepoSettingsForGroup(cloudRepoTarget)
           : undefined}
       >

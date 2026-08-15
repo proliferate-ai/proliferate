@@ -69,7 +69,9 @@ function target(
 }
 
 describe("buildAutomationTargetState", () => {
-  it("merges local and cloud metadata for the same repo", () => {
+  // Cloud is culled (PRO-10): a fresh automation is only ever offered local
+  // (and SSH) targets, never a cloud target or a "Configure cloud" action row.
+  it("offers only the local target for a configured-cloud + local repo", () => {
     const state = buildAutomationTargetState({
       repoConfigs: [repoConfig({ gitOwner: "Proliferate-AI", gitRepoName: "Proliferate" })],
       cloudWorkspaces: [],
@@ -86,11 +88,11 @@ describe("buildAutomationTargetState", () => {
     expect(state.groups).toHaveLength(1);
     expect(state.groups[0]?.rows.map((row) => row.kind === "target"
       ? row.target.executionTarget
-      : row.kind)).toEqual(["cloud", "local"]);
-    expect(state.selectedTarget).toMatchObject(target("cloud"));
+      : row.kind)).toEqual(["local"]);
+    expect(state.selectedTarget).toMatchObject(target("local"));
   });
 
-  it("derives configure-cloud rows as action-only rows", () => {
+  it("no longer derives a configure-cloud action row", () => {
     const state = buildAutomationTargetState({
       repoConfigs: [repoConfig({
         gitOwner: "proliferate-ai",
@@ -104,32 +106,17 @@ describe("buildAutomationTargetState", () => {
 
     expect(state.canSubmit).toBe(false);
     expect(state.selectedTarget).toBeNull();
-    expect(state.groups[0]?.rows).toMatchObject([
-      {
-        kind: "configureCloud",
-        gitOwner: "proliferate-ai",
-        gitRepoName: "proliferate",
-      },
-    ]);
+    expect(state.groups[0]?.rows ?? []).toEqual([]);
   });
 
-  it("defaults create mode to usable cloud, then local, then null", () => {
-    const cloud = buildAutomationTargetState({
+  it("defaults create mode to local, then null — never cloud", () => {
+    const withLocal = buildAutomationTargetState({
       repoConfigs: [repoConfig({ gitOwner: "proliferate-ai", gitRepoName: "cloud" })],
       cloudWorkspaces: [],
       repositories: [
         localRepository({ gitOwner: "proliferate-ai", gitRepoName: "local" }),
       ],
       selectedTarget: null,
-    });
-    const unavailableCloud = buildAutomationTargetState({
-      repoConfigs: [repoConfig({ gitOwner: "proliferate-ai", gitRepoName: "cloud" })],
-      cloudWorkspaces: [],
-      repositories: [
-        localRepository({ gitOwner: "proliferate-ai", gitRepoName: "local" }),
-      ],
-      selectedTarget: null,
-      cloudAvailable: false,
     });
     const empty = buildAutomationTargetState({
       repoConfigs: [],
@@ -138,12 +125,11 @@ describe("buildAutomationTargetState", () => {
       selectedTarget: null,
     });
 
-    expect(cloud.selectedTarget).toMatchObject(target("cloud", "proliferate-ai", "cloud"));
-    expect(unavailableCloud.selectedTarget).toMatchObject(target("local", "proliferate-ai", "local"));
+    expect(withLocal.selectedTarget).toMatchObject(target("local", "proliferate-ai", "local"));
     expect(empty.selectedTarget).toBeNull();
   });
 
-  it("can use an existing cloud workspace as a configured cloud target", () => {
+  it("no longer offers an existing cloud workspace as a create target", () => {
     const state = buildAutomationTargetState({
       repoConfigs: [],
       cloudWorkspaces: [cloudWorkspace("proliferate-ai", "cloud")],
@@ -151,8 +137,9 @@ describe("buildAutomationTargetState", () => {
       selectedTarget: null,
     });
 
-    expect(state.canSubmit).toBe(true);
-    expect(state.selectedTarget).toMatchObject(target("cloud", "proliferate-ai", "cloud"));
+    expect(state.canSubmit).toBe(false);
+    expect(state.selectedTarget).toBeNull();
+    expect(state.groups[0]?.rows ?? []).toEqual([]);
   });
 
   it("constrains edit mode to the saved repo identity", () => {

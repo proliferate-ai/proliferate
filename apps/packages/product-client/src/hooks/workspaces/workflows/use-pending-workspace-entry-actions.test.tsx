@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   createLocalWorkspaceAndEnter: vi.fn(),
   createWorktreeAndEnter: vi.fn(),
   retryCloudWorkspaceAndEnter: vi.fn(),
+  cloudComputeEnabled: true,
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -40,6 +41,10 @@ vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
   useCreateCloudWorkspace: () => ({
     retryCloudWorkspaceAndEnter: mocks.retryCloudWorkspaceAndEnter,
   }),
+}));
+
+vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
+  useAppCapabilities: () => ({ cloudComputeEnabled: mocks.cloudComputeEnabled }),
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
@@ -108,6 +113,7 @@ describe("usePendingWorkspaceEntryActions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.cloudComputeEnabled = true;
     useSessionSelectionStore.getState().clearSelection();
     useSessionSelectionStore.setState({
       pendingWorkspaces: [dismissed, other]
@@ -190,5 +196,40 @@ describe("usePendingWorkspaceEntryActions", () => {
     expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
       .toEqual([other.attemptId]);
     expect(useChatLaunchIntentStore.getState().intentOrder).toEqual(["launch-other"]);
+  });
+
+  // PRO-10 round-3 finding: the receipt's Retry path had no capability gate at
+  // all, so a disabled server could still create a cloud workspace via retry.
+  // This is the second of two gates (the flow itself also refuses); it should
+  // never even reach retryCloudWorkspaceAndEnter.
+  it("refuses the cloud retry and surfaces the unavailable toast when cloud compute is disabled", async () => {
+    mocks.cloudComputeEnabled = false;
+    const cloudEntry: PendingWorkspaceEntry = {
+      ...dismissed,
+      stage: "failed",
+      errorMessage: "boom",
+      request: {
+        kind: "cloud",
+        input: {
+          gitOwner: "proliferate-ai",
+          gitRepoName: "proliferate",
+          baseBranch: "main",
+          branchName: "pablo/retry",
+          generatedName: false,
+        },
+      },
+    };
+
+    const { result } = renderHook(() => usePendingWorkspaceEntryActions());
+
+    await act(async () => {
+      await result.current.handleRetry(cloudEntry);
+    });
+
+    expect(mocks.retryCloudWorkspaceAndEnter).not.toHaveBeenCalled();
+    expect(mocks.showToast).toHaveBeenCalledWith("Cloud workspaces are temporarily unavailable.");
+    // The dead attempt still gets ended, same as the cowork "not wired up" case.
+    expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
+      .toEqual([other.attemptId]);
   });
 });

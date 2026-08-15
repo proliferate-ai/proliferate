@@ -40,6 +40,33 @@ pub struct AgentRegistryAgent {
     /// Readers of the flag vocabulary must consult both.
     #[serde(default)]
     pub provider_config: Vec<AgentRegistryProviderConfig>,
+    /// How this harness's own self-updater is neutralized so the managed lane
+    /// stays the single source of version truth (Update Flow FR-3 / R2.5).
+    /// Required per harness — validation rejects a document that omits it.
+    pub self_update_neutralization: AgentRegistrySelfUpdateNeutralization,
+}
+
+/// Per-harness record of HOW the harness's own self-update path is disabled by
+/// the managed launcher. Drives `managed_launcher_env`: an `env` mechanism
+/// injects each `env[]` var into the launcher; `none_found`/`not_applicable`
+/// inject nothing and exist to document the static-analysis finding honestly.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistrySelfUpdateNeutralization {
+    /// One of `env`, `none_found`, `not_applicable`.
+    pub mechanism: String,
+    /// Human-readable evidence: which var disables it, or why none was found.
+    pub detail: String,
+    /// Env vars injected into the managed launcher when `mechanism == "env"`.
+    #[serde(default)]
+    pub env: Vec<AgentRegistrySelfUpdateEnvVar>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistrySelfUpdateEnvVar {
+    pub name: String,
+    pub value: String,
 }
 
 /// One typed provider-config declaration: which vault `kind` this harness
@@ -131,6 +158,17 @@ pub enum AgentRegistryAgentProcessInstall {
         source_build_binary_name: Option<String>,
         executable_relpath: PathBuf,
     },
+    /// First-party per-platform tarball pins (no ACP registry, no npm): a
+    /// sha256-verified archive per platform, resolved by resolve-pins.mjs onto
+    /// the catalog's archive source and installed through the existing archive
+    /// path. Additive — pending Agent Auth ADR ratification; no catalog entry
+    /// uses it yet (claude/codex stay git/npm this rung).
+    #[serde(rename = "direct_archive")]
+    DirectArchive {
+        platforms: HashMap<String, AgentRegistryAgentProcessArchiveTarget>,
+        #[serde(default)]
+        args: Vec<String>,
+    },
     #[serde(rename = "path_only")]
     PathOnly {
         candidate_binaries: Vec<String>,
@@ -141,6 +179,16 @@ pub enum AgentRegistryAgentProcessInstall {
     },
     #[serde(rename = "manual")]
     Manual { docs_url: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistryAgentProcessArchiveTarget {
+    pub url: String,
+    pub sha256: String,
+    pub expected_binary: String,
+    #[serde(default)]
+    pub size: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -461,6 +509,10 @@ mod tests {
             "auth": {
                 "readinessPolicy": "none",
                 "slots": []
+            },
+            "selfUpdateNeutralization": {
+                "mechanism": "none_found",
+                "detail": "static analysis found no self-update path"
             }
         }))
         .expect("agent without providerConfig must parse");

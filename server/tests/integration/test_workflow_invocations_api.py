@@ -220,8 +220,10 @@ async def test_invocation_request_rejects_snake_case_wire_fields_without_creatin
         )
 
         assert rejected.status_code == 422
+        # The union body namespaces error locs by request-model branch.
         assert any(
-            tuple(error["loc"]) == ("body", snake_case_key) and error["type"] == "extra_forbidden"
+            tuple(error["loc"]) == ("body", "WorkflowInvocationCreateRequest", snake_case_key)
+            and error["type"] == "extra_forbidden"
             for error in rejected.json()["detail"]
         )
         assert (

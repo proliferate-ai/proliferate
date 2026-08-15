@@ -23,6 +23,7 @@ import {
 } from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
 import { HarnessProvidersSection } from "#product/components/settings/panes/agents/harness/HarnessProvidersSection";
 import { HarnessConfigIssueBanner } from "#product/components/settings/panes/agents/harness/HarnessConfigIssueBanner";
+import { HarnessManagedNotice } from "#product/components/settings/panes/agents/harness/HarnessManagedNotice";
 import { HarnessSettingsSection } from "#product/components/settings/panes/agents/harness/HarnessSettingsSection";
 import { useHarnessAuthEditor } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-harness-install-action";
@@ -188,6 +189,12 @@ function HarnessRuntimeSurface({
           )}
         </SettingsSection>
       ) : null}
+
+      <HarnessManagedNotice
+        harnessKind={harnessKind}
+        displayName={displayName}
+        agent={runtimeAgent}
+      />
 
       <HarnessAuthSurface
         harnessKind={harnessKind}

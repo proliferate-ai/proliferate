@@ -351,7 +351,6 @@ export function GitReviewFileRow({
                 contentSearchOrderKey={contentSearchOrderKey}
                 overscrollBehaviorX="none"
                 overscrollBehaviorY="none"
-                chainVerticalWheel
                 fileLines={fileLines}
                 onRequestFileLines={requestFileLines}
                 hunkActions={hunkActions}

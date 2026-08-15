@@ -15,6 +15,42 @@ const LazyCloudAnyHarnessRuntimeProvider = lazy(() =>
 export const HARNESS_UPDATE_TOAST_ID = "harness-update:local";
 export const CLOUD_HARNESS_UPDATE_TOAST_ID = "harness-update:cloud";
 
+// Human phrasing for the runtime's typed install-failure enum
+// (InstallErrorKind). Absent/unknown kinds fall back silently to the generic
+// receipt, so a runtime that predates typed failures degrades cleanly.
+const FAILURE_KIND_REASON: Record<string, string> = {
+  network: "a network error",
+  checksum: "a checksum mismatch",
+  in_use: "the tool was in use",
+  disk: "not enough disk space",
+  other: "an unexpected error",
+};
+
+function agentDisplayLabel(kind: string): string {
+  return kind === "claude" ? "Claude Code" : getProviderDisplayName(kind);
+}
+
+// Name the harnesses that failed and, when a single typed reason covers them,
+// say why. Returns "" when the runtime reported no typed failureKind so the
+// caller keeps the original generic copy.
+function describeTypedFailures(
+  results: ReconcileAgentsResponse["results"] | undefined
+): string {
+  const failed = (results ?? []).filter(
+    (result): result is (typeof result) & { failureKind: string } =>
+      typeof result.failureKind === "string" && result.failureKind.length > 0
+  );
+  if (failed.length === 0) {
+    return "";
+  }
+  const names = failed.map((result) => agentDisplayLabel(result.kind)).join(", ");
+  const kinds = new Set(failed.map((result) => result.failureKind));
+  const reason = kinds.size === 1
+    ? FAILURE_KIND_REASON[failed[0].failureKind] ?? "an unexpected error"
+    : "multiple errors";
+  return ` ${names} failed (${reason}).`;
+}
+
 interface HarnessProgressToastOptions {
   snapshot: ReconcileAgentsResponse | null;
   targetLabel: string;
@@ -50,12 +86,16 @@ function useHarnessProgressToast({
           // earns: a success is a one-line receipt, a failure has a
           // consequence to state and somewhere to go.
           if (failed) {
+            const typedFailure = describeTypedFailures(snapshot.results);
+            const description = typedFailure
+              ? `${targetLabel}:${typedFailure} The ones that updated are usable. Open agent settings to retry the rest.`
+              : `${targetLabel}: the ones that updated are usable. Open agent settings to retry the rest.`;
             showToast({
               id: toastId,
               weight: "announcement",
               tone: "warning",
               title: "Some agent tools could not update",
-              description: `${targetLabel}: the ones that updated are usable. Open agent settings to retry the rest.`,
+              description,
             });
           } else {
             showToast({

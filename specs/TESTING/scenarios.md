@@ -336,10 +336,13 @@ Usage & Limits pane render those numbers (Playwright).
 
 Seed a repository configuration through the real product API (local-kind
 environment; no GitHub dependency), sign in through the Desktop web UI, and
-create a personal workflow definition that selects that repository and carries
-multiple uniquely identifiable ordered inputs, stages, and prompt steps (a
-goal on only one step, one stage on the runtime-default model). Assert the
-exact ordered input/stage/step arrays and the repoConfigId on the create
+create a personal workflow definition through the gen-2 builder: a linear
+chain of uniquely identifiable ordered nodes (`agent`/`human_in_loop`) whose
+prompts reference declared names via `@input:`/`@doc:` tokens, authored
+through the inputs panel and doc templates rather than free-standing
+stages/steps. Live validation blocks save while any prompt references an
+unresolved `@input:`/`@doc:` name; assert the exact ordered
+node/edge/input/docTemplate arrays and the repoConfigId on the create
 response, after a hard reload, after list reopen, on an authenticated GET, and
 again on the revision-2 update. Then delete and assert both the normal list
 and the authenticated API no longer expose it. The real server and Postgres
@@ -359,6 +362,16 @@ validation) → save version → trigger manually with args.
 Assert: `workflow_run` row created, status `pending_delivery`,
 `resolved_plan_json` populated with interpolated args; local-lane delivery
 attempt recorded. **Stop at the seam** — no runtime execution.
+
+**SUPERSEDED (gen-2 builder):** the collector above
+(`tests/intent/specs/workflow-runs.spec.ts`) drives the gen-1 shape —
+editor → save version → `workflow_run`/`resolved_plan_json`. The new tier-2
+seam spec `workflow-trigger-seam.spec.ts` covers the gen-2 equivalent
+instead: main page → Run → trigger dialog → exactly one
+`PUT /v1/workflow-invocations/{id}` carrying the frozen definition +
+placement, stopping at the same runtime seam (AnyHarness is absent in tier 2
+by standard). This entry's assertions stand as the historical record of the
+gen-1 collector being replaced; T2-WF-2 stays parked.
 
 ### T2-WF-2: poll trigger against stub feed
 The PR-B validation script (workflows-architecture §10) productionized:
@@ -726,6 +739,33 @@ Against the durable org's exhausted subject, assert:
 The funded half (fund → consume → refill/reactivate → meter overage) is
 deferred to T3-BILL-3 above, blocked by the same staging Stripe live-mode /
 E2B-webhook findings. Test: `tests/release/src/scenarios/t3-bill-4.ts`.
+
+### T3-WF-1: two-node reference workflow run — research then human review
+Authored against the frozen Workflows gen-2 ADR contract
+(`anyharness/sdk/src/types/workflow-runs-v2.ts`); the Rust runtime routes land
+in the parallel gen-2 ladder's PR5a (Lane R), which is not yet in this chain's
+base, so this scenario is authored and registered only — never executed —
+until that PR lands (see `tests/release/src/scenarios/t3-wf-1.ts`'s module
+docstring). The definition mirrors the shipped "Research and review" starter
+template (`apps/packages/product-client/src/config/workflows/
+starter-templates.ts`) verbatim: one `agent` node ("research") whose prompt
+uses `@input:question` and writes findings into `@doc:findings`, then one
+`human_in_loop` node ("review") gating completion. Model resolution reuses
+T3-CHAT-1's catalog-driven cheapest-Anthropic-family picker against the fixed
+starting harness `claude` (T3-SESSION-1's single-fixed-harness-cell pattern).
+Steps: `PUT /v1/workflow-runs/{run_id}` with the frozen invocation body
+(`{schemaVersion: 2, workflowDefinitionId, definition, arguments,
+placement}`) → node 1 (research) runs a real turn → the review gate parks the
+run → `POST .../nodes/{gate}/approve`.
+Assert: the PUT materializes a workspace and starts node 1; the research
+node's underlying session prompt carries the runtime's wrapped preamble
+around the raw node prompt (assert the wrapper's presence, not its exact
+text); the findings doc materializes as a real file under
+`.proliferate/context/` in the workspace; the run parks at
+`run.status=awaiting_human` with the gate node `awaiting_human` and HOLDS —
+no auto-advance; approving the gate advances the run to `completed`; every
+command (PUT, GET, approve) returns the full projection
+`{run, nodes[], docs[]}`.
 
 ---
 
