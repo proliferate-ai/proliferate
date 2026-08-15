@@ -184,6 +184,10 @@ mod tests {
 
         // A tripwire, not the assertion. If this file ever stops matching what
         // the loop assumes, the sweep above would find nothing and pass.
-        assert_eq!(gated.len(), 9, "expected nine gated commands, found {gated:?}");
+        assert_eq!(
+            gated.len(),
+            9,
+            "expected nine gated commands, found {gated:?}"
+        );
     }
 }

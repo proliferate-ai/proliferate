@@ -291,9 +291,31 @@ mod dev_env_republish {
         );
     }
 
+    /// The publish is an atomic replace: 0600 on the target, and no staged
+    /// sibling left behind — a polling reader must never see a torn snippet.
+    #[test]
+    fn write_replaces_atomically_with_owner_only_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = snippet_path("atomic");
+        write_dev_diagnostics_env(&path, "A=1\n").expect("first write");
+        write_dev_diagnostics_env(&path, "A=2\n").expect("replace");
+        assert_eq!(std::fs::read_to_string(&path).expect("target"), "A=2\n");
+        let mode = std::fs::metadata(&path)
+            .expect("metadata")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
+        let mut staged = path.clone().into_os_string();
+        staged.push(".tmp");
+        assert!(!std::path::Path::new(&staged).exists());
+        std::fs::remove_file(&path).ok();
+    }
+
     /// Ready(a) → Degraded → Ready(b) rewrites the published file with the new
-    /// endpoint and boot id, exactly once per new Ready boot id — the seeding
-    /// Ready and a repeated Ready with the same boot id publish nothing.
+    /// endpoint and boot id, exactly once per new Ready boot id — the seeded
+    /// boot id from the boot-time publish and a repeated Ready with the same
+    /// boot id publish nothing.
     #[tokio::test]
     async fn new_ready_boot_id_republishes_exactly_once() {
         let path = snippet_path("republish");
@@ -304,24 +326,31 @@ mod dev_env_republish {
         .expect("seed boot-time publish");
 
         let (state_tx, state_rx) = watch::channel(ready("boot-a", 0));
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
         let publishes = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&publishes);
         let publish_path = path.clone();
-        let republisher = tokio::spawn(dev_diagnostics_env_republish_loop(state_rx, move || {
-            counter.fetch_add(1, Ordering::SeqCst);
-            write_dev_diagnostics_env(
-                &publish_path,
-                &render_dev_diagnostics_env_snippet(
+        let republisher = tokio::spawn(dev_diagnostics_env_republish_loop(
+            state_rx,
+            shutdown_rx,
+            Some("boot-a".to_owned()),
+            move || {
+                counter.fetch_add(1, Ordering::SeqCst);
+                write_dev_diagnostics_env(
                     &publish_path,
-                    "http://127.0.0.1:2222/",
-                    "cap-b",
-                    "boot-b",
-                ),
-            )
-            .expect("republish");
-        }));
-        // Let the loop seed its last-published boot id from the current Ready
-        // before any transition is sent (current-thread runtime).
+                    &render_dev_diagnostics_env_snippet(
+                        &publish_path,
+                        "http://127.0.0.1:2222/",
+                        "cap-b",
+                        "boot-b",
+                    ),
+                )
+                .expect("republish");
+                Some("boot-b".to_owned())
+            },
+        ));
+        // Let the loop inspect the seeding Ready before any transition is sent
+        // (current-thread runtime).
         tokio::task::yield_now().await;
 
         state_tx.send_replace(degraded());
@@ -339,17 +368,49 @@ mod dev_env_republish {
         std::fs::remove_file(&path).ok();
     }
 
+    /// A Ready that landed before the watcher started (or whose boot-time
+    /// publish failed, seeding `None`) is published on the loop's first
+    /// inspection rather than silently treated as already covered.
+    #[tokio::test]
+    async fn ready_not_covered_by_the_boot_publish_is_published_immediately() {
+        let (_state_tx, state_rx) = watch::channel(ready("boot-b", 1));
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+        let publishes = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&publishes);
+        let republisher = tokio::spawn(dev_diagnostics_env_republish_loop(
+            state_rx,
+            shutdown_rx,
+            Some("boot-a".to_owned()),
+            move || {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Some("boot-b".to_owned())
+            },
+        ));
+        tokio::task::yield_now().await;
+        assert_eq!(publishes.load(Ordering::SeqCst), 1);
+        drop(_state_tx);
+        republisher.await.expect("republish loop exits cleanly");
+        assert_eq!(publishes.load(Ordering::SeqCst), 1);
+    }
+
     /// Non-Ready transitions alone must never trigger a publish: keying on the
     /// generation counter instead of Ready state would republish (and warn)
     /// here.
     #[tokio::test]
     async fn degraded_transitions_do_not_republish() {
         let (state_tx, state_rx) = watch::channel(ready("boot-a", 0));
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
         let publishes = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&publishes);
-        let republisher = tokio::spawn(dev_diagnostics_env_republish_loop(state_rx, move || {
-            counter.fetch_add(1, Ordering::SeqCst);
-        }));
+        let republisher = tokio::spawn(dev_diagnostics_env_republish_loop(
+            state_rx,
+            shutdown_rx,
+            Some("boot-a".to_owned()),
+            move || {
+                counter.fetch_add(1, Ordering::SeqCst);
+                None
+            },
+        ));
         tokio::task::yield_now().await;
 
         state_tx.send_replace(degraded());
@@ -357,6 +418,30 @@ mod dev_env_republish {
         drop(state_tx);
         republisher.await.expect("republish loop exits cleanly");
 
+        assert_eq!(publishes.load(Ordering::SeqCst), 0);
+    }
+
+    /// Arming shutdown ends the watch like the tail/export lease tasks, even
+    /// while the state sender stays alive.
+    #[tokio::test]
+    async fn armed_shutdown_exits_the_loop() {
+        let (_state_tx, state_rx) = watch::channel(degraded());
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let publishes = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&publishes);
+        let republisher = tokio::spawn(dev_diagnostics_env_republish_loop(
+            state_rx,
+            shutdown_rx,
+            None,
+            move || {
+                counter.fetch_add(1, Ordering::SeqCst);
+                None
+            },
+        ));
+        tokio::task::yield_now().await;
+
+        shutdown_tx.send_replace(true);
+        republisher.await.expect("republish loop exits on shutdown");
         assert_eq!(publishes.load(Ordering::SeqCst), 0);
     }
 }

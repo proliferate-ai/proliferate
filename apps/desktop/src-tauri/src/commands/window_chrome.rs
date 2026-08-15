@@ -19,7 +19,10 @@ impl Default for WindowChromeZoom {
 impl WindowChromeZoom {
     fn factor(&self) -> f64 {
         // A poisoning panic cannot tear an f64 store, so the value stays true.
-        *self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
@@ -78,8 +81,13 @@ pub fn set_webview_zoom(
     // layout always reflect a single command rather than an interleaving.
     // `set_zoom` posts to the event loop without waiting, so nothing under
     // this lock blocks on the main thread.
-    let mut guard = zoom.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    window.set_zoom(clamped).map_err(|error| error.to_string())?;
+    let mut guard = zoom
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    window
+        .set_zoom(clamped)
+        .map_err(|error| error.to_string())?;
     *guard = clamped;
 
     #[cfg(target_os = "macos")]

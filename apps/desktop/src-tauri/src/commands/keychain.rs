@@ -460,8 +460,14 @@ mod tests {
         let parsed: HashMap<String, String> = read_json_file(&path)
             .expect("read should succeed")
             .expect("file should exist");
-        assert_eq!(parsed.get("ANTHROPIC_API_KEY").map(String::as_str), Some("sk-ant-xxx"));
-        assert_eq!(parsed.get("OPENAI_API_KEY").map(String::as_str), Some("sk-openai-yyy"));
+        assert_eq!(
+            parsed.get("ANTHROPIC_API_KEY").map(String::as_str),
+            Some("sk-ant-xxx")
+        );
+        assert_eq!(
+            parsed.get("OPENAI_API_KEY").map(String::as_str),
+            Some("sk-openai-yyy")
+        );
 
         #[cfg(unix)]
         {

@@ -250,9 +250,11 @@ impl super::SidecarProcess {
 /// whenever a collector restart brings up a new generation, so an already
 /// running dev runtime can re-read it and re-attach.
 #[cfg(all(debug_assertions, unix))]
-pub(super) fn publish_dev_diagnostics_env(supervisor: &Arc<DiagnosticsCollectorSupervisor>) {
+pub(super) fn publish_dev_diagnostics_env(
+    supervisor: &Arc<DiagnosticsCollectorSupervisor>,
+) -> Option<String> {
     let Ok(path) = crate::app_config::dev_diagnostics_env_path() else {
-        return;
+        return None;
     };
     let collector = match supervisor.dev_collector_env() {
         Ok(collector) => collector,
@@ -261,7 +263,7 @@ pub(super) fn publish_dev_diagnostics_env(supervisor: &Arc<DiagnosticsCollectorS
                 classification = unavailable.classification(),
                 "dev diagnostics env not published: collector unavailable"
             );
-            return;
+            return None;
         }
     };
     let snippet = render_dev_diagnostics_env_snippet(
@@ -271,16 +273,22 @@ pub(super) fn publish_dev_diagnostics_env(supervisor: &Arc<DiagnosticsCollectorS
         &collector.collector_boot_id,
     );
     match write_dev_diagnostics_env(&path, &snippet) {
-        Ok(()) => tracing::info!(
-            dev_diagnostics_env = %path.display(),
-            endpoint = %collector.endpoint,
-            "external runtime can enable diagnostics with: set -a; . <dev_diagnostics_env>; set +a"
-        ),
-        Err(error) => tracing::warn!(
-            dev_diagnostics_env = %path.display(),
-            error = %error,
-            "failed to publish dev diagnostics env"
-        ),
+        Ok(()) => {
+            tracing::info!(
+                dev_diagnostics_env = %path.display(),
+                endpoint = %collector.endpoint,
+                "external runtime can enable diagnostics with: set -a; . <dev_diagnostics_env>; set +a"
+            );
+            Some(collector.collector_boot_id)
+        }
+        Err(error) => {
+            tracing::warn!(
+                dev_diagnostics_env = %path.display(),
+                error = %error,
+                "failed to publish dev diagnostics env"
+            );
+            None
+        }
     }
 }
 
@@ -307,6 +315,9 @@ pub(super) fn render_dev_diagnostics_env_snippet(
     )
 }
 
+/// Atomic replace: the producer polls this file, so it must only ever observe
+/// the old or the new complete snippet, never a torn write. The temp sibling
+/// carries 0600 from creation and the rename preserves it.
 #[cfg(all(debug_assertions, unix))]
 pub(super) fn write_dev_diagnostics_env(
     path: &std::path::Path,
@@ -315,6 +326,9 @@ pub(super) fn write_dev_diagnostics_env(
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
 
+    let mut staged_name = path.file_name().unwrap_or_default().to_owned();
+    staged_name.push(".tmp");
+    let staged = path.with_file_name(staged_name);
     path.parent()
         .map_or(Ok(()), std::fs::create_dir_all)
         .and_then(|()| {
@@ -323,60 +337,83 @@ pub(super) fn write_dev_diagnostics_env(
                 .create(true)
                 .truncate(true)
                 .mode(0o600)
-                .open(path)?;
+                .open(&staged)?;
             file.write_all(snippet.as_bytes())
+        })
+        .and_then(|()| std::fs::rename(&staged, path))
+        .inspect_err(|_| {
+            let _ = std::fs::remove_file(&staged);
         })
 }
 
 /// Keeps the published dev env current across collector restarts: the boot
 /// publish above is otherwise write-once, so an externally launched runtime
 /// stays pinned to a dead collector generation until its next restart.
-/// Idempotent — at most one watcher per process.
+/// `published_boot_id` is the boot id the boot-time publish actually wrote
+/// (`None` if it wrote nothing), so the watcher never trusts a second
+/// independent state read to decide what is already on disk. Idempotent — at
+/// most one watcher per process.
 #[cfg(all(debug_assertions, unix))]
 pub(super) fn spawn_dev_diagnostics_env_republisher(
     supervisor: Arc<DiagnosticsCollectorSupervisor>,
+    published_boot_id: Option<String>,
 ) {
     static SPAWNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if SPAWNED.swap(true, std::sync::atomic::Ordering::AcqRel) {
         return;
     }
     let state_rx = supervisor.subscribe_state();
-    tokio::spawn(dev_diagnostics_env_republish_loop(state_rx, move || {
-        publish_dev_diagnostics_env(&supervisor)
-    }));
+    let shutdown_rx = supervisor.subscribe_shutdown();
+    tokio::spawn(dev_diagnostics_env_republish_loop(
+        state_rx,
+        shutdown_rx,
+        published_boot_id,
+        move || publish_dev_diagnostics_env(&supervisor),
+    ));
 }
 
-/// Re-publishes exactly once per new `Ready` collector boot id. Keyed on the
-/// state watch rather than the generation counter: degraded publishes also
-/// bump the generation, and `dev_collector_env` warns when the collector is
-/// not Ready, so keying on Ready avoids warn spam. The current state seeds the
-/// last-published boot id because the boot-time publish already covered it.
+/// Re-publishes once per `Ready` collector boot id that differs from the last
+/// successfully published one. Keyed on the state watch rather than the
+/// generation counter: degraded publishes also bump the generation, and
+/// `dev_collector_env` warns when the collector is not Ready, so keying on
+/// Ready avoids warn spam. Each iteration inspects the current state before
+/// waiting, so a transition that lands between the boot-time publish and this
+/// task starting is still picked up; a failed publish leaves the last
+/// published boot id unchanged so the next transition retries. Exits when
+/// shutdown arms, like the tail/export lease tasks.
 #[cfg(all(debug_assertions, unix))]
 pub(super) async fn dev_diagnostics_env_republish_loop(
     mut state_rx: tokio::sync::watch::Receiver<
         crate::diagnostics_collector::supervisor::DesktopDiagnosticsSupervisorStateV1,
     >,
-    mut republish: impl FnMut(),
+    mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
+    mut published_boot_id: Option<String>,
+    mut republish: impl FnMut() -> Option<String>,
 ) {
     use crate::diagnostics_collector::supervisor::DesktopDiagnosticsSupervisorStateV1 as State;
 
-    let mut published_boot_id = match &*state_rx.borrow_and_update() {
-        State::Ready {
-            collector_boot_id, ..
-        } => Some(collector_boot_id.clone()),
-        _ => None,
-    };
-    while state_rx.changed().await.is_ok() {
-        let boot_id = match &*state_rx.borrow_and_update() {
+    loop {
+        let ready_boot_id = match &*state_rx.borrow_and_update() {
             State::Ready {
                 collector_boot_id, ..
-            } => collector_boot_id.clone(),
-            _ => continue,
+            } => Some(collector_boot_id.clone()),
+            _ => None,
         };
-        if published_boot_id.as_deref() == Some(boot_id.as_str()) {
-            continue;
+        if let Some(boot_id) = ready_boot_id {
+            if published_boot_id.as_deref() != Some(boot_id.as_str()) {
+                if let Some(written) = republish() {
+                    published_boot_id = Some(written);
+                }
+            }
         }
-        published_boot_id = Some(boot_id);
-        republish();
+        tokio::select! {
+            // Armed shutdown or a closed shutdown channel both end the watch.
+            _ = shutdown_rx.wait_for(|armed| *armed) => return,
+            changed = state_rx.changed() => {
+                if changed.is_err() {
+                    return;
+                }
+            }
+        }
     }
 }
