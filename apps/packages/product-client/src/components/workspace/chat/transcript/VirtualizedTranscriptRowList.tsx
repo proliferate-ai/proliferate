@@ -74,6 +74,7 @@ export function VirtualizedTranscriptRowList({
     onScrollSample,
     autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
     lastPromptSubmittedAtMs,
+    sessionKey: `${selectedWorkspaceId ?? ""}:${activeSessionId}`,
   });
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),

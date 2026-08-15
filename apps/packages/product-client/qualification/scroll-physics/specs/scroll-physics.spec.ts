@@ -323,11 +323,25 @@ test.describe("transcript scroll physics", () => {
     await drive(page, "finalizeStreamingTurn");
   });
 
-  // EXPECTED TO FAIL today (PRO-175). resetForSession always re-pins and snaps
-  // to bottom on every session switch, then runs a glue loop across the newly
-  // mounted rows, a revisit to a finalized session produces scrollTop motion
-  // frames instead of restoring its prior position with zero visible motion.
-  // Rung 2 introduces restore-finalized placement; unfixme there.
+  // EXPECTED TO FAIL today (PRO-175), for a DIFFERENT reason than the stamp
+  // leak this rung fixes. `resetForSession` still unconditionally
+  // pins/snaps/glues on every session switch by design (rung 2 leaves this
+  // alone), and the virtualizer's own remeasurement of freshly-mounted rows
+  // still produces a handful of settle frames after the snap — plus, in this
+  // fixture, a session switch resets `VirtualTranscriptRowList`'s
+  // `fallbackReason` to null, which can flip the tree from
+  // FullTranscriptRowList back to VirtualizedTranscriptRowList (a real
+  // component remount) if a blank-viewport fallback had fired for the
+  // intervening session. Either path produces multiple distinct scrollTop
+  // frames regardless of the stamp fix below. Verified: with
+  // `setPendingPromptStamp` reproducing the stamp-leak precondition
+  // (session-primary carries a stamp across an intervening session with
+  // none), the pre-fix code and the sessionKey-scoped fix in
+  // use-transcript-stick-to-bottom.ts produce IDENTICAL scrollTop traces
+  // (~5 distinct frames each) — the stamp leak was not this test's failure
+  // mode. Zero-motion placement on revisit is restore-finalized placement,
+  // named in the frozen ladder as rung 6 (bottom-on-entry replacement);
+  // unfixme there.
   test.fixme(
     "revisit-no-motion: switching back to a finalized session places with zero motion frames",
     async ({ page }) => {

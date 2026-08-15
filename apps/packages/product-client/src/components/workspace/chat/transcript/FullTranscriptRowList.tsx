@@ -88,6 +88,7 @@ export function FullTranscriptRowList({
     onScrollSample,
     autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
     lastPromptSubmittedAtMs,
+    sessionKey: `${selectedWorkspaceId ?? ""}:${activeSessionId}`,
   });
 
   // Content-search jump-to-match. The full list mounts every row, so the
