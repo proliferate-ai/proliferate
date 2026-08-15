@@ -117,17 +117,23 @@ export function VirtualizedTranscriptRowList({
     paddingStart: TRANSCRIPT_TOP_PADDING_PX,
     paddingEnd: structuralBottomInsetPx,
     initialOffset: () => estimatedInitialBottomOffset,
-    // Q12 (rung 4): EVALUATED false vs true. The owned single content
-    // ResizeObserver below routes every growth through the one frame pipeline,
-    // and the pipeline writes scrollTop exactly once per frame, so no
-    // ResizeObserver-loop error is provoked in either mode (the physics suite's
-    // no-pageerror assertion is clean with both). Turning TanStack's own
-    // observation OFF (false) does NOT move OUR snap — the pipeline still owns
-    // when that runs — it only desynchronizes TanStack's internal re-measure
-    // from our snap, which destabilized the pinned-follow / repin / prepend
-    // scenarios in the physics suite. Kept true: it preserves the proven
-    // measurement cadence at zero RO-loop cost. See the PR body for the matrix.
+    // Q12 (rung 4): kept true. EVALUATED false vs true; false desynchronizes
+    // TanStack's internal re-measure from our snap and destabilized the
+    // pinned-follow / repin / prepend physics scenarios. True preserves the
+    // proven measurement cadence; the owned content ResizeObserver still routes
+    // every growth through the one frame pipeline at zero RO-loop cost.
     useAnimationFrameWithResizeObserver: true,
+    // Rung 5 (PRO-187): the estimate-to-measured swap changes getTotalSize via
+    // TanStack's own animation-frame RO, one frame after the content-RO snap, so
+    // the painted frame is short by that delta (the r5 pinned-follow spike,
+    // bottomDistance 132 > 120). Route every virtualizer state change back
+    // through the single frame pipeline while pinned so the same frame re-snaps;
+    // it coalesces to one write and no-ops on stable geometry (no RO loop).
+    onChange: () => {
+      if (pinnedRef.current) {
+        notifyContentResize();
+      }
+    },
   });
   const pendingAnchorRef = useTranscriptVirtualAnchorCapture({
     getVirtualItems: () => virtualizer.getVirtualItems(),
@@ -312,20 +318,11 @@ export function VirtualizedTranscriptRowList({
     startAboveChangeCompensation,
   });
 
-  // Rung 5 (PRO-187): re-run the pinned snap on every commit whose ROWS changed,
-  // not only when the row COUNT or the estimate-derived total changes. A
-  // streaming turn grows its rendered DOM on each chunk while its
-  // composition estimate — and therefore `totalContentHeight`, an estimate sum
-  // until the row remeasures — stays constant, so neither `renderableRows.length`
-  // nor `totalContentHeight` fires mid-stream. The grown row lives in normal
-  // flow, so `scrollHeight` grows in the SAME commit it renders; snapping only
-  // from the content ResizeObserver trails that growth by a frame (or several,
-  // spread out on a slow/loaded CI runner), painting a bottom-distance spike
-  // above the follow ceiling (the r5 pinned-follow / repin regression:
-  // bottomDistance 132 > 120). Keying on the `renderableRows` identity runs this
-  // pinned snap in that commit's layout phase, reading the already-grown
-  // `scrollHeight`, so the growth and its snap paint together. Still the single
-  // writer — scrollToBottom marks its own write through the ownership markers.
+  // Rung 5 (PRO-187): re-run the pinned snap on every commit whose ROWS changed
+  // (identity, not just count/estimate-total) so a streaming turn's DOM growth
+  // snaps in that commit's layout phase against the already-grown `scrollHeight`
+  // instead of trailing the content ResizeObserver by a frame. The `onChange`
+  // bridge above covers the complementary measured-swap total-size change.
   useLayoutEffect(() => {
     if (!pinnedRef.current) {
       return;
