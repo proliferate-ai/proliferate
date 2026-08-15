@@ -14,16 +14,33 @@ use crate::bridge::activation::{
 };
 use crate::producer::transport::CollectorClient;
 
+#[cfg(test)]
+#[path = "tests_dev_refresh.rs"]
+mod tests;
+
 /// A stat per tick is the steady-state cost; the file only changes when the
 /// collector restarts, so seconds of re-attach latency are fine.
 const DEV_ENV_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
-pub(super) async fn dev_generation_refresh(inner: Arc<ProducerInner>, path: PathBuf) {
+/// Starts the refresh task when the host published the snippet's own path;
+/// an old app build's 3-line snippet keeps the frozen single-generation
+/// behavior.
+pub(super) fn spawn_if_configured(
+    runtime: &tokio::runtime::Handle,
+    inner: &Arc<ProducerInner>,
+    path: Option<PathBuf>,
+) {
+    if let Some(path) = path {
+        runtime.spawn(dev_generation_refresh(Arc::clone(inner), path));
+    }
+}
+
+async fn dev_generation_refresh(inner: Arc<ProducerInner>, path: PathBuf) {
     dev_generation_refresh_with_interval(inner, path, DEV_ENV_POLL_INTERVAL).await;
 }
 
 /// The interval seam exists for tests; production uses the constant above.
-pub(super) async fn dev_generation_refresh_with_interval(
+async fn dev_generation_refresh_with_interval(
     inner: Arc<ProducerInner>,
     path: PathBuf,
     interval: Duration,
@@ -69,5 +86,28 @@ pub(super) async fn dev_generation_refresh_with_interval(
             endpoint = %parsed.endpoint,
             "dev diagnostics re-attached to new collector generation"
         );
+    }
+}
+
+impl ProducerInner {
+    /// Boot id of the current generation, ready or cooling down. `None` while
+    /// unavailable so a re-published snippet for the same (dead) collector can
+    /// still be retried by the dev refresh loop.
+    fn current_collector_boot_id(&self) -> Option<String> {
+        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        match &state.collector {
+            super::CollectorAvailability::Ready(generation)
+            | super::CollectorAvailability::Cooldown { generation, .. } => {
+                Some(generation.collector_boot_id.clone())
+            }
+            super::CollectorAvailability::Unavailable { .. } => None,
+        }
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .terminal
     }
 }

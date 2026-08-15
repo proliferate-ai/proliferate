@@ -102,6 +102,8 @@ pub struct DesktopDiagnosticsDegradedBootstrap {
 #[cfg(debug_assertions)]
 pub struct DevEnvDiagnosticsBootstrap {
     pub(crate) initial_state: InitialCollectorState,
+    // Only the unix producer runs the refresh task, like the fd bridge.
+    #[cfg_attr(not(unix), allow(dead_code))]
     pub(crate) env_path: Option<std::path::PathBuf>,
 }
 

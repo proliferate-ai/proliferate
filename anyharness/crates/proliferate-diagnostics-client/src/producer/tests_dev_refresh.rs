@@ -7,8 +7,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use super::{
-    dev_refresh::dev_generation_refresh_with_interval,
+use super::super::{
     status::ProducerCollectorState,
     tests_support::{
         emit, producer, protected, settle, spawn_worker, wait_for, CollectorFixture,
@@ -16,6 +15,7 @@ use super::{
     },
     CollectorAvailability, ProducerInner,
 };
+use super::dev_generation_refresh_with_interval;
 use crate::{
     bridge::activation::{
         parse_dev_env_file, DEV_CAPABILITY_ENV, DEV_COLLECTOR_BOOT_ID_ENV, DEV_ENDPOINT_ENV,
