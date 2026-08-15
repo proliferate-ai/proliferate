@@ -160,6 +160,74 @@ describe("useTranscriptStickToBottom above-change compensation (PRO-187, r4)", (
       nowSpy.mockRestore();
     }
   });
+
+  // Deterministic negative control for the r5 prepend-anchoring CI defect
+  // (PRO-187): with composition-derived estimates + the write-through
+  // measured-height cache, the virtualizer's reported total scrollHeight moves
+  // NON-MONOTONICALLY while the freshly-prepended older rows correct from
+  // estimate to measured over the throttled settle. A frame that samples a
+  // transient DIP in that total (below a height already observed this window)
+  // must not shrink the compensation delta and pull the reader back up toward
+  // the newly prepended top (chromium scrollTop 120 vs > 150). The running-max
+  // clamp in the frame pipeline holds the reader at the highest absorbed delta.
+  it("holds the reader when the virtualizer's total transiently dips mid-correction", () => {
+    const handle = renderHarness();
+    const { viewport, api } = handle.current;
+    setContentHeight(viewport, 2000);
+    viewport.scrollTop = 1000;
+
+    act(() => {
+      api.setPinned(false);
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 });
+    });
+    // Let the forced-glue window run and terminate on its quiet frame (height
+    // held at 2000, delta 0). Subsequent corrections then drive isolated frame
+    // passes via the content ResizeObserver, one per frame.
+    act(() => {
+      flushRafRound();
+    });
+    act(() => {
+      flushRafRound();
+    });
+
+    // First correction: the prepended older rows measure taller, total grows to
+    // 2400. The frame pass absorbs the full delta: scrollTop = 1000 + 400 = 1400.
+    setContentHeight(viewport, 2400);
+    act(() => {
+      api.notifyContentResize();
+    });
+    expect(viewport.scrollTop).toBe(1400);
+    // Cross into the next frame so the following correction runs a fresh pass
+    // (the pipeline coalesces multiple same-frame notifies).
+    act(() => {
+      flushRafRound();
+    });
+
+    // Now the total TRANSIENTLY DIPS to 2200 (a write-through of a smaller
+    // measured height / estimate churn for a not-yet-settled row). Raw math
+    // (1000 + (2200 - 2000) = 1200) would jerk the reader 200px back toward the
+    // top. The monotonic clamp keeps the effective total at the 2400 already
+    // observed, so scrollTop stays 1400.
+    // NEGATIVE CONTROL: drop the running-max clamp in
+    // use-transcript-frame-pipeline-lifecycle.ts (use viewport.scrollHeight
+    // directly) and scrollTop falls to 1200 here.
+    setContentHeight(viewport, 2200);
+    act(() => {
+      api.notifyContentResize();
+    });
+    expect(viewport.scrollTop).toBe(1400);
+    act(() => {
+      flushRafRound();
+    });
+
+    // The correction resumes upward (total settles at 2500); the reader tracks
+    // the new, higher absorbed delta: scrollTop = 1000 + 500 = 1500.
+    setContentHeight(viewport, 2500);
+    act(() => {
+      api.notifyContentResize();
+    });
+    expect(viewport.scrollTop).toBe(1500);
+  });
 });
 
 describe("above-change compensation cancels on upward user intent (PRO-187, r4)", () => {
