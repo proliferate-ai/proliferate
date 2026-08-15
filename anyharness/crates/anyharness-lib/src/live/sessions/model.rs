@@ -40,6 +40,9 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
 
 use crate::domains::agents::model::ResolvedAgent;
+use crate::domains::sessions::extensions::{
+    SessionInteractionRequestedContext, SessionInteractionResolvedContext,
+};
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::domains::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PendingPromptReorderOutcome,
@@ -364,6 +367,10 @@ pub struct ActorCapabilities {
 #[derive(Default)]
 pub struct SessionHooks {
     pub on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync>>,
+    pub on_interaction_requested:
+        Option<Arc<dyn Fn(SessionInteractionRequestedContext) + Send + Sync>>,
+    pub on_interaction_resolved:
+        Option<Arc<dyn Fn(SessionInteractionResolvedContext) + Send + Sync>>,
     /// Called after the actor loop exits (normal or error). The bool indicates
     /// whether the actor exited with an error (true = errored).
     pub on_exit: Option<Box<dyn FnOnce(bool) + Send>>,

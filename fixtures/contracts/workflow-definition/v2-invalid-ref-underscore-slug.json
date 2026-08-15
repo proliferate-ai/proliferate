@@ -1,0 +1,16 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "nodes.0.prompt",
+  "note": "Doc slugs are kebab-case; an underscore token is a malformed reference. Input names take underscores, doc slugs never do.",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step",
+        "prompt": "Write into @doc:research_findings and stop"
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "nodes.0.prompt",
+  "note": "Trailing junk after a valid token is an error, not a prefix match: the whole non-space run is the reference attempt.",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step",
+        "prompt": "Write the plan into @doc:plan.md today"
+      }
+    ],
+    "docTemplates": [
+      {
+        "slug": "plan",
+        "producingNodeId": "n_a",
+        "body": "# Plan\n"
+      }
+    ]
+  }
+}

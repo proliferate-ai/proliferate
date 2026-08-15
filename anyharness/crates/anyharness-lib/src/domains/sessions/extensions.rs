@@ -1,4 +1,6 @@
-use anyharness_contract::v1::{ErrorEventDetails, SessionMcpBindingSummary};
+use anyharness_contract::v1::{
+    ErrorEventDetails, InteractionKind, InteractionOutcome, SessionMcpBindingSummary,
+};
 
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::domains::workspaces::model::WorkspaceRecord;
@@ -41,8 +43,10 @@ pub struct SessionTurnFinishedContext {
     pub workspace: WorkspaceRecord,
     pub session_id: String,
     pub turn_id: String,
-    /// The workflow-owned prompt id when present; used for exact prompt-identity
-    /// matching by workflow completion. `None` for prompts with no id.
+    /// The finished prompt's caller-supplied id when it carried one
+    /// (provenance only). The workflow extension matches by session link and
+    /// reports EVERY turn end of a linked session — a queued interjection's
+    /// turn must be able to complete a node — never by prompt identity.
     pub prompt_id: Option<String>,
     pub outcome: SessionTurnOutcome,
     pub stop_reason: Option<String>,
@@ -54,6 +58,21 @@ pub struct SessionTurnFinishedContext {
 pub struct SessionStartedContext {
     pub session_id: String,
     pub agent_kind: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionInteractionRequestedContext {
+    pub session_id: String,
+    pub request_id: String,
+    pub kind: InteractionKind,
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionInteractionResolvedContext {
+    pub session_id: String,
+    pub request_id: String,
+    pub kind: InteractionKind,
+    pub outcome: InteractionOutcome,
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +97,10 @@ pub trait SessionExtension: Send + Sync {
     fn on_session_started(&self, _ctx: SessionStartedContext) {}
 
     fn on_turn_finished(&self, _ctx: SessionTurnFinishedContext) {}
+
+    fn on_interaction_requested(&self, _ctx: SessionInteractionRequestedContext) {}
+
+    fn on_interaction_resolved(&self, _ctx: SessionInteractionResolvedContext) {}
 
     fn on_session_closing(
         &self,

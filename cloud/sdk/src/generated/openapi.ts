@@ -7063,10 +7063,39 @@ export interface components {
             /** Defaultrepoconfigid */
             defaultRepoConfigId?: string | null;
         };
-        /** WorkflowDefinitionListResponse */
-        WorkflowDefinitionListResponse: {
+        /** WorkflowDefinitionCreateRequestV2 */
+        WorkflowDefinitionCreateRequestV2: {
+            /** Title */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Defaultrepoconfigid */
+            defaultRepoConfigId?: string | null;
+            definition: components["schemas"]["WorkflowDefinitionDocumentV2"];
+        };
+        /** WorkflowDefinitionDocumentV2 */
+        WorkflowDefinitionDocumentV2: {
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 2;
+            /** Nodes */
+            nodes: components["schemas"]["WorkflowNodeV2"][];
+            /** Edges */
+            edges?: components["schemas"]["WorkflowEdgeV2"][];
+            /** Inputs */
+            inputs?: components["schemas"]["WorkflowInputV2"][];
+            /** Doctemplates */
+            docTemplates?: components["schemas"]["WorkflowDocTemplateV2"][];
+        };
+        /** WorkflowDefinitionListAnyResponse */
+        WorkflowDefinitionListAnyResponse: {
             /** Workflows */
-            workflows: components["schemas"]["WorkflowDefinitionResponse"][];
+            workflows: (components["schemas"]["WorkflowDefinitionResponse"] | components["schemas"]["WorkflowDefinitionResponseV2"])[];
         };
         /** WorkflowDefinitionResponse */
         WorkflowDefinitionResponse: {
@@ -7112,6 +7141,45 @@ export interface components {
             /** Deletedat */
             deletedAt: string | null;
         };
+        /** WorkflowDefinitionResponseV2 */
+        WorkflowDefinitionResponseV2: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Userid
+             * Format: uuid
+             */
+            userId: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 2;
+            /** Revision */
+            revision: number;
+            /** Defaultrepoconfigid */
+            defaultRepoConfigId: string | null;
+            definition: components["schemas"]["WorkflowDefinitionDocumentV2"];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Deletedat */
+            deletedAt: string | null;
+        };
         /** WorkflowDefinitionUpdateRequest */
         WorkflowDefinitionUpdateRequest: {
             /** Inputs */
@@ -7129,6 +7197,40 @@ export interface components {
             defaultRepoConfigId?: string | null;
             /** Expectedrevision */
             expectedRevision: number;
+        };
+        /** WorkflowDefinitionUpdateRequestV2 */
+        WorkflowDefinitionUpdateRequestV2: {
+            /** Title */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Defaultrepoconfigid */
+            defaultRepoConfigId?: string | null;
+            definition: components["schemas"]["WorkflowDefinitionDocumentV2"];
+            /** Expectedrevision */
+            expectedRevision: number;
+        };
+        /** WorkflowDocTemplateV2 */
+        WorkflowDocTemplateV2: {
+            /** Slug */
+            slug: string;
+            /** Producingnodeid */
+            producingNodeId: string;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+        };
+        /** WorkflowEdgeV2 */
+        WorkflowEdgeV2: {
+            /** From */
+            from: string;
+            /** To */
+            to: string;
         };
         /** WorkflowExactModelSelection */
         WorkflowExactModelSelection: {
@@ -7166,6 +7268,18 @@ export interface components {
             /** Required */
             required: boolean;
         };
+        /** WorkflowInputV2 */
+        WorkflowInputV2: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Required */
+            required: boolean;
+        };
         /** WorkflowInvocationCreateRequest */
         WorkflowInvocationCreateRequest: {
             /**
@@ -7185,6 +7299,34 @@ export interface components {
                 [key: string]: boolean | number | string;
             };
             target: components["schemas"]["ManagedCloudWorkflowTarget"];
+        };
+        /** WorkflowInvocationCreateRequestV2 */
+        WorkflowInvocationCreateRequestV2: {
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 2;
+            /**
+             * Workflowdefinitionid
+             * Format: uuid
+             */
+            workflowDefinitionId: string;
+            /** Arguments */
+            arguments: {
+                [key: string]: boolean | number | string;
+            };
+            placement: components["schemas"]["WorkflowInvocationPlacementV2"];
+        };
+        /** WorkflowInvocationPlacementV2 */
+        WorkflowInvocationPlacementV2: {
+            /** Repoconfigid */
+            repoConfigId: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "worktree" | "repo_root";
         };
         /** WorkflowInvocationResponse */
         WorkflowInvocationResponse: {
@@ -7222,6 +7364,65 @@ export interface components {
              * Format: date-time
              */
             createdAt: string;
+        };
+        /** WorkflowInvocationResponseV2 */
+        WorkflowInvocationResponseV2: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 2;
+            /**
+             * Workflowdefinitionid
+             * Format: uuid
+             */
+            workflowDefinitionId: string;
+            /** Definitionrevision */
+            definitionRevision: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            definition: components["schemas"]["WorkflowDefinitionDocumentV2"];
+            /** Arguments */
+            arguments: {
+                [key: string]: boolean | number | string;
+            };
+            placement: components["schemas"]["WorkflowInvocationPlacementV2"];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+        };
+        /** WorkflowNodeModelConfigV2 */
+        WorkflowNodeModelConfigV2: {
+            /** Agentkind */
+            agentKind: string;
+            /** Modelid */
+            modelId?: string | null;
+            /** Modeid */
+            modeId?: string | null;
+        };
+        /** WorkflowNodeV2 */
+        WorkflowNodeV2: {
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "agent" | "human_in_loop";
+            /** Title */
+            title: string;
+            /** Prompt */
+            prompt: string;
+            model?: components["schemas"]["WorkflowNodeModelConfigV2"] | null;
         };
         /** WorkflowPromptStep */
         WorkflowPromptStep: {
@@ -12044,7 +12245,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowDefinitionListResponse"];
+                    "application/json": components["schemas"]["WorkflowDefinitionListAnyResponse"];
                 };
             };
         };
@@ -12058,7 +12259,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WorkflowDefinitionCreateRequest"];
+                "application/json": components["schemas"]["WorkflowDefinitionCreateRequestV2"] | components["schemas"]["WorkflowDefinitionCreateRequest"];
             };
         };
         responses: {
@@ -12068,7 +12269,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowDefinitionResponse"];
+                    "application/json": components["schemas"]["WorkflowDefinitionResponse"] | components["schemas"]["WorkflowDefinitionResponseV2"];
                 };
             };
             /** @description Validation Error */
@@ -12130,7 +12331,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowDefinitionResponse"];
+                    "application/json": components["schemas"]["WorkflowDefinitionResponse"] | components["schemas"]["WorkflowDefinitionResponseV2"];
                 };
             };
             /** @description Validation Error */
@@ -12155,7 +12356,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WorkflowDefinitionUpdateRequest"];
+                "application/json": components["schemas"]["WorkflowDefinitionUpdateRequestV2"] | components["schemas"]["WorkflowDefinitionUpdateRequest"];
             };
         };
         responses: {
@@ -12165,7 +12366,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowDefinitionResponse"];
+                    "application/json": components["schemas"]["WorkflowDefinitionResponse"] | components["schemas"]["WorkflowDefinitionResponseV2"];
                 };
             };
             /** @description Validation Error */
@@ -12227,7 +12428,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManagedWorkflowInvocationResponse"];
+                    "application/json": components["schemas"]["ManagedWorkflowInvocationResponse"] | components["schemas"]["WorkflowInvocationResponseV2"];
                 };
             };
             /** @description Validation Error */
@@ -12252,7 +12453,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WorkflowInvocationCreateRequest"];
+                "application/json": components["schemas"]["WorkflowInvocationCreateRequestV2"] | components["schemas"]["WorkflowInvocationCreateRequest"];
             };
         };
         responses: {
@@ -12262,7 +12463,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                    "application/json": components["schemas"]["WorkflowInvocationResponse"] | components["schemas"]["WorkflowInvocationResponseV2"];
                 };
             };
             /** @description Created */
@@ -12271,7 +12472,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                    "application/json": components["schemas"]["WorkflowInvocationResponse"] | components["schemas"]["WorkflowInvocationResponseV2"];
                 };
             };
             /** @description Validation Error */

@@ -1,223 +1,278 @@
-// T2-WFDEF-1 (specs/TESTING/scenarios.md): workflow definition
-// authoring lifecycle. This is the PR1 seam: real Desktop web UI, real server,
-// and real Postgres, with AnyHarness deliberately skipped because definitions
-// do not execute yet.
+// T2-WFDEF-1 (specs/TESTING/scenarios.md): gen-2 workflow definition
+// authoring lifecycle. This is the PR7 seam: real Desktop web UI, real
+// server, and real Postgres, with AnyHarness deliberately skipped because
+// definitions do not execute yet.
 //
-// The scenario proves the full acceptance surface: a repository seeded through
-// the real product API and selected in the editor, multiple uniquely
-// identifiable ordered inputs/stages/steps, and exact ordered-array assertions
-// after create, hard reload, list reopen, authenticated GET, and revision 2.
+// The scenario proves the full acceptance surface: a linear chain of two
+// uniquely identifiable ordered nodes (agent, human_in_loop) whose prompts
+// reference declared names via @input:/@doc: tokens, authored through the
+// inputs panel and doc-templates panel rather than free-standing
+// stages/steps; live validation blocks save while a prompt references an
+// unresolved name and unblocks the moment the reference is declared; and
+// exact ordered node/edge/input/docTemplate arrays after create, hard
+// reload, list reopen, authenticated GET, and the revision-2 update (which
+// also reorders the chain, so the ordering assertions cannot pass
+// vacuously). Then delete and assert both the list and the authenticated API
+// no longer expose it.
+//
+// The gen-2 builder has no repository picker (see
+// lib/domain/workflows/workflow-builder-draft.ts's own comment on this): a
+// definition's `defaultRepoConfigId` is never set by this surface, so it is
+// asserted `null` throughout rather than seeded.
+//
+// Flag: workflows_v2 (lib/domain/capabilities/workflows-v2.ts) defaults to
+// `false` today and flips to `true` in this ladder's final rung, landed as its
+// own isolated commit later in this same PR. This spec asserts the flag-ON UI
+// and does not wait for that rung: the boot harness serves the desktop web
+// with `VITE_WORKFLOWS_V2=1` (stack/global-setup.ts's `extraDesktopEnv`),
+// which forces the gate on in either direction, so this file passes before and
+// after the default flips.
 
 import { expect, test, type Page } from "@playwright/test";
 import {
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
   apiBaseUrl,
-  apiRequest,
   ensureInstanceClaimed,
-  passwordLogin,
   webBaseUrl,
 } from "../stack/seed.ts";
-// TEMPORARY (workflows beta gate): see tests/intent/stack/workflows-beta-gate.ts.
-import { dismissWorkflowsBetaGate } from "../stack/workflows-beta-gate.ts";
 
 test.describe.configure({ mode: "serial" });
 
 const RUN_ID = Date.now();
-const ORIGINAL_TITLE = `T2 workflow ${RUN_ID}`;
+const ORIGINAL_TITLE = `T2 workflow v2 ${RUN_ID}`;
 const UPDATED_TITLE = `${ORIGINAL_TITLE} revised`;
-const ORIGINAL_DESCRIPTION = "Definition lifecycle acceptance coverage.";
-const UPDATED_DESCRIPTION = "Definition lifecycle acceptance coverage, revised.";
-const REPO_OWNER = "t2-wfdef";
-const REPO_NAME = `lifecycle-${RUN_ID}`;
+const ORIGINAL_DESCRIPTION = "Gen-2 definition lifecycle acceptance coverage.";
+const UPDATED_DESCRIPTION = "Gen-2 definition lifecycle acceptance coverage, revised.";
 
-// Each prompt embeds a unique ordinal marker so ordering assertions cannot
-// pass vacuously — a swapped stage or step changes the exact arrays below.
-const STAGE1_PROMPT1 = "s1p1: investigate {{inputs.ticket}} at severity {{inputs.severity}}.";
-const STAGE1_PROMPT2 = "s1p2: summarize the evidence for {{inputs.ticket}}.";
-const STAGE2_PROMPT1 = "s2p1: draft the fix plan for {{inputs.ticket}}.";
-const UPDATED_STAGE1_PROMPT2 = "s1p2v2: summarize and rank the evidence for {{inputs.ticket}}.";
-const GOAL = "Produce an evidence-backed diagnosis.";
-
-interface ComparableStage {
-  harnessConfig: { agentKind: string; modelId: string | null; effort: string | null };
-  steps: Array<{ kind: "agent.prompt"; prompt: string; goal: { objective: string } | null }>;
-}
+const NODE1_TITLE = `Investigate ${RUN_ID}`;
+const NODE2_TITLE = `Approve ${RUN_ID}`;
+const STAGE1_PROMPT = "s1p1: investigate @input:ticket at severity @input:severity.";
+const STAGE2_PROMPT = "s2p1: review @doc:findings for @input:ticket.";
+const UPDATED_STAGE2_PROMPT =
+  "s2p1v2: review @doc:findings for @input:ticket, then flag any blocking risk.";
+const DOC_BODY = "# Findings\n";
 
 const ORIGINAL_INPUTS = [
-  { name: "ticket", type: "string" as const, required: true },
-  { name: "severity", type: "number" as const, required: false },
+  { name: "ticket", description: "Ticket id to investigate.", required: true },
+  { name: "severity", description: "Optional severity rating.", required: false },
 ];
 
-const ORIGINAL_STAGES: ComparableStage[] = [
-  {
-    harnessConfig: { agentKind: "claude", modelId: "sonnet", effort: "high" },
-    steps: [
-      { kind: "agent.prompt" as const, prompt: STAGE1_PROMPT1, goal: { objective: GOAL } },
-      { kind: "agent.prompt" as const, prompt: STAGE1_PROMPT2, goal: null },
-    ],
-  },
-  {
-    harnessConfig: { agentKind: "claude", modelId: null, effort: null },
-    steps: [
-      { kind: "agent.prompt" as const, prompt: STAGE2_PROMPT1, goal: null },
-    ],
-  },
+interface ComparableNode {
+  id: string;
+  type: "agent" | "human_in_loop";
+  title: string;
+  prompt: string;
+  model: { agentKind: string; modelId: string | null; modeId: string | null } | null;
+}
+
+const ORIGINAL_NODES: ComparableNode[] = [
+  { id: "step-1", type: "agent", title: NODE1_TITLE, prompt: STAGE1_PROMPT, model: null },
+  { id: "step-2", type: "human_in_loop", title: NODE2_TITLE, prompt: STAGE2_PROMPT, model: null },
 ];
+const ORIGINAL_EDGES = [{ from: "step-1", to: "step-2" }];
 
-const UPDATED_STAGES: ComparableStage[] = [
-  {
-    ...ORIGINAL_STAGES[0]!,
-    steps: [
-      ORIGINAL_STAGES[0]!.steps[0]!,
-      { kind: "agent.prompt", prompt: UPDATED_STAGE1_PROMPT2, goal: null },
-    ],
-  },
-  ORIGINAL_STAGES[1]!,
+// Revision 2 both edits content AND reorders the chain (step-2 moves to the
+// front): a swapped, non-vacuous ordering assertion, mirroring gen-1's own
+// "unique ordinal marker" rationale for its stage/step arrays.
+const UPDATED_NODES: ComparableNode[] = [
+  { id: "step-2", type: "human_in_loop", title: NODE2_TITLE, prompt: UPDATED_STAGE2_PROMPT, model: null },
+  { id: "step-1", type: "agent", title: NODE1_TITLE, prompt: STAGE1_PROMPT, model: null },
 ];
+const UPDATED_EDGES = [{ from: "step-2", to: "step-1" }];
 
-let repoConfigId: string;
+const DOC_TEMPLATES = [{ slug: "findings", producingNodeId: "step-1", body: DOC_BODY }];
 
-test.beforeAll(async () => {
+let workflowId: string;
+
+test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition", async ({ page }) => {
   await ensureInstanceClaimed();
-  repoConfigId = await seedRepositoryThroughProductApi();
-});
-
-test("creates, reloads, reopens, edits, and deletes a durable definition", async ({ page }) => {
+  // `ensureInstanceClaimed`'s claim POST commits its transaction in dependency
+  // teardown after responding (same hazard `seedRepositoryThroughProductApi`
+  // guards against in this file's gen-1 predecessor); this spec has no
+  // repository-seeding step to absorb that delay before the first login, so
+  // it waits for the claim to be visible on the read-only signal directly
+  // rather than racing a UI-driven sign-in against it.
+  await awaitInstanceClaimVisible();
   await signInThroughUi(page);
-  await page.goto(`${webBaseUrl()}/workflows`);
-  // TEMPORARY (workflows beta gate): the surface raises a dismissible "in beta"
-  // notice over itself; a user clicks through it before touching the page, and
-  // so does this spec. Everything below exercises the real surface unchanged.
-  await dismissWorkflowsBetaGate(page);
 
+  await page.goto(`${webBaseUrl()}/workflows`);
   await expect(page.getByRole("heading", { name: "Workflows", exact: true, level: 1 })).toBeVisible();
-  await page.getByRole("button", { name: "New workflow", exact: true }).first().click();
+
+  // "New workflow options" is the trigger's accessible name (an explicit
+  // aria-label on WorkflowMainNewMenu), distinct from its visible "New
+  // workflow" text.
+  await page.getByRole("button", { name: "New workflow options", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Blank workflow", exact: true }).click();
+  await expect(page).toHaveURL(`${webBaseUrl()}/workflows/new`);
   await expect(page.getByRole("heading", { name: "New workflow", exact: true, level: 1 })).toBeVisible();
 
-  await page.getByLabel("Title").fill(ORIGINAL_TITLE);
-  await page.getByLabel("Description").fill(ORIGINAL_DESCRIPTION);
+  await page.locator("#workflow-builder-title").fill(ORIGINAL_TITLE);
+  await page.locator("#workflow-builder-description").fill(ORIGINAL_DESCRIPTION);
 
-  // The API-seeded repository must be offered and selected through the UI.
-  await expect(page.getByLabel("Default repository")).toHaveValue("");
-  await page.getByLabel("Default repository").selectOption(repoConfigId);
-
-  // Two uniquely identifiable ordered inputs.
+  // Two uniquely identifiable inputs, declared before the prompts that
+  // reference them so the only issue introduced below is the one the
+  // negative control below is about.
   await page.getByRole("button", { name: "Add input", exact: true }).click();
-  await page.locator("#workflow-input-0-name").fill("ticket");
-  await expect(page.locator("#workflow-input-0-type")).toHaveValue("string");
-  await expect(page.locator("#workflow-input-0-required")).toBeChecked();
+  await page.locator("#workflow-builder-input-0-name").fill("ticket");
+  await page.locator("#workflow-builder-input-0-description").fill("Ticket id to investigate.");
+  await expect(page.locator("#workflow-builder-input-0-required")).toBeChecked();
+
   await page.getByRole("button", { name: "Add input", exact: true }).click();
-  await page.locator("#workflow-input-1-name").fill("severity");
-  await page.locator("#workflow-input-1-type").selectOption("number");
-  await page.locator("#workflow-input-1-required").click();
-  await expect(page.locator("#workflow-input-1-required")).not.toBeChecked();
+  await page.locator("#workflow-builder-input-1-name").fill("severity");
+  await page.locator("#workflow-builder-input-1-description").fill("Optional severity rating.");
+  await page.locator("#workflow-builder-input-1-required").click();
+  await expect(page.locator("#workflow-builder-input-1-required")).not.toBeChecked();
 
-  // Stage 1: explicit model/effort, two ordered prompts, goal only on the first.
-  await page.locator("#workflow-stage-0-harness").selectOption("claude");
-  await page.locator("#workflow-stage-0-model").selectOption("sonnet");
-  await page.locator("#workflow-stage-0-effort").selectOption("high");
-  await page.locator("#workflow-stage-0-step-0-prompt").fill(STAGE1_PROMPT1);
-  await page.getByRole("button", { name: "Add goal", exact: true }).first().click();
-  await page.locator("#workflow-stage-0-step-0-goal").fill(GOAL);
-  await page.getByRole("button", { name: "Add prompt", exact: true }).click();
-  await page.locator("#workflow-stage-0-step-1-prompt").fill(STAGE1_PROMPT2);
+  // Node 1 (step-1, agent): both @input: refs already resolved by the inputs
+  // above, so this alone introduces no issue.
+  await page.locator("#workflow-builder-node-step-1-title").fill(NODE1_TITLE);
+  await page.locator("#workflow-builder-node-step-1-prompt").fill(STAGE1_PROMPT);
 
-  // Stage 2: runtime-default model, one prompt.
-  await page.getByRole("button", { name: "Add stage", exact: true }).click();
-  await page.locator("#workflow-stage-1-harness").selectOption("claude");
-  await expect(page.locator("#workflow-stage-1-model")).toHaveValue("");
-  await page.locator("#workflow-stage-1-step-0-prompt").fill(STAGE2_PROMPT1);
+  // Node 2 (step-2, human_in_loop): references @doc:findings, which is not
+  // declared yet — this is the negative control.
+  await page.getByRole("button", { name: "Add step", exact: true }).click();
+  await page.locator("#workflow-builder-node-step-2-approval").click();
+  await page.locator("#workflow-builder-node-step-2-title").fill(NODE2_TITLE);
+  await page.locator("#workflow-builder-node-step-2-prompt").fill(STAGE2_PROMPT);
+
+  // Negative control: an unresolved @doc: reference blocks save with an
+  // exact, non-generic message, and the chip preview marks it unresolved.
+  const saveButton = page.getByRole("button", { name: "Save", exact: true });
+  await expect(
+    page.getByText(
+      "Fix 1 issue before saving. Node “step-2” prompt references unknown doc template “@doc:findings”.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(saveButton).toBeDisabled();
+  await expect(page.locator('span[data-resolved="false"]')).toHaveCount(1);
+  await expect(page.locator('span[data-resolved="false"]')).toHaveText("@doc:findings");
+
+  // Fix: declare the doc template the prompt already references. Save
+  // unblocks the instant the reference resolves.
+  await page.getByRole("button", { name: "Add document", exact: true }).click();
+  await page.locator("#workflow-builder-doc-0-slug").fill("findings");
+  await page.locator("#workflow-builder-doc-0-producing-node").selectOption("step-1");
+  await page.locator("#workflow-builder-doc-0-body").fill(DOC_BODY);
+  await expect(page.locator('span[data-resolved="false"]')).toHaveCount(0);
+  await expect(saveButton).toBeEnabled();
 
   const createResponsePromise = page.waitForResponse((response) =>
     response.request().method() === "POST"
       && response.url() === `${apiBaseUrl()}/v1/workflows`
   );
-  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await saveButton.click();
   const createResponse = await createResponsePromise;
   expect(createResponse.status()).toBe(201);
-  const created = await createResponse.json() as WorkflowDefinitionResponse;
+  const created = await createResponse.json() as WorkflowDefinitionRecordV2Response;
+  expect(created.schemaVersion).toBe(2);
   expect(created.revision).toBe(1);
-  expect(created.defaultRepoConfigId).toBe(repoConfigId);
-  expect(created.inputs).toEqual(ORIGINAL_INPUTS);
-  expect(normalizedStages(created.stages)).toEqual(ORIGINAL_STAGES);
+  expect(created.defaultRepoConfigId).toBeNull();
+  expect(created.title).toBe(ORIGINAL_TITLE);
+  expect(created.description).toBe(ORIGINAL_DESCRIPTION);
+  expect(normalizedNodes(created.definition.nodes)).toEqual(ORIGINAL_NODES);
+  expect(created.definition.edges).toEqual(ORIGINAL_EDGES);
+  expect(created.definition.inputs).toEqual(ORIGINAL_INPUTS);
+  expect(created.definition.docTemplates).toEqual(DOC_TEMPLATES);
 
-  const workflowId = created.id;
+  workflowId = created.id;
   await expect(page).toHaveURL(`${webBaseUrl()}/workflows/${workflowId}`);
 
-  // The create transaction commits after the response; converge on revision 1
-  // being durably readable before reload/list assertions depend on it.
   await awaitWorkflowRevision(page, workflowId, 1);
 
-  // A hard browser reload forces a fresh authenticated GET from the server;
-  // this proves the editor is reopening durable Postgres state rather than a
-  // mutation-cache projection.
+  // A hard browser reload forces a fresh authenticated GET: proves the
+  // builder is reopening durable Postgres state, not a mutation cache.
   await page.reload();
-  await expectEditorState(page, {
+  await expectBuilderState(page, {
     title: ORIGINAL_TITLE,
     description: ORIGINAL_DESCRIPTION,
-    stage1Prompt2: STAGE1_PROMPT2,
+    nodes: ORIGINAL_NODES,
   });
 
-  // Return to the list and reopen through the product surface as well. This
-  // covers list discovery/navigation independently of the durable route
-  // reload above.
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  // Return to the list and reopen through the product surface as well —
+  // covers list discovery/navigation independently of the reload above.
+  await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page).toHaveURL(`${webBaseUrl()}/workflows`);
   await expect(page.getByRole("heading", { name: "Workflows", exact: true, level: 1 })).toBeVisible();
-  await page.getByRole("button").filter({ hasText: ORIGINAL_TITLE }).click();
+  const originalRow = page.getByRole("button").filter({ hasText: ORIGINAL_TITLE });
+  await expect(originalRow).toBeVisible();
+  await originalRow.hover();
+  await originalRow.getByRole("button", { name: `Edit ${ORIGINAL_TITLE}`, exact: true }).click();
   await expect(page).toHaveURL(`${webBaseUrl()}/workflows/${workflowId}`);
-  await expectEditorState(page, {
+  await expectBuilderState(page, {
     title: ORIGINAL_TITLE,
     description: ORIGINAL_DESCRIPTION,
-    stage1Prompt2: STAGE1_PROMPT2,
+    nodes: ORIGINAL_NODES,
   });
 
   const persisted = await authenticatedWorkflowGet(page, workflowId);
   expect(persisted.status).toBe(200);
   expect(persisted.body.revision).toBe(1);
   expect(persisted.body.title).toBe(ORIGINAL_TITLE);
-  expect(persisted.body.defaultRepoConfigId).toBe(repoConfigId);
-  expect(persisted.body.inputs).toEqual(ORIGINAL_INPUTS);
-  expect(normalizedStages(persisted.body.stages)).toEqual(ORIGINAL_STAGES);
+  expect(persisted.body.defaultRepoConfigId).toBeNull();
+  expect(normalizedNodes(persisted.body.definition.nodes)).toEqual(ORIGINAL_NODES);
+  expect(persisted.body.definition.edges).toEqual(ORIGINAL_EDGES);
+  expect(persisted.body.definition.inputs).toEqual(ORIGINAL_INPUTS);
+  expect(persisted.body.definition.docTemplates).toEqual(DOC_TEMPLATES);
 
-  await page.getByLabel("Title").fill(UPDATED_TITLE);
-  await page.getByLabel("Description").fill(UPDATED_DESCRIPTION);
-  await page.locator("#workflow-stage-0-step-1-prompt").fill(UPDATED_STAGE1_PROMPT2);
+  // Edit: title/description, reorder the chain (step-2 moves up), and edit
+  // step-2's prompt — content and order both change, so reload cannot pass
+  // by re-reading either the old order or the old text.
+  await page.locator("#workflow-builder-title").fill(UPDATED_TITLE);
+  await page.locator("#workflow-builder-description").fill(UPDATED_DESCRIPTION);
+  await page.getByRole("button", { name: "Move step 2 up", exact: true }).click();
+  await page.locator("#workflow-builder-node-step-2-prompt").fill(UPDATED_STAGE2_PROMPT);
 
   const updateResponsePromise = page.waitForResponse((response) =>
     response.request().method() === "PUT"
       && response.url() === `${apiBaseUrl()}/v1/workflows/${workflowId}`
   );
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await saveButton.click();
   const updateResponse = await updateResponsePromise;
   expect(updateResponse.status()).toBe(200);
-  const updated = await updateResponse.json() as WorkflowDefinitionResponse;
+  const updated = await updateResponse.json() as WorkflowDefinitionRecordV2Response;
   expect(updated.revision).toBe(2);
   expect(updated.title).toBe(UPDATED_TITLE);
-  expect(updated.defaultRepoConfigId).toBe(repoConfigId);
-  expect(updated.inputs).toEqual(ORIGINAL_INPUTS);
-  expect(normalizedStages(updated.stages)).toEqual(UPDATED_STAGES);
+  expect(updated.description).toBe(UPDATED_DESCRIPTION);
+  expect(updated.defaultRepoConfigId).toBeNull();
+  expect(normalizedNodes(updated.definition.nodes)).toEqual(UPDATED_NODES);
+  expect(updated.definition.edges).toEqual(UPDATED_EDGES);
+  expect(updated.definition.inputs).toEqual(ORIGINAL_INPUTS);
+  expect(updated.definition.docTemplates).toEqual(DOC_TEMPLATES);
 
-  // Converge on revision 2 before the hard reload depends on it.
   await awaitWorkflowRevision(page, workflowId, 2);
 
   await page.reload();
-  await expectEditorState(page, {
+  await expectBuilderState(page, {
     title: UPDATED_TITLE,
     description: UPDATED_DESCRIPTION,
-    stage1Prompt2: UPDATED_STAGE1_PROMPT2,
+    nodes: UPDATED_NODES,
   });
 
   const revisionTwo = await authenticatedWorkflowGet(page, workflowId);
   expect(revisionTwo.status).toBe(200);
   expect(revisionTwo.body.revision).toBe(2);
-  expect(revisionTwo.body.defaultRepoConfigId).toBe(repoConfigId);
-  expect(revisionTwo.body.inputs).toEqual(ORIGINAL_INPUTS);
-  expect(normalizedStages(revisionTwo.body.stages)).toEqual(UPDATED_STAGES);
+  expect(revisionTwo.body.defaultRepoConfigId).toBeNull();
+  expect(normalizedNodes(revisionTwo.body.definition.nodes)).toEqual(UPDATED_NODES);
+  expect(revisionTwo.body.definition.edges).toEqual(UPDATED_EDGES);
+  expect(revisionTwo.body.definition.inputs).toEqual(ORIGINAL_INPUTS);
+  expect(revisionTwo.body.definition.docTemplates).toEqual(DOC_TEMPLATES);
 
-  await page.getByRole("button", { name: "Delete workflow", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Delete workflow?", exact: true })).toBeVisible();
+  // Delete via the row's confirm dialog.
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page).toHaveURL(`${webBaseUrl()}/workflows`);
+  const updatedRow = page.getByRole("button").filter({ hasText: UPDATED_TITLE });
+  await expect(updatedRow).toBeVisible();
+  await updatedRow.hover();
+  await updatedRow.getByRole("button", { name: `${UPDATED_TITLE} actions`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Delete...", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Delete this workflow?", exact: true })).toBeVisible();
+  await expect(page.getByText(
+    `“${UPDATED_TITLE}” and its saved definition will be removed. Runs already started are not affected.`,
+    { exact: true },
+  )).toBeVisible();
+
   const deleteResponsePromise = page.waitForResponse((response) =>
     response.request().method() === "DELETE"
       && response.url().startsWith(`${apiBaseUrl()}/v1/workflows/${workflowId}`)
@@ -226,8 +281,6 @@ test("creates, reloads, reopens, edits, and deletes a durable definition", async
   const deleteResponse = await deleteResponsePromise;
   expect(deleteResponse.status()).toBe(204);
 
-  // Converge on the deletion being durably visible (404 + list absence)
-  // before asserting the dependent UI state.
   await awaitWorkflowDeleted(page, workflowId);
 
   await expect(page).toHaveURL(`${webBaseUrl()}/workflows`);
@@ -235,67 +288,7 @@ test("creates, reloads, reopens, edits, and deletes a durable definition", async
   await expect(page.getByText(UPDATED_TITLE, { exact: true })).toHaveCount(0);
 });
 
-// Lockout-safety contract of convergedAdminLogin, exercised with injected
-// probes so delayed post-/setup commit visibility is deterministic: the
-// credentialed POST happens exactly once, only after the read-only /setup
-// probe reports the committed claim — never as a retried login that would
-// trip the 5-failures-per-15-minutes auth throttle.
-test("delayed claim visibility yields exactly one login POST", async () => {
-  const setupStatuses = [200, 200, 404];
-  let loginCalls = 0;
-  const tokens = await convergedAdminLogin({
-    probeSetupStatus: async () => setupStatuses.shift() ?? 404,
-    login: async () => {
-      loginCalls += 1;
-      return { access_token: `token-${loginCalls}` };
-    },
-  });
-  expect(setupStatuses).toHaveLength(0);
-  expect(loginCalls).toBe(1);
-  expect(tokens.access_token).toBe("token-1");
-});
-
-/**
- * Seed a repository configuration through the real product API — the same
- * PUT /v1/cloud/repositories/{owner}/{repo}/environment surface the desktop
- * app drives. The PUT response body carries the created repoConfigId
- * directly; the request-scoped DB transaction commits in dependency teardown
- * AFTER the response is sent, so visibility to other requests is then polled
- * (bounded) before the UI relies on the repository being listable. No raw
- * SQL, no GitHub dependency (a local-kind environment needs neither).
- */
-async function seedRepositoryThroughProductApi(): Promise<string> {
-  const tokens = await convergedAdminLogin();
-  const saved = await apiRequest<{ repoConfigId?: string }>(
-    `/v1/cloud/repositories/${REPO_OWNER}/${REPO_NAME}/environment`,
-    {
-      method: "PUT",
-      token: tokens.access_token,
-      body: {
-        kind: "local",
-        desktopInstallId: `t2-wfdef-install-${RUN_ID}`,
-        localPath: `/tmp/t2-wfdef-${RUN_ID}`,
-      },
-    },
-  );
-  if (saved.status !== 200 || !saved.body.repoConfigId) {
-    throw new Error(`Repository seed failed (${saved.status}): ${JSON.stringify(saved.body)}`);
-  }
-  const seededId = saved.body.repoConfigId;
-  let lastList = "never listed";
-  await pollUntil(
-    () => `repository ${REPO_OWNER}/${REPO_NAME} (${seededId}) visible in /v1/cloud/repositories (last seen: ${lastList})`,
-    async () => {
-      const list = await apiRequest<{
-        repositories: Array<{ id: string }>;
-      }>("/v1/cloud/repositories", { token: tokens.access_token });
-      lastList = `status ${list.status}, ${list.body?.repositories?.length ?? 0} repositories`;
-      return list.status === 200
-        && list.body.repositories.some((candidate) => candidate.id === seededId);
-    },
-  );
-  return seededId;
-}
+// ── helpers ──
 
 const CONVERGENCE_TIMEOUT_MS = 15_000;
 const CONVERGENCE_POLL_MS = 250;
@@ -306,15 +299,9 @@ const CONVERGENCE_PROBE_TIMEOUT_MS = 5_000;
  * see the prior state. Poll with a short interval up to a hard overall
  * deadline; each probe is additionally raced against the smaller of the
  * per-probe cap and the remaining deadline, so one hung request cannot
- * exceed the bound. Probes MUST be read-only/idempotent: the race abandons
- * (does not cancel) an in-flight probe where the underlying API offers no
- * cancellation seam — the shared `apiRequest` helper takes no AbortSignal,
- * and threading one through is a suite-wide change this spec deliberately
- * avoids — so an abandoned probe may still complete server-side and overlap
- * the next attempt. Never route a mutating request (login POSTs especially:
- * auth throttles 5 failures per email/IP for 15 minutes) through this. The
- * `description` is evaluated at failure time so it can carry the last
- * observed state. */
+ * exceed the bound. Probes MUST be read-only/idempotent. Ported from this
+ * file's gen-1 predecessor unchanged — the convergence hazard is a server
+ * property, not a gen-1/gen-2 one. */
 async function pollUntil(
   description: string | (() => string),
   probe: () => Promise<boolean>,
@@ -350,74 +337,25 @@ async function pollUntil(
   );
 }
 
-/** Converge the admin login without lockout risk: a clean first-run claim
- * commits its transaction after the /setup response, so the admin account
- * may briefly be invisible to other requests. Retrying the credentialed
- * login POST would trip the auth throttle (5 failures per email/IP locks
- * the actor out for 15 minutes), so instead poll the read-only GET /setup
- * signal — it flips to 404 only once the committed claim is visible, and
- * the account commits in the same transaction — then POST the login
- * exactly once. A real credential failure surfaces immediately instead of
- * being retried into a lockout. `deps` exists for the focused delayed-
- * visibility test below; production callers use the defaults. */
-async function convergedAdminLogin(deps?: {
-  probeSetupStatus?: () => Promise<number>;
-  login?: () => Promise<{ access_token: string }>;
-}): Promise<{ access_token: string }> {
-  const probeSetupStatus = deps?.probeSetupStatus
-    ?? (async () => (await fetch(`${apiBaseUrl()}/setup`)).status);
-  const login = deps?.login ?? (() => passwordLogin(ADMIN_EMAIL, ADMIN_PASSWORD));
-
+/** Poll the read-only GET /setup signal until it reports the claim
+ * (`ensureInstanceClaimed`, imported from stack/seed.ts) as committed: a
+ * clean first-run claim commits its transaction in dependency teardown after
+ * the /setup response, so the admin account may briefly be invisible to
+ * other requests. This file's gen-1 predecessor guards the equivalent race by
+ * routing its first admin API call through a `convergedAdminLogin` helper
+ * that polls this same signal before a single credentialed login POST
+ * (never retried, to avoid tripping the 5-failures-per-15-minutes auth
+ * throttle); this spec signs in through the UI instead of the API, so there
+ * is no login POST to protect from a retry loop — only the wait for
+ * visibility before that one UI-driven attempt. */
+async function awaitInstanceClaimVisible(): Promise<void> {
   let lastStatus = "never probed";
   await pollUntil(
     () => `GET /setup to report the committed claim as 404 (last seen: ${lastStatus})`,
     async () => {
-      const status = await probeSetupStatus();
+      const status = (await fetch(`${apiBaseUrl()}/setup`)).status;
       lastStatus = `status ${status}`;
       return status === 404;
-    },
-  );
-  return login();
-}
-
-/** Wait for the definition to be readable at the expected revision through
- * the authenticated API before dependent UI/API assertions run. */
-async function awaitWorkflowRevision(
-  page: Page,
-  workflowId: string,
-  expectedRevision: number,
-): Promise<void> {
-  let last: { status: number; revision?: number } = { status: -1 };
-  await pollUntil(
-    () => `workflow ${workflowId} at revision ${expectedRevision} (last seen: ${JSON.stringify(last)})`,
-    async () => {
-      const result = await authenticatedWorkflowGet(page, workflowId);
-      last = { status: result.status, revision: result.body?.revision };
-      return result.status === 200 && result.body.revision === expectedRevision;
-    },
-  );
-}
-
-/** Wait for the deletion to be durably visible: detail 404 and gone from the
- * authenticated list. */
-async function awaitWorkflowDeleted(page: Page, workflowId: string): Promise<void> {
-  let lastSeen = "never probed";
-  await pollUntil(
-    () => `workflow ${workflowId} deleted (detail 404 + absent from list; last seen: ${lastSeen})`,
-    async () => {
-      const detail = await authenticatedWorkflowGet(page, workflowId);
-      if (detail.status !== 404) {
-        lastSeen = `detail status ${detail.status}`;
-        return false;
-      }
-      const token = await pageAccessToken(page);
-      const response = await page.request.get(`${apiBaseUrl()}/v1/workflows`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const body = await response.json() as { workflows: Array<{ id: string }> };
-      lastSeen = `detail 404, list status ${response.status()} with ${body.workflows?.length ?? 0} workflows`;
-      return response.status() === 200
-        && !body.workflows.some((candidate) => candidate.id === workflowId);
     },
   );
 }
@@ -428,37 +366,6 @@ async function signInThroughUi(page: Page): Promise<void> {
   await page.getByLabel("Password").fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByLabel("Password")).toHaveCount(0, { timeout: 30_000 });
-}
-
-/** Assert the full editor state: repo selection plus every ordered input,
- * stage, and step control, so reload/reopen cannot pass on a subset. */
-async function expectEditorState(
-  page: Page,
-  expected: { title: string; description: string; stage1Prompt2: string },
-): Promise<void> {
-  await expect(page.getByLabel("Title")).toHaveValue(expected.title);
-  await expect(page.getByLabel("Description")).toHaveValue(expected.description);
-  await expect(page.getByLabel("Default repository")).toHaveValue(repoConfigId);
-
-  await expect(page.locator("#workflow-input-0-name")).toHaveValue("ticket");
-  await expect(page.locator("#workflow-input-0-type")).toHaveValue("string");
-  await expect(page.locator("#workflow-input-0-required")).toBeChecked();
-  await expect(page.locator("#workflow-input-1-name")).toHaveValue("severity");
-  await expect(page.locator("#workflow-input-1-type")).toHaveValue("number");
-  await expect(page.locator("#workflow-input-1-required")).not.toBeChecked();
-
-  await expect(page.locator("#workflow-stage-0-harness")).toHaveValue("claude");
-  await expect(page.locator("#workflow-stage-0-model")).toHaveValue("sonnet");
-  await expect(page.locator("#workflow-stage-0-effort")).toHaveValue("high");
-  await expect(page.locator("#workflow-stage-0-step-0-prompt")).toHaveValue(STAGE1_PROMPT1);
-  await expect(page.locator("#workflow-stage-0-step-0-goal")).toHaveValue(GOAL);
-  await expect(page.locator("#workflow-stage-0-step-1-prompt")).toHaveValue(expected.stage1Prompt2);
-  await expect(page.locator("#workflow-stage-0-step-1-goal")).toHaveCount(0);
-
-  await expect(page.locator("#workflow-stage-1-harness")).toHaveValue("claude");
-  await expect(page.locator("#workflow-stage-1-model")).toHaveValue("");
-  await expect(page.locator("#workflow-stage-1-step-0-prompt")).toHaveValue(STAGE2_PROMPT1);
-  await expect(page.locator("#workflow-stage-2-harness")).toHaveCount(0);
 }
 
 async function pageAccessToken(page: Page): Promise<string> {
@@ -472,49 +379,131 @@ async function pageAccessToken(page: Page): Promise<string> {
 
 async function authenticatedWorkflowGet(
   page: Page,
-  workflowId: string,
-): Promise<{ status: number; body: WorkflowDefinitionResponse }> {
+  definitionId: string,
+): Promise<{ status: number; body: WorkflowDefinitionRecordV2Response }> {
   const token = await pageAccessToken(page);
-  const response = await page.request.get(`${apiBaseUrl()}/v1/workflows/${workflowId}`, {
+  const response = await page.request.get(`${apiBaseUrl()}/v1/workflows/${definitionId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return {
     status: response.status(),
-    body: await response.json() as WorkflowDefinitionResponse,
+    body: await response.json() as WorkflowDefinitionRecordV2Response,
   };
 }
 
-/** Project the response stages onto the exact comparable shape: the server
- * omits unset optional fields, so normalize them before deep equality. */
-function normalizedStages(
-  stages: WorkflowDefinitionResponse["stages"],
-): ComparableStage[] {
-  return stages.map((stage) => ({
-    harnessConfig: {
-      agentKind: stage.harnessConfig.agentKind,
-      modelId: stage.harnessConfig.modelId ?? null,
-      effort: stage.harnessConfig.effort ?? null,
+async function awaitWorkflowRevision(
+  page: Page,
+  definitionId: string,
+  expectedRevision: number,
+): Promise<void> {
+  let last: { status: number; revision?: number } = { status: -1 };
+  await pollUntil(
+    () => `workflow ${definitionId} at revision ${expectedRevision} (last seen: ${JSON.stringify(last)})`,
+    async () => {
+      const result = await authenticatedWorkflowGet(page, definitionId);
+      last = { status: result.status, revision: result.body?.revision };
+      return result.status === 200 && result.body.revision === expectedRevision;
     },
-    steps: stage.steps.map((step) => ({
-      kind: step.kind,
-      prompt: step.prompt,
-      goal: step.goal ? { objective: step.goal.objective } : null,
-    })),
+  );
+}
+
+async function awaitWorkflowDeleted(page: Page, definitionId: string): Promise<void> {
+  let lastSeen = "never probed";
+  await pollUntil(
+    () => `workflow ${definitionId} deleted (detail 404 + absent from list; last seen: ${lastSeen})`,
+    async () => {
+      const detail = await authenticatedWorkflowGet(page, definitionId);
+      if (detail.status !== 404) {
+        lastSeen = `detail status ${detail.status}`;
+        return false;
+      }
+      const token = await pageAccessToken(page);
+      const response = await page.request.get(`${apiBaseUrl()}/v1/workflows`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await response.json() as { workflows: Array<{ id: string }> };
+      lastSeen = `detail 404, list status ${response.status()} with ${body.workflows?.length ?? 0} workflows`;
+      return response.status() === 200
+        && !body.workflows.some((candidate) => candidate.id === definitionId);
+    },
+  );
+}
+
+/** Assert the full builder state: title/description plus every ordered node's
+ * id/type/title/prompt, the inputs, and the doc template — so reload/reopen
+ * cannot pass on a subset. */
+async function expectBuilderState(
+  page: Page,
+  expected: { title: string; description: string; nodes: ComparableNode[] },
+): Promise<void> {
+  await expect(page.locator("#workflow-builder-title")).toHaveValue(expected.title);
+  await expect(page.locator("#workflow-builder-description")).toHaveValue(expected.description);
+
+  for (const [index, node] of expected.nodes.entries()) {
+    await expect(page.locator(`#workflow-builder-node-${node.id}-title`)).toHaveValue(node.title);
+    await expect(page.locator(`#workflow-builder-node-${node.id}-prompt`)).toHaveValue(node.prompt);
+    // The "Requires approval" Switch (role="switch") replaced the old
+    // Agent/Human SegmentedControl; human_in_loop is now "approval on".
+    // Asserting both states (not just the checked one) keeps this
+    // non-vacuous for agent nodes.
+    await expect(page.locator(`#workflow-builder-node-${node.id}-approval`)).toHaveAttribute(
+      "aria-checked",
+      node.type === "human_in_loop" ? "true" : "false",
+    );
+  }
+  await expect(page.locator(`#workflow-builder-node-step-${expected.nodes.length + 1}-title`)).toHaveCount(0);
+
+  await expect(page.locator("#workflow-builder-input-0-name")).toHaveValue("ticket");
+  await expect(page.locator("#workflow-builder-input-0-required")).toBeChecked();
+  await expect(page.locator("#workflow-builder-input-1-name")).toHaveValue("severity");
+  await expect(page.locator("#workflow-builder-input-1-required")).not.toBeChecked();
+
+  await expect(page.locator("#workflow-builder-doc-0-slug")).toHaveValue("findings");
+  await expect(page.locator("#workflow-builder-doc-0-producing-node")).toHaveValue("step-1");
+  await expect(page.locator("#workflow-builder-doc-0-body")).toHaveValue(DOC_BODY);
+}
+
+/** Project the response nodes onto the exact comparable shape: `model` is
+ * optional/omittable on the wire, so normalize it before deep equality —
+ * same rationale as gen-1's `normalizedStages` in this file's predecessor. */
+function normalizedNodes(nodes: WorkflowNodeV2Response[]): ComparableNode[] {
+  return nodes.map((node) => ({
+    id: node.id,
+    type: node.type,
+    title: node.title,
+    prompt: node.prompt,
+    model: node.model
+      ? {
+        agentKind: node.model.agentKind,
+        modelId: node.model.modelId ?? null,
+        modeId: node.model.modeId ?? null,
+      }
+      : null,
   }));
 }
 
-interface WorkflowDefinitionResponse {
+interface WorkflowNodeV2Response {
+  id: string;
+  type: "agent" | "human_in_loop";
+  title: string;
+  prompt: string;
+  model?: { agentKind: string; modelId?: string | null; modeId?: string | null } | null;
+}
+
+interface WorkflowDefinitionV2Response {
+  schemaVersion: 2;
+  nodes: WorkflowNodeV2Response[];
+  edges: Array<{ from: string; to: string }>;
+  inputs: Array<{ name: string; description: string; required: boolean }>;
+  docTemplates: Array<{ slug: string; producingNodeId: string; body: string }>;
+}
+
+interface WorkflowDefinitionRecordV2Response {
   id: string;
   title: string;
+  description: string;
+  schemaVersion: 2;
   revision: number;
   defaultRepoConfigId: string | null;
-  inputs: Array<{ name: string; type: "string" | "number" | "boolean"; required: boolean }>;
-  stages: Array<{
-    harnessConfig: { agentKind: string; modelId?: string | null; effort?: string | null };
-    steps: Array<{
-      kind: "agent.prompt";
-      prompt: string;
-      goal?: { objective: string } | null;
-    }>;
-  }>;
+  definition: WorkflowDefinitionV2Response;
 }

@@ -91,6 +91,10 @@ export const workspaceArchiveActionsMock = {
 
 export const toastShowMock = vi.fn();
 
+// The workflows_v2 launch gate, held mutable so the sidebar is covered with
+// gen-2 both dark and live rather than only at the current default.
+export const workflowsGateState = { enabled: true };
+
 // A sidebar item's `id` is the LOGICAL workspace id; the runtime archive and
 // unarchive verbs address the UUID `localWorkspaceId` carries. Distinct here,
 // so handing a logical id to a runtime verb fails loudly.
@@ -114,6 +118,7 @@ export function resetMainSidebarTestState(): void {
   cloudAvailabilityState.cloudUnavailable = false;
   cloudAvailabilityState.authStatus = "authenticated";
   cloudAvailabilityState.cloudComputeEnabled = true;
+  workflowsGateState.enabled = true;
 }
 
 export function makePinnedItemState(
