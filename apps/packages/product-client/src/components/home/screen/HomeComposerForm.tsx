@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 import { CHAT_COMPOSER_LABELS } from "#product/copy/chat/chat-copy";
 import { ChatComposerActions } from "#product/components/workspace/chat/input/ChatComposerActions";
 import { ChatComposerControlRowFrame } from "#product/components/workspace/chat/composer/ChatComposerControlRowFrame";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
-import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { DraftAttachmentPreviewList } from "#product/components/workspace/chat/content/PromptContentRenderer";
+import { HomeComposerCommandEditor } from "#product/components/home/screen/HomeComposerCommandEditor";
 import { focusChatInputOnActivation } from "#product/lib/domain/focus-zone";
 import type { PromptAttachmentController } from "#product/hooks/chat/ui/use-chat-prompt-attachments";
 import { useChatInputPaste } from "#product/hooks/chat/ui/use-chat-input-paste";
+import { useHomeAvailableSlashCommands } from "#product/hooks/home/derived/use-home-available-slash-commands";
 import { useHomeNextComposerState } from "#product/hooks/home/ui/use-home-next-composer-state";
 import {
   finishOrCancelMeasurementOperation,
@@ -113,6 +114,11 @@ export function HomeComposerForm({
   const homeComposerInputMaxHeight =
     `calc(var(--text-composer--line-height) * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
 
+  // The slash-command menu's source: the persisted catalog last streamed by a
+  // session of the harness this composer will launch (PRO-228).
+  const availableCommands = useHomeAvailableSlashCommands(modelSelection?.kind ?? null);
+  const [composerOverlayHost, setComposerOverlayHost] = useState<HTMLDivElement | null>(null);
+
   // Measure home-composer typing latency + per-surface commit attribution
   // (no-op unless VITE_PROLIFERATE_DEBUG_MAIN_THREAD is enabled).
   const typingOperationRef = useRef<MeasurementOperationId | null>(null);
@@ -172,6 +178,14 @@ export function HomeComposerForm({
             wrapper itself anchors the control row's compact-tier container
             queries (see chat-layout.ts). */}
         <div className="relative z-10 @container" data-focus-zone="chat">
+          {/* Slash-menu anchor. Unlike the chat dock (bottom-anchored, grows
+              upward in normal flow), the home composer sits mid-screen, so the
+              tray is absolutely anchored above the surface to keep the composer
+              from shifting while a menu opens. */}
+          <div
+            ref={setComposerOverlayHost}
+            className="absolute inset-x-0 bottom-full z-popover flex flex-col"
+          />
           <ChatComposerSurface
             onPasteCapture={handleFilePasteCapture}
             onPaste={handlePaste}
@@ -194,7 +208,7 @@ export function HomeComposerForm({
                   maxHeight: homeComposerInputMaxHeight,
                 }}
               >
-                <ComposerRichTextEditor
+                <HomeComposerCommandEditor
                   value={composer.draft}
                   snapshot={composer.editorSnapshot}
                   onChange={handleDraftChange}
@@ -202,9 +216,8 @@ export function HomeComposerForm({
                   canSubmit={composer.canSubmit}
                   onSubmit={() => { void composer.submit(); }}
                   placeholder={CHAT_COMPOSER_LABELS.placeholder}
-                  disabled={false}
-                  surface="home"
-                  className="min-h-[inherit]"
+                  availableCommands={availableCommands}
+                  overlayHostElement={composerOverlayHost}
                 />
               </div>
 

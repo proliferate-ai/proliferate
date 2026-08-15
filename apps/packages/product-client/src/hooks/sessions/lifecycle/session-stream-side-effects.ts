@@ -15,6 +15,7 @@ import {
   trackSessionInteraction,
   trackWorkspaceInteraction,
 } from "#product/stores/preferences/workspace-ui-store";
+import { useSlashCommandCatalogStore } from "#product/stores/chat/slash-command-catalog-store";
 import {
   notifyTurnEnd,
   notifyUserFacingTurnEnd,
@@ -142,6 +143,13 @@ export function applyBatchedStreamSideEffects(input: {
         break;
       }
     }
+  }
+
+  if (plan.recordAvailableCommandsCatalog && input.agentKind) {
+    useSlashCommandCatalogStore.getState().recordCatalog(
+      input.agentKind,
+      input.transcript.availableCommands,
+    );
   }
 
   for (const intent of plan.persistReconciledControlPreferences) {
