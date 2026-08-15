@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { HomeComposerForm } from "#product/components/home/screen/HomeComposerForm";
 import { HomeOnboardingCards } from "#product/components/home/screen/HomeOnboardingCards";
 import { HomeProjectMenu } from "#product/components/home/screen/HomeProjectMenu";
@@ -7,11 +7,14 @@ import {
   ComposerLeadingControls,
   ComposerTrailingControls,
 } from "#product/components/workspace/chat/input/ChatInputControlRow";
+import { CHAT_INPUT_ATTACHMENT_ACCEPT } from "#product/config/chat";
 import {
   CHAT_SURFACE_GUTTER_CLASSNAME,
 } from "#product/config/chat-layout";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { useHomeComposerAttachments } from "#product/hooks/home/ui/use-home-composer-attachments";
 import { useHomeNextLaunchControls } from "#product/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeCloudRepoSettingsNavigation } from "#product/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
 import { useHomeNextTargetSelectionState } from "#product/hooks/home/ui/use-home-next-target-selection-state";
@@ -73,9 +76,18 @@ export function HomeNextScreen() {
   // the SAME control clusters as the chat input (ComposerLeadingControls +
   // ComposerTrailingControls from ChatInputControlRow), fed by launch-time
   // adapters instead of live-session state. Session-only controls degrade via
-  // their own gating (goal needs activeSessionId; attachments read
-  // supportsAttachments=false → chat's exact pre-session detail).
+  // their own gating (goal needs activeSessionId; attachments run on a
+  // home-scoped controller with optimistic pre-session capabilities and ride
+  // the launch as prompt snapshots — see useHomeNextComposerState.submit).
   const homeAgentKind = homeNext.effectiveModelSelection?.kind ?? null;
+  const {
+    attachments,
+    fileDragOver,
+    handleFileDrag,
+    handleDrop,
+    handleDragLeave,
+  } = useHomeComposerAttachments(homeNext.launchTarget?.kind ?? null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const homeSessionConfigControls = buildHomeSessionConfigControls({
     destination,
     agentKind: homeAgentKind,
@@ -134,8 +146,35 @@ export function HomeNextScreen() {
         }
         : null;
   return (
-    <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
+    <div
+      className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground"
+      data-telemetry-block
+      onDragEnter={handleFileDrag}
+      onDragOver={handleFileDrag}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="absolute inset-x-0 top-0 h-[46px]" data-tauri-drag-region="true" />
+      <Input
+        ref={fileInputRef}
+        variant="unstyled"
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          if (event.target.files) {
+            attachments.addFiles(event.target.files);
+          }
+          event.target.value = "";
+        }}
+        accept={CHAT_INPUT_ATTACHMENT_ACCEPT}
+      />
+      {fileDragOver && (
+        <div
+          className="pointer-events-none absolute inset-2 z-overlay rounded-xl border border-dashed border-primary/70 bg-primary/5"
+          aria-hidden="true"
+        />
+      )}
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className={`flex min-h-0 flex-1 basis-0 items-end justify-center pb-24 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
           <div className="relative mx-auto w-full max-w-transcript-thread">
@@ -218,6 +257,7 @@ export function HomeNextScreen() {
               modeId={homeNext.effectiveModeId}
               launchControlValues={homeLaunchControls.launchControlValues}
               launchTarget={homeNext.launchTarget}
+              attachments={attachments}
               controlsSlot={(
                 <ComposerLeadingControls
                   runtimeControlsDisabled={false}
@@ -233,10 +273,10 @@ export function HomeNextScreen() {
                   isEditingQueuedPrompt={false}
                   chatDisabled={false}
                   isSubmitting={false}
-                  supportsAttachments={false}
-                  canAttachFiles={false}
+                  supportsAttachments={attachments.supportsAttachments}
+                  canAttachFiles={attachments.canAttachFiles}
                   activeSessionId={null}
-                  onAttachFile={() => {}}
+                  onAttachFile={() => fileInputRef.current?.click()}
                 />
               )}
               targetPickerSlot={(

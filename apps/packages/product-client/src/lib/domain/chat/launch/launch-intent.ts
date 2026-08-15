@@ -1,4 +1,5 @@
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
@@ -15,6 +16,7 @@ export type ChatLaunchRetryMode =
 
 export interface ChatLaunchRetryInput {
   text: string;
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   modelSelection: HomeNextModelSelection;
   modeId: string | null;
   launchControlValues?: Record<string, string>;

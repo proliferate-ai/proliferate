@@ -14,7 +14,6 @@ import { useAppCommandActions } from "#product/hooks/app/workflows/use-app-comma
 import { useAgentAutoReconcile } from "#product/hooks/agents/lifecycle/use-agent-auto-reconcile"
 import { useFirstRunAuthAdoption } from "#product/hooks/agents/lifecycle/use-first-run-auth-adoption"
 import { useLocalAuthStateSync } from "#product/hooks/agents/lifecycle/use-local-auth-state-sync"
-import { useLocalAutomationExecutor } from "#product/hooks/automations/lifecycle/use-local-automation-executor"
 import { useAppearancePreferenceLifecycle } from "#product/hooks/preferences/lifecycle/use-appearance-preference-lifecycle"
 import { useRepoPreferencesLifecycle } from "#product/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
 import { useUserPreferencesLifecycle } from "#product/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
@@ -73,6 +72,18 @@ const SupportReportQueueRoot = lazy(() =>
 const AuthenticatedLaunchLifecycles = lazy(() =>
   import("#product/providers/AuthenticatedLaunchLifecycles").then((m) => ({
     default: m.AuthenticatedLaunchLifecycles,
+  })),
+)
+
+// Local automation execution both no-ops signed-out, so the owner is
+// authenticated-only + lazy for the same reason: the login shell never
+// fetches or parses the local-automation module (login runtime JS budget).
+// Deferred home-launch resumption is owned by AuthenticatedLaunchLifecycles
+// above (it shares that component's launch-registry lifetime), so it is not
+// duplicated here.
+const AuthenticatedBackgroundLifecycles = lazy(() =>
+  import("#product/providers/AuthenticatedBackgroundLifecycles").then((m) => ({
+    default: m.AuthenticatedBackgroundLifecycles,
   })),
 )
 
@@ -183,9 +194,6 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_auth_state_sync")
   useLocalAuthStateSync()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_auth_state_sync")
-  recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
-  useLocalAutomationExecutor()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")
   recordBootDiagnosticOnce("app_runtime.render.before.use_user_preferences_lifecycle")
   useUserPreferencesLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_user_preferences_lifecycle")
@@ -261,6 +269,11 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
       {authStatus === "authenticated" && (
         <Suspense fallback={null}>
           <AuthenticatedLaunchLifecycles />
+        </Suspense>
+      )}
+      {authStatus === "authenticated" && (
+        <Suspense fallback={null}>
+          <AuthenticatedBackgroundLifecycles />
         </Suspense>
       )}
       {children}

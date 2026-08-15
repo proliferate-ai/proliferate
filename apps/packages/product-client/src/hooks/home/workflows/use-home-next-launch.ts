@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useHomeNextLaunchPromptActions } from "#product/hooks/home/workflows/use-home-next-launch-prompt-actions";
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
@@ -36,6 +37,7 @@ import {
 
 interface HomeNextLaunchInput {
   text: string;
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   modelSelection: HomeNextModelSelection;
   modeId: string | null;
   launchControlValues?: Record<string, string>;
@@ -78,6 +80,7 @@ export function useHomeNextLaunch() {
 
   const launch = useCallback(async ({
     text,
+    attachmentSnapshots,
     modelSelection,
     modeId,
     launchControlValues,
@@ -143,6 +146,7 @@ export function useHomeNextLaunch() {
         markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId, attemptId);
         const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
           text: prompt,
+          attachmentSnapshots,
           promptId,
           launchIntentId,
           waitUntil: resultPromise,
@@ -173,6 +177,7 @@ export function useHomeNextLaunch() {
           await promptExistingSession({
             sessionId: projectedSessionId ?? result.session.id,
             text: prompt,
+            attachmentSnapshots,
             workspaceId: result.workspace.id,
             promptId,
             launchIntentId,
@@ -203,6 +208,7 @@ export function useHomeNextLaunch() {
         const queuedProjectedSessionId = createdWorkspacePromise
           ? await promptProjectedPendingWorkspaceSession({
             text: prompt,
+            attachmentSnapshots,
             promptId,
             launchIntentId,
             waitUntil: createdWorkspacePromise,
@@ -247,6 +253,7 @@ export function useHomeNextLaunch() {
             modeId,
             launchControlValues: resolvedLaunchControlValues,
             text: prompt,
+            attachmentSnapshots,
             promptId,
             launchIntentId,
             allowFreshFallback: target.existingWorkspaceId !== null,
@@ -275,6 +282,7 @@ export function useHomeNextLaunch() {
         markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId, attemptId);
         const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
           text: prompt,
+          attachmentSnapshots,
           promptId,
           launchIntentId,
           waitUntil: createdWorkspacePromise,
@@ -307,6 +315,7 @@ export function useHomeNextLaunch() {
             modeId,
             launchControlValues: resolvedLaunchControlValues,
             text: prompt,
+            attachmentSnapshots,
             promptId,
             launchIntentId,
             allowFreshFallback: false,
@@ -327,6 +336,7 @@ export function useHomeNextLaunch() {
         target,
         attemptId: cloudAttemptId,
         prompt,
+        attachmentSnapshots,
         promptId,
         launchIntentId,
         modelSelection,

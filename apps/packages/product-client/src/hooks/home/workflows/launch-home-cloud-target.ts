@@ -1,3 +1,4 @@
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import type { CloudWorkspaceEntryResult } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import type {
   HomeLaunchTarget,
@@ -21,6 +22,7 @@ export interface LaunchHomeCloudTargetInput {
    */
   attemptId: string;
   prompt: string;
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   promptId: string;
   launchIntentId: string;
   modelSelection: HomeNextModelSelection;
@@ -41,6 +43,7 @@ export interface LaunchHomeCloudTargetDeps {
   ) => Promise<CloudWorkspaceEntryResult>;
   promptProjectedPendingWorkspaceSession: (input: {
     text: string;
+    attachmentSnapshots?: PromptAttachmentSnapshot[];
     promptId: string;
     launchIntentId: string;
     waitUntil?: Promise<unknown>;
@@ -53,6 +56,7 @@ export interface LaunchHomeCloudTargetDeps {
     modeId: string | null;
     launchControlValues?: Record<string, string>;
     text: string;
+    attachmentSnapshots?: PromptAttachmentSnapshot[];
     promptId: string;
     launchIntentId: string;
     allowFreshFallback?: boolean;
@@ -105,6 +109,7 @@ export async function launchHomeCloudTarget(
   markHomeLaunchIntentMaterializedFromPendingWorkspace(input.launchIntentId, input.attemptId);
   const queuedProjectedSessionId = await deps.promptProjectedPendingWorkspaceSession({
     text: input.prompt,
+    attachmentSnapshots: input.attachmentSnapshots,
     promptId: input.promptId,
     launchIntentId: input.launchIntentId,
     waitUntil: resultPromise,
@@ -148,6 +153,7 @@ export async function launchHomeCloudTarget(
         modeId: input.modeId,
         launchControlValues: input.launchControlValues,
         text: input.prompt,
+        attachmentSnapshots: input.attachmentSnapshots,
         promptId: input.promptId,
         launchIntentId: input.launchIntentId,
         allowFreshFallback: false,
@@ -176,6 +182,7 @@ export async function launchHomeCloudTarget(
     modeId: input.modeId,
     launchControlValues: input.launchControlValues,
     promptText: input.prompt,
+    attachmentSnapshots: input.attachmentSnapshots,
     promptId: input.promptId,
     launchIntentId: input.launchIntentId,
     createdAt: input.createdAt,

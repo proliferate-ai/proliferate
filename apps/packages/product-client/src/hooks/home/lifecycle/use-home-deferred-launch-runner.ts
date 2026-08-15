@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
 import {
   notifyQueuedPromptSendFailure,
@@ -247,8 +246,7 @@ export function useHomeDeferredLaunchRunner() {
         retryMode: launchFailureRetryMode(launch.launchIntentId),
       });
       showToast("Cloud workspace is ready, but the queued prompt could not be sent.");
-    }
-  }, [
+    }  }, [
     announceBackgroundSendFailure,
     clear,
     createSessionWithResolvedConfig,

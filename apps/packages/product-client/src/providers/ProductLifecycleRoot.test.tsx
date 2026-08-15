@@ -79,6 +79,12 @@ vi.mock("#product/providers/SupportReportQueueRoot", () => ({
   SupportReportQueueRoot: () => <div data-testid="support-report-queue-root" />,
 }));
 
+vi.mock("#product/providers/AuthenticatedBackgroundLifecycles", () => ({
+  AuthenticatedBackgroundLifecycles: () => (
+    <div data-testid="authenticated-background-lifecycles" />
+  ),
+}));
+
 // Counted rather than stubbed away: where this hook runs relative to the auth
 // gate is the behaviour under test, not an implementation detail.
 const retentionSweepCount = vi.hoisted(() => ({ value: 0 }));

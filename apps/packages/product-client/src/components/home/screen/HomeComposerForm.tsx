@@ -6,7 +6,10 @@ import { ChatComposerControlRowFrame } from "#product/components/workspace/chat/
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { DraftAttachmentPreviewList } from "#product/components/workspace/chat/content/PromptContentRenderer";
 import { focusChatInputOnActivation } from "#product/lib/domain/focus-zone";
+import type { PromptAttachmentController } from "#product/hooks/chat/ui/use-chat-prompt-attachments";
+import { useChatInputPaste } from "#product/hooks/chat/ui/use-chat-input-paste";
 import { useHomeNextComposerState } from "#product/hooks/home/ui/use-home-next-composer-state";
 import {
   finishOrCancelMeasurementOperation,
@@ -59,6 +62,9 @@ interface HomeComposerFormProps {
   modeId: string | null;
   launchControlValues: Record<string, string>;
   launchTarget: HomeLaunchTarget | null;
+  /** Home-scoped attachment controller owned by `HomeNextScreen` (which also
+   * owns the drop target and the hidden file input the `+` button clicks). */
+  attachments: PromptAttachmentController;
 
   // --- stable slots built by the parent (draft-independent → never re-render on keystroke) ---
   /** Leading control-row content (mode pill), stable across keystrokes. */
@@ -81,6 +87,7 @@ export function HomeComposerForm({
   modeId,
   launchControlValues,
   launchTarget,
+  attachments,
   controlsSlot,
   controlsTrailingSlot,
   targetPickerSlot,
@@ -95,6 +102,11 @@ export function HomeComposerForm({
     modeId,
     launchControlValues,
     launchTarget,
+    attachments,
+  });
+  const { handleFilePasteCapture, handlePaste } = useChatInputPaste({
+    attachments,
+    canAcceptPastedAttachments: attachments.canAttachFiles,
   });
   // Cap at maxRows of composer text. Uses the --text-composer--line-height
   // token so the cap tracks the "UI font size" preference at runtime.
@@ -160,7 +172,10 @@ export function HomeComposerForm({
             wrapper itself anchors the control row's compact-tier container
             queries (see chat-layout.ts). */}
         <div className="relative z-10 @container" data-focus-zone="chat">
-          <ChatComposerSurface>
+          <ChatComposerSurface
+            onPasteCapture={handleFilePasteCapture}
+            onPaste={handlePaste}
+          >
             <form
               className="relative flex flex-col"
               onSubmit={(event) => {
@@ -168,8 +183,12 @@ export function HomeComposerForm({
                 if (composer.canSubmit) void composer.submit();
               }}
             >
+              <DraftAttachmentPreviewList
+                attachments={attachments.attachments}
+                onRemove={attachments.removeAttachment}
+              />
               <div
-                className="mt-3 mb-2 flex-grow select-text overflow-y-auto px-4"
+                className={`${attachments.hasAttachments ? "" : "mt-3 "}mb-2 flex-grow select-text overflow-y-auto px-4`}
                 style={{
                   minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
                   maxHeight: homeComposerInputMaxHeight,
@@ -199,7 +218,7 @@ export function HomeComposerForm({
                 action={(
                   <ChatComposerActions
                     isRunning={false}
-                    isEmpty={composer.draft.trim().length === 0}
+                    isEmpty={composer.isEmpty}
                     isDisabled={!composer.canSubmit}
                     onSubmit={() => { void composer.submit(); }}
                     onCancel={composer.cancel}

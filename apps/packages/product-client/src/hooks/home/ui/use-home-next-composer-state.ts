@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
+import type { PromptAttachmentController } from "#product/hooks/chat/ui/use-chat-prompt-attachments";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
 import { useHomeDraftHandoffStore } from "#product/stores/home/home-draft-handoff-store";
 import type {
@@ -18,6 +19,7 @@ interface UseHomeNextComposerStateArgs {
   modeId: string | null;
   launchControlValues: Record<string, string>;
   launchTarget: HomeLaunchTarget | null;
+  attachments: PromptAttachmentController;
 }
 
 export function useHomeNextComposerState({
@@ -28,6 +30,7 @@ export function useHomeNextComposerState({
   modeId,
   launchControlValues,
   launchTarget,
+  attachments,
 }: UseHomeNextComposerStateArgs) {
   const [draftState, setDraftState] = useState<{
     value: string;
@@ -45,15 +48,16 @@ export function useHomeNextComposerState({
     }
   }, [clearRestoredDraftText, restoredDraftText]);
 
-  const submitDisabledReason = draft.trim().length === 0
-    ? null
-    : targetDisabledReason;
+  // Attachment-only submits are legal, matching the chat composer: supported
+  // attachments count as prompt content.
+  const isEmpty = draft.trim().length === 0 && !attachments.hasSupportedAttachments;
   // Deliberately not gated on `isLaunching`: a launch in flight is exactly the
   // state a second Enter has to be allowed in, since the whole point is that
   // two launches can run at once. `isLaunching` still drives the send button's
   // spinner, it just no longer refuses the next prompt (PRO-230).
+  const submitDisabledReason = isEmpty ? null : targetDisabledReason;
   const canSubmit =
-    draft.trim().length > 0
+    !isEmpty
     && modelAvailabilityState === "launchable"
     && canLaunchTarget
     && !!modelSelection
@@ -74,6 +78,10 @@ export function useHomeNextComposerState({
     if (!canSubmit || !modelSelection || !launchTarget) return;
 
     const submittedDraft = draftState;
+    // Snapshotted now so files attached mid-launch stay out of this send.
+    // The chips stay visible until success: failure keeps them alongside the
+    // restored draft, mirroring the chat composer's clear-on-success contract.
+    const attachmentSnapshots = attachments.snapshotForSubmit();
     const restoreSubmittedDraft = () => {
       setDraftState((currentDraft) => (
         currentDraft.value.length === 0 ? submittedDraft : currentDraft
@@ -86,6 +94,7 @@ export function useHomeNextComposerState({
     try {
       const outcome = await launch({
         text: submittedDraft.value,
+        attachmentSnapshots,
         modelSelection,
         modeId,
         launchControlValues,
@@ -94,7 +103,9 @@ export function useHomeNextComposerState({
       // A duplicate submit collapsed into a launch that is running, so the
       // draft stays gone: putting it back would offer the user a re-send of a
       // prompt already on its way (PRO-230 review finding 7).
-      if (outcome !== "launched" && outcome !== "duplicate") {
+      if (outcome === "launched" || outcome === "duplicate") {
+        attachments.clearSubmittedAttachments(attachmentSnapshots);
+      } else {
         restoreSubmittedDraft();
       }
     } catch {
@@ -103,6 +114,7 @@ export function useHomeNextComposerState({
       restoreSubmittedDraft();
     }
   }, [
+    attachments,
     canSubmit,
     draftState,
     launch,
@@ -137,6 +149,7 @@ export function useHomeNextComposerState({
     setDraft,
     submitDisabledReason,
     canSubmit,
+    isEmpty,
     isLaunching,
     submit,
     cancel,
