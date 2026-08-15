@@ -148,6 +148,38 @@ describe("dispatchConfigIntent", () => {
     }));
   });
 
+  it("dispatches the superseding value when the queued intent was coalesced after selection", async () => {
+    const store = useSessionIntentStore.getState();
+    const selected = store.enqueueConfig({
+      clientSessionId: "session-1",
+      materializedSessionId: "runtime-session-1",
+      workspaceId: "workspace-1",
+      configId: "collaboration_mode",
+      value: "plan",
+    });
+    // A tail-coalesced follow-up click lands between dispatcher selection and
+    // dispatch: the wire payload must carry the superseding value.
+    store.enqueueConfig({
+      clientSessionId: "session-1",
+      materializedSessionId: "runtime-session-1",
+      workspaceId: "workspace-1",
+      configId: "collaboration_mode",
+      value: "accept",
+    });
+    const onFailure = vi.fn();
+    mocks.mutateAsync.mockResolvedValue(configResponse("accept"));
+
+    await dispatchConfigIntent(selected, createDeps(onFailure));
+
+    expect(mocks.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+      request: { configId: "collaboration_mode", value: "accept" },
+    }));
+    expect(useSessionIntentStore.getState().entriesById[selected.intentId]).toMatchObject({
+      status: "accepted",
+    });
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+
   it("persists an applied Codex effort as the next-session default", async () => {
     const initialLiveConfig = codexLiveConfig("low", "off", 1);
     putSessionRecord(createEmptySessionRecord("session-1", "codex", {

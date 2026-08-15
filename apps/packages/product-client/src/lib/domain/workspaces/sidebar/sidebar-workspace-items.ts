@@ -56,6 +56,10 @@ export function buildSidebarWorkspaceItems(args: {
   /** This Mac's native desktop worker install id (PR 5), used to resolve the
    * workspace-copy availability commands. Null on Web / no worker. */
   desktopInstallId?: string | null;
+  /** Whether Cloud compute is enabled on this deployment (PRO-10); gates the
+   * `add-cloud-copy` availability command the same way fresh-create is
+   * gated. */
+  cloudComputeEnabled: boolean;
 }): SidebarWorkspaceItemState[] {
   const linkCandidateCloudWorkspaceIds = collectCloudWorkspaceLinkCandidates(
     args.workspaces,
@@ -148,6 +152,7 @@ function buildSidebarWorkspaceItem(
       suppressActiveNeedsReview?: boolean;
     desktopInstallId?: string | null;
     linkCandidateCloudWorkspaceIds: ReadonlySet<string>;
+    cloudComputeEnabled: boolean;
   },
 ): SidebarWorkspaceItemWithWorkspace {
   const active = logicalWorkspaceMatchesId(entry, args.selectedLogicalWorkspaceId);
@@ -219,6 +224,7 @@ function buildSidebarWorkspaceItem(
         desktopInstallId,
         localGitStatus: gitStatus,
         linkCandidate,
+        cloudComputeEnabled: args.cloudComputeEnabled,
       }),
     );
   const linkedMaterialization = desktopInstallId

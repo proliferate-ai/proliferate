@@ -1,62 +1,30 @@
-import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { RedirectCallbackScreen } from "#product/components/auth/RedirectCallbackScreen";
 import { APP_ROUTES } from "#product/config/app-routes";
-import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
-import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import { useToastStore } from "#product/stores/toast/toast-store";
 
+/**
+ * Cloud culling (PRO-10, Rung 1): `workspaces/:workspaceId` deep links carried
+ * cloud workspace ids into a cloud-workspace open flow. With cloud surfaces
+ * culled, these deep links resolve to a neutral not-found state — never a
+ * crash and never a cloud pane (FR-2, FM4). The cloud open hooks stay in the
+ * codebase dormant; this page simply no longer reaches them.
+ */
 export function DesktopWorkspaceDeepLinkPage() {
-  const { workspaceId } = useParams();
+  // `workspaceId` is intentionally ignored: every deep-link workspace id now
+  // resolves to the same neutral not-found terminal state.
+  useParams();
   const navigate = useNavigate();
-  const { refreshCloudWorkspace } = useCloudWorkspaceActions();
-  const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
-  const showToast = useToastStore((state) => state.show);
-
-  useEffect(() => {
-    if (!workspaceId) {
-      navigate(APP_ROUTES.home, { replace: true });
-      return;
-    }
-
-    let active = true;
-    void refreshCloudWorkspace(workspaceId)
-      .then((workspace) => {
-        if (!active) {
-          return;
-        }
-        selectWorkspaceFromSurface(
-          cloudWorkspaceSyntheticId(workspace.id),
-          "desktop_deep_link",
-        );
-      })
-      .catch((error) => {
-        if (!active) {
-          return;
-        }
-        const message = error instanceof Error ? error.message : "Failed to open workspace.";
-        showToast(message);
-        navigate(APP_ROUTES.home, { replace: true });
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [
-    navigate,
-    refreshCloudWorkspace,
-    selectWorkspaceFromSurface,
-    showToast,
-    workspaceId,
-  ]);
 
   return (
     <RedirectCallbackScreen
-      title="Opening workspace"
-      description="Bringing this cloud workspace into Desktop."
-      statusLabel="Workspace deep link"
+      title="Workspace not found"
+      description="This workspace is no longer available."
+      statusLabel="Workspace not found"
       variant="handoff"
+      primaryAction={{
+        label: "Go home",
+        onClick: () => navigate(APP_ROUTES.home, { replace: true }),
+      }}
     />
   );
 }

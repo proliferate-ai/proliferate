@@ -53,6 +53,7 @@ from proliferate.integrations.desktop_downloads import (
 from proliferate.server.version import (
     desktop_version,
     min_desktop_version,
+    min_desktop_version_enforced,
     runtime_version,
     server_version,
     worker_version,
@@ -308,6 +309,11 @@ class MetaResponse(BaseModel):
     runtimeVersion: str
     workerVersion: str
     minDesktopVersion: str
+    # Explicit opt-in flag: whether the desktop should hard-block a client
+    # below `minDesktopVersion`, rather than only warning. See
+    # `min_desktop_version_enforced` — the min-version pin itself is not a
+    # safe block signal because it defaults to this server's own version.
+    minDesktopVersionEnforced: bool
     capabilities: ServerCapabilities
     # Additive: absent (``None``) unless the deployment configured an override.
     desktopUpdater: DesktopUpdaterCadence | None = None
@@ -359,6 +365,7 @@ async def meta() -> MetaResponse:
         runtimeVersion=runtime_version(),
         workerVersion=worker_version(),
         minDesktopVersion=min_desktop_version(),
+        minDesktopVersionEnforced=min_desktop_version_enforced(),
         capabilities=build_server_capabilities(settings),
         desktopUpdater=_desktop_updater_cadence(),
         agentCatalog=_agent_catalog_channel(settings),

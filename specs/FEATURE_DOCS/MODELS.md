@@ -267,7 +267,7 @@ protect live sessions and the machine, not staleness bookkeeping:
   probe's own thread so a cancelled attempt kills its child rather than
   leaking it.
 - **Failure backoff.** A failed attempt arms an exponential backoff — 60s
-  doubling to a 6h ceiling, spread by a deterministic ±20% jitter keyed on
+  doubling to a 30-minute ceiling, spread by a deterministic ±20% jitter keyed on
   (harness, attempt) so the schedule stays assertable — that gates
   admission of *automatic* event pokes after failures only. It is never a
   freshness gate, a manual/forced refresh always bypasses it, and it is
@@ -289,6 +289,53 @@ The same engine runs everywhere. A cloud sandbox's runtime probes under the
 same events and writes the same document; the Worker syncs it up as the cloud
 copy, while the desktop's document stays local. Local and cloud differ only
 in whether the document additionally syncs, never in probe or storage logic.
+
+### Two-tier probing
+
+The engine runs two tiers off the SAME closed event set, never a poll or a
+timer. Both are single-flight per harness and neither blocks the event that
+raised it.
+
+- **Tier 2 is the full probe** described above: spawn the harness into its
+  composed auth world and record what it advertises. It is the truth for the
+  picker and for launch validation.
+- **Tier 1 is an instant credential trial**: a roughly one-second key-scoped
+  check that never spawns a harness. It answers only "does this credential
+  still work right now", so a surface can show Authenticated or Expired before
+  the slower Tier 2 observation lands. A gateway source is trialled with a
+  `GET {base_url}/v1/models` using the harness's own virtual key (the surviving
+  key-scoped fetch machinery), classified as green on a 2xx, expired on a
+  401/403, and inconclusive (recording nothing) otherwise. Pasted api-key and
+  native CLI logins stay heuristic and render unverified: a native login would
+  need an unattended spawn (the keychain hazard cursor is excluded for), and a
+  pasted key has no verifiably free provider endpoint wired yet, so neither is
+  guessed. A green trial writes `Tier1Trial` evidence with an age into the
+  agent-auth facts, which is the only path to a green Authenticated display
+  before a full probe; a full observation always outranks it.
+
+**The trial is behind a flag, defaulting OFF.** A trial makes a real network
+call on every poke, so a deployment opts in through the engine's
+`tier1_trial_enabled` tunable; when off, no trial runs and credentials keep
+their heuristic (bare-presence or acknowledged-route) strength.
+
+Retuned constants (ADR FR-2, A5):
+
+- **Per-probe timeout 45s** (was 240s). A healthy harness answers ACP
+  `initialize` in well under a second, so a probe still running at 45s is
+  wedged, not slow, and the shorter ceiling turns it into a fast failed attempt
+  the backoff then spaces out.
+- **Spawn fast-fail.** A harness that cannot be spawned at all (missing or
+  broken binary) returns immediately with a named `spawn_failed` code instead of
+  waiting out the timeout, and arms the same backoff a probe failure does.
+- **Backoff ceiling 30 minutes** (was 6h), keeping the 60s initial delay and
+  the doubling ladder. The failures this brakes are transient, so a half-hour
+  ceiling recovers a self-healed harness within one window instead of hours.
+
+User-visible lifecycle: the runtime status projection exposes the engine's live
+phase (`idle`, `queued`, `running`, `backoff`), the last-success age, the
+last-failure detail, and `next_attempt_at` while in backoff. The agent-auth
+projection folds the same lifecycle into its facts, so a pane can render
+Probing or a scheduled next attempt without a second mechanism.
 
 ## The cloud copy
 
@@ -629,12 +676,6 @@ Deltas between this document and the integration stack
 - [ ] The degraded-apply pending badge does not exist. A probe that runs
       while gateway enrollment sync is incomplete serves its results with no
       indication that the observed world was missing the gateway source.
-- [ ] Cursor's exclusion from unattended probing is correct but its stated
-      reason is stale in code: `targets.rs`'s
-      `AUTO_PROBE_EXCLUDED_HARNESSES` comment justifies the carve-out by
-      claiming `cursor-agent` ignores `CURSOR_API_KEY`, which a live test on
-      2026-07-26 refuted (fixed in `4ccbfc41a`). The keychain-prompt reason
-      is the real and sufficient one; the comment should say only that.
 - [ ] The retained `inactive` cloud rows have no retention bound; the
       document owes a retention rule (keep N per scope, or an age bound) and
       the sweep that enforces it.

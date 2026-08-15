@@ -26,6 +26,7 @@ use crate::domains::agents::auth::login_terminal::{
     get_agent_login_terminal as get_agent_login_terminal_session,
     start_agent_login_terminal_session,
 };
+use crate::domains::agents::auth_state::AuthRuntimeInputs;
 use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 
 #[utoipa::path(
@@ -38,13 +39,28 @@ use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 )]
 pub async fn list_agents(State(state): State<AppState>) -> Json<Vec<AgentSummary>> {
     let snapshot = state.agent_runtime.list_agents().await;
+    let now = chrono::Utc::now();
+    // The auth runtime inputs are read from the in-memory model-snapshot service
+    // before the blocking hop, so the closure below owns everything it needs.
+    let auth_runtimes: Vec<AuthRuntimeInputs> = snapshot
+        .agents
+        .iter()
+        .map(|agent| {
+            state
+                .model_snapshot_service
+                .auth_runtime_inputs(agent.descriptor.kind.as_str(), now)
+        })
+        .collect();
     // to_summary probes PATH per agent (userPathCopyDetected); keep that
     // synchronous IO off the async executor.
     let summaries = tokio::task::spawn_blocking(move || {
         snapshot
             .agents
             .iter()
-            .map(|agent| to_summary(agent, Some(&snapshot.reconcile_snapshot)))
+            .zip(auth_runtimes.iter())
+            .map(|(agent, auth_runtime)| {
+                to_summary(agent, Some(&snapshot.reconcile_snapshot), auth_runtime)
+            })
             .collect::<Vec<AgentSummary>>()
     })
     .await
@@ -67,8 +83,15 @@ pub async fn get_agent(
     Path(kind): Path<String>,
 ) -> Result<Json<AgentSummary>, ApiError> {
     let snapshot = state.agent_runtime.get_agent(&kind).await?;
+    let auth_runtime = state
+        .model_snapshot_service
+        .auth_runtime_inputs(&kind, chrono::Utc::now());
     let summary = tokio::task::spawn_blocking(move || {
-        to_summary(&snapshot.agent, Some(&snapshot.reconcile_snapshot))
+        to_summary(
+            &snapshot.agent,
+            Some(&snapshot.reconcile_snapshot),
+            &auth_runtime,
+        )
     })
     .await
     .map_err(|e| ApiError::internal(format!("agent summary task failed: {e}")))?;
@@ -107,8 +130,11 @@ pub async fn install_agent(
         &kind,
         PokeReason::InstallCompleted,
     );
+    let auth_runtime = state
+        .model_snapshot_service
+        .auth_runtime_inputs(&kind, chrono::Utc::now());
     Ok(Json(InstallAgentResponse {
-        agent: to_summary(&outcome.agent, None),
+        agent: to_summary(&outcome.agent, None, &auth_runtime),
         already_installed: outcome.already_installed,
         installed_artifacts: outcome
             .installed_artifacts

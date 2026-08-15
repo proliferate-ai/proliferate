@@ -192,6 +192,43 @@ Typed native errors are `UPDATER_CHECK_FAILED`, `UPDATER_DOWNLOAD_STALLED`,
 `UPDATER_DOWNLOAD_ABORTED`, `UPDATER_ARTIFACT_HASH_MISMATCH`,
 `UPDATER_INSTALL_FAILED`, and `UPDATER_DISK_FULL`.
 
+## Version-Skew Enforcement
+
+`GET /meta` (`server/proliferate/server/meta.py`) reports `minDesktopVersion`
+(the floor the operator's server accepts) alongside a separate
+`minDesktopVersionEnforced` boolean. `minDesktopVersion` defaults to the
+server's own stamped desktop version — so its mere presence can never be the
+block signal, or every slightly-stale client would be locked out the moment
+enforcement shipped. Blocking requires the operator to explicitly set
+`ENFORCE_MIN_DESKTOP_VERSION=true` (`server/proliferate/server/version.py`);
+default is permissive (warn-only), matching this ADR's "server-config-driven,
+defaults permissive" gate.
+
+On the desktop, `useMinDesktopVersionGate`
+(`apps/packages/product-client/src/hooks/access/cloud/server-capabilities/use-min-desktop-version-gate.ts`)
+polls `/meta` for the currently connected server (boot-time and every 60s, not
+just the one-shot check the manual connect-server flow already ran) and
+renders `MinDesktopVersionGate` — a full-screen takeover cloned from
+`BootstrappedRoute`'s gating pattern, mounted above the workspace outlet in
+`App.tsx` — only when all of: the server explicitly enforces, the desktop's own
+version is confidently older
+(`isDesktopVersionSupported`, which fails open on dev/unstamped sentinels and
+unparseable strings), and the server actually declared a well-formed `/meta`.
+A self-hosted server that fails the structural shape check, or omits the
+fields entirely (older server), never blocks. The takeover blocks the *user*,
+not the runtime: background sessions keep executing beneath it. It never
+covers the sign-in/connect surface, and it carries a "Sign out and switch
+server" escape hatch, so a misconfigured self-hosted floor (one no published
+desktop build can satisfy) can strand a session but never the app. A `desktop_minversion_block`
+telemetry event fires once per transition into the blocked state; a
+`desktop.minversion.block_rate` server-side dashboard is a follow-up, not built
+here.
+
+Separately, the native shell asserts the AnyHarness sidecar's own version at
+boot — see [`desktop-native.md`](../../../../desktop-native.md#boot-flow) for
+`runtime_version_assert` and `PROLIFERATE_RUNTIME_VERSION_ASSERT`. That is an
+app-shell-to-sidecar check; this section is the desktop-app-to-server check.
+
 ## Implementation Ownership
 
 - Release manifest generation and CDN publication:
@@ -205,3 +242,9 @@ Typed native errors are `UPDATER_CHECK_FAILED`, `UPDATER_DOWNLOAD_STALLED`,
 - Pure selection and normalization: `apps/desktop/src/lib/domain/updates/**`.
 - Persistence and UI-facing orchestration: `apps/desktop/src/hooks/updates/**`.
 - Presentation: `apps/desktop/src/components/workspace/shell/sidebar/**`.
+- Version-skew gate: `apps/packages/product-client/src/hooks/access/cloud/server-capabilities/use-min-desktop-version-gate.ts`,
+  `apps/packages/product-client/src/components/auth/MinDesktopVersionGate.tsx`,
+  `server/proliferate/server/{meta,version}.py`.
+- Restart dialog interrupted-work list:
+  `apps/packages/product-client/src/hooks/app/lifecycle/use-running-agent-summaries.ts`,
+  `apps/packages/product-client/src/components/feedback/UpdateRestartDialog.tsx`.
