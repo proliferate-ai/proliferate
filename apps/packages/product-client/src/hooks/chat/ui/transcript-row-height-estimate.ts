@@ -150,6 +150,74 @@ export function estimateRenderableRowHeight(
   return ESTIMATED_SINGLE_BLOCK_TURN_HEIGHT_PX;
 }
 
+function collapsedActionsSizeBand(itemCount: number): string {
+  if (itemCount <= 3) return "s";
+  if (itemCount <= 8) return "m";
+  return "l";
+}
+
+function turnRowBucketKey(
+  blockKey: string,
+  displayBlocks: readonly TurnDisplayBlock[],
+): string {
+  if (blockKey === TURN_COMPLETED_HISTORY_BLOCK_KEY) {
+    return "turn:completed_history";
+  }
+  if (displayBlocks.length === 0) {
+    return "turn:empty";
+  }
+  const isAllPlainItemBlocks = displayBlocks.every((block) => block.kind === "item");
+  if (isAllPlainItemBlocks) {
+    if (displayBlocks.length === 1) return "turn:plain:1";
+    if (displayBlocks.length <= 3) return "turn:plain:2-3";
+    return "turn:plain:4+";
+  }
+  // Mixed / special composition: bucket by the ordered block kinds plus a coarse
+  // size band for the count-sensitive kinds, so structurally-identical turns
+  // (e.g. every collapsed tool-ledger turn of the same magnitude) share a bucket.
+  const signature = displayBlocks
+    .map((block) => {
+      switch (block.kind) {
+        case "collapsed_actions":
+          return `collapsed_actions:${collapsedActionsSizeBand(block.itemIds.length)}`;
+        case "subagent_creations":
+          return `subagent_creations:${block.itemIds.length <= 2 ? "s" : "l"}`;
+        case "inline_tools":
+          return `inline_tools:${Math.min(block.itemIds.length, 4)}`;
+        default:
+          return block.kind;
+      }
+    })
+    .join("|");
+  return `turn:mixed:${signature}`;
+}
+
+/**
+ * Stable composition-bucket identifier for a renderable row, aligned with the
+ * buckets estimateRenderableRowHeight guesses from. Rows that share a bucket key
+ * are estimated identically before measurement, so the per-session calibration
+ * (transcript-row-height-calibration.ts) can pool their real measured heights.
+ * Returns null for rows whose height is a small fixed constant not worth
+ * calibrating (history loader, goal event) or for the out-of-range probe.
+ */
+export function getRowEstimateBucketKey(
+  row: TranscriptRenderableRow | undefined,
+): string | null {
+  if (!row || row.kind === "history_loader") {
+    return null;
+  }
+  if (row.kind !== "transcript") {
+    return null;
+  }
+  if (row.row.kind === "goal_event") {
+    return null;
+  }
+  if (row.row.kind === "turn") {
+    return turnRowBucketKey(row.row.blockKey, row.row.renderPresentation.displayBlocks);
+  }
+  return "prompt";
+}
+
 /**
  * A cheap identity token for a row's COMPOSITION — used to invalidate a
  * persisted measured height when the row's underlying content changes shape
