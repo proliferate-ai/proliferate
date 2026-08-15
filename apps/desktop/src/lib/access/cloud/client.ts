@@ -108,7 +108,7 @@ const authMiddleware: Middleware = {
 async function prepareDesktopCloudRequest(request: Request): Promise<Request> {
   if (isDevAuthBypassed()) {
     throw new ProliferateClientError(
-      "Cloud workspaces require real sign-in. Set VITE_DEV_DISABLE_AUTH=false and sign in.",
+      "Signing in requires real auth. Set VITE_DEV_DISABLE_AUTH=false and sign in.",
       401,
       "dev_auth_bypass",
     );
@@ -135,7 +135,7 @@ async function prepareDesktopCloudRequest(request: Request): Promise<Request> {
 export async function getDesktopCloudAccessToken(): Promise<string> {
   if (isDevAuthBypassed()) {
     throw new ProliferateClientError(
-      "Cloud workspaces require real sign-in. Set VITE_DEV_DISABLE_AUTH=false and sign in.",
+      "Signing in requires real auth. Set VITE_DEV_DISABLE_AUTH=false and sign in.",
       401,
       "dev_auth_bypass",
     );
