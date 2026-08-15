@@ -34,9 +34,10 @@ const LADDER_LIT_STAGGER_MS = 30;
 
 /**
  * The composer's reasoning-effort control: a six-bar ladder that steps to the
- * next level on click and wraps at the top. No popover and no menu — the glyph
- * is both the readout and the affordance. Replaces ComposerReasoningEffortBars
- * in the composer row.
+ * next level on click and wraps at the top; ⌘/Ctrl click steps back and wraps
+ * at the bottom (⌃⇧E / ⌃⌥⇧E mirror both from the keyboard). No popover and no
+ * menu — the glyph is both the readout and the affordance. Replaces
+ * ComposerReasoningEffortBars in the composer row.
  */
 export function ComposerEffortStepper({ control }: ComposerEffortStepperProps) {
   const currentIndex = control.options.findIndex((option) => option.selected);

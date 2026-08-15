@@ -40,7 +40,7 @@ describe("buildShortcutSections", () => {
     expect(findEntry(tabs, "Previous tab")?.labels).toEqual(["⌘⇧[", "⌘⌥←", "⌃⇧⇥"]);
     expect(findEntry(tabs, "Close other tabs")?.labels).toEqual(["⌘⌥O", "⌘⇧O"]);
     expect(findEntry(tabs, "New chat")?.labels).toEqual(["⌘T"]);
-    expect(findEntry(currentWorkspace, "Open model and reasoning options")?.labels)
+    expect(findEntry(currentWorkspace, "Open model options")?.labels)
       .toEqual(["⌃⇧M"]);
   });
 

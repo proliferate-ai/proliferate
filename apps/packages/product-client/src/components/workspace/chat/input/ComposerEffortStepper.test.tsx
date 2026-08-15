@@ -114,7 +114,17 @@ describe("ComposerEffortStepper", () => {
 
     expect(runShortcutHandler("workspace.cycle-reasoning-effort", { source: "keyboard" }))
       .toBe(false);
+    expect(runShortcutHandler("workspace.cycle-reasoning-effort-back", { source: "keyboard" }))
+      .toBe(false);
     expect(control.onSelect).not.toHaveBeenCalled();
+  });
+
+  it("carries the step hint in the tooltip copy", () => {
+    renderStepper(createEffortControl("medium"));
+
+    const trigger = screen.getByRole("button", { name: "Reasoning: Medium" });
+    // jsdom's default navigator is non-Apple, so the hint reads "Ctrl click".
+    expect(trigger.getAttribute("title")).toContain("Click to step, Ctrl click to step back.");
   });
 
   it("does not register the shortcut when the level is not settable", () => {

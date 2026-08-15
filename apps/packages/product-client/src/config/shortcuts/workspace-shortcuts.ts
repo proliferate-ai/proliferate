@@ -249,7 +249,7 @@ export const WORKSPACE_SHORTCUTS = {
     id: "workspace.open-model-selector",
     label: "⌃⇧M",
     nonMacLabel: "Ctrl+Shift+M",
-    description: "Open model and reasoning options",
+    description: "Open model options",
     owner: "js",
     match: { kind: "fixed-code", code: "KeyM", meta: false, ctrl: true, shift: true, alt: false },
     nonMacMatch: { kind: "fixed-code", code: "KeyM", meta: true, shift: true, alt: false },
