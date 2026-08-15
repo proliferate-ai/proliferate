@@ -50,7 +50,7 @@ function makePipeline() {
 }
 
 describe("TranscriptFramePipeline", () => {
-  it("runs the snap pass AFTER the mutation commits (ordering)", () => {
+  it("runs the snap pass SYNCHRONOUSLY in the same frame the mutation committed", () => {
     const { frames, pipeline } = makePipeline();
     // The DOM height the browser has committed for this frame.
     let committedHeight = 100;
@@ -67,22 +67,27 @@ describe("TranscriptFramePipeline", () => {
     };
     pipeline.setWriter(writer);
 
-    // Mutation source: the height grows, THEN the source requests a frame.
+    // Mutation source: the height grows, THEN the source requests a frame. The
+    // content ResizeObserver fires post-layout / pre-paint, so the snap must run
+    // synchronously in THIS frame — NOT deferred to the next rAF. Re-deferring
+    // (scheduling runFramePass inside the guard rAF) is the pinned-follow drift
+    // regression: it leaves the viewport a frame behind a growing stream and
+    // fails this assertion (and the Playwright pinned-follow gate).
     committedHeight = 420;
     events.push("mutate");
     pipeline.requestFrame();
 
-    // Nothing has run yet: the snap is scheduled, not synchronous.
-    expect(snappedToHeight).toBe(-1);
-
-    frames.flushFrame();
-
-    // The one snap ran after the mutation and read the committed height.
+    // The snap already ran, in-line, against the committed height.
     expect(events).toEqual(["mutate", "snap"]);
     expect(snappedToHeight).toBe(420);
+
+    // Only the per-frame guard-reset frame is scheduled; it runs no snap.
+    expect(frames.pending).toBe(1);
+    frames.flushFrame();
+    expect(events).toEqual(["mutate", "snap"]);
   });
 
-  it("coalesces N mutation sources into exactly ONE snap per frame", () => {
+  it("coalesces N mutation sources into exactly ONE synchronous snap per frame", () => {
     const { frames, pipeline } = makePipeline();
     let passes = 0;
     pipeline.setWriter({
@@ -93,18 +98,24 @@ describe("TranscriptFramePipeline", () => {
       shouldContinueGlue: () => true,
     });
 
-    // Five independent mutation sources all request a frame in one tick.
+    // Five independent mutation sources all request a frame in one tick: the
+    // first snaps synchronously, the rest fold into it.
     for (let i = 0; i < 5; i += 1) {
       pipeline.requestFrame();
     }
+    expect(passes).toBe(1);
+    // Only the single guard-reset frame is pending, not five competing frames.
     expect(frames.pending).toBe(1);
 
     frames.flushFrame();
+    // The guard reset runs no snap.
     expect(passes).toBe(1);
 
-    // A fresh request after the frame drained schedules exactly one more pass.
+    // After the frame drained (guard cleared), a fresh request snaps once more.
     pipeline.requestFrame();
+    expect(passes).toBe(2);
     pipeline.requestFrame();
+    expect(passes).toBe(2); // folds into the same frame
     frames.flushFrame();
     expect(passes).toBe(2);
   });
@@ -185,7 +196,7 @@ describe("TranscriptFramePipeline", () => {
     expect(passes).toBe(1); // no further snap once disallowed
   });
 
-  it("cancel() kills a pending single-shot frame AND a glue window", () => {
+  it("cancel() clears the per-frame guard AND kills a glue window", () => {
     const { frames, pipeline } = makePipeline();
     let passes = 0;
     pipeline.setWriter({
@@ -196,16 +207,22 @@ describe("TranscriptFramePipeline", () => {
       shouldContinueGlue: () => true,
     });
 
+    // The single-shot snap is synchronous, so by the time a user-scroll pause
+    // fires there is nothing queued from it to kill — but cancel must drop the
+    // guard-reset frame and re-open the pipeline for the next notify.
     pipeline.requestFrame();
+    expect(passes).toBe(1);
     pipeline.cancel();
     frames.flushFrame();
-    expect(passes).toBe(0);
+    expect(passes).toBe(1); // nothing was queued to run
+    pipeline.requestFrame(); // guard cleared → snaps again
+    expect(passes).toBe(2);
 
     pipeline.beginGlue();
     pipeline.cancel();
     frames.flushFrame();
     expect(pipeline.isGluing).toBe(false);
-    expect(passes).toBe(0);
+    expect(passes).toBe(2); // glue killed before it could snap
   });
 
   it("requestFrame is a no-op while a glue window is active (single writer)", () => {

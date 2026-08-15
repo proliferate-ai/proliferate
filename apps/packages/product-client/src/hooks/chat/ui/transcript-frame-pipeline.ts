@@ -90,11 +90,16 @@ function defaultNow(): number {
 export class TranscriptFramePipeline {
   private writer: TranscriptFrameWriter | null = null;
 
-  // A single-shot frame scheduled by a mutation source outside the glue window.
-  // `framePending` is the source of truth (a synchronously-firing rAF — e.g. a
-  // test's rAF stub — clobbers the returned handle AFTER the callback nulls it,
-  // so the boolean, set inside the callback, is the reliable signal).
-  private framePending = false;
+  // Per-frame coalescing guard for the synchronous single-shot snap. The content
+  // ResizeObserver fires AFTER layout and BEFORE paint, so the growth it reports
+  // is already committed and measurable: the snap runs synchronously inside that
+  // notify (see `requestFrame`), never deferred to the next frame. This flag is
+  // set for the remainder of the current frame so a second same-frame notify
+  // folds into the pass that already ran; a guard-reset rAF clears it so the
+  // NEXT frame's first notify runs a fresh pass. `frameHandle` is only that
+  // guard-reset frame (it runs no snap), retained so `cancel`/`beginGlue` can
+  // drop it.
+  private framePassRanThisFrame = false;
   private frameHandle: number | null = null;
   // The self-driving forced-glue window (session entry / submit / tab resume).
   // `glueActive` is likewise the source of truth for the same reentrancy reason.
@@ -116,21 +121,35 @@ export class TranscriptFramePipeline {
   }
 
   /**
-   * A mutation source (content ResizeObserver, an above-change anchor set, a
-   * pinned snap effect) requests the one frame pass. Coalesces: many calls in
-   * one tick schedule a single frame that runs `runFramePass` exactly once. A
-   * no-op while a forced-glue window is already snapping every frame.
+   * The content ResizeObserver (the sole in-layout mutation source) requests the
+   * one frame pass. It runs SYNCHRONOUSLY: RO callbacks fire after the browser
+   * has committed the frame's layout and before paint, so the grown height is
+   * already measurable and the snap belongs in THIS frame's layout phase.
+   * Deferring it to the next rAF is the pinned-follow drift — under continuous
+   * growth the viewport would trail one frame behind a taller document forever.
+   *
+   * Coalesces: the first notify in a frame runs `runFramePass` exactly once and
+   * arms a per-frame guard; every later notify in the same frame folds into that
+   * pass. A guard-reset rAF (the ONLY rAF here, reserved for crossing into the
+   * next frame) clears the guard so the next frame's first notify snaps afresh.
+   * A no-op while a forced-glue window is already snapping every frame.
    */
   requestFrame(): void {
-    if (this.glueActive || this.framePending) {
+    if (this.glueActive || this.framePassRanThisFrame) {
       return;
     }
-    this.framePending = true;
+    const writer = this.writer;
+    if (writer == null) {
+      return;
+    }
+    // Arm the guard BEFORE running the pass so a reentrant notify (a snap write
+    // that itself trips the RO) folds in rather than snapping twice.
+    this.framePassRanThisFrame = true;
     this.frameHandle = this.raf(() => {
-      this.framePending = false;
+      this.framePassRanThisFrame = false;
       this.frameHandle = null;
-      this.writer?.runFramePass();
     });
+    writer.runFramePass();
   }
 
   /**
@@ -144,11 +163,11 @@ export class TranscriptFramePipeline {
     if (this.writer == null) {
       return;
     }
-    // Fold any pending single-shot frame into the window.
+    // Fold the pending guard-reset frame into the window and re-arm from scratch.
     if (this.frameHandle != null) {
       this.caf(this.frameHandle);
     }
-    this.framePending = false;
+    this.framePassRanThisFrame = false;
     this.frameHandle = null;
     if (this.glueHandle != null) {
       this.caf(this.glueHandle);
@@ -186,14 +205,15 @@ export class TranscriptFramePipeline {
 
   /**
    * The user reclaimed the frame (a synchronous pause listener fired inside the
-   * input event's call stack). Kill any pending single-shot frame and the
+   * input event's call stack). The single-shot snap is synchronous so nothing is
+   * queued from it, but drop the per-frame guard-reset rAF and kill the
    * forced-glue window so no queued snap can fight the user's scroll.
    */
   cancel(): void {
     if (this.frameHandle != null) {
       this.caf(this.frameHandle);
     }
-    this.framePending = false;
+    this.framePassRanThisFrame = false;
     this.frameHandle = null;
     if (this.glueHandle != null) {
       this.caf(this.glueHandle);
