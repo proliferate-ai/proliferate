@@ -377,8 +377,7 @@ async function discardIfSuperseded(
     lifecycle.retainCreatedSession = null;
     return true;
   }
-  // The successor already committed, but this created runtime could not be
-  // retired safely. Publish it honestly and stop this older materializer here.
+  // The successor already committed, but this created runtime could not be retired safely. Publish it honestly and stop this older materializer here.
   const retainCreatedSession = lifecycle.retainCreatedSession;
   lifecycle.retainCreatedSession = null;
   retainCreatedSession?.();
