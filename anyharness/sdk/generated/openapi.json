@@ -15530,6 +15530,13 @@
           "installedArtifacts"
         ],
         "properties": {
+          "failureKind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Typed classification of a terminal failure: one of `network`,\n`checksum`, `in_use`, `disk`, `other`. Additive and tolerant: absent on\nsuccess/skip and on runtimes that predate typed failures, so old readers\nsimply ignore it."
+          },
           "installedArtifacts": {
             "type": "array",
             "items": {
