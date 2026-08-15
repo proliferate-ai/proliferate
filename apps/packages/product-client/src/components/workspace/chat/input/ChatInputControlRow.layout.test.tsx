@@ -186,10 +186,11 @@ describe("composer control row layout at the right-rail clamp floor", () => {
       });
 
       // Every control rendered: model, mode, reasoning, fast mode, goal,
-      // integrations, attach, workspace status, send. A sparse row would
-      // make the no-overlap assertions vacuous.
+      // integrations, attach, workspace status, send (the cloud control left
+      // with the PRO-10 cull). A sparse row would make the no-overlap
+      // assertions vacuous.
       for (const pane of PANES) {
-        expect(result[pane.id]?.buttonCount, pane.id).toBeGreaterThanOrEqual(8);
+        expect(result[pane.id]?.buttonCount, pane.id).toBeGreaterThanOrEqual(7);
       }
 
       expect(result["floor-icon-mode"].overlaps).toEqual([]);
