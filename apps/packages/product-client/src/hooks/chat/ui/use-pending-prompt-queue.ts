@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   derivePendingPromptQueueRow,
+  derivePendingPromptQueueRows,
   type PendingPromptQueueRow,
 } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
 import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
+import { useActiveSessionLinkCompletions } from "#product/hooks/chat/derived/use-active-session-transcript-state";
 import { usePromptOutboxActions } from "#product/hooks/chat/workflows/use-prompt-outbox-actions";
 import { useQueuedPromptEditReader } from "#product/hooks/chat/ui/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "#product/hooks/sessions/workflows/use-delete-pending-prompt";
@@ -32,6 +34,7 @@ interface PendingQueueMutation {
 
 export function usePendingPromptQueue(): PendingPromptQueueState {
   const activeSessionId = useActiveSessionId();
+  const linkCompletionsByCompletionId = useActiveSessionLinkCompletions();
   const sessionMaterialized = useSessionDirectoryStore((state) =>
     activeSessionId
       ? Boolean(state.entriesById[activeSessionId]?.materializedSessionId)
@@ -50,20 +53,34 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
     : null;
 
   const rows = useMemo(() => {
-    const derived = visiblePendingPrompts.map(derivePendingPromptQueueRow);
+    const derived = derivePendingPromptQueueRows(
+      visiblePendingPrompts,
+      linkCompletionsByCompletionId,
+    );
     const order = activeMutation?.optimisticOrder ?? null;
     if (!order) {
       return derived;
     }
     const byKey = new Map(derived.map((row) => [row.key, row]));
-    const reordered = order.flatMap((key) => {
+    const reorderedMovableRows = order.flatMap((key) => {
       const row = byKey.get(key);
       return row ? [row] : [];
     });
-    const optimisticKeys = new Set(order);
-    reordered.push(...derived.filter((row) => !optimisticKeys.has(row.key)));
-    return reordered;
-  }, [activeMutation, visiblePendingPrompts]);
+    const optimisticKeys = new Set(reorderedMovableRows.map((row) => row.key));
+    let nextMovableIndex = 0;
+    return derived.map((row) => {
+      if (!optimisticKeys.has(row.key)) {
+        return row;
+      }
+      const replacement = reorderedMovableRows[nextMovableIndex];
+      nextMovableIndex += 1;
+      return replacement ?? row;
+    });
+  }, [
+    activeMutation,
+    linkCompletionsByCompletionId,
+    visiblePendingPrompts,
+  ]);
 
   const handleDelete = useCallback(
     (entry: PendingPromptQueueRow) => {
@@ -151,19 +168,37 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
         || toIndex < 0
         || fromIndex >= rows.length
         || toIndex >= rows.length
+        || rows[fromIndex]?.kind !== "plain"
+        || rows[toIndex]?.kind !== "plain"
+        || (rows[fromIndex]?.seq ?? 0) <= 0
+        || (rows[toIndex]?.seq ?? 0) <= 0
       ) {
         return;
       }
-      const expectedSeqs = rows.filter((row) => row.seq > 0).map((row) => row.seq);
-      const reorderedRows = [...rows];
-      const [moved] = reorderedRows.splice(fromIndex, 1);
+      const runtimeEntries = visiblePendingPrompts.filter((entry) => entry.seq > 0);
+      const expectedSeqs = runtimeEntries.map((entry) => entry.seq);
+      const movableRows = rows.filter((row) => row.kind === "plain" && row.seq > 0);
+      const fromMovableIndex = movableRows.findIndex((row) => row.key === rows[fromIndex]?.key);
+      const toMovableIndex = movableRows.findIndex((row) => row.key === rows[toIndex]?.key);
+      if (fromMovableIndex < 0 || toMovableIndex < 0) {
+        return;
+      }
+      const reorderedMovableRows = [...movableRows];
+      const [moved] = reorderedMovableRows.splice(fromMovableIndex, 1);
       if (!moved) {
         return;
       }
-      reorderedRows.splice(toIndex, 0, moved);
-      const desiredSeqs = reorderedRows
-        .filter((row) => row.seq > 0)
-        .map((row) => row.seq);
+      reorderedMovableRows.splice(toMovableIndex, 0, moved);
+      const reorderedUserSeqs = reorderedMovableRows.map((row) => row.seq);
+      let nextUserIndex = 0;
+      const desiredSeqs = runtimeEntries.map((entry) => {
+        if (derivePendingPromptQueueRow(entry).kind !== "plain") {
+          return entry.seq;
+        }
+        const desiredSeq = reorderedUserSeqs[nextUserIndex];
+        nextUserIndex += 1;
+        return desiredSeq ?? entry.seq;
+      });
       if (desiredSeqs.length === 0 || arraysEqual(expectedSeqs, desiredSeqs)) {
         return;
       }
@@ -175,7 +210,7 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
           token,
           kind: "reorder",
           steeringSeq: null,
-          optimisticOrder: reorderedRows.map((row) => row.key),
+          optimisticOrder: reorderedMovableRows.map((row) => row.key),
         });
         setMutationRevision((revision) => revision + 1);
         void reorderPendingPrompts(sessionId, expectedSeqs, desiredSeqs)
@@ -196,7 +231,14 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
       };
       attemptReorder();
     },
-    [activeSessionId, reorderPendingPrompts, rows, sessionMaterialized, showErrorToast],
+    [
+      activeSessionId,
+      reorderPendingPrompts,
+      rows,
+      sessionMaterialized,
+      showErrorToast,
+      visiblePendingPrompts,
+    ],
   );
 
   const queueMutationInFlight = activeMutation !== null;

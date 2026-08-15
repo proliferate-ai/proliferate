@@ -113,13 +113,14 @@ export function ComposerCaretPlugin({
         if (!$isRangeSelection(selection) || !selection.isCollapsed()) return null;
         const anchor = selection.anchor;
         const anchorNode = anchor.getNode();
-        return createDOMRange(
+        const range = createDOMRange(
           activeEditor,
           anchorNode,
           anchor.offset,
           anchorNode,
           anchor.offset,
         );
+        return range?.collapsed ? range : null;
       });
 
       if (range === null) return null;

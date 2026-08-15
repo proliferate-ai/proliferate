@@ -180,6 +180,47 @@ Use the focused procedures for behavior-specific setup:
 - [`stripe-local-testing.md`](stripe-local-testing.md) for Stripe;
 - [`mobile.md`](mobile.md) for Mobile and native OAuth.
 
+## Diagnostics
+
+A dev profile produces no diagnostic records by default. Diagnostics are opt-in
+because the export path is compile-time absent from customer builds, so a
+default collector build cannot export at all.
+
+To run any profile with diagnostics, build the collector once with the internal
+feature and point the desktop host at it:
+
+```bash
+pgrep -x cargo; pgrep -x rustc   # one Rust build at a time on constrained machines
+cargo build -p proliferate-diagnostics-collector --features internal-dogfood-export
+export PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN=<path to that binary>
+```
+
+That alone gives renderer, host, worker, and collector records with no
+credential and no network.
+
+The AnyHarness runtime is the exception, and the omission that most often
+reads as a product bug. Any profile that sets `ANYHARNESS_DEV_URL` runs the
+runtime externally, so the desktop host never spawns it, the runtime never
+inherits the control-bridge descriptor, and its diagnostics producer stays
+disabled. Session, turn, ACP, and subagent records are then absent even though
+the app behaves normally. Export them with:
+
+```bash
+export PROLIFERATE_DIAGNOSTICS_BRIDGE_ENDPOINT=<endpoint the host logs at boot>
+```
+
+Shipping records to a shared destination additionally needs
+`PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT` and
+`PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS`, and optionally
+`PROLIFERATE_DIAGNOSTICS_DEV_TAG` to identify whose machine produced a record.
+Keep the headers value, which carries an ingest key, in a mode-600 file outside
+the repository. All five inputs are catalogued in
+[`env-vars.yaml`](../../specs/developing/reference/env-vars.yaml).
+
+An unreachable or misconfigured destination never fails the app by design, so
+"the app works but no records arrive" is a configuration symptom rather than a
+code defect.
+
 ## Environment Sources
 
 This document routes operators and developers to the files or systems that

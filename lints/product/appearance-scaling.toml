@@ -770,3 +770,60 @@ clean."""
 [rule.example]
 bad = "an entry frozen at 4 in a file that now has 2 hits"
 good = "the census shrinks to 2 in the same commit that fixed the two sites"
+
+[[rule]]
+id = "PROD-SCALE-35"
+title = "no arbitrary width/height/padding/margin/inset bracket geometry"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """An arbitrary-value utility in the bare w-/h-/p-/m-/inset- bracket
+families — w-[200px], h-[38px], inset-[1px] — must not be authored. The prefixed
+and axis spellings (max-w-[…], min-h-[…], px-[…]) are outside this rule. Like the
+other staged families it is censused, not banned outright: a file may carry no
+more bracket-geometry hits than its recorded per-file count, which may only
+shrink."""
+alternative = """Use the ruled spacing/width scale. A genuinely measured or
+virtualization value needs a recorded cause at the site — a censusGrowthSanctions
+entry naming the file and count."""
+why = """Virtualization math, measured overlays and grid positioning produce
+legitimate bracket geometry, so the law is "no more than today, anywhere" and the
+per-file census burns down as surfaces migrate onto the spacing scale. The
+arbitrary-value rules above (radius/z/gap/size) deliberately stopped short of
+these families, which DESIGN_SYSTEM.md Current Gaps recorded as having no gate
+rule at all; this record closes that gap."""
+
+[rule.example]
+bad = "className=\"w-[200px] h-[38px]\""
+good = "className=\"w-52 h-9\", or a recorded cause for a measured value"
+
+[[rule]]
+id = "PROD-SCALE-36"
+title = "a sealed directory stays at zero, never re-baselined"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "scripts/appearance_scaling_baseline.json (sealedDirectories), every scanned file under a sealed prefix"
+
+rule = """A staged-rule hit inside a directory listed in `sealedDirectories` must
+not appear. A finished directory re-baselines to nothing: `--write-baseline`
+refuses to record a census entry under a sealed prefix, so the hit is reported as
+a violation instead of quietly re-entering the census. This rule is deliberately
+NOT staged: like PROD-SCALE-34 it is the guard on the census, so the census it
+guards can never absorb it."""
+alternative = """Fix the site. If a sealed directory genuinely still carries
+pre-existing debt then it was sealed in error, and removing the seal is a
+founder-reviewed amendment, not a fix."""
+why = """The difference between "burning down" and "finished": the rest of the
+tree ratchets, but a directory a migration slice cleaned is an absolute ban, so a
+regression there is a regression, not a new pre-existing site. Each seal names the
+slice that cleaned it, so the pin is a record of work done rather than an opinion
+about a directory."""
+
+[rule.example]
+bad = "a w-[200px] reappears in a directory the workflows conformance slice sealed at zero"
+good = "the sealed directory stays clean; a new measured value lands in a still-staged directory with a recorded cause"

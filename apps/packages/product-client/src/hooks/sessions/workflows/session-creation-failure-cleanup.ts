@@ -1,5 +1,10 @@
 import type { ErrorContext } from "@proliferate/product-client/host/product-host";
-import { isWorkspaceDirectoryMissingError } from "#product/lib/domain/sessions/creation/create-session-error";
+import {
+  formatSessionCreateCause,
+  isWorkspaceDirectoryMissingError,
+} from "#product/lib/domain/sessions/creation/create-session-error";
+import { isWorkspaceArchivedRefusal } from "#product/lib/domain/workspaces/archived/workspace-archived-refusal";
+import type { ToastErrorInput } from "#product/primitives/utils/toast-model";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
@@ -51,6 +56,37 @@ interface SessionCreationFailureCleanupDeps {
    * reads the product telemetry facade). Keeps this plain workflow vendor-free.
    */
   captureException: (error: unknown, context?: ErrorContext) => void;
+}
+
+/**
+ * Tells the user a queued prompt never sent.
+ *
+ * An unattended launch announces its own failure: it knows which workspace the
+ * prompt was for, which the composer-relative copy here cannot say, and its
+ * composer is not the one holding the text (PRO-230). Otherwise the attended
+ * path owns the message — no retry offered, because the composer still holds
+ * the draft and re-sending from a toast would race the user typing into it.
+ */
+export function announceQueuedPromptFailure(
+  error: unknown,
+  onQueuedPromptFailure: ((error: unknown) => void) | undefined,
+  showErrorToast: (input: ToastErrorInput) => void,
+): void {
+  if (onQueuedPromptFailure) {
+    onQueuedPromptFailure(error);
+    return;
+  }
+  // The missing-worktree composer panel owns that condition — no toast.
+  // WORKSPACE_ARCHIVED is the same "server is right, client was stale" shape —
+  // no toast there either.
+  if (isWorkspaceDirectoryMissingError(error) || isWorkspaceArchivedRefusal(error)) {
+    return;
+  }
+  showErrorToast({
+    headline: "Message not sent",
+    consequence: "No chat was opened. Your message is still in the composer.",
+    cause: formatSessionCreateCause(error),
+  });
 }
 
 export function cleanupSessionCreationFailure(
@@ -186,7 +222,7 @@ function moveOutboxPromptsToRecovery(
 
 function clearLaunchIntent(launchIntentId: string | null | undefined): void {
   if (launchIntentId) {
-    useChatLaunchIntentStore.getState().clearIfActive(launchIntentId);
+    useChatLaunchIntentStore.getState().clear(launchIntentId);
   }
 }
 

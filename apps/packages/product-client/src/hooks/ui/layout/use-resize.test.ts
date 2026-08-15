@@ -51,6 +51,27 @@ describe("useResize", () => {
     expect(onResize).not.toHaveBeenCalled();
   });
 
+  it("seeds the gesture from resolveSize at mousedown when the rendered size diverges", () => {
+    const onResize = vi.fn();
+    const { result } = renderHook(() =>
+      useResize({
+        direction: "horizontal",
+        size: 700,
+        resolveSize: () => 400,
+        onResize,
+      }));
+
+    act(() => {
+      result.current(mouseDownEvent(0));
+    });
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 30 }));
+    });
+    // From the rendered 400, not the tracked 700: the first pixel of pointer
+    // travel moves the panel instead of replaying the divergence as dead zone.
+    expect(onResize).toHaveBeenLastCalledWith(430);
+  });
+
   it("appends exactly one cursor-overlay div for the duration of the drag, and removes it on mouseup", () => {
     const { result } = renderHook(() =>
       useResize({ direction: "horizontal", size: 200, onResize: vi.fn() }));
@@ -141,5 +162,29 @@ describe("useResize", () => {
     unmount();
 
     expect(onResizeEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("ends the gesture when the window loses focus mid-drag", () => {
+    const onResize = vi.fn();
+    const onResizeEnd = vi.fn();
+    const { result } = renderHook(() =>
+      useResize({ direction: "horizontal", size: 300, onResize, onResizeEnd }));
+
+    act(() => {
+      result.current(mouseDownEvent(0));
+    });
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+
+    // The blur tears the gesture down exactly like a mouseup: the cursor
+    // overlay is gone, the end callback fired, and later mouse traffic is
+    // ignored.
+    expect(onResizeEnd).toHaveBeenCalledTimes(1);
+    expect(document.querySelectorAll("div[style*='col-resize']").length).toBe(0);
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 50 }));
+    });
+    expect(onResize).not.toHaveBeenCalled();
   });
 });

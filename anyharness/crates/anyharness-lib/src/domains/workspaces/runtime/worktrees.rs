@@ -9,7 +9,9 @@ use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceSurface};
 use crate::domains::workspaces::types::CreateWorktreeResult;
 use crate::domains::workspaces::worktree_checkout::WorktreeCheckoutMode;
-use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
+use crate::domains::workspaces::worktree_names::{
+    WorktreeNameConflictError, WorktreeNameConflictPolicy,
+};
 use crate::origin::OriginContext;
 
 const MAX_WORKTREE_NAME_ATTEMPTS: usize = 10_000;
@@ -121,7 +123,13 @@ impl WorkspaceRuntime {
                 if effective_conflict_policy.can_retry_branch() {
                     continue;
                 }
-                anyhow::bail!("worktree branch already exists: {}", candidate.branch_name);
+                return Err(WorktreeNameConflictError::Branch {
+                    source: anyhow::anyhow!(
+                        "worktree branch already exists: {}",
+                        candidate.branch_name
+                    ),
+                }
+                .into());
             }
 
             let existing_lookup_started = Instant::now();
@@ -129,7 +137,7 @@ impl WorkspaceRuntime {
                 if effective_conflict_policy.can_retry() {
                     continue;
                 }
-                return Err(error);
+                return Err(WorktreeNameConflictError::Path { source: error }.into());
             }
             tracing::info!(
                 repo_root_id = %repo_root_id,
@@ -180,6 +188,15 @@ impl WorkspaceRuntime {
                 {
                     continue;
                 }
+                Err(error) if !effective_conflict_policy.can_retry() => {
+                    return Err(self.classify_strict_worktree_create_failure(
+                        checkout_mode,
+                        &source.path,
+                        &canonical_target,
+                        &candidate.branch_name,
+                        error,
+                    ));
+                }
                 Err(error) => return Err(error),
             }
         }
@@ -207,20 +224,60 @@ impl WorkspaceRuntime {
                 "a workspace record already exists for path: {canonical_path}"
             )));
         }
-        if let Some(retired) = self
+        if let Some(archived) = self
             .store
-            .find_retired_incomplete_cleanup_by_path_and_kind(
-                &canonical_path,
-                WorkspaceKind::Worktree,
-            )?
+            .find_archived_by_path_and_kind(&canonical_path, WorkspaceKind::Worktree)?
         {
             return Ok(Some(anyhow::anyhow!(
-                "workspace path still has pending cleanup from retired workspace {}: {}",
-                retired.id,
+                "workspace path is reserved by archived workspace {}: {}",
+                archived.id,
                 canonical_path
             )));
         }
         Ok(None)
+    }
+
+    /// Re-read owner state after Git fails under an exact-name policy. This
+    /// closes the gap between the preflight checks and `git worktree add`
+    /// without parsing unstable stderr: a concurrent branch/path winner is
+    /// classified from durable state, while unrelated Git failures retain
+    /// their original cause.
+    pub(super) fn classify_strict_worktree_create_failure(
+        &self,
+        checkout_mode: WorktreeCheckoutMode,
+        source_repo_root: &str,
+        canonical_target: &Path,
+        branch_name: &str,
+        source: anyhow::Error,
+    ) -> anyhow::Error {
+        if checkout_mode.creates_branch()
+            && GitService::ref_exists(
+                Path::new(source_repo_root),
+                &format!("refs/heads/{branch_name}"),
+            )
+        {
+            return WorktreeNameConflictError::Branch { source }.into();
+        }
+
+        match self.path_conflict_error(canonical_target) {
+            Ok(Some(conflict)) => {
+                tracing::warn!(
+                    target_path = %canonical_target.display(),
+                    conflict = %conflict,
+                    "worktree create failure matched a post-create path conflict"
+                );
+                WorktreeNameConflictError::Path { source }.into()
+            }
+            Ok(None) => source,
+            Err(classification_error) => {
+                tracing::warn!(
+                    target_path = %canonical_target.display(),
+                    error = %classification_error,
+                    "worktree create failure conflict classification failed"
+                );
+                source
+            }
+        }
     }
 
     fn insert_created_worktree_record(

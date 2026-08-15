@@ -1,6 +1,9 @@
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { getFocusZone, isRightPanelFocusZone } from "#product/lib/domain/focus-zone";
-import { useContentSearchStore } from "#product/stores/search/content-search-store";
+import {
+  useContentSearchStore,
+  type ContentSearchSurface,
+} from "#product/stores/search/content-search-store";
 import {
   requestRightPanelCloseActiveTab,
   requestRightPanelRelativeTab,
@@ -88,6 +91,17 @@ export function useWorkspaceContentShortcuts(
   }, { enabled });
 
   useShortcutHandler("workspace.find-content", () => {
+    const activeElement = document.activeElement;
+    if (activeElement?.closest("[data-content-search-overlay]")) {
+      // Focus is already in the pill: Cmd+F cycles Chat <-> Diff when review
+      // search is available, rather than reopening/no-opping.
+      const state = useContentSearchStore.getState();
+      if (state.surfaceAvailability.review) {
+        openContentSearch(state.surface === "review" ? "chat" : "review");
+      }
+      return true;
+    }
+
     const surface = resolveContentSearchSurfaceForShortcut();
     if (!surface) {
       return false;
@@ -98,15 +112,24 @@ export function useWorkspaceContentShortcuts(
   }, { enabled });
 }
 
-function resolveContentSearchSurfaceForShortcut(): "chat" | "file" | null {
+function resolveContentSearchSurfaceForShortcut(): ContentSearchSurface | null {
   const activeElement = document.activeElement;
   if (activeElement?.closest("[data-file-viewer-frame]")) {
     return "file";
   }
+  if (activeElement?.closest("[data-git-review-document]")) {
+    return "review";
+  }
 
   const focusZone = getFocusZone();
   if (focusZone === "right-panel") {
-    return document.querySelector("[data-file-viewer-frame]") ? "file" : null;
+    if (document.querySelector("[data-file-viewer-frame]")) {
+      return "file";
+    }
+    if (document.querySelector("[data-git-review-document]")) {
+      return "review";
+    }
+    return null;
   }
 
   if (focusZone === "terminal") {

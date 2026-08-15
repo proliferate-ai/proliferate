@@ -69,6 +69,10 @@ function buildHeaderSlotSignature(slot: SessionDirectoryEntry): string {
     slot.activity.transcriptTitle ?? "",
     pendingInteractionSignature(slot.activity.pendingInteractions),
     slot.actionCapabilities.fork ? "fork" : "no-fork",
+    slot.sessionRelationship.kind,
+    "parentSessionId" in slot.sessionRelationship
+      ? slot.sessionRelationship.parentSessionId ?? ""
+      : "",
   ].join("\u001f");
 }
 

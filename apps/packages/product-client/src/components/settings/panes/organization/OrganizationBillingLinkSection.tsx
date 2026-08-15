@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "#product/primitives/Button";
 import { ChevronRight } from "#product/primitives/icons/core";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 
 export function OrganizationBillingLinkSection() {
@@ -9,25 +10,18 @@ export function OrganizationBillingLinkSection() {
 
   return (
     <SettingsSection title="Billing">
-      <div className="overflow-clip rounded-lg bg-foreground/5">
-        <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="font-medium text-foreground">Billing</div>
-            <div className="text-muted-foreground">Plan, seats, and usage</div>
-          </div>
-          <div className="shrink-0">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => navigate(buildSettingsHref({ section: "billing" }))}
-            >
-              Open billing
-              <ChevronRight className="icon-paired" />
-            </Button>
-          </div>
-        </div>
-      </div>
+      <SettingsRow label="Billing" description="Plan, seats, and usage">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          onClick={() => navigate(buildSettingsHref({ section: "billing" }))}
+        >
+          Open billing
+          <ChevronRight className="icon-paired" />
+        </Button>
+      </SettingsRow>
     </SettingsSection>
   );
 }

@@ -60,7 +60,12 @@ export interface RunAddRepoWorkflowArgs {
   invalidateWorkspaceCollections: (runtimeUrl: string) => Promise<unknown>;
   saveLocalRepoEnvironment?: (repoRoot: RepoRoot) => void;
   unhideRepoRoot: (repoRootId: string) => void;
-  openRepoSetupModal: (state: {
+  /**
+   * Announce the completed add. A receipt, not a question: the registration is
+   * already durable by the time this fires, so the caller raises a toast rather
+   * than a modal that would block the app on a decision nobody has to make.
+   */
+  reportRepoAdded: (state: {
     sourceRoot: string;
     repoName: string;
   }) => void;
@@ -75,7 +80,7 @@ export async function runAddRepoWorkflow({
   invalidateWorkspaceCollections,
   saveLocalRepoEnvironment,
   unhideRepoRoot,
-  openRepoSetupModal,
+  reportRepoAdded,
 }: RunAddRepoWorkflowArgs): Promise<RepoRoot> {
   const runtimeUrl = await ensureRuntimeReady();
   const repoRoot = await resolveRepoRootFromPath(path);
@@ -115,7 +120,7 @@ export async function runAddRepoWorkflow({
     runtimeUrl,
     elapsedMs: elapsedMs(invalidateStartedAt),
   });
-  openRepoSetupModal({
+  reportRepoAdded({
     sourceRoot: repoRoot.path,
     repoName: resolveRepoName(repoRoot),
   });

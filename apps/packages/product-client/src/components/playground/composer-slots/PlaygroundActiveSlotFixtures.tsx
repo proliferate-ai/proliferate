@@ -4,10 +4,6 @@ import { renderPanelSlotFixture } from "#product/components/playground/composer-
 
 export function renderActiveSlot(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
-    case "todos-short":
-    case "todos-mid":
-    case "todos-long":
-    case "todo-strip-with-approval":
     case "execute-approval":
     case "edit-approval":
     case "interaction-motion":

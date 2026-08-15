@@ -1,0 +1,6 @@
+{
+  "projectId": "26506959-df72-4ac3-8cb6-24508dec6b42",
+  "projectName": "Proliferate Library",
+  "shape": "registry",
+  "note": "Custom in-repo builder: scripts/design-sync/build.mjs emits the payload to scripts/design-sync/.out/ from the playground library registry (LIBRARY_TIERS). See scripts/design-sync/CONTRACT.md for the payload contract and upload choreography. Not the generic /design-sync converter."
+}

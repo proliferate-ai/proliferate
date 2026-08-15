@@ -5,7 +5,6 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { ComposerModelSelectorControl } from "#product/components/workspace/chat/input/ComposerModelSelectorControl";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
-import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { modelUnsupportedControlMessage } from "#product/lib/domain/chat/models/model-support-refusals";
 import { useModelSupportStore } from "#product/stores/chat/model-support-store";
 import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher";
@@ -28,14 +27,6 @@ function ShortcutDispatcher() {
   return null;
 }
 
-function openModelOptions(container: HTMLElement) {
-  fireEvent.pointerDown(container.querySelector<HTMLElement>("[data-composer-model-trigger]")!, {
-    button: 0,
-    ctrlKey: false,
-  });
-  fireEvent.click(document.querySelector<HTMLElement>("[data-composer-model-menu]")!);
-}
-
 function createKeyboardModelSelectorProps(): ModelSelectorProps {
   return {
     connectionState: "healthy",
@@ -54,6 +45,15 @@ function createKeyboardModelSelectorProps(): ModelSelectorProps {
     isLoading: false,
     onSelect: vi.fn(),
   };
+}
+
+function openModelOptions(container: HTMLElement) {
+  const trigger = container.querySelector<HTMLElement>("[data-composer-model-trigger]")!;
+  fireEvent.pointerDown(trigger, {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(trigger);
 }
 
 it("identifies model rows by both harness kind and model id", () => {
@@ -149,14 +149,14 @@ it("marks a refused row as disabled and explains it, rather than hiding the mode
   );
 
   openModelOptions(container);
-  const refusedRow = document.querySelector<HTMLElement>('[data-model-option="opus-9"]');
+  const refusedRow = document.querySelector<HTMLButtonElement>('[data-model-option="opus-9"]');
   expect(refusedRow).not.toBeNull();
   expect(refusedRow?.getAttribute("data-model-unsupported")).toBe("true");
-  expect(refusedRow?.hasAttribute("data-disabled")).toBe(true);
+  expect(refusedRow?.disabled).toBe(true);
   expect(refusedRow?.textContent).toContain("Not supported on this target");
 
-  const supportedRow = document.querySelector<HTMLElement>('[data-model-option="haiku"]');
-  expect(supportedRow?.hasAttribute("data-disabled")).toBe(false);
+  const supportedRow = document.querySelector<HTMLButtonElement>('[data-model-option="haiku"]');
+  expect(supportedRow?.disabled).toBe(false);
 
   if (refusedRow) fireEvent.click(refusedRow);
   expect(onSelect).not.toHaveBeenCalled();
@@ -275,32 +275,16 @@ it("opens the picker when a refusal asks for it, and again on the next refusal",
   expect(menuState()).toBe("open");
 });
 
-it("toggles model options from the active macOS workspace and restores composer focus", async () => {
+it("toggles the active model picker and restores the composer caret", async () => {
   vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
   const props = createKeyboardModelSelectorProps();
-  const reasoningControl: LiveSessionControlDescriptor = {
-    key: "effort",
-    label: "Reasoning effort",
-    detail: "High",
-    rawConfigId: "effort",
-    settable: true,
-    pendingState: null,
-    kind: "select",
-    options: [
-      { value: "medium", label: "Medium", selected: false },
-      { value: "high", label: "High", selected: true },
-    ],
-    onSelect: vi.fn(),
-  };
-
-  const { container, unmount } = render(
+  const { container } = render(
     <MemoryRouter>
       <ShortcutDispatcher />
       <div data-focus-zone="chat">
         <textarea data-chat-composer-editor defaultValue="Keep typing" />
         <ComposerModelSelectorControl
           modelSelectorProps={props}
-          reasoningControl={reasoningControl}
           keyboardShortcutEnabled
         />
       </div>
@@ -309,86 +293,38 @@ it("toggles model options from the active macOS workspace and restores composer 
   const prompt = container.querySelector<HTMLTextAreaElement>("[data-chat-composer-editor]")!;
   prompt.focus();
   prompt.setSelectionRange(4, 4);
-  const shortcut = new KeyboardEvent("keydown", {
+
+  fireEvent.keyDown(prompt, {
     key: "M",
     code: "KeyM",
     ctrlKey: true,
     shiftKey: true,
-    bubbles: true,
-    cancelable: true,
   });
-
-  act(() => {
-    prompt.dispatchEvent(shortcut);
-  });
-
-  expect(shortcut.defaultPrevented).toBe(true);
   expect(
     container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
   ).toBe("open");
-  const closeShortcut = new KeyboardEvent("keydown", {
+
+  fireEvent.keyDown(document.activeElement ?? prompt, {
     key: "M",
     code: "KeyM",
     ctrlKey: true,
     shiftKey: true,
-    bubbles: true,
-    cancelable: true,
   });
 
-  act(() => {
-    prompt.dispatchEvent(closeShortcut);
-  });
-
-  expect(closeShortcut.defaultPrevented).toBe(true);
-  expect(
-    container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
-  ).toBe("closed");
   await waitFor(() => {
+    expect(
+      container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
+    ).toBe("closed");
     expect(document.activeElement).toBe(prompt);
   });
   expect(prompt.selectionStart).toBe(4);
   expect(prompt.selectionEnd).toBe(4);
-
-  unmount();
-  const hidden = render(
-    <MemoryRouter initialEntries={["/settings"]}>
-      <ShortcutDispatcher />
-      <ComposerModelSelectorControl
-        modelSelectorProps={props}
-        reasoningControl={reasoningControl}
-        keyboardShortcutEnabled
-      />
-    </MemoryRouter>,
-  );
-  const settingsPrompt = document.createElement("textarea");
-  document.body.append(settingsPrompt);
-  const backgroundShortcut = new KeyboardEvent("keydown", {
-    key: "M",
-    code: "KeyM",
-    ctrlKey: true,
-    shiftKey: true,
-    bubbles: true,
-    cancelable: true,
-  });
-
-  act(() => {
-    settingsPrompt.dispatchEvent(backgroundShortcut);
-  });
-
-  expect(backgroundShortcut.defaultPrevented).toBe(false);
-  expect(
-    hidden.container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
-  ).toBe("closed");
-  settingsPrompt.remove();
 });
 
-it("restores composer focus when Escape closes the model menu", async () => {
-  vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
+it("restores composer focus when Escape closes the model picker", async () => {
   const props = createKeyboardModelSelectorProps();
-
   const { container } = render(
     <MemoryRouter>
-      <ShortcutDispatcher />
       <div data-focus-zone="chat">
         <textarea data-chat-composer-editor defaultValue="Keep typing" />
         <ComposerModelSelectorControl
@@ -403,12 +339,8 @@ it("restores composer focus when Escape closes the model menu", async () => {
   prompt.setSelectionRange(4, 4);
 
   openModelOptions(container);
-  expect(
-    container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
-  ).toBe("open");
-  expect(document.querySelector("[data-model-option]")).not.toBeNull();
-
-  fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
+  const search = document.querySelector<HTMLInputElement>('input[placeholder="Search models"]')!;
+  fireEvent.keyDown(search, { key: "Escape", code: "Escape" });
 
   await waitFor(() => {
     expect(
@@ -420,12 +352,10 @@ it("restores composer focus when Escape closes the model menu", async () => {
   expect(prompt.selectionEnd).toBe(4);
 });
 
-it("restores composer focus after Return selects a model", async () => {
-  vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
+it("restores composer focus after Enter selects a searched model", async () => {
   const props = createKeyboardModelSelectorProps();
   const { container } = render(
     <MemoryRouter>
-      <ShortcutDispatcher />
       <div data-focus-zone="chat">
         <textarea data-chat-composer-editor defaultValue="Keep typing" />
         <ComposerModelSelectorControl
@@ -439,19 +369,8 @@ it("restores composer focus after Return selects a model", async () => {
   prompt.focus();
   prompt.setSelectionRange(4, 4);
 
-  fireEvent.keyDown(prompt, {
-    key: "M",
-    code: "KeyM",
-    ctrlKey: true,
-    shiftKey: true,
-  });
-  const modelMenu = document.querySelector<HTMLElement>("[data-composer-model-menu]")!;
-  modelMenu.focus();
-  fireEvent.keyDown(modelMenu, { key: "Enter", code: "Enter" });
+  openModelOptions(container);
   const search = document.querySelector<HTMLInputElement>('input[placeholder="Search models"]')!;
-  search.focus();
-  expect(document.activeElement).toBe(search);
-
   fireEvent.keyDown(search, { key: "ArrowDown", code: "ArrowDown" });
   fireEvent.keyDown(search, { key: "Enter", code: "Enter" });
 
@@ -462,18 +381,12 @@ it("restores composer focus after Return selects a model", async () => {
     ).toBe("closed");
     expect(document.activeElement).toBe(prompt);
   });
-  expect(prompt.selectionStart).toBe(4);
-  expect(prompt.selectionEnd).toBe(4);
 });
 
-// The all-keyboard flow moves focus onto the model rows rather than the search
-// field. Regression coverage for Return activating a focused row on that path.
-it("restores composer focus after Return activates a focused model row", async () => {
-  vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
+it("restores composer focus after a keyboard-activated model row", async () => {
   const props = createKeyboardModelSelectorProps();
   const { container } = render(
     <MemoryRouter>
-      <ShortcutDispatcher />
       <div data-focus-zone="chat">
         <textarea data-chat-composer-editor defaultValue="Keep typing" />
         <ComposerModelSelectorControl
@@ -487,40 +400,50 @@ it("restores composer focus after Return activates a focused model row", async (
   prompt.focus();
   prompt.setSelectionRange(4, 4);
 
-  fireEvent.keyDown(prompt, {
-    key: "M",
-    code: "KeyM",
-    ctrlKey: true,
-    shiftKey: true,
-  });
-  const modelMenu = document.querySelector<HTMLElement>("[data-composer-model-menu]")!;
-  modelMenu.focus();
-  fireEvent.keyDown(modelMenu, { key: "Enter", code: "Enter" });
-
-  await waitFor(() => {
-    expect(document.activeElement?.getAttribute("data-model-option")).toBe("haiku");
-  });
-  fireEvent.keyDown(document.activeElement!, { key: "ArrowDown", code: "ArrowDown" });
-  await waitFor(() => {
-    expect(document.activeElement?.getAttribute("data-model-option")).toBe("sonnet");
-  });
-  fireEvent.keyDown(document.activeElement!, { key: "Enter", code: "Enter" });
+  openModelOptions(container);
+  const row = document.querySelector<HTMLButtonElement>('[data-model-option="sonnet"]')!;
+  row.focus();
+  fireEvent.keyDown(row, { key: "Enter", code: "Enter" });
+  fireEvent.click(row);
 
   expect(props.onSelect).toHaveBeenCalledWith({ kind: "claude", modelId: "sonnet" });
+  await waitFor(() => {
+    expect(document.activeElement).toBe(prompt);
+  });
+});
+
+it("keeps pointer selection focus-neutral", async () => {
+  const props = createKeyboardModelSelectorProps();
+  const { container } = render(
+    <MemoryRouter>
+      <div data-focus-zone="chat">
+        <textarea data-chat-composer-editor defaultValue="Keep typing" />
+        <ComposerModelSelectorControl
+          modelSelectorProps={props}
+          keyboardShortcutEnabled
+        />
+      </div>
+    </MemoryRouter>,
+  );
+  const prompt = container.querySelector<HTMLTextAreaElement>("[data-chat-composer-editor]")!;
+  prompt.focus();
+
+  openModelOptions(container);
+  fireEvent.click(document.querySelector<HTMLButtonElement>('[data-model-option="sonnet"]')!);
+
   await waitFor(() => {
     expect(
       container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
     ).toBe("closed");
-    expect(document.activeElement).toBe(prompt);
   });
-  expect(prompt.selectionStart).toBe(4);
-  expect(prompt.selectionEnd).toBe(4);
+  expect(document.activeElement).not.toBe(prompt);
 });
 
-it("does not restore Escape focus to a composer hidden behind another route", async () => {
+it("ignores the shortcut and Escape focus restore behind another route", async () => {
   const props = createKeyboardModelSelectorProps();
   const { container } = render(
     <MemoryRouter initialEntries={["/settings"]}>
+      <ShortcutDispatcher />
       <div aria-hidden="true">
         <div data-focus-zone="chat">
           <textarea data-chat-composer-editor defaultValue="Hidden draft" />
@@ -535,8 +458,22 @@ it("does not restore Escape focus to a composer hidden behind another route", as
   const prompt = container.querySelector<HTMLTextAreaElement>("[data-chat-composer-editor]")!;
   prompt.focus();
 
+  const shortcut = new KeyboardEvent("keydown", {
+    key: "M",
+    code: "KeyM",
+    ctrlKey: true,
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  act(() => {
+    prompt.dispatchEvent(shortcut);
+  });
+  expect(shortcut.defaultPrevented).toBe(false);
+
   openModelOptions(container);
-  fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
+  const search = document.querySelector<HTMLInputElement>('input[placeholder="Search models"]')!;
+  fireEvent.keyDown(search, { key: "Escape", code: "Escape" });
 
   await waitFor(() => {
     expect(

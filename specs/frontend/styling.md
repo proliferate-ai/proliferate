@@ -14,6 +14,8 @@ ProductClient's `src/domain/**` subtree is included in the package path above
 but is headless: it imports no CSS, Tailwind vocabulary, Design package, DOM
 primitive, or visual component.
 
+For which layer may style what — the five jobs of UI code (paint/anatomy/state/layout/behavior) and the component placement algorithm — see [DESIGN_SYSTEM.md § Component Library](../DESIGN_SYSTEM.md#component-library).
+
 ## Semantic Tokens
 
 Always use semantic theme tokens such as:
@@ -126,16 +128,38 @@ container.
 
 ## Card Surfaces
 
-For card-like containers (diff cards, file entries, settings items):
+Reach for the `Card` pattern
+(`#product/primitives/patterns/Card`) before hand-rolling a card-like
+container (diff cards, file entries). It owns the whole recipe below.
+The recipe is documented here because it is what `Card` paints, not as a
+licence to re-assemble it.
 
-- Background: `bg-foreground/5` for subtle tint against any surface
-- Header: double-layer pattern for opaque sticky headers:
-  outer `bg-sidebar-background`, inner `bg-foreground/5`
-- Border radius: `rounded-lg` with `overflow-clip`
-- Spacing between cards: `gap-2`
+- Background: `bg-surface-elevated-secondary` for a subtle tint against
+  any surface. This is the token form of the theme-stable card tint —
+  3% white in dark, 4.9% light ink in light. Do not write
+  `bg-foreground/5`: the appearance gate's `FOREGROUND_ALPHA_RE` rejects
+  raw `foreground/<alpha>` fills, and the token is the sanctioned way to
+  name the same wash.
+- Header: double-layer pattern for opaque sticky headers. A sticky
+  header over a tinted card cannot just repeat the tint, or the body
+  shows through it — so the outer layer paints the opaque plane behind
+  the card and the inner layer repaints the tint on top, resolving to
+  exactly the body's colour. The ground is whatever the card's own
+  parent paints, and `Card`'s `plane` axis names the two grounds it
+  supports: `content` is `bg-background`, `rail` is `bg-sidebar` — the
+  ground the git/review rail that hosts these cards paints
+  (`GitPanel.tsx`). `bg-sidebar-background` is a *third*, darker plane
+  (`#181818` against `bg-sidebar`'s `#222222`) painted by the right-panel
+  frame, the attached pane shell and the file-tree pane; a card whose
+  parent is one of those cannot ground on `plane="rail"` without seaming,
+  and needs a review decision rather than a guessed token.
+- Border radius: `rounded-lg` with `overflow-clip`. Never
+  `overflow-hidden`, which establishes a scroll container and freezes a
+  sticky header inside a box that never scrolls.
+- Spacing between cards: `gap-2`, owned by the container.
 
 Do not use `bg-hover/30` or similar opacity-based backgrounds that
-shift meaning across themes. `bg-foreground/5` is theme-stable.
+shift meaning across themes.
 
 ## RTL Truncation for File Paths
 

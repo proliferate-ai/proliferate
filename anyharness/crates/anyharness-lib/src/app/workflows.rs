@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use tokio::runtime::Handle;
 
-use crate::domains::sessions::admission::SessionMutationAdmission;
+use crate::domains::sessions::admission::{SessionMutationAdmission, SessionOperabilityPolicy};
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::workflows::control::{WorkflowRunGates, WorkflowSessionControllerPolicy};
 use crate::domains::workflows::runtime::WorkflowRunRuntime;
@@ -53,6 +53,7 @@ pub(super) struct WorkflowWiringPhaseTwo {
 /// completion extension for the session extension list.
 pub(super) fn wire_workflows_before_sessions(
     db: &Db,
+    operability_policy: Arc<dyn SessionOperabilityPolicy>,
 ) -> Result<WorkflowWiringPhaseOne, AppStateInitError> {
     let service = Arc::new(WorkflowRunService::new(WorkflowRunStore::new(db.clone())));
     service
@@ -62,9 +63,12 @@ pub(super) fn wire_workflows_before_sessions(
     // One shared per-run gate set (spec workflow-run-control §6.1): injected
     // into BOTH the workflow runtime and the completion extension.
     let gates = Arc::new(WorkflowRunGates::new());
-    let admission = Arc::new(SessionMutationAdmission::new(Arc::new(
-        WorkflowSessionControllerPolicy::new(WorkflowRunStore::new(db.clone())),
-    )));
+    let admission = Arc::new(SessionMutationAdmission::new(
+        Arc::new(WorkflowSessionControllerPolicy::new(WorkflowRunStore::new(
+            db.clone(),
+        ))),
+        operability_policy,
+    ));
     let workspace_materialization = Arc::new(WorkflowWorkspaceService::new(
         MaterializationStore::new(db.clone()),
     ));

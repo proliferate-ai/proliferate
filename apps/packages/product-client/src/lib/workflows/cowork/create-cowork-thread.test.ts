@@ -68,8 +68,11 @@ describe("createCoworkThreadWorkflow", () => {
     const response = coworkThreadResponse();
     const launchDefaults = deferred<Session>();
     let pendingEntry: PendingWorkspaceEntry | null = null;
-    const setPendingWorkspaceEntry = vi.fn((entry: PendingWorkspaceEntry | null) => {
+    const setPendingWorkspaceEntry = vi.fn((entry: PendingWorkspaceEntry) => {
       pendingEntry = entry;
+    });
+    const clearPendingWorkspaceEntry = vi.fn(() => {
+      pendingEntry = null;
     });
     const beginPendingWorkspace = vi.fn<
       CreateCoworkThreadWorkflowDeps["beginPendingWorkspace"]
@@ -86,7 +89,8 @@ describe("createCoworkThreadWorkflow", () => {
       logLatency: vi.fn(),
       getSelectedWorkspaceId: vi.fn(() => null),
       getPendingWorkspaceEntry: vi.fn(() => pendingEntry),
-      isAttemptCurrent: vi.fn(() => true),
+      isAttemptLive: vi.fn(() => true),
+      isAttemptAttended: vi.fn(() => true),
       setThreadsCollapsed: vi.fn(),
       beginPendingWorkspace,
       navigateToWorkspaceShell: vi.fn(),
@@ -98,6 +102,7 @@ describe("createCoworkThreadWorkflow", () => {
       setDraftText: vi.fn(),
       clearDraft: vi.fn(),
       setPendingWorkspaceEntry,
+      clearPendingWorkspaceEntry,
       activateWorkspace: vi.fn(),
       rememberLastViewedSession: vi.fn(),
       trackWorkspaceInteraction: vi.fn(),
@@ -129,7 +134,70 @@ describe("createCoworkThreadWorkflow", () => {
       workspace: { id: "workspace-cowork" },
       projectedSessionId: "projected-session",
     });
-    expect(setPendingWorkspaceEntry).toHaveBeenLastCalledWith(null);
+    expect(clearPendingWorkspaceEntry).toHaveBeenCalledWith("attempt-1");
+  });
+
+  it("adopts a caller's pre-minted attempt id", async () => {
+    const deps = resolvedWorkflowDeps();
+
+    await createCoworkThreadWorkflow({
+      attemptId: "attempt-from-home",
+      agentKind: "codex",
+      modelId: "gpt-5.6-codex",
+      coworkWorkspaceDelegationEnabled: false,
+      runtimeUrl: "http://127.0.0.1:4317",
+    }, deps);
+
+    expect(deps.createPendingWorkspaceAttemptId).not.toHaveBeenCalled();
+    expect(vi.mocked(deps.beginPendingWorkspace).mock.calls[0]?.[0].attemptId)
+      .toBe("attempt-from-home");
+    expect(deps.clearPendingWorkspaceEntry).toHaveBeenCalledWith("attempt-from-home");
+  });
+
+  it("does not mark an unattended thread viewed, but still tracks recency", async () => {
+    const deps = {
+      ...resolvedWorkflowDeps(),
+      isAttemptAttended: vi.fn(() => false),
+    } satisfies CreateCoworkThreadWorkflowDeps;
+
+    await createCoworkThreadWorkflow({
+      agentKind: "codex",
+      modelId: "gpt-5.6-codex",
+      coworkWorkspaceDelegationEnabled: false,
+      runtimeUrl: "http://127.0.0.1:4317",
+    }, deps);
+
+    // The thread was never on screen, so nothing may claim the user saw it.
+    expect(deps.activateWorkspace).not.toHaveBeenCalled();
+    expect(deps.rememberLastViewedSession).not.toHaveBeenCalled();
+    expect(deps.markWorkspaceViewed).not.toHaveBeenCalled();
+    expect(deps.markWorkspaceBootstrappedInSession).not.toHaveBeenCalled();
+    // Recency ordering is not a viewed stamp (spec section 8, step 6).
+    expect(deps.trackWorkspaceInteraction).toHaveBeenCalledWith(
+      "workspace-cowork",
+      "2026-07-15T12:00:00Z",
+    );
+    // Negative control: the pipeline itself still ran to completion.
+    expect(deps.clearPendingWorkspaceEntry).toHaveBeenCalledWith("attempt-1");
+  });
+
+  it("marks an attended thread viewed", async () => {
+    const deps = resolvedWorkflowDeps();
+
+    await createCoworkThreadWorkflow({
+      agentKind: "codex",
+      modelId: "gpt-5.6-codex",
+      coworkWorkspaceDelegationEnabled: false,
+      runtimeUrl: "http://127.0.0.1:4317",
+    }, deps);
+
+    expect(deps.activateWorkspace).toHaveBeenCalled();
+    expect(deps.rememberLastViewedSession).toHaveBeenCalledWith(
+      "workspace-cowork",
+      "session-cowork",
+    );
+    expect(deps.markWorkspaceViewed).toHaveBeenCalledWith("workspace-cowork");
+    expect(deps.markWorkspaceBootstrappedInSession).toHaveBeenCalledWith("workspace-cowork");
   });
 });
 
@@ -145,7 +213,8 @@ function resolvedWorkflowDeps(): CreateCoworkThreadWorkflowDeps {
     logLatency: vi.fn(),
     getSelectedWorkspaceId: vi.fn(() => null),
     getPendingWorkspaceEntry: vi.fn(() => null),
-    isAttemptCurrent: vi.fn(() => true),
+    isAttemptLive: vi.fn(() => true),
+    isAttemptAttended: vi.fn(() => true),
     setThreadsCollapsed: vi.fn(),
     beginPendingWorkspace: vi.fn(() => "projected-session"),
     navigateToWorkspaceShell: vi.fn(),
@@ -157,6 +226,7 @@ function resolvedWorkflowDeps(): CreateCoworkThreadWorkflowDeps {
     setDraftText: vi.fn(),
     clearDraft: vi.fn(),
     setPendingWorkspaceEntry: vi.fn(),
+    clearPendingWorkspaceEntry: vi.fn(),
     activateWorkspace: vi.fn(),
     rememberLastViewedSession: vi.fn(),
     trackWorkspaceInteraction: vi.fn(),
@@ -178,7 +248,6 @@ function coworkThreadResponse(): CreateCoworkThreadResponse {
       surface: "cowork",
       kind: "local",
       lifecycleState: "active",
-      cleanupState: "none",
       createdAt,
       updatedAt: createdAt,
     },

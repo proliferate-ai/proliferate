@@ -6,7 +6,9 @@ import {
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { CloudUpload } from "#product/primitives/icons/platform";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { OrganizationLogo } from "#product/components/settings/panes/organization/OrganizationLogo";
 import type { OrganizationRecord } from "#product/lib/domain/organizations/organization-records";
 
@@ -41,45 +43,37 @@ export function OrganizationSettingsCard({
   }
 
   return (
-    <SettingsSection title="Profile">
-      <form onSubmit={(event) => { void onSubmit(event); }}>
-        <div className="overflow-clip rounded-lg bg-foreground/5">
-          {/* Identity header */}
-          <div className="flex min-h-[3.5rem] flex-col gap-3 border-b border-border-light px-3.5 py-3.5 text-ui sm:flex-row sm:items-center">
-            <OrganizationLogo organization={organization} logoImage={settingsLogoImage} />
-            <div className="min-w-0 flex-1">
-              <div className="text-body-emphasis font-medium text-foreground">{organization.name}</div>
-              <div className="text-muted-foreground">Organization</div>
-            </div>
-          </div>
+    <form onSubmit={(event) => { void onSubmit(event); }}>
+      <SettingsSection title="Profile">
+        <RosterRow
+          density="comfortable"
+          leading={<OrganizationLogo organization={organization} logoImage={settingsLogoImage} />}
+          title={organization.name}
+          secondary="Organization"
+        />
 
-          {/* Name row */}
-          <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="font-medium text-foreground">Name</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Input
-                value={settingsName}
-                onChange={(event) => onNameChange(event.currentTarget.value)}
-                aria-label="Organization name"
-                disabled={!canManage}
-                className="w-64 max-w-full"
-              />
-              {canManage ? (
-                <Button type="submit" size="sm" loading={saving} disabled={!settingsName.trim()}>
-                  Save
-                </Button>
-              ) : null}
-            </div>
-          </div>
+        <SettingsRow label="Name">
+          <Input
+            value={settingsName}
+            onChange={(event) => onNameChange(event.currentTarget.value)}
+            aria-label="Organization name"
+            disabled={!canManage}
+            className="w-64 max-w-full"
+          />
+          {canManage ? (
+            <Button type="submit" size="sm" loading={saving} disabled={!settingsName.trim()}>
+              Save
+            </Button>
+          ) : null}
+        </SettingsRow>
 
-          {/* Logo row */}
-          <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="font-medium text-foreground">Logo</div>
-              <div className="text-muted-foreground">Square image for best results</div>
-            </div>
+        <SettingsRow label="Logo" description="Square image for best results">
+          {/* Column layout, not SettingsRow's default row: the upload
+              controls and any submit error stack vertically in the trailing
+              slot rather than spanning the row's full width like the
+              original hand-roll — a documented shape difference from
+              adopting SettingsRow's single trailing slot. */}
+          <div className="flex flex-col items-end gap-2">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Input
                 ref={fileInputRef}
@@ -116,11 +110,11 @@ export function OrganizationSettingsCard({
               ) : null}
             </div>
             {logoImageError ? (
-              <div className="mt-1 w-full text-ui text-destructive">{logoImageError}</div>
+              <div className="text-ui text-destructive">{logoImageError}</div>
             ) : null}
           </div>
-        </div>
-      </form>
-    </SettingsSection>
+        </SettingsRow>
+      </SettingsSection>
+    </form>
   );
 }

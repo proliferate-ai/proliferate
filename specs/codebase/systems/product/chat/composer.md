@@ -15,6 +15,9 @@ Scope:
 - `apps/packages/product-client/src/domain/chats/composer/resolve-dock-slots.ts`
 - `apps/packages/product-client/src/hooks/chat/derived/use-active-todo-tracker.ts`
 - `apps/packages/product-client/src/domain/chats/tools/active-todo-tracker.ts`
+- `apps/packages/product-client/src/domain/chats/composer/todo-progress-summary.ts`
+- `apps/packages/product-client/src/domain/chats/composer/todo-progress-pill-state.ts`
+- `apps/packages/product-client/src/components/workspace/chat/input/TodoProgressPill.tsx`
 - `apps/packages/product-client/src/domain/chats/tools/claude-plan-tool-call.ts`
 - `apps/packages/product-client/src/lib/access/anyharness/reviews.ts`
 - `apps/packages/product-client/src/lib/domain/reviews/**`
@@ -38,16 +41,17 @@ ChatView
     ├── activeSlot: at most one of
     │     ├── ConnectedApprovalCard         (pending tool approval)
     │     ├── ConnectedUserInputCard        (agent question/form)
-    │     ├── ConnectedMcpElicitationCard   (MCP form)
-    │     └── TodoTrackerPanel              (Codex/Gemini structured plan)
+    │     └── ConnectedMcpElicitationCard   (MCP form)
     ├── attachedSlot
-    │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
-    │     ├── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
     │     ├── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews and subagents)
     │     └── WorkspaceActivityComposerCard (Git/PR summary and source-control actions)
+    ├── floatingSlot                        (absolutely positioned, reserves no layout space)
+    │     └── TodoProgressPill              (transient centered pill above ChatInput — plan/todo progress, any agent)
     ├── ChatInput
     │   └── ChatComposerSurface
-    │       └── form: ComposerCommandEditor + ModelSelector + SessionConfigControls + ChatComposerActions
+    │       └── form: ComposerCommandEditor + ChatInputControlRow (ComposerLeadingControls + ComposerTrailingControls + ChatComposerActions)
+    │           (or the blocked-status takeover: ComposerBlockedStatusLine +
+    │            ComposerBlockedControlRow while a persistent condition blocks chat)
     └── footerSlot
         └── reserved for product-specific footer context when present
 ```
@@ -84,14 +88,47 @@ Home and queued-edit state retain the same opaque snapshot locally while their
 Markdown draft is live. Empty drafts, plain-text compatibility writes, and
 external draft replacements discard the snapshot.
 
-The live editor recognizes `*`/`_` emphasis, `**`/`__` strong emphasis, and
-line-leading unordered and ordered list shortcuts. Cmd/Ctrl-B and Cmd/Ctrl-I
-toggle marks through the rich-text command layer. Tab/Shift-Tab indent or
-outdent only when the selection is inside a list item. Every composer surface —
-workspace, Home, and queued edits — submits on plain Enter or Cmd/Ctrl-Enter,
-including from a list item, and Shift-Enter inserts a newline without
-submitting. Queued edits use the workspace editor's minimum height, row cap,
-and overflow scrolling.
+Assistant-response excerpts added from the transcript are workspace-scoped
+composer context, stored separately from `ChatComposerDraft`. Each excerpt is
+shown above the editor as a removable quoted preview; preview truncation is
+visual only, and submission includes the full selected text exactly once in
+the serialized prompt. An excerpt makes an otherwise empty composer
+submittable. After a successful direct submit, `ChatInput` clears only the
+excerpt ids captured by that submission so context attached during the
+in-flight send is retained. Immediate transcript follow-ups do not clear or
+replace the current composer draft.
+
+The live editor recognizes `*`/`_` emphasis, `**`/`__` strong emphasis,
+line-leading unordered and ordered list shortcuts, and triple-backtick fenced
+code blocks. A typed fence becomes a code block only after a matching closing
+fence exists on its own line; an incomplete fence remains literal text. A
+complete pasted fence is imported as the same editable code block. The editor
+serializes that block back to fenced Markdown, so draft and submission
+boundaries remain unchanged. Cmd/Ctrl-B and Cmd/Ctrl-I toggle marks through the
+rich-text command layer; the global left-sidebar toggle yields the B chord to
+the editor only while composer text is highlighted (PRO-265) — with a
+collapsed caret, or focus anywhere else including the terminal, it keeps
+toggling the sidebar.
+Tab/Shift-Tab indent or outdent only when the selection
+is inside a list item. Every composer surface — workspace, Home, and queued
+edits — submits on plain Enter or Cmd/Ctrl-Enter, including from a list item or
+code block, and Shift-Enter inserts a newline without submitting. Queued edits
+use the workspace editor's minimum height, row cap, and overflow scrolling.
+
+Rich clipboard code is normalized on entry. A pasted rendered code block
+(`text/html` `<pre><code>`) imports as one editable code block — Lexical's
+double `<pre>`/`<code>` conversion is dissolved — and a code block that ends
+the draft always keeps a continuation paragraph after it, so the caret can
+always leave the block (the same continuation the typed-fence path creates).
+Bold and italic are the only authorable text formats, and no block-level
+alignment or indent is authorable outside list nesting. Everything beyond
+that in a rich paste — the inline-code text format (typed backticks stay
+literal), underline, strikethrough, centered or indented blocks — keeps its
+characters and structure and drops the formatting on entry
+(`ComposerFormatGuardPlugin`, PRO-159/PRO-265). An external draft
+replacement resets inherited selection formats along with the content;
+without that reset the format bits survive the clear and re-apply to
+everything typed after a send (PRO-159).
 
 Lexical's high-priority Enter and Tab commands own this decision before native
 editor mutation. The surface applies the shared submit contract exactly once;
@@ -132,6 +169,22 @@ Discovery follows the current caret rather than the end of the document, and a
 selection replaces only the active slash-token range while preserving text and
 formatting around it.
 
+The Home composer offers the same slash menu before any session exists
+(`HomeComposerCommandEditor.tsx`). Its source is not a live transcript: each
+session's `available_commands_update` also records that harness's catalog into
+a persisted per-agent-kind store (`slash-command-catalog-store.ts`), and Home
+reads the catalog for the harness the composer is about to launch. The same
+desktop runnable-command policy applies, the tray anchors absolutely above the
+surface (the mid-screen composer must not shift as the menu opens), and file
+mentions are deliberately absent — there is no workspace to search before
+launch. Until a harness has streamed one session, its Home menu is empty.
+
+File-mention discovery keeps the runtime's full supported result page instead
+of applying a smaller presentation limit or discarding fuzzy matches with a
+stricter client-side filter. The shared inline-menu viewport stays visually
+capped at about ten rows and scrolls the remaining matches; Arrow-key navigation
+keeps the highlighted row in view while focus remains in the composer editor.
+
 Composer focus follows the app lifecycle. The workspace composer takes focus
 after mount and workspace switches (`ChatInput.tsx`), and the Home composer
 takes focus after mount (`HomeComposerForm.tsx`); both surfaces mark their
@@ -155,25 +208,23 @@ display labels or from one provider's raw runtime id shape.
 
 Rules:
 
-- Model and reasoning effort share one composer pill: `Model · Effort`. Its
-  compact root menu presents `Model`, `Effort`, and `Speed` as nested rows when
-  the harness exposes those controls. Each row shows the current value and
-  opens its complete choice list in a side panel. The Model panel retains the
-  searchable grouped catalog; Effort preserves the authored option ladder;
-  Speed presents the default and fast choices. Provider setup and settings
-  remain in the nested Advanced row. Do not render a separate click-to-cycle
-  effort-bars button or a separate Fast icon button. Model-only contexts such
-  as plan handoff may omit the tuning rows.
-- `Ctrl+Shift+M` toggles the active compact root menu open and closed, including
+- The model pill opens the searchable grouped catalog popover
+  (`ComposerModelPickerPopover`) and owns model/harness selection only. Under
+  the ruled composer input grammar (owner rev #1851, superseding the earlier
+  combined `Model · Effort` pill), reasoning effort, `fast_mode`, and the
+  working mode are separate composer chips — see §1.2 for their placement and
+  interaction contracts. Model-only contexts such as plan handoff render just
+  the model selection.
+- `Ctrl+Shift+M` toggles the model picker popover open and closed, including
   while the composer editor is focused. It does nothing while that selector is
   unavailable.
-- Closing the active root menu with `Ctrl+Shift+M`, Escape, or a keyboard model
+- Closing the picker with `Ctrl+Shift+M`, Escape, or a keyboard model
   selection returns focus to the active composer editor without changing its
   draft or caret. Pointer dismissal and model selectors outside an active
   composer keep their own focus behavior.
 - Preserve authored catalog effort labels (`Extra High`, `Max`, `Ultra`, and
-  so on); do not rewrite distinct values to internal spellings such as
-  `Xhigh`.
+  so on) wherever effort values render, including the effort stepper chip; do
+  not rewrite distinct values to internal spellings such as `Xhigh`.
 - The current composer chip uses the active session's effective runtime model
   once AnyHarness reports one. Pending launches may show requested model intent.
 - Picker selected state, dedupe, visibility, and display labels use canonical
@@ -198,15 +249,39 @@ showing the raw session values that required the mapping.
 
 ## 1.2 Session control placement
 
-The chat and Home composers use the same control partition and visible order:
+The chat and Home composers use the same control partition and visible order
+(`ComposerLeadingControls` in `ChatInputControlRow.tsx`, shared verbatim; home
+feeds it launch-time descriptors instead of live-session ones):
 
-1. the combined model/harness, reasoning-effort, and Fast selector
-2. the primary working mode selector
+1. the model/harness selector (§1.1)
+2. the Fast toggle, when the harness exposes `fast_mode`
+3. the reasoning-effort stepper, when the harness exposes an effort ladder
+4. the primary working mode badge
+5. the goal button (live sessions only) and urgent-only integrations
 
-Reasoning effort and `fast_mode` live inside the model selector described in
-§1.1; they must not also render as separate composer controls. The primary
-working mode is compact text plus a subtle disclosure chevron, without a
-leading mode icon.
+`buildComposerSessionControlGroups` owns the partition: it promotes the mode,
+effort, and `fast_mode` descriptors to their dedicated chips. Controls it does
+not promote (the permission/access `mode` while `collaboration_mode` is
+primary, and any other unclaimed configuration control) do not render in the
+composer row at all — there is no overflow or three-dot configuration menu;
+harness configuration surfaces (`SessionConfigControls`, the full-menu
+`SessionModeControl`) remain their home in settings.
+
+The two cycling chips share one interaction contract:
+
+- The reasoning-effort stepper (`ComposerEffortStepper`) is a six-bar ladder
+  chip. Click steps to the next level and wraps at the top; `⌘ click`
+  (`Ctrl click` on non-Apple platforms) steps back and wraps at the bottom.
+  `⌃⇧E` steps forward and `⌃⌥⇧E` steps back from anywhere on the main screen.
+- The working mode badge (`ComposerModeBadge`) is icon-only at every width —
+  the mode's configured glyph and nothing else, remounted per value so the
+  step is legible from the glyph swap. Click steps to the next mode;
+  `⌘ click`/`Ctrl click` steps back. `Shift+Tab` from the composer editor also
+  steps back.
+- Both chips' tooltips use `keepOpenOnPress`, report the value just landed on,
+  and carry the click-to-step and `⌘ click`-to-step-back hints
+  (`appendSessionControlStepHint`); the modifier word is platform-resolved,
+  never hardcoded.
 
 Visible controls use one consistent inter-item rhythm. Compact controls must
 not reserve a trailing pending-state slot when no pending state exists; that
@@ -219,13 +294,48 @@ keeps Codex's collaboration mode independent from its read-only/auto/full-access
 permissions while preserving harnesses such as Claude, Cursor, and OpenCode
 whose working and access behavior still share one mode control.
 
-Permission/access mode and every other unclaimed configuration control render
-only under the rightmost three-dot configuration menu. A reasoning-level
-control with two or more ordered values remains visible in the combined picker
-when the runtime reports it as non-settable, but its choices are disabled.
-Cowork hides the permission/access `mode` because its access policy is
-product-defined, but retains independent working-mode controls such as
-`collaboration_mode` together with model tuning in the combined picker.
+A reasoning-effort ladder with two or more ordered values keeps its chip
+visible when the runtime reports it as non-settable, but the chip is disabled
+— it still reads the level. Cowork hides the permission/access `mode` because
+its access policy is product-defined
+(`filterComposerSessionControlsForSurface`), but retains independent
+working-mode controls such as `collaboration_mode` together with the tuning
+chips.
+
+### Compact control tier (narrow composers)
+
+Below a 32rem composer-container width (`chat-layout.ts` owns the class-string
+constants; the dock column's `@container` anchors the query in chat, and the
+Home composer wrapper anchors its own), labeled control pills shed their words
+so the row degrades to icons instead of truncating mid-word or painting over
+neighboring controls:
+
+- The working-mode badge is already icon-only at every width (§1.2), so the
+  compact tier changes nothing about it.
+- The reasoning pill hides the level word; the lit level bars keep reading
+  the level.
+- The integrations pill hides the connected count and keeps the glyph. The
+  urgent re-auth label stays visible (and shrinkable) at every width.
+- The model pill keeps its provider icon and name and remains the flexible
+  item — it truncates with an ellipsis before any icon pill compresses. Its
+  max-width is `min(15rem, 100%)`: the wrapper bound is load-bearing, because
+  a bare rem cap replaces the primitive's `max-w-full` in tailwind-merge and
+  the pill's column-flex wrapper (`items-start`, for the inline error) does
+  not otherwise constrain the button — an uncapped button paints over the
+  mode pill instead of truncating.
+- Each swap is CSS visibility on one button (wrapper-span classes via
+  `ComposerControlButton`), so `data-*` driver attributes, handlers, and
+  `aria-label`s are width-independent. Pending-state indicators stay visible
+  at every width.
+
+The main pane's floor is sized so the compact row sits at its natural width:
+`MAIN_PANE_MIN_WIDTH` (`right-panel-model.ts`) clamps the right rail's
+rendered width so the chat pane never drops below 440px, whatever the
+persisted panel width, sidebar width, and window size add up to. At the
+floor, every pill renders at content size with the shared 8px rhythm intact —
+minimizing the pane must not compress the spacing between pills or truncate
+the model name for the canonical control row. The persisted panel width is
+not clamped — the user's chosen width returns when the window affords it.
 
 ## 2. Dock Regions
 
@@ -241,11 +351,16 @@ this order:
 1. **`outboundSlot`** — queued outbound work: user prompts, queued wake prompts,
    review feedback prompts, and review-complete prompts.
 2. **`activeSlot`** — the active agent state. Permission approvals, user-input
-   questions, and MCP elicitation forms take precedence. If there is no blocking
-   request, this slot may show `TodoTrackerPanel`.
-3. **`attachedSlot`** — ambient attached context and parallel work:
-   workspace/worktree/runtime panels plus review agents and linked
-   same-workspace subagents.
+   questions, and MCP elicitation forms are its only inhabitants; it is empty
+   when none of those is pending.
+3. **`attachedSlot`** — parallel delegated work: review agents and linked
+   same-workspace subagents. Persistent workspace/runtime blocking state is
+   not an attached panel; it takes over the composer itself (below).
+
+Plan/todo progress is **not** a dock-region inhabitant. It renders through the
+separate `floatingSlot` described in §2.2 — a transient overlay that never
+occupies or displaces `activeSlot`, so a permission/question/MCP form is never
+competing with plan state for the slot.
 
 Review status lives in `attachedSlot`, not in active state. The shared
 `DelegatedWorkComposerControl` owns the compact `Agents` summary-control +
@@ -267,6 +382,24 @@ finished result notice. This review-start gate is separate from chat input
 availability; `parent_revising` keeps review controls visible but leaves parent
 chat input enabled.
 
+**Blocked-status composer takeover** (`useComposerBlockedState` +
+`lib/domain/chat/composer/composer-blocked-state.ts`): when a persistent
+condition blocks chat — worktree/local checkout missing, a FAILED
+cloud/cowork provisioning attempt, the cloud workspace-status screen
+demanding attention, or a live cloud runtime out of `ready` — `ChatInput`
+replaces the draft textarea with a one-line status
+(`ComposerBlockedStatusLine`) and swaps the control row for the state's
+recovery actions (`ComposerBlockedControlRow`); send stays disabled with the
+blocked message as its reason, and irreversible actions (lost-workspace
+delete) confirm first. In-flight (non-failed) provisioning is deliberately
+NOT a takeover: availability keeps the composer enabled so the first prompt
+can be typed and queued against the pending workspace. The panel-derived
+buckets are mutually exclusive upstream (`use-workspace-status-panel-state`
+yields one kind, resolving a pending entry before a missing directory); the
+resolver then prefers any panel bucket over the runtime bucket. Cowork
+threads suppress the takeover via `suppressWorkspaceTakeover` exactly as
+they used to suppress the ambient workspace-status panel.
+
 If you need to introduce another dock-region inhabitant, classify it by state
 role first: outbound work, active agent state, or attached context/parallel
 work. Add the precedence decision to `resolve-dock-slots.ts` and the shared DOM
@@ -282,8 +415,8 @@ prompt panel. `outboundSlot` must render before `activeSlot`; both stack above
 attached context/parallel work when present.
 
 The workspace-activity cap is a separate Git/PR surface. It renders last in
-the attached stack, after ambient context, delegated work, and session
-goal/activity, so it joins directly to the composer. Its collapsed trigger is
+the attached stack, after delegated work and session goal/activity, so it
+joins directly to the composer. Its collapsed trigger is
 text-only, has no disclosure arrow, and shows at most three ordered Git/PR
 facts: conflicts or failing checks first, then sync and changed-file state,
 then a healthy branch/clean fallback. It never shows filenames, diff stats, or
@@ -370,6 +503,41 @@ the newest editable queued prompt. Steering promotes the selected prompt to the
 head and interrupts the active turn so normal durable queue drain executes it
 next.
 
+### The todo progress pill (`floatingSlot`)
+
+`TodoProgressPill.tsx` replaced the persistent `TodoTrackerPanel`/`TodoTrackerStrip`
+dock inhabitants with a transient floating pill. It is mounted through
+`ChatComposerDock`'s `floatingSlot` prop — an absolutely positioned overlay,
+centered directly above `ChatInput`, that reserves no layout space of its own
+and therefore never shifts the dock when it shows or hides.
+
+- **Data source.** Driven by `useActiveTodoTracker()`
+  (any agent's live plan, including Claude's TodoWrite — see §3.4). `todo-progress-summary.ts`
+  reduces `PlanEntry[]` to a `{ completedCount, total, currentStepNumber, label }`
+  summary (`"Step N/Total"`); `hasTodoStepAdvanced` compares two summaries to
+  detect a step completing.
+- **Nothing renders by default.** The pill appears only when the current step
+  number advances — never on a tracker's first appearance — lingers ~4s
+  (fade starts at 3.4s, 600ms opacity ease), then unmounts. Hovering pins it
+  (cancels the fade, reveals a checklist card above it with one row per
+  entry); mouse-leave unpins and restarts a short fade (starts at 1.2s, gone
+  by 1.8s). A step advance while the pointer is on the pill/checklist does
+  not restart that cycle: the pinned checklist stays mounted and its rows
+  update in place, so the in-progress spinner never remounts mid-hover.
+  `todo-progress-pill-state.ts` owns this show → linger → fade →
+  hide state machine as a pure reducer (`todoPillReducer`); the connected
+  component only owns the timers and the hovered guard.
+- **No dock-slot precedence.** Because it floats independently of
+  `activeSlot`/`attachedSlot`, it never competes with `ConnectedApprovalCard`,
+  `ConnectedUserInputCard`, or `ConnectedMcpElicitationCard` for the slot —
+  there is no more "todo strip" companion under an interaction card.
+- **Reduced motion:** shows/hides directly instead of animating the opacity
+  fade (`usePrefersReducedMotion`).
+- Pure pieces (`TodoProgressPillView`, `TodoProgressChecklistCard`) are
+  exported for fixtures; the playground's `todos-short`/`todos-mid`/`todos-long`
+  scenarios render them pinned open via `PlaygroundFloatingSlotFixtures.tsx`
+  since the connected pill only appears on a live step advance.
+
 ## 2.1 Composer footer semantics
 
 The dock owns footer placement when a product-specific footer exists. This
@@ -383,7 +551,7 @@ All three sit inside the composer area. They differ by lifecycle and role, and t
 
 | Component | Lifecycle | Renders | Header shape |
 |---|---|---|---|
-| `TodoTrackerPanel` | Long-lived, non-gating active agent state | `PlanEntry[]` as a fade-masked list | tiny muted icon + muted status text |
+| `TodoProgressPill` | Transient, non-gating — floats above the dock, not in it (§2.2) | `PlanEntry[]` reduced to a `Step N/Total` pill + hover checklist | `DotCellLoader` + tabular-nums step label |
 | `ApprovalCard` | Short-lived, gating (demands a decision) | options from `pendingApproval`, one variant for all three `toolKind`s | plain title only — NO icon, NO label chip, NO separator |
 | `ProposedPlanCard` | Lives in the **transcript**, not above composer | immutable markdown plan snapshot, decision state, and plan actions | bold plan title + icon-only Copy/Collapse buttons |
 | `PlanReferenceAttachmentCard` | Draft/user-prompt attachment | immutable markdown plan snapshot attached to a prompt | compact draft chip + preview action before send; full collapsible transcript card after send |
@@ -445,11 +613,60 @@ echoes it back as a `plan_reference` content part.
   source proposed plan. Approval state remains local to the session that
   received the original proposed-plan item.
 
-### 3.4 Todo tracker is Codex/Gemini only
+### 3.4 Todo tracker covers every agent's live plan
 
-`useActiveTodoTracker` narrows `deriveCanonicalPlan` to `sourceKind === "structured_plan"`. Claude's `plan` items are filtered out by the SDK (Claude's `TodoWrite` is internal bookkeeping, not a presented plan). Do not re-enable Claude's structured plans in the todo tracker — they belong elsewhere.
+`deriveActiveTodoTracker` reads `plan` items straight off the transcript (latest in-progress item with entries, any `sourceAgentKind`) instead of `deriveCanonicalPlan`. The SDK's canonical derivation excludes Claude's `TodoWrite` because the *formal plan UI* treats it as internal bookkeeping — but internal task tracking is exactly what the progress pill surfaces, so the tracker deliberately bypasses that gate. Keep the two derivations separate: the SDK exclusion still governs the formal plan surfaces, and the pill-side derivation must not feed them.
 
-## 4. Visual rules (minimalist pattern)
+### 3.5 Workspace-creation receipts belong to one session
+
+The local/worktree creation receipt is a synthetic transcript projection, not
+a persisted session event. Its settled row belongs only to the session created
+with the workspace. During the pending-to-materialized handoff, the workspace
+arrival event carries that ProductClient session alias so the row stays mounted
+without waiting for the session-list query. After materialization or reload,
+the earliest server `createdAt` session (ID tie-break) is authoritative. The
+arrival event remains workspace-scoped for setup and arrival lifecycle state;
+switching session tabs must not clear it or project its receipt into another
+session.
+
+### 3.6 File drops attach by upload or local reference
+
+Dropping onto the chat surface accepts every file type and folders. Two
+transports back the chips:
+
+- **Byte uploads** stay the transport for what the upload pipeline already
+  accepts — images within the image cap and small text files — because they
+  work on any workspace and put actual pixels in front of the model
+  (`promptUploadKind` in `prompt-attachment-rules.ts` is the single
+  eligibility source for `addFiles` and drop partitioning).
+- **Local references** (`kind: "local_ref"`) cover everything else: folders,
+  binaries, and oversize files. They carry an absolute path and submit as
+  `resource_link` prompt blocks (`file://` URI), which the runtime passes
+  through to the agent untouched; the co-located agent opens the path itself.
+  No bytes are read, so there is no size cap and no preview affordance on the
+  chip. Folder refs use the `inode/directory` MIME type, which is what flips
+  the chip and transcript icon to the folder visual and the metadata label to
+  "Folder".
+
+HTML5 drops never expose filesystem paths, so `ChatView` recovers them through
+the host seam: `host.desktop.files.readDroppedPaths()` reads the macOS drag
+pasteboard right after the DOM drop (`dragDropEnabled` stays `false`; native
+Tauri drag-drop would swallow DOM drops app-wide). The resolver is only wired
+for local-runtime workspaces, mirroring `resolveRuntimeTargetForWorkspace`:
+`cloud:*` sandboxes and `target:*` SSH targets cannot read this machine's
+paths and keep the byte-upload-only behavior, as do the web host and any drag
+whose pasteboard carries no filenames or whose shape does not correspond to
+the dropped FileList (`droppedPathsMatchFiles`: every File must consume a
+distinct candidate, leftover candidates must be directories — the
+stale-pasteboard guard; the flow falls back to `addFiles`). The pasteboard
+snapshot is additionally bound to the drop's drag session: `ChatView`
+captures the pasteboard changeCount while the drag is over the surface and
+rejects a snapshot read under a different count, and the native read
+discards snapshots whose changeCount moved mid-read.
+In-flight path resolutions are discarded when the workspace scope changes so
+a drop never lands attachments into another workspace's draft. Drops still
+require an active session with prompt capabilities; the new-chat attachment
+flow is separate scope (PRO-186).
 
 These are the calls that get broken most easily.
 
@@ -480,7 +697,7 @@ At most **one** visual element in a header's leading position:
 
 | Pattern | Example | Where |
 |---|---|---|
-| Tiny muted icon + muted text | `ClipboardList` icon + "1 out of 5 tasks completed" | TodoTrackerPanel |
+| Loader + tabular-nums step label | `DotCellLoader` + "Step 2/5" | TodoProgressPill |
 | Bold content label (no icon) | "Plan" / plan title | ProposedPlanCard |
 | Plain medium-weight title (no icon, no label chip) | "git push origin main" / "Ready to code?" | ApprovalCard |
 
@@ -501,16 +718,25 @@ Destructive options (deny/reject/cancel) render their label in
 Allow/Deny pair) go through the same row component — do not reintroduce a
 button row.
 
-### 4.4 Todo tracker specifics
+### 4.4 Todo progress pill specifics
 
-- Header: tiny icon + muted status text (`text-muted-foreground`), no bold.
-- Body: `vertical-scroll-fade-mask max-h-40` (160px cap) with `[--edge-fade-distance:2rem]`.
-  The fade-mask utility lives in `apps/packages/design/src/css/product.css` so shared
-  chat components can use it on Desktop and Web.
-- Completed entries: `line-through` + `text-muted-foreground/60` on both the index and the content span.
-- Default: expanded. Collapse chevron in header.
+See §2.2 for lifecycle/state-machine detail. Visual specifics:
 
-Do **not** grow the scroll cap past `max-h-40` — larger caps dominate the composer visually.
+- Pill: `rounded-full bg-popover shadow-popover` + a 0.5px `ring-border` hairline,
+  `px-3 py-[5px]`, `text-ui-sm text-muted-foreground` (hover → foreground).
+  Content: `DotCellLoader` (`size="compact" variant="wave"`, scaled via
+  `--dot-cell-size: 0.125rem; --dot-cell-gap: 0.078rem`) + `"Step N/Total"`
+  (`tabular-nums`).
+- Hover checklist card: `rounded-[10px] bg-popover shadow-popover` + the same
+  0.5px ring, `px-1 py-2`, `max-w-[520px]`. Rows: `CheckCircleFilled` muted +
+  `line-through` `text-muted-foreground/60` label (done); `Spinner` +
+  `text-foreground` label (in progress); `Circle` faint + `text-muted-foreground`
+  label (pending).
+- No scroll cap — the pill is transient and the checklist only appears on
+  hover, so there is no persistent 160px budget to protect.
+
+Do **not** reintroduce a persistent, always-mounted todo panel in the dock —
+that is exactly the pattern this pill replaced.
 
 ### 4.5 ProposedPlanCard specifics
 
@@ -535,7 +761,7 @@ Do **not** grow the scroll cap past `max-h-40` — larger caps dominate the comp
 Control-row tone rule — the pills are **monochrome**:
 
 - Every control pill is a `ComposerControlButton`
-  ([ComposerControlButton.tsx](../../../../../apps/packages/product-client/src/primitives/patterns/ComposerControlButton.tsx)). It has no
+  ([ComposerControlButton.tsx](../../../../../apps/packages/product-client/src/primitives/patterns/composer/ComposerControlButton.tsx)). It has no
   `tone` prop; the tone system was deleted 2026-07-02 along with the plan-mode
   tint (`--color-plan-border` is gone). Do **not** reintroduce mode-based
   tinting on the mode pill or any other control.
@@ -552,11 +778,13 @@ As-built composer surface — `ChatComposerSurface` (ProductClient) tags itself 
 the `chat-composer-surface` class, whose paint lives in
 `apps/packages/design/src/css/product.css`:
 
-- Background: `--color-composer-background`.
-- Outline: a 0.5px stroke-in-shadow (`0 0 0 0.5px var(--color-border)`)
-  stacked with `--color-composer-shadow` (which resolves to
-  `--shadow-subtle`) — there is no CSS `border`.
-- Radius: `rounded-[var(--radius-composer,1rem)]`; `--radius-composer` is 1rem.
+- Background: `--color-composer-background`. Opaque in both modes; light takes
+  the `#f6f6f6` rail plane, because the fill is the only thing separating the
+  composer from the page.
+- Outline: none. The chrome is fill-only — no CSS `border`, no stroke-in-shadow
+  and no elevation stack. The composer's own shadow token was deleted with the
+  elevation it described.
+- Radius: `rounded-composer`; `--radius-composer` is 1.75rem (28px).
   `ChatComposerDock` locally overrides only the top corners to zero while the
   full-width workspace-activity cap is present.
 
@@ -593,7 +821,7 @@ These are patterns that were tried and rejected. Reintroducing them reopens know
   tool approvals go in `ApprovalCard`; formal plan decisions go in
   `ProposedPlanCard`.
 - **`!h-8 !px-2.5` style `!important` button overrides.** Fixed at the root by adding `tailwind-merge` to the `Button` primitive. Don't reintroduce `!` bangs.
-- **`useActivePlan` hook.** Renamed to `useActiveTodoTracker` and narrowed to `structured_plan` only. The old name and signature are gone.
+- **`useActivePlan` hook.** Renamed to `useActiveTodoTracker`; it now derives from raw `plan` items across all agents (see §3.4). The old name and signature are gone.
 - **Icons + label chips + separator + title stacked in a header.** The whole "RUN COMMAND · git push origin main" pattern was dropped. Just the title.
 
 ## 7. Iterating visually — the playground
@@ -603,9 +831,9 @@ These are patterns that were tried and rejected. Reintroducing them reopens know
 Scenarios (selectable via `?s=<key>`):
 
 - `clean` — baseline, no panel
-- `todos-short`, `todos-mid`, `todos-long` — TodoTrackerPanel at three sizes
+- `todos-short`, `todos-mid`, `todos-long` — TodoProgressPill pinned open (pill + checklist) at three plan sizes, via `PlaygroundFloatingSlotFixtures.tsx`
 - `execute-approval`, `edit-approval` — ApprovalCard execute/edit variants
-- `workspace-arrival-created` — WorkspaceArrivalAttachedPanel above the composer
+- `workspace-receipt-setup-succeeded`, `workspace-receipt-setup-failed` — WorkspaceCreationReceiptView (transcript creation receipt) collapsed/expanded
 - `cloud-first-runtime`, `cloud-provisioning`, `cloud-applying-files`, `cloud-blocked`, `cloud-error`, `cloud-reconnecting`, `cloud-reconnect-error` — cloud workspace/runtime composer states
 - `claude-plan-short`, `claude-plan-long` — ProposedPlanCard in transcript
 - `review-feedback-message`, `review-complete-message` — collapsed transcript receipts for review feedback and completed reviews
@@ -634,5 +862,6 @@ Thin page → fat components, per the `pages/**` orchestration-only rule:
 - `components/playground/PlaygroundScenarioBar.tsx` — top-bar scenario picker
 - `components/playground/PlaygroundTranscript.tsx` — transcript area (renders `ProposedPlanCard` when applicable)
 - `components/playground/PlaygroundComposer.tsx` — `ChatComposerDock` + scenario-driven dock slots + read-only composer surface
+- `components/playground/composer-slots/PlaygroundFloatingSlotFixtures.tsx` — `floatingSlot` fixture renderer (todo progress pill scenarios)
 
 Adding a new scenario: update `config/playground.ts` (add the key + label), optionally add fixture data in `__fixtures__/playground.ts`, then extend the relevant slot renderer in `PlaygroundComposer` and/or `PlaygroundTranscript`.

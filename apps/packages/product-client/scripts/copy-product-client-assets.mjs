@@ -11,7 +11,7 @@
 //      into the repo root — no checked-in duplicate, no cross-package reach.
 //
 //   2. --dist (runs after tsc): mirrors every non-TypeScript file under `src/`
-//      (index.css, svg/png/jpeg/mp3 assets, the generated catalog, committed
+//      (index.css, svg/png/jpeg/wav assets, the generated catalog, committed
 //      config JSON) into the emitted `dist/` tree so the two host Vite builds
 //      resolve the asset/catalog URLs from the package's published output.
 //

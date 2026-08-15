@@ -6,6 +6,7 @@ import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
+  makeCloudLogicalWorkspace,
   makeLocalLogicalWorkspace,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
@@ -15,7 +16,6 @@ function buildSnapshot(
   return buildWorkspaceActivityIndicatorSnapshot({
     logicalWorkspaces: [],
     workspaceActivities: {},
-    archivedSet: new Set(),
     hiddenRepoRootIds: new Set(),
     workspaceTypes: DEFAULT_SIDEBAR_WORKSPACE_TYPES,
     lastViewedAt: {},
@@ -185,18 +185,18 @@ describe("workspace activity indicator", () => {
   });
 
   it("ignores archived workspaces", () => {
-    const workspace = makeLocalLogicalWorkspace({
+    const workspace = makeCloudLogicalWorkspace({
       id: "archived-workspace",
       repoKey: "/tmp/repo-a",
       repoName: "repo-a",
+      productLifecycle: "archived",
     });
 
     expect(buildSnapshot({
       logicalWorkspaces: [workspace],
       workspaceActivities: {
-        "archived-workspace-materialization": "error",
+        "cloud:archived-workspace-cloud": "error",
       },
-      archivedSet: new Set(["archived-workspace"]),
     })).toMatchObject({
       state: "idle",
       attentionCount: 0,

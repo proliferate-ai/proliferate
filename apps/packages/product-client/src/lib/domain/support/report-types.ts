@@ -1,3 +1,7 @@
+import type {
+  PreparedSupportSnapshotV1,
+  SupportSnapshotConsentV1,
+} from "@proliferate/product-client/host/desktop-bridge";
 import type { SupportMessageContext } from "#product/lib/domain/support/types";
 
 export type SupportReportScopeKind =
@@ -55,6 +59,14 @@ export interface SupportReportServerCorrelation {
   sessionIds: string[];
 }
 
+export type SupportReportSnapshotIntent =
+  | { kind: "none" }
+  | {
+      kind: "prepared";
+      consent: SupportSnapshotConsentV1;
+      artifact: PreparedSupportSnapshotV1;
+    };
+
 export interface SupportReportJob {
   jobId: string;
   createdAt: string;
@@ -78,12 +90,10 @@ export interface SupportReportJob {
    * outcome. Optional for backwards-compatible persistence; defaults to `false`.
    */
   notifyMe?: boolean;
-  /**
-   * When `false`, diagnostics (app logs) are not collected or uploaded for this
-   * report. Optional for backwards-compatible persistence; defaults to `true`
-   * (logs included) so pre-existing queued jobs keep their original behavior.
-   */
+  /** Migration-only persisted input. It never grants snapshot consent. */
   includeLogs?: boolean;
+  /** Immutable diagnostics intent. Every newly queued job carries this field. */
+  supportSnapshot: SupportReportSnapshotIntent;
   snapshot: SupportReportWindowSnapshot;
   attachments: SupportReportAttachmentPayload[];
   activeWorkspaceId?: string;

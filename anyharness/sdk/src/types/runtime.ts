@@ -22,4 +22,16 @@ export type AgentSeedSource = components["schemas"]["AgentSeedSource"];
 export type AgentSeedOwnership = components["schemas"]["AgentSeedOwnership"];
 export type AgentSeedLastAction = components["schemas"]["AgentSeedLastAction"];
 export type AgentSeedFailureKind = components["schemas"]["AgentSeedFailureKind"];
-export type ProblemDetails = components["schemas"]["ProblemDetails"];
+/**
+ * RFC 7807 problem details.
+ *
+ * `extra` is widened from the generated type. The runtime declares it as a
+ * free-form object, which `openapi-typescript` narrows to
+ * `Record<string, never>` — a shape that claims the payload has no keys and
+ * would make the client's untouched passthrough uncompilable. The payload is
+ * per-code (the unarchive scenario body, the git-lock file path), so `unknown` is
+ * the honest type and the caller narrows it at the point of use.
+ */
+export type ProblemDetails =
+  & Omit<components["schemas"]["ProblemDetails"], "extra">
+  & { extra?: unknown };

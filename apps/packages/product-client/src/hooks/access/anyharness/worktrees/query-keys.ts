@@ -20,12 +20,3 @@ export function worktreeSettingsTargetHealthKey(target: WorktreeSettingsTarget) 
   ] as const;
 }
 
-export function worktreeSettingsTargetRetentionPolicyKey(target: WorktreeSettingsTarget) {
-  return [
-    "worktree-settings",
-    "retention-policy",
-    target.location,
-    target.environmentId ?? target.runtimeUrl,
-    target.runtimeGeneration,
-  ] as const;
-}

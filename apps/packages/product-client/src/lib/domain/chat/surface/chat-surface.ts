@@ -1,4 +1,8 @@
 import type { Workspace } from "@anyharness/sdk";
+import {
+  launchIntentOwnsShell,
+  type LaunchIntentScope,
+} from "#product/lib/domain/chat/launch/launch-intent";
 
 export type ChatSurfaceState =
   | { kind: "no-workspace" }
@@ -28,7 +32,15 @@ export interface ResolveChatSurfaceStateInput {
   selectedWorkspaceId: string | null;
   hasPendingWorkspaceEntry: boolean;
   activeLaunchIntentId: string | null;
+  /** The workspace identities the active launch intent may own, if any. */
+  launchIntentScope: LaunchIntentScope | null;
+  /** True while the active launch intent is still in flight (not failed). */
+  launchIntentInFlight: boolean;
   launchIntentSessionId: string | null;
+  /** The current shell's own selected logical workspace id (pending-workspace UI key or workspace id). */
+  shellLogicalWorkspaceId: string | null;
+  /** The current shell's own selected (materialized) workspace id. */
+  shellWorkspaceId: string | null;
   selectedLocalWorkspace: Workspace | null;
   isArrivalWorkspace: boolean;
   shouldShowSelectedCloudWorkspaceStatus: boolean;
@@ -58,11 +70,22 @@ export function shouldMountWorkspaceShell(args: {
 
 export function resolveLaunchIntentSurfaceOverride(args: {
   activeLaunchIntentId: string | null;
+  launchIntentScope: LaunchIntentScope | null;
   launchIntentSessionId: string | null;
   activeSessionId: string | null;
   hasVisibleSessionContent: boolean;
+  shellLogicalWorkspaceId: string | null;
+  shellWorkspaceId: string | null;
 }): LaunchIntentSurfaceOverride | null {
   if (!args.activeLaunchIntentId) {
+    return null;
+  }
+
+  if (!launchIntentOwnsShell({
+    scope: args.launchIntentScope,
+    shellLogicalWorkspaceId: args.shellLogicalWorkspaceId,
+    shellWorkspaceId: args.shellWorkspaceId,
+  })) {
     return null;
   }
 
@@ -101,16 +124,30 @@ export function resolveChatSurfaceState(input: ResolveChatSurfaceStateInput): Ch
   }
 
   if (input.hasPendingWorkspaceEntry && scopedActiveSessionId) {
-    return scopedHasContent
-      ? { kind: "session-transcript", sessionId: scopedActiveSessionId }
-      : { kind: "session-empty", sessionId: scopedActiveSessionId };
+    if (scopedHasContent) {
+      return { kind: "session-transcript", sessionId: scopedActiveSessionId };
+    }
+    // With a launch intent still in flight, the queued prompt has not landed
+    // in the projected session yet (a one-beat gap after send). Fall through
+    // to the launch-intent pane, which already shows the prompt bubble and
+    // frontier status at final transcript geometry — rendering session-empty
+    // here instead double-mounts the creation receipt (canvas topSlot first,
+    // pending-prompt frontier a beat later) and the transcript jumps.
+    // Failed intents keep the session-empty surface: the pending entry's
+    // creation receipt owns retry/back for local and worktree creations.
+    if (!input.launchIntentInFlight) {
+      return { kind: "session-empty", sessionId: scopedActiveSessionId };
+    }
   }
 
   const launchIntentOverride = resolveLaunchIntentSurfaceOverride({
     activeLaunchIntentId: input.activeLaunchIntentId,
+    launchIntentScope: input.launchIntentScope,
     launchIntentSessionId: input.launchIntentSessionId,
     activeSessionId: scopedActiveSessionId,
     hasVisibleSessionContent: scopedHasContent,
+    shellLogicalWorkspaceId: input.shellLogicalWorkspaceId,
+    shellWorkspaceId: input.shellWorkspaceId,
   });
   if (launchIntentOverride) {
     return launchIntentOverride;

@@ -190,6 +190,27 @@ export function delegatedWorkSummaryPriority(
   }
 }
 
+/**
+ * Ceiling for the message preview an agent-message tooltip shows. The tooltip
+ * is a peek, not the reading surface — the full text lives in the subagent's
+ * own transcript — and an unclamped multi-thousand-character prompt wraps
+ * into a tooltip taller than the viewport.
+ */
+export const AGENT_MESSAGE_PREVIEW_MAX_CHARS = 500;
+
+export function clampAgentMessagePreview(text: string): string {
+  if (text.length <= AGENT_MESSAGE_PREVIEW_MAX_CHARS) {
+    return text;
+  }
+  // slice() counts UTF-16 code units, so the cut can bisect a surrogate pair;
+  // drop an orphaned high surrogate rather than render U+FFFD before the
+  // ellipsis.
+  const cut = text
+    .slice(0, AGENT_MESSAGE_PREVIEW_MAX_CHARS - 1)
+    .replace(/[\uD800-\uDBFF]$/u, "");
+  return `${cut.trimEnd()}…`;
+}
+
 function normalizeStatus(status: string | null | undefined): string {
   return status
     ?.replace(/[_-]+/gu, " ")

@@ -4,15 +4,19 @@ use std::time::Duration;
 use super::default_branch;
 use super::executor::resolve_git_repo_root;
 pub use super::operations::clone::CloneError;
+use super::operations::snapshot::WorkspaceSnapshot;
+use super::operations::worktree_branch;
+use super::operations::worktree_restore::WorktreeRestoreOptions;
 use super::operations::{
-    branches, clone, commit, commit_all, diff, diff_files, push, revert_patches, scratch, staging,
-    status, status_summary, worktrees,
+    branches, clone, commit, commit_all, diff, diff_files, gc, push, revert_patches, scratch,
+    snapshot, snapshot_restore, staging, status, status_summary, worktrees,
 };
 use super::types::{
     CommitError, GitBranch, GitBranchDiffFilesResult, GitDiffError, GitDiffResult, GitDiffScope,
     GitRevertPatchEntry, GitRevertPatchesError, GitRevertPatchesResult, GitStatusSnapshot,
     GitStatusSummarySnapshot, GitWorktreeRestoreError, GitWorktreeRestoreOutcome, PushError,
-    WorktreeBaseFetch,
+    QuiesceReport, SnapshotError, SnapshotNotice, WorktreeBaseFetch, WorktreeRegistration,
+    WorktreeRemoveError, WorktreeRemoveOutcome,
 };
 
 pub struct GitService;
@@ -120,12 +124,12 @@ impl GitService {
     pub fn restore_worktree(
         source_repo_root: &Path,
         target_path: &Path,
-        branch_name: &str,
+        options: WorktreeRestoreOptions<'_>,
     ) -> Result<GitWorktreeRestoreOutcome, GitWorktreeRestoreError> {
         super::operations::worktree_restore::restore_worktree(
             source_repo_root,
             target_path,
-            branch_name,
+            options,
         )
     }
 
@@ -192,7 +196,7 @@ impl GitService {
     pub fn remove_worktree_force(
         repo_root_path: &str,
         worktree_path: &str,
-    ) -> anyhow::Result<worktrees::GitWorktreeRemoveOutput> {
+    ) -> Result<WorktreeRemoveOutcome, WorktreeRemoveError> {
         worktrees::remove_worktree_force(repo_root_path, worktree_path)
     }
 
@@ -202,6 +206,13 @@ impl GitService {
 
     pub fn stdout_result(repo_root: &Path, args: &[&str]) -> anyhow::Result<String> {
         worktrees::stdout_result(repo_root, args)
+    }
+
+    /// Purge's (and the sweep's) guarded `git gc`: `gc.worktreePruneExpire=never`
+    /// plus a spelled-out `1.hour.ago` prune window. See `operations::gc` for
+    /// why both literal strings are load-bearing.
+    pub fn gc_repo(repo_root: &Path) -> anyhow::Result<()> {
+        gc::gc_repo(repo_root)
     }
 
     pub fn switch_to_existing_branch(
@@ -277,5 +288,92 @@ impl GitService {
         summary: &str,
     ) -> anyhow::Result<Option<String>> {
         commit_all::commit_all_if_dirty(workspace_path, summary)
+    }
+
+    /// Capture a `WorkspaceSnapshot` of `workspace_path`: HEAD, branch, the
+    /// exact staged tree, and the working tree tree (staged ∪ unstaged ∪
+    /// untracked non-ignored). Dead code this rung — no caller in the product
+    /// invokes it; R4's `archive.rs` is the only intended caller.
+    pub fn snapshot_workspace(workspace_path: &Path) -> Result<WorkspaceSnapshot, SnapshotError> {
+        snapshot::snapshot_workspace(workspace_path)
+    }
+
+    /// The read-only surface covering the three business-rule refusals
+    /// (hollow checkout, conflict-bearing operation, unborn HEAD) so a caller
+    /// can refuse before quiescing anything. Writes nothing to the worktree.
+    pub fn probe_refusals(workspace_path: &Path) -> Result<(), SnapshotError> {
+        snapshot::probe_refusals(workspace_path)
+    }
+
+    /// Reap the debris a caller's own kills left behind (stranded conflict
+    /// sentinels and lock files) so the capture that follows is not
+    /// permanently blocked by state only the caller's SIGKILLs created.
+    pub fn repair_kill_debris(
+        workspace_path: &Path,
+        quiesce: &QuiesceReport,
+    ) -> Result<Vec<SnapshotNotice>, SnapshotError> {
+        snapshot::repair_kill_debris(workspace_path, quiesce)
+    }
+
+    /// Restore `workspace_path`'s disk and index to exactly what `snap`
+    /// captured. Precondition owned by the caller: HEAD already sits at the
+    /// archived SHA.
+    pub fn restore_snapshot(
+        workspace_path: &Path,
+        snap: &WorkspaceSnapshot,
+    ) -> Result<(), SnapshotError> {
+        snapshot_restore::restore_snapshot(workspace_path, snap)
+    }
+
+    /// Tree-source variant of [`Self::restore_snapshot`] for a ref-driven
+    /// restore that holds resolved tree OIDs rather than a `WorkspaceSnapshot`.
+    pub fn restore_trees(
+        workspace_path: &Path,
+        work_tree: &str,
+        index_tree: &str,
+    ) -> Result<(), SnapshotError> {
+        snapshot_restore::restore_trees(workspace_path, work_tree, index_tree)
+    }
+
+    /// Public projection of `git worktree list --porcelain` registrations for
+    /// `repo_root`, so callers outside the git adapter can read registrations
+    /// without re-parsing porcelain output themselves.
+    pub fn list_worktree_registrations(
+        repo_root: &Path,
+    ) -> anyhow::Result<Vec<WorktreeRegistration>> {
+        super::operations::worktree_registrations::list_worktree_registrations(repo_root)
+    }
+
+    /// The recreate-tier verb: create a new branch named `desired_branch`
+    /// (uniquified on collision) at `sha`, never moving an existing ref.
+    /// Explicitly not [`Self::create_worktree_at_ref`], whose fast-forward
+    /// path runs `git branch --force`.
+    pub fn create_branch_at_sha_uniquified(
+        source_repo_root: &Path,
+        desired_branch: &str,
+        sha: &str,
+    ) -> anyhow::Result<String> {
+        worktree_branch::create_branch_at_sha_uniquified(source_repo_root, desired_branch, sha)
+    }
+
+    /// The tip of `branch_name`, `None` when it does not exist.
+    pub fn branch_tip_sha(repo_root: &Path, branch_name: &str) -> anyhow::Result<Option<String>> {
+        worktree_branch::branch_tip_sha(repo_root, branch_name)
+    }
+
+    /// `git branch -D`. The archive branch-delete step's verb; its two policy
+    /// guards live in the caller.
+    pub fn delete_branch_force(repo_root: &Path, branch_name: &str) -> anyhow::Result<()> {
+        worktree_branch::delete_branch_force(repo_root, branch_name)
+    }
+
+    /// Point HEAD at a branch, working tree and index untouched.
+    pub fn point_head_at_branch(workspace_path: &Path, branch_name: &str) -> anyhow::Result<()> {
+        worktree_branch::point_head_at_branch(workspace_path, branch_name)
+    }
+
+    /// Detach HEAD at a SHA, working tree and index untouched.
+    pub fn detach_head_at_sha(workspace_path: &Path, sha: &str) -> anyhow::Result<()> {
+        worktree_branch::detach_head_at_sha(workspace_path, sha)
     }
 }

@@ -1,5 +1,5 @@
-import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import type { AccountProviderView } from "#product/lib/domain/auth/account-profile-presentation";
@@ -85,19 +85,11 @@ function getActionsForProvider(
 // ---------------------------------------------------------------------------
 
 /**
- * Account rows read at the sidebar's scale, not one step above it.
- *
- * These rows used to sit on `text-body`, which put a signed-in account's own
- * details a size larger than every nav row and settings row surrounding them —
- * the pane looked zoomed relative to the app it lives in. `text-ui` for titles
- * and `text-ui-sm` for detail is the same pairing `SettingsRow` uses, so a
- * reader crossing from the sidebar into this pane crosses no type step at all.
- *
- * The hairline is a `border-t` with `first:border-t-0` rather than a trailing
- * `border-b`, so the panel's own border never doubles up with a row's.
+ * Fixed-width leading column so the provider mark's box stays the same size
+ * across rows even though brand marks differ in natural proportions — title
+ * text keeps one left edge across the whole roster.
  */
-export const ACCOUNT_ROW_CLASS =
-  "flex min-h-[3.5rem] flex-col gap-2 border-t border-border-light py-3 first:border-t-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6";
+const ROW_LEADING_COLUMN_CLASS = "flex w-5 items-center justify-center text-foreground";
 
 export function AccountAction({
   action,
@@ -146,40 +138,41 @@ export function SignInMethodRow({
     ? githubLabel
     : provider.accountLabel;
 
+  const isPrimary = provider.primary && provider.connected;
+  const description = isPrimary
+    ? detail
+      ? `Primary sign-in method · ${detail}`
+      : "Primary sign-in method"
+    : detail || (provider.connected ? "Connected" : "Not connected");
+
   return (
-    <div className={ACCOUNT_ROW_CLASS}>
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <ProviderBrandIcon
-          provider={provider.provider}
-          label={provider.brandLabel ?? provider.label}
-          className="icon-control shrink-0 text-muted-foreground"
-        />
-        <div className="min-w-0 space-y-0.5">
-          <div className="flex items-center gap-2 text-ui font-medium text-foreground">
-            <span>{provider.label}</span>
-            {provider.primary && provider.connected ? (
-              <Badge tone="neutral" className="shrink-0 whitespace-nowrap">Primary</Badge>
-            ) : null}
-          </div>
-          <div className="truncate text-ui-sm text-muted-foreground">
-            {detail || (provider.connected ? "Connected" : "Not connected")}
-          </div>
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Badge tone="neutral" className="shrink-0 whitespace-nowrap">
-          {statusLabel}
-        </Badge>
-        {rowActions.map((action, idx) => (
-          <AccountAction
-            key={idx}
-            action={action}
-            variant={idx === 0 ? "secondary" : "ghost"}
-            size="sm"
+    <RosterRow
+      density="comfortable"
+      leading={(
+        <span className={ROW_LEADING_COLUMN_CLASS}>
+          <ProviderBrandIcon
+            provider={provider.provider}
+            label={provider.brandLabel ?? provider.label}
+            className="icon-control shrink-0"
           />
-        ))}
-      </div>
-    </div>
+        </span>
+      )}
+      title={provider.label}
+      secondary={description}
+      trailing={(
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="min-w-0 truncate text-ui-sm text-muted-foreground">{statusLabel}</span>
+          {rowActions.map((action, idx) => (
+            <AccountAction
+              key={idx}
+              action={action}
+              variant={idx === 0 ? "secondary" : "ghost"}
+              size="sm"
+            />
+          ))}
+        </div>
+      )}
+    />
   );
 }
 
@@ -189,24 +182,26 @@ export function ConnectedServiceRow({
   service: AccountConnectedServiceView;
 }) {
   return (
-    <div className={ACCOUNT_ROW_CLASS}>
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex flex-wrap items-center gap-2 text-ui font-medium text-foreground">
-          <span>{service.label}</span>
-          <Badge tone="neutral" className="shrink-0 whitespace-nowrap">
-            {service.statusLabel}
-          </Badge>
+    <RosterRow
+      density="comfortable"
+      leading={(
+        <span className={ROW_LEADING_COLUMN_CLASS}>
+          <ProviderBrandIcon provider="github" className="icon-control shrink-0" />
+        </span>
+      )}
+      title={service.label}
+      secondary={(
+        <>
+          {service.description}
+          {service.accountLabel ? ` · ${service.accountLabel}` : ""}
+        </>
+      )}
+      trailing={(
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="min-w-0 truncate text-ui-sm text-muted-foreground">{service.statusLabel}</span>
+          {service.action ? <AccountAction action={service.action} variant="secondary" /> : null}
         </div>
-        <div className="text-ui-sm text-muted-foreground">{service.description}</div>
-        {service.accountLabel ? (
-          <div className="truncate text-ui-sm text-muted-foreground">{service.accountLabel}</div>
-        ) : null}
-      </div>
-      {service.action ? (
-        <div className="shrink-0">
-          <AccountAction action={service.action} variant="secondary" />
-        </div>
-      ) : null}
-    </div>
+      )}
+    />
   );
 }

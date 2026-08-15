@@ -8,6 +8,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 import { FileTreeRow } from "#product/components/workspace/files/tree/FileTreeRow";
 import { resolveWorkspaceStatPathKind } from "#product/lib/domain/files/path-references";
+import { fileTreeIndentPaddingLeft } from "#product/lib/domain/files/file-tree-indent";
 import { useFileTreeStore } from "#product/stores/editor/file-tree-store";
 
 interface FileTreeDirectoryProps {
@@ -197,7 +198,7 @@ function FileTreeStatus({
         compact ? "h-7" : "px-1 py-3",
         tone === "error" && "text-destructive",
       )}
-      style={compact ? { paddingLeft: 6 + level * 14 } : undefined}
+      style={compact ? { paddingLeft: fileTreeIndentPaddingLeft(level) } : undefined}
     >
       {message}
     </p>

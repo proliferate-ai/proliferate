@@ -66,6 +66,70 @@ function IntegratedLatestRow({
 }
 
 describe("useChatTranscriptRowRenderer", () => {
+  it("threads transcript completion state and workspace into pending receipt rows", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.linkCompletionsByCompletionId = {
+      "completion-1": {
+        relation: "subagent",
+        completionId: "completion-1",
+        sessionLinkId: "link-1",
+        parentSessionId: "session-1",
+        childSessionId: "child-1",
+        childTurnId: "turn-child",
+        childLastEventSeq: 4,
+        outcome: "completed",
+        label: "Schema audit",
+        seq: 5,
+        timestamp: "2026-08-10T00:00:00Z",
+      },
+    };
+    const prompt = {
+      seq: 6,
+      promptId: "prompt-agent",
+      text: "Hidden wake body",
+      contentParts: [],
+      queuedAt: "2026-08-10T00:00:01Z",
+      promptProvenance: {
+        type: "subagentWake" as const,
+        sessionLinkId: "link-1",
+        completionId: "completion-1",
+      },
+    };
+    const renderPendingPromptRow = vi.fn(() => null);
+    const row = {
+      kind: "pending_prompt" as const,
+      key: "pending-prompt:session-1",
+    };
+    const { result } = renderHook(() => useChatTranscriptRowRenderer({
+      activeSessionId: "session-1",
+      latestLiveExplorationBlock: null,
+      latestLiveStatus: null,
+      latestCompletedTurnId: null,
+      latestTurnId: null,
+      optimisticPromptTrailingStatus: null,
+      outboxActions: OUTBOX_ACTIONS,
+      outboxStartedAtByPromptId: OUTBOX_STARTED_AT_BY_PROMPT_ID,
+      renderPendingPromptRow,
+      renderTurnRow: () => null,
+      selectedWorkspaceId: "workspace-1",
+      sessionViewState: "working",
+      transcript,
+      visibleOutboxEntries: [],
+      visibleOptimisticPrompt: prompt,
+    }));
+
+    result.current.renderRow(row, 2);
+
+    expect(renderPendingPromptRow).toHaveBeenCalledWith(expect.objectContaining({
+      activeSessionId: "session-1",
+      transcript,
+      selectedWorkspaceId: "workspace-1",
+      row,
+      rowIndex: 2,
+      prompt,
+    }));
+  });
+
   it("keeps historical revisions stable across stream batches and targets live status", () => {
     const renderPendingPromptRow = vi.fn(() => null);
     const renderTurnRow = vi.fn(() => null);

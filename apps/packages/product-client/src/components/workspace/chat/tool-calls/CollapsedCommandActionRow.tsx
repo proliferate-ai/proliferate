@@ -9,6 +9,7 @@ import {
   formatCommandExecutionLabel,
 } from "#product/domain/chats/tools/collapsed-action-labels";
 import { ActionDisclosureRow } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
+import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 
 export function CommandActionRow({ item }: { item: ToolCallItem }) {
   const [expanded, setExpanded] = useState(false);
@@ -26,7 +27,7 @@ export function CommandActionRow({ item }: { item: ToolCallItem }) {
         onToggle={() => setExpanded((value) => !value)}
       />
       {expanded && (
-        <div className="mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-surface-elevated-secondary">
+        <ToolActionDetailsPanel className="mt-1.5">
           <div className="flex items-center justify-between gap-2 px-2 py-1 text-chat text-muted-foreground">
             <span>Shell</span>
           </div>
@@ -44,7 +45,7 @@ export function CommandActionRow({ item }: { item: ToolCallItem }) {
               <code>{output || "No output"}</code>
             </pre>
           </AutoHideScrollArea>
-        </div>
+        </ToolActionDetailsPanel>
       )}
     </div>
   );

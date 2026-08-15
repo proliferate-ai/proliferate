@@ -7,24 +7,21 @@ import {
   type MouseEvent,
   type SetStateAction,
 } from "react";
-import { useResize } from "#product/hooks/ui/layout/use-resize";
 import {
   useMainScreenRightPanel,
   type MainScreenRightPanelState,
 } from "#product/hooks/main/facade/use-main-screen-right-panel";
+import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { shouldMountWorkspaceShell } from "#product/lib/domain/chat/surface/chat-surface";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import {
-  WORKSPACE_SIDEBAR_MAX_WIDTH,
-  WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "#product/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
-import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useShellLaunchIntent } from "#product/hooks/chat/derived/use-shell-launch-intent";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
@@ -40,6 +37,8 @@ export interface MainScreenLayoutState extends MainScreenRightPanelState {
   setSidebarOpen: Dispatch<SetStateAction<boolean>>;
   sidebarWidth: number;
   setSidebarWidth: Dispatch<SetStateAction<number>>;
+  /** True while the left separator is driving live, non-durable geometry. */
+  sidebarResizing: boolean;
   terminalActivationRequest: TerminalActivationRequest | null;
   setTerminalActivationRequest: Dispatch<SetStateAction<TerminalActivationRequest | null>>;
   publishDialog: PublishDialogState;
@@ -83,7 +82,7 @@ export function useMainScreenState(): MainScreenState {
     CLOSED_PUBLISH_DIALOG_STATE,
   );
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -97,15 +96,12 @@ export function useMainScreenState(): MainScreenState {
   const isCloudWorkspaceSelected = selectedCloudWorkspaceId !== null;
   const sidebarOpen = useWorkspaceUiStore((state) => state.sidebarOpen);
   const setSidebarOpen = useWorkspaceUiStore((state) => state.setSidebarOpen);
-  const sidebarWidth = useWorkspaceUiStore((state) => state.sidebarWidth);
-  const setSidebarWidth = useWorkspaceUiStore((state) => state.setSidebarWidth);
-  const onLeftSeparatorDown = useResize({
-    direction: "horizontal",
-    size: sidebarWidth,
-    onResize: setSidebarWidth,
-    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
-    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
-  });
+  const {
+    sidebarWidth,
+    setSidebarWidth,
+    sidebarResizing,
+    onSidebarSeparatorDown: onLeftSeparatorDown,
+  } = useWorkspaceSidebarResize();
 
   // The right panel's frame — geometry, open state, focus requests and the
   // separator drag that can collapse it — is its own concern; this facade only
@@ -118,15 +114,17 @@ export function useMainScreenState(): MainScreenState {
     rightPanelSuppressed: Boolean(pendingWorkspaceEntry),
   });
 
-  const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
+  const activeLaunchIntent = useShellLaunchIntent();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const repoRoots = workspaceCollections?.repoRoots ?? [];
-  const activeLaunchIntentIdForShell =
-    selectedWorkspaceId || pendingWorkspaceEntry
-      ? activeLaunchIntent?.id ?? null
-      : null;
+  // An intent only mounts the shell for its own workspace: a selected
+  // workspace or pending entry always mounts the shell on their own, and an
+  // intent additionally mounts it only when it is this shell's own — which
+  // `useShellLaunchIntent` already decided by scope. This stops one
+  // workspace's launch intent from hijacking an unrelated shell (PRO-230).
+  const activeLaunchIntentIdForShell = activeLaunchIntent?.id ?? null;
   const hasLaunchIntentOnlyShell = false;
   const hasWorkspaceShell = shouldMountWorkspaceShell({
     selectedWorkspaceId,
@@ -180,6 +178,7 @@ export function useMainScreenState(): MainScreenState {
       setSidebarOpen,
       sidebarWidth,
       setSidebarWidth,
+      sidebarResizing,
       terminalActivationRequest,
       setTerminalActivationRequest,
       publishDialog,

@@ -22,6 +22,7 @@ export const SHORTCUT_GROUPS = [
       "openSupport",
       "showKeyboardShortcuts",
       "settingsSectionByIndex",
+      "settingsBack",
       "increaseWindowZoom",
       "decreaseWindowZoom",
     ],
@@ -39,6 +40,7 @@ export const SHORTCUT_GROUPS = [
       "workspaceByIndex",
       "previousWorkspace",
       "nextWorkspace",
+      "archiveWorkspace",
     ],
   },
   {
@@ -64,6 +66,8 @@ export const SHORTCUT_GROUPS = [
     shortcutKeys: [
       "focusChat",
       "openModelSelector",
+      "cycleReasoningEffort",
+      "cycleReasoningEffortBack",
       "openTerminal",
       "toggleLeftSidebar",
       "toggleRightPanel",

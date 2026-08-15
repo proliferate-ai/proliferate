@@ -67,7 +67,7 @@ function makeDeps(): AuthOrchestrationDeps {
     })),
     setAuthState: vi.fn(),
     clearSessionRuntimeState: vi.fn(),
-    closeRepoSetupModal: vi.fn(),
+    dismissRepoAddedReceipt: vi.fn(),
     showToast: vi.fn(),
   };
 }

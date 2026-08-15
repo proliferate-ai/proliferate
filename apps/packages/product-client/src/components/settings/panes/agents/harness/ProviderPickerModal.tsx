@@ -195,6 +195,11 @@ export function ProviderPickerModal({
   }
 
   return (
+    // The sizeClassName/panelClassName overrides and the h-[34px]/max-h-
+    // [340px] brackets below are deferred (frozen spec §4.3): fixing them
+    // properly means a ModalShell size variant, which is a library edit out
+    // of this slice's scope. Kept pixel-identical rather than rounded to the
+    // nearest step.
     <ModalShell
       open={open}
       onClose={onClose}

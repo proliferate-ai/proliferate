@@ -35,7 +35,7 @@ export function migrateWorkspaceUiState(
   const state = {
     ...WORKSPACE_UI_DEFAULTS,
     ...input,
-  };
+  } as PersistedWorkspaceUiState & { archivedWorkspaceIds?: unknown };
   let didMigrate = false;
   const previousMigrationVersion = state.migrationVersion ?? 0;
   if (previousMigrationVersion < 7) {
@@ -53,8 +53,12 @@ export function migrateWorkspaceUiState(
     };
     didMigrate = true;
   }
-  if (previousMigrationVersion < 3) {
-    state.archivedWorkspaceIds = [];
+  if (previousMigrationVersion < 15 && "archivedWorkspaceIds" in state) {
+    // The client-side hide-set is gone: the runtime's lifecycle filter is
+    // now the single source of truth, so a legacy persisted id must not
+    // survive the migration to resurrect a row the server already reports
+    // archived (or hide one it does not).
+    delete state.archivedWorkspaceIds;
     didMigrate = true;
   }
   if (previousMigrationVersion < 2) {
@@ -73,6 +77,11 @@ export function migrateWorkspaceUiState(
   }
   if (previousMigrationVersion < WORKSPACE_UI_MIGRATION_VERSION) {
     state.migrationVersion = WORKSPACE_UI_MIGRATION_VERSION;
+    didMigrate = true;
+  }
+
+  if (!Array.isArray(state.pinnedWorkspaceIds)) {
+    state.pinnedWorkspaceIds = WORKSPACE_UI_DEFAULTS.pinnedWorkspaceIds;
     didMigrate = true;
   }
 

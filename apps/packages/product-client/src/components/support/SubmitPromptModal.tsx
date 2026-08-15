@@ -5,6 +5,8 @@ import { useSupportModalState } from "#product/hooks/support/facade/use-support-
 import { useSupportOutreachEmail } from "#product/hooks/support/facade/use-support-outreach-email";
 import { SupportCreditField } from "#product/components/support/SupportCreditField";
 import { SupportModalFooter } from "#product/components/support/SupportModalFooter";
+import { SupportSnapshotConsentField } from "#product/components/support/SupportSnapshotConsentField";
+import { SupportSnapshotSaveCopyButton } from "#product/components/support/SupportSnapshotSaveCopyButton";
 
 interface SubmitPromptModalProps {
   onClose: () => void;
@@ -22,6 +24,7 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
     setCreditConsent,
     setCreditName,
     setMessage,
+    snapshotConsent,
     stagingError,
   } = useSupportModalState({ kind: "feature", onClose });
   const outreach = useSupportOutreachEmail();
@@ -40,13 +43,12 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
         <section className="space-y-2">
           <Textarea
             id="support-prompt-message"
-            variant="code"
             autoFocus
             data-telemetry-mask
             value={message}
             onChange={(event) => setMessage(event.target.value)}
             placeholder="Prompt a coding agent to build what you want to see in Proliferate. If we like it, we'll run it and merge the result."
-            className="min-h-[140px]"
+            className="min-h-[140px] resize-y"
           />
         </section>
 
@@ -58,6 +60,7 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
             creditName={creditName}
             setCreditName={setCreditName}
           />
+          <SupportSnapshotConsentField snapshot={snapshotConsent} />
         </div>
 
         {stagingError ? (
@@ -70,6 +73,7 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
           <Button type="button" variant="ghost" onClick={handleCancel}>
             Cancel
           </Button>
+          <SupportSnapshotSaveCopyButton snapshot={snapshotConsent} />
           <Button
             type="button"
             disabled={!canSend}

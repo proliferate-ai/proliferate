@@ -50,55 +50,19 @@ reason = "in-memory health snapshot named like a store (Arc<RwLock<AgentSeedHeal
 [[exception]]
 rule = "AH-API-2"
 path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
-site = "mod tests::crate::domains::sessions::store::SessionStore"
-reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
-
-[[exception]]
-rule = "AH-API-2"
-path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
 site = "mod tests::crate::domains::workspaces::store::WorkspaceStore"
 reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
 
 [[exception]]
 rule = "AH-API-2"
 path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
-site = "fn purge_preflight_allows_retired_complete_workspace::WorkspaceStore::new"
+site = "fn purge_workspace_deletes_an_active_worktree_row_and_its_checkout::WorkspaceStore::new"
 reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
 
 [[exception]]
 rule = "AH-API-2"
 path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
-site = "fn purge_preflight_allows_retired_purge_retry_workspace::WorkspaceStore::new"
-reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
-
-[[exception]]
-rule = "AH-API-2"
-path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
-site = "fn purge_preflight_allows_dirty_active_workspace::WorkspaceStore::new"
-reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
-
-[[exception]]
-rule = "AH-API-2"
-path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
-site = "fn purge_preflight_reports_single_unsupported_workspace_blocker::WorkspaceStore::new"
-reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
-
-[[exception]]
-rule = "AH-API-2"
-path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
-site = "fn purge_preflight_still_blocks_active_workspace_operations::WorkspaceStore::new"
-reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
-
-[[exception]]
-rule = "AH-API-2"
-path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
-site = "fn purge_retry_deletes_rows_when_attachment_cleanup_fails::WorkspaceStore::new"
-reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
-
-[[exception]]
-rule = "AH-API-2"
-path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
-site = "fn purge_retry_deletes_rows_when_attachment_cleanup_fails::SessionStore::new"
+site = "fn purge_workspace_deletes_an_archived_row_whose_checkout_is_already_gone::WorkspaceStore::new"
 reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
 
 [[exception]]
@@ -243,12 +207,6 @@ reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline w
 rule = "AH-CONTRACT-1"
 path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
 site = "fn schedule_kind_wire::anyharness_contract::v1::LoopScheduleKind::Cron"
-reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
-site = "fn fire::anyharness_contract::v1::LoopStatus::Active"
 reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
 
 [[exception]]
@@ -487,12 +445,6 @@ reason = "1 wire type import below the mapper boundary; target = sessions domain
 
 [[exception]]
 rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/live_config/mod.rs"
-site = "anyharness_contract::v1::PromptCapabilities"
-reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/live_config/raw.rs"
 site = "anyharness_contract::v1::RawSessionConfigOption"
 reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
@@ -519,12 +471,6 @@ reason = "2 wire type imports below the mapper boundary (one inside the inline c
 rule = "AH-CONTRACT-1"
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/contract.rs"
 site = "anyharness_contract::v1::SessionMcpServer"
-reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/product_launch.rs"
-site = "anyharness_contract::v1::SessionMcpBindingSummary"
 reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
 
 [[exception]]
@@ -703,24 +649,6 @@ reason = "1 wire type import below the mapper boundary; target = sessions domain
 
 [[exception]]
 rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/subagents/hooks.rs"
-site = "anyharness_contract::v1::SubagentTurnCompletedPayload"
-reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/subagents/mcp/calls_helpers.rs"
-site = "fn mode_options_to_json::anyharness_contract::v1::NormalizedSessionControl"
-reason = "1 inline wire path (:43 NormalizedSessionControl fn param) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/subagents/mcp/definition.rs"
-site = "anyharness_contract::v1::SessionMcpBindingNotAppliedReason"
-reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/subagents/transcript.rs"
 site = "anyharness_contract::v1::ContentPart"
 reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
@@ -745,57 +673,15 @@ reason = "1 wire type import below the mapper boundary; target = workspaces doma
 
 [[exception]]
 rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/purge.rs"
-site = "fn display_preflight_message::anyharness_contract::v1::WorkspaceRetireBlocker"
-reason = "1 inline wire path (:361 WorkspaceRetireBlocker slice fn param) below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/live_config/mod.rs"
+site = "anyharness_contract::v1::ConfigApplyState"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
 
 [[exception]]
 rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs"
-site = "anyharness_contract::v1::WorkspaceRetireBlocker"
-reason = "1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs"
-site = "anyharness_contract::v1::WorkspaceCleanupOperation"
-reason = "1 wire type import + 6 inline wire paths mapping git operations (:557 return type, :560-:572 variants) below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs"
-site = "fn git_operation_to_contract::anyharness_contract::v1::git::GitOperation"
-reason = "1 wire type import + 6 inline wire paths mapping git operations (:557 return type, :560-:572 variants) below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs"
-site = "fn git_operation_to_contract::anyharness_contract::v1::git::GitOperation::Merge"
-reason = "1 wire type import + 6 inline wire paths mapping git operations (:557 return type, :560-:572 variants) below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs"
-site = "fn git_operation_to_contract::anyharness_contract::v1::git::GitOperation::Rebase"
-reason = "1 wire type import + 6 inline wire paths mapping git operations (:557 return type, :560-:572 variants) below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs"
-site = "fn git_operation_to_contract::anyharness_contract::v1::git::GitOperation::CherryPick"
-reason = "1 wire type import + 6 inline wire paths mapping git operations (:557 return type, :560-:572 variants) below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs"
-site = "fn git_operation_to_contract::anyharness_contract::v1::git::GitOperation::Revert"
-reason = "1 wire type import + 6 inline wire paths mapping git operations (:557 return type, :560-:572 variants) below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs"
-site = "fn git_operation_to_contract::anyharness_contract::v1::git::GitOperation::None"
-reason = "1 wire type import + 6 inline wire paths mapping git operations (:557 return type, :560-:572 variants) below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/product_launch.rs"
+site = "anyharness_contract::v1::SessionMcpBindingOutcome"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
 
 [[exception]]
 rule = "AH-CONTRACT-2"
@@ -895,12 +781,6 @@ reason = "summary reads LiveSessionExecutionSnapshot from live::sessions::handle
 
 [[exception]]
 rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/subagents/hooks.rs"
-site = "crate::live::sessions::LiveSessionManager"
-reason = "subagent hooks hold LiveSessionManager directly; target = sessions runtime valve (grid plan PR 6d)"
-
-[[exception]]
-rule = "AH-LIVE-5"
 path = "anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs"
 site = "crate::live::terminals::TerminalService"
 reason = "access gate holds live terminals directly (1 use-line + 1 re-import inside the inline cfg(test) mod the engine cannot see); target = workspaces runtime valve (grid plan PR 6b)"
@@ -913,15 +793,21 @@ reason = "access gate holds live terminals directly (1 use-line + 1 re-import in
 
 [[exception]]
 rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs"
-site = "crate::live::terminals::TerminalService"
-reason = "retire preflight holds live terminals directly; target = workspaces runtime valve (grid plan PR 6b)"
-
-[[exception]]
-rule = "AH-LIVE-5"
 path = "anyharness/crates/anyharness-lib/src/domains/workspaces/setup_runtime.rs"
 site = "crate::live::terminals::TerminalService"
 reason = "workspace setup holds live terminals directly; target = workspaces runtime valve (grid plan PR 6b)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/archive/quiesce.rs"
+site = "crate::live::terminals::TerminalService"
+reason = "archive quiesce holds live terminals directly, exactly as access_gate.rs and deletion/purge.rs do — the three plane stops are the same live surface; target = workspaces runtime valve (grid plan PR 6b)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/purge.rs"
+site = "crate::live::terminals::TerminalService"
+reason = "purge holds live terminals directly (row-dies-last quiesce is deliberately duplicated from archive/quiesce.rs rather than shared, R5); target = workspaces runtime valve (grid plan PR 6b)"
 
 [[exception]]
 rule = "AH-POLICY-1"
@@ -1048,3 +934,15 @@ rule = "AH-STORE-4"
 path = "anyharness/crates/anyharness-lib/src/live/terminals/manager.rs"
 site = "crate::domains::terminals::store::TerminalStore"
 reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/workspace_stop.rs"
+site = "crate::domains::terminals::service::TerminalCommandService"
+reason = "R3: split from manager.rs to stay under the line cap (spec Scope section F); carries forward manager.rs's own already-allowlisted occurrence of this same live/terminals-uses-the-older-lock-based-doctrine exception for the TerminalCommandService/new_command_run_record calls the three workspace-wide stop primitives need; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/workspace_stop.rs"
+site = "crate::domains::terminals::service::new_command_run_record"
+reason = "R3: split from manager.rs to stay under the line cap (spec Scope section F); carries forward manager.rs's own already-allowlisted occurrence of this same live/terminals-uses-the-older-lock-based-doctrine exception for the TerminalCommandService/new_command_run_record calls the three workspace-wide stop primitives need; ratchet only, do not fix"
+

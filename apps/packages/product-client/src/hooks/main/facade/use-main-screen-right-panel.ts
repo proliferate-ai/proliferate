@@ -12,8 +12,10 @@ import { useResize } from "#product/hooks/ui/layout/use-resize";
 import {
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
+  MAIN_PANE_MIN_WIDTH,
   RIGHT_PANEL_DEFAULT_WIDTH,
-  RIGHT_PANEL_MAX_WIDTH,
+  RIGHT_PANEL_FALLBACK_MAX_WIDTH,
+  RIGHT_PANEL_MIN_WIDTH,
   clampRightPanelWidth,
   normalizeRightPanelDurableState,
   resolveRightPanelDragOutcome,
@@ -96,6 +98,27 @@ export function useMainScreenRightPanel({
   );
   const rightPanelDurableState = rightPanelSessionDurableState
     ?? persistedRightPanelDurableState;
+  // External openers (chat file links, attachment previews) reveal the frame
+  // by writing the durable store (`setRightPanelOpenForWorkspace`). Once a
+  // session override exists those writes would stay invisible behind it, so a
+  // same-workspace change of the persisted open flag folds into the override.
+  // A workspaceUiKey change only re-baselines: the frame stays shell-level
+  // across workspace switches.
+  const persistedOpenBaselineRef = useRef({
+    key: workspaceUiKey,
+    open: persistedRightPanelDurableState.open,
+  });
+  useEffect(() => {
+    const baseline = persistedOpenBaselineRef.current;
+    const open = persistedRightPanelDurableState.open;
+    persistedOpenBaselineRef.current = { key: workspaceUiKey, open };
+    if (baseline.key !== workspaceUiKey || baseline.open === open) {
+      return;
+    }
+    setRightPanelSessionDurableState((session) => (
+      session === null || session.open === open ? session : { ...session, open }
+    ));
+  }, [persistedRightPanelDurableState.open, workspaceUiKey]);
   const rightPanelMaterializedState = materializedWorkspaceId
     ? rightPanelMaterializedByWorkspace[materializedWorkspaceId]
       ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE
@@ -220,13 +243,26 @@ export function useMainScreenRightPanel({
   // can drop the geometry easing while the width is pointer-driven.
   const rightPanelDragCollapsedRef = useRef(false);
   const rightPanelDragWidthRef = useRef<number | null>(null);
+  // The drag's ceiling, measured at mousedown: the rail's row (window minus
+  // the sidebar at its current width — zero when folded) minus the chat
+  // pane's floor. There is no fixed maximum; a wider window affords a wider
+  // panel. Falls back to the legacy ceiling only when no rail is rendered.
+  const rightPanelDragMaxWidthRef = useRef<number>(RIGHT_PANEL_FALLBACK_MAX_WIDTH);
+  // The gesture's seed width. The floor clamp can render the rail below the
+  // collapse threshold, so the collapse decision needs the start to tell a
+  // widening drag from a closing shove.
+  const rightPanelDragStartWidthRef = useRef<number>(Number.POSITIVE_INFINITY);
   const [rightPanelResizing, setRightPanelResizing] = useState(false);
   const handleRightPanelDrag = useCallback(
     (rawWidth: number) => {
       if (rightPanelDragCollapsedRef.current || !workspaceUiKey) {
         return;
       }
-      const outcome = resolveRightPanelDragOutcome(rawWidth);
+      const outcome = resolveRightPanelDragOutcome(
+        rawWidth,
+        rightPanelDragMaxWidthRef.current,
+        rightPanelDragStartWidthRef.current,
+      );
       if (outcome.kind === "collapse") {
         rightPanelDragCollapsedRef.current = true;
         // Resizing ends here so the collapse itself animates: the last
@@ -252,23 +288,44 @@ export function useMainScreenRightPanel({
       setRightPanelWidthForWorkspace(workspaceUiKey, draggedWidth);
     }
   }, [setRightPanelWidthForWorkspace, workspaceUiKey]);
+  // The rail's rendered width can sit below the persisted width while the
+  // main-pane floor clamps it (MAIN_PANE_MIN_WIDTH in the rail's width
+  // style). Seeding the drag from the rendered edge keeps the separator under
+  // the pointer from the first pixel — starting from the larger persisted
+  // value would replay the clamped-away difference as dead travel before
+  // anything moved.
+  const resolveRenderedRailWidth = useCallback(() => {
+    const railWidth = document
+      .querySelector("[data-right-panel-rail]")
+      ?.getBoundingClientRect().width;
+    return railWidth ? railWidth : rightPanelWidth;
+  }, [rightPanelWidth]);
   const beginRightSeparatorDrag = useResize({
     direction: "horizontal",
     size: rightPanelWidth,
+    resolveSize: resolveRenderedRailWidth,
     onResize: handleRightPanelDrag,
     onResizeEnd: handleRightSeparatorDragEnd,
     reverse: true,
+    // No static bounds: the raw pointer width must stay visible for the
+    // collapse decision, and the ceiling is per-gesture, measured below.
     min: 0,
-    max: RIGHT_PANEL_MAX_WIDTH,
   });
   const onRightSeparatorDown = useCallback(
     (event: MouseEvent) => {
+      const railRow = document
+        .querySelector("[data-right-panel-rail]")
+        ?.parentElement?.getBoundingClientRect().width;
+      rightPanelDragMaxWidthRef.current = railRow
+        ? Math.max(RIGHT_PANEL_MIN_WIDTH, railRow - MAIN_PANE_MIN_WIDTH)
+        : RIGHT_PANEL_FALLBACK_MAX_WIDTH;
+      rightPanelDragStartWidthRef.current = resolveRenderedRailWidth();
       rightPanelDragCollapsedRef.current = false;
       rightPanelDragWidthRef.current = null;
       setRightPanelResizing(true);
       beginRightSeparatorDrag(event);
     },
-    [beginRightSeparatorDrag],
+    [beginRightSeparatorDrag, resolveRenderedRailWidth],
   );
 
   const userOpenOverrideActive = Boolean(

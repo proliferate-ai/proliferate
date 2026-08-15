@@ -1,44 +1,11 @@
-use std::fs;
 use std::path::Path;
 
 use super::WorkspaceRuntime;
 use crate::adapters::git::GitService;
 use crate::domains::repo_roots::model::RepoRootRecord;
-use crate::domains::workspaces::managed_root::canonical_managed_worktrees_root;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
 
 impl WorkspaceRuntime {
-    pub fn retire_worktree_materialization(
-        &self,
-        workspace: &WorkspaceRecord,
-    ) -> anyhow::Result<()> {
-        if workspace.kind != WorkspaceKind::Worktree {
-            anyhow::bail!("unsupported workspace kind for retire: {}", workspace.kind);
-        }
-        let worktree = Path::new(&workspace.path);
-        if !worktree.exists() {
-            return Ok(());
-        }
-        let managed_root = canonical_managed_worktrees_root(&self.runtime_home)?;
-        let canonical_worktree = fs::canonicalize(worktree).map_err(|error| {
-            anyhow::anyhow!("canonicalizing workspace checkout path for retire: {error}")
-        })?;
-        if !canonical_worktree.starts_with(&managed_root) {
-            anyhow::bail!(
-                "refusing to remove worktree outside managed worktrees root: {}",
-                workspace.path
-            );
-        }
-        let repo_root = self.repo_root_for_workspace(workspace)?;
-        let output = GitService::remove_worktree_force(&repo_root.path, &workspace.path)?;
-        if !output.success && worktree.exists() {
-            anyhow::bail!(
-                "failed to remove worktree materialization: {}",
-                output.stderr
-            );
-        }
-        Ok(())
-    }
     pub fn cleanup_failed_worktree(
         &self,
         repo_root_path: &str,
@@ -87,10 +54,7 @@ impl WorkspaceRuntime {
     ) -> anyhow::Result<()> {
         let worktree = Path::new(worktree_path);
         if worktree.exists() {
-            let output = GitService::remove_worktree_force(repo_root_path, worktree_path)?;
-            if !output.success && worktree.exists() {
-                fs::remove_dir_all(worktree)?;
-            }
+            GitService::remove_worktree_force(repo_root_path, worktree_path)?;
         }
         GitService::prune_stale_worktrees_if_possible(Path::new(repo_root_path));
 

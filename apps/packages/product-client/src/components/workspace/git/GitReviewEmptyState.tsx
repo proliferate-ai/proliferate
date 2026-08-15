@@ -25,12 +25,18 @@ export function GitReviewEmptyState({
     <div
       className={
         isPanel
+          // C4: floors the panel variant's height so a one-line empty state
+          // doesn't collapse to a sliver above the review document's other
+          // chrome.
           ? "flex min-h-[200px] items-center justify-center px-4 py-8"
           : "flex min-h-20 items-center justify-center px-4 py-4"
       }
     >
       <div
         className={`flex w-full flex-col items-center text-center ${
+          // C4: caps prose width so title/description wrap into a readable
+          // centered block instead of spanning the full panel width; the
+          // inline variant's narrower cap matches its smaller footprint.
           isPanel ? "max-w-[280px]" : "max-w-[260px]"
         }`}
       >

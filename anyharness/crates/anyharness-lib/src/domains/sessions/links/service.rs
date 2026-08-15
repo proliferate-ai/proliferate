@@ -1,6 +1,9 @@
 use uuid::Uuid;
 
-use super::model::{SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation};
+use super::model::{
+    SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation, SubagentLinkCloseOutcome,
+    SubagentLinkOpenOutcome,
+};
 use super::store::{InsertSubagentLinkOutcome, SessionLinkStore};
 use crate::domains::sessions::store::SessionStore;
 
@@ -104,6 +107,7 @@ impl SessionLinkService {
             created_by_turn_id: input.created_by_turn_id,
             created_by_tool_call_id: input.created_by_tool_call_id,
             created_at: chrono::Utc::now().to_rfc3339(),
+            subagent_closed_at: None,
             closed_at: None,
         };
         self.store.insert(&record).map_err(|error| {
@@ -175,11 +179,75 @@ impl SessionLinkService {
             created_by_turn_id: input.created_by_turn_id,
             created_by_tool_call_id: input.created_by_tool_call_id,
             created_at: chrono::Utc::now().to_rfc3339(),
+            subagent_closed_at: None,
             closed_at: None,
         };
         let outcome = self
             .store
             .insert_subagent_with_child_limit(&record, max_children)
+            .map_err(|error| {
+                if is_unique_constraint_error(&error) {
+                    CreateSessionLinkError::Duplicate
+                } else {
+                    CreateSessionLinkError::Store(error)
+                }
+            })?;
+        match outcome {
+            InsertSubagentLinkOutcome::Inserted => Ok(record),
+            InsertSubagentLinkOutcome::FanoutLimit => Err(CreateSessionLinkError::FanoutLimit),
+        }
+    }
+
+    /// Atomically persists a newly assembled child session and its capped
+    /// same-workspace subagent relationship. This is the creation seam for a
+    /// child that must never be visible without its role-defining link.
+    pub fn create_subagent_session_and_link_with_child_limit(
+        &self,
+        session: &crate::domains::sessions::model::SessionRecord,
+        input: CreateSessionLinkInput,
+        max_children: usize,
+    ) -> Result<SessionLinkRecord, CreateSessionLinkError> {
+        if input.relation != SessionLinkRelation::Subagent {
+            return Err(CreateSessionLinkError::Store(anyhow::anyhow!(
+                "atomic child creation requires a subagent relationship"
+            )));
+        }
+        if input.parent_session_id == input.child_session_id {
+            return Err(CreateSessionLinkError::SelfLink);
+        }
+        if input.child_session_id != session.id {
+            return Err(CreateSessionLinkError::Store(anyhow::anyhow!(
+                "subagent relationship child does not match the session being created"
+            )));
+        }
+        if self
+            .session_store
+            .find_by_id(&input.parent_session_id)
+            .map_err(CreateSessionLinkError::Store)?
+            .is_none()
+        {
+            return Err(CreateSessionLinkError::ParentNotFound(
+                input.parent_session_id,
+            ));
+        }
+
+        let record = SessionLinkRecord {
+            id: Uuid::new_v4().to_string(),
+            public_id: Some(new_public_id(input.relation)),
+            relation: input.relation,
+            parent_session_id: input.parent_session_id,
+            child_session_id: input.child_session_id,
+            workspace_relation: input.workspace_relation,
+            label: input.label,
+            created_by_turn_id: input.created_by_turn_id,
+            created_by_tool_call_id: input.created_by_tool_call_id,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            subagent_closed_at: None,
+            closed_at: None,
+        };
+        let outcome = self
+            .store
+            .insert_subagent_session_with_child_limit(session, &record, max_children)
             .map_err(|error| {
                 if is_unique_constraint_error(&error) {
                     CreateSessionLinkError::Duplicate
@@ -226,11 +294,50 @@ impl SessionLinkService {
         self.store.list_subagent_children(parent_session_id)
     }
 
+    pub fn list_subagent_links_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.store.list_subagent_links_for_workspace(workspace_id)
+    }
+
+    pub fn list_subagent_children_including_closed(
+        &self,
+        parent_session_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        Ok(self
+            .store
+            .list_by_parent_including_closed(parent_session_id)?
+            .into_iter()
+            .filter(|link| link.relation == SessionLinkRelation::Subagent)
+            .collect())
+    }
+
+    pub fn list_current_subagent_children_with_unclosed_turns_page(
+        &self,
+        after_link_id: Option<&str>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<(String, String)>> {
+        self.store
+            .list_current_subagent_children_with_unclosed_turns_page(after_link_id, limit)
+    }
+
     pub fn find_subagent_parent(
         &self,
         child_session_id: &str,
     ) -> anyhow::Result<Option<SessionLinkRecord>> {
         self.store.find_subagent_parent(child_session_id)
+    }
+
+    pub fn find_subagent_parent_including_closed(
+        &self,
+        child_session_id: &str,
+    ) -> anyhow::Result<Option<SessionLinkRecord>> {
+        Ok(self
+            .store
+            .list_by_child_including_closed(child_session_id)?
+            .into_iter()
+            .find(|link| link.relation == SessionLinkRelation::Subagent))
     }
 
     pub fn find_subagent_link(
@@ -273,6 +380,19 @@ impl SessionLinkService {
         self.store.close_link(id, closed_at)
     }
 
+    pub fn close_subagent_operability(
+        &self,
+        id: &str,
+        subagent_closed_at: &str,
+    ) -> anyhow::Result<SubagentLinkCloseOutcome> {
+        self.store
+            .close_subagent_operability(id, subagent_closed_at)
+    }
+
+    pub fn open_subagent_operability(&self, id: &str) -> anyhow::Result<SubagentLinkOpenOutcome> {
+        self.store.open_subagent_operability(id)
+    }
+
     pub fn delete_link(&self, id: &str) -> anyhow::Result<bool> {
         self.store.delete_by_id(id)
     }
@@ -301,6 +421,14 @@ impl SessionLinkService {
             record.public_id = Some(new_public_id(record.relation));
         }
         self.store.import_link(&record)
+    }
+}
+
+impl crate::domains::sessions::admission::SessionOperabilityPolicy for SessionLinkService {
+    fn is_reversibly_closed_subagent(&self, session_id: &str) -> anyhow::Result<bool> {
+        Ok(self
+            .find_subagent_parent(session_id)?
+            .is_some_and(|link| link.subagent_closed_at.is_some()))
     }
 }
 

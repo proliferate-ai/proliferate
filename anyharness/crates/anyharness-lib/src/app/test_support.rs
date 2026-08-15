@@ -6,6 +6,9 @@ use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::model::ActorCapabilities;
+use crate::live::sessions::product_context::{
+    AgentProductContext, AgentProductContextResolutionError, AgentProductContextResolver,
+};
 use crate::persistence::Db;
 
 /// Store-backed [`ActorCapabilities`] for tests: the same wiring as
@@ -24,8 +27,22 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
             store.clone(),
             attachment_storage,
         )),
+        product_context: Arc::new(TestAgentProductContextResolver),
         observers: Vec::new(),
         permission_advisor: None,
+    }
+}
+
+struct TestAgentProductContextResolver;
+
+impl AgentProductContextResolver for TestAgentProductContextResolver {
+    fn resolve(
+        &self,
+        _session_id: &str,
+    ) -> Result<AgentProductContext, AgentProductContextResolutionError> {
+        Ok(AgentProductContext::new(
+            "You are currently an ordinary agent in this test workspace.",
+        ))
     }
 }
 
@@ -160,8 +177,7 @@ pub(crate) fn insert_session_row(
     store.insert(&record).expect("insert session row");
 }
 
-pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &str, path: &str) {
-    let repo_root_id = format!("repo-root-{workspace_id}");
+pub(crate) fn seed_repo_root(db: &Db, repo_root_id: &str, path: &str) {
     let now = "2026-03-25T00:00:00Z";
     db.with_conn(|conn| {
         conn.execute(
@@ -171,11 +187,21 @@ pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &
              ) VALUES (?1, 'external', ?2, NULL, 'main', NULL, NULL, NULL, NULL, ?3, ?3)",
             rusqlite::params![repo_root_id, path, now],
         )?;
+        Ok(())
+    })
+    .expect("seed repo root");
+}
+
+pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &str, path: &str) {
+    let repo_root_id = format!("repo-root-{workspace_id}");
+    seed_repo_root(db, &repo_root_id, path);
+    let now = "2026-03-25T00:00:00Z";
+    db.with_conn(|conn| {
         conn.execute(
             "INSERT INTO workspaces (
-                id, kind, repo_root_id, path, surface, lifecycle_state, cleanup_state,
+                id, kind, repo_root_id, path, surface, lifecycle_state,
                 created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, 'standard', 'active', 'none', ?5, ?5)",
+             ) VALUES (?1, ?2, ?3, ?4, 'standard', 'active', ?5, ?5)",
             rusqlite::params![workspace_id, kind, repo_root_id, path, now],
         )?;
         Ok(())

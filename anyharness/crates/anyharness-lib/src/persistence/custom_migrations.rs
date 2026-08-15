@@ -37,7 +37,189 @@ pub(super) const CUSTOM_FOREIGN_KEY_MIGRATIONS: &[(
         "0063_workflow_session_controller_uniqueness",
         migrate_workflow_session_controller_uniqueness,
     ),
+    (
+        "0067_workspace_archived_lifecycle",
+        migrate_workspace_archived_lifecycle,
+    ),
+    (
+        "0068_workspace_drop_cleanup_columns",
+        migrate_workspace_drop_cleanup_columns,
+    ),
 ];
+
+/// Turns the workspace lifecycle enum from `{active, retired}` into
+/// `{active, archived}` and adds the four columns archiving needs.
+///
+/// The CHECK constraint is inline, so this is a full-table rebuild (precedent
+/// 0049). Registered in `CUSTOM_FOREIGN_KEY_MIGRATIONS` so the runner disables
+/// foreign keys around it; the body must not touch the pragma itself.
+///
+/// Retired rows are ABSORBED, not kept: a retired row is exactly an archived
+/// row whose uncommitted state was never snapshotted, so `archived_head_sha`
+/// stays NULL for every row here. `archived_branch` and `archived_at` are
+/// backfilled for absorbed rows only, so a later unarchive of an absorbed row
+/// has a branch tip to aim at and the archived list has a date to show.
+fn migrate_workspace_archived_lifecycle(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    let columns = table_columns(tx, "workspaces")?;
+    if columns.iter().any(|column| column == "archived_head_sha") {
+        return Ok(());
+    }
+
+    tx.execute_batch(
+        "
+        CREATE TABLE workspaces_new (
+            id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL CHECK (kind IN ('local', 'worktree')),
+            repo_root_id TEXT NOT NULL REFERENCES repo_roots(id),
+            path TEXT NOT NULL,
+            surface TEXT NOT NULL DEFAULT 'standard' CHECK (surface IN ('standard', 'cowork')),
+            original_branch TEXT,
+            current_branch TEXT,
+            display_name TEXT,
+            origin_json TEXT,
+            creator_context_json TEXT,
+            lifecycle_state TEXT NOT NULL DEFAULT 'active' CHECK (lifecycle_state IN ('active', 'archived')),
+            cleanup_state TEXT NOT NULL DEFAULT 'none' CHECK (cleanup_state IN ('none', 'pending', 'complete', 'failed')),
+            cleanup_operation TEXT CHECK (cleanup_operation IS NULL OR cleanup_operation IN ('retire', 'purge')),
+            cleanup_error_message TEXT,
+            cleanup_failed_at TEXT,
+            cleanup_attempted_at TEXT,
+            archived_head_sha TEXT,
+            archived_branch TEXT,
+            archived_at TEXT,
+            partial_capture_json TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        ",
+    )?;
+
+    // Every non-`active` lifecycle value maps to `archived`, not only the
+    // literal 'retired': the new CHECK admits exactly two values, and an
+    // unknown value already READS as archived under the tolerant parse.
+    tx.execute(
+        "
+        INSERT INTO workspaces_new (
+            id, kind, repo_root_id, path, surface, original_branch, current_branch,
+            display_name, origin_json, creator_context_json, lifecycle_state,
+            cleanup_state, cleanup_operation, cleanup_error_message, cleanup_failed_at,
+            cleanup_attempted_at, archived_head_sha, archived_branch, archived_at,
+            partial_capture_json, created_at, updated_at
+        )
+        SELECT
+            id, kind, repo_root_id, path, COALESCE(surface, 'standard'),
+            original_branch, current_branch, display_name, origin_json,
+            creator_context_json,
+            CASE WHEN lifecycle_state = 'active' THEN 'active' ELSE 'archived' END,
+            COALESCE(cleanup_state, 'none'), cleanup_operation, cleanup_error_message,
+            cleanup_failed_at, cleanup_attempted_at,
+            NULL,
+            CASE WHEN lifecycle_state = 'active' THEN NULL
+                 ELSE COALESCE(current_branch, original_branch) END,
+            CASE WHEN lifecycle_state = 'active' THEN NULL
+                 ELSE COALESCE(cleanup_attempted_at, ?1) END,
+            NULL,
+            created_at, updated_at
+        FROM workspaces
+        ",
+        [chrono::Utc::now().to_rfc3339()],
+    )?;
+
+    // Index names are database-global: drop all three BEFORE the rename so the
+    // recreate cannot collide with a surviving old index. The retention index
+    // is renamed for its new consumer with an identical column tuple.
+    // `PRAGMA legacy_alter_table` keeps SQLite from rewriting every other
+    // table's foreign-key references at the rename (precedent 0049/0062).
+    tx.execute_batch(
+        "
+        DROP INDEX IF EXISTS idx_workspaces_path;
+        DROP INDEX IF EXISTS idx_workspaces_repo_root_id;
+        DROP INDEX IF EXISTS idx_workspaces_retention;
+        DROP INDEX IF EXISTS idx_workspaces_lifecycle;
+
+        PRAGMA legacy_alter_table = ON;
+        ALTER TABLE workspaces RENAME TO workspaces_old;
+        ALTER TABLE workspaces_new RENAME TO workspaces;
+        DROP TABLE workspaces_old;
+        PRAGMA legacy_alter_table = OFF;
+
+        CREATE INDEX idx_workspaces_path ON workspaces(path);
+        CREATE INDEX idx_workspaces_repo_root_id ON workspaces(repo_root_id);
+        CREATE INDEX idx_workspaces_lifecycle
+            ON workspaces(repo_root_id, kind, lifecycle_state, surface);
+        ",
+    )?;
+
+    Ok(())
+}
+
+/// R5: the row dies last now, so the five `cleanup_*` columns — the
+/// tombstone/retry state a distinct cleanup-in-progress row used to carry —
+/// have no reader left. Dropped in a full-table rebuild (precedent
+/// 0049/0067) because SQLite's `DROP COLUMN` cannot remove a column
+/// referenced by a CHECK constraint. Registered in
+/// `CUSTOM_FOREIGN_KEY_MIGRATIONS` so the runner disables foreign keys around
+/// it; the body must not touch the pragma itself.
+fn migrate_workspace_drop_cleanup_columns(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    let columns = table_columns(tx, "workspaces")?;
+    if !columns.iter().any(|column| column == "cleanup_state") {
+        return Ok(());
+    }
+
+    tx.execute_batch(
+        "
+        CREATE TABLE workspaces_new (
+            id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL CHECK (kind IN ('local', 'worktree')),
+            repo_root_id TEXT NOT NULL REFERENCES repo_roots(id),
+            path TEXT NOT NULL,
+            surface TEXT NOT NULL DEFAULT 'standard' CHECK (surface IN ('standard', 'cowork')),
+            original_branch TEXT,
+            current_branch TEXT,
+            display_name TEXT,
+            origin_json TEXT,
+            creator_context_json TEXT,
+            lifecycle_state TEXT NOT NULL DEFAULT 'active' CHECK (lifecycle_state IN ('active', 'archived')),
+            archived_head_sha TEXT,
+            archived_branch TEXT,
+            archived_at TEXT,
+            partial_capture_json TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO workspaces_new (
+            id, kind, repo_root_id, path, surface, original_branch, current_branch,
+            display_name, origin_json, creator_context_json, lifecycle_state,
+            archived_head_sha, archived_branch, archived_at, partial_capture_json,
+            created_at, updated_at
+        )
+        SELECT
+            id, kind, repo_root_id, path, surface, original_branch, current_branch,
+            display_name, origin_json, creator_context_json, lifecycle_state,
+            archived_head_sha, archived_branch, archived_at, partial_capture_json,
+            created_at, updated_at
+        FROM workspaces;
+
+        DROP INDEX IF EXISTS idx_workspaces_path;
+        DROP INDEX IF EXISTS idx_workspaces_repo_root_id;
+        DROP INDEX IF EXISTS idx_workspaces_lifecycle;
+
+        PRAGMA legacy_alter_table = ON;
+        ALTER TABLE workspaces RENAME TO workspaces_old;
+        ALTER TABLE workspaces_new RENAME TO workspaces;
+        DROP TABLE workspaces_old;
+        PRAGMA legacy_alter_table = OFF;
+
+        CREATE INDEX idx_workspaces_path ON workspaces(path);
+        CREATE INDEX idx_workspaces_repo_root_id ON workspaces(repo_root_id);
+        CREATE INDEX idx_workspaces_lifecycle
+            ON workspaces(repo_root_id, kind, lifecycle_state, surface);
+        ",
+    )?;
+
+    Ok(())
+}
 
 /// Spec 2b: at most one NONTERMINAL workflow run controls one session;
 /// historical terminal reuse stays allowed, so uniqueness is partial over the

@@ -1,5 +1,6 @@
 use std::{
     env, fs,
+    path::PathBuf,
     process::Stdio,
     sync::{atomic::Ordering, Arc},
     thread,
@@ -11,16 +12,53 @@ use tokio::time::{sleep, timeout, Instant};
 
 use super::lifecycle::{
     lock_for_worker_start, prepare_desktop_dispatch_worker_update,
-    prepare_existing_worker_for_ensure,
+    prepare_existing_worker_for_ensure, WorkerStartFailure, WorkerStartFailureKind,
+};
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
+use super::lifecycle::{
+    read_worker_log_tail, worker_startup_failure_message, WORKER_LOG_TAIL_MAX_BYTES,
 };
 use super::{
-    acquire_worker_database_lock, read_worker_log_tail, startup_watch_window,
-    worker_database_lock_is_held, worker_paths_in_namespace, worker_startup_failure_message,
-    write_worker_config, CloudWorkerLifecycle, CloudWorkerProcess, CloudWorkerState,
-    LEGACY_WORKER_STATE_NAMESPACE, WORKER_LOG_TAIL_MAX_BYTES, WORKER_STATE_NAMESPACE,
+    acquire_worker_database_lock, observer, spawn, startup_watch_window,
+    worker_database_lock_is_held, worker_paths_in_namespace, write_worker_config,
+    CloudWorkerLifecycle, CloudWorkerProcess, CloudWorkerState, LEGACY_WORKER_STATE_NAMESPACE,
+    WORKER_STATE_NAMESPACE,
 };
 
 const TEST_WORKER_LOCK_PATH_ENV: &str = "PROLIFERATE_TEST_WORKER_LOCK_PATH";
+
+#[test]
+fn worker_start_errors_preserve_the_frozen_bounded_classification() {
+    for (message, kind, classification) in [
+        (
+            "Proliferate Worker binary was not found.",
+            WorkerStartFailureKind::BinaryMissing,
+            "binary_missing",
+        ),
+        (
+            "Proliferate Worker exited during startup with status 1.",
+            WorkerStartFailureKind::EarlyExit,
+            "child_exited",
+        ),
+        (
+            "Failed to inspect Proliferate Worker startup: injected",
+            WorkerStartFailureKind::InspectionFailed,
+            "child_inspection_failed",
+        ),
+        (
+            "Failed to start Proliferate Worker with fixture: injected",
+            WorkerStartFailureKind::SpawnFailed,
+            "spawn_failed",
+        ),
+    ] {
+        let failure = WorkerStartFailure::from(message.to_string());
+        assert_eq!(failure.kind, kind);
+        assert_eq!(failure.kind.classification(), classification);
+    }
+}
 
 #[test]
 fn worker_config_uses_the_desktop_sidecar_url() {
@@ -80,11 +118,11 @@ async fn update_preparation_only_stops_worker_for_direct_exit_installers() {
     }
 
     let state = Arc::new(CloudWorkerState::default());
-    state.lifecycle.lock().await.process = Some(CloudWorkerProcess {
-        target_id: "desktop-install".to_string(),
+    state.lifecycle.lock().await.process = Some(CloudWorkerProcess::untracked(
+        "desktop-install".to_string(),
         child,
         config_path,
-    });
+    ));
 
     prepare_desktop_dispatch_worker_update(&state, false)
         .await
@@ -174,12 +212,13 @@ async fn credential_rotation_retains_owned_worker_after_stop_failure_and_retries
     }
 
     let mut lifecycle = CloudWorkerLifecycle {
-        process: Some(CloudWorkerProcess {
-            target_id: "desktop-install".to_string(),
+        process: Some(CloudWorkerProcess::untracked(
+            "desktop-install".to_string(),
             child,
             config_path,
-        }),
+        )),
         injected_stop_error: Some("injected rotation stop failure".to_string()),
+        ..Default::default()
     };
     let error = prepare_existing_worker_for_ensure(&mut lifecycle, "desktop-install", true)
         .await
@@ -207,6 +246,11 @@ async fn v2_worker_namespace_converges_while_a_legacy_worker_holds_its_lock() {
     fs::create_dir_all(&root).expect("create temporary worker root");
     let legacy = worker_paths_in_namespace(&root, LEGACY_WORKER_STATE_NAMESPACE, "install-1");
     let current = worker_paths_in_namespace(&root, WORKER_STATE_NAMESPACE, "install-1");
+    let compatibility = spawn::worker_legacy_log_paths(&root, "install-1");
+    let legacy_log_path = compatibility.v1;
+    let current_log_path = compatibility.v2;
+    assert_eq!(legacy_log_path.parent(), legacy.config.parent());
+    assert_eq!(current_log_path.parent(), current.config.parent());
     fs::create_dir_all(legacy.database.parent().expect("legacy Worker parent"))
         .expect("create legacy Worker namespace");
     let legacy_config = b"legacy-config-sentinel";
@@ -214,7 +258,7 @@ async fn v2_worker_namespace_converges_while_a_legacy_worker_holds_its_lock() {
     let legacy_log = b"legacy-log-sentinel";
     fs::write(&legacy.config, legacy_config).expect("seed legacy Worker config");
     fs::write(&legacy.database, legacy_database).expect("seed legacy Worker database");
-    fs::write(&legacy.log, legacy_log).expect("seed legacy Worker log");
+    fs::write(&legacy_log_path, legacy_log).expect("seed legacy Worker log");
 
     let mut legacy_child = Command::new(env::current_exe().expect("resolve test executable"))
         .arg("worker_database_lock_holder_fixture")
@@ -243,7 +287,7 @@ async fn v2_worker_namespace_converges_while_a_legacy_worker_holds_its_lock() {
 
     assert_ne!(legacy.config, current.config);
     assert_ne!(legacy.database, current.database);
-    assert_ne!(legacy.log, current.log);
+    assert_ne!(legacy_log_path, current_log_path);
     let current_lock = acquire_worker_database_lock(&current.database)
         .expect("v2 credential mutation must not contend with the legacy Worker");
     write_worker_config(
@@ -264,7 +308,10 @@ async fn v2_worker_namespace_converges_while_a_legacy_worker_holds_its_lock() {
         fs::read(&legacy.database).expect("read legacy database"),
         legacy_database
     );
-    assert_eq!(fs::read(&legacy.log).expect("read legacy log"), legacy_log);
+    assert_eq!(
+        fs::read(&legacy_log_path).expect("read legacy log"),
+        legacy_log
+    );
     drop(current_lock);
 
     legacy_child
@@ -272,6 +319,20 @@ async fn v2_worker_namespace_converges_while_a_legacy_worker_holds_its_lock() {
         .await
         .expect("stop legacy lock-holder fixture");
     fs::remove_dir_all(root).expect("remove temporary worker root");
+}
+
+#[test]
+fn legacy_log_helper_exposes_only_fixed_v2_and_v1_paths() {
+    let root = PathBuf::from("/app");
+    let paths = spawn::worker_legacy_log_paths(&root, "target/with spaces");
+    assert_eq!(
+        paths.v2,
+        root.join("cloud-worker-v2/target_with_spaces/worker.log")
+    );
+    assert_eq!(
+        paths.v1,
+        root.join("cloud-worker/target_with_spaces/worker.log")
+    );
 }
 
 #[test]
@@ -291,6 +352,92 @@ fn fresh_enrollment_gets_the_longer_startup_watch() {
     assert_eq!(startup_watch_window(false), Duration::from_millis(500));
 }
 
+#[test]
+fn worker_observer_generation_replacement_makes_old_task_inert() {
+    let first = observer::next_generation(0);
+    let replacement = observer::next_generation(first);
+    assert!(observer::generation_matches(first, first));
+    assert!(!observer::generation_matches(first, replacement));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn one_worker_observer_reaps_a_natural_exit_and_releases_the_owner() {
+    let child = Command::new("/bin/sh")
+        .args(["-c", "exit 0"])
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawn natural-exit fixture");
+    let state = Arc::new(CloudWorkerState::default());
+    {
+        let mut lifecycle = state.lifecycle.lock().await;
+        lifecycle.process = Some(CloudWorkerProcess::untracked(
+            "natural-exit".to_string(),
+            child,
+            "natural-exit.toml".into(),
+        ));
+        observer::start(&state, &mut lifecycle);
+        assert!(lifecycle.exit_observer.is_some());
+    }
+
+    timeout(Duration::from_secs(2), async {
+        loop {
+            if state.lifecycle.lock().await.process.is_none() {
+                break;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("natural-exit observer must reconcile the owner");
+    assert!(state.lifecycle.lock().await.exit_observer.is_none());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn startup_inspection_ambiguity_returns_the_complete_owned_process() {
+    let child = Command::new("/bin/sh")
+        .args(["-c", "sleep 10"])
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawn retained startup fixture");
+    let process = CloudWorkerProcess::untracked(
+        "inspection-ambiguous".to_string(),
+        child,
+        "inspection-ambiguous.toml".into(),
+    );
+    let failure = WorkerStartFailure::new(
+        WorkerStartFailureKind::InspectionFailed,
+        "Failed to inspect Proliferate Worker startup: injected".to_string(),
+    );
+
+    let spawn::WorkerLaunchOutcome::RetainedAfterInspection {
+        mut process,
+        failure,
+    } = spawn::retained_after_startup_inspection(process, failure)
+    else {
+        panic!("inspection ambiguity must retain the process")
+    };
+    assert_eq!(failure.kind, WorkerStartFailureKind::InspectionFailed);
+    assert!(matches!(process.child.try_wait(), Ok(None)));
+
+    let state = Arc::new(CloudWorkerState::default());
+    {
+        let mut lifecycle = state.lifecycle.lock().await;
+        lifecycle.process = Some(process);
+        observer::start(&state, &mut lifecycle);
+        assert!(lifecycle.process.is_some());
+        assert!(lifecycle.exit_observer.is_some());
+    }
+    super::lifecycle::stop_tracked_desktop_dispatch_worker(&state)
+        .await
+        .expect("stop retained startup fixture");
+}
+
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
 #[test]
 fn worker_log_tail_returns_only_the_requested_final_lines() {
     let root = env::temp_dir().join(format!(
@@ -312,6 +459,10 @@ fn worker_log_tail_returns_only_the_requested_final_lines() {
     fs::remove_dir_all(root).expect("remove temporary worker log root");
 }
 
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
 #[test]
 fn missing_worker_log_has_no_tail() {
     let missing = env::temp_dir().join(format!(
@@ -322,6 +473,10 @@ fn missing_worker_log_has_no_tail() {
     assert_eq!(read_worker_log_tail(&missing, 12), "");
 }
 
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
 #[test]
 fn worker_log_tail_scrubs_secrets_and_user_paths() {
     let root = env::temp_dir().join(format!(
@@ -351,6 +506,10 @@ fn worker_log_tail_scrubs_secrets_and_user_paths() {
     fs::remove_dir_all(root).expect("remove temporary worker log root");
 }
 
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
 #[test]
 fn startup_failure_message_scrubs_the_worker_log_path() {
     let home = crate::app_config::home_dir().expect("resolve user home");
@@ -363,6 +522,10 @@ fn startup_failure_message_scrubs_the_worker_log_path() {
     assert!(message.contains("safe tail"));
 }
 
+#[cfg(not(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+)))]
 #[test]
 fn worker_log_tail_reads_only_the_bounded_suffix() {
     let root = env::temp_dir().join(format!(

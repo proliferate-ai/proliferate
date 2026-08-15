@@ -10,7 +10,6 @@ export interface SubagentReceiptModel {
   subagentId: string;
   title: string;
   harnessLabel: string;
-  wakeScheduled: boolean;
   timestamp: string;
   prompt?: string;
 }
@@ -29,10 +28,7 @@ export function SubagentCreationReceipt({
   // The agent-authored task label is the sole human-readable name; the short
   // ID surfaces only in the disclosure details.
   const shortId = shortDelegatedWorkId(model.subagentId);
-  const launchFragments = [
-    model.harnessLabel,
-    model.wakeScheduled ? "Wake scheduled" : null,
-  ].filter((value): value is string => !!value);
+  const launchLabel = model.harnessLabel;
   const compact = density === "compact";
 
   return (
@@ -79,9 +75,9 @@ export function SubagentCreationReceipt({
         <span className={`shrink-0 text-muted-foreground ${compact ? "text-ui-sm" : "text-ui"}`}>
           created
         </span>
-        {!compact && launchFragments.length > 0 ? (
+        {!compact ? (
           <span className="hidden min-w-0 truncate font-mono text-ui-sm text-faint sm:inline">
-            {launchFragments.join(" · ")}
+            {launchLabel}
           </span>
         ) : null}
       </div>
@@ -93,7 +89,7 @@ export function SubagentCreationReceipt({
           }`}
         >
           <DetailRow label="ID" value={shortId} mono />
-          <DetailRow label="Launch" value={launchFragments.join(" · ")} />
+          <DetailRow label="Launch" value={launchLabel} />
           <DetailRow label="Created" value={model.timestamp} />
           {model.prompt ? <DetailRow label="Prompt" value={model.prompt} /> : null}
           {onOpenSession ? (

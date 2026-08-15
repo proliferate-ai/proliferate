@@ -1,4 +1,6 @@
 import { useCallback } from "react";
+import { promptAttachmentSendFields } from "#product/domain/chats/composer/prompt-attachment-content-parts";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
 import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
 import type { HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
@@ -13,9 +15,9 @@ export function useHomeNextLaunchPromptActions() {
   const { promptSession } = useSessionPromptWorkflow();
   const { createSessionWithResolvedConfig } = useSessionCreationActions();
   const markLaunchIntentMaterialized =
-    useChatLaunchIntentStore((state) => state.markMaterializedIfActive);
+    useChatLaunchIntentStore((state) => state.markMaterialized);
   const markLaunchIntentSendAttempted =
-    useChatLaunchIntentStore((state) => state.markSendAttemptedIfActive);
+    useChatLaunchIntentStore((state) => state.markSendAttempted);
 
   const createFreshSession = useCallback(async (input: {
     workspaceId: string;
@@ -23,6 +25,7 @@ export function useHomeNextLaunchPromptActions() {
     modeId: string | null;
     launchControlValues?: Record<string, string>;
     text: string;
+    attachmentSnapshots?: PromptAttachmentSnapshot[];
     promptId: string;
     launchIntentId: string;
   }) => {
@@ -34,6 +37,7 @@ export function useHomeNextLaunchPromptActions() {
       promptId: input.promptId,
       launchIntentId: input.launchIntentId,
       launchControlValues: input.launchControlValues,
+      ...promptAttachmentSendFields(input.text, input.attachmentSnapshots),
       ...modeOptions(input.modeId),
     });
   }, [createSessionWithResolvedConfig]);
@@ -45,6 +49,7 @@ export function useHomeNextLaunchPromptActions() {
     modeId: string | null;
     launchControlValues?: Record<string, string>;
     text: string;
+    attachmentSnapshots?: PromptAttachmentSnapshot[];
     promptId: string;
     launchIntentId: string;
     allowFreshFallback?: boolean;
@@ -59,6 +64,7 @@ export function useHomeNextLaunchPromptActions() {
         text: input.text,
         workspaceId: input.workspaceId,
         promptId: input.promptId,
+        ...promptAttachmentSendFields(input.text, input.attachmentSnapshots),
         onBeforeOptimisticPrompt: () => {
           markLaunchIntentSendAttempted(input.launchIntentId);
         },
@@ -76,6 +82,7 @@ export function useHomeNextLaunchPromptActions() {
       modeId: input.modeId,
       launchControlValues: input.launchControlValues,
       text: input.text,
+      attachmentSnapshots: input.attachmentSnapshots,
       promptId: input.promptId,
       launchIntentId: input.launchIntentId,
     });
@@ -88,13 +95,16 @@ export function useHomeNextLaunchPromptActions() {
 
   const promptProjectedPendingWorkspaceSession = useCallback(async (input: {
     text: string;
+    attachmentSnapshots?: PromptAttachmentSnapshot[];
     promptId: string;
     launchIntentId: string;
     waitUntil?: Promise<unknown>;
+    /** Routes the prompt to this attempt's projected session, attended or not. */
+    attemptId?: string | null;
   }): Promise<string | null> => {
     const projected = input.waitUntil
-      ? await waitForProjectedPendingWorkspaceSession(input.waitUntil)
-      : resolveProjectedPendingWorkspaceSession();
+      ? await waitForProjectedPendingWorkspaceSession(input.waitUntil, input.attemptId)
+      : resolveProjectedPendingWorkspaceSession(input.attemptId);
     if (!projected) {
       return null;
     }
@@ -107,6 +117,7 @@ export function useHomeNextLaunchPromptActions() {
       text: input.text,
       workspaceId: projected.workspaceId,
       promptId: input.promptId,
+      ...promptAttachmentSendFields(input.text, input.attachmentSnapshots),
       onBeforeOptimisticPrompt: () => {
         markLaunchIntentSendAttempted(input.launchIntentId);
       },
@@ -121,6 +132,7 @@ export function useHomeNextLaunchPromptActions() {
   const promptExistingSession = useCallback(async (input: {
     sessionId: string;
     text: string;
+    attachmentSnapshots?: PromptAttachmentSnapshot[];
     workspaceId: string;
     promptId: string;
     launchIntentId: string;
@@ -130,6 +142,7 @@ export function useHomeNextLaunchPromptActions() {
       text: input.text,
       workspaceId: input.workspaceId,
       promptId: input.promptId,
+      ...promptAttachmentSendFields(input.text, input.attachmentSnapshots),
       onBeforeOptimisticPrompt: () => {
         markLaunchIntentSendAttempted(input.launchIntentId);
       },

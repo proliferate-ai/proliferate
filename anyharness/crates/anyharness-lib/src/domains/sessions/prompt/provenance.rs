@@ -1,6 +1,23 @@
 use anyharness_contract::v1::PromptProvenance as PublicPromptProvenance;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentSessionPromptSource {
+    pub source_session_id: String,
+    pub session_link_id: Option<String>,
+    pub label: String,
+}
+
+impl AgentSessionPromptSource {
+    pub(crate) fn into_provenance(self) -> PromptProvenance {
+        PromptProvenance::AgentSession {
+            source_session_id: self.source_session_id,
+            session_link_id: self.session_link_id,
+            label: Some(self.label),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum PromptProvenance {
@@ -49,6 +66,19 @@ pub(crate) enum PromptProvenance {
 }
 
 impl PromptProvenance {
+    /// Stable low-cardinality label for observability. Mirrors the serde
+    /// `kind` tag so a record reads the same as the persisted provenance.
+    pub(crate) fn kind_label(&self) -> &'static str {
+        match self {
+            PromptProvenance::AgentSession { .. } => "agent_session",
+            PromptProvenance::Automation { .. } => "automation",
+            PromptProvenance::SubagentWake { .. } => "subagent_wake",
+            PromptProvenance::LinkWake { .. } => "link_wake",
+            PromptProvenance::ReviewFeedback { .. } => "review_feedback",
+            PromptProvenance::System { .. } => "system",
+        }
+    }
+
     pub(crate) fn to_public(&self) -> Option<PublicPromptProvenance> {
         match self {
             PromptProvenance::AgentSession {

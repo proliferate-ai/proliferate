@@ -8,6 +8,7 @@ import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-short
 import { resolveWorkspaceShellSurface } from "#product/lib/domain/workspaces/shell/shell-surface";
 import { ownsCoworkNewThreadShortcut } from "#product/lib/domain/cowork/new-thread-shortcut";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 
 type CreateCoworkThreadFromSelection = ReturnType<
   typeof useCoworkThreadWorkflow
@@ -40,7 +41,7 @@ export function CoworkThreadLaunchProvider({ children }: { children: ReactNode }
 
 function DesktopCoworkThreadLaunchProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;

@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
-import { ListRow } from "#product/primitives/patterns/ListRow";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 import { ArrowRight } from "#product/primitives/icons/core";
 
 interface PlaygroundDestination {
@@ -71,12 +71,13 @@ export function PlaygroundIndex() {
         description="Dev-only surfaces for exercising product UI outside the authenticated app. import.meta.env.DEV only."
       />
       <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
-        <div className="rounded-lg border border-border">
+        <div className="divide-y divide-border-light rounded-lg border border-border px-1">
           {DESTINATIONS.map((destination) => (
-            <ListRow
+            <RosterRow
               key={destination.path}
+              density="comfortable"
               title={destination.title}
-              description={(
+              secondary={(
                 <>
                   <code className="font-mono text-ui-sm">{destination.path}</code>
                   <span className="mx-1.5">·</span>
@@ -84,7 +85,7 @@ export function PlaygroundIndex() {
                 </>
               )}
               trailing={<ArrowRight className="icon-paired text-muted-foreground" />}
-              onClick={() => navigate(destination.path)}
+              onSelect={() => navigate(destination.path)}
             />
           ))}
         </div>

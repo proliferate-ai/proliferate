@@ -7,6 +7,13 @@ import {
 interface ChatPreMessageCanvasProps {
   bottomInsetPx: number;
   children: ReactNode;
+  /**
+   * Optional content pinned above the centered hero, left-aligned at the
+   * top of the column (e.g. the workspace-creation receipt). Renders
+   * whether or not it has anything to show — callers pass a component that
+   * is safe to mount unconditionally.
+   */
+  topSlot?: ReactNode;
 }
 
 /**
@@ -17,14 +24,18 @@ interface ChatPreMessageCanvasProps {
 export function ChatPreMessageCanvas({
   bottomInsetPx,
   children,
+  topSlot,
 }: ChatPreMessageCanvasProps) {
   return (
     <div
       className={`flex flex-1 min-h-0 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
       style={{ paddingBottom: bottomInsetPx }}
     >
-      <div className={`${CHAT_COLUMN_CLASSNAME} flex flex-col items-center justify-center py-8`}>
-        {children}
+      <div className={`${CHAT_COLUMN_CLASSNAME} flex flex-col py-8`}>
+        {topSlot}
+        <div className="flex flex-1 min-h-0 flex-col items-center justify-center">
+          {children}
+        </div>
       </div>
     </div>
   );

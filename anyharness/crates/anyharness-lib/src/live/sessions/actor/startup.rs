@@ -201,10 +201,12 @@ impl SessionActor {
             capabilities_from_acp(Some(&init_response.agent_capabilities.prompt_capabilities));
 
         tracing::info!(
+            target: "anyharness.session.established",
             session_id = %session_id,
             native_session_id = %native_session_id,
             startup_strategy = startup_strategy_label,
             native_startup_disposition = startup_disposition.as_str(),
+            resumed = startup_disposition == NativeSessionStartupDisposition::LoadedExisting,
             "ACP session established"
         );
 
@@ -379,6 +381,7 @@ impl SessionActor {
             handle,
             _acp_shutdown: shutdown_tx,
             child,
+            pending_stop_response: None,
         };
         Ok((actor, notification_rx, background_work_rx))
     }

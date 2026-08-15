@@ -136,6 +136,10 @@ TEXT_PLANES: tuple[str, ...] = (
     "--color-surface-under",
     "--color-muted",
     "--color-sidebar",
+    # The composer is a fully opaque plane the product paints text on, so it is
+    # measured like every other elevation role rather than assumed to inherit
+    # the page's numbers.
+    "--color-composer-background",
 )
 
 # Each border role is measured against the plane it actually divides. The

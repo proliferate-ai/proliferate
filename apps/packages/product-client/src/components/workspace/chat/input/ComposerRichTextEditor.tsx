@@ -20,10 +20,11 @@ import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
-import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ComposerCaretPlugin } from "#product/components/workspace/chat/input/ComposerCaretPlugin";
+import { ComposerFencedCodePlugin } from "#product/components/workspace/chat/input/ComposerFencedCodePlugin";
+import { ComposerFormatGuardPlugin } from "#product/components/workspace/chat/input/ComposerFormatGuardPlugin";
 import {
   COMPOSER_INPUT_TRANSFORMERS,
   COMPOSER_NODES,
@@ -32,6 +33,7 @@ import {
   type ComposerEditorContext,
 } from "#product/components/workspace/chat/input/ComposerEditorDocument";
 import { ComposerLinkPastePlugin } from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
+import { ComposerMarkdownShortcutPlugin } from "#product/components/workspace/chat/input/ComposerMarkdownShortcutPlugin";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "#product/config/transcript-link-styles";
 import type { ComposerKeyboardEventLike } from "#product/lib/domain/chat/composer/composer-keyboard";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
@@ -89,6 +91,12 @@ export function ComposerRichTextEditor({
     theme: {
       paragraph: "m-0 min-h-[1lh]",
       text: { bold: "font-semibold", italic: "italic" },
+      // Recorded cause (DESIGN_SYSTEM.md § UI-conformance review, check 4): a
+      // two-argument CSS fallback for the optional per-theme code-block
+      // override. No token utility can express a fallback chain, and this
+      // string must stay a plain class list because Lexical's theme map takes
+      // one.
+      code: "box-border my-2 block w-full min-w-0 max-w-full overflow-x-auto whitespace-pre rounded-lg border border-transparent bg-[var(--color-code-block-background,var(--color-card))] p-3 font-mono text-chat font-normal text-foreground",
       list: {
         ul: "list-disc pl-5",
         ol: "list-decimal pl-5",
@@ -163,7 +171,9 @@ export function ComposerRichTextEditor({
       </div>
       <HistoryPlugin />
       <ListPlugin />
-      <MarkdownShortcutPlugin transformers={INPUT_TRANSFORMERS} />
+      <ComposerMarkdownShortcutPlugin transformers={INPUT_TRANSFORMERS} />
+      <ComposerFencedCodePlugin />
+      <ComposerFormatGuardPlugin />
       <ComposerBehaviorPlugin
         canSubmit={canSubmit}
         onSubmit={onSubmit}
@@ -254,13 +264,30 @@ function ComposerEditorBridge({
     editor.update(() => {
       $getRoot().clear();
       if (value) $convertFromMarkdownString(value, INPUT_TRANSFORMERS);
-      $getRoot().selectEnd();
+      // Reset inherited text formats along with the content: the selection's
+      // format bits survive a root clear, so a code-formatted draft would
+      // otherwise re-apply `code` to everything typed after a send (PRO-159).
+      const selection = $getRoot().selectEnd();
+      if (selection.format !== 0 || selection.style !== "") {
+        selection.format = 0;
+        selection.style = "";
+        selection.dirty = true;
+      }
     }, { tag: EXTERNAL_VALUE_TAG });
   }, [editor, snapshot, value]);
 
   useEffect(() => editor.registerUpdateListener(({ editorState, dirtyElements, dirtyLeaves, tags }) => {
     editorState.read(() => {
-      onEditorContextChange?.(readComposerEditorContext());
+      const context = readComposerEditorContext();
+      onEditorContextChange?.(context);
+      // Mirror "text is highlighted" onto the root so the global shortcut
+      // dispatcher can cede ⌘B to the editor's bold chord without reading
+      // DOM selection state; Lexical's selection is what bold applies to,
+      // so it is the source of truth (PRO-265).
+      editor.getRootElement()?.toggleAttribute(
+        "data-chat-composer-highlight",
+        context.anchorOffset !== context.focusOffset,
+      );
       if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
       const payload = JSON.stringify(editorState.toJSON());
       if (payload === lastDocumentPayloadRef.current) return;

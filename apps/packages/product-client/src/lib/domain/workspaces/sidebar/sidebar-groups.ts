@@ -9,7 +9,10 @@ import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-stat
 import type {
   SidebarGroupState,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
-import { buildPendingSidebarProjection } from "#product/lib/domain/workspaces/sidebar/pending-sidebar-projection";
+import {
+  buildPendingSidebarProjection,
+  type PendingSidebarProjection,
+} from "#product/lib/domain/workspaces/sidebar/pending-sidebar-projection";
 import { resolveSidebarWorkspaceTypes } from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import {
   compareLogicalWorkspaceRecency,
@@ -77,11 +80,11 @@ export function buildSidebarGroupStates(args: {
   logicalWorkspaces: LogicalWorkspace[];
   showArchived: boolean;
   workspaceTypes: ReturnType<typeof resolveSidebarWorkspaceTypes>;
-  archivedSet: Set<string>;
+  pinnedSet?: Set<string>;
   hiddenRepoRootIds: Set<string>;
   selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
-  pendingWorkspaceEntry?: PendingWorkspaceEntry | null;
+  pendingWorkspaceEntries?: readonly PendingWorkspaceEntry[];
   workspaceActivities: Record<string, SidebarSessionActivityState>;
   pendingPromptCounts?: Record<string, number>;
   gitStatus: GitStatusSnapshot | undefined;
@@ -117,31 +120,52 @@ export function buildSidebarGroupStates(args: {
     }
   }
 
-  const pendingProjection = args.pendingWorkspaceEntry
-    ? buildPendingSidebarProjection({
-      entry: args.pendingWorkspaceEntry,
+  // Several launches can be in flight at once, so the sidebar projects every
+  // live attempt, not just the attended one (PRO-230).
+  const pendingProjectionsByRepoKey = new Map<string, PendingSidebarProjection[]>();
+  // Suppression is keyed off the attempt's own materialized workspace id, not
+  // off what the user has selected, and applies in EVERY group: an unattended
+  // attempt whose real workspace has already landed in the collections cache
+  // would otherwise render twice, once as its pending row and once as the real
+  // row in whichever group that workspace sorts into.
+  const pendingOwnedWorkspaceIds = new Set<string>();
+  for (const entry of args.pendingWorkspaceEntries ?? []) {
+    const projection = buildPendingSidebarProjection({
+      entry,
       repoRootsById,
       selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId,
       selectedWorkspaceId: args.selectedWorkspaceId,
       activeSessionTitle: args.activeSessionTitle,
-    })
-    : null;
+    });
+    if (!projection) {
+      continue;
+    }
+    if (entry.workspaceId) {
+      pendingOwnedWorkspaceIds.add(entry.workspaceId);
+    }
+    const existing = pendingProjectionsByRepoKey.get(projection.repoKey);
+    if (existing) {
+      existing.push(projection);
+    } else {
+      pendingProjectionsByRepoKey.set(projection.repoKey, [projection]);
+    }
+  }
 
   const groupKeys = new Set<string>([
     ...repoRootsByKey.keys(),
     ...groups.keys(),
-    ...(pendingProjection ? [pendingProjection.repoKey] : []),
+    ...pendingProjectionsByRepoKey.keys(),
     ...cloudRepoConfigsByKey.keys(),
   ]);
 
   return Array.from(groupKeys)
     .map((repoKey): { group: SidebarGroupState; sortRecency: LogicalWorkspaceRecency } | null => {
       const rawGroupWorkspaces = groups.get(repoKey) ?? [];
-      const pendingItem =
-        pendingProjection?.repoKey === repoKey ? pendingProjection.item : null;
-      const pendingOwnedWorkspaceId = pendingItem
-        ? args.pendingWorkspaceEntry?.workspaceId ?? null
-        : null;
+      // A repo group may host several pending rows at once; launch order is
+      // their order, and they stay above the materialized rows.
+      const groupPendingProjections = pendingProjectionsByRepoKey.get(repoKey) ?? [];
+      const groupPendingProjection = groupPendingProjections[0] ?? null;
+      const pendingItems = groupPendingProjections.map((projection) => projection.item);
       const groupWorkspaces = groupHasWorkActivity(
         rawGroupWorkspaces,
         args.workspaceLastInteracted,
@@ -158,9 +182,9 @@ export function buildSidebarGroupStates(args: {
       }
       const workspaceItems = buildSidebarWorkspaceItems({
         workspaces: groupWorkspaces,
-        pendingItem,
-        pendingOwnedWorkspaceId,
-        archivedSet: args.archivedSet,
+        pendingItems,
+        pendingOwnedWorkspaceIds,
+        pinnedSet: args.pinnedSet,
         selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId,
         selectedWorkspaceId: args.selectedWorkspaceId,
         workspaceActivities: args.workspaceActivities,
@@ -176,8 +200,8 @@ export function buildSidebarGroupStates(args: {
         suppressActiveNeedsReview: args.suppressActiveNeedsReview,
         desktopInstallId: args.desktopInstallId,
       });
-      const items = pendingItem
-        ? [pendingItem, ...workspaceItems]
+      const items = pendingItems.length > 0
+        ? [...pendingItems, ...workspaceItems]
         : workspaceItems;
       const visibleItems = items.filter((item) => {
         if (args.showArchived) {
@@ -207,8 +231,10 @@ export function buildSidebarGroupStates(args: {
         visibleItemIds,
         args.workspaceLastInteracted,
       );
-      const latestPendingRecency =
-        pendingItem && visibleItemIds.has(pendingItem.id) ? pendingProjection!.sortRecency : null;
+      const latestPendingRecency = latestVisiblePendingRecency(
+        groupPendingProjections,
+        visibleItemIds,
+      );
       const sortRecency = latestPendingRecency && (
         !latestWorkspaceRecency
         || compareResolvedLogicalWorkspaceRecency(latestPendingRecency, latestWorkspaceRecency) < 0
@@ -224,15 +250,15 @@ export function buildSidebarGroupStates(args: {
       const cloudSourceRoot = cloudRepoConfig
         ? `cloud:${cloudRepoConfig.gitOwner}/${cloudRepoConfig.gitRepoName}`
         : null;
-      const sourceRoot = pendingProjection?.repoKey === repoKey && !repoRoot
-        ? pendingProjection.sourceRoot
+      const sourceRoot = groupPendingProjection && !repoRoot
+        ? groupPendingProjection.sourceRoot
         : repoRoot?.path
         ?? representative?.sourceRoot
         ?? cloudSourceRoot
         ?? repoKey;
       const name = repoRoot?.displayName?.trim()
         || repoRoot?.remoteRepoName?.trim()
-        || (pendingProjection?.repoKey === repoKey ? pendingProjection.name : null)
+        || groupPendingProjection?.name
         || cloudRepoConfig?.gitRepoName
         || (representative ? logicalGroupName(representative) : sourceRoot.split("/").filter(Boolean).pop())
         || sourceRoot;
@@ -246,23 +272,23 @@ export function buildSidebarGroupStates(args: {
           sourceRoot,
           name,
           allLogicalWorkspaceIds: [
-            ...(pendingItem ? [pendingItem.id] : []),
+            ...pendingItems.map((item) => item.id),
             ...groupWorkspaces
               .filter((entry) =>
-                entry.id !== pendingItem?.id
-                && !pendingOwnsLogicalWorkspace(pendingOwnedWorkspaceId, entry)
+                !pendingItems.some((item) => item.id === entry.id)
+                && !pendingOwnsLogicalWorkspace(pendingOwnedWorkspaceIds, entry)
               )
               .map((entry) => entry.id),
           ],
           repoRootId:
             repoRoot?.id
             ?? representative?.repoRoot?.id
-            ?? (pendingProjection?.repoKey === repoKey ? pendingProjection.repoRoot?.id : null)
+            ?? groupPendingProjection?.repoRoot?.id
             ?? null,
           localSourceRoot:
             repoRoot?.path
             ?? groupWorkspaces.find((entry) => entry.localWorkspace)?.localWorkspace?.path
-            ?? (pendingProjection?.repoKey === repoKey ? pendingProjection.repoRoot?.path : null)
+            ?? groupPendingProjection?.repoRoot?.path
             ?? null,
           cloudRepoTarget:
             provider === "github" && owner && repoName
@@ -301,6 +327,25 @@ function latestVisibleWorkspaceRecency(
     const recency = resolveLogicalWorkspaceRecency(workspace, workspaceActivityAt);
     if (!latestRecency || compareResolvedLogicalWorkspaceRecency(recency, latestRecency) < 0) {
       latestRecency = recency;
+    }
+  }
+  return latestRecency;
+}
+
+function latestVisiblePendingRecency(
+  projections: readonly PendingSidebarProjection[],
+  visibleItemIds: Set<string>,
+): LogicalWorkspaceRecency | null {
+  let latestRecency: LogicalWorkspaceRecency | null = null;
+  for (const projection of projections) {
+    if (!visibleItemIds.has(projection.item.id)) {
+      continue;
+    }
+    if (
+      !latestRecency
+      || compareResolvedLogicalWorkspaceRecency(projection.sortRecency, latestRecency) < 0
+    ) {
+      latestRecency = projection.sortRecency;
     }
   }
   return latestRecency;

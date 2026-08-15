@@ -152,6 +152,12 @@ export function Tooltip({
               ? undefined
               : {
                 boxSizing: "border-box",
+                // Height needs a ceiling too: callers can hand this arbitrary
+                // text, and without one a long message wraps into a column
+                // taller than the viewport — the `overflow-hidden` below only
+                // clips once a bound exists. Callers with genuinely long
+                // content should clamp to a preview before it gets here.
+                maxHeight: "min(18rem, calc(100vh - 1.5rem))",
                 maxWidth: "min(22rem, calc(100vw - 1.5rem))",
                 overflowWrap: "anywhere",
                 whiteSpace: "normal",

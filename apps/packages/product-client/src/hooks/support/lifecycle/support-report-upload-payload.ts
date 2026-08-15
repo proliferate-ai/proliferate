@@ -12,6 +12,7 @@ import type {
   SupportReportWorkspaceOption,
 } from "#product/lib/domain/support/report-types";
 import type { DesktopProductEventMap } from "#product/lib/domain/telemetry/events";
+import { SupportReportLocalPayloadError } from "#product/lib/domain/support/report-upload-failure";
 
 /**
  * Narrow typed telemetry dependency injected from the calling hook (which reads
@@ -22,6 +23,10 @@ type TrackSupportReportSubmitted = (
   name: "support_report_submitted",
   payload: DesktopProductEventMap["support_report_submitted"],
 ) => void;
+
+interface SupportReportSubmittedTelemetry {
+  track: TrackSupportReportSubmitted;
+}
 
 export const DIAGNOSTICS_MAX_BYTES = 25 * 1024 * 1024;
 const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
@@ -41,7 +46,7 @@ export function buildCreateReportRequest(
     workspaceRefs: workspaceRefsForJob(job),
     telemetryRefs: supportContext.telemetryRefs,
     expectedClientUploads: {
-      diagnostics: job.includeLogs !== false,
+      diagnostics: job.supportSnapshot.kind === "prepared",
       attachmentCount,
     },
     publicContentConsent: false,
@@ -91,18 +96,23 @@ export function trackSupportReportSubmitted(
   job: SupportReportJob,
   correlation: SupportReportServerCorrelation,
   attachmentCount: number,
-  track: TrackSupportReportSubmitted,
+  diagnosticsIncluded: boolean,
+  telemetry: SupportReportSubmittedTelemetry,
 ): void {
-  const workspaceIds = workspaceIdsForJob(job);
-  track("support_report_submitted", {
-    source_surface: "desktop",
-    scope_kind: job.scope.kind,
-    public_content_consent: job.publicContentConsent !== false,
-    diagnostics_included: job.includeLogs !== false,
-    attachment_count: attachmentCount,
-    workspace_count: workspaceIds.length,
-    cloud_workspace_count: correlation.cloudWorkspaceIds.length,
-  });
+  try {
+    const workspaceIds = workspaceIdsForJob(job);
+    telemetry.track("support_report_submitted", {
+      source_surface: "desktop",
+      scope_kind: job.scope.kind,
+      public_content_consent: job.publicContentConsent !== false,
+      diagnostics_included: diagnosticsIncluded,
+      attachment_count: attachmentCount,
+      workspace_count: workspaceIds.length,
+      cloud_workspace_count: correlation.cloudWorkspaceIds.length,
+    });
+  } catch {
+    // Product analytics is observational and cannot change report delivery.
+  }
 }
 
 export async function putPresignedObject(
@@ -126,20 +136,22 @@ export async function putPresignedObject(
 }
 
 export function validateAttachmentSizes(job: SupportReportJob): void {
+  if (job.attachments.length > 20) {
+    throw new SupportReportLocalPayloadError("Attachments are too large.");
+  }
   let total = 0;
   for (const attachment of job.attachments) {
-    if (attachment.sizeBytes > ATTACHMENT_MAX_BYTES) {
-      throw new Error(`Attachment is too large: ${attachment.fileName}`);
+    if (!Number.isSafeInteger(attachment.sizeBytes) || attachment.sizeBytes < 0
+      || attachment.sizeBytes > ATTACHMENT_MAX_BYTES) {
+      throw new SupportReportLocalPayloadError(
+        `Attachment is too large: ${attachment.fileName}`,
+      );
     }
     total += attachment.sizeBytes;
   }
   if (total > TOTAL_ATTACHMENT_MAX_BYTES) {
-    throw new Error("Attachments are too large.");
+    throw new SupportReportLocalPayloadError("Attachments are too large.");
   }
-}
-
-export function jsonBlob(value: unknown): Blob {
-  return new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
 }
 
 export async function loadAttachmentBlob(
@@ -153,9 +165,17 @@ export async function loadAttachmentBlob(
         : null
     );
   if (!dataBase64) {
-    throw new Error(`Attachment data is missing: ${attachment.fileName}`);
+    throw new SupportReportLocalPayloadError(
+      `Attachment data is missing: ${attachment.fileName}`,
+    );
   }
-  return base64Blob(dataBase64, attachment.contentType);
+  try {
+    return base64Blob(dataBase64, attachment.contentType);
+  } catch {
+    throw new SupportReportLocalPayloadError(
+      `Attachment data is invalid: ${attachment.fileName}`,
+    );
+  }
 }
 
 export async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
@@ -169,8 +189,8 @@ export function completeRequestForUpload(input: {
   job: SupportReportJob;
   reportId: string;
   /**
-   * Diagnostics object metadata. Omitted (undefined) when the submitter turned
-   * off "Include app logs" so no diagnostics.json was uploaded for this report.
+   * Diagnostics object metadata. Omitted when this job has no exact prepared
+   * snapshot, so no diagnostics.json was uploaded for the report.
    */
   diagnostics?: {
     objectKey: string;

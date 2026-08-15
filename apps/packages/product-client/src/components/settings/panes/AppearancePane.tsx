@@ -1,7 +1,9 @@
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsMenu } from "#product/primitives/patterns/SettingsMenu";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsMenu } from "#product/primitives/patterns/settings/SettingsMenu";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
+import { Card } from "#product/primitives/patterns/Card";
 import { Button } from "#product/primitives/Button";
 import { AppearanceCodePreview } from "#product/components/settings/panes/AppearanceCodePreview";
 import { ThemePreviewCards } from "#product/components/settings/panes/ThemePreviewCards";
@@ -12,6 +14,7 @@ import { Switch } from "#product/primitives/Switch";
 import {
   READABLE_CODE_FONT_SIZE_LABELS,
   READABLE_CODE_FONT_SIZE_OPTIONS,
+  readableCodeFontSizeDetail,
   UI_FONT_SIZE_LABELS,
   UI_FONT_SIZE_OPTIONS,
   WINDOW_ZOOM_LABELS,
@@ -24,19 +27,21 @@ import { useColorMode } from "#product/hooks/theme/workflows/use-theme-preferenc
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 /**
- * Rows on this pane sit inside bordered panels rather than flat on the page.
- * Everywhere else in Settings a flat list is right, because the whole pane is
- * one list; here the pane alternates between controls and previews, and the
- * panel is what tells a reader which of the two they are looking at.
+ * Preview sections use `surface="plain"` and the preview shells below force
+ * `bg-background` onto `Card`'s `opaque` surface — their content sits on the
+ * real app background, never inside the wash card. A preview's job is to
+ * show what a surface looks like in the app, and the app draws transcripts
+ * and diffs on the page background; tinting them card-gray would make the
+ * preview lie about the thing it previews. This is a deliberate divergence
+ * from `Card`'s default fills (`bg-card` for `opaque`, no plain-background
+ * option), documented rather than force-fit.
+ *
+ * One enumerated pixel delta from the adoption: the retired
+ * `PREVIEW_PANEL_CLASS` drew `rounded-xl` (12px); `Card` owns its radius and
+ * paints `rounded-lg` (8px). The corner is not restated at the call site —
+ * radius belongs to the card, and a per-site override would reopen the axis
+ * `Card`'s doc closes.
  */
-const PANEL_CLASS = "rounded-xl border border-border bg-card px-4";
-/**
- * Preview panels deliberately do NOT take `bg-card`. A preview's job is to
- * show what a surface looks like in the app, and the app draws transcripts and
- * diffs on the page background — tinting them card-gray would make the preview
- * lie about the thing it previews.
- */
-const PREVIEW_PANEL_CLASS = "overflow-hidden rounded-xl border border-border bg-background";
 /** Narrower than the shared settings control width: these are short values. */
 const CONTROL_WIDTH_CLASS = "w-40";
 
@@ -65,116 +70,113 @@ export function AppearancePane() {
   const canIncreaseZoom = windowZoomId !== WINDOW_ZOOM_IDS[WINDOW_ZOOM_IDS.length - 1];
 
   return (
-    <section className="flex flex-col gap-8">
-      <SettingsPageHeader title="Appearance" />
+    <SettingsPageBody>
+      <PageHeader variant="flat" title="Appearance" />
 
-      <SettingsSection title="Theme">
+      <SettingsSection title="Theme" surface="plain">
         <ThemePreviewCards value={mode} onChange={setMode} />
       </SettingsSection>
 
-      <SettingsSection title="Code preview">
-        <div className={PREVIEW_PANEL_CLASS}>
+      <SettingsSection title="Code preview" surface="plain">
+        <Card surface="opaque" className="bg-background">
           <AppearanceCodePreview />
-        </div>
+        </Card>
       </SettingsSection>
 
-      <SettingsSection title="Chat preview">
-        <div className={`${PREVIEW_PANEL_CLASS} flex flex-col gap-6 px-4 py-4`}>
+      <SettingsSection title="Chat preview" surface="plain">
+        <Card surface="opaque" className="flex flex-col gap-6 bg-background px-4 py-4">
           <UserMessage sessionId={null} content={CHAT_PREVIEW_PROMPT} />
           <AssistantMessage content={CHAT_PREVIEW_RESPONSE} animateReveal={false} />
-        </div>
+        </Card>
       </SettingsSection>
 
       <SettingsSection title="Preferences">
-        <div className={PANEL_CLASS}>
-          <SettingsRow
-            label="Window zoom"
-            description="Zoom everything in the window, like browser zoom. Font size settings are unaffected."
+        <SettingsRow
+          label="Window zoom"
+          description="Zoom everything in the window, like browser zoom. Font size settings are unaffected."
+        >
+          <div
+            className={`flex h-7 ${CONTROL_WIDTH_CLASS} items-center overflow-hidden rounded-lg bg-surface-control text-foreground`}
           >
-            <div
-              className={`flex h-7 ${CONTROL_WIDTH_CLASS} items-center overflow-hidden rounded-lg bg-surface-control text-foreground`}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Zoom out"
+              disabled={!canDecreaseZoom}
+              className="h-7 w-7 shrink-0 rounded-none"
+              onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, -1))}
             >
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Zoom out"
-                disabled={!canDecreaseZoom}
-                className="h-7 w-7 shrink-0 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
-                onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, -1))}
-              >
-                <Minus className="icon-paired" />
-              </Button>
-              <div className="flex h-7 flex-1 items-center justify-center border-x border-border-light text-ui font-medium text-foreground">
-                {WINDOW_ZOOM_LABELS[windowZoomId]}
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Zoom in"
-                disabled={!canIncreaseZoom}
-                className="h-7 w-7 shrink-0 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
-                onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, 1))}
-              >
-                <Plus className="icon-paired" />
-              </Button>
+              <Minus className="icon-paired" />
+            </Button>
+            <div className="flex h-7 flex-1 items-center justify-center border-x border-border-light text-ui font-medium text-foreground">
+              {WINDOW_ZOOM_LABELS[windowZoomId]}
             </div>
-          </SettingsRow>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Zoom in"
+              disabled={!canIncreaseZoom}
+              className="h-7 w-7 shrink-0 rounded-none"
+              onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, 1))}
+            >
+              <Plus className="icon-paired" />
+            </Button>
+          </div>
+        </SettingsRow>
 
-          <SettingsRow
-            label="UI font size"
-            description="Scale app and chat text"
-          >
-            <SettingsMenu
-              label={UI_FONT_SIZE_LABELS[uiFontSizeId]}
-              className={CONTROL_WIDTH_CLASS}
-              groups={[{
-                id: "ui-font-size",
-                options: UI_FONT_SIZE_OPTIONS.map((option) => ({
-                  id: option.id,
-                  label: option.label,
-                  selected: option.id === uiFontSizeId,
-                  onSelect: () => setPreference("uiFontSizeId", option.id),
-                })),
-              }]}
-            />
-          </SettingsRow>
+        <SettingsRow
+          label="UI font size"
+          description="Scale app and chat text"
+        >
+          <SettingsMenu
+            label={UI_FONT_SIZE_LABELS[uiFontSizeId]}
+            className={CONTROL_WIDTH_CLASS}
+            groups={[{
+              id: "ui-font-size",
+              options: UI_FONT_SIZE_OPTIONS.map((option) => ({
+                id: option.id,
+                label: option.label,
+                selected: option.id === uiFontSizeId,
+                onSelect: () => setPreference("uiFontSizeId", option.id),
+              })),
+            }]}
+          />
+        </SettingsRow>
 
-          <SettingsRow
-            label="Code font size"
-            description="Scale editors, diffs, and code blocks"
-          >
-            <SettingsMenu
-              label={READABLE_CODE_FONT_SIZE_LABELS[readableCodeFontSizeId]}
-              className={CONTROL_WIDTH_CLASS}
-              groups={[{
-                id: "readable-code-font-size",
-                options: READABLE_CODE_FONT_SIZE_OPTIONS.map((option) => ({
-                  id: option.id,
-                  label: option.label,
-                  selected: option.id === readableCodeFontSizeId,
-                  onSelect: () => setPreference("readableCodeFontSizeId", option.id),
-                })),
-              }]}
-            />
-          </SettingsRow>
-        </div>
+        <SettingsRow
+          label="Code font size"
+          description="Scale editors, diffs, and code blocks"
+        >
+          <SettingsMenu
+            label={READABLE_CODE_FONT_SIZE_LABELS[readableCodeFontSizeId]}
+            className={CONTROL_WIDTH_CLASS}
+            groups={[{
+              id: "readable-code-font-size",
+              options: READABLE_CODE_FONT_SIZE_OPTIONS.map((option) => ({
+                id: option.id,
+                label: option.label,
+                detail: readableCodeFontSizeDetail(option.id, uiFontSizeId),
+                selected: option.id === readableCodeFontSizeId,
+                onSelect: () => setPreference("readableCodeFontSizeId", option.id),
+              })),
+            }]}
+          />
+        </SettingsRow>
       </SettingsSection>
 
       <SettingsSection title="Advanced">
-        <div className={PANEL_CLASS}>
-          <SettingsRow
-            label="Transparent chrome"
-            description="Use glass treatment for workspace headers and tab bars"
-          >
-            <Switch
-              checked={transparentChromeEnabled}
-              onChange={(value) => setPreference("transparentChromeEnabled", value)}
-            />
-          </SettingsRow>
-        </div>
+        <SettingsRow
+          label="Transparent chrome"
+          description="Use glass treatment for workspace headers and tab bars"
+        >
+          <Switch
+            checked={transparentChromeEnabled}
+            onChange={(value) => setPreference("transparentChromeEnabled", value)}
+          />
+        </SettingsRow>
       </SettingsSection>
-    </section>
+    </SettingsPageBody>
   );
 }

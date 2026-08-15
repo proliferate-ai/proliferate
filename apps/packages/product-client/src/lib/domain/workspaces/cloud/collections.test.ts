@@ -21,7 +21,6 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     currentBranch: "currentBranch" in overrides ? overrides.currentBranch : "feature/workspace-1",
     executionSummary: overrides.executionSummary,
     lifecycleState: overrides.lifecycleState ?? "active",
-    cleanupState: overrides.cleanupState ?? "none",
     createdAt: overrides.createdAt ?? "2026-04-06T10:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-06T10:00:00.000Z",
   };
@@ -216,25 +215,23 @@ describe("upsertCloudWorkspaceCollections", () => {
 });
 
 describe("buildWorkspaceCollections", () => {
-  it("splits active, retired, all, and cleanup-attention local workspaces", () => {
+  it("keeps only active rows in the listed collections and archived rows in allWorkspaces", () => {
     const active = makeWorkspace({ id: "workspace-active" });
-    const retiredComplete = makeWorkspace({
-      id: "workspace-retired-complete",
-      lifecycleState: "retired",
-      cleanupState: "complete",
+    const archivedComplete = makeWorkspace({
+      id: "workspace-archived-complete",
+      lifecycleState: "archived",
       updatedAt: "2026-04-06T11:00:00.000Z",
     });
-    const retiredFailed = makeWorkspace({
-      id: "workspace-retired-failed",
-      lifecycleState: "retired",
-      cleanupState: "failed",
+    const archivedFailed = makeWorkspace({
+      id: "workspace-archived-failed",
+      lifecycleState: "archived",
       updatedAt: "2026-04-06T12:00:00.000Z",
     });
 
     const collections = buildWorkspaceCollections([
       active,
-      retiredComplete,
-      retiredFailed,
+      archivedComplete,
+      archivedFailed,
     ]);
 
     expect(collections.localWorkspaces.map((workspace) => workspace.id)).toEqual([
@@ -243,25 +240,17 @@ describe("buildWorkspaceCollections", () => {
     expect(collections.workspaces.map((workspace) => workspace.id)).toEqual([
       "workspace-active",
     ]);
-    expect(collections.retiredLocalWorkspaces.map((workspace) => workspace.id)).toEqual([
-      "workspace-retired-failed",
-      "workspace-retired-complete",
-    ]);
     expect(collections.allWorkspaces.map((workspace) => workspace.id)).toEqual([
-      "workspace-retired-failed",
-      "workspace-retired-complete",
+      "workspace-archived-failed",
+      "workspace-archived-complete",
       "workspace-active",
-    ]);
-    expect(collections.cleanupAttentionWorkspaces.map((workspace) => workspace.id)).toEqual([
-      "workspace-retired-failed",
     ]);
   });
 
-  it("does not request activity refresh for retired rows", () => {
+  it("does not request activity refresh for archived rows", () => {
     const collections = buildWorkspaceCollections([
       makeWorkspace({
-        lifecycleState: "retired",
-        cleanupState: "failed",
+        lifecycleState: "archived",
         executionSummary: {
           phase: "running",
           totalSessionCount: 1,

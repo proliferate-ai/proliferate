@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { KeyRound, Plus } from "lucide-react";
+import { Plus } from "#product/primitives/icons/core";
 
-import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import type { CloudSecretsPanelModel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import type {
   SecretMaterializationView,
@@ -101,78 +100,75 @@ export function SecretManagementPanel({
   }
 
   return (
-    <SettingsSection>
-      <SettingsRow
-        label={(
-          <span className="flex items-center gap-2">
-            <KeyRound className="icon-paired text-muted-foreground" />
-            {title}
-          </span>
-        )}
-        description={<SecretScopeNotice description={description} />}
-      >
-        <div className="flex items-center gap-2">
-          <Badge tone={status === "ready" ? "success" : status === "error" ? "destructive" : "warning"}>
-            {statusLabel(status, loading)}
-          </Badge>
-          {canManage ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => setEditorState({ mode: "create", kind: "env" })}
-            >
-              <Plus className="icon-paired" />
-              Add secret
-            </Button>
-          ) : null}
-        </div>
-      </SettingsRow>
-
-      <SettingsRow
-        label="Environment variables"
-        className="sm:flex-col sm:items-stretch sm:justify-start"
-      >
-        <div className="w-full">
-          <SecretList
-            emptyLabel="No environment variables yet."
-            emptyDescription="Add your first key to inject it into every cloud sandbox in this scope."
-            addLabel="Add variable"
-            onAdd={() => setEditorState({ mode: "create", kind: "env" })}
-            items={envItems}
-            canManage={canManage}
-            onEdit={(item) => setEditorState({ mode: "edit", kind: "env", nameOrPath: item.label })}
-            onDelete={(item) => setDeleteState({ kind: "env", nameOrPath: item.label })}
-          />
-        </div>
-      </SettingsRow>
-
-      <SettingsRow
-        label="Files"
-        className="sm:flex-col sm:items-stretch sm:justify-start"
-      >
-        <div className="w-full">
-          <SecretList
-            emptyLabel="No file secrets yet."
-            emptyDescription="Write a config or credential file straight into the sandbox filesystem."
-            addLabel="Add file"
-            onAdd={() => setEditorState({ mode: "create", kind: "file" })}
-            items={fileItems}
-            canManage={canManage}
-            onEdit={(item) => setEditorState({ mode: "edit", kind: "file", nameOrPath: item.label })}
-            onDelete={(item) => setDeleteState({ kind: "file", nameOrPath: item.label })}
-          />
-        </div>
-      </SettingsRow>
-
-      {materialization?.lastError || error ? (
-        <SettingsRow label="Status">
-          <div className="max-w-xl text-ui text-destructive">
-            {error ?? materialization?.lastError}
+    <>
+      <SettingsSection>
+        <SettingsRow
+          label={title}
+          description={<SecretScopeNotice description={description} />}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-ui-sm text-muted-foreground">{statusLabel(status, loading)}</span>
+            {canManage ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setEditorState({ mode: "create", kind: "env" })}
+              >
+                <Plus className="icon-paired" />
+                Add secret
+              </Button>
+            ) : null}
           </div>
         </SettingsRow>
-      ) : null}
 
+        <SettingsRow
+          label="Environment variables"
+          className="sm:flex-col sm:items-stretch sm:justify-start"
+        >
+          <div className="w-full">
+            <SecretList
+              emptyLabel="No environment variables yet."
+              emptyDescription="Add your first key to inject it into every cloud sandbox in this scope."
+              addLabel="Add variable"
+              onAdd={() => setEditorState({ mode: "create", kind: "env" })}
+              items={envItems}
+              canManage={canManage}
+              onEdit={(item) => setEditorState({ mode: "edit", kind: "env", nameOrPath: item.label })}
+              onDelete={(item) => setDeleteState({ kind: "env", nameOrPath: item.label })}
+            />
+          </div>
+        </SettingsRow>
+
+        <SettingsRow
+          label="Files"
+          className="sm:flex-col sm:items-stretch sm:justify-start"
+        >
+          <div className="w-full">
+            <SecretList
+              emptyLabel="No file secrets yet."
+              emptyDescription="Write a config or credential file straight into the sandbox filesystem."
+              addLabel="Add file"
+              onAdd={() => setEditorState({ mode: "create", kind: "file" })}
+              items={fileItems}
+              canManage={canManage}
+              onEdit={(item) => setEditorState({ mode: "edit", kind: "file", nameOrPath: item.label })}
+              onDelete={(item) => setDeleteState({ kind: "file", nameOrPath: item.label })}
+            />
+          </div>
+        </SettingsRow>
+
+        {materialization?.lastError || error ? (
+          <SettingsRow label="Status">
+            <div className="max-w-xl text-ui text-destructive">
+              {error ?? materialization?.lastError}
+            </div>
+          </SettingsRow>
+        ) : null}
+      </SettingsSection>
+      {/* Rendered as siblings, not SettingsGroup children: they always mount
+          one element even while closed, which would otherwise count toward
+          the group's divider interleaving and leave trailing hairlines. */}
       <SecretEditorDialog
         open={Boolean(editorState)}
         state={editorState}
@@ -192,7 +188,7 @@ export function SecretManagementPanel({
         onClose={() => setDeleteState(null)}
         onConfirm={handleDeleteConfirm}
       />
-    </SettingsSection>
+    </>
   );
 }
 

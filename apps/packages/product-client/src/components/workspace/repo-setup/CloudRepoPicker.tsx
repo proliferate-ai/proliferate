@@ -1,11 +1,6 @@
 import { type FormEvent } from "react";
-import {
-  Archive,
-  Check,
-  Lock,
-  RotateCw,
-  ShieldAlert,
-} from "lucide-react";
+import { Archive, Check } from "#product/primitives/icons/core";
+import { CircleCheck, Lock, RotateCw, ShieldAlert } from "#product/primitives/icons/status";
 import { GitHub } from "#product/primitives/icons/platform";
 
 import {
@@ -36,6 +31,7 @@ export function CloudRepoPicker({
   manualValue,
   repositories,
   blocker = null,
+  connectedBanner = null,
   loading = false,
   loadingMore = false,
   addingRepoId = null,
@@ -59,6 +55,23 @@ export function CloudRepoPicker({
 
   return (
     <div className="flex flex-col">
+      {/* Confirmation on arrival: without it, finishing the GitHub checklist
+          drops the user into a bare list with no sign the work landed.
+
+          The success tint is spelled out because nothing sanctioned carries it
+          at banner scale: `Badge` owns the same three tokens but is a pill and
+          keeps them private, and `NoticeBanner` has no success tone. Worth
+          promoting a success tone onto NoticeBanner if a second banner ever
+          wants one — one instance is not yet a vocabulary. */}
+      {connectedBanner ? (
+        <div
+          role="status"
+          className="mx-2 mb-2 flex items-center gap-2 rounded-lg border border-success/25 bg-success/10 px-2.5 py-2 text-ui-sm text-success"
+        >
+          <CircleCheck aria-hidden className="icon-paired shrink-0" />
+          <span>{connectedBanner}</span>
+        </div>
+      ) : null}
       <PopoverSearchField
         value={query}
         onChange={onQueryChange}

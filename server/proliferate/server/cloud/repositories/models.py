@@ -34,6 +34,8 @@ class RepoEnvironmentResponse(BaseModel):
     default_branch: str | None = Field(serialization_alias="defaultBranch")
     setup_script: str = Field(serialization_alias="setupScript")
     run_command: str = Field(serialization_alias="runCommand")
+    archive_script: str = Field(serialization_alias="archiveScript")
+    rerun_setup_on_unarchive: bool = Field(serialization_alias="rerunSetupOnUnarchive")
     materialization: RepoEnvironmentMaterializationResponse | None = None
 
 
@@ -58,6 +60,10 @@ class SaveRepoEnvironmentRequest(BaseModel):
     default_branch: str | None = Field(default=None, alias="defaultBranch")
     setup_script: str = Field(default="", alias="setupScript")
     run_command: str = Field(default="", alias="runCommand")
+    # None means "leave the stored value alone" on an existing row, and
+    # "take the column default" when the upsert inserts a fresh row.
+    archive_script: str | None = Field(default=None, alias="archiveScript")
+    rerun_setup_on_unarchive: bool | None = Field(default=None, alias="rerunSetupOnUnarchive")
 
 
 class UpdateRepoConfigRequest(BaseModel):
@@ -94,6 +100,8 @@ def repo_environment_payload(
         default_branch=value.default_branch,
         setup_script=value.setup_script,
         run_command=value.run_command,
+        archive_script=value.archive_script,
+        rerun_setup_on_unarchive=value.rerun_setup_on_unarchive,
         materialization=repo_environment_materialization_payload(materialization),
     )
 

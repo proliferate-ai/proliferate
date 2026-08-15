@@ -6,6 +6,21 @@
 export const CHAT_COLUMN_CLASSNAME = "mx-auto w-full max-w-transcript-thread";
 export const CHAT_SURFACE_GUTTER_CLASSNAME = "px-4";
 
+/**
+ * Compact control tier: below this composer-container width the labeled
+ * control pills shed their words — the working-mode pill swaps its name for
+ * the mode icon, the reasoning pill keeps only the level bars, and the
+ * integrations pill keeps only the glyph — so the control row degrades to
+ * icons instead of truncating mid-word or painting over its neighbors.
+ * Class-string constants (not a bare width) because Tailwind's scanner needs
+ * the complete variant text in source; they resolve against the nearest
+ * `@container` ancestor (the dock column in chat, the composer wrapper on
+ * Home).
+ */
+export const COMPOSER_COMPACT_HIDDEN_CLASSNAME = "@max-[32rem]:hidden";
+export const COMPOSER_COMPACT_ONLY_FLEX_CLASSNAME = "hidden @max-[32rem]:flex";
+export const COMPOSER_COMPACT_SHRINK_NONE_CLASSNAME = "@max-[32rem]:shrink-0";
+
 export const CHAT_SCROLL_BASE_BOTTOM_PADDING_PX = 40;
 // True visual clearance between the pinned live tail and the dock's top edge.
 // Added on top of the measured dock height (which already includes the dock's

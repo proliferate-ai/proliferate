@@ -1,18 +1,19 @@
 import type { ReactNode } from "react";
 import { IconButton } from "#product/primitives/IconButton";
 import { SplitPanelLeft } from "#product/primitives/icons/app-shell";
-import { useResize } from "#product/hooks/ui/layout/use-resize";
-import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
+import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
+import {
+  useHasMacWindowControls,
+  useMacWindowControlsInsetClass,
+} from "#product/hooks/ui/layout/use-mac-window-controls";
+import { useGlassChromeCanvas } from "#product/hooks/theme/derived/use-glass-chrome-canvas";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import {
   resolveMainSidebarEdgeClassName,
   resolveStandardWorkspaceChromeClasses,
+  SIDEBAR_GLASS_CLASS,
 } from "#product/lib/domain/preferences/workspace-chrome";
 import { useProductHost } from "#product/host/ProductHostProvider";
-import {
-  WORKSPACE_SIDEBAR_MAX_WIDTH,
-  WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "#product/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdateFooterButton } from "#product/components/app/sidebar/SidebarUpdateFooterButton";
@@ -23,28 +24,30 @@ interface MainSidebarPageShellProps {
 
 export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   const sidebarOpen = useWorkspaceUiStore((s) => s.sidebarOpen);
-  const sidebarWidth = useWorkspaceUiStore((s) => s.sidebarWidth);
   const setSidebarOpen = useWorkspaceUiStore((s) => s.setSidebarOpen);
-  const setSidebarWidth = useWorkspaceUiStore((s) => s.setSidebarWidth);
+  const {
+    sidebarWidth,
+    sidebarResizing,
+    onSidebarSeparatorDown,
+  } = useWorkspaceSidebarResize();
   const transparentChromeEnabled = useTransparentChromeEnabled();
   const desktopHost = useProductHost().desktop !== null;
   // Only a host that actually paints macOS window buttons reserves room for
   // them; on Web (and non-Mac desktop) the inset was dead space above the nav.
+  const hasMacWindowControls = useHasMacWindowControls();
   const macWindowControlsInsetClass = useMacWindowControlsInsetClass();
+  // Vibrancy only exists behind the window on macOS Desktop (apply_vibrancy
+  // in src-tauri/src/lib.rs); elsewhere a translucent sidebar would expose
+  // the bare window fill. Matches WorkspaceShellSidebar so the main sidebar
+  // keeps one look across route shells.
+  const glassSidebar = transparentChromeEnabled && hasMacWindowControls;
+  useGlassChromeCanvas(glassSidebar);
   const chromeClasses = resolveStandardWorkspaceChromeClasses({
     transparent: transparentChromeEnabled,
     sidebarOpen,
     showHeaderDivider: false,
     showContentTopBorder: false,
   });
-  const onLeftSeparatorDown = useResize({
-    direction: "horizontal",
-    size: sidebarWidth,
-    onResize: setSidebarWidth,
-    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
-    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
-  });
-
   return (
     <div
       className={`flex h-screen overflow-hidden ${chromeClasses.root}`}
@@ -54,7 +57,13 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
         id="main-sidebar"
         // isolate: keeps sidebar-internal z-indexes below the resize
         // separator's overlapping hit strip (z-10 in the page context).
-        className={`isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-panel ease-in-out ${resolveMainSidebarEdgeClassName({
+        className={`isolate flex shrink-0 flex-col overflow-hidden ${
+          glassSidebar ? SIDEBAR_GLASS_CLASS : "bg-sidebar"
+        } ${
+          sidebarResizing
+            ? "transition-none"
+            : "transition-[width] duration-panel ease-in-out"
+        } ${resolveMainSidebarEdgeClassName({
           desktop: desktopHost,
           transparent: transparentChromeEnabled,
         })}`}
@@ -74,7 +83,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
-          <MainSidebar />
+          <MainSidebar glassBackground={glassSidebar} />
         </div>
       </div>
 
@@ -83,7 +92,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
           role="separator"
           aria-orientation="vertical"
           aria-controls="main-sidebar"
-          onMouseDown={onLeftSeparatorDown}
+          onMouseDown={onSidebarSeparatorDown}
           className="relative z-10 -ml-1 flex w-1 shrink-0 cursor-col-resize items-center justify-center transition-colors hover:bg-primary/30 active:bg-primary/50"
         />
       )}

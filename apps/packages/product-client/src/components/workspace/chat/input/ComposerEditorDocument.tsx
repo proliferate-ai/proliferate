@@ -1,9 +1,12 @@
 import {
+  $createParagraphNode,
   $createRangeSelection,
   $getRoot,
   $getSelection,
+  $isElementNode,
   $isRangeSelection,
   $setSelection,
+  type ElementNode,
   type LexicalEditor,
   type LexicalNode,
   type RangeSelection,
@@ -27,6 +30,10 @@ import {
   COMPOSER_FILE_MENTION_TRANSFORMER,
   ComposerFileMentionNode,
 } from "#product/components/workspace/chat/input/ComposerFileMentionNode";
+import {
+  COMPOSER_CODE_TRANSFORMER,
+  isComposerOffsetInsideOpenCodeFence,
+} from "#product/components/workspace/chat/input/ComposerCodeFenceMarkdown";
 
 /**
  * The composer's document model: which node types exist in a draft, how markdown
@@ -38,6 +45,7 @@ import {
  * and none of it needs React.
  */
 export const COMPOSER_NODES = [
+  ...COMPOSER_CODE_TRANSFORMER.dependencies,
   ListNode,
   ListItemNode,
   LinkNode,
@@ -47,12 +55,14 @@ export const COMPOSER_NODES = [
 /**
  * Markdown recognized while editing.
  *
- * Emphasis and lists become real nodes as the user types. A workspace file link
- * becomes a mention chip. A web link is intentionally absent, so
+ * Emphasis, lists, and complete fenced code blocks become real nodes as the
+ * user types. A workspace file link becomes a mention chip. A web link is
+ * intentionally absent, so
  * `[Docs](https://example.com)` typed into the draft stays literal text — the
  * paste plugin, not typing, is what creates web links.
  */
 export const COMPOSER_INPUT_TRANSFORMERS: Transformer[] = [
+  COMPOSER_CODE_TRANSFORMER,
   UNORDERED_LIST,
   ORDERED_LIST,
   BOLD_ITALIC_STAR,
@@ -74,6 +84,7 @@ export interface ComposerEditorContext {
   plainText: string;
   anchorOffset: number;
   focusOffset: number;
+  selectionInCodeBlock: boolean;
 }
 
 /**
@@ -87,19 +98,83 @@ export function readComposerEditorContext(): ComposerEditorContext {
   const selection = $getSelection();
   const plainText = $getRoot().getTextContent();
   if (!$isRangeSelection(selection)) {
-    return { plainText, anchorOffset: plainText.length, focusOffset: plainText.length };
+    return {
+      plainText,
+      anchorOffset: plainText.length,
+      focusOffset: plainText.length,
+      selectionInCodeBlock: false,
+    };
   }
   return {
     plainText,
     anchorOffset: globalPointOffset(selection.anchor.getNode(), selection.anchor.offset),
     focusOffset: globalPointOffset(selection.focus.getNode(), selection.focus.offset),
+    selectionInCodeBlock: isComposerSelectionPointInsideCode(
+      selection.focus.getNode(),
+      selection.focus.offset,
+    ),
   };
 }
 
 export function getComposerEditorContext(editor: LexicalEditor): ComposerEditorContext {
-  let context: ComposerEditorContext = { plainText: "", anchorOffset: 0, focusOffset: 0 };
+  let context: ComposerEditorContext = {
+    plainText: "",
+    anchorOffset: 0,
+    focusOffset: 0,
+    selectionInCodeBlock: false,
+  };
   editor.getEditorState().read(() => { context = readComposerEditorContext(); });
   return context;
+}
+
+export function isComposerNodeInsideCodeBlock(node: LexicalNode): boolean {
+  let current: LexicalNode | null = node;
+  while (current) {
+    if (current.getType() === "code") return true;
+    current = current.getParent();
+  }
+  return false;
+}
+
+export function isComposerSelectionPointInsideCode(
+  node: LexicalNode,
+  offset: number,
+): boolean {
+  if (isComposerNodeInsideCodeBlock(node)) return true;
+
+  let paragraph: LexicalNode | null = node;
+  while (paragraph && paragraph.getParent()?.getType() !== "root") {
+    paragraph = paragraph.getParent();
+  }
+  if (!paragraph || paragraph.getType() !== "paragraph") return false;
+
+  const pointOffset = offsetWithinNode(node, offset, paragraph);
+  return pointOffset !== null && isComposerOffsetInsideOpenCodeFence(
+    paragraph.getTextContent(),
+    pointOffset,
+  );
+}
+
+/** Moves the caret after an imported block so normal typing can continue. */
+export function selectComposerContinuationAfter(nodes: readonly LexicalNode[]) {
+  const lastNode = nodes[nodes.length - 1];
+  if (!lastNode) return;
+  if (lastNode.getType() !== "code") {
+    $setSelection(null);
+    lastNode.selectEnd();
+    return;
+  }
+
+  const nextNode = lastNode.getNextSibling();
+  if (nextNode) {
+    $setSelection(null);
+    nextNode.selectStart();
+    return;
+  }
+  const continuation = $createParagraphNode();
+  lastNode.insertAfter(continuation);
+  $setSelection(null);
+  continuation.selectStart();
 }
 
 export function replaceComposerTextRange(
@@ -151,22 +226,77 @@ function replaceComposerRange(
 }
 
 function globalPointOffset(node: LexicalNode, localOffset: number): number {
-  let offset = 0;
-  for (const textNode of $getRoot().getAllTextNodes()) {
-    if (textNode.is(node)) return offset + localOffset;
-    offset += textNode.getTextContentSize();
+  return offsetWithinNode(node, localOffset, $getRoot())
+    ?? $getRoot().getTextContentSize();
+}
+
+function offsetWithinNode(
+  node: LexicalNode,
+  localOffset: number,
+  ancestor: LexicalNode,
+): number | null {
+  let current: LexicalNode | null = node;
+  let offset = $isElementNode(node)
+    ? textSizeBeforeChild(node, localOffset)
+    : localOffset;
+  while (current && !current.is(ancestor)) {
+    for (const sibling of current.getPreviousSiblings()) {
+      offset += sibling.getTextContentSize();
+      if ($isElementNode(sibling) && !sibling.isInline()) offset += 2;
+    }
+    current = current.getParent();
   }
-  return offset;
+  return current ? offset : null;
 }
 
 function pointAtOffset(offset: number): { node: TextNode; offset: number } | null {
-  const nodes = $getRoot().getAllTextNodes();
   let traversed = 0;
-  for (const node of nodes) {
-    const end = traversed + node.getTextContentSize();
-    if (offset <= end) return { node, offset: Math.max(0, offset - traversed) };
+  let point: { node: TextNode; offset: number } | null = null;
+  const visit = (node: LexicalNode) => {
+    if (point) return;
+    if ($isElementNode(node)) {
+      const children = node.getChildren();
+      for (let index = 0; index < children.length; index += 1) {
+        const child = children[index]!;
+        visit(child);
+        if (point) return;
+        if (
+          index < children.length - 1
+          && $isElementNode(child)
+          && !child.isInline()
+        ) traversed += 2;
+      }
+      return;
+    }
+    if (node.getType() !== "text") {
+      traversed += node.getTextContentSize();
+      return;
+    }
+    const textNode = node as TextNode;
+    const end = traversed + textNode.getTextContentSize();
+    if (offset >= traversed && offset <= end) {
+      point = { node: textNode, offset: offset - traversed };
+    }
     traversed = end;
-  }
-  const last = nodes[nodes.length - 1];
+  };
+  visit($getRoot());
+  if (point) return point;
+  const textNodes = $getRoot().getAllTextNodes();
+  const last = textNodes[textNodes.length - 1];
   return last ? { node: last, offset: last.getTextContentSize() } : null;
+}
+
+function textSizeBeforeChild(node: ElementNode, end: number) {
+  const children = node.getChildren();
+  let size = 0;
+  for (let index = 0; index < Math.min(end, children.length); index += 1) {
+    const child = children[index]!;
+    size += child.getTextContentSize();
+    if (
+      index < children.length - 1
+      && $isElementNode(child)
+      && !child.isInline()
+    ) size += 2;
+  }
+  return size;
 }

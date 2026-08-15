@@ -3,7 +3,7 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { CoworkArtifactTurnCard } from "#product/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
 import {
   ToolCallSummary,
@@ -16,7 +16,6 @@ import {
 import {
   blockBelongsToCompletedHistory,
 } from "#product/domain/chats/transcript/transcript-rendering";
-import { formatWorkedForDuration } from "#product/domain/chats/transcript/transcript-work-duration";
 import type {
   TurnDisplayBlock,
   TurnPresentation,
@@ -29,7 +28,13 @@ import { TranscriptTreeNode } from "#product/components/workspace/chat/transcrip
 import {
   formatCollapsedSummary,
 } from "#product/components/workspace/chat/transcript/TranscriptToolGroupUtils";
-import { TURN_ITEM_GAP_CLASS } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import {
+  CompletedHistorySequence,
+  resolveCompletedHistoryDisclosureLabel,
+  TURN_ITEM_GAP_CLASS,
+  useCompletedHistoryTransition,
+} from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import { useTurnWorkspaceReceiptSlot } from "#product/components/workspace/chat/transcript/TurnWorkspaceReceiptSlot";
 import type { AssistantMessageRevealState } from "#product/lib/domain/chat/transcript/assistant-message-reveal";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
@@ -49,6 +54,7 @@ export function TurnItemSequence({
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
+  workspaceReceipt = null,
 }: {
   turn: TurnRecord;
   transcript: TranscriptState;
@@ -67,6 +73,12 @@ export function TurnItemSequence({
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
+  /**
+   * The workspace-creation receipt, when this row hosts it. Renders as the
+   * first child inside the completed-history disclosure when this row owns
+   * one; otherwise see TurnWorkspaceReceiptSlot for its standalone position.
+   */
+  workspaceReceipt?: ReactNode;
 }) {
   const visiblePresentation = constrainTurnItemSequencePresentation(
     presentation,
@@ -115,6 +127,22 @@ export function TurnItemSequence({
   // footerless fallback card. This sequence only consumes that index.
   let hasRenderedCompletedHistory = false;
 
+  // Workspace-creation receipt hosting: folds into the completed-history
+  // disclosure below when this row owns one; see TurnWorkspaceReceiptSlot
+  // for its standalone position/disclosure logic otherwise.
+  const {
+    inlineWorkspaceReceiptBlockKey,
+    renderInlineWorkspaceReceiptAtEnd,
+    workspaceReceiptSlot,
+  } = useTurnWorkspaceReceiptSlot({
+    workspaceReceipt,
+    presentation: visiblePresentation,
+    transcript,
+    turn,
+    completedHistoryLabel,
+    tailAssistantProseRootId,
+  });
+
   return (
     <>
       {visiblePresentation.displayBlocks.map((block) => {
@@ -138,6 +166,7 @@ export function TurnItemSequence({
               borderless
               renderChildren={() => (
                 <CompletedHistorySequence>
+                  {workspaceReceipt}
                   {visiblePresentation.displayBlocks
                     .filter((historyBlock) =>
                       blockBelongsToCompletedHistory(historyBlock, completedHistoryRootIdSet)
@@ -194,12 +223,14 @@ export function TurnItemSequence({
 
         return (
           <Fragment key={blockKey}>
+            {blockKey === inlineWorkspaceReceiptBlockKey ? workspaceReceiptSlot : null}
             {blockKey === frontierBlockKey ? standaloneFrontierPrelude : null}
             {renderedBlock}
           </Fragment>
         );
       })}
       {frontierBlockKey === null ? standaloneFrontierPrelude : null}
+      {renderInlineWorkspaceReceiptAtEnd ? workspaceReceiptSlot : null}
     </>
   );
 }
@@ -224,20 +255,6 @@ export function constrainTurnItemSequencePresentation(
     ...presentation,
     displayBlocks: presentation.displayBlocks.slice(0, frontierIndex + 1),
   };
-}
-
-function useCompletedHistoryTransition(eligible: boolean): boolean {
-  const wasEligibleRef = useRef(eligible);
-  const [transitionClaimed, setTransitionClaimed] = useState(false);
-
-  useLayoutEffect(() => {
-    if (eligible && !wasEligibleRef.current) {
-      setTransitionClaimed(true);
-    }
-    wasEligibleRef.current = eligible;
-  }, [eligible]);
-
-  return transitionClaimed;
 }
 
 export function shouldRenderCompletedArtifactCards({
@@ -283,26 +300,6 @@ export function resolveTurnItemFrontierBlockKey(
   }
 
   return frontierBlock ? getTurnDisplayBlockKey(frontierBlock) : null;
-}
-
-export function CompletedHistorySequence({ children }: { children: ReactNode }) {
-  return (
-    <div
-      data-completed-history-sequence
-      className={`flex flex-col ${TURN_ITEM_GAP_CLASS}`}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function resolveCompletedHistoryDisclosureLabel(
-  turn: Pick<TurnRecord, "startedAt" | "completedAt">,
-  override: string | null | undefined,
-): string {
-  return override
-    ?? formatWorkedForDuration(turn.startedAt, turn.completedAt)
-    ?? "Worked";
 }
 
 function TranscriptFragment({
@@ -356,7 +353,7 @@ function CompletedArtifactCards({
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       {items.map((item) => (
         <CoworkArtifactTurnCard
           key={`turn-artifact-${item.itemId}`}

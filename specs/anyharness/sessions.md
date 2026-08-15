@@ -103,12 +103,18 @@ It stores an advisory relationship between two existing sessions:
 - optional creator turn id
 - optional creator tool-call id
 - created timestamp
+- optional `subagent_closed_at`, the reversible operability gate for subagent
+  relationships
+- optional `closed_at`, the terminal relationship-history marker
 
 The link service validates that parent and child sessions exist, rejects
 self-links, and enforces uniqueness for `(relation, parent_session_id,
 child_session_id)`. For `subagent` links, a child may have only one parent.
 Deleting a session removes any links where that session is the parent or child,
 including completion and wake-schedule rows attached to those links.
+Accepted completion-delivery snapshots are separate from link history: deleting
+the parent removes them, while promotion or later child deletion preserves them
+until the parent sees the attributed completion prompt.
 
 Session links are durable product state, but their creator turn/tool metadata is
 provenance only. It must not be used as an authorization, billing, or trust
@@ -173,73 +179,105 @@ bytes into ACP prompt content after reading them from storage. Managed
 `anyharness-attachment://sessions/<session-id>/attachments/<attachment-id>`
 URIs identify transcript resources but are not an agent dereference mechanism.
 
-## Same-Workspace Subagents
+## Same-Workspace Delegated Agents
 
-Same-workspace subagents are the first product use of `SessionLinkRecord`.
+Same-workspace delegated agents use `SessionLinkRecord`; `subagent` remains the
+durable relation and public product vocabulary.
 
 The model is intentionally small:
 
 - the child is a normal session in the same workspace as the parent
 - the durable ownership boundary is `relation = subagent`
-- `session_links` is the access-control check for every child-id-taking tool
-- PR2 does not cascade-delete child sessions when a parent is deleted; deleting
-  either session removes only the link and attached completion/schedule rows
-- nested subagents are blocked; a session that is already a subagent child does
-  not receive subagent MCP tools
-- parents are limited to eight subagents
-- `subagents_enabled` is a durable create-time session policy. Missing legacy
-  rows default enabled in the session store/read model. Resume reads the stored
-  policy and does not silently re-enable disabled sessions.
+- `session_links` is the authorization check for every relationship-targeting
+  operation
+- the child session and capped relationship are inserted atomically, so an
+  in-progress delegated-agent creation is never observable as an ordinary
+  session
+- deleting either session removes the relationship and link completion rows.
+  Accepted completion-delivery snapshots are separate: parent deletion removes
+  them, while child deletion or promotion preserves them until the parent sees
+  the attributed prompt
+- delegated agents cannot create agents, but eligible delegated sessions still
+  receive Workspace for identity, reads, messaging, and parent-authorized
+  operations
+- parents are limited to eight delegated-agent relationships, including
+  reversibly Closed relationships
+- `subagents_enabled` remains serialized on session records for wire and
+  mobility compatibility. Workspace attachment and current-role authority do
+  not consult it; Workspace-created delegated agents intentionally store it as
+  disabled.
+
+Subagent relationship operability is separate from terminal session state:
+
+- Open means `subagent_closed_at` is unset and parent/user mutations may target
+  the child.
+- Close atomically sets `subagent_closed_at` and purges every durable pending
+  prompt. Completion-ledger rows, transcript, config, native session id,
+  session row, and relationship remain. The transaction also removes any stale
+  shared wake-table row left by an older runtime, but current delegated-agent
+  behavior cannot create or read such a schedule.
+- After that transaction commits, the runtime non-terminally unloads the actor.
+  An active turn is cancelled with a bounded grace period; already-streamed
+  output and the Cancelled completion are preserved. Close never writes the
+  session's `closed_at` or `dismissed_at`.
+- Open restarts the same durable/native conversation before clearing the gate.
+  Failure leaves the relationship Closed, and purged prompts are not replayed.
+- Closed relationships remain parent/user-queryable and count toward the
+  eight-child limit, but all mutation paths other than Open or idempotent Close
+  return an Open-required conflict.
+- Promotion is allowed only while Open. It physically deletes the relationship
+  while leaving the session, actor, active turn, native identity, transcript,
+  and config untouched; subsequent authorization and reads treat the session
+  as ordinary.
+
+The relationship mutation gate is shared by Workspace Agent Operations and
+HTTP session mutations. This keeps Close serialized against prompts, config
+changes, and terminal lifecycle calls. There is no Subagents MCP
+registration, capability token, tool surface, or compatibility alias.
 
 The subagent domain lives under
 `anyharness/crates/anyharness-lib/src/domains/sessions/subagents/**`.
 
-It owns:
+It owns only the remaining session-domain mechanics:
 
-- subagent creation/list/read/send validation
-- child ownership checks
+- capped same-workspace relationship insertion and roster summaries
 - passive child completion rows in `session_link_completions`
-- one-shot wake schedule rows in `session_link_wake_schedules`
-- subagent MCP capability-token validation
-- bounded and sanitized child event reads
+- durable completion delivery, retry, and transcript-correlation helpers
+- the turn-finished latency nudge for the crash-safe delivery worker
 
-### Subagent MCP Tools
+### Workspace MCP And Completion Delivery
 
-Standard non-cowork parent sessions receive an internal MCP server named
-`subagents` at launch time. The MCP binding is generated by a session extension,
-not by client-provided configuration.
+Workspace Agent Operations owns agent discovery, creation, configuration,
+messaging, interruption, Close, Open, Promote, and request-time relationship
+authorization. Its MCP implementation lives under
+`domains/agent_operations/mcp/**`; the exact 18-tool contract lives in
+[Workspace Product MCP](../codebase/platforms/product/agent-features/definitions/workspace.md).
 
-The token binds to:
+Workspace attaches to Standard sessions unless their binding policy is
+`InternalOnly`. That includes ordinary, delegated, and promoted/restarted
+sessions; Cowork and internal review/workflow sessions do not receive it. The
+capability token binds the runtime, workspace, session, and product MCP, while
+every `tools/call` resolves current caller role, parent ownership,
+relationship, workspace, and target truth again.
 
-- workspace id
-- parent session id
-- expiration time
+Delegated completion notification is durable session admission, not a
+one-shot MCP wake tool. Terminal persistence captures the child completion and
+delivery intent; the delivery worker admits one parent prompt with
+`PromptProvenance::SubagentWake`, and restart/reconciliation preserves exactly
+once visibility. The terminal assistant message remains the completion payload
+relayed to the parent.
 
-Tools must not trust a model-supplied parent id. The trusted parent id comes
-from the token. Any tool that accepts `childSessionId` must look up a matching
-`session_links(parent_session_id, child_session_id)` row before reading or
-mutating the child.
+The worker also injects one `subagent_turn_completed` event into the parent
+transcript on the single Pending to Enqueued delivery transition, ahead of the
+wake turn admitted from the queued prompt. That event carries the completion
+metadata the transcript indexes for wake receipts and roster invalidation;
+injection is best effort because the delivery is already committed and the
+transition never repeats.
 
-Current tools:
-
-- `get_subagent_launch_options`
-- `create_subagent`
-- `list_subagents`
-- `send_subagent_message`
-- `get_subagent_status`
-- `read_subagent_events`
-- `schedule_subagent_wake`
-
-`get_subagent_launch_options` is the discovery surface parent agents should use
-before choosing non-default `agentKind`, `modelId`, or `modeId` values. It
-reports current parent-derived defaults, launchable agents/models, subagent
-limits, and live parent mode options when AnyHarness has observed them. Mode ids
-remain launch hints; agent/model choices are validated against the launch
-catalog.
-
-`read_subagent_events` is deliberately bounded. It accepts `sinceSeq` plus a
-limit capped at 100, strips streaming deltas, and removes raw tool input/output
-from returned event JSON.
+`session_link_wake_schedules` remains a shared persistence and mobility wire
+contract solely for Cowork. Delegated-agent relationships cannot create, read,
+export, or import a wake schedule; mobility filters and validates schedules by
+Cowork relation.
 
 ## Forked Sessions
 
@@ -292,28 +330,25 @@ desktop or public HTTP shapes.
 
 ### Parent Wake
 
-Child turn completion is passive by default. When a child turn finishes, the
-subagent extension inserts a durable completion row keyed by
-`(session_link_id, child_turn_id)` and injects a typed
-`subagent_turn_completed` metadata event into the parent session. SDK reducers
-and UI consumers use this for latest state; it is not transcript content.
+Every terminal child turn atomically records a completion row and an independent
+delivery snapshot while the subagent relationship exists. A retry worker turns
+that snapshot into one durable, attributed parent prompt using the stable
+delivery id for deduplication. This is automatic for completed, failed, and
+cancelled turns, including reversible Close cancellation; it does not depend on
+the legacy one-shot wake schedule. The worker reconciles parent transcript and
+pending-queue state before inserting, and marks delivery complete only after the
+attributed parent transcript item is durable.
 
-Parent wake prompts require an explicit one-shot schedule. Parent agents should
-call `schedule_subagent_wake` after `create_subagent` or
-`send_subagent_message` when they want to listen for the child's next
-completion. Legacy `wakeOnCompletion` fields on create/send are still parsed for
-backward compatibility but are no longer advertised. The schedule is a latch in
-`session_link_wake_schedules`; it applies only to the next newly recorded
-completion for that link and is consumed in the same transaction that queues the
-parent prompt. Duplicate/replayed completion processing must not consume a
-schedule created after the original completion row already existed.
+The shared one-shot wake-schedule table remains only for Cowork session-link
+behavior. Delegated-agent relationships neither create nor read those rows,
+and the table does not gate automatic terminal-completion delivery.
 
 Parent-to-child prompts use internal `agent_session` provenance with the parent
 session id and session link id. Runtime child-to-parent wake prompts use
-internal `subagent_wake` provenance with the `session_link_id` and
-`completion_id`. Legacy `system/subagent_wake` rows are tolerated for
-pending-wake detection, but public read models must not fabricate missing link
-or completion ids.
+internal `subagent_wake` provenance with the `session_link_id` and stable
+delivery id as `completion_id`. Legacy `system/subagent_wake` rows are tolerated
+for pending-wake detection, but public read models must not fabricate missing
+link or completion ids.
 
 ## Session Extensions
 
@@ -576,6 +611,12 @@ Code path:
 - Session event sequences are monotonic per session.
 - Durable records remain authoritative even when no live actor exists.
 - Config changes requested while busy must not be lost.
+- Session titles keep a fixed precedence. An explicitly assigned title (user
+  rename or generated summary through `PATCH /v1/sessions/{id}/title`) always
+  wins and is never overwritten by lower layers. The prompt endpoint assigns
+  the first prompt's text as the title only when the session has none, and
+  harness `session_info_update` titles are fallback-only: both persist through
+  `update_title_if_absent` and never replace an assigned title.
 
 ## Extension Points
 

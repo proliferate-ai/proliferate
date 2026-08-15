@@ -252,6 +252,19 @@ jobs:
           codesign --verify --verbose "$EXTRACTED_NODE_BIN"
           spctl --assess --verbose=4 --type open --context context:primary-signature "$EXTRACTED_NODE_BIN"
 
+      - name: Build diagnostics collector for target
+        if: steps.filter.outputs.skip != 'true'
+        shell: bash
+        run: |
+          cargo build --release -p proliferate-diagnostics-collector --target "${{ matrix.target }}"
+          mkdir -p apps/desktop/src-tauri/binaries
+          collector="target/${{ matrix.target }}/release/proliferate-diagnostics-collector"
+          staged="apps/desktop/src-tauri/binaries/proliferate-diagnostics-collector-${{ matrix.target }}"
+          test -x "$collector"
+          cp "$collector" "$staged"
+          chmod +x "$staged"
+          cmp "$collector" "$staged"
+
       - name: Build Proliferate debug helper for target
         if: steps.filter.outputs.skip != 'true'
         shell: bash
@@ -370,6 +383,12 @@ jobs:
           _API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           _API_KEY: ${{ secrets.APPLE_API_KEY }}
           ALLOW_UNSIGNED: ${{ inputs.allow_unsigned && 'true' || 'false' }}
+          # GitHub sets CI=true, which makes tauri-bundler pass --skip-jenkins to
+          # bundle_dmg.sh and silently skip all DMG styling from tauri.conf.json
+          # (background, icon positions, window size). Opt back in; if the Finder
+          # AppleScript fails the DMG build exits non-zero, so this cannot regress
+          # into silently shipping an unstyled DMG. See PRO-110.
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
         run: |
           desktop_version="$(node -p "require('./package.json').version")"
           anyharness_version="$(grep '^version' ../../anyharness/crates/anyharness/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
@@ -408,6 +427,39 @@ jobs:
           else
             pnpm tauri build --target ${{ matrix.target }} --bundles msi,nsis
           fi
+
+      - name: Verify packaged native binary inventory
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        shell: bash
+        run: |
+          app="target/${{ matrix.target }}/release/bundle/macos/Proliferate.app"
+          bin_dir="$app/Contents/MacOS"
+          test -d "$bin_dir"
+          actual_inventory="$(find "$bin_dir" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | tr '\n' ' ')"
+          expected_inventory="anyharness proliferate proliferate-debug proliferate-diagnostics-collector proliferate-worker "
+          [[ "$actual_inventory" == "$expected_inventory" ]] || {
+            echo "::error::Unexpected Contents/MacOS inventory: $actual_inventory"
+            exit 1
+          }
+          for binary in anyharness proliferate-worker proliferate-debug proliferate-diagnostics-collector; do
+            test -f "$bin_dir/$binary" || { echo "::error::Missing packaged $binary"; exit 1; }
+            test -x "$bin_dir/$binary" || { echo "::error::Packaged $binary is not executable"; exit 1; }
+            if grep -a -q "diagnostics collector placeholder" "$bin_dir/$binary"; then
+              echo "::error::Packaged diagnostics collector is a placeholder"
+              exit 1
+            fi
+            codesign --verify --verbose "$bin_dir/$binary"
+          done
+          # The internal OTLP export path is compiled out of customer builds.
+          # Its destination variable name is a string literal that only exists
+          # inside that path, so finding it here means a customer release was
+          # built with internal-dogfood-export enabled.
+          for binary in anyharness proliferate proliferate-worker proliferate-debug proliferate-diagnostics-collector; do
+            if grep -a -q "PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT" "$bin_dir/$binary"; then
+              echo "::error::Packaged $binary carries the internal OTLP export path"
+              exit 1
+            fi
+          done
 
       - name: Upload native Sentry debug files
         if: steps.filter.outputs.skip != 'true'
@@ -449,6 +501,19 @@ jobs:
             compgen -G "$base/dmg/*.dmg" > /dev/null || { echo "::error::Missing macOS DMG"; exit 1; }
             compgen -G "$base/macos/*.app.tar.gz" > /dev/null || { echo "::error::Missing macOS updater tarball"; exit 1; }
             compgen -G "$base/macos/*.app.tar.gz.sig" > /dev/null || { echo "::error::Missing macOS updater signature"; exit 1; }
+
+            # DMG styling lives in a .DS_Store written by the Finder AppleScript
+            # during bundling. Tauri skips that script when CI=true unless
+            # TAURI_BUNDLER_DMG_IGNORE_CI=true, so assert it actually landed to
+            # keep the unstyled-DMG regression from ever shipping again (PRO-110).
+            dmg=$(compgen -G "$base/dmg/*.dmg" | head -n 1)
+            mount_dir=$(mktemp -d)
+            hdiutil attach "$dmg" -readonly -nobrowse -noautoopen -mountpoint "$mount_dir"
+            styling_ok=true
+            [[ -f "$mount_dir/.DS_Store" ]] || styling_ok=false
+            # Retry the detach once: Spotlight can hold the fresh volume busy.
+            hdiutil detach "$mount_dir" -quiet || { sleep 2; hdiutil detach "$mount_dir" -force; }
+            $styling_ok || { echo "::error::DMG has no .DS_Store — Finder styling was skipped (see PRO-110)"; exit 1; }
           else
             compgen -G "$base/nsis/*-setup.exe" > /dev/null || { echo "::error::Missing Windows NSIS installer"; exit 1; }
             compgen -G "$base/nsis/*-setup.exe.sig" > /dev/null || { echo "::error::Missing Windows updater signature"; exit 1; }

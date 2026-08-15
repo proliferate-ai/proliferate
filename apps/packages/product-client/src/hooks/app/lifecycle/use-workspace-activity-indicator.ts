@@ -30,7 +30,6 @@ export function useWorkspaceActivityIndicator(
     isLoading: logicalWorkspacesLoading,
   } = useLogicalWorkspaces();
   const {
-    archivedWorkspaceIds,
     hiddenRepoRootIds,
     hydrated: workspaceUiHydrated,
     lastViewedAt,
@@ -40,7 +39,6 @@ export function useWorkspaceActivityIndicator(
     workspaceLastInteracted,
     workspaceTypes,
   } = useWorkspaceUiStore(useShallow((state) => ({
-    archivedWorkspaceIds: state.archivedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     hydrated: state._hydrated,
     lastViewedAt: state.lastViewedAt,
@@ -65,10 +63,6 @@ export function useWorkspaceActivityIndicator(
   const sessionEntriesById = useSessionDirectoryStore((state) => state.entriesById);
   const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
 
-  const archivedSet = useMemo(
-    () => new Set(archivedWorkspaceIds),
-    [archivedWorkspaceIds],
-  );
   const hiddenRepoRootSet = useMemo(
     () => new Set(hiddenRepoRootIds),
     [hiddenRepoRootIds],
@@ -102,7 +96,6 @@ export function useWorkspaceActivityIndicator(
     logicalWorkspaces,
     workspaceActivities,
     pendingPromptCounts,
-    archivedSet,
     hiddenRepoRootIds: hiddenRepoRootSet,
     selectedLogicalWorkspaceId,
     workspaceTypes,
@@ -113,7 +106,6 @@ export function useWorkspaceActivityIndicator(
     sessionLastInteracted,
     sessionLastViewedAt,
   }), [
-    archivedSet,
     hiddenRepoRootSet,
     lastViewedAt,
     logicalWorkspaces,

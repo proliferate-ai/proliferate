@@ -1,4 +1,4 @@
-import { KeyRound, Plus } from "lucide-react";
+import { KeyRound, Plus } from "#product/primitives/icons/core";
 
 import { Button } from "#product/primitives/Button";
 import { SecretRow } from "#product/components/patterns/secrets/SecretRow";

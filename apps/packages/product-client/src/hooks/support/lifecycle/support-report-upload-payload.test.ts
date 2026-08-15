@@ -23,6 +23,7 @@ function makeJob(overrides: Partial<SupportReportJob> = {}): SupportReportJob {
     publicContentConsent: false,
     kind: "bug",
     creditConsent: false,
+    supportSnapshot: { kind: "none" },
     snapshot: {
       openedAt: "2026-07-05T00:00:00.000Z",
       source: "sidebar",
@@ -37,24 +38,30 @@ function makeJob(overrides: Partial<SupportReportJob> = {}): SupportReportJob {
 }
 
 describe("buildCreateReportRequest", () => {
-  it("carries urgent / notifyMe and diagnostics=true by default", () => {
+  it("carries urgent / notifyMe and declares diagnostics only for prepared intent", () => {
     const request = buildCreateReportRequest(makeJob({ urgent: true, notifyMe: true }), 0, supportContext);
     expect(request.urgent).toBe(true);
     expect(request.notifyMe).toBe(true);
-    expect(request.expectedClientUploads?.diagnostics).toBe(true);
+    expect(request.expectedClientUploads?.diagnostics).toBe(false);
   });
 
-  it("sets diagnostics=false when includeLogs is off", () => {
-    const request = buildCreateReportRequest(makeJob({ includeLogs: false }), 0, supportContext);
+  it("never treats legacy includeLogs truthiness as consent", () => {
+    const request = buildCreateReportRequest(makeJob({ includeLogs: true }), 0, supportContext);
     expect(request.expectedClientUploads?.diagnostics).toBe(false);
+  });
+
+  it("declares diagnostics for an exact prepared snapshot", () => {
+    const request = buildCreateReportRequest(makeJob({
+      supportSnapshot: preparedSnapshotIntent(),
+    }), 0, supportContext);
+    expect(request.expectedClientUploads?.diagnostics).toBe(true);
   });
 
   it("defaults urgent/notifyMe to false for legacy persisted jobs", () => {
     const request = buildCreateReportRequest(makeJob(), 2, supportContext);
     expect(request.urgent).toBe(false);
     expect(request.notifyMe).toBe(false);
-    // Missing includeLogs defaults to logs-included.
-    expect(request.expectedClientUploads?.diagnostics).toBe(true);
+    expect(request.expectedClientUploads?.diagnostics).toBe(false);
     expect(request.expectedClientUploads?.attachmentCount).toBe(2);
   });
 
@@ -69,6 +76,37 @@ describe("buildCreateReportRequest", () => {
     expect(request.clientReleaseId).toBe("proliferate-desktop@0.3.27+abcdef012345");
   });
 });
+
+function preparedSnapshotIntent(): Extract<SupportReportJob["supportSnapshot"], { kind: "prepared" }> {
+  return {
+    kind: "prepared",
+    consent: {
+      version: 1,
+      disclosureVersion: "desktop_support_snapshot_customer_content_v1",
+      grantedAt: "2026-07-05T00:00:00.000Z",
+      selection: {
+        kind: "recent_activity",
+        workspace: { kind: "none", reason: "no_selected_bundled_local_workspace" },
+      },
+    },
+    artifact: {
+      artifactSchemaVersion: 3,
+      artifactId: `ssv1_${"a".repeat(64)}`,
+      snapshotId: "snapshot-1",
+      preparationOperationId: "operation-1",
+      generatedAt: "2026-07-05T00:00:00.000Z",
+      sizeBytes: 2,
+      sha256: "b".repeat(64),
+      summary: {
+        collectorRecords: 0,
+        fallbackRecords: 0,
+        sessions: 0,
+        omissions: 0,
+        truncations: 0,
+      },
+    },
+  };
+}
 
 describe("completeRequestForUpload", () => {
   it("omits the diagnostics object when logs are excluded", () => {

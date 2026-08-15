@@ -1,5 +1,6 @@
 pub mod access_gate;
 pub mod access_model;
+pub mod archive;
 pub mod branch_refresh;
 pub mod checkout_gate;
 pub mod creator_context;
@@ -11,16 +12,12 @@ pub mod inventory;
 pub mod managed_root;
 pub mod model;
 pub mod operation_gate;
-pub mod purge;
+pub mod options;
+pub mod path_identity;
 pub mod resolver;
 #[cfg(test)]
 mod resolver_tests;
 pub mod restore_runtime;
-pub mod retention;
-pub mod retention_policy;
-pub mod retire;
-pub mod retire_policy;
-pub mod retire_preflight;
 pub mod runtime;
 pub mod setup_runtime;
 pub mod store;

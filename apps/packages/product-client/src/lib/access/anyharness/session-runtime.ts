@@ -21,6 +21,7 @@ import {
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import {
   getSession,
+  getSessionSubagents,
   listSessionEvents,
   listWorkspaceSessions,
   resumeSession as resumeRuntimeSession,
@@ -30,6 +31,8 @@ import {
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
+  getMaterializedSessionId,
+  isPendingSessionId,
   requireMaterializedSessionId,
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -38,7 +41,9 @@ interface SessionStreamCallbacks {
   onHandle?: (handle: SessionStreamHandle) => void;
   onOpen: () => void;
   onEvent: (envelope: SessionEventEnvelope) => void;
-  onError: () => void;
+  // Widened from `() => void` so the transport failure reaches the product-client
+  // call site, which classifies it for diagnostics (never logging the message).
+  onError: (error?: unknown) => void;
   onClose: () => void;
   measurementOperationId?: MeasurementOperationId | null;
 }
@@ -129,7 +134,12 @@ export async function getSessionClientAndWorkspace(
     connection,
     target,
     workspaceId,
-    materializedSessionId: requireMaterializedSessionId(sessionId),
+    // A directory entry only exists for sessions touched this app run. Ids
+    // without one (e.g. closed sessions listed from the runtime) are already
+    // materialized runtime ids; only genuinely pending ids must keep failing.
+    materializedSessionId: isPendingSessionId(sessionId)
+      ? requireMaterializedSessionId(sessionId)
+      : getMaterializedSessionId(sessionId) ?? sessionId,
   };
 }
 
@@ -199,6 +209,41 @@ export async function fetchSessionHistory(
       globalThis.clearTimeout(timeoutId);
     }
   }
+}
+
+export async function fetchSessionSubagentRoster(
+  sessionId: string,
+  options?: {
+    requestHeaders?: HeadersInit;
+    ssh?: DesktopSshBridge | null;
+    cloudClient: CloudSandboxGatewayUrlSource | null;
+  },
+) {
+  const { connection, materializedSessionId } = await getSessionClientAndWorkspace(
+    sessionId,
+    options?.ssh ?? null,
+    options?.cloudClient ?? null,
+  );
+  return getSessionSubagents(
+    connection,
+    materializedSessionId,
+    options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
+  );
+}
+
+export async function fetchSessionWorkspaceSummaries(
+  sessionId: string,
+  options?: {
+    ssh?: DesktopSshBridge | null;
+    cloudClient: CloudSandboxGatewayUrlSource | null;
+  },
+) {
+  const { connection } = await getSessionClientAndWorkspace(
+    sessionId,
+    options?.ssh ?? null,
+    options?.cloudClient ?? null,
+  );
+  return listWorkspaceSessions(connection, undefined);
 }
 
 export async function fetchSessionSummary(

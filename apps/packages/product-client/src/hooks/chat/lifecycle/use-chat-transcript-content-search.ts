@@ -25,6 +25,12 @@ interface ChatTranscriptContentSearchInput {
   optimisticPrompt: PendingPromptEntry | null;
   outboxEntries: readonly PromptOutboxEntry[];
   goalEvents: readonly GoalTranscriptEvent[];
+  /**
+   * Default-on registration switch. Embedded transcripts (Agents-pane detail)
+   * pass false so the main chat surface stays the only content-search index
+   * owner; disabled instances register nothing and unregister on flip.
+   */
+  enabled?: boolean;
 }
 
 interface IndexedUnit {
@@ -55,6 +61,7 @@ export function useChatTranscriptContentSearch({
   optimisticPrompt,
   outboxEntries,
   goalEvents,
+  enabled = true,
 }: ChatTranscriptContentSearchInput): void {
   const open = useContentSearchStore((state) => state.open);
   const surface = useContentSearchStore((state) => state.surface);
@@ -64,7 +71,7 @@ export function useChatTranscriptContentSearch({
 
   const deferredQuery = useDeferredValue(rawQuery);
   const query = normalizeContentSearchQuery(deferredQuery);
-  const shouldIndex = open && surface === "chat" && query.length > 0;
+  const shouldIndex = enabled && open && surface === "chat" && query.length > 0;
 
   const rowCacheRef = useRef<TranscriptRowModelCache>(createTranscriptRowModelCache());
 

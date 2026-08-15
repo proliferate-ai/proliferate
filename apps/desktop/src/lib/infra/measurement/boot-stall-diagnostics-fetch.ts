@@ -1,5 +1,5 @@
 import {
-  INTERNAL_LOG_RENDERER_EVENT_URL,
+  INTERNAL_RENDERER_DIAGNOSTICS_INGEST_URL,
   MAX_FETCH_SUMMARY_ENTRIES,
   type BootDiagnosticRecorder,
   type BootDiagnosticDump,
@@ -27,12 +27,12 @@ export function installBootDiagnosticsFetchProbe(deps: {
     input: RequestInfo | URL,
     init?: RequestInit,
   ): Promise<Response> {
+    if (isRendererDiagnosticsIngest(input)) {
+      return originalFetch!.call(window, input, init);
+    }
     const requestSeq = deps.getNextSeq();
     const startedAt = now();
     const request = summarizeFetchRequest(input, init);
-    if (request.url === INTERNAL_LOG_RENDERER_EVENT_URL) {
-      return originalFetch!.call(window, input, init);
-    }
 
     recordFetchSummaryStart(request);
     deps.recordBootDiagnostic("fetch.start", {
@@ -63,6 +63,19 @@ export function installBootDiagnosticsFetchProbe(deps: {
       throw error;
     }
   };
+}
+
+function isRendererDiagnosticsIngest(input: RequestInfo | URL): boolean {
+  try {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url;
+    return url === INTERNAL_RENDERER_DIAGNOSTICS_INGEST_URL;
+  } catch {
+    return false;
+  }
 }
 
 export function uninstallBootDiagnosticsFetchProbe(): void {

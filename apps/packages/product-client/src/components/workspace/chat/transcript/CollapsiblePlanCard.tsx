@@ -57,6 +57,13 @@ export function CollapsiblePlanCard({
   const compact = density === "compact";
   // One shell language for every plan surface; density only changes padding
   // and title size.
+  //
+  // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review, check 1):
+  // `bg-card/85` is the translucent plan sheet, and `Card`'s two fills are the
+  // flat `bg-card` and the borderless tint. This shell is also not a
+  // `Disclosure`: collapsing here fades the body under a mask and floats an
+  // "Expand plan" button over it rather than hiding the content, and the toggle
+  // is an icon button paired with Copy in the header, not a chevron title row.
   const shellClassName =
     "relative overflow-clip rounded-lg border border-border/70 bg-card/85 text-left";
   const headerClassName = compact

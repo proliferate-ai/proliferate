@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatAgentMessageReceiptVerb,
   formatWakePromptQueueText,
   formatSubagentLabel,
   isSubagentWakeProvenance,
@@ -38,6 +39,39 @@ describe("isSubagentWakeProvenance", () => {
       sessionLinkId: "link-1",
       completionId: "completion-1",
     })).toBe(true);
+  });
+});
+
+describe("formatAgentMessageReceiptVerb", () => {
+  const provenance = {
+    type: "subagentWake" as const,
+    sessionLinkId: "link-1",
+    completionId: "completion-1",
+  };
+
+  it("never claims a wake outcome before the completion projection resolves", () => {
+    expect(formatAgentMessageReceiptVerb({ provenance, completion: null })).toBe("updated ·");
+  });
+
+  it.each([
+    ["completed", "finished ·"],
+    ["failed", "failed ·"],
+    ["cancelled", "cancelled ·"],
+    ["canceled", "cancelled ·"],
+  ])("maps %s completion outcomes to %s", (outcome, expected) => {
+    expect(formatAgentMessageReceiptVerb({
+      provenance,
+      completion: { outcome } as never,
+    })).toBe(expected);
+  });
+
+  it("uses reply copy for direct agent-session messages", () => {
+    expect(formatAgentMessageReceiptVerb({
+      provenance: {
+        type: "agentSession",
+        sourceSessionId: "agent-session-1",
+      },
+    })).toBe("replied");
   });
 });
 

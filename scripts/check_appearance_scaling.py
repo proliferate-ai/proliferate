@@ -149,6 +149,7 @@ AUTHORED_THEME_RULE = "PROD-SCALE-30"
 AUTHORED_ROOT_TOKEN_RULE = "PROD-SCALE-31"
 STANDARD_Z_RULE = "PROD-SCALE-32"
 LONG_LIST_RULE = "PROD-SCALE-33"
+ARBITRARY_BRACKET_GEOMETRY_RULE = "PROD-SCALE-35"
 
 FIXED_TEXT_PATTERNS = (
     (
@@ -221,6 +222,14 @@ ARBITRARY_Z_RE = re.compile(r"(?<![A-Za-z0-9_-])z-\[[^\]]+\]")
 STANDARD_Z_RE = re.compile(r"(?<![A-Za-z0-9_-])z-(?:0|10|20|30|40|50)(?![A-Za-z0-9_-])")
 ARBITRARY_GAP_RE = re.compile(r"(?<![A-Za-z0-9_-])gap-\[[^\]]+\]")
 ARBITRARY_SIZE_RE = re.compile(r"(?<![A-Za-z0-9_-])size-\[[^\]]+\]")
+# The width/height/padding/margin/inset bracket families, which the arbitrary-
+# value rules above deliberately stopped short of. They are censused rather than
+# banned outright: virtualization math, measured overlays and grid positioning
+# produce legitimate ones, so the law is "no more than today, anywhere", and the
+# per-file census burns down as surfaces migrate onto the spacing scale.
+ARBITRARY_BRACKET_GEOMETRY_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])(?:w|h|p|m|inset)-\[[^\]]+\]"
+)
 # `shadow-keystone` (and its historical `-sm`/`-lg` spellings) is banned from
 # commit one even though no consumer has been migrated yet: the token is removed
 # by the authority, so any surviving use is a dead class, not a pending
@@ -312,6 +321,7 @@ STAGED_RULE_IDS = frozenset({
     ARBITRARY_Z_RULE,
     ARBITRARY_GAP_RULE,
     ARBITRARY_SIZE_RULE,
+    ARBITRARY_BRACKET_GEOMETRY_RULE,
     RETIRED_SHADOW_RULE,
     RETIRED_ACCENT_RULE,
     FOREGROUND_ALPHA_RULE,
@@ -337,6 +347,16 @@ CENSUS_SLACK_RULE_ID = "PROD-SCALE-34"
 SANCTION_KEY = "censusGrowthSanctions"
 SANCTION_FILES_KEY = "files"
 SANCTION_JUSTIFICATION_KEY = "justification"
+# Directories a migration slice finished. Their census is pinned at zero, so a
+# regression there fails as a violation instead of quietly re-entering the
+# census: `--write-baseline` refuses to record an entry under a sealed prefix,
+# which removes the one move that could turn a finished directory back into a
+# staged one. Each seal names the slice that cleaned it, so the pin is a record
+# of work done rather than an opinion about a directory.
+SEALED_KEY = "sealedDirectories"
+SEALED_PATH_KEY = "path"
+SEALED_JUSTIFICATION_KEY = "justification"
+SEALED_RULE_ID = "PROD-SCALE-36"
 
 
 @dataclass(frozen=True)
@@ -483,6 +503,7 @@ def check_foundation_source(path: Path, source: str) -> list[Violation]:
         (ARBITRARY_Z_RULE, ARBITRARY_Z_RE),
         (ARBITRARY_GAP_RULE, ARBITRARY_GAP_RE),
         (ARBITRARY_SIZE_RULE, ARBITRARY_SIZE_RE),
+        (ARBITRARY_BRACKET_GEOMETRY_RULE, ARBITRARY_BRACKET_GEOMETRY_RE),
         (RETIRED_SHADOW_RULE, OLD_SHADOW_RE),
         (NUMERIC_DURATION_RULE, NUMERIC_DURATION_UTILITY_RE),
         (JS_MOTION_RULE, JS_MOTION_LITERAL_RE),
@@ -869,6 +890,63 @@ def census_slack(
     return reported
 
 
+def sealed_prefixes(baseline: Mapping[str, object]) -> list[tuple[str, str]]:
+    """``(prefix, justification)`` for every sealed directory, validated.
+
+    A seal without a written reason is an opinion, not a record, so it is
+    rejected at load time rather than enforced silently.
+    """
+    sealed: list[tuple[str, str]] = []
+    for entry in baseline.get(SEALED_KEY, []) or []:
+        prefix = str(entry.get(SEALED_PATH_KEY, "")).strip()
+        justification = str(entry.get(SEALED_JUSTIFICATION_KEY, "")).strip()
+        if not prefix:
+            raise ValueError(f"{SEALED_KEY} entry is missing {SEALED_PATH_KEY!r}")
+        if not justification:
+            raise ValueError(
+                f"{SEALED_KEY} entry {prefix!r} needs a {SEALED_JUSTIFICATION_KEY!r} "
+                "naming the slice that cleaned it"
+            )
+        sealed.append((prefix if prefix.endswith("/") else prefix + "/", justification))
+    return sealed
+
+
+def sealed_directory_violations(
+    violations: Sequence[Violation],
+    baseline: Mapping[str, object],
+    repo_root: Path = REPO_ROOT,
+) -> list[Violation]:
+    """Any staged-rule hit inside a directory a slice already finished.
+
+    Reported before the census is applied, so a sealed directory cannot absorb a
+    hit even if a stale census entry survived for one of its files. This is the
+    difference between "burning down" and "finished": the rest of the tree
+    ratchets, a sealed directory is an absolute ban.
+    """
+    sealed = sealed_prefixes(baseline)
+    if not sealed:
+        return []
+    reported: list[Violation] = []
+    for violation in violations:
+        if violation.rule_id not in STAGED_RULE_IDS:
+            continue
+        relative = relative_path(violation.path, repo_root)
+        for prefix, justification in sealed:
+            if relative.startswith(prefix):
+                reported.append(
+                    Violation(
+                        SEALED_RULE_ID,
+                        violation.path,
+                        violation.lineno,
+                        f"[{violation.rule_id}] {violation.detail} — {prefix} is "
+                        f"sealed at zero ({justification}); a finished directory "
+                        f"re-baselines to nothing, so fix the site",
+                    )
+                )
+                break
+    return reported
+
+
 def apply_staged_baseline(
     violations: Sequence[Violation],
     baseline: Mapping[str, int],
@@ -946,11 +1024,13 @@ def collect_raw_violations(paths: Sequence[Path] | None = None) -> list[Violatio
 
 def collect_violations(paths: Sequence[Path] | None = None) -> list[Violation]:
     raw = collect_raw_violations(paths)
-    baseline = load_baselines().get(STAGED_CENSUS_KEY, {})
+    baselines = load_baselines()
+    baseline = baselines.get(STAGED_CENSUS_KEY, {})
     scope = None if paths is None else {relative_path(path) for path in paths}
     return [
         *apply_staged_baseline(raw, baseline),
         *census_slack(raw, baseline, scope=scope),
+        *sealed_directory_violations(raw, baselines),
     ]
 
 
@@ -1009,6 +1089,19 @@ def write_baseline(path: Path = BASELINE_FILE) -> int:
     existing = load_baselines()
     current = staged_census(collect_raw_violations())
     previous: Mapping[str, int] = existing.get(STAGED_CENSUS_KEY, {})
+
+    sealed = sealed_prefixes(existing)
+    resealed = sorted(
+        key
+        for key in current
+        if any(key.startswith(prefix) for prefix, _ in sealed)
+    )
+    if resealed:
+        print("Refusing to census a sealed directory; these are finished, not staged:")
+        for key in resealed:
+            print(f"  {key}")
+        return 1
+
     unsanctioned = unsanctioned_growth(previous, current, existing.get(SANCTION_KEY, {}))
     if unsanctioned and previous:
         print("Refusing to grow the staged census without a sanction; migrate these sites")

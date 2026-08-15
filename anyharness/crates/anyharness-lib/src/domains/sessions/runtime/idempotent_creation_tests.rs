@@ -50,7 +50,8 @@ async fn create_replay_joins_pending_startup_and_persists_readiness() {
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let state = test_state("pending");
-    let _agent_program_guard = AgentProgramGuard::set(&state.runtime_home.join("claude-agent-stub"));
+    let _agent_program_guard =
+        AgentProgramGuard::set(&state.runtime_home.join("claude-agent-stub"));
     let session_id = "01234567-89ab-4def-8123-456789abcdef";
     state
         .session_service

@@ -2783,5 +2783,47 @@ class MobileProductClientBoundaryTest(unittest.TestCase):
         )
 
 
+class LucideIconSourceTest(unittest.TestCase):
+    """UI-conformance review check 5, both halves: imports and manifests."""
+
+    def test_reports_every_lucide_import_spelling(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path = root / "Feature.tsx"
+            path.write_text(
+                'import { Check } from "lucide-react";\n'
+                'import Dyn from "lucide-react/dynamicIconImports";\n'
+                'export { X } from "lucide-react";\n'
+                '// import { Y } from "lucide-react";\n'
+                'import { Real } from "#product/primitives/icons/core";\n',
+                encoding="utf-8",
+            )
+            with patch.object(check_module, "LUCIDE_SCANNED_MANIFESTS", []):
+                violations = check_module.find_lucide_icon_source_violations([path])
+        self.assertEqual([violation.lineno for violation in violations], [1, 2, 3])
+        self.assertTrue(
+            all(violation.rule_id == "LUCIDE_ICON_SOURCE" for violation in violations)
+        )
+
+    def test_reports_a_manifest_dependency_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            manifest = root / "package.json"
+            manifest.write_text(
+                '{\n  "dependencies": {\n    "lucide-react": "^0.4.0",\n'
+                '    "react": "19"\n  }\n}\n',
+                encoding="utf-8",
+            )
+            with patch.object(check_module, "LUCIDE_SCANNED_MANIFESTS", [manifest]):
+                violations = check_module.find_lucide_icon_source_violations([])
+        self.assertEqual(
+            [(violation.rule_id, violation.lineno) for violation in violations],
+            [("LUCIDE_PACKAGE_DEPENDENCY", 3)],
+        )
+
+    def test_the_shipped_tree_declares_and_imports_no_lucide(self) -> None:
+        self.assertEqual(check_module.find_lucide_icon_source_violations(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

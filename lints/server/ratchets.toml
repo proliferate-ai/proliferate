@@ -25,8 +25,8 @@ reason = "D1 adds get_default_organization_for_user (earliest active membership 
 
 [[max_lines]]
 path = "server/proliferate/server/accounts/identity/api.py"
-max_lines = 488
-reason = "complete behavior-preserving account-entry route move; split pending"
+max_lines = 514
+reason = "desktop-surface provider callbacks now dispatch to an HTML handoff/error page instead of a raw 302 via a new _provider_callback_response helper (PRO-111); split pending"
 
 [[max_lines]]
 path = "server/proliferate/server/billing/stripe_webhooks.py"
@@ -85,8 +85,8 @@ reason = "D train: D2 free-credit dedupe proofs + converted-claim guard + import
 
 [[max_lines]]
 path = "server/tests/integration/test_auth_flow.py"
-max_lines = 2216
-reason = "existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage + SG10 review: explicit crypto-secret fixture setup retains the nested grant construction"
+max_lines = 2331
+reason = "existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage + SG10 review: explicit crypto-secret fixture setup retains the nested grant construction; PRO-111 desktop handoff/error page coverage (launch script + provider error page + web-stays-302 pin) adds three tests to the existing desktop/mobile provider callback surface; PRO-111 review fixes: M2 folds the launch-script test into a parse-deep-link-then-exchange assertion, L5 tightens the error-page tone assertion"
 
 [[max_lines]]
 path = "server/tests/integration/test_billing_accounting.py"
@@ -122,6 +122,11 @@ reason = "W-F5 level-policy suite; W-F2 adds the INVOICE_NOT_PERIOD_BOUNDARY lev
 path = "server/tests/integration/test_stripe_webhooks.py"
 max_lines = 1502
 reason = "existing server oversized integration test; W-F2 adds billing_reason to two invoice fixtures that would otherwise take the new non-boundary early return (silently un-testing the pro-pricing gate and the boundary hold-clear they exist to cover), plus an annotation on the seat-reconciliation grant assertion. That annotation is the larger part of the growth and is deliberate: the assertion pins 15.0 h, which review established is a real over-grant (~17.5 vs ~12.5 owed) reached by re-delivery of a boundary invoice after a seat was added mid-period — the same arithmetic as W-F2 through a different door. It is pinned as current behaviour with the residual named and its narrow reachability stated, rather than left reading as correct, because an in-repo comment blessing this shape is how the W-F2 bug survived review the first time; billing error normalization pins the direct product-error envelope after route-wrapper removal"
+
+[[max_lines]]
+path = "server/tests/unit/auth/test_identity_error_ownership.py"
+max_lines = 603
+reason = "PRO-111 adds the surface/error field assertions to the OAuthProviderTokenRejectedError redirect-shape test now that complete_oauth_provider_callback returns AuthCallbackRedirect instead of a bare url string; split pending"
 
 [[max_lines]]
 path = "server/tests/unit/test_agent_auth_materialization.py"

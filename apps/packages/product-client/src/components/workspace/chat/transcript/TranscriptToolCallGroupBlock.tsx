@@ -63,7 +63,7 @@ export function TranscriptToolCallGroupBlock({
       summary={summary}
       itemCount={renderableItemCount}
       renderChildren={() => (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {hasRenderableToolDetails(item) && (
             <TranscriptToolCallItemBlock
               item={item}
@@ -71,7 +71,7 @@ export function TranscriptToolCallGroupBlock({
               onOpenArtifact={onOpenArtifact}
             />
           )}
-          <div className="ml-1 space-y-1.5">
+          <div className="ml-1 space-y-1">
             {childIds.map((childId) => (
               <Fragment key={childId}>
                 {renderChild(childId)}

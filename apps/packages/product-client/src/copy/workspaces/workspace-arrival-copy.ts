@@ -37,3 +37,53 @@ export const WORKSPACE_ARRIVAL_LABELS = {
   noWorkspaceTitle: "Select a workspace",
   noWorkspaceBody: "Choose a workspace from the sidebar to start chatting.",
 } as const;
+
+/**
+ * Workspace-creation transcript receipt copy. The receipt sentence carries
+ * the whole state in words — failure is never signaled with color or badges.
+ */
+export const WORKSPACE_CREATION_RECEIPT_LABELS = {
+  creating: {
+    worktree: "Creating worktree",
+    workspace: "Creating workspace",
+  },
+  creationFailed: {
+    worktree: "Worktree creation failed",
+    workspace: "Workspace creation failed",
+  },
+  created: {
+    worktree: "Worktree created",
+    workspace: "Workspace created",
+  },
+  createdSetupFailed: {
+    worktree: "Worktree created, but setup failed",
+    workspace: "Workspace created, but setup failed",
+  },
+  createdSetupCompleted: {
+    worktree: "Worktree created, setup completed",
+    workspace: "Workspace created, setup completed",
+  },
+  preparingLogPrefix: {
+    worktree: "Preparing worktree at",
+    workspace: "Preparing workspace at",
+  },
+  createdLogPrefix: {
+    worktree: "Worktree created at",
+    workspace: "Workspace created at",
+  },
+  creationFailedFallbackDetail: "Workspace creation failed.",
+  setupFailedFallbackDetail: "Setup failed.",
+  setupQueuedStatus: "Setup queued",
+  setupRunningStatus: "Setup running",
+  setupQueuedLog: "Setup script queued...",
+  setupRunningLog: "Setup script running...",
+  setupSucceededLog: "Setup completed successfully",
+  previousRunSuffix: "(previous run)",
+  rerunLogSuffix: "(rerun)",
+  rerunSetup: "Rerun setup",
+  rerunningLabel: "Rerunning…",
+  seeTerminal: "See terminal",
+  copyLogTitle: "Copy log",
+  retryCreation: "Retry",
+  backFromCreation: "Back",
+} as const;

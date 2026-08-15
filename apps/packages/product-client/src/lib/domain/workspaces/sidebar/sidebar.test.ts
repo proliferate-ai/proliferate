@@ -97,10 +97,11 @@ describe("repo-root seeded groups", () => {
   it("keeps a repo-root-backed group when all matching workspaces are archived", () => {
     const groups = buildGroups({
       logicalWorkspaces: [
-        makeLocalLogicalWorkspace({
+        makeCloudLogicalWorkspace({
           id: "archived-workspace",
           repoKey: "github:proliferate-ai:repo-a",
           repoName: "repo-a",
+          productLifecycle: "archived",
         }),
       ],
       repoRoots: [
@@ -110,7 +111,6 @@ describe("repo-root seeded groups", () => {
           sourceRoot: "/tmp/repo-a",
         }),
       ],
-      archivedIds: ["archived-workspace"],
     });
 
     expect(groups).toHaveLength(1);
@@ -150,11 +150,6 @@ describe("sidebar workspace filters", () => {
     const groups = buildGroups({
       logicalWorkspaces: [
         makeLocalLogicalWorkspace({
-          id: "local-1",
-          repoKey: "/tmp/repo-a",
-          repoName: "repo-a",
-        }),
-        makeLocalLogicalWorkspace({
           id: "worktree-1",
           repoKey: "/tmp/repo-a",
           repoName: "repo-a",
@@ -162,12 +157,17 @@ describe("sidebar workspace filters", () => {
           branch: "feature/worktree-1",
         }),
         makeCloudLogicalWorkspace({
+          id: "archived-cloud",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          productLifecycle: "archived",
+        }),
+        makeCloudLogicalWorkspace({
           id: "cloud-1",
           repoKey: "/tmp/repo-b",
           repoName: "repo-b",
         }),
       ],
-      archivedIds: ["local-1"],
     });
 
     expect(groups).toHaveLength(2);
@@ -268,15 +268,13 @@ describe("sidebar workspace filters", () => {
           repoKey: "/tmp/repo-a",
           repoName: "repo-a",
         }),
-        makeLocalLogicalWorkspace({
+        makeCloudLogicalWorkspace({
           id: "archived-selected",
           repoKey: "/tmp/repo-a",
           repoName: "repo-a",
-          kind: "worktree",
-          branch: "feature/archived-selected",
+          productLifecycle: "archived",
         }),
       ],
-      archivedIds: ["archived-selected"],
       selectedLogicalWorkspaceId: "archived-selected",
     });
 
@@ -318,12 +316,11 @@ describe("sidebar workspace filters", () => {
         repoKey: "/tmp/repo-a",
         repoName: "repo-a",
       }),
-      makeLocalLogicalWorkspace({
-        id: "worktree-archived",
+      makeCloudLogicalWorkspace({
+        id: "cloud-archived",
         repoKey: "/tmp/repo-a",
         repoName: "repo-a",
-        kind: "worktree",
-        branch: "feature/worktree-archived",
+        productLifecycle: "archived",
       }),
       makeCloudLogicalWorkspace({
         id: "cloud-1",
@@ -334,19 +331,18 @@ describe("sidebar workspace filters", () => {
 
     const hiddenArchivedGroups = buildGroups({
       logicalWorkspaces,
-      workspaceTypes: ["worktree"],
-      archivedIds: ["worktree-archived"],
+      workspaceTypes: ["cloud"],
     });
     const archivedOnlyGroups = buildGroups({
       logicalWorkspaces,
       showArchived: true,
-      workspaceTypes: ["worktree"],
-      archivedIds: ["worktree-archived"],
+      workspaceTypes: ["cloud"],
     });
 
-    expect(hiddenArchivedGroups).toHaveLength(0);
+    expect(hiddenArchivedGroups).toHaveLength(1);
+    expect(hiddenArchivedGroups[0]?.items.map((item) => item.id)).toEqual(["cloud-1"]);
     expect(archivedOnlyGroups).toHaveLength(1);
-    expect(archivedOnlyGroups[0]?.items.map((item) => item.id)).toEqual(["worktree-archived"]);
+    expect(archivedOnlyGroups[0]?.items.map((item) => item.id)).toEqual(["cloud-archived"]);
   });
 
   it("preserves the full repo workspace id list even when visible items are filtered", () => {

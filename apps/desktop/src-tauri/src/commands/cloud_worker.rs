@@ -1,6 +1,6 @@
 use std::{
     fs::OpenOptions,
-    io::{self, Read, Seek, SeekFrom},
+    io,
     path::{Path, PathBuf},
     sync::{atomic::AtomicBool, Arc},
 };
@@ -8,33 +8,47 @@ use std::{
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use tokio::{
-    process::Child,
-    sync::Mutex,
-    time::{sleep, Duration, Instant},
-};
+use tokio::{process::Child, sync::Mutex, time::Duration};
+
+use proliferate_diagnostics_protocol::v1::types::TerminalOutcomeV1;
 
 use crate::{
     app_config,
-    diagnostics::scrub_diagnostic_text,
-    sidecar::{resolve_shell_path, SharedSidecar},
+    diagnostics_collector::{
+        producer::TauriDiagnosticsProducer, shutdown::DiagnosticsShutdownCoordinator,
+        supervisor::DiagnosticsCollectorSupervisor,
+    },
+    sidecar::SharedSidecar,
 };
 
+#[cfg_attr(
+    not(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    )),
+    path = "cloud_worker/launcher_legacy.rs"
+)]
 mod launcher;
 pub(crate) mod lifecycle;
+mod observer;
+pub(crate) mod spawn;
+pub(crate) mod state;
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+mod tail;
+#[cfg(all(
+    test,
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+mod tail_tests;
 
-use launcher::find_proliferate_worker_launcher;
-
-const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
-// Releases through 0.3.38 used `cloud-worker`. Some of those Desktop processes
-// exited without stopping their child, so the legacy Worker can retain that
-// namespace's credential lock across an app update. The complete v2 namespace
-// lets a freshly enrolled Worker converge without inspecting or killing an
-// unowned process; server enrollment revokes every predecessor for the same
-// desktop install.
-const WORKER_STATE_NAMESPACE: &str = "cloud-worker-v2";
-#[cfg(test)]
-const LEGACY_WORKER_STATE_NAMESPACE: &str = "cloud-worker";
+// Releases through 0.3.38 used `cloud-worker`; v2 avoids an orphaned legacy
+// credential lock without inspecting or killing an unowned process.
+pub(super) const WORKER_STATE_NAMESPACE: &str = "cloud-worker-v2";
+pub(super) const LEGACY_WORKER_STATE_NAMESPACE: &str = "cloud-worker";
 const WORKER_CREDENTIALS_LOCKED_ERROR: &str =
     "Cannot replace worker credentials while a Proliferate Worker is still running.";
 
@@ -42,6 +56,13 @@ const WORKER_CREDENTIALS_LOCKED_ERROR: &str =
 pub struct CloudWorkerState {
     lifecycle: Mutex<CloudWorkerLifecycle>,
     terminal_shutdown_armed: AtomicBool,
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    child_shutdown_signal: std::sync::Mutex<
+        Option<crate::diagnostics_collector::child_bridge::shutdown_signal::ChildShutdownSignal>,
+    >,
 }
 
 pub type SharedCloudWorkerState = Arc<CloudWorkerState>;
@@ -49,14 +70,34 @@ pub type SharedCloudWorkerState = Arc<CloudWorkerState>;
 #[derive(Default)]
 struct CloudWorkerLifecycle {
     process: Option<CloudWorkerProcess>,
+    observer_generation: u64,
+    exit_observer: Option<tokio::task::JoinHandle<()>>,
     #[cfg(test)]
     injected_stop_error: Option<String>,
 }
 
+/// Identity-stable Worker owner, with bundled bridge, drainers, and tail kept
+/// through verified reap on supported targets.
 struct CloudWorkerProcess {
     target_id: String,
     child: Child,
     config_path: PathBuf,
+    observer_generation: u64,
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    bridge: Option<crate::diagnostics_collector::child_bridge::runtime::ChildDiagnosticsBridge>,
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    drainers: Vec<tokio::task::JoinHandle<io::Result<()>>>,
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    tail: tail::SharedWorkerTail,
 }
 
 struct WorkerDatabaseLock {
@@ -99,7 +140,37 @@ pub async fn ensure_desktop_dispatch_worker(
     input: EnsureDesktopDispatchWorkerInput,
     sidecar: State<'_, SharedSidecar>,
     worker_state: State<'_, SharedCloudWorkerState>,
+    diagnostics_supervisor: State<'_, Arc<DiagnosticsCollectorSupervisor>>,
+    diagnostics_producer: State<'_, TauriDiagnosticsProducer>,
 ) -> Result<EnsureDesktopDispatchWorkerResult, String> {
+    if input.target_id.trim().is_empty() {
+        return Err("targetId is required.".to_string());
+    }
+    let operation = diagnostics_producer.begin_lifecycle("desktop.worker_process.start");
+    if diagnostics_supervisor.shutdown_is_armed() {
+        operation.terminal(TerminalOutcomeV1::Rejected, Some("shutdown_armed"));
+        return Err("Worker start rejected because shutdown is armed".to_string());
+    }
+    let _ = diagnostics_supervisor.wait_startup_barrier().await;
+    let result = ensure_desktop_dispatch_worker_inner(
+        input,
+        sidecar,
+        worker_state,
+        &diagnostics_producer,
+        &diagnostics_supervisor,
+    )
+    .await;
+    lifecycle::finish_worker_start_operation(operation, &result);
+    result.map_err(|error| error.message)
+}
+
+async fn ensure_desktop_dispatch_worker_inner(
+    input: EnsureDesktopDispatchWorkerInput,
+    sidecar: State<'_, SharedSidecar>,
+    worker_state: State<'_, SharedCloudWorkerState>,
+    diagnostics_producer: &TauriDiagnosticsProducer,
+    diagnostics_supervisor: &Arc<DiagnosticsCollectorSupervisor>,
+) -> Result<EnsureDesktopDispatchWorkerResult, lifecycle::WorkerStartFailure> {
     let target_id = non_empty("targetId", input.target_id)?;
     let cloud_base_url = configured_cloud_base_url()?;
     let integration_gateway_home = app_config::anyharness_runtime_home_path()?;
@@ -117,13 +188,14 @@ pub async fn ensure_desktop_dispatch_worker(
             config_path: config_path.to_string_lossy().into_owned(),
         });
     };
-    if let Some(config_path) = lifecycle::prepare_existing_worker_for_ensure(
+    let prepared = lifecycle::prepare_existing_worker_for_ensure_observed(
         &mut lifecycle,
         &target_id,
         enrollment_token.is_some(),
+        diagnostics_producer,
     )
-    .await?
-    {
+    .await;
+    if let Some(config_path) = prepared? {
         return Ok(EnsureDesktopDispatchWorkerResult {
             target_id,
             status: "running",
@@ -131,8 +203,7 @@ pub async fn ensure_desktop_dispatch_worker(
         });
     }
 
-    let launcher = find_proliferate_worker_launcher()
-        .ok_or_else(|| "Proliferate Worker binary was not found.".to_string())?;
+    let launcher = spawn::prepare_launcher().await?;
     let paths = worker_paths(&target_id)?;
     let mut mutation_lock = None;
     if enrollment_token.is_some() {
@@ -146,10 +217,9 @@ pub async fn ensure_desktop_dispatch_worker(
             });
         }
         if !worker_identity_exists(&paths.database)? {
-            return Err(
-                "Desktop dispatch worker is missing local credentials and needs a fresh enrollment token."
-                    .to_string(),
-            );
+            let message =
+                "Desktop dispatch worker is missing local credentials and needs a fresh enrollment token.";
+            return Err(message.to_string().into());
         }
     }
     if enrollment_token.is_some() && paths.database.exists() {
@@ -170,74 +240,51 @@ pub async fn ensure_desktop_dispatch_worker(
     )?;
     drop(mutation_lock);
 
-    let (log_stdout, log_stderr) = open_worker_log(&paths.log)?;
-    tracing::info!(
-        launcher = %launcher,
-        config_path = %paths.config.display(),
-        log_path = %paths.log.display(),
-        "Starting Proliferate Worker"
-    );
-
-    let mut command = launcher.command(&paths.config);
-    command
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::from(log_stdout))
-        .stderr(std::process::Stdio::from(log_stderr))
-        .kill_on_drop(true);
-    if let Some(path) = resolve_shell_path() {
-        command.env("PATH", path);
-    }
-
-    let mut child = command.spawn().map_err(|error| {
-        tracing::error!(launcher = %launcher, %error, "Failed to start Proliferate Worker");
-        format!("Failed to start Proliferate Worker with {launcher}: {error}")
-    })?;
-    tracing::info!(
-        launcher = %launcher,
-        pid = child.id(),
-        "Proliferate Worker spawned"
-    );
-    let startup_deadline = Instant::now() + startup_watch_window(enrollment_token.is_some());
-    let startup_exit = loop {
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|error| format!("Failed to inspect Proliferate Worker startup: {error}"))?
-        {
-            break Some(status);
-        }
-        if Instant::now() >= startup_deadline {
-            break None;
-        }
-        sleep(Duration::from_millis(100)).await;
-    };
-    if let Some(status) = startup_exit {
-        let log_tail = read_worker_log_tail(&paths.log, 12);
-        let scrubbed_log_path = scrub_diagnostic_text(&paths.log.to_string_lossy());
-        tracing::error!(
-            launcher = %launcher,
-            %status,
-            log_path = %scrubbed_log_path,
-            log_tail = %log_tail,
-            "Proliferate Worker exited during startup"
-        );
-        return Err(worker_startup_failure_message(
-            &status.to_string(),
-            &paths.log,
-            &log_tail,
-        ));
-    }
-
+    let launch = spawn::launch_and_watch(
+        &launcher,
+        &paths,
+        target_id.clone(),
+        enrollment_token.is_some(),
+        diagnostics_supervisor,
+    )
+    .await?;
     let result = EnsureDesktopDispatchWorkerResult {
-        target_id: target_id.clone(),
+        target_id,
         status: "started",
         config_path: paths.config.to_string_lossy().into_owned(),
     };
-    lifecycle.process = Some(CloudWorkerProcess {
-        target_id,
-        child,
-        config_path: paths.config,
-    });
-    Ok(result)
+    match launch {
+        spawn::WorkerLaunchOutcome::Started(process) => {
+            #[cfg(all(
+                target_os = "macos",
+                any(target_arch = "aarch64", target_arch = "x86_64")
+            ))]
+            worker_state.set_child_shutdown_signal(
+                process
+                    .diagnostics_bridge()
+                    .and_then(|bridge| bridge.shutdown_signal()),
+            );
+            lifecycle.process = Some(process);
+            observer::start(worker_state.inner(), &mut lifecycle);
+            Ok(result)
+        }
+        spawn::WorkerLaunchOutcome::RetainedAfterInspection { process, failure } => {
+            // Ambiguity is not reap authority: retain the complete owner
+            // under its observer before publishing the classified error.
+            #[cfg(all(
+                target_os = "macos",
+                any(target_arch = "aarch64", target_arch = "x86_64")
+            ))]
+            worker_state.set_child_shutdown_signal(
+                process
+                    .diagnostics_bridge()
+                    .and_then(|bridge| bridge.shutdown_signal()),
+            );
+            lifecycle.process = Some(process);
+            observer::start(worker_state.inner(), &mut lifecycle);
+            Err(failure)
+        }
+    }
 }
 
 /// Stops the tracked dispatch worker (if any) and removes the
@@ -246,33 +293,45 @@ pub async fn ensure_desktop_dispatch_worker(
 #[tauri::command]
 pub async fn stop_desktop_dispatch_worker(
     state: State<'_, SharedCloudWorkerState>,
+    diagnostics_producer: State<'_, TauriDiagnosticsProducer>,
 ) -> Result<StopDesktopDispatchWorkerResult, String> {
+    let operation = diagnostics_producer.begin_lifecycle("desktop.worker_process.stop");
     let stop_result = lifecycle::stop_tracked_desktop_dispatch_worker(&state).await;
 
-    let dotfile = app_config::anyharness_runtime_home_path()?.join("integration-gateway.json");
-    let credential_cleanup_result = match std::fs::remove_file(&dotfile) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(format!(
-            "Failed to remove integration gateway credentials at {}: {error}",
-            dotfile.display()
-        )),
+    let credential_cleanup_result = match app_config::anyharness_runtime_home_path() {
+        Ok(runtime_home) => {
+            let dotfile = runtime_home.join("integration-gateway.json");
+            match std::fs::remove_file(&dotfile) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(format!(
+                    "Failed to remove integration gateway credentials at {}: {error}",
+                    dotfile.display()
+                )),
+            }
+        }
+        Err(error) => Err(error),
     };
-    match (stop_result, credential_cleanup_result) {
+    let result = match (stop_result, credential_cleanup_result) {
         (Ok(stopped), Ok(())) => Ok(StopDesktopDispatchWorkerResult { stopped }),
         (Err(stop_error), Ok(())) => Err(stop_error),
         (Ok(_), Err(cleanup_error)) => Err(cleanup_error),
         (Err(stop_error), Err(cleanup_error)) => {
             Err(format!("{stop_error}; additionally, {cleanup_error}"))
         }
-    }
+    };
+    lifecycle::finish_worker_stop_operation(operation, &result);
+    result
 }
 
 #[tauri::command]
 pub async fn prepare_desktop_dispatch_worker_update(
-    state: State<'_, SharedCloudWorkerState>,
+    shutdown: State<'_, Arc<DiagnosticsShutdownCoordinator>>,
 ) -> Result<(), String> {
-    lifecycle::prepare_desktop_dispatch_worker_update(&state, cfg!(target_os = "windows")).await
+    if !cfg!(target_os = "windows") {
+        return Ok(());
+    }
+    shutdown.shutdown().await
 }
 
 fn non_empty(name: &str, value: String) -> Result<String, String> {
@@ -295,9 +354,14 @@ fn configured_cloud_base_url() -> Result<String, String> {
         .map(|value| value.trim_end_matches('/').to_string())
 }
 
+/// Bundled macOS creates no `worker.log`; unsupported targets preserve it.
 struct WorkerPaths {
     config: PathBuf,
     database: PathBuf,
+    #[cfg(not(all(
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    )))]
     log: PathBuf,
 }
 
@@ -316,6 +380,10 @@ fn worker_paths_in_namespace(app_dir: &Path, namespace: &str, target_id: &str) -
     WorkerPaths {
         config: root.join("config.toml"),
         database: root.join("worker.sqlite3"),
+        #[cfg(not(all(
+            target_os = "macos",
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        )))]
         log: root.join("worker.log"),
     }
 }
@@ -456,22 +524,6 @@ fn write_worker_config(
     set_private_file_permissions(path)
 }
 
-/// Opens (and truncates) the worker log file, returning independent handles
-/// for the child's stdout and stderr so both streams land in the same file.
-fn open_worker_log(path: &Path) -> Result<(std::fs::File, std::fs::File), String> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
-    }
-    let file = std::fs::File::create(path)
-        .map_err(|error| format!("Failed to open worker log at {}: {error}", path.display()))?;
-    set_private_file_permissions(path)?;
-    let clone = file
-        .try_clone()
-        .map_err(|error| format!("Failed to open worker log at {}: {error}", path.display()))?;
-    Ok((file, clone))
-}
-
 fn startup_watch_window(fresh_enrollment: bool) -> Duration {
     if fresh_enrollment {
         // A fresh enrollment must survive its first control-plane roundtrip.
@@ -480,43 +532,6 @@ fn startup_watch_window(fresh_enrollment: bool) -> Duration {
     } else {
         Duration::from_millis(500)
     }
-}
-
-fn worker_startup_failure_message(status: &str, log_path: &Path, log_tail: &str) -> String {
-    let scrubbed_log_path = scrub_diagnostic_text(&log_path.to_string_lossy());
-    let mut message = format!(
-        "Proliferate Worker exited during startup with {status}. See {scrubbed_log_path} for output."
-    );
-    if !log_tail.is_empty() {
-        message.push_str("\n\nLast worker log lines:\n");
-        message.push_str(log_tail);
-    }
-    message
-}
-
-/// Best-effort context for a startup error returned to the renderer. The
-/// worker log is truncated for every launch. Read only a fixed suffix so this
-/// error path cannot allocate or block in proportion to total log volume.
-fn read_worker_log_tail(path: &Path, max_lines: usize) -> String {
-    let Ok(mut file) = std::fs::File::open(path) else {
-        return String::new();
-    };
-    let Ok(file_len) = file.metadata().map(|metadata| metadata.len()) else {
-        return String::new();
-    };
-    let read_len = file_len.min(WORKER_LOG_TAIL_MAX_BYTES) as usize;
-    let start = file_len.saturating_sub(read_len as u64);
-    if file.seek(SeekFrom::Start(start)).is_err() {
-        return String::new();
-    }
-    let mut bytes = vec![0; read_len];
-    if file.read_exact(&mut bytes).is_err() {
-        return String::new();
-    }
-    let contents = String::from_utf8_lossy(&bytes);
-    let lines = contents.lines().collect::<Vec<_>>();
-    let start = lines.len().saturating_sub(max_lines);
-    scrub_diagnostic_text(&lines[start..].join("\n"))
 }
 
 fn toml_string(value: &str) -> String {
@@ -530,7 +545,7 @@ fn toml_string(value: &str) -> String {
     )
 }
 
-fn sanitize_path_segment(value: &str) -> String {
+pub(super) fn sanitize_path_segment(value: &str) -> String {
     value
         .chars()
         .map(|ch| {

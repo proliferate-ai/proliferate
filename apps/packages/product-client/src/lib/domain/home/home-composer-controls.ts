@@ -1,3 +1,4 @@
+import type { PromptCapabilities } from "@anyharness/sdk";
 import type {
   AgentModelGroup,
   AgentModelInfo,
@@ -20,6 +21,18 @@ import type {
  * a live session; home feeds them from pre-launch config. One view layer, two
  * data sources — do not fork home-only picker components again.
  */
+
+/**
+ * Home is pre-session, so no harness has reported prompt capabilities yet
+ * (they arrive per session via liveConfig). Attach optimistically with the
+ * capability set the mainline agents report; the launched session's composer
+ * re-gates from live capabilities once they exist.
+ */
+export const HOME_COMPOSER_PROMPT_CAPABILITIES: PromptCapabilities = {
+  image: true,
+  audio: false,
+  embeddedContext: true,
+};
 
 export function buildHomeModelSelectorProps({
   groups,

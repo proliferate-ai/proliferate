@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { TranscriptContextProviders } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import {
   PendingInteractionMarkerView,
   TURN_ITEM_GAP_CLASS,
@@ -13,8 +14,35 @@ import {
   resolveTurnTrailingStatus,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 
+const pendingInteractionMocks = vi.hoisted(() => ({
+  readForSession: vi.fn(),
+  bySessionId: {} as Record<string, { kind: string } | null>,
+}));
+
+vi.mock("#product/hooks/chat/derived/use-active-session-identity", () => ({
+  useActiveSessionId: () => "main-session",
+}));
+
+vi.mock("#product/hooks/chat/derived/use-active-pending-session-interactions", () => ({
+  usePendingInteractionStateForSession: (sessionId: string | null) => {
+    pendingInteractionMocks.readForSession(sessionId);
+    const primaryPendingInteraction = sessionId
+      ? pendingInteractionMocks.bySessionId[sessionId] ?? null
+      : null;
+    return {
+      pendingInteractions: primaryPendingInteraction ? [primaryPendingInteraction] : [],
+      pendingApproval: null,
+      pendingUserInput: null,
+      pendingMcpElicitation: null,
+      primaryPendingInteraction,
+    };
+  },
+}));
+
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
+  pendingInteractionMocks.bySessionId = {};
 });
 
 describe("TurnShell", () => {
@@ -55,13 +83,16 @@ describe("TurnAssistantActionRow", () => {
     expect(container.innerHTML).toContain("opacity-0 group-hover/turn:opacity-100");
   });
 
-  it("hover-gates the copy button on the final message too (never permanent chrome)", () => {
+  it("keeps the copy button permanently visible on the final completed message", () => {
+    // PRO-119: the persistent copy button is the transcript's "session is
+    // done" marker — without it a finished session is indistinguishable from
+    // a quiet running one.
     const { container } = render(
-      <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" />,
+      <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" alwaysVisible />,
     );
     const copyWrapper = container.querySelector("[data-turn-assistant-footer-slot] > span");
-    expect(copyWrapper?.className).toContain("opacity-0 group-hover/turn:opacity-100");
-    expect(copyWrapper?.className).not.toMatch(/(?<!:)opacity-100/);
+    expect(copyWrapper?.className).toContain("opacity-100");
+    expect(copyWrapper?.className).not.toContain("opacity-0");
   });
 
   it("hover-gates the date like the copy button", () => {
@@ -71,6 +102,16 @@ describe("TurnAssistantActionRow", () => {
     // (The outer copy-button wrapper span also has "5:02pm" as its
     // textContent since it contains the date span, so pick the innermost
     // match — the one with no further descendant spans.)
+    const timestamp = Array.from(container.querySelectorAll("span")).find(
+      (span) => span.textContent === "5:02pm" && span.querySelector("span") === null,
+    );
+    expect(timestamp?.className).toContain("opacity-0 group-hover/turn:opacity-100");
+  });
+
+  it("keeps the date hover-gated even when the copy button is permanent", () => {
+    const { container } = render(
+      <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" alwaysVisible />,
+    );
     const timestamp = Array.from(container.querySelectorAll("span")).find(
       (span) => span.textContent === "5:02pm" && span.querySelector("span") === null,
     );
@@ -161,6 +202,23 @@ describe("resolveTurnTrailingStatus", () => {
     // No more generic 8px "Waiting for your input" copy.
     expect(container.textContent).not.toContain("Waiting for your input");
     expect(container.innerHTML).not.toContain("text-xs");
+  });
+
+  it("reads the embedded transcript child's pending interaction instead of the active main session", () => {
+    pendingInteractionMocks.bySessionId = {
+      "main-session": { kind: "permission" },
+      "child-session": { kind: "user_input" },
+    };
+    const { container } = render(
+      <TranscriptContextProviders sessionId="child-session">
+        {resolveTurnTrailingStatus(STARTED_AT, "needs_input", null)}
+      </TranscriptContextProviders>,
+    );
+
+    expect(pendingInteractionMocks.readForSession).toHaveBeenCalledWith("child-session");
+    expect(pendingInteractionMocks.readForSession).not.toHaveBeenCalledWith("main-session");
+    expect(container.textContent).toContain("Question");
+    expect(container.textContent).not.toContain("Permission");
   });
 });
 

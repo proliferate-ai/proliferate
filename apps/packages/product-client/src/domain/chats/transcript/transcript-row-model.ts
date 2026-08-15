@@ -32,15 +32,33 @@ export type TranscriptRow =
     renderPresentation: TurnPresentation;
     isFirstTurnRow: boolean;
     isLastTurnRow: boolean;
+    /**
+     * True for exactly one row of the FIRST turn when a workspace-creation
+     * receipt should render. That row hosts the receipt as one of its
+     * tool-call-style entries — see `applyWorkspaceReceiptHost` for the
+     * selection rule and `TurnItemSequence` for how it renders (folded into
+     * the completed-history disclosure, or inline before the turn's first
+     * non-user-message content while streaming).
+     */
+    hostsWorkspaceReceipt?: boolean;
   }
   | {
     kind: "pending_prompt";
     key: `pending-prompt:${string}`;
+    /**
+     * True when no turn exists yet to host the workspace-creation receipt
+     * (worktree still being created, prompt queued). The pending-prompt row
+     * hosts it in its frontier slot instead of a standalone row — see
+     * `TranscriptPendingPromptRow`'s `workspaceReceipt` prop.
+     */
+    hostsWorkspaceReceipt?: boolean;
   }
   | {
     kind: "outbox_prompt";
     key: `prompt:${string}`;
     clientPromptId: string;
+    /** Same meaning as the `pending_prompt` variant's flag, above. */
+    hostsWorkspaceReceipt?: boolean;
   }
   | {
     kind: "goal_event";
@@ -81,6 +99,20 @@ export interface BuildTranscriptRowModelInput {
    * row can never be pushed before a row anchored to turn N or earlier.
    */
   goalEvents?: readonly GoalTranscriptEvent[];
+  /**
+   * Workspace-creation receipt identity, or null/undefined for none. Like
+   * goal rows, this is client-side composition only — the receipt derives
+   * from the workspace record + setup-status query, never from stored
+   * transcript content.
+   *
+   * It hosts as one of the first turn's tool calls once a turn exists (see
+   * `applyWorkspaceReceiptHost`). Before any turn exists — worktree still
+   * being created, the user's prompt queued — it hosts in the last prompt
+   * row's frontier slot instead (see `hostsWorkspaceReceipt` on the
+   * `pending_prompt`/`outbox_prompt` row variants). Callers must only pass
+   * it when the full history is loaded (no older pages above).
+   */
+  workspaceReceiptKey?: string | null;
 }
 
 export interface TranscriptRowModelCache {
@@ -105,10 +137,21 @@ export function buildTranscriptRowModel({
   latestTurnId,
   latestTurnHasAssistantRenderableContent,
   goalEvents = EMPTY_GOAL_EVENTS,
+  workspaceReceiptKey = null,
 }: BuildTranscriptRowModelInput, cache?: TranscriptRowModelCache): TranscriptRow[] {
   const rows: TranscriptRow[] = [];
   const seenTurnIds = new Set<string>();
   const goalRows = bucketGoalEventRows(goalEvents, transcript);
+
+  // The receipt reads as one of the first turn's tool calls: it hosts on
+  // whichever row of that turn will render the completed-history "Worked for
+  // Ns" disclosure (folding into it like any other tool call), or otherwise
+  // the turn's first row with non-user-message content, or otherwise the
+  // turn's first row — see `applyWorkspaceReceiptHost`. Only when no turn is
+  // renderable yet does it instead host in the last prompt row's frontier
+  // slot (below), so it still lands after the user's message rather than
+  // detached below a false "Thinking" status.
+  let turnHostedWorkspaceReceipt = false;
 
   rows.push(...goalRows.beforeFirstTurn);
 
@@ -130,6 +173,7 @@ export function buildTranscriptRowModel({
       continue;
     }
 
+    const hostsWorkspaceReceipt = workspaceReceiptKey != null && seenTurnIds.size === 0;
     seenTurnIds.add(turnId);
     const turnGoalRows = goalRows.byTurnId.get(turnId) ?? EMPTY_GOAL_ROWS;
     const needsLeadingSplit = turnGoalRows.length > 0;
@@ -140,6 +184,7 @@ export function buildTranscriptRowModel({
       cache,
       needsLeadingSplit,
       goalSeqBoundaries,
+      hostsWorkspaceReceipt,
     );
     // Interleave goal rows by seq among the turn's own rows.
     const interleavedRows = interleaveGoalRowsBySeq(
@@ -149,13 +194,18 @@ export function buildTranscriptRowModel({
       transcript,
     );
     rows.push(...interleavedRows);
+    if (hostsWorkspaceReceipt) {
+      turnHostedWorkspaceReceipt = true;
+    }
   }
 
+  let lastPromptRowIndex = -1;
   if (visibleOptimisticPrompt) {
     rows.push({
       kind: "pending_prompt",
       key: buildPendingPromptRowKey(activeSessionId),
     });
+    lastPromptRowIndex = rows.length - 1;
   }
 
   for (const entry of visibleOutboxEntries) {
@@ -164,6 +214,19 @@ export function buildTranscriptRowModel({
       key: buildOutboxPromptRowKey(entry.clientPromptId),
       clientPromptId: entry.clientPromptId,
     });
+    lastPromptRowIndex = rows.length - 1;
+  }
+
+  // No renderable turn hosts the receipt yet (brand-new workspace, or the
+  // only turn is hidden behind its local prompt echo): the receipt hosts in
+  // the last prompt row's frontier slot instead, so it still lands after the
+  // user's message. An empty transcript (no prompt rows either) renders no
+  // receipt at all.
+  if (workspaceReceiptKey != null && !turnHostedWorkspaceReceipt && lastPromptRowIndex !== -1) {
+    const promptRow = rows[lastPromptRowIndex];
+    if (promptRow.kind === "pending_prompt" || promptRow.kind === "outbox_prompt") {
+      rows[lastPromptRowIndex] = { ...promptRow, hostsWorkspaceReceipt: true };
+    }
   }
 
   if (cache) {
@@ -419,6 +482,46 @@ function interleaveGoalRowsBySeq(
   return result;
 }
 
+/**
+ * Selects the row that hosts the workspace-creation receipt among a turn's
+ * (already built) rows and marks it `hostsWorkspaceReceipt: true`. Preferred
+ * host, in order:
+ *   1. The row that renders the completed-history "Worked for Ns" disclosure
+ *      (`renderPresentation.completedHistorySummary` set) — the receipt
+ *      folds in as the disclosure's first child, collapsing with it.
+ *   2. Otherwise, the first row containing any non-user-message block — the
+ *      receipt renders inline before that block while the turn streams.
+ *   3. Otherwise, the turn's first row (e.g. a turn that is so far nothing
+ *      but the user's prompt) — the receipt renders after it.
+ * All other rows are returned unchanged (same references, so unrelated rows
+ * don't lose memoization).
+ */
+function applyWorkspaceReceiptHost(
+  rows: readonly Extract<TranscriptRow, { kind: "turn" }>[],
+  transcript: TranscriptState,
+): readonly Extract<TranscriptRow, { kind: "turn" }>[] {
+  if (rows.length === 0) {
+    return rows;
+  }
+  let hostIndex = rows.findIndex((row) =>
+    row.renderPresentation.completedHistorySummary !== null
+  );
+  if (hostIndex === -1) {
+    hostIndex = rows.findIndex((row) =>
+      row.renderPresentation.displayBlocks.some((block) =>
+        block.kind !== "item"
+        || transcript.itemsById[block.itemId]?.kind !== "user_message"
+      )
+    );
+  }
+  if (hostIndex === -1) {
+    hostIndex = 0;
+  }
+  return rows.map((row, index) =>
+    index === hostIndex ? { ...row, hostsWorkspaceReceipt: true } : row
+  );
+}
+
 export function buildTurnContentRowKey(
   turnId: string,
 ): `turn:${string}:block:${typeof TURN_CONTENT_BLOCK_KEY}` {
@@ -454,12 +557,14 @@ function buildTurnRows(
   cache: TranscriptRowModelCache | undefined,
   needsLeadingSplit: boolean,
   goalSeqBoundaries: readonly number[] = [],
+  hostsWorkspaceReceipt = false,
 ): TurnRowsResult {
   const cacheKey = createTranscriptTurnRowCacheKey(
     turn,
     transcript,
     needsLeadingSplit,
     goalSeqBoundaries,
+    hostsWorkspaceReceipt,
   );
   const cached = cache?.turnRowsById.get(turn.turnId) ?? null;
   if (cached && isTranscriptTurnRowCacheHit(cached, cacheKey)) {
@@ -473,6 +578,7 @@ function buildTurnRows(
     presentation,
     needsLeadingSplit,
     goalSeqBoundaries,
+    hostsWorkspaceReceipt,
   );
   cache?.turnRowsById.set(turn.turnId, {
     ...cacheKey,
@@ -487,7 +593,13 @@ function buildRowsForTurnPresentation(
   presentation: TurnPresentation,
   needsLeadingSplit: boolean,
   goalSeqBoundaries: readonly number[],
+  hostsWorkspaceReceipt: boolean,
 ): readonly Extract<TranscriptRow, { kind: "turn" }>[] {
+  const finalize = (
+    rows: readonly Extract<TranscriptRow, { kind: "turn" }>[],
+  ): readonly Extract<TranscriptRow, { kind: "turn" }>[] =>
+    hostsWorkspaceReceipt ? applyWorkspaceReceiptHost(rows, transcript) : rows;
+
   // When goal seq boundaries exist, skip the large-turn chunk early-return and
   // use the goal-partition path instead (the final slice's scoped collapse
   // absorbs the bulk). Goal-less turns keep the existing chunk behavior.
@@ -496,7 +608,7 @@ function buildRowsForTurnPresentation(
       ? chunkTurnDisplayBlocks(presentation)
       : [];
     if (chunks.length > 1) {
-      return chunks.map((chunk, index) => {
+      return finalize(chunks.map((chunk, index) => {
         const renderPresentation: TurnPresentation = {
           ...presentation,
           displayBlocks: chunk.blocks,
@@ -509,7 +621,7 @@ function buildRowsForTurnPresentation(
           isFirstTurnRow: index === 0,
           isLastTurnRow: index === chunks.length - 1,
         });
-      });
+      }));
     }
   }
 
@@ -525,7 +637,7 @@ function buildRowsForTurnPresentation(
       sortedBoundaries,
     );
     if (subRows.length > 1) {
-      return subRows;
+      return finalize(subRows);
     }
   }
 
@@ -552,18 +664,18 @@ function buildRowsForTurnPresentation(
         isFirstTurnRow: false,
         isLastTurnRow: true,
       });
-      return [leadingRow, restRow];
+      return finalize([leadingRow, restRow]);
     }
   }
 
-  return [buildTurnRow({
+  return finalize([buildTurnRow({
     turnId: turn.turnId,
     blockKey: TURN_CONTENT_BLOCK_KEY,
     presentation,
     renderPresentation: presentation,
     isFirstTurnRow: true,
     isLastTurnRow: true,
-  })];
+  })]);
 }
 
 /** Counts the turn's leading run of display blocks that are `user_message`

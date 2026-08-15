@@ -12,11 +12,13 @@ import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/avai
 import { missingCheckoutCopy } from "#product/copy/workspaces/workspace-availability-copy";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import {
   resolveWorkspaceSessionRecoverySendBlockedReason,
 } from "#product/lib/domain/workspaces/selection/session-recovery";
+import type { ModelSelectorSelection } from "#product/lib/domain/chat/models/model-selector-types";
 
 export type ChatAvailabilityState = ChatInputAvailabilityState;
 
@@ -24,9 +26,15 @@ export type ChatAvailabilityState = ChatInputAvailabilityState;
 // pure chat-input resolver; this hook only gathers React state.
 export function useChatAvailabilityState(options?: {
   activeSessionId?: string | null;
+  activeLaunchSelection?: ModelSelectorSelection | null;
+  launchReadiness?: {
+    isLoading: boolean;
+    isReady: boolean;
+    disabledReason: string | null;
+  };
 }): ChatAvailabilityState {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const storedActiveSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const workspaceSessionRecovery = useSessionSelectionStore(
@@ -43,7 +51,8 @@ export function useChatAvailabilityState(options?: {
   });
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
-  const configuredLaunch = useConfiguredLaunchReadiness();
+  const configuredLaunch = useConfiguredLaunchReadiness(options?.activeLaunchSelection ?? null);
+  const launchReadiness = options?.launchReadiness ?? configuredLaunch;
 
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const selectedLocalWorkspace = selectedCloudWorkspaceId === null
@@ -67,9 +76,9 @@ export function useChatAvailabilityState(options?: {
     selectedCloudRuntimePhase: selectedCloudRuntime.state?.phase ?? null,
     selectedCloudRuntimeActionBlockReason: selectedCloudRuntime.state?.actionBlockReason ?? null,
     activeSessionId,
-    isConfiguredLaunchLoading: configuredLaunch.isLoading,
-    hasReadyConfiguredLaunch: configuredLaunch.isReady,
-    configuredLaunchDisabledReason: configuredLaunch.disabledReason,
+    isConfiguredLaunchLoading: launchReadiness.isLoading,
+    hasReadyConfiguredLaunch: launchReadiness.isReady,
+    configuredLaunchDisabledReason: launchReadiness.disabledReason,
     sessionRecoverySendReason:
       workspaceSessionRecovery?.sessionId === activeSessionId
         ? resolveWorkspaceSessionRecoverySendBlockedReason(
@@ -81,9 +90,9 @@ export function useChatAvailabilityState(options?: {
   }), [
     activeSessionId,
     connectionState,
-    configuredLaunch.disabledReason,
-    configuredLaunch.isLoading,
-    configuredLaunch.isReady,
+    launchReadiness.disabledReason,
+    launchReadiness.isLoading,
+    launchReadiness.isReady,
     pendingWorkspaceEntry,
     primaryPendingInteractionKind,
     selectedCloudRuntime.state?.actionBlockReason,

@@ -122,7 +122,10 @@ export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItem
         )}
         {...props}
       >
-        {icon ? <span className="inline-flex shrink-0 items-center">{icon}</span> : null}
+        {/* The icons center on the line box, but the mostly-lowercase labels
+            carry their visual mass at x-height, below that center — sit the
+            glyph down a hair so it reads aligned with the word. */}
+        {icon ? <span className="inline-flex shrink-0 translate-y-[1px] items-center">{icon}</span> : null}
         <span className="inline-flex min-w-0 items-baseline gap-1 text-left">
           <span className="min-w-0 max-w-60 truncate font-normal">{value}</span>
         </span>

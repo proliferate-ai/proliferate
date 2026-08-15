@@ -14,6 +14,7 @@ use super::links::service::SessionLinkService;
 use super::mcp_bindings::crypto::SessionDataCipher;
 use super::mcp_bindings::model::SessionMcpServer;
 use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
+use super::mcp_bindings::workspace_attachment::WorkspaceMcpAttachmentError;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
@@ -24,6 +25,7 @@ use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAcc
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
+mod agent_creation;
 mod config;
 mod creation;
 mod fork;
@@ -35,14 +37,26 @@ mod launch_env;
 mod launch_env_tests;
 mod launch_policy;
 mod lifecycle;
+#[cfg(test)]
+mod lifecycle_tests;
 mod pending_prompts;
 mod prompt;
+#[cfg(test)]
+pub(crate) mod prompt_message_actor_tests;
+#[cfg(test)]
+mod prompt_message_cold_start_tests;
+#[cfg(test)]
+mod prompt_message_tests;
 mod replay;
 mod startup;
+mod startup_errors;
+mod subagent_lifecycle;
 #[cfg(test)]
 mod tests;
 pub(crate) mod view;
+mod workspace_mcp_attachment;
 
+pub use agent_creation::{CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError};
 pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
 pub(crate) use lifecycle::LiveTurnCancelOutcome;
 pub(crate) use prompt::TextPromptDispatchError;
@@ -109,6 +123,7 @@ pub enum CreateAndStartSessionError {
         session_id: String,
     },
     MissingDataKey,
+    WorkspaceMcpAttachmentFailed(WorkspaceMcpAttachmentError),
     /// Agent-auth route resolution refused the launch (fail-closed selection
     /// missing, malformed state file, unsupported route, ...). Typed so the
     /// API layer surfaces the stable machine code (`AGENT_ROUTE_*`).
@@ -130,6 +145,7 @@ pub enum EnsureLiveSessionError {
         path: String,
     },
     MissingDataKey,
+    WorkspaceMcpAttachmentFailed(WorkspaceMcpAttachmentError),
     /// See [`CreateAndStartSessionError::RouteAuth`].
     RouteAuth(RouteAuthError),
     /// A9 Scope C: the common live-start seam (`start_live_session`) now
@@ -178,6 +194,11 @@ pub enum SendPromptError {
         path: String,
     },
     InvalidPrompt(crate::domains::sessions::prompt::PromptValidationError),
+    WorkspaceMcpAttachmentFailed(WorkspaceMcpAttachmentError),
+    ProductContextUnavailable {
+        incident_id: String,
+        error: crate::live::sessions::product_context::AgentProductContextResolutionError,
+    },
     Internal(anyhow::Error),
 }
 
@@ -233,6 +254,7 @@ pub struct ForkSessionOutcome {
 pub enum PendingPromptMutationError {
     SessionNotFound(String),
     NotFound,
+    Protected,
     InvalidPrompt(crate::domains::sessions::prompt::PromptValidationError),
     Internal(anyhow::Error),
 }
@@ -249,6 +271,14 @@ pub enum PendingPromptQueueError {
 #[derive(Debug)]
 pub enum SessionLifecycleError {
     SessionNotFound(String),
+    Internal(anyhow::Error),
+}
+
+#[derive(Debug)]
+pub enum SubagentLifecycleError {
+    RelationshipNotFound,
+    OpenRequired,
+    Resume(EnsureLiveSessionError),
     Internal(anyhow::Error),
 }
 
@@ -346,6 +376,7 @@ pub(super) enum StartSessionError {
     Closed,
     MissingDataKey,
     RestartRequired(String),
+    WorkspaceMcpAttachmentFailed(WorkspaceMcpAttachmentError),
     /// Agent-auth route resolution refused the launch (fail-closed, spec §3).
     RouteAuth(RouteAuthError),
     /// A9 Scope C: `resolve_launch_agent`'s status was resolved at this seam
@@ -402,5 +433,10 @@ impl SessionRuntime {
 
     pub fn forget_live_session_for_mobility_blocking(&self, session_id: &str) {
         self.acp_manager.remove_session_blocking(session_id);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn product_mcp_launch_ids(&self) -> Vec<&'static str> {
+        self.product_mcp_launch_catalog.registered_product_ids()
     }
 }

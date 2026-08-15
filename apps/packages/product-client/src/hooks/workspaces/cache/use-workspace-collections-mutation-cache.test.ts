@@ -65,7 +65,6 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     updatedAt: "2026-05-30T17:00:00.000Z",
     repoRootId: null,
     lifecycleState: "active",
-    cleanupState: "complete",
     ...overrides,
   } as Workspace;
 }

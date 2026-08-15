@@ -13,8 +13,26 @@ use crate::domains::sessions::runtime_event::{
 use super::{SessionLifecycleError, SessionRuntime};
 
 use crate::live::sessions::ConditionalCancelOutcome;
+use crate::process_kill::PlaneKills;
 
 impl SessionRuntime {
+    /// Retire the in-memory actor while leaving the durable session fully
+    /// resumable. This is intentionally separate from terminal Close and
+    /// user-facing Dismiss semantics.
+    pub async fn unload_live_session_nonterminal(
+        &self,
+        session_id: &str,
+    ) -> Result<(), SessionLifecycleError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
+        let _record = self.get_session_or_not_found(session_id)?;
+        self.acp_manager
+            .unload_session_nonterminal(session_id)
+            .await
+            .map_err(SessionLifecycleError::Internal)
+    }
+
     pub async fn cancel_live_session(
         &self,
         session_id: &str,
@@ -52,35 +70,90 @@ impl SessionRuntime {
             .ok_or_else(|| SessionLifecycleError::SessionNotFound(session_id.to_string()))
     }
 
-    pub async fn force_retire_workspace_live_sessions_for_purge(
-        &self,
-        workspace_id: &str,
-    ) -> anyhow::Result<usize> {
+    /// Stop every live session in `workspace_id`: awaits each agent
+    /// process's confirmed death (group TERM → 5s grace → KILL) and moves
+    /// the session row to its stopped (`idle`) state, never `closed` or
+    /// `dismissed` — the whole point of archiving is that unarchive resumes.
+    /// Generalized from `force_retire_workspace_live_sessions_for_purge`,
+    /// which only dismissed handles and never awaited process death or wrote
+    /// a session row; purge inherits both new behaviors by calling this.
+    /// Infallible from the caller's point of view: a per-session error is
+    /// logged and folded into a zero contribution, matching the `_for_purge`
+    /// precedent.
+    ///
+    /// The per-session stops are driven CONCURRENTLY. Each `stop_and_await`
+    /// carries its own TERM → grace → KILL escalation, so a sequential walk
+    /// would stack one 5s grace window per live session and a workspace with
+    /// two of them could never fit R4's 8s `QUIESCE_DEADLINE`. One grace
+    /// window must cover the whole plane.
+    pub async fn stop_all_for_workspace(&self, workspace_id: &str) -> anyhow::Result<PlaneKills> {
         let sessions = self
             .session_service
             .store()
             .list_by_workspace(workspace_id)?;
-        let mut retired_count = 0usize;
 
-        for session in sessions {
-            let Some(handle) = self.acp_manager.get_handle(&session.id).await else {
-                self.acp_manager.remove_session(&session.id).await;
-                continue;
-            };
+        let stops = sessions.into_iter().map(|session| async move {
+            let mut kills = PlaneKills::default();
 
-            if let Err(error) = handle.dismiss().await {
-                tracing::warn!(
-                    session_id = %session.id,
-                    workspace_id = %workspace_id,
-                    error = %error,
-                    "failed to dismiss live session during workspace purge"
-                );
+            // A session with no live handle contributes no kills, but it
+            // still owns a row. Falling through to the row write rather than
+            // returning early is what makes an INTERRUPTED stop converge: the
+            // attempt that was dropped mid-flight may already have detached
+            // the actor without ever reaching the row, and skipping the write
+            // here would leave that row reading "running" for a session that
+            // is gone for good.
+            if let Some(handle) = self.acp_manager.get_handle(&session.id).await {
+                match handle.stop_and_await().await {
+                    Ok((total, git)) => {
+                        kills.total += total;
+                        kills.git += git;
+                    }
+                    Err(error) => {
+                        // Includes the actor that is already on its way out:
+                        // its mailbox closes the moment it decides to exit, so
+                        // the command is refused rather than answered. "Already
+                        // stopped" is exactly the outcome this primitive wants,
+                        // and a zero contribution states it honestly.
+                        tracing::warn!(
+                            session_id = %session.id,
+                            workspace_id = %workspace_id,
+                            error = %error,
+                            "failed to stop live session during workspace stop"
+                        );
+                    }
+                }
             }
             self.acp_manager.remove_session(&session.id).await;
-            retired_count += 1;
+
+            // Only a live row moves to its stopped state - never rewrite a
+            // row that already reads "closed"/"completed"/"errored", which
+            // `update_status` guards against for `closed_at` but not against
+            // for the status value itself.
+            if matches!(session.status.as_str(), "starting" | "running") {
+                let now = chrono::Utc::now().to_rfc3339();
+                if let Err(error) =
+                    self.session_service
+                        .store()
+                        .update_status(&session.id, "idle", &now)
+                {
+                    tracing::warn!(
+                        session_id = %session.id,
+                        workspace_id = %workspace_id,
+                        error = %error,
+                        "failed to move session to its stopped state during workspace stop"
+                    );
+                }
+            }
+            kills
+        });
+
+        let mut kills = PlaneKills::default();
+        for session_kills in futures::future::join_all(stops).await {
+            kills.total += session_kills.total;
+            kills.git += session_kills.git;
         }
 
-        Ok(retired_count)
+        Ok(kills)
     }
 
     async fn close_session_actor_and_mark_closed(
@@ -148,9 +221,24 @@ impl SessionRuntime {
             }
             self.close_session_tree(&link.child_session_id, visited)
                 .await?;
-            self.session_link_service
+            // close_session_tree above already closed this link from the
+            // child's side, so the record is the authority on who observed
+            // the transition: only the caller whose write flipped it reports
+            // the cause, and the link is logged exactly once.
+            let newly_closed = self
+                .session_link_service
                 .close_link(&link.id, &now)
                 .map_err(SessionLifecycleError::Internal)?;
+            if newly_closed {
+                tracing::info!(
+                    target: "anyharness.subagent.link_closed",
+                    parent_session_id = %link.parent_session_id,
+                    child_session_id = %link.child_session_id,
+                    relation = link.relation.as_str(),
+                    cause = "parent_session_closed",
+                    "subagent: link closed"
+                );
+            }
             closed_child_session_ids.insert(link.child_session_id);
         }
         for session_id in extension_close_session_ids {
@@ -197,9 +285,20 @@ impl SessionRuntime {
             ) {
                 continue;
             }
-            self.session_link_service
+            let newly_closed = self
+                .session_link_service
                 .close_link(&link.id, &now)
                 .map_err(SessionLifecycleError::Internal)?;
+            if newly_closed {
+                tracing::info!(
+                    target: "anyharness.subagent.link_closed",
+                    parent_session_id = %link.parent_session_id,
+                    child_session_id = %link.child_session_id,
+                    relation = link.relation.as_str(),
+                    cause = "child_session_closed",
+                    "subagent: link closed"
+                );
+            }
         }
         Ok(())
     }
@@ -236,6 +335,7 @@ impl SessionRuntime {
     pub async fn restore_dismissed_session(
         &self,
         workspace_id: &str,
+        expected_session_id: &str,
     ) -> Result<Option<SessionRecord>, SessionLifecycleError> {
         self.access_gate
             .assert_can_mutate_for_workspace(workspace_id)
@@ -249,7 +349,7 @@ impl SessionRuntime {
         let Some(restored) = self
             .session_service
             .store()
-            .pop_last_dismissed_in_workspace(workspace_id, &now)
+            .pop_last_dismissed_in_workspace(workspace_id, Some(expected_session_id), &now)
             .map_err(SessionLifecycleError::Internal)?
         else {
             tracing::info!(

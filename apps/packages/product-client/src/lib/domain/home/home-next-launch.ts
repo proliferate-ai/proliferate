@@ -18,7 +18,6 @@ import {
 } from "#product/lib/domain/agents/model-options";
 import { resolveModelForRegistry } from "#product/lib/domain/chat/launch/session-config";
 import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
-import { buildLocalSlotLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 
 export type HomeNextRepositorySelection =
   | { kind: "auto" }
@@ -76,6 +75,32 @@ export type HomeLaunchTarget =
     defaultBranch: string | null;
   }
   | { kind: "cloud"; gitOwner: string; gitRepoName: string; baseBranch: string };
+
+/**
+ * What one Home submit did.
+ *
+ * A boolean could not tell the composer whether to put the prompt back: a
+ * submit that collapsed into the identical launch already running started no
+ * new work, but the work *is* running, so restoring the draft would hand the
+ * user back a prompt that is already being answered. The four cases are what
+ * the two callers actually branch on — the composer restores the draft for
+ * everything except `launched` and `duplicate`, and the launch-intent pane's
+ * Retry clears the intent it replaced only when a replacement intent exists
+ * (`launched`, `not-started`).
+ */
+export type HomeNextLaunchOutcome =
+  /** Work started: it is running, queued, or waiting on a cloud workspace. */
+  | "launched"
+  /**
+   * Attempted and ended without starting work — creation failed, or the user
+   * dismissed the pending workspace. It minted a launch intent, which owns the
+   * outcome's presentation.
+   */
+  | "not-started"
+  /** Collapsed into the identical submit already in flight; nothing minted. */
+  | "duplicate"
+  /** Never attempted: no launch slot, no such target on this host, no prompt. */
+  | "refused";
 
 export function resolveHomeModelAvailabilityState(input: {
   isLoading: boolean;
@@ -231,16 +256,13 @@ export function resolveHomeNextDefaultBranchName(input: {
 export function findHomeNextLocalWorkspace(input: {
   workspaces: Workspace[];
   repoRootId: string;
-  archivedWorkspaceIds: string[];
   workspaceLastInteracted: Record<string, string>;
 }): Workspace | null {
-  const archivedWorkspaceIdSet = new Set(input.archivedWorkspaceIds);
   return input.workspaces
     .filter((workspace) =>
       workspace.repoRootId === input.repoRootId
       && workspace.kind === "local"
       && workspace.surface !== "cowork"
-      && !isWorkspaceArchived(workspace.id, archivedWorkspaceIdSet)
     )
     .sort((left, right) => {
       const byInteraction =
@@ -334,16 +356,12 @@ export function findHomeNextMatchingWorkspace(input: {
   workspaces: Workspace[];
   repoRootId: string;
   branchName: string;
-  archivedWorkspaceIds: string[];
   workspaceLastInteracted: Record<string, string>;
 }): Workspace | null {
-  const archivedWorkspaceIdSet = new Set(input.archivedWorkspaceIds);
-
   return input.workspaces
     .filter((workspace) =>
       workspace.repoRootId === input.repoRootId
       && workspace.surface !== "cowork"
-      && !isWorkspaceArchived(workspace.id, archivedWorkspaceIdSet)
       && rawWorkspaceBranch(workspace) === input.branchName
     )
     .sort((left, right) => {
@@ -361,9 +379,4 @@ export function findHomeNextMatchingWorkspace(input: {
 
       return left.id.localeCompare(right.id);
     })[0] ?? null;
-}
-
-function isWorkspaceArchived(workspaceId: string, archivedWorkspaceIdSet: Set<string>): boolean {
-  return archivedWorkspaceIdSet.has(workspaceId)
-    || archivedWorkspaceIdSet.has(buildLocalSlotLogicalWorkspaceId(workspaceId));
 }

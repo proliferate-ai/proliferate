@@ -6,6 +6,7 @@ use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::domains::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::terminals::TerminalService;
+use crate::process_kill::PlaneKills;
 
 #[derive(Clone)]
 pub struct WorkspaceSetupRuntime {
@@ -104,6 +105,58 @@ impl WorkspaceSetupRuntime {
             .acquire_shared(&workspace.id, WorkspaceOperationKind::SetupCommand)
             .await;
         self.start_setup_for_record(workspace, command, base_ref)
+            .await
+    }
+
+    /// Kill whatever setup or archive-script run is active for
+    /// `workspace_id` and await its confirmed death. NO operation-gate lease
+    /// and NO access-gate assertion: this is a stop primitive called from
+    /// inside a flow (quiesce, R4) that already holds the workspace's
+    /// exclusive lease - acquiring a second lease here would deadlock
+    /// against the caller. Zero counts means no run was active; a plane
+    /// error is the caller's to fold to zero (`unwrap_or_default()`), not
+    /// this method's to retry.
+    pub async fn kill_setup_run(&self, workspace_id: &str) -> anyhow::Result<PlaneKills> {
+        self.terminal_service
+            .kill_active_run_for_workspace(workspace_id)
+            .await
+    }
+
+    /// Runs `script` in the workspace's worktree and awaits its exit (or the
+    /// same 300s default timeout `start_setup` uses, on which the run is
+    /// killed and the caller proceeds - a script failure or timeout is the
+    /// caller's to interpret, non-fatal for archive). The script runs after
+    /// the snapshot the caller already took, so its own effects are
+    /// invisible to it. Takes the script CONTENT as a parameter and stores
+    /// nothing runtime-side - the content lives in `repo_environment`
+    /// (cloud state, R6) and is resolved and sent by the client at click
+    /// time. No lease, no access gate, for the same reason as
+    /// `kill_setup_run`.
+    pub async fn run_archive_script(
+        &self,
+        workspace_id: &str,
+        script: &str,
+    ) -> anyhow::Result<std::process::ExitStatus> {
+        let script = script.trim();
+        if script.is_empty() {
+            anyhow::bail!(WorkspaceSetupError::InvalidCommand);
+        }
+        let record = self.load_workspace(workspace_id.to_string()).await?;
+        let env_vars = {
+            let workspace_runtime = self.workspace_runtime.clone();
+            let record = record.clone();
+            tokio::task::spawn_blocking(move || {
+                workspace_runtime.build_workspace_env(&record, None)
+            })
+            .await??
+        };
+        self.terminal_service
+            .run_blocking_command_for_workspace(
+                &record.id,
+                &record.path,
+                script.to_string(),
+                env_vars,
+            )
             .await
     }
 

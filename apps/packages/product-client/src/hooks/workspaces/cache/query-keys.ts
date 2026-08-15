@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type { Query, QueryClient } from "@tanstack/react-query";
 import type { WorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
 
 export function workspaceCollectionsRootKey() {
@@ -7,6 +7,16 @@ export function workspaceCollectionsRootKey() {
 
 export function workspaceCollectionsScopeKey(runtimeUrl: string) {
   return [...workspaceCollectionsRootKey(), runtimeUrl] as const;
+}
+
+/**
+ * The archived-workspaces list query. Deliberately its own key, not folded
+ * into the active-collections cache: the two lists are disjoint by
+ * construction (the server's `lifecycle` filter is the single source of
+ * truth), so there is nothing to merge.
+ */
+export function archivedWorkspacesKey(runtimeUrl: string) {
+  return ["workspaces", "archived", runtimeUrl] as const;
 }
 
 function workspaceCollectionsUserScopeKey(
@@ -29,10 +39,26 @@ export function getWorkspaceCollectionsFromCache(
   runtimeUrl: string,
   authUserId: string | null = null,
 ): WorkspaceCollections | undefined {
-  const matchingQueries = queryClient.getQueryCache().findAll({
+  return pickFreshestCollections(queryClient.getQueryCache().findAll({
     queryKey: workspaceCollectionsUserScopeKey(runtimeUrl, authUserId),
-  });
+  }));
+}
 
+// Scope-level read: matches every collections query for the runtime
+// regardless of auth-user/cloud key segments, for callers that don't know
+// which variant is live.
+export function getAnyWorkspaceCollectionsFromCache(
+  queryClient: QueryClient,
+  runtimeUrl: string,
+): WorkspaceCollections | undefined {
+  return pickFreshestCollections(queryClient.getQueryCache().findAll({
+    queryKey: workspaceCollectionsScopeKey(runtimeUrl),
+  }));
+}
+
+function pickFreshestCollections(
+  matchingQueries: Query[],
+): WorkspaceCollections | undefined {
   return matchingQueries
     .map((query) => ({
       data: query.state.data,
@@ -52,10 +78,8 @@ function isWorkspaceCollections(value: unknown): value is WorkspaceCollections {
 
   const candidate = value as Partial<Record<keyof WorkspaceCollections, unknown>>;
   return Array.isArray(candidate.localWorkspaces)
-    && Array.isArray(candidate.retiredLocalWorkspaces)
     && Array.isArray(candidate.repoRoots)
     && Array.isArray(candidate.cloudWorkspaces)
     && Array.isArray(candidate.workspaces)
-    && Array.isArray(candidate.allWorkspaces)
-    && Array.isArray(candidate.cleanupAttentionWorkspaces);
+    && Array.isArray(candidate.allWorkspaces);
 }

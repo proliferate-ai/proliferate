@@ -7,8 +7,8 @@ import { ChatInputControlRow } from "#product/components/workspace/chat/input/Ch
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { ComposerFileMentionSearch } from "#product/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
-import { ComposerTextarea } from "#product/primitives/patterns/ComposerTextarea";
-import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
+import { ComposerTextarea } from "#product/primitives/patterns/composer/ComposerTextarea";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/composer/ComposerTextareaFrame";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,
@@ -37,8 +37,13 @@ import {
   createPlaygroundEnvironmentTargetState,
 } from "#product/lib/domain/chat/__fixtures__/playground/environment-fixtures";
 import { PlaygroundAttachmentComposerSurface } from "#product/components/playground/PlaygroundAttachmentFixtures";
+import { renderComposerBlockedSurface } from "#product/components/playground/composer-slots/PlaygroundComposerBlockedFixtures";
 
 export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNode {
+  const blockedSurface = renderComposerBlockedSurface(scenario);
+  if (blockedSurface) {
+    return blockedSurface;
+  }
   switch (scenario) {
     case "composer-long-input":
       return <PlaygroundLongInputComposerSurface />;
@@ -51,7 +56,15 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
         />
       );
     case "workspace-status-card":
-      return <PlaygroundComposerSurface statusControl={<PlaygroundWorkspaceStatusControl />} />;
+      // The card is no longer a composer control (the statusControl slot is
+      // gone), but the fixture is still the only place its full anatomy can be
+      // inspected — so the playground mounts it beside the composer.
+      return (
+        <div className="flex flex-col items-start gap-3">
+          <PlaygroundWorkspaceStatusControl />
+          <PlaygroundComposerSurface />
+        </div>
+      );
     case "status-live-stream":
       return <PlaygroundComposerSurface interactive />;
     case "slash-command-search":
@@ -70,11 +83,9 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
 export function PlaygroundComposerSurface({
   ultra = false,
   interactive = false,
-  statusControl,
 }: {
   ultra?: boolean;
   interactive?: boolean;
-  statusControl?: ReactNode;
 }) {
   const [draft, setDraft] = useState("");
   const [editorSnapshot, setEditorSnapshot] = useState<ChatComposerEditorSnapshot>();
@@ -111,7 +122,7 @@ export function PlaygroundComposerSurface({
             />
           )}
         </div>
-        <PlaygroundComposerControlRow ultra={ultra} statusControl={statusControl} />
+        <PlaygroundComposerControlRow ultra={ultra} />
       </form>
     </ChatComposerSurface>
   );
@@ -203,7 +214,7 @@ function PlaygroundFileMentionComposerSurface({
           results={results}
           highlightedIndex={0}
           listRef={listRef}
-          query="tok"
+          query="a"
           isLoading={false}
           isError={false}
           isPending={false}
@@ -223,7 +234,7 @@ function PlaygroundFileMentionComposerSurface({
             data-telemetry-mask
             className="mb-2 flex min-h-14 flex-grow select-text items-start px-5 text-composer text-foreground"
           >
-            <span>Look at @tok</span>
+            <span>Look at @a</span>
           </div>
           <PlaygroundComposerControlRow />
         </form>
@@ -296,10 +307,8 @@ function usePlaygroundLiveControls(controls: LiveSessionControlDescriptor[]) {
 
 function PlaygroundComposerControlRow({
   ultra = false,
-  statusControl,
 }: {
   ultra?: boolean;
-  statusControl?: ReactNode;
 }) {
   const baseControls = useMemo(
     () => (ultra
@@ -314,7 +323,6 @@ function PlaygroundComposerControlRow({
       runtimeControlsDisabled={false}
       modelSelectorProps={createPlaygroundModelSelectorProps()}
       agentKind="codex"
-      statusControl={statusControl}
       sessionConfigControls={sessionConfigControls}
       isEditingQueuedPrompt={false}
       chatDisabled={false}

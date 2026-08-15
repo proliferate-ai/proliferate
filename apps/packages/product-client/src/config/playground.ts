@@ -4,7 +4,6 @@ export type ScenarioKey =
   | "todos-short"
   | "todos-mid"
   | "todos-long"
-  | "todo-strip-with-approval"
   | "execute-approval"
   | "edit-approval"
   | "interaction-motion"
@@ -28,7 +27,9 @@ export type ScenarioKey =
   | "slash-command-empty"
   | "file-mention-search"
   | "file-mention-empty"
-  | "workspace-arrival-created"
+  | "workspace-receipt-setup-succeeded"
+  | "workspace-receipt-setup-failed"
+  | "worktree-missing"
   | "cloud-first-runtime"
   | "cloud-provisioning"
   | "cloud-applying-files"
@@ -83,6 +84,9 @@ export type ScenarioKey =
   | "subagents-queued-wake"
   | "subagents-queued-wake-with-approval"
   | "subagent-wake-card"
+  | "agent-operations-receipts"
+  | "agent-operations-grouping-insertion"
+  | "agent-operations-pending-aggregate"
   | "goal-active-short"
   | "goal-active-long"
   | "goal-active-pause-disabled"
@@ -121,7 +125,6 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "todos-short": { label: "Todos (3)" },
   "todos-mid": { label: "Todos (5)" },
   "todos-long": { label: "Todos (12)" },
-  "todo-strip-with-approval": { label: "Todo strip + approval" },
   "execute-approval": { label: "Execute approval" },
   "edit-approval": { label: "Edit approval" },
   "interaction-motion": { label: "Interaction motion" },
@@ -145,7 +148,9 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "slash-command-empty": { label: "Slash commands empty" },
   "file-mention-search": { label: "File mentions" },
   "file-mention-empty": { label: "File mentions empty" },
-  "workspace-arrival-created": { label: "Workspace arrival" },
+  "workspace-receipt-setup-succeeded": { label: "Creation receipt (setup succeeded)" },
+  "workspace-receipt-setup-failed": { label: "Creation receipt (setup failed)" },
+  "worktree-missing": { label: "Composer takeover: worktree missing" },
   "cloud-first-runtime": { label: "Cloud first runtime" },
   "cloud-provisioning": { label: "Cloud provisioning" },
   "cloud-applying-files": { label: "Cloud applying files" },
@@ -200,6 +205,9 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "subagents-queued-wake": { label: "Subagent queued wake" },
   "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
   "subagent-wake-card": { label: "Subagent wake card" },
+  "agent-operations-receipts": { label: "Agent operation receipts" },
+  "agent-operations-grouping-insertion": { label: "Agent receipt insertion" },
+  "agent-operations-pending-aggregate": { label: "Agent pending aggregate" },
   "goal-active-short": { label: "Goal active (codex)" },
   "goal-active-long": { label: "Goal long objective" },
   "goal-active-pause-disabled": { label: "Goal active (claude)" },

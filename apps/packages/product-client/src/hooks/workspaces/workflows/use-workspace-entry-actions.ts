@@ -35,7 +35,13 @@ import {
 import {
   failPendingWorkspaceEntry,
   finalizePendingWorkspaceSelection,
+  type WorkspaceEntryFinalizationResult,
 } from "#product/hooks/workspaces/workflows/workspace-entry-finalization";
+import {
+  getPendingWorkspaceEntry,
+  isAttemptLive,
+  patchAttempt,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 import {
   runLightweightLocalWorkspaceEntry,
   runLightweightWorktreeWorkspaceEntry,
@@ -47,9 +53,6 @@ import type {
 } from "#product/hooks/workspaces/workflows/workspace-entry-types";
 
 const EMPTY_REPO_ROOTS: RepoRoot[] = [], EMPTY_WORKSPACES: Workspace[] = [];
-
-const isAttemptCurrent = (attemptId: string): boolean =>
-  useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
 
 function requestChatInputFocus(): void { useChatInputStore.getState().requestFocus(); }
 
@@ -74,7 +77,7 @@ export function useWorkspaceEntryActions() {
       repoGroupKeyToExpand?: string | null;
       knownWorkspace?: Workspace | null;
     },
-  ): Promise<boolean> => {
+  ): Promise<WorkspaceEntryFinalizationResult> => {
     return finalizePendingWorkspaceSelection({
       entry,
       workspaceId,
@@ -115,7 +118,7 @@ export function useWorkspaceEntryActions() {
     }
 
     const entry = buildSubmittingPendingEntry({
-      attemptId: createAttemptId(),
+      attemptId: options?.attemptId ?? createAttemptId(),
       selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
       source: "local-created",
       displayName: resolveDisplayNameFromPath(sourceRoot),
@@ -135,23 +138,22 @@ export function useWorkspaceEntryActions() {
         workspaceId: workspace.id,
         requestElapsedMs: elapsedMs(startedAt),
       });
-      if (!isAttemptCurrent(entry.attemptId)) {
+      if (!isAttemptLive(entry.attemptId)) {
         return null;
       }
       const selectionEntry: PendingWorkspaceEntry = {
         ...entry,
         workspaceId: workspace.id,
       };
-      const selectionFinalized = await finalizeSelection(selectionEntry, workspace.id, {
+      // `committed` without `selected` is a background completion: the user
+      // switched away mid-create and the launch finished behind them.
+      const selection = await finalizeSelection(selectionEntry, workspace.id, {
         repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
         knownWorkspace: workspace,
       });
-      return selectionFinalized ? { workspaceId: workspace.id, projectedSessionId } : null;
+      return selection.committed ? { workspaceId: workspace.id, projectedSessionId } : null;
     } catch (error) {
-      const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
-      const workspaceId = currentPending?.attemptId === entry.attemptId
-        ? currentPending.workspaceId
-        : null;
+      const workspaceId = getPendingWorkspaceEntry(entry.attemptId)?.workspaceId ?? null;
       failPendingEntry(
         workspaceId
           ? {
@@ -183,18 +185,16 @@ export function useWorkspaceEntryActions() {
     await createLocalWorkspaceAndEnterInternal(sourceRoot, options);
   }, [createLocalWorkspaceAndEnterInternal]);
 
-  const createLocalWorkspaceAndEnterWithResult = useCallback(async (
+  // Null means the user dismissed the pending workspace, not that creation
+  // failed: real failures throw from the internal action.
+  const createLocalWorkspaceAndEnterWithResult = useCallback((
     sourceRoot: string,
     options?: WorkspaceEntryOptions,
-  ): Promise<WorkspaceEntryResult> => {
-    const result = await createLocalWorkspaceAndEnterInternal(sourceRoot, {
+  ): Promise<WorkspaceEntryResult | null> => {
+    return createLocalWorkspaceAndEnterInternal(sourceRoot, {
       ...options,
       throwOnFailure: true,
     });
-    if (!result) {
-      throw new Error("Workspace creation was interrupted.");
-    }
-    return result;
   }, [createLocalWorkspaceAndEnterInternal]);
 
   const createWorktreeAndEnterInternal = useCallback(async (
@@ -231,7 +231,7 @@ export function useWorkspaceEntryActions() {
       });
     }
 
-    const attemptId = createAttemptId();
+    const attemptId = options?.attemptId ?? createAttemptId();
     let entry: PendingWorkspaceEntry | null = null;
     let projectedSessionId: string | null = null;
 
@@ -279,10 +279,7 @@ export function useWorkspaceEntryActions() {
         baseBranchName: resolved.params.baseRef,
         request: { kind: "worktree", input: resolvedInput, retryInput: normalizedInput },
       };
-      const pendingAtResolve = useSessionSelectionStore.getState().pendingWorkspaceEntry;
-      if (pendingAtResolve?.attemptId === attemptId) {
-        useSessionSelectionStore.getState().setPendingWorkspaceEntry(resolvedEntry);
-      }
+      patchAttempt(attemptId, resolvedEntry);
       entry = resolvedEntry;
       logLatency("workspace.worktree.resolve.success", {
         attemptId: entry.attemptId,
@@ -318,7 +315,7 @@ export function useWorkspaceEntryActions() {
         createElapsedMs: elapsedMs(createStartedAt),
         totalElapsedMs: elapsedMs(startedAt),
       });
-      if (!isAttemptCurrent(entry.attemptId)) {
+      if (!isAttemptLive(entry.attemptId)) {
         return null;
       }
 
@@ -331,19 +328,21 @@ export function useWorkspaceEntryActions() {
         setupScript: result.setupScript ?? null,
       });
 
-      const selectionFinalized = await finalizeSelection(selectionEntry, result.workspace.id, {
+      // `committed` without `selected` is a background completion: the user
+      // switched away mid-create and the launch finished behind them.
+      const selection = await finalizeSelection(selectionEntry, result.workspace.id, {
         latencyFlowId: options?.latencyFlowId,
         repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(result.workspace, repoRoots),
         knownWorkspace: result.workspace,
       });
-      if (!selectionFinalized) {
+      if (!selection.committed) {
         return null;
       }
       return { workspaceId: result.workspace.id, projectedSessionId };
     } catch (error) {
-      const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+      const currentPending = getPendingWorkspaceEntry(attemptId);
       failLatencyFlow(options?.latencyFlowId, "worktree_enter_failed");
-      if (entry && currentPending?.attemptId === attemptId) {
+      if (entry && currentPending) {
         failPendingEntry(
           currentPending,
           resolveErrorMessage(error, "Failed to create worktree."),
@@ -372,18 +371,16 @@ export function useWorkspaceEntryActions() {
     await createWorktreeAndEnterInternal(input, options);
   }, [createWorktreeAndEnterInternal]);
 
-  const createWorktreeAndEnterWithResult = useCallback(async (
+  // Null means the user dismissed the pending worktree, not that creation
+  // failed: real failures throw from the internal action.
+  const createWorktreeAndEnterWithResult = useCallback((
     input: string | CreateWorktreeWorkspaceInput,
     options?: WorkspaceEntryOptions,
-  ): Promise<WorkspaceEntryResult> => {
-    const result = await createWorktreeAndEnterInternal(input, {
+  ): Promise<WorkspaceEntryResult | null> => {
+    return createWorktreeAndEnterInternal(input, {
       ...options,
       throwOnFailure: true,
     });
-    if (!result) {
-      throw new Error("Worktree creation was interrupted.");
-    }
-    return result;
   }, [createWorktreeAndEnterInternal]);
 
   return {

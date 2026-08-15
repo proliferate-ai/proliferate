@@ -2,8 +2,8 @@ import type { RefObject } from "react";
 import {
   ComposerInlineMenuPanel,
   ComposerInlineMenuRow,
-  ComposerInlineMenuStatusRow,
 } from "#product/components/workspace/chat/input/ComposerInlineMenu";
+import { PickerEmptyRow } from "#product/primitives/patterns/PickerPopoverContent";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import type { FileMentionResult } from "#product/lib/domain/chat/composer/file-mention-search";
 
@@ -66,9 +66,9 @@ export function ComposerFileMentionSearch({
           />
         ))
       ) : (
-        <ComposerInlineMenuStatusRow>
-          {mentionStatusMessage({ query, isLoading, isError, isPending, runtimeReady })}
-        </ComposerInlineMenuStatusRow>
+        <PickerEmptyRow
+          label={mentionStatusMessage({ query, isLoading, isError, isPending, runtimeReady })}
+        />
       )}
     </ComposerInlineMenuPanel>
   );

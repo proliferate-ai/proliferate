@@ -20,6 +20,11 @@ import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useWorkspaceEntryFlow } from "#product/hooks/workspaces/workflows/use-workspace-entry-flow";
+import {
+  getPendingWorkspaceEntry,
+  isAttemptAttended,
+  isAttemptLive,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { useCloudAgentCatalog } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
@@ -60,6 +65,9 @@ export function useCoworkThreadWorkflow() {
   const { upsertLocalWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
   const setPendingWorkspaceEntry = useSessionSelectionStore(
     (state) => state.setPendingWorkspaceEntry,
+  );
+  const clearPendingWorkspaceEntry = useSessionSelectionStore(
+    (state) => state.clearPendingWorkspaceEntry,
   );
   const activateWorkspace = useSessionSelectionStore((state) => state.activateWorkspace);
   const { beginPendingWorkspace } = useWorkspaceEntryFlow();
@@ -106,6 +114,7 @@ export function useCoworkThreadWorkflow() {
   }, [location.pathname, navigate]);
 
   const createThreadWithResolvedConfig = useCallback(async (input: {
+    attemptId?: string;
     agentKind: string;
     modelId: string;
     modeId?: string | null;
@@ -135,10 +144,9 @@ export function useCoworkThreadWorkflow() {
       elapsedSince,
       logLatency,
       getSelectedWorkspaceId: () => useSessionSelectionStore.getState().selectedWorkspaceId,
-      getPendingWorkspaceEntry: () =>
-        useSessionSelectionStore.getState().pendingWorkspaceEntry,
-      isAttemptCurrent: (attemptId) =>
-        useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId,
+      getPendingWorkspaceEntry,
+      isAttemptLive,
+      isAttemptAttended,
       setThreadsCollapsed: (collapsed) => {
         useWorkspaceUiStore.getState().setThreadsCollapsed(collapsed);
       },
@@ -165,6 +173,7 @@ export function useCoworkThreadWorkflow() {
       setDraftText,
       clearDraft,
       setPendingWorkspaceEntry,
+      clearPendingWorkspaceEntry,
       activateWorkspace,
       rememberLastViewedSession,
       trackWorkspaceInteraction,
@@ -187,6 +196,7 @@ export function useCoworkThreadWorkflow() {
     runtimeUrl,
     setDraftText,
     activateWorkspace,
+    clearPendingWorkspaceEntry,
     setPendingWorkspaceEntry,
     showToast,
     upsertLocalWorkspace,
@@ -267,6 +277,7 @@ export function useCoworkThreadWorkflow() {
   ]);
 
   const createThreadFromSelection = useCallback(async (input: {
+    attemptId?: string;
     agentKind: string;
     modelId: string;
     modeId?: string | null;
@@ -275,6 +286,7 @@ export function useCoworkThreadWorkflow() {
     sourceWorkspaceId?: string | null;
   }) => {
     return createThreadWithResolvedConfig({
+      attemptId: input.attemptId,
       agentKind: input.agentKind,
       modelId: input.modelId,
       modeId: input.modeId,

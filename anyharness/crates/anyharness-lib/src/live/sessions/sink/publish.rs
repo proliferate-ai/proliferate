@@ -14,6 +14,18 @@ impl SessionEventSink {
         turn_id: Option<String>,
         item_id: Option<String>,
     ) {
+        if self
+            .staged_terminal
+            .as_ref()
+            .is_some_and(|staged| !staged.is_drafting)
+        {
+            tracing::error!(
+                session_id = %self.session_id,
+                failure_code = "terminal_sequence_fenced",
+                "event rejected while a frozen terminal transaction is unresolved"
+            );
+            return;
+        }
         // Anything emitted into an open engine-initiated turn (beyond its own
         // start/end boundaries) marks it non-empty for the post-dispatch
         // sweep (see `sweep_empty_engine_turn`).
@@ -26,6 +38,26 @@ impl SessionEventSink {
             )
         {
             self.engine_turn_has_events = true;
+        }
+        if self
+            .staged_terminal
+            .as_ref()
+            .is_some_and(|staged| staged.is_drafting)
+        {
+            let envelope = build_session_event(
+                &self.session_id,
+                &mut self.next_seq,
+                event,
+                turn_id,
+                item_id,
+            );
+            self.staged_terminal
+                .as_mut()
+                .expect("terminal stage exists")
+                .input
+                .events
+                .push(envelope);
+            return;
         }
         let envelope = publish_session_event(
             &self.session_id,
@@ -40,6 +72,25 @@ impl SessionEventSink {
     }
 }
 
+pub(super) fn build_session_event(
+    session_id: &str,
+    next_seq: &mut i64,
+    event: SessionEvent,
+    turn_id: Option<String>,
+    item_id: Option<String>,
+) -> SessionEventEnvelope {
+    let seq = *next_seq;
+    *next_seq += 1;
+    SessionEventEnvelope {
+        session_id: session_id.to_string(),
+        seq,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        turn_id,
+        item_id,
+        event,
+    }
+}
+
 pub(crate) fn publish_session_event(
     session_id: &str,
     next_seq: &mut i64,
@@ -49,25 +100,16 @@ pub(crate) fn publish_session_event(
     turn_id: Option<String>,
     item_id: Option<String>,
 ) -> SessionEventEnvelope {
-    let seq = *next_seq;
-    *next_seq += 1;
-    let timestamp = chrono::Utc::now().to_rfc3339();
-    let event_type = event.event_type().to_string();
+    let envelope = build_session_event(session_id, next_seq, event, turn_id, item_id);
+    let seq = envelope.seq;
+    let timestamp = envelope.timestamp.clone();
+    let event_type = envelope.event.event_type().to_string();
     tracing::info!(
         session_id = %session_id,
         seq = seq,
         event_type = %event_type,
         "event_sink: emitting event"
     );
-
-    let envelope = SessionEventEnvelope {
-        session_id: session_id.to_string(),
-        seq,
-        timestamp: timestamp.clone(),
-        turn_id: turn_id.clone(),
-        item_id: item_id.clone(),
-        event,
-    };
 
     let payload_json = serde_json::to_string(&envelope.event).unwrap_or_default();
     tracing::debug!(session_id = %session_id, seq = seq, "event_sink: event persisted");
@@ -77,8 +119,8 @@ pub(crate) fn publish_session_event(
         seq,
         timestamp,
         event_type,
-        turn_id,
-        item_id,
+        turn_id: envelope.turn_id.clone(),
+        item_id: envelope.item_id.clone(),
         payload_json,
     };
     if let Err(e) = store.append_event(&record) {
@@ -132,6 +174,13 @@ pub(super) fn publish_session_event_strict(
             .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))?;
     }
     *next_seq += 1;
+    tracing::info!(
+        target: "anyharness.session.event_injected",
+        session_id = %session_id,
+        seq = seq,
+        event_type = %record.event_type,
+        "event_sink: injecting runtime event"
+    );
     let _ = event_tx.send(envelope.clone());
     Ok(envelope)
 }

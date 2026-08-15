@@ -1,11 +1,12 @@
 import type { BillingReturnSurface } from "@proliferate/cloud-sdk";
 import { BillingSettingsPane } from "#product/components/billing/BillingSettingsPane";
+import { BillingBalanceNotice } from "#product/components/patterns/BillingGateState";
 import {
-  BillingBalanceNotice,
   billingGateView,
   toBillingGateReason,
-} from "#product/components/patterns/BillingGateState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+} from "#product/lib/domain/billing/billing-gate-presentation";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import {
   BillingAutoTopUpCard,
   BillingPlanCard,
@@ -106,8 +107,9 @@ export function BillingSettingsSurface({
     : null;
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Billing"
         description="Manage usage and billing details."
       />
@@ -204,6 +206,6 @@ export function BillingSettingsSurface({
           </>
         ) : null}
       </BillingSettingsPane>
-    </section>
+    </SettingsPageBody>
   );
 }

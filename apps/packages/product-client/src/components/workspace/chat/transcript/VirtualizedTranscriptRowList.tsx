@@ -38,7 +38,7 @@ export function VirtualizedTranscriptRowList({
   selectedWorkspaceId,
   activeSessionId,
   isSessionBusy,
-  pendingPromptText,
+  lastPromptSubmittedAtMs,
   onLoadOlderHistory,
   onScrollSample,
   renderRow,
@@ -73,6 +73,7 @@ export function VirtualizedTranscriptRowList({
     scrollRef,
     onScrollSample,
     autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
+    lastPromptSubmittedAtMs,
   });
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
@@ -323,7 +324,7 @@ export function VirtualizedTranscriptRowList({
     scrollToBottom();
   }, [
     isSessionBusy,
-    pendingPromptText,
+    lastPromptSubmittedAtMs,
     pinnedRef,
     renderableRows.length,
     scrollToBottom,

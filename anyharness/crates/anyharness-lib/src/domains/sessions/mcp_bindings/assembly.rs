@@ -6,7 +6,11 @@ use anyharness_contract::v1::SessionMcpBindingSummary;
 use super::crypto::SessionDataCipher;
 use super::model::SessionMcpServer;
 use super::product_catalog::ProductMcpLaunchCatalog;
-use super::summaries::serialize_binding_summaries;
+use super::product_launch::ProductMcpLaunchError;
+use super::summaries::{serialize_binding_summaries, SessionMcpSummaryError};
+use super::workspace_attachment::{
+    is_retired_subagents_mcp_binding_summary_id, summary_error_class, WorkspaceMcpAttachmentError,
+};
 use crate::domains::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras,
 };
@@ -29,6 +33,7 @@ pub struct SessionMcpLaunchAssembly {
 pub enum SessionMcpLaunchAssemblyError {
     MissingDataKey,
     RestartRequired(String),
+    WorkspaceAttachment(WorkspaceMcpAttachmentError),
     Internal(anyhow::Error),
 }
 
@@ -46,7 +51,16 @@ pub fn assemble_session_mcp_launch(
         .map_err(SessionMcpLaunchAssemblyError::Internal)?;
     let mut product_extras = product_mcp_launch_catalog
         .resolve_launch_extras(workspace, record)
-        .map_err(SessionMcpLaunchAssemblyError::Internal)?;
+        .map_err(map_product_mcp_launch_error)?;
+    let workspace_selected = product_extras
+        .mcp_servers
+        .iter()
+        .any(|server| match server {
+            SessionMcpServer::Http(server) => {
+                server.connection_id == crate::domains::agent_operations::mcp::definition::ID
+            }
+            SessionMcpServer::Stdio(_) => false,
+        });
     launch_extras
         .system_prompt_append
         .append(&mut product_extras.system_prompt_append);
@@ -76,9 +90,42 @@ pub fn assemble_session_mcp_launch(
         launch_extras.system_prompt_append,
     );
     let mcp_binding_summaries_json =
-        merge_extension_binding_summaries(record, &launch_extras.mcp_binding_summaries)?;
+        merge_extension_binding_summaries(record, &launch_extras.mcp_binding_summaries).map_err(
+            |error| {
+                // One serialization failure, two different 500 shapes
+                // depending on `workspace_selected`
+                // (WORKSPACE_MCP_ATTACHMENT_FAILED vs the generic internal
+                // code). This field is the only way to tell them apart.
+                tracing::warn!(
+                    target: "anyharness.workspace_mcp.summary_serialization_failed",
+                    session_id = %record.id,
+                    workspace_selected,
+                    error_class = summary_error_class(&error),
+                    "session MCP binding summary assembly failed"
+                );
+                if workspace_selected {
+                    SessionMcpLaunchAssemblyError::WorkspaceAttachment(
+                        WorkspaceMcpAttachmentError::summary_assembly(anyhow::Error::new(error)),
+                    )
+                } else {
+                    SessionMcpLaunchAssemblyError::Internal(anyhow::Error::new(error))
+                }
+            },
+        )?;
     mcp_servers.extend(launch_extras.mcp_servers);
     dedupe_mcp_servers(&mut mcp_servers);
+
+    // Emitted only once the summary merge above has succeeded, so this event
+    // is never a false positive against a summary_assembly failure that
+    // still fails the launch.
+    if workspace_selected {
+        tracing::info!(
+            target: "anyharness.workspace_mcp.attached",
+            session_id = %record.id,
+            workspace_id = %workspace.id,
+            "Workspace MCP attached to session launch"
+        );
+    }
 
     Ok(SessionMcpLaunchAssembly {
         mcp_servers,
@@ -86,6 +133,16 @@ pub fn assemble_session_mcp_launch(
         first_prompt_system_prompt_append,
         mcp_binding_summaries_json,
     })
+}
+
+fn map_product_mcp_launch_error(error: ProductMcpLaunchError) -> SessionMcpLaunchAssemblyError {
+    if error.product_mcp_id() == crate::domains::agent_operations::mcp::definition::ID {
+        SessionMcpLaunchAssemblyError::WorkspaceAttachment(
+            WorkspaceMcpAttachmentError::from_product_launch(error),
+        )
+    } else {
+        SessionMcpLaunchAssemblyError::Internal(anyhow::Error::new(error))
+    }
 }
 
 fn dedupe_mcp_servers(servers: &mut Vec<SessionMcpServer>) {
@@ -169,24 +226,33 @@ fn merge_system_prompt_append(
 fn merge_extension_binding_summaries(
     record: &SessionRecord,
     extension_summaries: &[SessionMcpBindingSummary],
-) -> Result<Option<String>, SessionMcpLaunchAssemblyError> {
-    if extension_summaries.is_empty() {
-        return Ok(None);
-    }
+) -> Result<Option<String>, SessionMcpSummaryError> {
     let mut summaries = record
         .to_contract()
         .mcp_binding_summaries
         .unwrap_or_default();
+    let has_retired_subagents_summary = summaries
+        .iter()
+        .any(|summary| is_retired_subagents_mcp_binding_summary_id(&summary.id));
+    if extension_summaries.is_empty() && !has_retired_subagents_summary {
+        return Ok(None);
+    }
+    // PR10 has no compatibility alias for the retired Subagents product MCP.
+    // Scrub its persisted launch summary while assembling the replacement so
+    // upgraded sessions cannot continue advertising a server that no longer
+    // exists.
+    summaries.retain(|summary| !is_retired_subagents_mcp_binding_summary_id(&summary.id));
     for summary in extension_summaries {
-        if summaries.iter().all(|existing| existing.id != summary.id) {
+        if let Some(existing) = summaries
+            .iter_mut()
+            .find(|existing| existing.id == summary.id)
+        {
+            *existing = summary.clone();
+        } else {
             summaries.push(summary.clone());
         }
     }
-    serialize_binding_summaries(Some(summaries)).map_err(|error| {
-        SessionMcpLaunchAssemblyError::Internal(anyhow::anyhow!(
-            "serialize MCP binding summaries: {error}"
-        ))
-    })
+    serialize_binding_summaries(Some(summaries))
 }
 
 #[cfg(test)]
@@ -198,12 +264,16 @@ mod tests {
     use crate::domains::sessions::mcp_bindings::model::{
         SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
     };
+    use crate::domains::sessions::mcp_bindings::product_launch::ProductMcpLaunchRegistration;
     use crate::domains::sessions::model::SessionMcpBindingPolicy;
     use crate::domains::workspaces::model::{
-        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
         WorkspaceSurface,
     };
     use crate::origin::OriginContext;
+
+    mod binding_summaries;
+    mod workspace_attachment;
 
     #[derive(Clone)]
     struct StaticExtension {
@@ -237,11 +307,10 @@ mod tests {
             origin: Some(OriginContext::api_local_runtime()),
             creator_context: None,
             lifecycle_state: WorkspaceLifecycleState::Active,
-            cleanup_state: WorkspaceCleanupState::None,
-            cleanup_operation: None,
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
+            archived_head_sha: None,
+            archived_branch: None,
+            archived_at: None,
+            partial_capture_json: None,
             created_at: "2026-03-25T00:00:00Z".to_string(),
             updated_at: "2026-03-25T00:00:00Z".to_string(),
         }
@@ -460,20 +529,17 @@ mod tests {
     }
 
     #[test]
-    fn assemble_launch_merges_existing_and_extension_binding_summaries_in_order() {
+    fn assemble_launch_scrubs_retired_subagents_summary_without_replacement_extensions() {
         let mut record = session_record();
-        record.mcp_binding_summaries_json =
-            serde_json::to_string(&vec![summary("user-1", "user")]).ok();
-        let extension: Arc<dyn SessionExtension> = Arc::new(StaticExtension {
-            extras: SessionLaunchExtras {
-                mcp_binding_summaries: vec![summary("product-1", "product")],
-                ..SessionLaunchExtras::default()
-            },
-        });
+        record.mcp_binding_summaries_json = serde_json::to_string(&vec![
+            summary("user-1", "user"),
+            summary("internal:subagents", "subagents"),
+        ])
+        .ok();
 
         let assembled = assemble_session_mcp_launch(
             None,
-            &[extension],
+            &[],
             &ProductMcpLaunchCatalog::disabled(),
             &workspace_record(),
             &record,
@@ -484,32 +550,7 @@ mod tests {
             serde_json::from_str(&assembled.mcp_binding_summaries_json.expect("summaries"))
                 .expect("parse summaries");
 
-        assert_eq!(summaries.len(), 2);
+        assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, "user-1");
-        assert_eq!(summaries[1].id, "product-1");
-    }
-
-    #[test]
-    fn assemble_launch_rejects_invalid_extension_binding_summary() {
-        let mut invalid_summary = summary("product-1", "product");
-        invalid_summary.id = "product binding".to_string();
-        let extension: Arc<dyn SessionExtension> = Arc::new(StaticExtension {
-            extras: SessionLaunchExtras {
-                mcp_binding_summaries: vec![invalid_summary],
-                ..SessionLaunchExtras::default()
-            },
-        });
-
-        let error = assemble_session_mcp_launch(
-            None,
-            &[extension],
-            &ProductMcpLaunchCatalog::disabled(),
-            &workspace_record(),
-            &session_record(),
-            None,
-        )
-        .expect_err("invalid summary");
-
-        assert!(matches!(error, SessionMcpLaunchAssemblyError::Internal(_)));
     }
 }

@@ -1,36 +1,23 @@
 /**
  * PR status rendered as a dot (UX spec §2/§3).
  *
- * The dot is 6px, colored per PR state, and carries a tooltip with the PR
- * number + state. Two render modes:
- *  - `PrStatusDot` — standalone dot (workspaces page rows, after branch name)
- *  - `PrStatusIconOverlay` — wraps a row icon and anchors the dot on its
- *    bottom-right corner (web sidebar rows; the desktop sidebar renders
- *    PR state via SidebarWorkspaceGitGlyph instead), mirroring codex's
- *    `--pr-status-dot-color` circle-on-icon pattern.
+ * The dot itself is the `StatusDot` primitive; this file is the thin domain
+ * seam that turns a `PrStatusView` into that primitive's two axes plus a
+ * tooltip. The tone/fill mapping lives beside `PrStatusKind` in
+ * [pr-status-presentation.ts](../../lib/domain/workspaces/git-status/pr-status-presentation.ts)
+ * (`prStatusTone`), per the presenter-function rule in specs/DESIGN_SYSTEM.md.
  *
- * Tone rules (spec §3.3): every dot tone is an OPAQUE color — no alpha
- * tokens. open → `success`, checks failing / closed → `destructive`,
- * pending → HOLLOW `warning-foreground` ring (the solid warning hue, since
- * `warning` itself is a low-alpha surface tint), changes requested →
- * filled `warning-foreground`, draft → `muted-foreground`, merged →
- * `pr-merged` (GitHub-convention purple; never `info`, which is the unread
- * color). Cross-app tokens, so the component works on desktop and web.
+ * `PrStatusIconOverlay` used to live here — a `relative inline-flex` wrapper
+ * anchoring the dot on a row glyph's bottom-right corner. Positioning is
+ * layout, which feature code owns, so its one call site (the sidebar repo
+ * row) now writes those four classes in place.
  */
-import type { ReactNode } from "react";
-import { twMerge } from "#product/primitives/utils/tw-merge";
-import type { PrStatusKind, PrStatusView } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
-
-const PR_STATUS_TONE: Record<PrStatusKind, string> = {
-  open: "bg-success",
-  checks_failing: "bg-destructive",
-  // Hollow: pending is the only in-flight state — an outline, not a fill.
-  pending: "border border-warning-foreground bg-transparent",
-  changes_requested: "bg-warning-foreground",
-  draft: "bg-muted-foreground",
-  merged: "bg-pr-merged",
-  closed: "bg-destructive",
-};
+import { StatusDot } from "#product/primitives/StatusDot";
+import {
+  prStatusTone,
+  type PrStatusKind,
+  type PrStatusView,
+} from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 
 const PR_STATUS_LABEL: Record<PrStatusKind, string> = {
   open: "Open",
@@ -66,46 +53,14 @@ export function PrStatusDot({
   withNativeTitle?: boolean;
 }) {
   const tooltip = prStatusTooltip(status);
+  const { tone, fill } = prStatusTone(status.kind);
   return (
-    <span
-      role="img"
-      aria-label={tooltip}
+    <StatusDot
+      tone={tone}
+      fill={fill}
+      label={tooltip}
       title={withNativeTitle ? tooltip : undefined}
-      className={twMerge(
-        "inline-block size-1.5 shrink-0 rounded-full",
-        PR_STATUS_TONE[status.kind],
-        className,
-      )}
+      className={className}
     />
-  );
-}
-
-/**
- * Anchors the PR dot on the bottom-right of a row icon.
- * Renders children unchanged when no status is present. The dot sits fully
- * off the 14px glyph's strokes as a bare opaque dot — no ring halo, which
- * reads wrong on hovered/active alpha-overlay rows.
- */
-export function PrStatusIconOverlay({
-  status,
-  children,
-  className = "",
-}: {
-  status: PrStatusView | null | undefined;
-  children: ReactNode;
-  className?: string;
-}) {
-  if (!status) {
-    return <>{children}</>;
-  }
-  return (
-    <span className={twMerge("relative inline-flex items-center justify-center", className)}>
-      {children}
-      <PrStatusDot
-        status={status}
-        withNativeTitle={false}
-        className="absolute -bottom-px -right-px"
-      />
-    </span>
   );
 }

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { UserAvatar } from "#product/primitives/UserAvatar";
 
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import type { AccountProviderView } from "#product/lib/domain/auth/account-profile-presentation";
 import {
   AccountPasswordCredentialRow,
@@ -75,7 +76,7 @@ export function AccountSettingsPane({
   actions,
   accessDescription,
   providersTitle = "Sign-in methods",
-  providersDescription = "How you sign in to this account across desktop, web, and mobile.",
+  providersDescription,
   connectedServicesTitle = "Connected services",
   connectedServicesDescription = "Authorize services Proliferate uses inside managed cloud sandboxes.",
   connectedServices = [],
@@ -96,97 +97,91 @@ export function AccountSettingsPane({
 
   return (
     <div className="space-y-6">
-      {/* 1. Profile header */}
-      <SettingsSection>
-        <AccountProfileHeader
-          avatarUrl={avatarUrl ?? null}
-          displayName={displayName}
-          email={email}
-          profileSummary={profileSummary}
-          signOut={actions.signOut}
-        />
-      </SettingsSection>
+      {/* Identity sits on the page background, not inside a wash card. */}
+      <AccountProfileHeader
+        avatarUrl={avatarUrl ?? null}
+        displayName={displayName}
+        email={email}
+        githubLabel={githubLabel}
+        profileSummary={profileSummary}
+        signOut={actions.signOut}
+      />
 
-      {/* 2. Sign-in methods */}
       <SettingsSection
         title={providersTitle}
         description={signInMethodsDescription}
         action={sectionAction}
       >
-        <div className={ACCOUNT_PANEL_CLASS}>
-          {effectiveProviders.map((row) => (
-            <SignInMethodRow
-              key={`${row.provider.provider}-${row.provider.accountLabel ?? row.provider.label}`}
-              provider={row.provider}
-              actions={row.actions}
-              githubLabel={githubLabel}
-            />
-          ))}
-          {passwordCredential ? (
-            <AccountPasswordCredentialRow credential={passwordCredential} />
-          ) : null}
-        </div>
+        {effectiveProviders.map((row) => (
+          <SignInMethodRow
+            key={`${row.provider.provider}-${row.provider.accountLabel ?? row.provider.label}`}
+            provider={row.provider}
+            actions={row.actions}
+            githubLabel={githubLabel}
+          />
+        ))}
+        {passwordCredential ? (
+          <AccountPasswordCredentialRow credential={passwordCredential} />
+        ) : null}
       </SettingsSection>
 
-      {/* 3. Connected services */}
       {connectedServices.length > 0 ? (
         <SettingsSection title={connectedServicesTitle} description={connectedServicesDescription}>
-          <div className={ACCOUNT_PANEL_CLASS}>
-            {connectedServices.map((service) => (
-              <ConnectedServiceRow key={service.id} service={service} />
-            ))}
-          </div>
+          {connectedServices.map((service) => (
+            <ConnectedServiceRow key={service.id} service={service} />
+          ))}
         </SettingsSection>
       ) : null}
 
-      {/* 4. Footer */}
       {error ? <p className="text-ui text-destructive">{error}</p> : null}
     </div>
   );
 }
 
-/**
- * Rows sit in a bordered panel rather than on a raised fill. The old
- * `bg-surface-elevated-secondary` block read as a shaded slab with no edge,
- * which put the account's rows on a different footing from every other boxed
- * group in Settings; a border and the card plane is the shared treatment.
- */
-const ACCOUNT_PANEL_CLASS = "rounded-xl border border-border bg-card px-4";
-
 function AccountProfileHeader({
   avatarUrl,
   displayName,
   email,
+  githubLabel,
   profileSummary,
   signOut,
 }: {
   avatarUrl: string | null;
   displayName: string;
   email: string;
+  githubLabel: string;
   profileSummary: string;
   signOut?: AccountActionView;
 }) {
+  // A GitHub handle reads as "@login"; anything else (a status word like
+  // "Not connected" or "Unavailable") isn't an identity to show next to the
+  // glyph, so the third line falls back to the profile summary instead.
+  const hasGitHubHandle = githubLabel.trim().startsWith("@");
+
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+    <div className="flex items-center gap-4">
       <UserAvatar
         key={avatarUrl ?? "account-avatar"}
         avatarUrl={avatarUrl}
         displayName={displayName}
-        className="size-12 shrink-0 rounded-full text-heading font-medium"
+        className="size-16 shrink-0 rounded-full text-heading font-medium"
       />
       <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="truncate text-body-emphasis text-foreground">{displayName}</div>
+        <span className="block truncate text-body-emphasis font-medium text-foreground">
+          {displayName}
+        </span>
         <div className="truncate text-ui-sm text-muted-foreground">{email}</div>
-        <p className="text-ui-sm text-muted-foreground">{profileSummary}</p>
+        {hasGitHubHandle ? (
+          <div className="flex items-center gap-1.5 text-ui-sm text-muted-foreground">
+            <ProviderBrandIcon provider="github" className="icon-compact shrink-0" />
+            <span className="truncate">{githubLabel}</span>
+          </div>
+        ) : (
+          <p className="text-ui-sm text-muted-foreground">{profileSummary}</p>
+        )}
       </div>
-      {/*
-       * Sign out belongs on the identity it signs out of, not alone at the
-       * bottom of the pane. In the footer it was separated from the account it
-       * acts on by two unrelated sections, which is how a destructive-adjacent
-       * action ends up being read as applying to whatever sits above it.
-       */}
       {signOut ? (
-        <div className="shrink-0 sm:ml-auto">
+        <div className="shrink-0">
           <AccountAction action={signOut} variant="secondary" />
         </div>
       ) : null}

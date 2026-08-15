@@ -154,9 +154,8 @@ impl MobilityRuntime {
         let movable_ids = movable_session_ids(&session_facts)
             .into_iter()
             .collect::<HashSet<_>>();
-        let (_links, _completions, _wake_schedules, partial_graph) = self
-            .subagent_service
-            .mobility_graph_for_sessions(&movable_ids)
+        let partial_graph = self
+            .partial_session_link_graph(&movable_ids)
             .map_err(MobilityError::Internal)?;
 
         // --- decide --------------------------------------------------------
@@ -232,5 +231,33 @@ impl MobilityRuntime {
             sessions,
             warnings,
         })
+    }
+
+    fn partial_session_link_graph(
+        &self,
+        session_ids: &HashSet<String>,
+    ) -> anyhow::Result<Vec<String>> {
+        let mut blockers = Vec::new();
+        for session_id in session_ids {
+            for link in self
+                .session_link_service
+                .list_by_parent_including_closed(session_id)?
+            {
+                if !session_ids.contains(&link.child_session_id) && link.closed_at.is_none() {
+                    blockers.push(link.child_session_id);
+                }
+            }
+            for link in self
+                .session_link_service
+                .list_by_child_including_closed(session_id)?
+            {
+                if !session_ids.contains(&link.parent_session_id) && link.closed_at.is_none() {
+                    blockers.push(link.parent_session_id);
+                }
+            }
+        }
+        blockers.sort();
+        blockers.dedup();
+        Ok(blockers)
     }
 }

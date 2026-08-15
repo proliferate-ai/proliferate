@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type {
   ChatTranscriptOutboxActions,
   ChatTranscriptViewProps,
@@ -8,6 +8,12 @@ import { ChatContentSearchQueryContext } from "./ChatContentSearchContext";
 import { useChatTranscriptCopySelection } from "#product/hooks/chat/ui/use-chat-transcript-copy-selection";
 import { useChatTranscriptRowRenderer } from "#product/hooks/chat/ui/use-chat-transcript-row-renderer";
 import { useChatTranscriptViewModel } from "#product/hooks/chat/ui/use-chat-transcript-view-model";
+import {
+  ConnectedSelectedResponseActionMenu,
+  type SelectedResponsePendingAnnotation,
+} from "#product/components/workspace/chat/transcript/SelectedResponseActionMenu";
+import { ConnectedSelectedResponseAnnotationComposer } from "#product/components/workspace/chat/transcript/SelectedResponseAnnotationComposer";
+import { ConnectedSelectedResponseAnnotationMarkers } from "#product/components/workspace/chat/transcript/SelectedResponseAnnotationMarkers";
 
 const noop = () => {};
 const NOOP_OUTBOX_ACTIONS: ChatTranscriptOutboxActions = {
@@ -28,6 +34,8 @@ export function ChatTranscriptView({
   scrollHandleRef,
 }: ChatTranscriptViewProps) {
   const selectionRootRef = useRef<HTMLDivElement>(null);
+  const [pendingAnnotation, setPendingAnnotation] =
+    useState<SelectedResponsePendingAnnotation | null>(null);
   const searchQuery = contentSearch?.query.trim() ? contentSearch.query.trim() : null;
   const model = useChatTranscriptViewModel({
     state,
@@ -35,7 +43,7 @@ export function ChatTranscriptView({
     renderTurnTrailingStatus,
   });
 
-  useChatTranscriptCopySelection({
+  const transcriptSelection = useChatTranscriptCopySelection({
     selectionRootRef,
     transcript: model.transcript,
     visibleTurnIds: model.visibleTurnIds,
@@ -80,7 +88,7 @@ export function ChatTranscriptView({
         isSessionBusy={
           model.sessionViewState === "working" || model.sessionViewState === "needs_input"
         }
-        pendingPromptText={model.visibleOptimisticPrompt?.text ?? null}
+        lastPromptSubmittedAtMs={model.lastPromptSubmittedAtMs}
         onLoadOlderHistory={model.onLoadOlderHistory}
         onScrollSample={onScrollSample}
         renderRow={renderVirtualRow}
@@ -88,6 +96,25 @@ export function ChatTranscriptView({
         columnClassName={model.columnClassName}
         gutterClassName={model.gutterClassName}
         scrollHandleRef={scrollHandleRef}
+      />
+      {transcriptSelection.selectedResponse ? (
+        <ConnectedSelectedResponseActionMenu
+          selection={transcriptSelection.selectedResponse}
+          focusRequestNonce={transcriptSelection.menuFocusRequestNonce}
+          onDismiss={transcriptSelection.dismissSelectedResponse}
+          onAnnotationAdded={setPendingAnnotation}
+        />
+      ) : null}
+      {pendingAnnotation ? (
+        <ConnectedSelectedResponseAnnotationComposer
+          key={pendingAnnotation.id}
+          annotation={pendingAnnotation}
+          onDone={() => setPendingAnnotation(null)}
+        />
+      ) : null}
+      <ConnectedSelectedResponseAnnotationMarkers
+        rootRef={selectionRootRef}
+        suppressedAnnotationId={pendingAnnotation?.id ?? null}
       />
     </ChatContentSearchQueryContext.Provider>
   );

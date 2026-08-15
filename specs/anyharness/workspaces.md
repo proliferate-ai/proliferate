@@ -135,8 +135,20 @@ checkout and git state, but have distinct workspace ids and therefore distinct
 session lists and runtime session state.
 
 For `kind=worktree`, create remains path-unique. A worktree workspace owns its
-materialized checkout path, so active worktree path collisions and pending
-retired cleanup for the same worktree path still block creation.
+materialized checkout path, so two kinds of claim on that path block creation:
+
+- an ACTIVE worktree workspace already recorded at the path, and
+- an ARCHIVED worktree workspace recorded at the path
+  (`find_archived_by_path_and_kind`,
+  `anyharness/crates/anyharness-lib/src/domains/workspaces/store/lookups.rs`).
+
+The archived clause replaced the retire-era "pending retired cleanup" predicate,
+which is gone with the `cleanup_*` columns. It is deliberately wider than what
+it replaced: archiving reserves a workspace's recorded path for the row's whole
+lifetime, because unarchive restores in place and never relocates, so a path
+handed to a new workspace is a path its owner can never come back to. The same
+refusal applies at all four callers - creation, exact-ref materialization, the
+mobility destination, and identity registration.
 
 ### Create Worktree
 
@@ -267,6 +279,87 @@ The durable workspace rows are loaded and stored through:
 - file path safety
 - hosting-provider PR operations
 
+### Archive
+
+`domains/workspaces/archive/` is the archiving-workspaces feature's module, and
+`WorkspaceArchiveService` is its orchestrator — a service struct with injected
+dependencies, constructed directly in `app/mod.rs` alongside its sibling
+`WorkspacePurgeService` (`domains/workspaces/deletion/purge.rs`); there is no
+separate wiring family struct for this pair (R5). The ADR's `rt.` pseudocode is
+shorthand; there is no runtime god object and domains may not import
+`AppState`.
+
+Three guarantees shape the whole module:
+
+- **Archive answers at the flip.** Everything the user waits for happens before
+  `mark_archived`; the archive script, the worktree removal, and the branch
+  delete run detached afterwards and can each fail without failing the request.
+  That is safe because "leftover" is a DERIVED listing fact, never a stored
+  state, so nothing needs repairing — only converging.
+- **Undo is cheap.** The detached tail carries a generation-tagged cancellation
+  token registered BEFORE the flip (so row-visibility implies token-existence),
+  and unarchive fires it and awaits confirmed process death. A cancel that lands
+  before removal starts skips removal entirely, so the directory is intact and
+  the restore happens in place — which makes Undo-mid-script the CHEAPEST path
+  in the system rather than the most expensive.
+- **Nothing destructive runs on a guess.** Every path comparison resolves both
+  sides through `path_identity.rs`, in whichever direction is safe for the
+  caller: `same_path` (an unresolvable comparison counts as a claim) for the
+  claim gate, whose `true` answer refuses, and `same_path_strict` (an
+  unresolvable comparison counts as somebody else's) for "is this git
+  registration ours?", whose `true` answer admits a reclaim or a prune. Every
+  destructive step also re-reads its row under the workspace's gate lease.
+
+The module's files: `archive.rs` and `unarchive.rs` (the two flows), `phase2.rs`
+(the detached tail plus the leftover predicate), `tiers.rs` (unarchive's pure
+scenario decision), `tokens.rs` (the cancellation map), `inflight.rs` (the
+path-claim exclusion), `quiesce.rs` (the three plane stops), `sweep.rs` (the
+reconciler of last resort), `refs.rs`, and `types.rs`.
+
+Two mechanisms are worth knowing before reading any of it:
+
+- **The leftover predicate** (`phase2::is_leftover`): `kind == Worktree &&
+  lifecycle == Archived && archived_head_sha.is_some() &&
+  !checkout_directory_missing() && !any_other_row_claims_path()`. Every term is
+  load-bearing. The kind guard stops the sweep deleting a user's own checkout;
+  the snapshot guard stops it deleting never-snapshotted work on a sha-NULL row;
+  the path-ownership guard stops "cleaning A's leftover" from deleting B's live
+  worktree.
+- **The claim narrowing** (`store::any_other_row_claims_path`): exactly one
+  shape is excused from claiming its path, an archived row that carries an
+  `archived_head_sha`; every other row claims, including one whose lifecycle
+  value this binary does not recognise. Without the narrowing, two sha-bearing
+  archived rows recording one path each read as the other's claimant and both
+  stay wedged forever. Without the fail-closed direction, a lifecycle state
+  added by a newer binary would read as "not a claimant" to an older one, which
+  is the reading that ends in a deletion.
+
+`sweep.rs` runs a boot pass plus a slow tick, suppressed under `cfg(test)` at
+the wiring site following the `AppState::automatic_poke_engine` precedent — a
+background pass that removes directories would otherwise land in the middle of
+suites that build real worktrees and count what is on disk.
+
+`archive/refs.rs` is the ADR's one stated carve-out from "adapters/git owns
+every git verb": it is the sole reader/writer of the private
+`refs/proliferate/archive-*` namespace (`archive-heads`, `archive-worktrees`,
+`archive-indexes`, plus the exempt `rescue/<id>-<sha>/...` family), shelling
+`git update-ref` / `show-ref --verify` / `for-each-ref` directly rather than
+going through `adapters/git`. `adapters/git` still owns every worktree,
+index, and content verb; only this one namespace's ref-plumbing lives in the
+domain. `scripts/check_anyharness_boundaries.py` says nothing about
+`std::process::Command`, so this passes the automated boundary checker; the
+sole-writer rule is a design invariant enforced by review (grep for
+`update-ref`/`show-ref`/`for-each-ref` against `refs/proliferate/` across the
+tree), not by a script.
+
+`QuiesceReport` — the evidence a later rung's kill-debris repair keys off
+(how many git processes were actually killed, and when quiescing completed)
+— is defined in `adapters/git/types.rs`, not in `archive/quiesce.rs`, even
+though the ADR's design places it in the domain: `adapters/**` may not import
+`crate::domains::**` (`ADAPTERS_PRODUCT_DOMAIN_IMPORT`), so the adapter's
+`repair_kill_debris` cannot consume a domain-owned type. `archive/quiesce.rs`
+constructs and re-exports the adapter's type rather than defining a second one.
+
 ## Important Invariants
 
 - Local and worktree workspaces are different durable kinds.
@@ -280,17 +373,28 @@ The durable workspace rows are loaded and stored through:
 - Worktree restoration never removes or overwrites an occupied destination and
   treats ambiguous Git registration state as a conflict.
 - Every workspace must point at exactly one repo root.
+- A workspace's path is stable for its lifetime. Native chat resume keys on the
+  absolute worktree path, so an unarchive whose recorded path is occupied is a
+  DECISION (a scenario 409), never a relocation to a sibling directory.
+- An archived workspace refuses every mutation with `WORKSPACE_ARCHIVED` and
+  allows every read. `WorkspaceAccessGate` is the single carrier of that
+  predicate; `api/http/access.rs::assert_workspace_active` is a thin wrapper over
+  it for the routes not already on the gate. Archiving is not deleting: chat
+  history, the file tree, and git state all still render.
+- `GET /v1/workspaces` filters to `active` by default and accepts
+  `?lifecycle=archived|all`, so a client that predates archiving sees exactly
+  the list it saw before.
 - Workspace paths should be canonicalized before identity decisions.
 - Workspace env should be derived from durable workspace + repo-root records,
   not reconstructed ad hoc by callers.
-- Worktree retention policy is enforced only by AnyHarness. Desktop and cloud
-  control planes may store desired policy, but they must sync it through the
-  runtime retention policy API before triggering cleanup.
-- Managed launchers may set `ANYHARNESS_DEFER_STARTUP_RETENTION=1` to skip only
-  the automatic startup retention pass until the desired policy is applied.
-  This is distinct from `ANYHARNESS_DISABLE_WORKTREE_RETENTION`, which disables
-  retention more broadly. Post-create and manual retention runs stay enabled
-  when startup retention is deferred.
+- There is no backstop retention pass. Automatic pruning was the retire
+  lifecycle's sweeper, and both left together when `retired` was absorbed
+  into `archived`; the runtime never deletes a checkout the user did not ask
+  it to delete.
+- A workspace's recorded path stays reserved for its lifetime: creation
+  refuses any path an archived row still claims, for every workspace kind,
+  regardless of that row's cleanup state
+  (`store/lookups.rs::find_archived_by_path_and_kind`).
 
 ## Extension Points
 

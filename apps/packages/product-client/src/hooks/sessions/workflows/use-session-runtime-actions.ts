@@ -30,6 +30,11 @@ import {
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionStreamConnectionActions } from "#product/hooks/sessions/lifecycle/use-session-stream-connection-actions";
+import { recordSessionMetadataRefreshFailure } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import {
+  safeRendererErrorMessage,
+  safeRendererErrorName,
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 export function useSessionRuntimeActions() {
   const host = useProductHost();
@@ -165,9 +170,17 @@ export function useSessionRuntimeActions() {
         );
       }
     } catch (error) {
+      const errorName = safeRendererErrorName(error);
+      const errorMessage = safeRendererErrorMessage(error);
       logDevSessionRuntimeEvent(sessionId, "summary_refresh_failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
-        message: error instanceof Error ? error.message : String(error),
+        errorName,
+        message: errorMessage,
+      });
+      recordSessionMetadataRefreshFailure({
+        sessionId,
+        operationId: options?.measurementOperationId ?? undefined,
+        errorName,
+        errorMessage,
       });
       if (import.meta.env.DEV) {
         console.debug("[session-runtime] session metadata refresh failed", error);

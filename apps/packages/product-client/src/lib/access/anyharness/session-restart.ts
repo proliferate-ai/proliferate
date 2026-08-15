@@ -6,6 +6,11 @@ import {
   restoreDismissedSession,
   resumeSession,
 } from "#product/lib/access/anyharness/sessions";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 /**
  * Restart a running session's agent process so its next launch re-runs
@@ -72,6 +77,17 @@ export async function restartSessionsOnNewAuth(
           // error/recovery state through the existing session machinery;
           // the restart offer never shows a modal error.
           failedSessionIds.push(target.sessionId);
+          recordRendererDiagnostic({
+            name: "renderer.agent_auth.session_restart_failed",
+            severity: "warn",
+            kind: "message",
+            privacy: "operational",
+            correlation: { sessionId: target.sessionId },
+            fields: {
+              error_name: diagnosticField(safeRendererErrorName(error), "operational"),
+            },
+            errorClassification: "session_restart_failed",
+          });
           console.warn(
             "[agent-auth] session restart on new auth failed",
             target.sessionId,

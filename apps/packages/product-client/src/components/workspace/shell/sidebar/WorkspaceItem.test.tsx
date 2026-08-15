@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { sidebarGitAttentionIndicator } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
+import { WORKSPACE_PEEK_DELAY_MS } from "#product/components/workspace/shell/sidebar/WorkspacePeekCard";
 
 const webTestHost = { desktop: null } as ProductHost;
 
@@ -117,7 +119,7 @@ describe("WorkspaceItem", () => {
     expect(onCopyBranchName).toHaveBeenCalledTimes(1);
   });
 
-  it("renders PR status as the left identity glyph", () => {
+  it("renders PR status as the trailing identity glyph", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -147,7 +149,7 @@ describe("WorkspaceItem", () => {
     expect(cells?.children).toHaveLength(2);
   });
 
-  it("keeps a dim PR identity for an authoritative no-PR branch", () => {
+  it("falls back to the worktree identity for a branch with no PR", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -164,10 +166,10 @@ describe("WorkspaceItem", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "No pull request" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Worktree · no pull request" })).toBeTruthy();
   });
 
-  it("keeps a dim PR identity when PR data is unknown", () => {
+  it("falls back to the worktree identity when PR data is unknown", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -176,18 +178,26 @@ describe("WorkspaceItem", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "Pull request status unavailable" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Worktree · no pull request" })).toBeTruthy();
   });
 
-  it("keeps the PR identity in place for cloud workspaces", () => {
+  it("shows the cloud identity for a cloud workspace without a PR", () => {
     renderWithProductHost(
       <WorkspaceItem name="Cloud workspace" variant="cloud" />,
     );
 
-    expect(screen.getByRole("img", { name: "Pull request status unavailable" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Cloud workspace · no pull request" })).toBeTruthy();
   });
 
-  it("shows git attention beside the PR identity", () => {
+  it("leaves the identity cell out entirely for a local row without a PR", () => {
+    const { container } = renderWithProductHost(
+      <WorkspaceItem name="Local workspace" variant="local" />,
+    );
+
+    expect(container.querySelector("[data-sidebar-trailing-identity]")).toBeNull();
+  });
+
+  it("does not repeat check attention that the state dot already carries", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -197,8 +207,27 @@ describe("WorkspaceItem", () => {
     );
 
     expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
-    expect(screen.getByRole("img", { name: "Pull request changes requested" }))
-      .toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Pull request changes requested" }))
+      .toBeNull();
+  });
+
+  it("puts merge conflicts in the status cell, not beside the identity glyph", () => {
+    const conflicted = makeGitStatus({ conflicted: true, attention: "conflicts" });
+    renderWithProductHost(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        // The row is handed the indicator the domain waterfall builds, rather
+        // than deriving conflicts itself. Resolved through the real function
+        // so the two cannot drift apart.
+        statusIndicator={sidebarGitAttentionIndicator(conflicted)}
+        gitStatus={conflicted}
+      />,
+    );
+
+    const alert = screen.getByRole("img", { name: "Merge conflicts in worktree" });
+    expect(alert.closest("[data-sidebar-trailing-status]")).not.toBeNull();
+    expect(alert.closest("[data-sidebar-trailing-identity]")).toBeNull();
   });
 
   it("shows the unread dot in the right slot when the row needs review", () => {
@@ -225,6 +254,41 @@ describe("WorkspaceItem", () => {
 
     expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
     expect(screen.queryByRole("img", { name: "Unseen activity" })).toBeNull();
+  });
+
+  it("opens the hover peek card from the row itself", () => {
+    vi.useFakeTimers();
+    try {
+      renderWithProductHost(
+        <WorkspaceItem
+          name="Feature worktree"
+          variant="worktree"
+          repoName="proliferate"
+          lastActivityLabel="38m ago"
+          gitStatus={makeGitStatus()}
+          onSelect={vi.fn()}
+        />,
+      );
+
+      const row = screen.getByText("Feature worktree").closest('[role="button"]');
+      fireEvent.pointerEnter(row!);
+      act(() => {
+        vi.advanceTimersByTime(WORKSPACE_PEEK_DELAY_MS);
+      });
+
+      const card = document.querySelector("[data-workspace-peek-card]");
+      expect(card).not.toBeNull();
+      expect(card?.textContent).toContain("proliferate");
+      expect(card?.textContent).toContain("PR #805 · Open");
+
+      // Closing has its own forwarding chain to survive: the row's
+      // `onPointerLeave` has to clear `ProductSidebarWorkspaceRow`'s Omit list
+      // and both spreads to reach `SidebarRowSurface`.
+      fireEvent.pointerLeave(row!);
+      expect(document.querySelector("[data-workspace-peek-card]")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("opens the pull request from the context menu", () => {

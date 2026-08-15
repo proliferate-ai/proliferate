@@ -1,6 +1,7 @@
 import { FileEditorView } from "#product/components/workspace/files/FileEditorView";
 import { PromptAttachmentViewer } from "#product/components/workspace/files/PromptAttachmentViewer";
 import { GitPanel } from "#product/components/workspace/git/GitPanel";
+import { AgentsPane } from "#product/components/workspace/delegated-work/agents-pane/AgentsPane";
 import { ScratchPadPanel } from "#product/components/workspace/scratch/ScratchPadPanel";
 import { RightPanelPlaceholder } from "#product/components/workspace/shell/right-panel/RightPanelPlaceholder";
 import { TerminalPanel } from "#product/components/workspace/terminals/TerminalPanel";
@@ -20,6 +21,8 @@ interface RightPanelContentProps {
   workspaceUiKey: string | null;
   activeEntryKey: RightPanelActiveEntryKey;
   activeTool: RightPanelTool | null;
+  /** Whether the right panel is actually open/visible (not just mounted). */
+  isOpen: boolean;
   activeTerminalId: string | null;
   activeViewerTarget: ViewerTarget | null;
   orderedTerminals: readonly TerminalRecord[];
@@ -42,6 +45,7 @@ export function RightPanelContent({
   workspaceUiKey,
   activeEntryKey,
   activeTool,
+  isOpen,
   activeTerminalId,
   activeViewerTarget,
   orderedTerminals,
@@ -80,6 +84,11 @@ export function RightPanelContent({
           {activeTool === "git" && (
             <div className="absolute inset-0">
               <GitPanel />
+            </div>
+          )}
+          {activeTool === "agents" && workspaceId && (
+            <div className="absolute inset-0">
+              <AgentsPane workspaceId={workspaceId} isOpen={isOpen} />
             </div>
           )}
           {activeViewerTarget && (

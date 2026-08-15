@@ -3,21 +3,28 @@ import type { IconProps } from "./types";
 export type CommandPaletteGlyphName =
   | "arrow-left"
   | "arrow-right"
+  | "arrow-up-right"
   | "chat"
-  | "chat-plus"
+  | "circle-help"
   | "cloud-plus"
+  | "cloud-upload"
   | "command"
+  | "folder"
   | "folder-plus"
   | "git-branch"
+  | "globe"
+  | "home"
   | "keyboard"
-  | "panel-bottom"
+  | "panel-left"
+  | "panel-right"
   | "pencil"
   | "play"
   | "rotate-ccw"
   | "search"
   | "settings"
-  | "terminal"
-  | "tree";
+  | "square-pen"
+  | "square-terminal"
+  | "workflow";
 
 export function CommandPaletteGlyph({
   name,
@@ -30,7 +37,7 @@ export function CommandPaletteGlyph({
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.8}
+      strokeWidth={1.75}
       strokeLinecap="round"
       strokeLinejoin="round"
       {...props}
@@ -56,14 +63,21 @@ function renderCommandPaletteGlyph(name: CommandPaletteGlyphName) {
           <path d="m12 5 7 7-7 7" />
         </>
       );
-    case "chat":
-      return <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />;
-    case "chat-plus":
+    case "arrow-up-right":
       return (
         <>
-          <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
-          <path d="M12 8v6" />
-          <path d="M9 11h6" />
+          <path d="M7 7h10v10" />
+          <path d="M7 17 17 7" />
+        </>
+      );
+    case "chat":
+      return <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />;
+    case "circle-help":
+      return (
+        <>
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <path d="M12 17h.01" />
         </>
       );
     case "cloud-plus":
@@ -72,6 +86,14 @@ function renderCommandPaletteGlyph(name: CommandPaletteGlyphName) {
           <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 0 1 .5 8.97" />
           <path d="M18 14v6" />
           <path d="M15 17h6" />
+        </>
+      );
+    case "cloud-upload":
+      return (
+        <>
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+          <path d="M12 12v9" />
+          <path d="m16 16-4-4-4 4" />
         </>
       );
     case "command":
@@ -87,6 +109,8 @@ function renderCommandPaletteGlyph(name: CommandPaletteGlyphName) {
           <path d="M15 18a3 3 0 1 0 3-3" />
         </>
       );
+    case "folder":
+      return <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />;
     case "folder-plus":
       return (
         <>
@@ -104,6 +128,21 @@ function renderCommandPaletteGlyph(name: CommandPaletteGlyphName) {
           <path d="M18 9a9 9 0 0 1-9 9" />
         </>
       );
+    case "globe":
+      return (
+        <>
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+          <path d="M2 12h20" />
+        </>
+      );
+    case "home":
+      return (
+        <>
+          <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+          <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        </>
+      );
     case "keyboard":
       return (
         <>
@@ -115,11 +154,18 @@ function renderCommandPaletteGlyph(name: CommandPaletteGlyphName) {
           <path d="M11 13h6" />
         </>
       );
-    case "panel-bottom":
+    case "panel-left":
       return (
         <>
-          <rect x="3" y="4" width="18" height="16" rx="2" />
-          <path d="M3 14h18" />
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M9 3v18" />
+        </>
+      );
+    case "panel-right":
+      return (
+        <>
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M15 3v18" />
         </>
       );
     case "pencil":
@@ -152,21 +198,28 @@ function renderCommandPaletteGlyph(name: CommandPaletteGlyphName) {
           <circle cx="12" cy="12" r="3" />
         </>
       );
-    case "terminal":
+    case "square-pen":
       return (
         <>
-          <path d="m4 17 6-6-6-6" />
-          <path d="M12 19h8" />
+          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
         </>
       );
-    case "tree":
+    case "square-terminal":
       return (
-        <path
-          d="M15.8 11.535c.367 0 .665.298.665.665v5a.665.665 0 0 1-.665.665h-5a.665.665 0 1 1 0-1.33h3.394l-3.565-3.564a.666.666 0 0 1 .942-.942l3.564 3.565V12.2c0-.367.298-.665.665-.665Zm0-9.4c.367 0 .665.298.665.665v5a.665.665 0 0 1-1.33 0V4.405l-5.128 5.128c-.323.324-.558.565-.842.74a2.668 2.668 0 0 1-.771.319c-.324.078-.662.073-1.12.073H1.93a.665.665 0 1 1 0-1.33h5.345c.52 0 .673-.005.809-.037.136-.033.266-.086.385-.16.12-.072.23-.177.598-.545l5.128-5.128H10.8a.665.665 0 0 1 0-1.33h5Z"
-          fill="currentColor"
-          stroke="none"
-          transform="scale(1.2)"
-        />
+        <>
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="m7 11 2-2-2-2" />
+          <path d="M11 13h4" />
+        </>
+      );
+    case "workflow":
+      return (
+        <>
+          <rect x="3" y="3" width="8" height="8" rx="2" />
+          <rect x="13" y="13" width="8" height="8" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+        </>
       );
   }
 }

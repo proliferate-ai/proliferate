@@ -51,13 +51,28 @@ pub(in crate::live::sessions::actor) async fn resolve_pending_interactions(
 
     let cancelled = {
         let mut sink = event_sink.lock().await;
+        let render_resolutions = sink.event_mutations_admitted();
         let cancelled = interaction_broker
             .cancel_session(session_id, broker_outcome)
             .await;
 
-        for interaction in &cancelled {
-            let (kind, outcome) = broker_outcome_to_interaction_event(interaction.outcome.clone());
-            sink.interaction_resolved(interaction.request_id.clone(), kind, outcome);
+        if render_resolutions {
+            for interaction in &cancelled {
+                let (kind, outcome) =
+                    broker_outcome_to_interaction_event(interaction.outcome.clone());
+                sink.interaction_resolved(interaction.request_id.clone(), kind, outcome);
+            }
+        } else if !cancelled.is_empty() {
+            // Terminal-persistence failure retires the actor with its event
+            // sequence frozen. Rendezvous waiters still need a deterministic
+            // cancellation, but that shutdown cleanup is explicitly
+            // non-event-producing; startup repair owns the next ledger row.
+            tracing::info!(
+                session_id,
+                cancelled_count = cancelled.len(),
+                result_class = "terminal_fenced_cleanup",
+                "cancelled pending interactions without rendering resolution events"
+            );
         }
 
         cancelled

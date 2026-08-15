@@ -4,21 +4,20 @@ import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product
 import { hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input";
 import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import {
-  formatSessionCreateCause,
   isWorkspaceDirectoryMissingError,
   toSessionCreateFailureDisplayError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
 import { pickLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
 import { resolveSessionCreationModeId } from "#product/lib/domain/sessions/creation/mode";
+import { isWorkspaceArchivedRefusal } from "#product/lib/domain/workspaces/archived/workspace-archived-refusal";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import {
-  createEmptySessionRecord,
+  buildOptimisticSessionCreationRecord,
   getSessionRecord,
   putSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use-workspace-surface-lookup";
@@ -54,10 +53,13 @@ import {
   type ReplacementShellPreferencesTransaction,
 } from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
 import { adoptRecoveredSessionIdentity } from "#product/hooks/sessions/workflows/session-creation-recovered-identity";
-import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
+import {
+  announceQueuedPromptFailure,
+  cleanupSessionCreationFailure,
+} from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { resolveRecoveryWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import type { PendingEmptySessionCreationLifecycle } from "#product/hooks/sessions/workflows/pending-empty-session-creation";
 import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/caller-selected-session-create";
@@ -89,9 +91,9 @@ export function useSessionCreationActions() {
     if (!workspaceId) {
       throw new Error("No workspace selected");
     }
-    const recoveryWorkspaceUiKey = resolveWorkspaceUiKey(
-      current.selectedLogicalWorkspaceId, workspaceId,
-    ) ?? workspaceId;
+    const recoveryWorkspaceUiKey = resolveRecoveryWorkspaceUiKey(
+      options.targetWorkspaceUiKey, current.selectedLogicalWorkspaceId, workspaceId,
+    );
 
     const blockedError = getWorkspaceRuntimeBlockError(workspaceId);
     if (blockedError) {
@@ -150,25 +152,20 @@ export function useSessionCreationActions() {
       targetSessionId: pendingSessionId,
     });
 
-    const optimisticRecord: SessionRuntimeRecord = {
-      ...createEmptySessionRecord(pendingSessionId, options.agentKind, {
-        workspaceId,
-        materializedSessionId: null,
-        modelId: options.modelId,
-        requestedModelId: options.modelId,
-        modeId: resolvedModeId ?? null,
-        title: existingProjectedRecord?.title ?? null,
-        hasAttemptedPrompt: existingProjectedRecord?.hasAttemptedPrompt ?? false,
-        optimisticPrompt: null,
-        pendingConfigChanges: {},
-        sessionRelationship: { kind: "root" },
-      }),
-      status: "starting",
-      transcriptHydrated: true,
-    };
+    const optimisticRecord = buildOptimisticSessionCreationRecord({
+      agentKind: options.agentKind,
+      existingProjectedRecord,
+      modelId: options.modelId,
+      pendingSessionId,
+      promptText: hasPrompt ? options.text : null,
+      resolvedModeId: resolvedModeId ?? null,
+      workspaceId,
+    });
 
     putSessionRecord(optimisticRecord);
-    activateSession(pendingSessionId);
+    if (options.activateOnCreate !== false) {
+      activateSession(pendingSessionId);
+    }
     logLatency("session.create.optimistic_record", {
       clientSessionId: pendingSessionId,
       workspaceId,
@@ -188,7 +185,13 @@ export function useSessionCreationActions() {
     let currentOwnedShellWorkspaceId: string | null = null;
     let currentOwnedSessionId: string | null = null;
     const writeOwnedShellIntent = (sessionId: string, shellWorkspaceId?: string | null): void => {
-      const write = writeChatShellIntentForSession({ workspaceId, shellWorkspaceId, sessionId });
+      const write = writeChatShellIntentForSession({
+        workspaceId,
+        // Null falls back to the writer's own selection-derived resolution,
+        // which is the key every later read resolves to.
+        shellWorkspaceId: shellWorkspaceId ?? null,
+        sessionId,
+      });
       if (!write) {
         return;
       }
@@ -248,6 +251,12 @@ export function useSessionCreationActions() {
         // gate reflect the real state.
         void invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
       }
+      if (isWorkspaceArchivedRefusal(error)) {
+        // The uniform WORKSPACE_ARCHIVED rule (§3.11): the server is correct,
+        // only the client was stale — refresh the listing so the row moves
+        // out of active lists, and raise no failure toast for this case.
+        void invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
+      }
       cleanupSessionCreationFailure({
         agentKind: options.agentKind,
         currentOwnedSessionId,
@@ -284,7 +293,7 @@ export function useSessionCreationActions() {
       });
       if (options.launchIntentId) {
         useChatLaunchIntentStore.getState()
-          .markSendAttemptedIfActive(options.launchIntentId);
+          .markSendAttempted(options.launchIntentId);
       }
     }
 
@@ -386,18 +395,7 @@ export function useSessionCreationActions() {
     if (hasPrompt) {
       void createPromise.catch((error) => {
         cleanupCreateFailure(error);
-        // The missing-worktree composer panel owns that condition — no toast.
-        if (!isWorkspaceDirectoryMissingError(error)) {
-          // This path had a prompt, so the thing the user lost is the message,
-          // not just the chat — say which, and where the draft went. No retry:
-          // the composer still holds the text, and re-sending from a toast
-          // would race the user typing into it.
-          showErrorToast({
-            headline: "Message not sent",
-            consequence: "No chat was opened. Your message is still in the composer.",
-            cause: formatSessionCreateCause(error),
-          });
-        }
+        announceQueuedPromptFailure(error, options.onQueuedPromptFailure, showErrorToast);
       }).finally(cleanupInFlight);
       return pendingSessionId;
     }

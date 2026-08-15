@@ -27,7 +27,6 @@ export interface BuildWorkspaceActivityIndicatorSnapshotArgs {
   logicalWorkspaces: readonly LogicalWorkspace[];
   workspaceActivities: Record<string, SidebarSessionActivityState>;
   pendingPromptCounts?: Record<string, number>;
-  archivedSet: ReadonlySet<string>;
   hiddenRepoRootIds: ReadonlySet<string>;
   selectedLogicalWorkspaceId?: string | null;
   workspaceTypes: readonly SidebarWorkspaceVariant[] | null | undefined;
@@ -66,7 +65,7 @@ export function buildWorkspaceActivityIndicatorSnapshot(
   for (const workspace of args.logicalWorkspaces) {
     const relatedIds = logicalWorkspaceRelatedIds(workspace);
     const relatedIdSet = new Set(relatedIds);
-    const archived = isLogicalWorkspaceArchived(relatedIds, args.archivedSet);
+    const archived = isLogicalWorkspaceArchived(workspace);
     const active = logicalWorkspaceMatchesId(workspace, args.selectedLogicalWorkspaceId);
     const variant = sidebarWorkspaceVariantForLogicalWorkspace(workspace);
     if (
@@ -104,11 +103,13 @@ export function buildWorkspaceActivityIndicatorSnapshot(
   };
 }
 
-function isLogicalWorkspaceArchived(
-  relatedIds: readonly string[],
-  archivedSet: ReadonlySet<string>,
-): boolean {
-  return relatedIds.some((id) => archivedSet.has(id));
+/**
+ * Archived is a cloud-only term now: the client-side hide-set is gone, and
+ * the runtime's `lifecycle` filter already excludes archived local
+ * workspaces from every logical-workspace projection before it reaches here.
+ */
+function isLogicalWorkspaceArchived(workspace: LogicalWorkspace): boolean {
+  return !workspace.localWorkspace && workspace.cloudWorkspace?.productLifecycle === "archived";
 }
 
 function isLogicalWorkspaceRepoHidden(

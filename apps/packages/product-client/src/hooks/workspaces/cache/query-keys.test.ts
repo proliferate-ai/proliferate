@@ -10,12 +10,10 @@ import {
 function makeCollections(overrides: Partial<WorkspaceCollections> = {}): WorkspaceCollections {
   return {
     localWorkspaces: [],
-    retiredLocalWorkspaces: [],
     repoRoots: [],
     cloudWorkspaces: [],
     workspaces: [],
     allWorkspaces: [],
-    cleanupAttentionWorkspaces: [],
     ...overrides,
   };
 }

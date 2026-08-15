@@ -41,6 +41,11 @@ function SkillsToolResultDetails({
 }: {
   presentation: SkillsToolResultPresentation;
 }) {
+  // Recorded cause (DESIGN_SYSTEM.md § UI-conformance review, check 4) for the
+  // `font-[520]` below: the UI face is variable, and 520 is the intermediate
+  // weight that reads as emphasis at 14px without the optical jump `font-medium`
+  // (500 → 600 on this face) produces next to body text. There is no scale step
+  // between the two.
   switch (presentation.kind) {
     case "list":
       return (
@@ -70,7 +75,7 @@ function SkillsToolResultDetails({
       );
     case "activate":
       return (
-        <div className="space-y-3 px-3 py-2 text-chat">
+        <div className="space-y-2 px-3 py-2 text-chat">
           <div className="space-y-1">
             <div className="flex min-w-0 items-center gap-2">
               <span className="min-w-0 truncate font-[520] text-foreground">

@@ -2,15 +2,12 @@ import { Suspense, lazy } from "react"
 import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
-import { ToastHost } from "#product/primitives/patterns/ToastHost"
+import { ToastHost } from "#product/primitives/patterns/toast/ToastHost"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
-import { useLocalWorktreeSettingsTarget } from "#product/hooks/workspaces/facade/use-local-worktree-settings-target"
-import { useWorktreeCleanupPolicySync } from "#product/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
 import { SupportModalHost } from "#product/components/support/SupportModalHost"
 import { LoginPage } from "#product/pages/LoginPage"
 import { SettingsCloudRedirect } from "#product/pages/SettingsCloudRedirect"
-import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store"
 import { ShortcutRevealProvider } from "#product/providers/ShortcutRevealProvider"
 import type { ProductRoutesComponent } from "#product/ProductClient"
 
@@ -128,7 +125,6 @@ export function App({ RoutesComponent }: AppProps) {
   return (
       <ShortcutRevealProvider>
         <MacWindowControlsSafeArea />
-        <WorktreeCleanupPolicySyncGate />
         <RoutesComponent>
           <Route path="/index.html" element={<Navigate to="/" replace />} />
           <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
@@ -285,18 +281,3 @@ function AppUpdateSurface() {
   )
 }
 
-function WorktreeCleanupPolicySyncGate() {
-  const preferencesHydrated = useUserPreferencesStore((s) => s._hydrated)
-
-  if (!preferencesHydrated) {
-    return null
-  }
-
-  return <WorktreeCleanupPolicySyncMount />
-}
-
-function WorktreeCleanupPolicySyncMount() {
-  const settings = useLocalWorktreeSettingsTarget()
-  useWorktreeCleanupPolicySync(settings.targets, settings.syncPolicyToTarget)
-  return null
-}

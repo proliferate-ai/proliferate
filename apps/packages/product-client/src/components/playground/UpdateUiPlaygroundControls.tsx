@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
-import { RangeSlider } from "#product/primitives/RangeSlider";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { setDevRunningAgentCount } from "#product/hooks/app/lifecycle/use-running-agent-count";
 import { useUpdater, type UpdaterErrorSource } from "#product/hooks/access/tauri/use-updater";
@@ -319,7 +319,10 @@ export function UpdateUiPlaygroundControls() {
         <span className="mx-1 h-5 w-px bg-border" />
         <Label className="mb-0 flex items-center gap-2">
           Download progress
-          <RangeSlider
+          <Input
+            type="range"
+            variant="unstyled"
+            className="h-1 w-40 cursor-pointer appearance-none rounded-full bg-input accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
             min={0}
             max={100}
             step={1}
@@ -341,7 +344,6 @@ export function UpdateUiPlaygroundControls() {
                   : current,
               );
             }}
-            className="h-1 w-40"
           />
           <span className="w-8 text-right tabular-nums">
             {liveDownloadProgress ?? 0}%

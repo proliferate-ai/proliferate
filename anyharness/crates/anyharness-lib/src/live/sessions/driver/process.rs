@@ -94,6 +94,13 @@ pub(in crate::live::sessions) fn spawn_agent_process(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
+    // The agent's own process group, so a workspace-wide stop can reach its
+    // descendants (most of all a `git` the agent runs through a bash tool
+    // call) with one group signal instead of missing every grandchild.
+    // `kill_on_drop(true)` above stays as the crash backstop for the direct
+    // child only; the group is what `stop_and_await` escalates against.
+    #[cfg(unix)]
+    command.process_group(0);
     remove_runtime_private_env(&mut command);
     // Agent-auth sanitization: removal wins over the inherited ambient env
     // (e.g. a developer shell exporting CLAUDE_CODE_USE_BEDROCK would silently

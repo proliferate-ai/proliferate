@@ -111,13 +111,92 @@ body {
   line-height: var(--text-ui--line-height);
 }
 
-:is(input, textarea, [contenteditable]:not([contenteditable="false"]), [data-ui-thin-caret]) {
-  caret-color: var(--color-text-caret);
+/* Layered per the shared-reset rule in specs/frontend/styling.md: unlayered
+   CSS beats every layer, which would both strip caret utilities off matching
+   elements and defeat the empty-field caret suppression below — that rule must
+   win this one by specificity inside the same layer. */
+@layer base {
+  :is(input, textarea, [contenteditable]:not([contenteditable="false"]), [data-ui-thin-caret]) {
+    caret-color: var(--color-text-caret);
+  }
+}
+
+/* Current macOS WebKit paints native insertion carets at two CSS pixels, at the
+   same origin where a native placeholder's first glyph begins. Rather than
+   nudging the focused placeholder aside (which visibly bumped it on every
+   focus/blur while it stayed on screen), suppress the native caret only while
+   the placeholder is shown — an empty start-aligned field's caret sits at the
+   content-box origin — and paint the same one-pixel replacement caret the chat
+   composer uses, as a background bar at that origin. Typing any character
+   dismisses the placeholder, which atomically restores the native caret in the
+   same style rule (IME composition included). Entered text, its caret, and the
+   resting placeholder never move. The base layer lets a specialized control
+   override this contract, but an override must replace it whole: overriding
+   only the background leaves an invisible caret; overriding only caret-color
+   doubles it. A centered or right-to-left field must opt out the same way —
+   the bar is pinned to the left content edge. */
+@layer base {
+  /* activity-motion */
+  :is(input, textarea):focus:placeholder-shown {
+    animation: ui-empty-field-caret-blink 1s steps(1, end) infinite;
+    background-image: linear-gradient(var(--color-text-caret), var(--color-text-caret));
+    background-origin: content-box;
+    background-repeat: no-repeat;
+    background-size: 1px 1.25em;
+    caret-color: transparent;
+  }
+  /* Single-line inputs center their one line box in the content box; textareas
+     stack lines from the content-box top. Align the bar with where the first
+     glyph actually renders in each. */
+  input:focus:placeholder-shown {
+    background-position: 0 50%;
+  }
+  textarea:focus:placeholder-shown {
+    background-position: 0 0;
+  }
+  /* Refine with line-box units where the engine has them. This stays a
+     separate progressive layer because an engine that lacks `lh` drops the
+     declaration, and background-size would fall back to `auto` — a gradient
+     with no intrinsic size then floods the whole content box. The base
+     declarations above must therefore stand alone without `lh`. */
+  @supports (height: 1lh) {
+    :is(input, textarea):focus:placeholder-shown {
+      background-size: 1px min(1lh, 1.25em);
+    }
+    textarea:focus:placeholder-shown {
+      background-position: 0 calc((1lh - min(1lh, 1.25em)) / 2);
+    }
+  }
+}
+
+@keyframes ui-empty-field-caret-blink {
+  0%, 54% {
+    background-image: linear-gradient(var(--color-text-caret), var(--color-text-caret));
+  }
+  55%, 100% {
+    background-image: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(input, textarea):focus:placeholder-shown {
+    animation: none;
+  }
 }
 
 :is(input, textarea, [contenteditable]:not([contenteditable="false"]), [data-ui-thin-caret])::selection {
   background-color: var(--color-text-selection);
   color: inherit;
+}
+
+/* SelectedResponseAnnotationMarkers.tsx paints each annotated excerpt through
+   the custom-highlight registry for as long as its annotation stays attached
+   to the composer. One-off color-mix per the PRO-243 review: promote to a
+   token only if a second translucent --color-special use appears. Byte-lean
+   on purpose (short highlight name, `background`, `#0000` for transparent):
+   the login first-load CSS budget sits within ~20 B of its cap. */
+::highlight(annotation) {
+  background: color-mix(in oklab, var(--color-special) 30%, #0000);
 }
 
 /* Spinner.tsx keeps the wrapper box stationary while the shared theme rotates
@@ -297,13 +376,14 @@ body {
   box-shadow: var(--shadow-user-message);
 }
 
-/* Composer chrome: no border — a 0.5px stroke painted in
-   the shadow stack plus the elevation shadow. */
+/* Composer chrome: fill only. No stroke and no elevation — the composer is
+   read by its own fill against the pane and by its 28px radius, so the 0.5px
+   shadow-stroke and the elevation stack that used to sit here are both gone.
+   This is a replacement of the chrome, not a variant: every
+   .chat-composer-surface instance is borderless and shadowless, so the
+   composer's own elevation token went with the elevation it described. */
 .chat-composer-surface {
   background-color: var(--color-composer-background);
-  box-shadow:
-    0 0 0 0.5px var(--color-border),
-    var(--color-composer-shadow);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
@@ -313,11 +393,13 @@ body {
    so it takes the identical translucent fill and backdrop treatment — a cap
    that skipped the blur would be translucent over an unblurred transcript one
    pixel above a surface translucent over a blurred one, reading as two
-   different greys at the seam. It carries no elevation shadow (it is not the
-   floating edge); its 1px stroke is painted outside the border-box by the
-   consumer (ring-*) to line up with the surface's 0.5px shadow stroke, and the
-   bottom of that stroke is clipped here because the surface below is no longer
-   opaque enough to cover the bleed at 96% alpha. */
+   different greys at the seam. It carries no elevation shadow and no stroke of
+   its own; the 1px stroke that outlines the cap is painted outside the
+   border-box by the consumer (ring-*), and the bottom of it is clipped here
+   because the surface below is no longer opaque enough to cover the bleed at
+   96% alpha. The surface's own 0.5px shadow-stroke that this used to line up
+   with is gone (see .chat-composer-surface above); the cap's ring is the
+   activity card's chrome and is out of the composer-input scope. */
 .chat-composer-surface--cap {
   background-color: var(--color-composer-background);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
@@ -753,238 +835,6 @@ mark.content-find-active {
  * NON-THEME STYLES
  * ======================================================================== */
 
-/* ---- Chat diffs ---- */
-.thread-diff-virtualized {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 36px;
-}
-
-/*
- * Row-level virtualization for LARGE sidebar review diffs (opted in per card
- * via data-diff-row-virtualization when the patch exceeds
- * DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD). Every diff row cell — gutter and
- * content are separate grid children in all three viewers — skips layout and
- * paint while outside its scrollport, so scrolling one multi-thousand-row
- * diff no longer keeps every row painted. `auto` in contain-intrinsic-size
- * remembers each cell's real rendered height, so wrapped lines and per-gap
- * context expanders don't make the scrollbar jump after first paint; the
- * one-line-height fallback matches the min-height every unwrapped row has,
- * keeping subgrid track sizing stable for cells that were never rendered.
- */
-[data-diff-row-virtualization] .diff-gutter-cell,
-[data-diff-row-virtualization] .diff-content-cell {
-  content-visibility: auto;
-  contain-intrinsic-size: auto var(--diffs-line-height);
-}
-
-/*
- * Block-level virtualization for the file viewer's rendered-document preview.
- * A large Markdown file re-wraps every block whenever the pane width changes —
- * which during a separator drag is every frame — so top-level blocks outside
- * the scrollport skip layout and paint instead, and a resize (or scroll) only
- * pays for the visible slice. `auto` in contain-intrinsic-size remembers each
- * block's real rendered height after first paint; the fallback approximates
- * one prose line for blocks that have never rendered.
- */
-.file-preview-virtualized > * {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 24px;
-}
-
-.composer-diff-simple-line {
-  --diff-view-surface: var(--color-diff-main-surface);
-  --diff-view-header-surface: var(--diff-view-surface);
-  --diff-view-empty-surface: color-mix(in srgb, var(--diff-view-surface) 96%, var(--color-foreground));
-  --diffs-bg: var(--diff-view-surface);
-  background-color: var(--color-diff-code-surface);
-  scrollbar-color: var(--color-scrollbar-thumb) transparent;
-}
-
-.composer-diff-simple-line:hover {
-  scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
-}
-
-[data-diff-surface="chat"] .composer-diff-simple-line,
-[data-diff-surface="sidebar"] .composer-diff-simple-line {
-  --diff-view-surface: var(--color-diff-main-surface);
-  --diff-view-context-surface: transparent;
-  --diff-view-context-number: transparent;
-  --diff-view-empty-surface: transparent;
-  --diff-view-separator-surface: transparent;
-  --diffs-bg-context-override: transparent;
-  --diffs-bg-separator-override: transparent;
-  background-color: var(--color-diff-code-surface);
-}
-
-.composer-diff-simple-line [data-diff] {
-  background-color: var(--diffs-bg);
-  color: var(--diffs-fg);
-}
-
-.composer-diff-simple-line [data-code] {
-  background-color: var(--diffs-bg);
-}
-
-.composer-diff-simple-line [data-line-type="context"] {
-  background-color: var(--diffs-bg-context-override);
-}
-
-/* -- Git review document (sidebar Changes pane) --
-   Flat review treatment: unchanged lines sit on the plain pane background
-   (only +/- rows carry a tint), and hunk-gap separators render as a slim
-   strip inset from the pane edges with rounded ends instead of a full-width
-   band. Scoped to the review scroll container so chat-transcript diffs keep
-   their own treatment. */
-[data-git-review-document] {
-  --diffs-bg-context-override: var(--color-background);
-  --diff-view-context-number: var(--color-background);
-  /* Separator cells draw their strip via ::before below; the cell itself must
-     stay transparent or the strip reads as a full-width band. This var feeds
-     the later .composer-diff-simple-line [data-separator] background rule. */
-  --diffs-bg-separator-override: transparent;
-}
-
-[data-git-review-document] [data-separator] {
-  background: transparent;
-  position: relative;
-}
-
-[data-git-review-document] [data-separator]::before {
-  content: "";
-  position: absolute;
-  inset: 3px 0;
-  background: var(--diff-view-separator-surface);
-  pointer-events: none;
-}
-
-/* Gutter cells cap the left end of the strip; content cells (gap-expander,
-   gap-info, collapsed-context rows) cap the right end. Between them the two
-   ::before segments meet edge-to-edge, so the strip reads as one slim pill
-   inset from the pane edges — a [data-separator='line-info'] look. */
-[data-git-review-document] .diff-gutter-cell[data-separator]::before {
-  left: 6px;
-  border-radius: 6px 0 0 6px;
-}
-
-[data-git-review-document] .diff-content-cell[data-separator]::before,
-[data-git-review-document] [data-separator="gap-expander"]::before,
-[data-git-review-document] [data-separator="gap-info"]::before {
-  right: 6px;
-  border-radius: 0 6px 6px 0;
-}
-
-/* Keep separator labels and expand controls above the ::before strip. */
-[data-git-review-document] [data-separator] > * {
-  position: relative;
-}
-
-.composer-diff-simple-line [data-line-type="change-addition"] {
-  background-color: var(--diffs-bg-addition-override);
-}
-
-.composer-diff-simple-line [data-line-type="change-deletion"] {
-  background-color: var(--diffs-bg-deletion-override);
-}
-
-.composer-diff-simple-line [data-line-type="change-addition"]:hover,
-.composer-diff-simple-line [data-line-type="change-addition"]:hover > .diff-gutter-cell {
-  background-color: var(--diffs-bg-addition-hover-override);
-}
-
-.composer-diff-simple-line [data-line-type="change-deletion"]:hover,
-.composer-diff-simple-line [data-line-type="change-deletion"]:hover > .diff-gutter-cell {
-  background-color: var(--diffs-bg-deletion-hover-override);
-}
-
-.composer-diff-simple-line .diff-gutter-cell[data-line-type="context"],
-.composer-diff-simple-line .diff-content-cell[data-line-type="context"] {
-  color: color-mix(in srgb, var(--diffs-fg) 30%, transparent);
-}
-
-.composer-diff-simple-line .diff-content-cell[data-line-type="change-addition"] {
-  color: var(--color-diff-added);
-}
-
-.composer-diff-simple-line .diff-content-cell[data-line-type="change-deletion"] {
-  color: var(--color-diff-deleted);
-}
-
-.composer-diff-simple-line [data-separator] {
-  background-color: var(--diffs-bg-separator-override);
-}
-
-.composer-diff-simple-line .diff-content-cell[data-empty-side] {
-  background-color: var(--diff-view-empty-surface);
-}
-
-.composer-diff-simple-line .diff-gutter-cell[data-empty-side] {
-  background-color: var(--diff-view-context-number);
-}
-
-.composer-diff-simple-line .diff-gutter-cell {
-  border-inline-end: 1px solid var(--color-diff-code-surface);
-}
-
-.composer-diff-simple-line .diff-gutter-cell[data-line-type="context"] {
-  background-color: var(--diff-view-context-number);
-  color: color-mix(in srgb, var(--diffs-fg) 35%, transparent);
-}
-
-.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"] {
-  background-color: var(--diffs-bg-addition-number-override);
-  color: var(--color-diff-added);
-}
-
-.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-deletion"] {
-  background-color: var(--diffs-bg-deletion-number-override);
-  color: var(--color-diff-deleted);
-}
-
-.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"],
-.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-deletion"] {
-  position: sticky;
-  inset-inline-start: 0;
-  z-index: 10;
-}
-
-.composer-diff-simple-line [data-line-number-content] {
-  position: relative;
-  z-index: 1;
-}
-
-.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"]::before,
-.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-deletion"]::before {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: 0;
-  width: 3px;
-}
-
-.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"]::before {
-  background-color: var(--diffs-addition-color-override);
-}
-
-.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-deletion"]::before {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    var(--diffs-deletion-color-override) 0 1px,
-    transparent 1px 3px
-  );
-}
-
-.composer-diff-simple-line [data-separator]:empty {
-  display: flex;
-  align-items: center;
-  background-color: transparent;
-}
-
-.composer-diff-simple-line [data-content] [data-separator]:empty::after {
-  content: "";
-  flex: 1;
-  margin-inline: 1ch;
-  border-top: 1px solid color-mix(in srgb, var(--diffs-fg) 18%, transparent);
-}
 
 /* ---- Base styles ---- */
 html,
@@ -1130,131 +980,6 @@ body {
   }
 }
 
-/* ---- Reasoning-effort emphasis ----
-   "max": the session sits at the highest reasoning level its model offers —
-   the bars take the app accent, nothing else changes. "ultra": that top level
-   is the ultra tier, which only frontier models expose (GPT-5.6 Sol/Terra
-   today) — the chip names the tier ("Ultra") in foreground-weight text, the
-   bars keep the accent, and the lit bars run the compositor-only wave. The
-   word is the signal: no gradient paints, no composer-wide ring.
-   Non-ultra models never get the ultra treatment, even at their own max. */
-.composer-level-bars-max,
-.composer-level-bars-ultra {
-  color: var(--color-special);
-}
-
-.composer-level-bars-button-ultra {
-  color: var(--color-foreground);
-}
-
-/* Bars are plain HTML spans now (see LevelBarsIcon in LevelBarsButton.tsx) —
-   transform/opacity here run on the compositor instead of forcing a repaint
-   of SVG child elements every frame in WKWebView. */
-/* activity-motion */
-/* Ambient, not urgent: the wave says "this model is thinking hard", so it
-   breathes rather than pulsing the way the original 1.1s cycle did (which read
-   as a loading spinner).
-   The rise is the slow, deliberate half and gets most of the cycle: the peak
-   sits at 62% of 8.6s, so the bar climbs for ~5.3s and drains in ~3.3s.
-   Deliberately NOT --ease-out-quint: that curve covers ~93% of the distance in
-   its first tenth and then parks at the extreme, which turns a long duration
-   into a fast snap plus dead air rather than a long climb. --ease-standard is
-   the in-out on the token scale, so the bar is still visibly travelling for
-   most of each leg instead of idling at the top and bottom. */
-.composer-level-bar-wave {
-  transform-origin: bottom;
-  animation: composer-level-bar-wave 8.6s var(--ease-standard) infinite;
-}
-
-@keyframes composer-level-bar-wave {
-  0%,
-  100% {
-    transform: scaleY(0.72);
-    opacity: 0.78;
-  }
-  62% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .composer-level-bar-wave {
-    animation: none;
-  }
-}
-
-/* Step transitions: stepping the reasoning-effort control up lights bars
-   bottom-to-top in a slight stagger (LevelBarsButton.tsx computes the
-   per-bar delay); stepping down drains them the same way. Wrapping past the
-   top level back to the bottom plays a quick transform-based "flip" on the
-   whole icon instead — a deliberate reset, not an error. Compositor-only
-   (transform/opacity), disabled under reduced motion. */
-.composer-level-bar-fill-in,
-.composer-level-bar-drain-out {
-  transform-origin: bottom;
-}
-
-/* Paced by the activity scale, not the hover role: this is the motion you are
-   meant to watch a bar make, so it needs a duration you can follow rather than
-   the ~120ms of pointer feedback. --ease-out-cubic spends that budget on a
-   quick departure that decelerates into the top -- not --ease-out-quint, which
-   is so front-loaded it arrives almost immediately and then visibly idles. */
-.composer-level-bar-fill-in {
-  animation: composer-level-bar-fill-in var(--activity-level-bar-step) var(--ease-out-cubic) both;
-}
-
-.composer-level-bar-drain-out {
-  animation: composer-level-bar-drain-out var(--activity-level-bar-step) var(--ease-out-cubic) both;
-}
-
-/* The fill travels the bar's whole height: it is clipped by the track above it,
-   so scaling from 0 reads as ink rising inside a bar that stays where it is,
-   not as the bar itself growing. Opacity is left alone -- the fill is fully
-   opaque the entire way, and the unfilled remainder is the track's own dim
-   tone showing through. */
-@keyframes composer-level-bar-fill-in {
-  0% {
-    transform: scaleY(0);
-  }
-  100% {
-    transform: scaleY(1);
-  }
-}
-
-@keyframes composer-level-bar-drain-out {
-  0% {
-    transform: scaleY(1);
-  }
-  100% {
-    transform: scaleY(0);
-  }
-}
-
-.composer-level-bars-wrap {
-  animation: composer-level-bars-wrap var(--duration-disclosure) var(--ease-spring) both;
-}
-
-@keyframes composer-level-bars-wrap {
-  0% {
-    transform: rotate(0deg);
-  }
-  50% {
-    transform: rotate(-16deg) scaleY(0.85);
-  }
-  100% {
-    transform: rotate(0deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .composer-level-bar-fill-in,
-  .composer-level-bar-drain-out,
-  .composer-level-bars-wrap {
-    animation: none;
-  }
-}
-
 /* Composer control value swap: when a selection changes, the new value slides
    in from above while the old value slides out below, clipped by the swap
    container. Compositor rule: transform/opacity only. */
@@ -1302,14 +1027,49 @@ body {
   }
 }
 
-/* Ultra "on": a filled purple chip behind the level control (same idea as the
-   fast-mode zap's active background), pinned through hover so it stays lit. */
-.composer-reasoning-ultra-chip {
-  background-color: color-mix(in oklab, var(--color-pr-merged) 15%, transparent);
+/* Composer effort ladder: the six bars only ever change opacity between lit
+   (1) and unlit (0.3), and ComposerEffortStepper.tsx supplies the per-bar
+   transition-delay that makes the lit edge travel up the ladder rather than
+   the whole glyph flipping at once. The ruled 240ms is --duration-panel. */
+.composer-effort-ladder-bar {
+  transition: opacity var(--duration-panel) var(--ease-standard);
 }
 
-.composer-reasoning-ultra-chip:hover {
-  background-color: color-mix(in oklab, var(--color-pr-merged) 22%, transparent) !important;
+@media (prefers-reduced-motion: reduce) {
+  .composer-effort-ladder-bar {
+    transition: none;
+  }
+}
+
+/* Composer mode badge glyph swap: the badge is icon-only, so the mode change
+   has nothing but the glyph to carry it. The new mode drops in from above
+   instead of crossfading — a crossfade of two 18px glyphs reads as a redraw,
+   the drop reads as a different mode arriving. Compositor-only
+   (transform/opacity); the element is keyed on the mode value in
+   ComposerModeBadge.tsx so the animation replays per step.
+   The ruled 200ms lands exactly on --duration-disclosure, and the curve is
+   --ease-out-quint off the existing ease scale: a one-consumer curve is not
+   worth a token of its own, and the drop is short enough that quint's
+   front-loaded departure reads as the same arrival. */
+.composer-mode-badge-glyph {
+  animation: composer-mode-badge-glyph-in var(--duration-disclosure) var(--ease-out-quint) both;
+}
+
+@keyframes composer-mode-badge-glyph-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-7px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-mode-badge-glyph {
+    animation: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1350,6 +1110,31 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .chip-enter {
+    animation: none;
+  }
+}
+
+/* A newly settled subagent identity joins an already-mounted horizontal run.
+   Its receipt-specific registry key makes the pop one-shot; replay and
+   virtualization remounts stay static. Compositor-only: opacity/scale. */
+@keyframes subagent-spawn-chip-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.subagent-spawn-chip-enter {
+  transform-origin: 50% 50%;
+  animation: subagent-spawn-chip-enter var(--duration-pop) var(--ease-pop) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subagent-spawn-chip-enter {
     animation: none;
   }
 }
@@ -1573,12 +1358,6 @@ body {
 /* 4.5s total: trot in (0-30%), pause & celebrate (30-70%), trot out (70-100%) */
 /* Arms down during trot, raise when paused in center, stay up for exit */
 /* Trophy pops in after arms are up, stays for the hold, exits with the trot */
-/* ---- Chat view text selection ---- */
-.chat-selection-root ::selection {
-  background-color: var(--color-text-selection);
-  color: inherit;
-}
-
 .workspace-shell-tab {
   height: var(--workspace-shell-tab-height);
 }
@@ -1605,6 +1384,12 @@ body {
   padding-right: calc(
     var(--workspace-shell-tab-status-size) + var(--workspace-shell-tab-content-gap)
   );
+}
+
+/* A revealed shortcut participates in the button's flex row, so its own
+   width replaces the status reservation and the title truncates before it. */
+.workspace-shell-tab[data-has-shortcut="true"] .workspace-shell-tab__label {
+  padding-right: 0;
 }
 
 .workspace-shell-tab__status {

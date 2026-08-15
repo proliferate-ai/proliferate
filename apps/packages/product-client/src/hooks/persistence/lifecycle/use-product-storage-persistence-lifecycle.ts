@@ -17,6 +17,10 @@ import {
   setCloudDisplayNameSuppressionStorageContext,
 } from "#product/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
 import {
+  hydrateSlashCommandCatalog,
+  setSlashCommandCatalogStorageContext,
+} from "#product/stores/chat/slash-command-catalog-store";
+import {
   hydrateSessionReplacementTombstones,
   setSessionReplacementTombstonesStorageContext,
 } from "#product/lib/access/persistence/session-replacement-tombstones-storage";
@@ -52,6 +56,9 @@ export function useProductStoragePersistenceLifecycle(): void {
 
     setCloudDisplayNameSuppressionStorageContext(storage);
     void hydrateCloudDisplayNameSuppression(storage, isStale);
+
+    setSlashCommandCatalogStorageContext(storage);
+    void hydrateSlashCommandCatalog(storage, isStale);
 
     setSessionReplacementTombstonesStorageContext(storage);
     void hydrateSessionReplacementTombstones(storage, isStale).then((entries) => {

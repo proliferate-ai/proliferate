@@ -11,6 +11,9 @@ import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-st
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
+import {
+  pendingWorkspaceEntries,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 
 const mocks = vi.hoisted(() => ({
   resolveWorktreeCreationInput: vi.fn(),
@@ -41,7 +44,6 @@ vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
         currentBranch: "main",
         originalBranch: "main",
         lifecycleState: "active",
-        cleanupState: "none",
         createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",
       }],
@@ -194,7 +196,7 @@ describe("useWorkspaceEntryActions", () => {
     });
 
     await waitFor(() => expect(mocks.createWorktreeWorkspace).toHaveBeenCalled());
-    const pendingEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+    const pendingEntry = onlyPendingEntry();
     expect(pendingEntry).toMatchObject({
       source: "worktree-created",
       displayName: "workspace-abc",
@@ -238,7 +240,7 @@ describe("useWorkspaceEntryActions", () => {
         state.workspaceLastInteracted["workspace-created"]
         && !previousState.workspaceLastInteracted["workspace-created"]
       ) {
-        pendingEntryAtInteraction = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+        pendingEntryAtInteraction = onlyPendingEntry();
       }
     });
 
@@ -250,13 +252,93 @@ describe("useWorkspaceEntryActions", () => {
       workspaceId: "workspace-created",
     });
     unsubscribe();
-    expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
+    expect(onlyPendingEntry()).toBeNull();
+    expect(useSessionSelectionStore.getState().workspaceArrivalEvent).toMatchObject({
+      workspaceId: "workspace-created",
+      source: "worktree-created",
+      receiptClientSessionId: projectedSessionId,
+    });
     expect(useWorkspaceUiStore.getState().workspaceLastInteracted["workspace-created"])
       .toEqual(expect.any(String));
     expect(pendingEntryAtInteraction).toMatchObject({
       source: "worktree-created",
       workspaceId: "workspace-created",
     });
+  });
+
+  it("completes a worktree launch after the user switches away mid-flight", async () => {
+    let finishCreate: (value: { workspace: Workspace; setupScript: null }) => void =
+      () => {
+        throw new Error("create promise resolver was not initialized");
+      };
+    const createPromise = new Promise<{ workspace: Workspace; setupScript: null }>((resolve) => {
+      finishCreate = resolve;
+    });
+    mocks.resolveWorktreeCreationInput.mockResolvedValueOnce({
+      params: {
+        repoRootId: "repo-root-1",
+        workspaceName: "workspace-abc",
+        branchName: "pablo/workspace-abc",
+        targetPath: "/Users/pablo/.proliferate/worktrees/proliferate/workspace-abc",
+        baseRef: "main",
+        setupScript: null,
+      },
+      source: null,
+      repoName: "proliferate",
+    });
+    mocks.createWorktreeWorkspace.mockReturnValueOnce(createPromise);
+
+    const { result } = renderHook(() => useWorkspaceEntryActions());
+    let actionPromise!: Promise<{ workspaceId: string; projectedSessionId: string | null } | null>;
+    await act(async () => {
+      actionPromise = result.current.createWorktreeAndEnterWithResult({
+        repoRootId: "repo-root-1",
+        sourceWorkspaceId: "workspace-source",
+        baseBranch: "main",
+      }, {
+        initialSession: {
+          kind: "session",
+          agentKind: "codex",
+          modelId: "gpt-5.5",
+          modeId: "xhigh",
+          displayTitle: "gpt-5.5",
+        },
+      });
+    });
+    await waitFor(() => expect(mocks.createWorktreeWorkspace).toHaveBeenCalled());
+    const pendingEntry = onlyPendingEntry();
+
+    // The user leaves the pending shell while the backend create is still open.
+    act(() => {
+      useSessionSelectionStore.getState().activateWorkspace({
+        logicalWorkspaceId: "workspace-other",
+        workspaceId: "workspace-other",
+        initialActiveSessionId: "session-other",
+      });
+    });
+    expect(onlyPendingEntry()).toMatchObject({ attemptId: pendingEntry?.attemptId });
+
+    finishCreate({
+      workspace: worktreeWorkspace("workspace-created"),
+      setupScript: null,
+    });
+
+    // The launch runs to completion in the background...
+    await expect(actionPromise).resolves.toMatchObject({
+      workspaceId: "workspace-created",
+    });
+    expect(mocks.materializePendingWorkspaceSessions).toHaveBeenCalledWith(
+      expect.objectContaining({ attemptId: pendingEntry?.attemptId }),
+      "workspace-created",
+      // The user moved away before finalization, and that one decision governs
+      // materialization too (PRO-230).
+      { attended: false },
+    );
+    expect(onlyPendingEntry()).toBeNull();
+    // ...without pulling the user back out of the workspace they moved to.
+    expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-other");
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-other");
+    expect(useSessionSelectionStore.getState().workspaceArrivalEvent).toBeNull();
   });
 
   it("seeds a projected pending session from saved defaults when no initial session is passed", async () => {
@@ -301,7 +383,7 @@ describe("useWorkspaceEntryActions", () => {
     });
 
     await waitFor(() => expect(mocks.createWorktreeWorkspace).toHaveBeenCalled());
-    const pendingEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+    const pendingEntry = onlyPendingEntry();
     expect(pendingEntry).not.toBeNull();
     const projectedSessionId = useSessionSelectionStore.getState().activeSessionId;
     expect(projectedSessionId).toEqual(expect.stringContaining("client-session:claude:"));
@@ -331,6 +413,11 @@ describe("useWorkspaceEntryActions", () => {
   });
 });
 
+/** This slice keeps at most one attempt in flight per test. */
+function onlyPendingEntry() {
+  return pendingWorkspaceEntries(useSessionSelectionStore.getState().pendingWorkspaces)[0] ?? null;
+}
+
 function worktreeWorkspace(id: string): Workspace {
   return {
     id,
@@ -344,11 +431,6 @@ function worktreeWorkspace(id: string): Workspace {
     origin: null,
     creatorContext: null,
     lifecycleState: "active",
-    cleanupState: "none",
-    cleanupOperation: null,
-    cleanupErrorMessage: null,
-    cleanupFailedAt: null,
-    cleanupAttemptedAt: null,
     executionSummary: null,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",

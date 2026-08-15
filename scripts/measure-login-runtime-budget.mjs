@@ -83,7 +83,30 @@ const DIST = join(REPO_ROOT, "apps", "web", "dist");
 // deps-bump residual). Posthog 1.386.8 pin recovered most weight but PR #1677's
 // 30-package bump had small residual contributors (~500 B). Honest fix = cap raise
 // to 490000 B (pre-bump CI was 481979 B, leaving only 3 KB headroom).
-const CAPS = { js: 490000, css: 66000 };
+//
+// Raised to 500000 B on 2026-08-13 (founder decision, this PR). The diagnostic
+// snapshot consent surface put /login at 495612 B, 5612 B over. The weight is
+// support-modal code that most users never open, so the standing intent is to
+// lazy-load it out of the first-load graph and lower this cap again; the raise
+// is the unblock, not the fix. main and PRs 6-7 of this train measure clean, so
+// this PR is the whole delta.
+// Also on 2026-08-13 (PRO-111, merged on main as 490500): AuthShell surfaces
+// previously-invisible auth errors via describeAuthIssue, +452 B of genuine
+// feature bytes.
+//
+// Raised to 500500 on 2026-08-14: once the observability train and this week's
+// product PRs all landed on main, the composed bundle measured 500291 B —
+// each PR fit its own cap view, but the sum overflowed by 291 B. The standing
+// intent above is unchanged: lazy-load the support modal out of the first-load
+// graph and bring this cap back down; the raise is the unblock, not the fix.
+//
+// Raised to JS 502000 / CSS 66250 on 2026-08-15 (PRO-165): home-screen
+// attachments put the composed bundle at 501563 B JS / 66013 B CSS. The
+// growth is genuine feature bytes in the shared shell (the home composer now
+// runs the same attachment controller, drop overlay, and launch-snapshot
+// plumbing chat uses; the drop overlay's utility combos add the CSS bytes).
+// The support-modal lazy-load intent above remains the path back down.
+const CAPS = { js: 502000, css: 66250 };
 // Baseline requests zero of these on /login; any byte is a fail-closed
 // regression (login/callback must not eagerly load fonts/images/audio).
 const ZERO_KINDS = ["font", "image", "audio"];

@@ -1,5 +1,5 @@
 import { Button } from "#product/primitives/Button";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { AppShellReviewIcon } from "#product/primitives/icons/app-shell";
 import {
@@ -97,7 +97,7 @@ export interface WorkspaceStatusActions {
   onCompareBranch?: () => void;
   /** Checks row action ("View") — opens the PR itself. */
   onViewChecks?: () => void;
-  /** Focus one of our agents' chat tabs (subagent or review session). */
+  /** Open the agent's owning surface (Agents pane or review session). */
   onOpenAgentSession?: (sessionId: string) => void;
 }
 
@@ -291,8 +291,8 @@ export function WorkspaceStatusCard({
 }
 
 /* One state group of our agents: sprite cluster + "N working".
-   Clicking focuses the group's first agent session (tab activation) — the
-   hover card lists every member. */
+   Clicking opens the group's first agent in its owning surface; the hover card
+   lists every member. */
 function SubagentGroupRow({
   rows,
   state,

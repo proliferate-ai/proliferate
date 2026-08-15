@@ -12,7 +12,6 @@ import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-clou
 import { useWorkspaceGitStatuses } from "#product/hooks/workspaces/derived/use-workspace-git-statuses";
 import { useWorkspaceSidebarState } from "#product/hooks/workspaces/derived/use-workspace-sidebar-state";
 import { useWorkspaceSidebarActions } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-actions";
-import { useAppCommandActionsContext } from "#product/providers/AppCommandActionsProvider";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import { formatSidebarRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import {
@@ -36,7 +35,6 @@ const PR_STATUS_UNAVAILABLE_LABEL = "PR status unavailable — gh not signed in"
  */
 export function WorkspacesPage() {
   const actions = useWorkspaceSidebarActions();
-  const appCommands = useAppCommandActionsContext();
   const { cloudActive } = useCloudAvailabilityState();
   const { data: repoConfigs } = useRepositories(cloudActive);
   const { groups } = useWorkspaceSidebarState({
@@ -81,7 +79,7 @@ export function WorkspacesPage() {
             </Tooltip>
           ) : null}
           onWorkspaceSelect={actions.handleSelectWorkspace}
-          onCreate={() => appCommands.newWorktreeWorkspace.execute("palette")}
+          onCreate={actions.handleStartWorktreeWorkspaceCreation}
           createShortcutLabel={getShortcutDisplayLabel(SHORTCUTS.newWorktree)}
         />
       </div>

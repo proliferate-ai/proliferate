@@ -1,17 +1,18 @@
-import type { ReactNode } from "react";
-// CircleCheck isn't in the curated ProductClient icon set — the goal bar
-// and goal transcript rows source it directly from lucide-react too.
-import { CircleCheck } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   CircleQuestion,
   MessageCircleQuestion,
 } from "#product/primitives/icons/core";
 import { Sparkles } from "#product/primitives/icons/product";
-import type { PendingInteraction } from "@anyharness/sdk";
+import { CircleCheck } from "#product/primitives/icons/status";
+import type { PendingInteraction, TurnRecord } from "@anyharness/sdk";
+import { formatWorkedForDuration } from "#product/domain/chats/transcript/transcript-work-duration";
 import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
 import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
-import { useActivePendingInteractionState } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
+import { usePendingInteractionStateForSession } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
+import { useTranscriptSessionId } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import type { SessionViewState } from "#product/domain/sessions/activity";
 
 /**
@@ -23,7 +24,13 @@ import type { SessionViewState } from "#product/domain/sessions/activity";
 export type PendingInteractionMarkerKind = "permission" | "question";
 
 const TURN_HORIZONTAL_PADDING = "px-0";
-const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
+/**
+ * Fixed height shared by every trailing-status variant AND the reserved
+ * frontier keeper in TranscriptTurnRow: the status content may mount and
+ * unmount mid-turn (Thinking yields to tool shimmers and returns), but the
+ * box it lives in must not change size, or the transcript bottom bounces.
+ */
+export const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
 /**
  * Reference-ramp conversation-item rhythm shared by pending and materialized
  * turns. [CHAT-04] RULED block, retuned: that rhythm is the 16px
@@ -55,12 +62,22 @@ export function TurnAssistantActionRow({
   showCopyButton = false,
   reserveSlot = false,
   timestampLabel = null,
+  alwaysVisible = false,
   metMarker = null,
 }: {
   content: string | null;
   showCopyButton?: boolean;
   reserveSlot?: boolean;
   timestampLabel?: string | null;
+  /**
+   * When true the copy button is persistently visible (opacity-100) instead
+   * of hover-gated. Set only for the transcript's final completed AI message:
+   * the permanent button is the "session is done" marker that distinguishes a
+   * finished session from a quiet running one (PRO-119). Every earlier
+   * message keeps hover-to-reveal, and the timestamp stays hover-only on
+   * every message including the final one.
+   */
+  alwaysVisible?: boolean;
   /**
    * Inline "✓ Goal achieved in Xs" marker rendered between the copy button
    * and the timestamp — only on the final completed message when the active
@@ -73,12 +90,10 @@ export function TurnAssistantActionRow({
     return null;
   }
 
-  // Hover-to-reveal on EVERY message, including the final one — the copy
-  // button is never permanent chrome. (The goal-met marker below stays
-  // persistently visible; it reports state rather than offering an action.)
-  const visibilityClassName =
+  const hoverVisibilityClassName =
     "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
-  const timestampVisibilityClassName = visibilityClassName;
+  const visibilityClassName = alwaysVisible ? "opacity-100" : hoverVisibilityClassName;
+  const timestampVisibilityClassName = hoverVisibilityClassName;
 
   return (
     // The footer sits in the same TURN_ITEM_GAP_CLASS flex column as the
@@ -132,6 +147,44 @@ export function TurnGoalMetMarker({ label }: { label: string }): ReactNode {
       {label}
     </span>
   );
+}
+
+// One-shot flag for the completed-history disclosure's entry animation: only
+// a live streaming→settled transition animates; mounting an already-settled
+// turn (history load, row remount) does not. Shared by the real disclosure in
+// TurnItemSequence and the synthesized one in TurnWorkspaceReceiptSlot.
+export function useCompletedHistoryTransition(eligible: boolean): boolean {
+  const wasEligibleRef = useRef(eligible);
+  const [transitionClaimed, setTransitionClaimed] = useState(false);
+
+  useLayoutEffect(() => {
+    if (eligible && !wasEligibleRef.current) {
+      setTransitionClaimed(true);
+    }
+    wasEligibleRef.current = eligible;
+  }, [eligible]);
+
+  return transitionClaimed;
+}
+
+export function CompletedHistorySequence({ children }: { children: ReactNode }) {
+  return (
+    <div
+      data-completed-history-sequence
+      className={`flex flex-col ${TURN_ITEM_GAP_CLASS}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function resolveCompletedHistoryDisclosureLabel(
+  turn: Pick<TurnRecord, "startedAt" | "completedAt">,
+  override: string | null | undefined,
+): string {
+  return override
+    ?? formatWorkedForDuration(turn.startedAt, turn.completedAt)
+    ?? "Worked";
 }
 
 export function resolvePendingPromptTrailingStatus(
@@ -241,8 +294,16 @@ function TrailingStatusCrossfade({
 // Reads the composer's primary pending interaction so the transcript marker can
 // name WHAT is awaiting the user (Permission vs Question) rather than a generic
 // "waiting" row. Kept a thin wrapper so the presentation stays pure/testable.
+// The interaction comes from the transcript this marker is rendered inside —
+// the transcript-context session — so an embedded non-active transcript
+// (Agents-pane detail) never shows the main active session's interaction.
+// Outside a transcript context the active session stays the default.
 function ConnectedPendingInteractionMarker(): ReactNode {
-  const { primaryPendingInteraction } = useActivePendingInteractionState();
+  const transcriptSessionId = useTranscriptSessionId();
+  const activeSessionId = useActiveSessionId();
+  const { primaryPendingInteraction } = usePendingInteractionStateForSession(
+    transcriptSessionId ?? activeSessionId,
+  );
   return (
     <PendingInteractionMarkerView
       kind={pendingInteractionMarkerKind(primaryPendingInteraction?.kind)}

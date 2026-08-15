@@ -3,6 +3,7 @@ import { createTranscriptState, type PendingPromptEntry, type TranscriptState } 
 import {
   buildTranscriptRowModel,
   createTranscriptRowModelCache,
+  type TranscriptRow,
 } from "./transcript-row-model";
 import { createPromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 import {
@@ -960,6 +961,224 @@ describe("buildTranscriptRowModel", () => {
         );
       }
     }
+  });
+
+  describe("workspace receipt hosting", () => {
+    it("hosts the receipt inside the completed-history disclosure row for a completed first turn", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "user-1", "make me a worktree", 1);
+      // 3 assistant items: the last is final prose, the other 2 fold into
+      // the turn's completed-history disclosure.
+      addAssistantItems(transcript, "turn-1", 3, 10);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        workspaceReceiptKey: "worktree:workspace-1",
+      });
+
+      expect(rows).toHaveLength(1);
+      const row = rows[0];
+      if (row.kind !== "turn") {
+        throw new Error("expected a turn row");
+      }
+      expect(row.turnId).toBe("turn-1");
+      expect(row.hostsWorkspaceReceipt).toBe(true);
+      expect(row.renderPresentation.completedHistorySummary).not.toBeNull();
+    });
+
+    it("hosts on the turn's row with non-user content while the first turn is still streaming", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", false);
+      addUserItem(transcript, "turn-1", "user-1", "make me a worktree", 1);
+      addCommandItem(transcript, "turn-1", "command-1", 2);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        workspaceReceiptKey: "worktree:workspace-1",
+      });
+
+      expect(rows).toHaveLength(1);
+      const row = rows[0];
+      if (row.kind !== "turn") {
+        throw new Error("expected a turn row");
+      }
+      expect(row.turnId).toBe("turn-1");
+      expect(row.hostsWorkspaceReceipt).toBe(true);
+      // Streaming turn: no completed-history disclosure exists yet, so the
+      // receipt hosts via the "first row with non-user content" fallback.
+      expect(row.renderPresentation.completedHistorySummary).toBeNull();
+    });
+
+    it("hosts in the first turn only, never a later turn", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "user-1", "first prompt", 1);
+      addAssistantItems(transcript, "turn-1", 1, 10);
+      addTurn(transcript, "turn-2", true);
+      addUserItem(transcript, "turn-2", "user-2", "second prompt", 20);
+      addAssistantItems(transcript, "turn-2", 1, 30);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-2",
+        latestTurnHasAssistantRenderableContent: true,
+        workspaceReceiptKey: "worktree:workspace-1",
+      });
+
+      const isHostingTurnRow = (
+        row: TranscriptRow,
+      ): row is Extract<TranscriptRow, { kind: "turn" }> =>
+        row.kind === "turn" && !!row.hostsWorkspaceReceipt;
+      const hostedRows = rows.filter(isHostingTurnRow);
+      expect(hostedRows).toHaveLength(1);
+      expect(hostedRows[0].turnId).toBe("turn-1");
+    });
+
+    it("does not serve a stale hostsWorkspaceReceipt flag from the turn-row cache once the key appears or disappears", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "user-1", "make me a worktree", 1);
+      addAssistantItems(transcript, "turn-1", 1, 10);
+      const cache = createTranscriptRowModelCache();
+      const buildRows = (workspaceReceiptKey: string | null) =>
+        buildTranscriptRowModel({
+          activeSessionId: "session-1",
+          transcript,
+          visibleOptimisticPrompt: null,
+          latestTurnId: "turn-1",
+          latestTurnHasAssistantRenderableContent: true,
+          workspaceReceiptKey,
+        }, cache);
+      const hostFlag = (rows: readonly TranscriptRow[]) => {
+        const row = rows[0];
+        return row.kind === "turn" ? !!row.hostsWorkspaceReceipt : false;
+      };
+
+      expect(hostFlag(buildRows(null))).toBe(false);
+      expect(hostFlag(buildRows("worktree:workspace-1"))).toBe(true);
+      expect(hostFlag(buildRows(null))).toBe(false);
+      expect(hostFlag(buildRows("worktree:workspace-1"))).toBe(true);
+    });
+
+    it("hosts on the last prompt row's frontier when no turn is renderable yet", () => {
+      const transcript = createTranscriptState("session-1");
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: pendingPrompt(),
+        latestTurnId: null,
+        latestTurnHasAssistantRenderableContent: false,
+        workspaceReceiptKey: "worktree:workspace-1",
+      });
+
+      expect(rows.map((row) => row.kind)).toEqual(["pending_prompt"]);
+      const row = rows[0];
+      if (row.kind !== "pending_prompt") {
+        throw new Error("expected a pending_prompt row");
+      }
+      expect(row.hostsWorkspaceReceipt).toBe(true);
+    });
+
+    it("hosts on the last outbox prompt row's frontier when no turn is renderable yet", () => {
+      const transcript = createTranscriptState("session-1");
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        visibleOutboxEntries: [
+          createPromptOutboxEntry({
+            clientPromptId: "prompt-1",
+            clientSessionId: "session-1",
+            text: "first",
+            blocks: [{ type: "text", text: "first" }],
+            now: "2026-01-01T00:00:00.000Z",
+          }),
+          createPromptOutboxEntry({
+            clientPromptId: "prompt-2",
+            clientSessionId: "session-1",
+            text: "second",
+            blocks: [{ type: "text", text: "second" }],
+            now: "2026-01-01T00:00:01.000Z",
+          }),
+        ],
+        latestTurnId: null,
+        latestTurnHasAssistantRenderableContent: false,
+        workspaceReceiptKey: "worktree:workspace-1",
+      });
+
+      expect(rows.map((row) => row.kind)).toEqual(["outbox_prompt", "outbox_prompt"]);
+      const [firstRow, secondRow] = rows;
+      if (firstRow.kind !== "outbox_prompt" || secondRow.kind !== "outbox_prompt") {
+        throw new Error("expected outbox_prompt rows");
+      }
+      expect(firstRow.hostsWorkspaceReceipt).toBeFalsy();
+      expect(secondRow.hostsWorkspaceReceipt).toBe(true);
+    });
+
+    it("renders no receipt in an empty transcript", () => {
+      const transcript = createTranscriptState("session-1");
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: null,
+        latestTurnHasAssistantRenderableContent: false,
+        workspaceReceiptKey: "worktree:workspace-1",
+      });
+
+      expect(rows).toEqual([]);
+    });
+
+    it("omits the receipt row when the key is null", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addAssistantItems(transcript, "turn-1", 1, 10);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        workspaceReceiptKey: null,
+      });
+
+      expect(
+        rows.some((row) => row.kind === "turn" && row.hostsWorkspaceReceipt),
+      ).toBe(false);
+    });
+
+    it("omits the receipt row when the key is omitted entirely", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addAssistantItems(transcript, "turn-1", 1, 10);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+      });
+
+      expect(
+        rows.some((row) => row.kind === "turn" && row.hostsWorkspaceReceipt),
+      ).toBe(false);
+    });
   });
 });
 

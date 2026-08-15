@@ -43,11 +43,18 @@ describe("transcript selection decisions", () => {
 
   it("sets ownership only from unblocked transcript targets", () => {
     expect(resolvePointerOwnership(target({ insideRoot: true }))).toBe("set-owned");
+    expect(resolvePointerOwnership(target({ contextualActions: true }))).toBe("ignore");
     expect(resolvePointerOwnership(target({ insideRoot: false }))).toBe("clear-owned");
     expect(resolvePointerOwnership(target({ insideRoot: true, textEntry: true }))).toBe("clear-owned");
     expect(resolvePointerOwnership(target({ insideRoot: true, terminalZone: true }))).toBe("clear-owned");
+    expect(resolvePointerOwnership(target({ insideRoot: true, browserZone: true }))).toBe("clear-owned");
     expect(resolvePointerOwnership(target({ insideRoot: true, nativeInteractive: true }))).toBe("clear-owned");
     expect(resolvePointerOwnership(target({ insideRoot: true, ariaInteractive: true }))).toBe("clear-owned");
+    expect(resolvePointerOwnership(target({
+      insideRoot: true,
+      nativeInteractive: true,
+      selectableInteractiveText: true,
+    }))).toBe("track-selection");
   });
 
   it("treats ignored controls as chrome without blocking body descendants", () => {
@@ -92,6 +99,41 @@ describe("transcript selection decisions", () => {
       eventTarget: inside,
       activeTarget: target(),
     })).toBe("ignore");
+  });
+
+  it("lets the active chat surface own primary-A without a prior selection", () => {
+    expect(resolvePrimaryAAction({
+      owned: false,
+      commandOwnerActive: true,
+      isSelectAll: true,
+      defaultPrevented: false,
+      eventTarget: target(),
+      activeTarget: target(),
+    })).toBe("select-root");
+    expect(resolvePrimaryAAction({
+      owned: false,
+      commandOwnerActive: true,
+      isSelectAll: true,
+      defaultPrevented: false,
+      eventTarget: target(),
+      activeTarget: target({ textEntry: true }),
+    })).toBe("clear-owned");
+    expect(resolvePrimaryAAction({
+      owned: false,
+      commandOwnerActive: true,
+      isSelectAll: true,
+      defaultPrevented: false,
+      eventTarget: target(),
+      activeTarget: target({ terminalZone: true }),
+    })).toBe("clear-owned");
+    expect(resolvePrimaryAAction({
+      owned: false,
+      commandOwnerActive: true,
+      isSelectAll: true,
+      defaultPrevented: false,
+      eventTarget: target(),
+      activeTarget: target({ browserZone: true }),
+    })).toBe("clear-owned");
   });
 
   it("clamps document selection changes only when transcript ownership is active", () => {

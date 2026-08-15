@@ -1,0 +1,117 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
+import {
+  resolveWorkspaceConnectionFromContext,
+  useAnyHarnessWorkspaceContext,
+} from "../context/AnyHarnessWorkspace.js";
+import { getAnyHarnessClient } from "../lib/client-cache.js";
+import {
+  anyHarnessSessionKey,
+  anyHarnessSessionSubagentsKey,
+  anyHarnessSessionsKey,
+  anyHarnessWorkspaceSubagentsKey,
+} from "../lib/query-keys.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
+
+interface WorkspaceQueryOptions {
+  workspaceId?: string | null;
+  enabled?: boolean;
+}
+
+interface SessionSubagentsQueryOptions extends WorkspaceQueryOptions {
+  /** Passthrough to React Query; omit to keep the default (no polling). */
+  refetchInterval?: number | false;
+  /** Passthrough to React Query; omit to keep the client's default. */
+  refetchOnWindowFocus?: boolean;
+}
+
+type SubagentLifecycleMutationInput = {
+  parentSessionId: string;
+  childSessionId: string;
+};
+
+export function useSessionSubagentsQuery(
+  sessionId: string | null | undefined,
+  options?: SessionSubagentsQueryOptions,
+) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useQuery({
+    queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, sessionId),
+    enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
+    // Spread conditionally: an explicit `undefined` would override the host
+    // QueryClient's global defaults, silently changing every omitted-option caller.
+    ...(options?.refetchInterval !== undefined
+      ? { refetchInterval: options.refetchInterval }
+      : {}),
+    ...(options?.refetchOnWindowFocus !== undefined
+      ? { refetchOnWindowFocus: options.refetchOnWindowFocus }
+      : {}),
+    queryFn: async ({ signal }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.getSubagents(
+        sessionId!,
+        requestOptionsWithSignal(undefined, signal),
+      );
+    },
+  });
+}
+
+function useSubagentLifecycleMutation(
+  action: "closeSubagent" | "openSubagent" | "promoteSubagent",
+  options?: { workspaceId?: string | null },
+) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const queryClient = useQueryClient();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: SubagentLifecycleMutationInput) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions[action](input.parentSessionId, input.childSessionId);
+    },
+    onSuccess: (_response, variables) => {
+      // Reconciliation belongs to this hook, but an accepted lifecycle
+      // response is immediate product truth. Do not hold mutateAsync (and the
+      // Close/Open/Promote UI transition) behind active-query refetches.
+      void Promise.allSettled([
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceSubagentsKey(cacheScopeKey, workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionSubagentsKey(
+            cacheScopeKey,
+            workspaceId,
+            variables.parentSessionId,
+          ),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, variables.childSessionId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.childSessionId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId),
+        }),
+      ]);
+    },
+  });
+}
+
+export function useCloseSubagentMutation(options?: { workspaceId?: string | null }) {
+  return useSubagentLifecycleMutation("closeSubagent", options);
+}
+
+export function useOpenSubagentMutation(options?: { workspaceId?: string | null }) {
+  return useSubagentLifecycleMutation("openSubagent", options);
+}
+
+export function usePromoteSubagentMutation(options?: { workspaceId?: string | null }) {
+  return useSubagentLifecycleMutation("promoteSubagent", options);
+}

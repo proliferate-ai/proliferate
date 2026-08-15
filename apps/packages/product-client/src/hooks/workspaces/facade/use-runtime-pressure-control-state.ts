@@ -1,10 +1,8 @@
 import type {
   HealthResponse,
   PruneOrphanWorktreeRequest,
-  RunWorktreeRetentionResponse,
   RuntimeResourcePressure,
   WorkspacePurgeResponse,
-  WorkspaceRetireResponse,
   WorktreeInventoryRow,
 } from "@anyharness/sdk";
 import { useCallback, useMemo } from "react";
@@ -14,10 +12,6 @@ import { useWorktreeSettingsTargets } from "#product/hooks/workspaces/facade/use
 import {
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
 } from "#product/lib/domain/preferences/user/worktree-auto-delete";
-import {
-  worktreeRetentionRunMessage,
-  worktreeSettingsActionFailureMessage,
-} from "#product/lib/domain/workspaces/sidebar/worktree-settings-actions";
 import type { WorktreeSettingsTarget } from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
@@ -56,11 +50,8 @@ export interface RuntimePressureControlState {
   targets: RuntimePressureTargetState[];
   isDiscovering: boolean;
   actions: {
-    runCleanup: (target: WorktreeSettingsTarget) => void;
     pruneOrphan: (target: WorktreeSettingsTarget, input: PruneOrphanWorktreeRequest) => void;
-    pruneWorkspace: (target: WorktreeSettingsTarget, workspaceId: string) => void;
     purgeWorkspace: (target: WorktreeSettingsTarget, workspaceId: string) => void;
-    retryPurge: (target: WorktreeSettingsTarget, workspaceId: string) => void;
   };
 }
 
@@ -127,28 +118,22 @@ export function useRuntimePressureControlStateFromSettings(
       ?? null;
   }, [combinedTargets, selected.selectedLogicalWorkspace]);
 
+  // Both actions resolve only on success now: purge answers
+  // `{ outcome: "deleted", alreadyDeleted }` or throws, and prune-orphan
+  // resolves void or throws. The retire-era success-shaped failure results
+  // (`blocked`, `cleanup_failed`, `cleanupMessage`, `preflight.blockers`) are
+  // gone with the preflight and the tombstone, so the catch path is the only
+  // failure path left.
   const runAction = useCallback(<TResult,>(
     operation: () => Promise<TResult>,
     success: string | ((result: TResult) => string),
   ) => {
     void operation().then((result) => {
-      const failureMessage = worktreeSettingsActionFailureMessage(result);
-      if (failureMessage) {
-        showToast(failureMessage);
-        return;
-      }
       showToast(typeof success === "function" ? success(result) : success);
     }).catch((error) => {
       showToast(error instanceof Error ? error.message : String(error));
     });
   }, [showToast]);
-
-  const runCleanup = useCallback((target: WorktreeSettingsTarget) => {
-    runAction<RunWorktreeRetentionResponse>(
-      () => settings.runRetention(target, idealWorktreeCount),
-      worktreeRetentionRunMessage,
-    );
-  }, [idealWorktreeCount, runAction, settings]);
 
   const pruneOrphan = useCallback((
     target: WorktreeSettingsTarget,
@@ -160,24 +145,10 @@ export function useRuntimePressureControlStateFromSettings(
     );
   }, [runAction, settings]);
 
-  const pruneWorkspace = useCallback((target: WorktreeSettingsTarget, workspaceId: string) => {
-    runAction<WorkspaceRetireResponse>(
-      () => settings.pruneWorkspaceCheckout(target, workspaceId),
-      "Workspace checkout removed.",
-    );
-  }, [runAction, settings]);
-
   const purgeWorkspace = useCallback((target: WorktreeSettingsTarget, workspaceId: string) => {
     runAction<WorkspacePurgeResponse>(
       () => settings.purgeWorkspace(target, workspaceId),
       "Runtime workspace history deleted.",
-    );
-  }, [runAction, settings]);
-
-  const retryPurge = useCallback((target: WorktreeSettingsTarget, workspaceId: string) => {
-    runAction<WorkspacePurgeResponse>(
-      () => settings.retryPurge(target, workspaceId),
-      "Purge retry finished.",
     );
   }, [runAction, settings]);
 
@@ -187,11 +158,8 @@ export function useRuntimePressureControlStateFromSettings(
     targets: combinedTargets,
     isDiscovering: settings.isDiscovering,
     actions: {
-      runCleanup,
       pruneOrphan,
-      pruneWorkspace,
       purgeWorkspace,
-      retryPurge,
     },
   };
 }
