@@ -184,13 +184,11 @@ export const themeTokens = {
    */
   "--color-composer-background": {
     dark: "#2d2d2d",
-    // Light was pure white when the composer still drew a 0.5px stroke +
-    // elevation; borderless chrome (composer-input cleanup) means the fill IS
-    // the surface, so white-on-white would make the composer invisible. It
-    // reuses the sanctioned rail plane #f6f6f6 (--color-surface-under /
-    // --color-sidebar) rather than adding a fourth opaque light plane — light
-    // has exactly three, and the rail is already the step off the page that
-    // dark spells #181818 → #2d2d2d.
+    // Light reuses the sanctioned rail plane #f6f6f6
+    // (--color-surface-under / --color-sidebar) rather than adding a fourth
+    // opaque light plane. Its shared border-role hairline makes the perimeter
+    // legible without restoring elevation; dark keeps the stronger
+    // #181818 → #2d2d2d fill step and no perimeter paint.
     light: "#f6f6f6",
     provenance: "[RETUNE:surface/composer-fill]",
   },
