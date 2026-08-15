@@ -24,6 +24,7 @@ import {
 } from "#product/domain/sessions/intents/session-intent-reconciliation";
 import {
   bindSessionIntentMaterialization,
+  findSupersedableTailConfigIntent,
   getPromptEntryByPromptId,
   patchSessionIntent,
   removeSessionIntent,
@@ -93,16 +94,36 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
 
   enqueueConfig: (input) => {
     const debugStartedAtMs = startSessionIntentStoreActionTrace();
-    const intent = createUpdateConfigIntent({
-      ...input,
-      intentId: input.intentId ?? createSessionIntentId("config"),
-    });
+    // Same intent id and queue position: the burst reads as one selection
+    // whose value kept changing, and ordering against any later intents is
+    // untouched. Skipped when the caller pins an explicit intentId.
+    const supersedable = input.intentId
+      ? null
+      : findSupersedableTailConfigIntent(
+        useSessionIntentStore.getState(),
+        input.clientSessionId,
+        input.configId,
+      );
+    const intent: SessionUpdateConfigIntent = supersedable
+      ? {
+        ...supersedable,
+        value: input.value,
+        materializedSessionId: input.materializedSessionId ?? supersedable.materializedSessionId,
+        workspaceId: input.workspaceId ?? supersedable.workspaceId,
+        persistDefaultPreference: input.persistDefaultPreference ?? supersedable.persistDefaultPreference,
+        updatedAt: new Date().toISOString(),
+      }
+      : createUpdateConfigIntent({
+        ...input,
+        intentId: input.intentId ?? createSessionIntentId("config"),
+      });
     set((state) => {
       const next = withDispatchVersion(state, upsertSessionIntent(state, intent));
       recordSessionIntentStoreAction("enqueueConfig", state, next, {
         clientSessionId: intent.clientSessionId,
         configId: intent.configId,
         intentKind: intent.kind,
+        superseded: Boolean(supersedable),
         workspaceId: intent.workspaceId,
       }, debugStartedAtMs);
       return next;
