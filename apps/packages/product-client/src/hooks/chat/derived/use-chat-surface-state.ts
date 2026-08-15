@@ -5,6 +5,7 @@ import {
   resolveChatSurfaceState,
   type ChatSurfaceState,
 } from "#product/lib/domain/chat/surface/chat-surface";
+import { resolveLaunchIntentScope } from "#product/lib/domain/chat/launch/launch-intent";
 import { shouldShowCloudWorkspaceStatusScreen } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
@@ -22,6 +23,9 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   selectedWorkspaceId: string | null;
 } {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const workspaceArrivalEvent = useSessionSelectionStore((state) => state.workspaceArrivalEvent);
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
@@ -84,11 +88,14 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     selectedWorkspaceId,
     hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
     activeLaunchIntentId: activeLaunchIntent?.id ?? null,
+    launchIntentScope: activeLaunchIntent ? resolveLaunchIntentScope(activeLaunchIntent) : null,
     launchIntentInFlight: activeLaunchIntent ? activeLaunchIntent.failure === null : false,
     launchIntentSessionId:
       activeLaunchIntent?.materializedSessionId
       ?? activeLaunchIntent?.clientSessionId
       ?? null,
+    shellLogicalWorkspaceId: selectedLogicalWorkspaceId,
+    shellWorkspaceId: selectedWorkspaceId,
     selectedLocalWorkspace,
     isArrivalWorkspace: workspaceArrivalEvent?.workspaceId === selectedWorkspaceId,
     shouldShowSelectedCloudWorkspaceStatus: selectedCloudWorkspace
@@ -105,10 +112,13 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     isRunning,
     streamConnectionState,
   })), [
+    activeLaunchIntent?.attemptId,
     activeLaunchIntent?.clientSessionId,
     activeLaunchIntent?.failure,
     activeLaunchIntent?.id,
     activeLaunchIntent?.materializedSessionId,
+    activeLaunchIntent?.materializedWorkspaceId,
+    activeLaunchIntent?.targetWorkspaceId,
     activeSessionId,
     hasContent,
     hasTranscriptEntry,
@@ -119,6 +129,7 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     selectedCloudRuntime.state?.preserveVisibleContent,
     selectedCloudWorkspace,
     selectedLocalWorkspace,
+    selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     shellRenderScope,
     streamConnectionState,

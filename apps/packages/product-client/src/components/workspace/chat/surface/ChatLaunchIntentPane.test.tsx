@@ -89,6 +89,8 @@ function intent(): ChatLaunchIntent {
     },
     materializedWorkspaceId: null,
     materializedSessionId: null,
+    attemptId: null,
+    targetWorkspaceId: null,
     createdAt: 1_700_000_000_000,
     sendAttemptedAt: null,
     failure: null,

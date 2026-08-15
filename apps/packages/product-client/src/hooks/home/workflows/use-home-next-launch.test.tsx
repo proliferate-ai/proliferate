@@ -198,6 +198,88 @@ describe("useHomeNextLaunch", () => {
     expect(mocks.navigate).toHaveBeenCalledTimes(1);
   });
 
+  // PR #1867 review finding 1: the intent used to stay unscoped
+  // (attemptId/targetWorkspaceId/materializedWorkspaceId all null) for the
+  // entire in-flight window on the success path, because
+  // markHomeLaunchIntentMaterializedFromPendingWorkspace was only called from
+  // the catch block. This pins that the launch flow now scopes the intent to
+  // its pending attempt synchronously, right after invoking the create call
+  // and before awaiting it — not only after the create promise settles.
+  it("scopes the launch intent to its pending attempt before the create promise resolves (PRO-230)", async () => {
+    const sessionId = "client-session:codex:sync-scope";
+    const pendingEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "sync-scope-attempt",
+      selectedWorkspaceId: null,
+      source: "worktree-created",
+      displayName: "sync-scope",
+      repoLabel: "repo",
+      baseBranchName: "main",
+      request: {
+        kind: "worktree",
+        input: {
+          repoRootId: "repo-root-1",
+          sourceWorkspaceId: null,
+          baseBranch: "main",
+          defaultBranch: "main",
+        },
+      },
+    });
+
+    let resolveCreate: (value: { workspaceId: string; projectedSessionId: string | null }) => void =
+      () => {};
+    const createPromise = new Promise<{ workspaceId: string; projectedSessionId: string | null }>(
+      (resolve) => {
+        resolveCreate = resolve;
+      },
+    );
+    // Mirrors production: beginPendingWorkspace runs synchronously in the
+    // create workflow's body, before its first await, so the pending entry
+    // is already in the store by the time the caller gets the promise back.
+    mocks.createWorktreeAndEnterWithResult.mockImplementation(() => {
+      useSessionSelectionStore.getState().enterPendingWorkspaceShell(pendingEntry, {
+        initialActiveSessionId: sessionId,
+      });
+      return createPromise;
+    });
+
+    const { result } = renderHomeNextLaunch();
+
+    let launchPromise: Promise<boolean> = Promise.resolve(false);
+    act(() => {
+      launchPromise = result.current.launch({
+        text: "scope before resolve",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: {
+          kind: "worktree",
+          repoRootId: "repo-root-1",
+          sourceWorkspaceId: null,
+          baseBranch: "main",
+          defaultBranch: "main",
+        },
+      });
+    });
+
+    // The create promise is still pending here, so if scoping only happened
+    // in the catch block (the pre-fix behavior), attemptId would still be
+    // null at this point.
+    expect(useChatLaunchIntentStore.getState().activeIntent?.attemptId).toBe("sync-scope-attempt");
+
+    putSessionRecord(createEmptySessionRecord(sessionId, "codex", {
+      workspaceId: buildPendingWorkspaceUiKey(pendingEntry),
+      materializedSessionId: null,
+      modelId: "gpt-5.4",
+    }));
+    resolveCreate({ workspaceId: "workspace-real", projectedSessionId: sessionId });
+
+    let succeeded = false;
+    await act(async () => {
+      succeeded = await launchPromise;
+    });
+    expect(succeeded).toBe(true);
+  });
+
   it("does not invoke the Desktop Cowork workflow from Web Home", async () => {
     mocks.productHost.desktop = null;
     const { result } = renderHomeNextLaunch();

@@ -17,6 +17,8 @@ function intent(overrides: Partial<ChatLaunchIntent> = {}): ChatLaunchIntent {
     },
     materializedWorkspaceId: null,
     materializedSessionId: null,
+    attemptId: null,
+    targetWorkspaceId: null,
     createdAt: 100,
     sendAttemptedAt: null,
     failure: null,
@@ -95,5 +97,26 @@ describe("chat launch intent store", () => {
       .toBe("workspace-1");
     expect(useChatLaunchIntentStore.getState().activeIntent?.materializedSessionId)
       .toBe("session-1");
+  });
+
+  it("carries the pending attempt id only for the active launch intent", () => {
+    useChatLaunchIntentStore.getState().begin(intent({ id: "launch-2" }));
+
+    useChatLaunchIntentStore.getState().markMaterializedIfActive("launch-1", {
+      attemptId: "attempt-old",
+    });
+    expect(useChatLaunchIntentStore.getState().activeIntent?.attemptId).toBeNull();
+
+    useChatLaunchIntentStore.getState().markMaterializedIfActive("launch-2", {
+      attemptId: "attempt-1",
+    });
+    expect(useChatLaunchIntentStore.getState().activeIntent?.attemptId).toBe("attempt-1");
+  });
+
+  it("defaults attemptId and targetWorkspaceId to null on begin", () => {
+    useChatLaunchIntentStore.getState().begin(intent({ id: "launch-3" }));
+
+    expect(useChatLaunchIntentStore.getState().activeIntent?.attemptId).toBeNull();
+    expect(useChatLaunchIntentStore.getState().activeIntent?.targetWorkspaceId).toBeNull();
   });
 });
