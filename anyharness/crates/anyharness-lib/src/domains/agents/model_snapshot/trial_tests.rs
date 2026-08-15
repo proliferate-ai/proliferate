@@ -425,6 +425,62 @@ fn both_flags_off_gates_the_engine() {
     assert!(engine.gateway_health("claude").is_none());
 }
 
+#[tokio::test]
+async fn a_rotated_key_resets_the_health_baseline_instead_of_drifting() {
+    // The model list is a function of the KEY, so the same key is stable (no drift)
+    // and a rotated key presents a genuinely different list. Without the baseline
+    // reset on rotation, that different list would false-pulse ModelsDrifted; with
+    // it, the rotated key starts a fresh Reachable baseline.
+    let engine = Tier1TrialEngine::with_probe(
+        false,
+        unique_home(),
+        Arc::new(KeyedModelsProbe),
+    )
+    .with_health(true);
+
+    // Key A: first observation is the baseline.
+    engine
+        .run_trial("claude", "http://gw".into(), "key-a".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::Reachable),
+    );
+
+    // Key A again: same list, stable baseline, still Reachable.
+    engine
+        .run_trial("claude", "http://gw".into(), "key-a".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::Reachable),
+    );
+
+    // Key B (a rotation): a different list, but the rotation resets the baseline,
+    // so this reads Reachable (fresh) rather than ModelsDrifted.
+    engine
+        .run_trial("claude", "http://gw".into(), "key-b".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::Reachable),
+        "a rotated key must start a fresh baseline, not drift against the old key",
+    );
+}
+
+/// Green with a model list derived from the KEY, so a given key is stable and a
+/// different key presents a different list — the shape a rotation-reset test needs.
+struct KeyedModelsProbe;
+
+#[async_trait::async_trait]
+impl Tier1TrialProbe for KeyedModelsProbe {
+    async fn check(&self, _base_url: &str, key: &str) -> Tier1TrialCheck {
+        Tier1TrialCheck::Green {
+            model_ids: vec![format!("model-for-{key}")],
+        }
+    }
+}
+
 /// Green with a different model list on each successive check, to exercise drift.
 struct DriftingProbe {
     checks: AtomicUsize,

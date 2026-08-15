@@ -363,9 +363,17 @@ defaulting OFF.
   (`_verification_loop`, gated by `agent_gateway_verification_enabled` plus the
   gateway being enabled and background workers on, on the
   `agent_gateway_verification_interval_seconds` interval) that asks LiteLLM which
-  models each active enrollment key can see. A non-empty list records `ok`; an
-  empty list records `misconfigured` with a small delta JSON; an error records
-  NO verdict, so a transient blip never overwrites a last-known-good. The verdict
+  models each active enrollment key can see and DIFFS that observed set against the
+  EXPECTED access-group set for the key's `harness_kind`, derived from the deployed
+  `server/litellm/config.yaml` (the model ids whose `model_info.access_groups`
+  contain the `harness_kind`). An exact match records `ok`; any missing or extra
+  ids records `misconfigured` with a delta JSON (`{missing, extra, observed_count,
+  expected_count}`), which catches both a wrong-but-populated group and the
+  stale-deployed-image drift class (repo says X, proxy serves Y). If `config.yaml`
+  is genuinely absent the check degrades rather than crashing (a non-empty list
+  reads `ok` with a `config_unavailable` note, an empty list still `misconfigured`).
+  An error records NO verdict, so a transient blip never overwrites a
+  last-known-good, and the reported exception is key-redacted. The verdict
   persists on the enrollment-key row (`verification_status`,
   `verification_delta`, `verified_at`) and is surfaced additively on the gateway
   capabilities response, never on key material and never on the pinned

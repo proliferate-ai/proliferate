@@ -1,8 +1,9 @@
 """Integration tests for the control-plane gateway verification loop (FR-3).
 
 Covers ``proliferate.server.cloud.agent_gateway.verification.run_verification``
-against a real Postgres session and a fake ``list_models``: the ok/misconfigured
-diff verdicts, error-means-no-overwrite, and the worker's flag gating.
+against a real Postgres session and a fake ``list_models``: the expected-set
+diff verdicts (ok / missing / extra), the config-unavailable degraded fallback,
+error-means-no-overwrite, key-material redaction, and the worker's flag gating.
 """
 
 from __future__ import annotations
@@ -75,13 +76,22 @@ def _fake_list_models(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, object
     monkeypatch.setattr(litellm, "list_models", _list)
 
 
+def _fake_expected(
+    monkeypatch: pytest.MonkeyPatch, expected: dict[str, set[str]] | None
+) -> None:
+    """Pin the expected access-group map so verdicts don't depend on config.yaml."""
+    monkeypatch.setattr(verification, "load_expected_access_groups", lambda: expected)
+
+
 @pytest.mark.asyncio
-async def test_nonempty_model_list_records_ok(
+async def test_matching_model_set_records_ok(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     enrollment_id = await _create_enrollment(db_session)
     key_id = await _mint_key(db_session, enrollment_id, "claude")
-    _fake_list_models(monkeypatch, {"sk-litellm-claude": ["claude-sonnet"]})
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet", "claude-opus"}})
+    # Order-insensitive: observed matches the expected set exactly.
+    _fake_list_models(monkeypatch, {"sk-litellm-claude": ["claude-opus", "claude-sonnet"]})
 
     result = await verification.run_verification(db_session)
 
@@ -95,12 +105,73 @@ async def test_nonempty_model_list_records_ok(
 
 
 @pytest.mark.asyncio
-async def test_empty_model_list_records_misconfigured_delta(
+async def test_missing_model_records_misconfigured_with_missing_delta(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    enrollment_id = await _create_enrollment(db_session)
+    key_id = await _mint_key(db_session, enrollment_id, "claude")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet", "claude-opus"}})
+    _fake_list_models(monkeypatch, {"sk-litellm-claude": ["claude-sonnet"]})
+
+    result = await verification.run_verification(db_session)
+
+    assert result.misconfigured == 1
+    keys = await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
+    verdict = next(k for k in keys if k.id == key_id)
+    assert verdict.verification_status == AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED
+    assert verdict.verification_delta is not None
+    assert "claude-opus" in verdict.verification_delta
+    assert '"missing"' in verdict.verification_delta
+
+
+@pytest.mark.asyncio
+async def test_extra_model_records_misconfigured_with_extra_delta(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     enrollment_id = await _create_enrollment(db_session)
     key_id = await _mint_key(db_session, enrollment_id, "codex")
-    _fake_list_models(monkeypatch, {"sk-litellm-codex": []})
+    _fake_expected(monkeypatch, {"codex": {"gpt-5"}})
+    _fake_list_models(monkeypatch, {"sk-litellm-codex": ["gpt-5", "gpt-forbidden"]})
+
+    result = await verification.run_verification(db_session)
+
+    assert result.misconfigured == 1
+    keys = await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
+    verdict = next(k for k in keys if k.id == key_id)
+    assert verdict.verification_status == AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED
+    assert verdict.verification_delta is not None
+    assert "gpt-forbidden" in verdict.verification_delta
+    assert '"extra"' in verdict.verification_delta
+
+
+@pytest.mark.asyncio
+async def test_config_unavailable_degrades_nonempty_to_ok(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    enrollment_id = await _create_enrollment(db_session)
+    key_id = await _mint_key(db_session, enrollment_id, "grok")
+    # No expected set to diff against: a non-empty list is the best we can say.
+    _fake_expected(monkeypatch, None)
+    _fake_list_models(monkeypatch, {"sk-litellm-grok": ["grok-2"]})
+
+    result = await verification.run_verification(db_session)
+
+    assert result.ok == 1
+    keys = await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
+    verdict = next(k for k in keys if k.id == key_id)
+    assert verdict.verification_status == AGENT_GATEWAY_VERIFICATION_STATUS_OK
+    assert verdict.verification_delta is not None
+    assert "config_unavailable" in verdict.verification_delta
+
+
+@pytest.mark.asyncio
+async def test_config_unavailable_still_flags_empty_list(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    enrollment_id = await _create_enrollment(db_session)
+    key_id = await _mint_key(db_session, enrollment_id, "grok")
+    _fake_expected(monkeypatch, None)
+    _fake_list_models(monkeypatch, {"sk-litellm-grok": []})
 
     result = await verification.run_verification(db_session)
 
@@ -118,6 +189,7 @@ async def test_error_does_not_overwrite_a_prior_verdict(
 ) -> None:
     enrollment_id = await _create_enrollment(db_session)
     key_id = await _mint_key(db_session, enrollment_id, "grok")
+    _fake_expected(monkeypatch, {"grok": {"grok-2"}})
 
     # First tick records ok.
     _fake_list_models(monkeypatch, {"sk-litellm-grok": ["grok-2"]})
@@ -135,6 +207,34 @@ async def test_error_does_not_overwrite_a_prior_verdict(
     keys = await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
     verdict = next(k for k in keys if k.id == key_id)
     assert verdict.verification_status == AGENT_GATEWAY_VERIFICATION_STATUS_OK
+
+
+@pytest.mark.asyncio
+async def test_reported_error_redacts_the_virtual_key(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    enrollment_id = await _create_enrollment(db_session)
+    await _mint_key(db_session, enrollment_id, "claude")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}})
+
+    # An error whose message embeds the decrypted virtual key (as a stringified
+    # HTTP client error carrying an Authorization header might).
+    leaky = RuntimeError("401 from https://gw with header Bearer sk-litellm-claude")
+    _fake_list_models(monkeypatch, {"sk-litellm-claude": leaky})
+
+    captured: list[str] = []
+
+    def _capture(exc: Exception, *, tags: dict[str, str]) -> None:  # noqa: ARG001
+        captured.append(str(exc))
+
+    monkeypatch.setattr(verification, "report_critical", _capture)
+
+    await verification.run_verification(db_session)
+
+    assert captured, "an errored key must be reported"
+    message = captured[0]
+    assert "sk-litellm-claude" not in message, "the virtual key must be redacted"
+    assert "[redacted]" in message
 
 
 @pytest.mark.asyncio

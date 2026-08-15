@@ -140,6 +140,12 @@ pub struct Tier1TrialEngine {
     /// The last-known sorted-model-id hash per harness, the baseline the drift
     /// check compares each fresh observation against.
     model_hashes: Mutex<HashMap<String, String>>,
+    /// The last credential fingerprint checked per harness, tracked independently
+    /// of either flag so a key rotation resets BOTH the trial verdict and the
+    /// health drift baseline. Without this, a rotated key would false-pulse
+    /// `ModelsDrifted` by comparing the new key's models against the old key's
+    /// baseline.
+    last_fingerprint: Mutex<HashMap<String, String>>,
     /// Single-flight: a harness already being trialled coalesces onto the
     /// in-flight check instead of stacking a second network call.
     in_flight: Mutex<HashSet<String>>,
@@ -163,6 +169,7 @@ impl Tier1TrialEngine {
             results: Mutex::new(HashMap::new()),
             health: Mutex::new(HashMap::new()),
             model_hashes: Mutex::new(HashMap::new()),
+            last_fingerprint: Mutex::new(HashMap::new()),
             in_flight: Mutex::new(HashSet::new()),
         }
     }
@@ -217,6 +224,10 @@ impl Tier1TrialEngine {
         self.model_hashes
             .lock()
             .expect("gateway health hashes poisoned")
+            .remove(harness_kind);
+        self.last_fingerprint
+            .lock()
+            .expect("tier-1 trial fingerprints poisoned")
             .remove(harness_kind);
     }
 
@@ -300,18 +311,38 @@ impl Tier1TrialEngine {
     /// assert the verdict mapping and the rotation invalidation without the spawn.
     pub async fn run_trial(&self, harness_kind: &str, base_url: String, key: String) {
         let fingerprint = credential_fingerprint(&base_url, &key);
-        // A key rotation (a different fingerprint) invalidates any prior verdict
-        // UP FRONT, before we even know the new outcome: the old verdict was about
-        // a key that is no longer configured. So a rotated key followed by an
-        // inconclusive recheck leaves nothing standing, never the stale green.
-        if self.enabled {
-            let mut results = self.results.lock().expect("tier-1 trial results poisoned");
-            if results
+        // A key rotation (a different fingerprint) invalidates BOTH prior verdicts
+        // UP FRONT, before we even know the new outcome: the old trial verdict AND
+        // the old health drift baseline were about a key that is no longer
+        // configured. So a rotated key followed by an inconclusive recheck leaves
+        // nothing standing (never the stale green), and its fresh model list starts
+        // a NEW baseline instead of false-pulsing `ModelsDrifted` against the
+        // departed key's models. Tracked on its own fingerprint map so this fires
+        // regardless of which flag (trial or health) is on.
+        let rotated = {
+            let mut fingerprints = self
+                .last_fingerprint
+                .lock()
+                .expect("tier-1 trial fingerprints poisoned");
+            let rotated = fingerprints
                 .get(harness_kind)
-                .is_some_and(|prior| prior.fingerprint != fingerprint)
-            {
-                results.remove(harness_kind);
-            }
+                .is_some_and(|prior| prior != &fingerprint);
+            fingerprints.insert(harness_kind.to_string(), fingerprint.clone());
+            rotated
+        };
+        if rotated {
+            self.results
+                .lock()
+                .expect("tier-1 trial results poisoned")
+                .remove(harness_kind);
+            self.health
+                .lock()
+                .expect("gateway health results poisoned")
+                .remove(harness_kind);
+            self.model_hashes
+                .lock()
+                .expect("gateway health hashes poisoned")
+                .remove(harness_kind);
         }
         // ONE fetch serves both verdicts (ADR FR-3): the health check reads the
         // same result the trial does, never a second hit on the gateway.

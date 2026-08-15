@@ -1,16 +1,27 @@
 """Control-plane gateway-enablement verification (agent-auth.md FR-3).
 
-One read-only observation per active enrollment key: ask LiteLLM which models
-the harness's own virtual key can see, and record a per-key verdict. A key that
-sees a non-empty model list is ``ok`` (its access-group grant is live); a key
-that sees an empty list is ``misconfigured`` (its access group named by
-``harness_kind`` is not granting the models it should). An error observing a key
-records NO verdict, so a transient LiteLLM blip never overwrites a
-last-known-good.
+One read-only observation per active enrollment key: ask LiteLLM which models the
+harness's own virtual key can see, and DIFF that observed set against the
+EXPECTED access-group set for the key's ``harness_kind``. Expected is derived from
+the one reviewed source of truth in the repo, ``server/litellm/config.yaml`` (the
+deployed proxy config): the model ids whose ``model_info.access_groups`` contain
+the ``harness_kind``.
 
-The verdict feeds the FR-1 evidence model additively: a ``misconfigured`` key
-carries a delta the desktop surfaces as ``Misconfigured``. Nothing here logs key
-material — only the harness_kind and the key row id, both non-secret.
+- observed set == expected set (order-insensitive): ``ok``.
+- any missing or extra ids: ``misconfigured`` with a real delta
+  (``{missing, extra, observed_count, expected_count}``). This catches a
+  wrong-but-populated access group AND the stale-deployed-image drift class
+  (repo says X, the proxy serves Y).
+- an error observing a key records NO verdict, so a transient LiteLLM blip never
+  overwrites a last-known-good.
+
+If ``config.yaml`` is genuinely absent in a deployed environment, the check
+degrades rather than crashing: a non-empty list reads ``ok`` with a delta noting
+the degraded check, an empty list still reads ``misconfigured``.
+
+Nothing here logs key material: the observing exception is sanitized (the
+decrypted virtual key substring is redacted) before it reaches Sentry, and only
+the harness_kind and the key row id are tagged.
 """
 
 from __future__ import annotations
@@ -18,7 +29,9 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
+import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
@@ -36,6 +49,10 @@ from proliferate.lib.infra.time.wall_clock import utcnow
 
 logger = logging.getLogger(__name__)
 
+# ``server/litellm/config.yaml`` relative to this file
+# (proliferate/server/cloud/agent_gateway/verification.py -> server/).
+_CONFIG_PATH = Path(__file__).resolve().parents[4] / "litellm" / "config.yaml"
+
 
 @dataclass(frozen=True)
 class VerificationResult:
@@ -47,12 +64,84 @@ class VerificationResult:
     errored: int
 
 
+def load_expected_access_groups() -> dict[str, set[str]] | None:
+    """Map each ``harness_kind`` to the set of model ids granted to its access group.
+
+    Parses the deployed LiteLLM config (mirroring
+    ``tests/unit/test_litellm_config_access_groups.py``). Returns ``None`` when the
+    file is absent or unparseable, so the loop can degrade instead of crashing.
+    """
+    try:
+        with _CONFIG_PATH.open() as handle:
+            document = yaml.safe_load(handle)
+        model_list = document["model_list"]
+    except (OSError, yaml.YAMLError, KeyError, TypeError):
+        return None
+    expected: dict[str, set[str]] = {}
+    for entry in model_list:
+        if not isinstance(entry, dict):
+            continue
+        model_name = entry.get("model_name")
+        access_groups = (entry.get("model_info") or {}).get("access_groups") or []
+        if not isinstance(model_name, str) or not isinstance(access_groups, list):
+            continue
+        for group in access_groups:
+            expected.setdefault(str(group), set()).add(model_name)
+    return expected
+
+
+def _diff_verdict(
+    harness_kind: str,
+    observed: list[str],
+    expected_map: dict[str, set[str]] | None,
+) -> tuple[str, str | None]:
+    """Classify one key's observed model set into (status, delta_json)."""
+    observed_set = set(observed)
+    if expected_map is None:
+        # Degraded: no expected set to diff against. A non-empty list is the best
+        # we can say (ok), an empty one is still wrong (misconfigured).
+        degraded = {"degraded": "config_unavailable"}
+        if observed_set:
+            return AGENT_GATEWAY_VERIFICATION_STATUS_OK, json.dumps(degraded)
+        return (
+            AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED,
+            json.dumps({**degraded, "reason": "empty_model_list"}),
+        )
+    expected = expected_map.get(harness_kind, set())
+    missing = sorted(expected - observed_set)
+    extra = sorted(observed_set - expected)
+    if not missing and not extra:
+        return AGENT_GATEWAY_VERIFICATION_STATUS_OK, None
+    delta = json.dumps(
+        {
+            "missing": missing,
+            "extra": extra,
+            "observed_count": len(observed_set),
+            "expected_count": len(expected),
+        }
+    )
+    return AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED, delta
+
+
+def _sanitized(exc: Exception, virtual_key: str) -> RuntimeError:
+    """A stand-in exception carrying the type name and a key-redacted message.
+
+    An HTTP client error can stringify request headers, so the decrypted virtual
+    key must never reach the reporter verbatim.
+    """
+    message = f"{type(exc).__name__}: {exc}"
+    if virtual_key:
+        message = message.replace(virtual_key, "[redacted]")
+    return RuntimeError(message)
+
+
 async def run_verification(db: AsyncSession) -> VerificationResult:
     """Verify every active enrollment key's gateway model access, once.
 
-    Never raises for a single bad key: a per-key failure is reported and skipped
-    so the rest of the tick still runs, and it records no verdict.
+    Never raises for a single bad key: a per-key failure is reported (sanitized)
+    and skipped so the rest of the tick still runs, and it records no verdict.
     """
+    expected_map = load_expected_access_groups()
     keys = await list_all_active_enrollment_keys(db)
     ok = 0
     misconfigured = 0
@@ -66,11 +155,11 @@ async def run_verification(db: AsyncSession) -> VerificationResult:
             # row). Nothing to verify; leave any prior verdict standing.
             continue
         try:
-            models = await litellm.list_models(virtual_key=virtual_key)
+            observed = await litellm.list_models(virtual_key=virtual_key)
         except Exception as exc:  # noqa: BLE001 - one bad key must not abort the tick
             errored += 1
             report_critical(
-                exc,
+                _sanitized(exc, virtual_key),
                 tags={
                     "domain": "agent_gateway",
                     "action": "verification",
@@ -79,27 +168,17 @@ async def run_verification(db: AsyncSession) -> VerificationResult:
                 },
             )
             continue
-        now = utcnow()
-        if models:
-            await record_enrollment_key_verification(
-                db,
-                enrollment_key_id=key.id,
-                status=AGENT_GATEWAY_VERIFICATION_STATUS_OK,
-                delta=None,
-                verified_at=now,
-            )
+        status, delta = _diff_verdict(key.harness_kind, observed, expected_map)
+        await record_enrollment_key_verification(
+            db,
+            enrollment_key_id=key.id,
+            status=status,
+            delta=delta,
+            verified_at=utcnow(),
+        )
+        if status == AGENT_GATEWAY_VERIFICATION_STATUS_OK:
             ok += 1
         else:
-            delta = json.dumps(
-                {"reason": "empty_model_list", "harness_kind": key.harness_kind}
-            )
-            await record_enrollment_key_verification(
-                db,
-                enrollment_key_id=key.id,
-                status=AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED,
-                delta=delta,
-                verified_at=now,
-            )
             misconfigured += 1
     return VerificationResult(
         checked=len(keys),
