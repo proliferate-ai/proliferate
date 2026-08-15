@@ -17,6 +17,17 @@ class Settings(BaseSettings):
     proliferate_dev: bool = Field(default=False, validation_alias="PROLIFERATE_DEV")
     api_base_url: str = ""
     api_path_prefix: str = ""
+    # Optional desktop updater cadence overrides surfaced additively on ``/meta``
+    # under ``desktopUpdater``. ``None`` (the default) leaves the desktop's baked
+    # defaults in force; a deployment can slow or speed the background check and
+    # stall threshold without a desktop release. The desktop consumes these
+    # tolerantly (absent/garbage is ignored).
+    desktop_updater_check_interval_ms: int | None = Field(
+        default=None, validation_alias="DESKTOP_UPDATER_CHECK_INTERVAL_MS"
+    )
+    desktop_updater_stall_threshold_ms: int | None = Field(
+        default=None, validation_alias="DESKTOP_UPDATER_STALL_THRESHOLD_MS"
+    )
     # Compiled ProductClient Web distribution served from this image. Empty (the
     # default) keeps the API-only behavior: no static serving, no SPA fallback.
     # When set to a directory containing index.html, the API serves that Web

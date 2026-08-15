@@ -74,7 +74,7 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
 
     body = _client().get("/meta").json()
 
-    assert set(body) == set(_VERSION_FIELDS) | {"capabilities"}
+    assert set(body) == set(_VERSION_FIELDS) | {"capabilities", "desktopUpdater"}
     for field in _VERSION_FIELDS:
         assert isinstance(body[field], str) and body[field]
     assert isinstance(body["capabilities"], dict)
@@ -95,6 +95,9 @@ _META_GOLDEN_FIELDS = [
     "workerVersion",
     "minDesktopVersion",
     "capabilities",
+    # Additive (FR-2): optional desktop updater cadence override, null unless
+    # the deployment configured it.
+    "desktopUpdater",
 ]
 
 
@@ -565,3 +568,29 @@ def test_version_helper_dev_fallback(monkeypatch) -> None:  # type: ignore[no-un
     monkeypatch.setattr(version_module, "_read_version_file", lambda: None)
 
     assert version_module.server_version() == "0.0.0-dev"
+
+
+def test_meta_desktop_updater_cadence_absent_by_default() -> None:
+    # Additive field: present but null unless a deployment configured overrides.
+    body = _client().get("/meta").json()
+    assert "desktopUpdater" in body
+    assert body["desktopUpdater"] is None
+
+
+def test_desktop_updater_cadence_builder_is_settings_driven() -> None:
+    from proliferate.server.meta import _desktop_updater_cadence
+
+    # No overrides -> None (baked desktop defaults stand).
+    base = _cfg()
+    setattr(base, "desktop_updater_check_interval_ms", None)
+    setattr(base, "desktop_updater_stall_threshold_ms", None)
+    assert _desktop_updater_cadence(base) is None
+
+    # Either field set -> a populated model; the unset field stays None.
+    with_override = _cfg()
+    setattr(with_override, "desktop_updater_check_interval_ms", 900_000)
+    setattr(with_override, "desktop_updater_stall_threshold_ms", None)
+    cadence = _desktop_updater_cadence(with_override)
+    assert cadence is not None
+    assert cadence.checkIntervalMs == 900_000
+    assert cadence.stallThresholdMs is None

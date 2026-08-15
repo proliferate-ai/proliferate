@@ -278,6 +278,18 @@ def build_server_capabilities(config: Settings) -> ServerCapabilities:
     )
 
 
+class DesktopUpdaterCadence(BaseModel):
+    """Optional desktop updater cadence overrides.
+
+    Both fields default to ``None``; the desktop keeps its baked defaults unless
+    a deployment sets them. Additive and tolerant — the desktop ignores absent
+    or malformed values.
+    """
+
+    checkIntervalMs: int | None = None
+    stallThresholdMs: int | None = None
+
+
 class MetaResponse(BaseModel):
     serverVersion: str
     desktopVersion: str
@@ -285,6 +297,19 @@ class MetaResponse(BaseModel):
     workerVersion: str
     minDesktopVersion: str
     capabilities: ServerCapabilities
+    # Additive: absent (``None``) unless the deployment configured an override.
+    desktopUpdater: DesktopUpdaterCadence | None = None
+
+
+def _desktop_updater_cadence(config: Settings) -> DesktopUpdaterCadence | None:
+    check_interval = config.desktop_updater_check_interval_ms
+    stall_threshold = config.desktop_updater_stall_threshold_ms
+    if check_interval is None and stall_threshold is None:
+        return None
+    return DesktopUpdaterCadence(
+        checkIntervalMs=check_interval,
+        stallThresholdMs=stall_threshold,
+    )
 
 
 @router.get("/meta", response_model=MetaResponse)
@@ -296,6 +321,7 @@ async def meta() -> MetaResponse:
         workerVersion=worker_version(),
         minDesktopVersion=min_desktop_version(),
         capabilities=build_server_capabilities(settings),
+        desktopUpdater=_desktop_updater_cadence(settings),
     )
 
 
