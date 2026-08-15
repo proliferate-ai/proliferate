@@ -7,6 +7,18 @@ edition = "2021"
 license = "AGPL-3.0"
 repository = "https://github.com/proliferate-ai/proliferate"
 
+[profile.dev]
+# Keep file/line backtraces for workspace crates without paying for full
+# variable-level debug info (DWARF). Cuts rlib size, link memory, and disk.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+# Applies to all non-workspace-member dependencies only (Cargo book,
+# "Overrides": the `"*"` package name overrides settings "for all
+# dependencies (but not any workspace member)"). Dependencies get no debug
+# info at all, since we never step into their source.
+debug = false
+
 [workspace.dependencies]
 # HTTP / async
 axum = { version = "0.8", features = ["ws"] }
