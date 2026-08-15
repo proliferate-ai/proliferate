@@ -15,6 +15,8 @@ const PHASE_LABELS = {
   available: "Download update",
   downloading: "Downloading update",
   stalled: "Download stalled",
+  verifying: "Verifying update",
+  reusingStaged: "Preparing update",
   ready: "Restart to update",
   error: "Update failed",
 } as const;
