@@ -95,6 +95,7 @@ struct Fixture {
     signer: TestSigner,
     catalog_bytes: Vec<u8>,
     registry_bytes: Vec<u8>,
+    manifest_bytes: Vec<u8>,
 }
 
 const BASE_URL: &str = "https://example.test";
@@ -138,9 +139,11 @@ fn valid_fixture() -> Fixture {
     let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
 
     let client = FakeFetchClient::default();
+    let manifest_url = format!("{BASE_URL}/catalogs/agents/{CHANNEL}/manifest.json");
+    client.insert(&manifest_url, manifest_bytes.clone());
     client.insert(
-        &format!("{BASE_URL}/catalogs/agents/{CHANNEL}/manifest.json"),
-        manifest_bytes,
+        &format!("{manifest_url}.minisig"),
+        signer.sign(&manifest_bytes),
     );
     let base = versioned_base(&catalog.catalog_version);
     client.insert(&format!("{base}/{CATALOG_FILE}"), catalog_bytes.clone());
@@ -159,6 +162,7 @@ fn valid_fixture() -> Fixture {
         signer,
         catalog_bytes,
         registry_bytes,
+        manifest_bytes,
     }
 }
 
@@ -184,8 +188,59 @@ fn valid_artifact_fetches_verifies_and_stages() {
     assert!(staged_path.join(CATALOG_FILE).exists());
     assert!(staged_path.join(REGISTRY_FILE).exists());
 
-    let reloaded = load_staged_from_disk(&staged_path).expect("reload from disk");
+    assert!(staged_path.join(CATALOG_SIG_FILE).exists(), "M1(b): the .minisig must be persisted alongside the staged doc");
+    assert!(staged_path.join(REGISTRY_SIG_FILE).exists());
+
+    let reloaded = load_staged_from_disk(&staged_path, &[fixture.signer.public_key()])
+        .expect("reload from disk, re-verified");
     assert_eq!(reloaded.catalog.catalog_version, pair.catalog.catalog_version);
+}
+
+#[test]
+fn load_staged_from_disk_refuses_when_no_pubkey_is_provisioned() {
+    let fixture = valid_fixture();
+    let staged_dir = scratch_dir();
+    let staged_path = staged_dir.join("staged");
+    fetch_and_stage(
+        BASE_URL,
+        CHANNEL,
+        &staged_path,
+        &fixture.client,
+        &[fixture.signer.public_key()],
+    )
+    .expect("valid artifact must be accepted");
+
+    assert!(
+        load_staged_from_disk(&staged_path, &[]).is_none(),
+        "M2: an unprovisioned pubkey must refuse the warm-cache load unconditionally, never treat 'no key' as 'anything verifies'"
+    );
+}
+
+#[test]
+fn tampered_staged_doc_on_disk_is_refused_even_though_the_original_fetch_verified() {
+    let fixture = valid_fixture();
+    let staged_dir = scratch_dir();
+    let staged_path = staged_dir.join("staged");
+    fetch_and_stage(
+        BASE_URL,
+        CHANNEL,
+        &staged_path,
+        &fixture.client,
+        &[fixture.signer.public_key()],
+    )
+    .expect("valid artifact must be accepted");
+
+    // Simulate tampering with the staged catalog bytes on disk AFTER the
+    // verified fetch wrote them (M1: a staged directory is untrusted input
+    // to a fresh process, even one THIS process staged, until re-verified).
+    let mut tampered = fixture.catalog_bytes.clone();
+    tampered.push(b' ');
+    std::fs::write(staged_path.join(CATALOG_FILE), &tampered).unwrap();
+
+    assert!(
+        load_staged_from_disk(&staged_path, &[fixture.signer.public_key()]).is_none(),
+        "tampered staged bytes must fail re-verification against the persisted signature"
+    );
 }
 
 #[test]
@@ -246,10 +301,9 @@ fn wrong_version_identity_between_manifest_and_document_is_rejected() {
     let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
 
     let client = FakeFetchClient::default();
-    client.insert(
-        &format!("{BASE_URL}/catalogs/agents/{CHANNEL}/manifest.json"),
-        manifest_bytes,
-    );
+    let manifest_url = format!("{BASE_URL}/catalogs/agents/{CHANNEL}/manifest.json");
+    client.insert(&manifest_url, manifest_bytes.clone());
+    client.insert(&format!("{manifest_url}.minisig"), signer.sign(&manifest_bytes));
     let base = versioned_base(&manifest.catalog_version);
     client.insert(&format!("{base}/{CATALOG_FILE}"), catalog_bytes.clone());
     client.insert(&format!("{base}/{REGISTRY_FILE}"), registry_bytes.clone());
@@ -308,20 +362,24 @@ fn corrupt_sha256_is_rejected() {
 fn load_staged_from_disk_returns_none_for_a_missing_directory() {
     let staged_dir = scratch_dir();
     let staged_path = staged_dir.join("does-not-exist");
-    assert!(load_staged_from_disk(&staged_path).is_none());
+    let signer = TestSigner::generate();
+    assert!(load_staged_from_disk(&staged_path, &[signer.public_key()]).is_none());
 }
 
 #[test]
 fn load_staged_from_disk_returns_none_for_corrupt_json() {
     let staged_dir = scratch_dir();
-    std::fs::write(staged_dir.join(CATALOG_FILE), b"not json").unwrap();
-    std::fs::write(
-        staged_dir.join(REGISTRY_FILE),
-        serde_json::to_vec(&bundled_agent_registry_document().clone()).unwrap(),
-    )
-    .unwrap();
+    let signer = TestSigner::generate();
+    let catalog_bytes = b"not json".to_vec();
+    let registry_bytes = serde_json::to_vec(&bundled_agent_registry_document().clone()).unwrap();
+    std::fs::write(staged_dir.join(CATALOG_FILE), &catalog_bytes).unwrap();
+    std::fs::write(staged_dir.join(REGISTRY_FILE), &registry_bytes).unwrap();
+    std::fs::write(staged_dir.join(CATALOG_SIG_FILE), signer.sign(&catalog_bytes)).unwrap();
+    std::fs::write(staged_dir.join(REGISTRY_SIG_FILE), signer.sign(&registry_bytes)).unwrap();
 
-    assert!(load_staged_from_disk(&staged_dir).is_none());
+    // Correctly signed, but not parseable JSON: the gate check runs AFTER
+    // signature verification, and must still refuse.
+    assert!(load_staged_from_disk(&staged_dir, &[signer.public_key()]).is_none());
 }
 
 #[test]
@@ -332,5 +390,67 @@ fn missing_env_never_constructs_a_fetch_client_or_touches_the_network() {
     // fetch entries at all still lets `load_staged_from_disk` run cleanly
     // (nothing to load), proving the floor-only path never needs a client.
     let staged_dir = scratch_dir();
-    assert!(load_staged_from_disk(&staged_dir.join("staged")).is_none());
+    let signer = TestSigner::generate();
+    assert!(load_staged_from_disk(&staged_dir.join("staged"), &[signer.public_key()]).is_none());
+}
+
+#[test]
+fn unsigned_manifest_is_rejected_even_when_the_documents_it_names_are_correctly_signed() {
+    let fixture = valid_fixture();
+    // Serve a WRONG manifest signature: correctly signed documents underneath
+    // it are irrelevant if the manifest that named their catalogVersion
+    // can't itself be trusted (M3).
+    fixture.client.insert(
+        &format!("{BASE_URL}/catalogs/agents/{CHANNEL}/manifest.json.minisig"),
+        fixture.signer.sign(b"not the manifest bytes"),
+    );
+
+    let staged_dir = scratch_dir();
+    let staged_path = staged_dir.join("staged");
+    let err = fetch_and_stage(
+        BASE_URL,
+        CHANNEL,
+        &staged_path,
+        &fixture.client,
+        &[fixture.signer.public_key()],
+    )
+    .expect_err("a manifest with a bad signature must be rejected");
+
+    assert_eq!(err.reason, CatalogArtifactRejectReason::Signature);
+    assert!(!staged_path.exists());
+}
+
+/// (m2) The response-size cap on the real HTTP client. Spins up a tiny local
+/// server (loopback only) that serves a body over the cap; a network-shaped
+/// integration test is the only way to exercise the streaming/cap logic
+/// itself rather than the fake in-memory client every other test here uses.
+#[test]
+fn bounded_http_client_rejects_a_response_over_the_size_cap() {
+    use std::io::{Read as _, Write as _};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
+    let addr = listener.local_addr().unwrap();
+    let handle = std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf);
+            let oversized_body = vec![b'a'; 5 * 1024 * 1024]; // 5 MiB > 4 MiB cap
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                oversized_body.len()
+            );
+            let _ = stream.write_all(header.as_bytes());
+            let _ = stream.write_all(&oversized_body);
+        }
+    });
+
+    let client = BoundedHttpFetchClient::new();
+    let result = client.get_bytes(&format!("http://{addr}/oversized"));
+    handle.join().unwrap();
+
+    assert!(
+        result.is_err(),
+        "a response over the 4 MiB cap must be rejected, not buffered in full"
+    );
 }

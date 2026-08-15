@@ -116,10 +116,27 @@ impl Default for BoundedHttpFetchClient {
     }
 }
 
+/// (m2) Hard response-size ceiling. Every document this lane fetches
+/// (catalog, registry, manifest, signatures) is well under a megabyte; 4 MiB
+/// is generous headroom, not a working budget. Streamed with a `+1`-byte
+/// cap so an over-cap response is detected deterministically rather than by
+/// racing an unbounded read against memory pressure.
+const MAX_RESPONSE_BYTES: u64 = 4 * 1024 * 1024;
+
 impl ArtifactFetchClient for BoundedHttpFetchClient {
     fn get_bytes(&self, url: &str) -> anyhow::Result<Vec<u8>> {
+        use std::io::Read;
         let response = self.client.get(url).send()?.error_for_status()?;
-        Ok(response.bytes()?.to_vec())
+        let mut limited = response.take(MAX_RESPONSE_BYTES + 1);
+        let mut buf = Vec::new();
+        limited.read_to_end(&mut buf)?;
+        if buf.len() as u64 > MAX_RESPONSE_BYTES {
+            anyhow::bail!(
+                "response for {url} exceeded the {MAX_RESPONSE_BYTES}-byte cap; refusing rather \
+                 than buffering an unbounded body"
+            );
+        }
+        Ok(buf)
     }
 }
 
@@ -138,6 +155,13 @@ const REGISTRY_FILE: &str = "registry.json";
 const CATALOG_SIG_FILE: &str = "catalog.json.minisig";
 const REGISTRY_SIG_FILE: &str = "registry.json.minisig";
 const MANIFEST_FILE: &str = "manifest.json";
+const MANIFEST_SIG_FILE: &str = "manifest.json.minisig";
+/// High-water mark file, persisted under `<runtime_home>/catalog/activated.json`.
+/// Records the `generated_at` of the last artifact this process (or a prior
+/// one) actually ACTIVATED, so a downgrade to an older-but-still-newer-than-
+/// bundled staged artifact can never re-win after a newer one has already
+/// been active on this machine (M3, downgrade resistance).
+const ACTIVATED_MARK_FILE: &str = "activated.json";
 
 fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
@@ -171,6 +195,15 @@ pub fn fetch_and_stage(
     let manifest_bytes = client
         .get_bytes(&manifest_url)
         .map_err(|e| reject(CatalogArtifactRejectReason::Fetch, e.to_string()))?;
+    // M3 (downgrade resistance): the manifest itself is signed. Verify BEFORE
+    // trusting anything it says — including `catalogVersion`, which the
+    // versioned-file URLs below are built from. An attacker who can serve an
+    // old, still-validly-signed catalog/registry pair but a forged manifest
+    // pointing at it must not be able to walk this runtime backwards.
+    let manifest_sig = client
+        .get_bytes(&format!("{manifest_url}.minisig"))
+        .map_err(|e| reject(CatalogArtifactRejectReason::Fetch, e.to_string()))?;
+    verify_signature_any(pubkeys, &manifest_bytes, &manifest_sig)?;
     let manifest: CatalogArtifactManifest = serde_json::from_slice(&manifest_bytes)
         .map_err(|e| reject(CatalogArtifactRejectReason::Fetch, format!("manifest parse: {e}")))?;
 
@@ -226,8 +259,16 @@ pub fn fetch_and_stage(
     let generated_at = parse_generated_at(&catalog.generated_at)
         .map_err(|e| reject(CatalogArtifactRejectReason::Gates, format!("generated_at: {e}")))?;
 
-    write_staged_atomic(staged_dir, &catalog_bytes, &registry_bytes, &manifest_bytes)
-        .map_err(|e| reject(CatalogArtifactRejectReason::Fetch, format!("stage write: {e}")))?;
+    write_staged_atomic(
+        staged_dir,
+        &catalog_bytes,
+        &registry_bytes,
+        &manifest_bytes,
+        &catalog_sig,
+        &registry_sig,
+        &manifest_sig,
+    )
+    .map_err(|e| reject(CatalogArtifactRejectReason::Fetch, format!("stage write: {e}")))?;
 
     Ok(StagedArtifactPair {
         catalog,
@@ -304,11 +345,15 @@ fn verify_signature(
 /// Sibling-staging-dir + rename, mirroring the installer's archive-tree
 /// staging discipline (`installer::downloads::download_and_extract_archive_tree_verified`):
 /// write the whole new tree next to the target, then atomically replace it.
+#[allow(clippy::too_many_arguments)]
 fn write_staged_atomic(
     staged_dir: &Path,
     catalog_bytes: &[u8],
     registry_bytes: &[u8],
     manifest_bytes: &[u8],
+    catalog_sig: &[u8],
+    registry_sig: &[u8],
+    manifest_sig: &[u8],
 ) -> std::io::Result<()> {
     let parent = staged_dir.parent().unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent)?;
@@ -322,6 +367,13 @@ fn write_staged_atomic(
     std::fs::write(staging_dir.join(CATALOG_FILE), catalog_bytes)?;
     std::fs::write(staging_dir.join(REGISTRY_FILE), registry_bytes)?;
     std::fs::write(staging_dir.join(MANIFEST_FILE), manifest_bytes)?;
+    // M1(b): persist the .minisig files alongside the staged docs. Without
+    // these on disk, a later boot's warm-cache load (`load_staged_from_disk`)
+    // has no signature to re-verify against and MUST refuse — never trust
+    // staged bytes it cannot itself re-verify.
+    std::fs::write(staging_dir.join(CATALOG_SIG_FILE), catalog_sig)?;
+    std::fs::write(staging_dir.join(REGISTRY_SIG_FILE), registry_sig)?;
+    std::fs::write(staging_dir.join(MANIFEST_SIG_FILE), manifest_sig)?;
     let _ = std::fs::remove_dir_all(staged_dir);
     std::fs::rename(&staging_dir, staged_dir)?;
     Ok(())
@@ -331,9 +383,37 @@ fn write_staged_atomic(
 /// entire lane is inert: nothing downstream of this function is ever
 /// consulted, and no `dyn ArtifactFetchClient` is ever constructed.
 pub fn env_base_url() -> Option<String> {
-    std::env::var("ANYHARNESS_CATALOG_ARTIFACT_BASE_URL")
+    let raw = std::env::var("ANYHARNESS_CATALOG_ARTIFACT_BASE_URL")
         .ok()
-        .filter(|v| !v.trim().is_empty())
+        .filter(|v| !v.trim().is_empty())?;
+    if is_acceptable_base_url_scheme(&raw) {
+        Some(raw)
+    } else {
+        tracing::warn!(
+            "ANYHARNESS_CATALOG_ARTIFACT_BASE_URL is set but is not an https:// URL; refusing \
+             and treating the publisher lane as inert rather than fetching over a scheme that \
+             cannot protect the manifest/signature exchange from a network attacker"
+        );
+        None
+    }
+}
+
+/// (m1) Reject non-`https://` base URLs. `http://127.0.0.1` and
+/// `http://localhost` are additionally accepted, but ONLY in test builds —
+/// production boot never has a reason to fetch the publisher lane over
+/// plaintext. Extracted as a pure function (no env access) so the scheme
+/// policy itself is directly testable without mutating process env.
+fn is_acceptable_base_url_scheme(url: &str) -> bool {
+    if url.starts_with("https://") {
+        return true;
+    }
+    #[cfg(test)]
+    {
+        if url.starts_with("http://127.0.0.1") || url.starts_with("http://localhost") {
+            return true;
+        }
+    }
+    false
 }
 
 /// `ANYHARNESS_CATALOG_CHANNEL`, default `"stable"`.
@@ -372,24 +452,51 @@ pub fn baked_pubkey_next() -> Option<minisign_verify::PublicKey> {
     CATALOG_SIGNING_PUBKEY_B64_NEXT.and_then(|b64| minisign_verify::PublicKey::from_base64(b64).ok())
 }
 
-/// Load a previously staged artifact from disk (no network). Re-runs the
-/// SAME gates the fetch path ran, because a staged artifact from a prior
-/// process is untrusted input to THIS process until re-verified — a
-/// corrupted or partially written staged dir must fall back to the floor,
-/// never crash boot. Returns `None` (never propagates an error) so the
-/// caller's fallback is unconditional.
-pub fn load_staged_from_disk(staged_dir: &Path) -> Option<StagedArtifactPair> {
-    let catalog_json = std::fs::read_to_string(staged_dir.join(CATALOG_FILE)).ok()?;
-    let registry_json = std::fs::read_to_string(staged_dir.join(REGISTRY_FILE)).ok()?;
+/// Load a previously staged artifact from disk (no network) — the "warm
+/// cache" path used when this boot's fetch failed or was skipped but a prior
+/// boot staged something. This is untrusted input to THIS process until
+/// re-verified: M1 requires the FULL minisign verification the fetch path
+/// ran, against the exact staged bytes, with the same baked pubkeys, before
+/// any schema/generated_at gate runs. If `pubkeys` is empty (unprovisioned),
+/// this refuses unconditionally — an unprovisioned signing key must never be
+/// treated as "anything on disk verifies" (M2: this is also the lane-inert
+/// gate for the warm-cache path; the caller in `sync.rs` additionally never
+/// even calls this function when the env var is absent).
+///
+/// A corrupted, partially written, or unsigned staged dir must fall back to
+/// the floor, never crash boot — so this never propagates an error, only
+/// `None`.
+pub fn load_staged_from_disk(
+    staged_dir: &Path,
+    pubkeys: &[minisign_verify::PublicKey],
+) -> Option<StagedArtifactPair> {
+    if pubkeys.is_empty() {
+        return None;
+    }
 
-    let catalog = match parse_agent_catalog_json(&catalog_json) {
+    let catalog_bytes = std::fs::read(staged_dir.join(CATALOG_FILE)).ok()?;
+    let registry_bytes = std::fs::read(staged_dir.join(REGISTRY_FILE)).ok()?;
+    let catalog_sig = std::fs::read(staged_dir.join(CATALOG_SIG_FILE)).ok()?;
+    let registry_sig = std::fs::read(staged_dir.join(REGISTRY_SIG_FILE)).ok()?;
+
+    if let Err(e) = verify_signature_any(pubkeys, &catalog_bytes, &catalog_sig) {
+        tracing::warn!(reason = e.reason.as_str(), "staged catalog failed minisign re-verification on load");
+        return None;
+    }
+    if let Err(e) = verify_signature_any(pubkeys, &registry_bytes, &registry_sig) {
+        tracing::warn!(reason = e.reason.as_str(), "staged registry failed minisign re-verification on load");
+        return None;
+    }
+
+    let catalog_json = std::str::from_utf8(&catalog_bytes).ok()?;
+    let catalog = match parse_agent_catalog_json(catalog_json) {
         Ok(c) => c,
         Err(e) => {
             reject(CatalogArtifactRejectReason::Gates, format!("staged catalog: {e}"));
             return None;
         }
     };
-    let registry: AgentRegistryDocument = match serde_json::from_str(&registry_json) {
+    let registry: AgentRegistryDocument = match serde_json::from_slice(&registry_bytes) {
         Ok(r) => r,
         Err(e) => {
             reject(CatalogArtifactRejectReason::Gates, format!("staged registry parse: {e}"));
@@ -416,6 +523,55 @@ pub fn load_staged_from_disk(staged_dir: &Path) -> Option<StagedArtifactPair> {
         registry,
         generated_at,
     })
+}
+
+/// (M3) Persisted monotonic high-water mark: the `generated_at` of the last
+/// artifact this machine ever ACTIVATED, across process restarts. Required
+/// in addition to the bundled-floor comparison because the floor never
+/// moves (it is compiled into the binary), so without this mark a runtime
+/// could be pointed at an OLDER — but still validly signed and still newer
+/// than the floor — staged artifact and "roll back" a previously-activated
+/// newer one. Tolerant by design: absent or garbage falls back to the
+/// bundled-floor-only comparison, never a boot failure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ActivatedMark {
+    generated_at: String,
+}
+
+fn activated_mark_path(runtime_home: &Path) -> PathBuf {
+    runtime_home.join("catalog").join(ACTIVATED_MARK_FILE)
+}
+
+/// Tolerant read: a missing file, unreadable file, or unparseable/unparseable
+/// timestamp all resolve to `None` — never an error, never a panic.
+pub fn read_high_water_mark(runtime_home: &Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    let raw = std::fs::read_to_string(activated_mark_path(runtime_home)).ok()?;
+    let mark: ActivatedMark = serde_json::from_str(&raw).ok()?;
+    parse_generated_at(&mark.generated_at).ok()
+}
+
+/// Write the mark ONLY after a successful activation decision (i.e. only
+/// when the staged pair actually won and became the active catalog for this
+/// process). Best-effort: a write failure is logged, never propagated —
+/// losing the mark degrades to "bundled-floor-only" comparison next boot,
+/// which is the same safe default a fresh machine starts from, never a
+/// crash or an unverified activation.
+pub fn write_high_water_mark(runtime_home: &Path, generated_at: chrono::DateTime<chrono::Utc>) {
+    let path = activated_mark_path(runtime_home);
+    let mark = ActivatedMark {
+        generated_at: generated_at.to_rfc3339(),
+    };
+    let result = (|| -> std::io::Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let json = serde_json::to_string(&mark)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        std::fs::write(path, json)
+    })();
+    if let Err(e) = result {
+        tracing::warn!(error = %e, "failed to persist the catalog activation high-water mark; a future boot may re-evaluate against the bundled floor only");
+    }
 }
 
 #[cfg(test)]
