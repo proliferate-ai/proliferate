@@ -5,7 +5,7 @@ import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { PaneHeader } from "#product/components/workspace/pane/PaneHeader";
 import { WorkflowDocsList } from "#product/components/workflows/run-view/WorkflowDocsList";
-import { WorkflowGraphNodeCard } from "#product/components/workflows/run-view/WorkflowGraphNodeCard";
+import { WorkflowGraphView } from "#product/components/workflows/run-view/WorkflowGraphView";
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
 import { useWorkflowPane } from "#product/hooks/workflows/facade/use-workflow-pane";
 import { useWorkflowDocOpen } from "#product/hooks/workflows/ui/use-workflow-doc-open";
@@ -90,39 +90,16 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
               <h3 className="px-1 text-ui font-medium text-foreground">
                 {WORKFLOW_RUN_VIEW_COPY.graphSectionTitle}
               </h3>
-              <div className="flex flex-col gap-3">
-                {pane.slots.map((slot) => (
-                  <div key={slot.chainIndex} className="flex flex-col gap-1.5">
-                    {slot.attempts.map((vm) => (
-                      <WorkflowGraphNodeCard
-                        key={vm.node.id}
-                        vm={vm}
-                        needsInput={pane.needsInputNodeRowIds.has(vm.node.id)}
-                        busy={pane.busy}
-                        onFocusSession={pane.actions.focusNodeSession}
-                        onApprove={pane.actions.approve}
-                        onFailRedo={pane.actions.failRedo}
-                        onFlipType={pane.actions.flipType}
-                        onAddAdhoc={pane.actions.addAdhocNode}
-                      />
-                    ))}
-                    {slot.adhoc.map((vm) => (
-                      <WorkflowGraphNodeCard
-                        key={vm.node.id}
-                        vm={vm}
-                        secondary
-                        needsInput={pane.needsInputNodeRowIds.has(vm.node.id)}
-                        busy={pane.busy}
-                        onFocusSession={pane.actions.focusNodeSession}
-                        onApprove={pane.actions.approve}
-                        onFailRedo={pane.actions.failRedo}
-                        onFlipType={pane.actions.flipType}
-                        onAddAdhoc={pane.actions.addAdhocNode}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
+              <WorkflowGraphView
+                slots={pane.slots}
+                needsInputNodeRowIds={pane.needsInputNodeRowIds}
+                busy={pane.busy}
+                onFocusSession={pane.actions.focusNodeSession}
+                onApprove={pane.actions.approve}
+                onFailRedo={pane.actions.failRedo}
+                onFlipType={pane.actions.flipType}
+                onAddAdhoc={pane.actions.addAdhocNode}
+              />
             </section>
 
             <section className="flex flex-col gap-2">
