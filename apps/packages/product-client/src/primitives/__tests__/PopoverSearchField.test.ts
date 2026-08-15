@@ -65,8 +65,8 @@ describe("empty-field replacement caret", () => {
       ];
 
       for (const field of fields) {
-        // Ensure the field is blurred first: PopoverSearchField auto-focuses on
-        // mount, so the "Search models" input would otherwise still be focused.
+        // Park focus on the button so each field starts provably blurred,
+        // regardless of where the previous loop iteration left it.
         await page.getByRole("button", { name: "Done" }).focus();
 
         // Blurred + empty: native caret intact, no replacement bar, no indent.
