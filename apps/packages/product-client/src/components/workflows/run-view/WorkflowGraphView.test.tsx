@@ -165,6 +165,54 @@ describe("WorkflowGraphView", () => {
     expect(chainTitle.closest(".border-l")).toBeNull();
   });
 
+  it("renders a side node under the attempt it anchors to, not after the last attempt", () => {
+    renderView([
+      {
+        chainIndex: 0,
+        attempts: [
+          buildVm({ id: "node-a", chainIndex: 0, title: "First attempt", status: "failed" }),
+          buildVm({ id: "node-b", chainIndex: 0, title: "Second attempt", kind: "replacement" }),
+        ],
+        adhoc: [
+          buildVm({
+            id: "node-side",
+            chainIndex: 0,
+            title: "Side errand",
+            kind: "adhoc",
+            anchorNodeRowId: "node-a",
+          }),
+        ],
+      },
+    ]);
+
+    const side = screen.getByText("01 · Side errand");
+    const secondAttempt = screen.getByText("01 · Second attempt");
+    expect(side.closest(".border-l")).not.toBeNull();
+    expect(
+      side.compareDocumentPosition(secondAttempt) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("still renders a side node whose anchor is not among the slot's attempts", () => {
+    renderView([
+      {
+        chainIndex: 0,
+        attempts: [buildVm({ id: "node-chain", chainIndex: 0, title: "Anchor" })],
+        adhoc: [
+          buildVm({
+            id: "node-side",
+            chainIndex: 0,
+            title: "Orphaned errand",
+            kind: "adhoc",
+            anchorNodeRowId: "node-gone",
+          }),
+        ],
+      },
+    ]);
+
+    expect(screen.getByText("01 · Orphaned errand").closest(".border-l")).not.toBeNull();
+  });
+
   it("passes card callbacks through untouched", () => {
     const { onApprove } = renderView([
       {

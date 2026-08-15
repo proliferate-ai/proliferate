@@ -1,6 +1,9 @@
 import { Fragment } from "react";
 
-import type { WorkflowGraphSlotVM } from "#product/domain/workflows/run-view-model";
+import type {
+  WorkflowGraphNodeVM,
+  WorkflowGraphSlotVM,
+} from "#product/domain/workflows/run-view-model";
 import { ChevronDown } from "#product/primitives/icons/core";
 import { WorkflowGraphNodeCard } from "#product/components/workflows/run-view/WorkflowGraphNodeCard";
 
@@ -17,10 +20,10 @@ export interface WorkflowGraphViewProps {
 
 /**
  * The run's chain drawn as a graph rather than a flat stack: consecutive
- * chain slots are joined by a drawn edge, and a slot's ad hoc side nodes
- * hang off a branch rail under their anchor, so the pane reads as flow —
- * this slot feeds the next, that side node belongs to this one — instead of
- * a list of sibling cards.
+ * chain slots are joined by a drawn edge, and every ad hoc side node hangs
+ * off a branch rail directly under the attempt it anchors to, so the pane
+ * reads as flow — this slot feeds the next, that side node belongs to this
+ * attempt — instead of a list of sibling cards.
  *
  * Pure layout. Retries stay inside their slot (a second attempt is the same
  * chain position, not a chain advance, so no edge is drawn between them),
@@ -37,38 +40,99 @@ export function WorkflowGraphView({
   onFlipType,
   onAddAdhoc,
 }: WorkflowGraphViewProps) {
-  const cardHandlers = { onFocusSession, onApprove, onFailRedo, onFlipType, onAddAdhoc };
+  const cardProps = {
+    needsInputNodeRowIds,
+    busy,
+    onFocusSession,
+    onApprove,
+    onFailRedo,
+    onFlipType,
+    onAddAdhoc,
+  };
   return (
     <div className="flex flex-col">
-      {slots.map((slot, slotIndex) => (
-        <Fragment key={slot.chainIndex}>
-          {slotIndex > 0 ? <WorkflowGraphEdge /> : null}
-          <div className="flex flex-col gap-1.5">
-            {slot.attempts.map((vm) => (
-              <WorkflowGraphNodeCard
-                key={vm.node.id}
-                vm={vm}
-                needsInput={needsInputNodeRowIds.has(vm.node.id)}
-                busy={busy}
-                {...cardHandlers}
-              />
-            ))}
-            {slot.adhoc.length > 0 ? (
-              <div className="ml-6 flex flex-col gap-1.5 border-l border-border pl-3">
-                {slot.adhoc.map((vm) => (
+      {slots.map((slot, slotIndex) => {
+        const attemptIds = new Set(slot.attempts.map((vm) => vm.node.id));
+        // A side node's anchor is normally one of this slot's attempt rows; a
+        // projection can still hand back an anchor the slot does not contain,
+        // and those side nodes render on a trailing rail rather than vanish.
+        const orphaned = slot.adhoc.filter(
+          (vm) => vm.node.anchorNodeRowId === null || !attemptIds.has(vm.node.anchorNodeRowId),
+        );
+        return (
+          <Fragment key={slot.chainIndex}>
+            {slotIndex > 0 ? <WorkflowGraphEdge /> : null}
+            <div className="flex flex-col gap-1.5">
+              {slot.attempts.map((vm) => (
+                <Fragment key={vm.node.id}>
                   <WorkflowGraphNodeCard
-                    key={vm.node.id}
                     vm={vm}
-                    secondary
                     needsInput={needsInputNodeRowIds.has(vm.node.id)}
                     busy={busy}
-                    {...cardHandlers}
+                    onFocusSession={onFocusSession}
+                    onApprove={onApprove}
+                    onFailRedo={onFailRedo}
+                    onFlipType={onFlipType}
+                    onAddAdhoc={onAddAdhoc}
                   />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </Fragment>
+                  <WorkflowGraphBranchRail
+                    vms={slot.adhoc.filter((adhocVm) => adhocVm.node.anchorNodeRowId === vm.node.id)}
+                    {...cardProps}
+                  />
+                </Fragment>
+              ))}
+              <WorkflowGraphBranchRail vms={orphaned} {...cardProps} />
+            </div>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+interface WorkflowGraphBranchRailProps {
+  vms: WorkflowGraphNodeVM[];
+  needsInputNodeRowIds: ReadonlySet<string>;
+  busy: boolean;
+  onFocusSession(nodeRowId: string): void;
+  onApprove(nodeRowId: string): void;
+  onFailRedo(nodeRowId: string, prompt?: string): void;
+  onFlipType(nodeRowId: string, nodeType: "agent" | "human_in_loop"): void;
+  onAddAdhoc(anchorNodeRowId: string, prompt: string): void;
+}
+
+/**
+ * The branch rail a slot's side nodes hang from: rendered directly under the
+ * attempt they anchor to, so a retry's side errand never reads as belonging
+ * to a different attempt. Renders nothing for an empty group — the rail is
+ * the fork's drawing, not a slot fixture.
+ */
+function WorkflowGraphBranchRail({
+  vms,
+  needsInputNodeRowIds,
+  busy,
+  onFocusSession,
+  onApprove,
+  onFailRedo,
+  onFlipType,
+  onAddAdhoc,
+}: WorkflowGraphBranchRailProps) {
+  if (vms.length === 0) return null;
+  return (
+    <div className="ml-6 flex flex-col gap-1.5 border-l border-border pl-3">
+      {vms.map((vm) => (
+        <WorkflowGraphNodeCard
+          key={vm.node.id}
+          vm={vm}
+          secondary
+          needsInput={needsInputNodeRowIds.has(vm.node.id)}
+          busy={busy}
+          onFocusSession={onFocusSession}
+          onApprove={onApprove}
+          onFailRedo={onFailRedo}
+          onFlipType={onFlipType}
+          onAddAdhoc={onAddAdhoc}
+        />
       ))}
     </div>
   );
