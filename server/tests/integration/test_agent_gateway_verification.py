@@ -77,9 +77,7 @@ def _fake_list_models(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, object
     monkeypatch.setattr(litellm, "list_models", _list)
 
 
-def _fake_expected(
-    monkeypatch: pytest.MonkeyPatch, expected: dict[str, set[str]] | None
-) -> None:
+def _fake_expected(monkeypatch: pytest.MonkeyPatch, expected: dict[str, set[str]] | None) -> None:
     """Pin the expected access-group map so verdicts don't depend on config.yaml."""
     monkeypatch.setattr(verification, "load_expected_access_groups", lambda: expected)
 

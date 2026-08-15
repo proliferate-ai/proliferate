@@ -147,9 +147,7 @@ async def run_verification(db: AsyncSession) -> VerificationResult:
     misconfigured = 0
     errored = 0
     for key in keys:
-        virtual_key = await get_enrollment_key_virtual_key_decrypted(
-            db, enrollment_key_id=key.id
-        )
+        virtual_key = await get_enrollment_key_virtual_key_decrypted(db, enrollment_key_id=key.id)
         if virtual_key is None:
             # No stored key material to check yet (a freshly created, not-yet-minted
             # row). Nothing to verify; leave any prior verdict standing.
