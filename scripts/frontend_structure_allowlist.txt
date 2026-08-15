@@ -18,7 +18,7 @@
 # max-lines entries.
 
 apps/packages/product-client/src/components/workspace/chat/input/ChatInput.tsx 447 blocked-status composer takeover branch (textarea/control-row swap + focus restore); split on next growth
-apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx 521 connected sidebar host; main's pinned-section split landed alongside R7's lifecycle archive handlers (resolver, instant archive, optimistic-hide over groups+pinned, scenario dialog) in the merge; extraction pending
+apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx 524 connected sidebar host; main's pinned-section split landed alongside R7's lifecycle archive handlers (resolver, instant archive, optimistic-hide over groups+pinned, scenario dialog) in the merge; +3 from #1856's transparent-chrome vibrancy pass-through; extraction pending
 apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-archive-actions.ts 464 R7 lifecycle archive/unarchive orchestrator: verb posts, undo toasts, 409 scenario flow, optimistic-hide set with pending reconciliation; grew past 400 with the flicker-regression rider
 apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 425 workspace bootstrap actions + gateway billing-block capture into the status screen (C8); split on next growth
 apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx 525 existing markdown transcript renderer pending split
