@@ -264,16 +264,12 @@ test.describe("transcript scroll physics", () => {
     await drive(page, "finalizeStreamingTurn");
   });
 
-  // FIXME AT RUNG 3 ONLY (chat-scroll/r3-single-writer). CI proved that the r3
-  // single-writer pin decision cannot hold the post-repin follow cadence on
-  // slow CI runners: on webkit this scenario lands bottomDistance 332 (> 202,
-  // i.e. > PIN_FOLLOW_MAX_DISTANCE) after the repin-and-stream arm. The rung-4
-  // same-frame pipeline (PR #1945, chat-scroll/r4-frame-pipeline) synchronously
-  // snaps inside the ResizeObserver notify path, and CI proves that fix makes
-  // webkit repin PASS at r4. The threshold is NOT loosened; this scenario is
-  // un-fixme'd by r4's diff (it must be active on r4/r5). Un-fixme point: PR
-  // #1945.
-  test.fixme("repin band edge: returning into the bottom band re-pins; staying above does not", async ({
+  // Rung 4 un-fixmes repin-band-edge: PR #1938 (r3) marks it test.fixme because
+  // the single-writer pin decision alone cannot hold the post-repin follow
+  // cadence on slow CI runners (webkit bottomDistance 332 > 202 after the
+  // repin-and-stream arm). The synchronous ResizeObserver-notify snap this rung
+  // adds fixes it, proven green on CI here.
+  test("repin band edge: returning into the bottom band re-pins; staying above does not", async ({
     page,
   }) => {
     await ready(page);
