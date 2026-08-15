@@ -32,12 +32,18 @@ import {
 } from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
 import { useSessionHistorySubagentAuthority } from "#product/hooks/sessions/lifecycle/use-session-history-subagent-authority";
 import {
-  abandonRendererFlow,
   beginRendererFlow,
   finishRendererFlow,
   markRendererFlowDataReady,
   markRendererFlowShellCommitted,
 } from "#product/lib/infra/diagnostics/renderer-flow-timing";
+import {
+  buildSessionOpenBeginParams,
+  buildSessionOpenDataReadyParams,
+  buildSessionOpenFinishParams,
+  buildSessionOpenShellCommittedParams,
+  markSessionOpenFlowAbandoned,
+} from "#product/hooks/sessions/lifecycle/session-open-flow-marks";
 
 export interface SessionHistoryHydrationOptions {
   afterSeq?: number;
@@ -78,32 +84,15 @@ export function useSessionHistoryHydration() {
 
       const afterSeq = options?.replace ? undefined : options?.afterSeq;
       const beforeSeq = options?.replace || afterSeq != null ? undefined : options?.beforeSeq;
-      // UX-latency R1: a full (non-incremental) hydration is the session_open
-      // flow. Incremental append/prepend fetches are not a fresh open.
+      // UX-latency R1 (Q17): a full (non-incremental) hydration is the
+      // session_open flow, which emits ONLY through the renderer flow-timing
+      // family; see session-open-flow-marks.ts for param construction and the
+      // rationale for skipping the legacy measurement-operation/logLatency
+      // emits here. Incremental append/prepend fetches are not a fresh open.
       const isSessionOpenFlow = afterSeq == null && beforeSeq == null;
       if (isSessionOpenFlow) {
-        beginRendererFlow({
-          kind: "session_open",
-          correlationKey: sessionId,
-          correlation: { sessionId },
-        });
-        // The transcript slot already exists, so the shell is committed by the
-        // time a full hydration begins. NOTE: intent_to_shell_ms is ~0 by
-        // construction for session_open (intent and shell fire back to back);
-        // the meaningful timings are shell_to_data (the history fetch) and
-        // data_to_stable (replay + store + mount).
-      }
-      // UX-latency R1 (Q17): the full-hydration path is the session_open flow and
-      // emits ONLY through the renderer flow-timing family. The
-      // `session_history_initial_hydrate` measurement operation and the
-      // `logLatency("session.history.rehydrate.success")` emit that used to run
-      // here were the parallel layer the ADR gate forbids, so they are skipped on
-      // this path; their phase timings are rerouted onto the renderer marks
-      // (event_count on data_ready, replay/store/mount deltas on content_stable).
-      // Incremental append/prepend hydrations are out of scope and keep the
-      // finer-grained history-apply measurement operation.
-      if (isSessionOpenFlow) {
-        markRendererFlowShellCommitted({ kind: "session_open", correlationKey: sessionId });
+        beginRendererFlow(buildSessionOpenBeginParams(sessionId));
+        markRendererFlowShellCommitted(buildSessionOpenShellCommittedParams(sessionId));
       } else {
         standaloneMeasurementOperationId = startMeasurementOperation({
           kind: resolveHistoryApplyOperationKind({ afterSeq, beforeSeq }),
@@ -167,21 +156,13 @@ export function useSessionHistoryHydration() {
         });
       }
       if (isSessionOpenFlow) {
-        markRendererFlowDataReady({
-          kind: "session_open",
-          correlationKey: sessionId,
-          detail: { event_count: events.length },
-        });
+        markRendererFlowDataReady(buildSessionOpenDataReadyParams(sessionId, events.length));
       }
       const currentSlot = getSessionRecord(sessionId);
       if (!currentSlot || (options?.isCurrent && !options.isCurrent())) {
         finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
         if (isSessionOpenFlow) {
-          abandonRendererFlow({
-            kind: "session_open",
-            correlationKey: sessionId,
-            reason: "session_slot_changed",
-          });
+          markSessionOpenFlowAbandoned(sessionId, "session_slot_changed");
         }
         return false;
       }
@@ -373,11 +354,7 @@ export function useSessionHistoryHydration() {
       })) {
         finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
         if (isSessionOpenFlow) {
-          abandonRendererFlow({
-            kind: "session_open",
-            correlationKey: sessionId,
-            reason: "session_slot_changed",
-          });
+          markSessionOpenFlowAbandoned(sessionId, "session_slot_changed");
         }
         return false;
       }
@@ -388,25 +365,18 @@ export function useSessionHistoryHydration() {
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed", true);
       if (isSessionOpenFlow) {
         // Phase timings rerouted from the removed measurement operation onto the
-        // canonical content_stable mark.
-        finishRendererFlow({
-          kind: "session_open",
-          correlationKey: sessionId,
-          detail: {
-            event_count: replacementEvents.length,
-            replay_ms: Math.round(storeStartedAt - replayStartedAt),
-            store_ms: Math.round(mountStartedAt - storeStartedAt),
-            mount_ms: Math.round(performance.now() - mountStartedAt),
-          },
-        });
+        // canonical content_stable mark (see session-open-flow-marks.ts).
+        finishRendererFlow(buildSessionOpenFinishParams(sessionId, {
+          eventCount: replacementEvents.length,
+          replayStartedAt,
+          storeStartedAt,
+          mountStartedAt,
+          finishedAt: performance.now(),
+        }));
       }
       return true;
     } catch (error) {
-      abandonRendererFlow({
-        kind: "session_open",
-        correlationKey: sessionId,
-        reason: "session_history_rehydrate_failed",
-      });
+      markSessionOpenFlowAbandoned(sessionId, "session_history_rehydrate_failed");
       reportSessionHistoryRehydrateFailure({
         error,
         sessionId,

@@ -64,8 +64,6 @@ export function useTerminalStreamController() {
         runtimeGeneration: resolvedConnection.runtimeGeneration,
       }),
     };
-    // The terminal shell is present once its runtime connection is resolved.
-    markRendererFlowShellCommitted({ kind: "terminal_attach", correlationKey: terminalId });
     let sawExitEvent = false;
     let sawFirstData = false;
     const didConnect = ensureConnected({
@@ -121,6 +119,13 @@ export function useTerminalStreamController() {
       },
     });
     if (didConnect) {
+      // The terminal shell is present once its runtime connection is resolved
+      // AND ensureConnected has confirmed this is a real (fresh) attach, not a
+      // keep-alive reattach onto an already-connected/exited entry. Marking
+      // this before didConnect was known let reattaches contaminate
+      // terminal_attach aggregations with spurious near-0ms shell_committed
+      // samples.
+      markRendererFlowShellCommitted({ kind: "terminal_attach", correlationKey: terminalId });
       bumpConnectionVersion(terminalId);
     } else {
       // Keep-alive reattach: ensureConnected short-circuits on an existing

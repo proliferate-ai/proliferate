@@ -126,6 +126,12 @@ export function useWorkspaceBootstrapActions() {
     let rendererFlowAbandonReason: string | null = null;
     let sessions: WorkspaceSession[] = [];
     // UX-latency R1 canonical flow marks (intent -> shell -> data -> stable).
+    // COVERAGE LIMIT (honest): this intent mark fires here, after the caller
+    // has already resolved which connection/workspace to bootstrap. Upstream
+    // work in run-workspace-selection.ts and selection/* (click handling,
+    // connection resolution, dedupe against the current selection) runs
+    // BEFORE this callback, so intent_to_shell_ms and the rest of this flow
+    // under-measure the true click-to-settled latency by that upstream phase.
     beginRendererFlow({
       kind: "workspace_open",
       correlationKey: workspaceId,
