@@ -222,6 +222,12 @@ export function VirtualizedTranscriptRowList({
     onViewportScroll,
   ]);
 
+  const startAboveChangeCompensation = useAboveChangeCompensation({
+    scrollRef,
+    pinnedRef,
+    notifyProgrammaticScroll,
+  });
+
   useLayoutEffect(() => {
     lastBlankReportSignatureRef.current = null;
     pendingPrependAnchorRef.current = null;
@@ -249,9 +255,19 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll(() => {
       viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
     });
-    // Open the blank-fallback grace window: the anchor write above lands against the still-estimated short scrollHeight.
+    // The synchronous write above lands against the CURRENT scrollHeight, which
+    // still reflects the virtualizer's 360px estimate for the freshly-mounted
+    // older rows. On Chromium the transcript runs with `overflow-anchor: none`
+    // (the single-writer ruling), so the browser no longer silently corrects
+    // that shortfall as the real, taller row heights measure in a frame later —
+    // the reading row would drift down by the estimate-to-measured difference.
+    // Re-apply the same delta each frame while the prepended rows settle (a no-op
+    // once pinned or height-stable), so scrollTop absorbs the full added-above
+    // height and the reading row stays fixed on every engine.
+    startAboveChangeCompensation(anchor);
+    // Open the blank-fallback grace window: the anchored scrollTop sits ahead of the still-estimated mounted range until those rows measure taller.
     prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
-  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned]);
+  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned, startAboveChangeCompensation]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -271,12 +287,6 @@ export function VirtualizedTranscriptRowList({
     });
     return () => { window.cancelAnimationFrame(frame); };
   }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
-
-  const startAboveChangeCompensation = useAboveChangeCompensation({
-    scrollRef,
-    pinnedRef,
-    notifyProgrammaticScroll,
-  });
 
   // While unpinned, a completing turn can split one row into completed-history +
   // content — a new, unmeasured row inserted ABOVE the anchored row. The
