@@ -10,6 +10,7 @@ surface). That model uses the on-disk snake_case field names verbatim (matching
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
@@ -20,6 +21,7 @@ from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
     AgentAuthDeliveryAckRecord,
     AgentAuthSelectionRecord,
+    AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
     DesiredAuthSource,
     OrgMemberRouteSelectionRecord,
@@ -187,10 +189,29 @@ class AgentAuthDeliveryAckResponse(AgentGatewayBaseModel):
 # --------------------------------------------------------------------------- #
 
 
+class AgentGatewayVerificationVerdict(AgentGatewayBaseModel):
+    """One per-harness gateway-enablement verdict (agent-auth.md FR-3).
+
+    ``delta`` is the parsed verification-delta JSON (never key material); it is
+    present only for a ``misconfigured`` verdict.
+    """
+
+    harness_kind: str = Field(alias="harnessKind")
+    status: str
+    delta: dict[str, Any] | None = None
+    verified_at: str | None = Field(default=None, alias="verifiedAt")
+
+
 class AgentGatewayCapabilitiesResponse(AgentGatewayBaseModel):
     gateway_enabled: bool = Field(alias="gatewayEnabled")
     public_base_url: str | None = Field(alias="publicBaseUrl")
     enrollment_status: str = Field(alias="enrollmentStatus")
+    # Additive FR-3 surface: per-harness gateway-enablement verdicts for the
+    # governing enrollment. Empty until the verification loop records one.
+    verifications: list[AgentGatewayVerificationVerdict] = Field(
+        default_factory=list,
+        alias="verifications",
+    )
 
 
 class AgentGatewayEnrollmentResponse(AgentGatewayBaseModel):
@@ -287,6 +308,25 @@ def desired_source(input_source: AgentAuthSourceInput) -> DesiredAuthSource:
         env_var_name=input_source.env_var_name,
         provider_hint=input_source.provider_hint,
         enabled=input_source.enabled,
+    )
+
+
+def verification_verdict_payload(
+    record: AgentGatewayEnrollmentKeyRecord,
+) -> AgentGatewayVerificationVerdict:
+    delta: dict[str, Any] | None = None
+    if record.verification_delta is not None:
+        try:
+            parsed = json.loads(record.verification_delta)
+        except (ValueError, TypeError):
+            parsed = None
+        if isinstance(parsed, dict):
+            delta = parsed
+    return AgentGatewayVerificationVerdict(
+        harnessKind=record.harness_kind,
+        status=record.verification_status or "",
+        delta=delta,
+        verifiedAt=_iso(record.verified_at),
     )
 
 

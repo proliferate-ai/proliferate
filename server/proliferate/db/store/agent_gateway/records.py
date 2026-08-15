@@ -103,6 +103,9 @@ class AgentGatewayEnrollmentKeyRecord:
     harness_kind: str
     virtual_key_id: str | None
     sync_fingerprint: str | None
+    verification_status: str | None
+    verification_delta: str | None
+    verified_at: datetime | None
     created_at: datetime
     updated_at: datetime
     revoked_at: datetime | None

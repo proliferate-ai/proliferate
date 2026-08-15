@@ -419,6 +419,12 @@ class Settings(BaseSettings):
     agent_gateway_llm_margin_pct: str = "15"
     agent_gateway_usage_import_interval_seconds: float = 60.0
     agent_gateway_usage_import_overlap_seconds: float = 300.0
+    # Control-plane gateway-enablement verification (agent-auth.md FR-3). The loop
+    # asks LiteLLM which models each active enrollment key can see and records a
+    # per-key verdict. Behind a flag (default off) so a deployment opts in, and it
+    # only runs when the gateway is enabled and background workers are on.
+    agent_gateway_verification_enabled: bool = False
+    agent_gateway_verification_interval_seconds: float = 900.0
     agent_gateway_topup_interval_seconds: float = 300.0
     # Auto top-up fires when the shared LLM pool drops below this balance; each
     # trigger buys exactly one pack (face value ``agent_gateway_topup_amount_usd``)
