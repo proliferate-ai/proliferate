@@ -22,7 +22,7 @@ mod tests;
 use std::sync::Arc;
 
 use authorization_policy::{CallerFacts, TargetFacts};
-pub use error::AgentOperationsError;
+pub use error::{agent_operations_outcome_class, AgentOperationsError};
 pub(crate) use ports::AgentMessageQueue;
 pub use ports::{
     AgentCatalogReads, AgentConfigMutationState, AgentExecutionReads, AgentLaunchOptionReads,
