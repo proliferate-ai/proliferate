@@ -18,7 +18,7 @@ use super::super::{
 use super::dev_generation_refresh_with_interval;
 use crate::{
     bridge::activation::{
-        parse_dev_env_file, DEV_CAPABILITY_ENV, DEV_COLLECTOR_BOOT_ID_ENV, DEV_ENDPOINT_ENV,
+        parse_dev_env_snippet, DEV_CAPABILITY_ENV, DEV_COLLECTOR_BOOT_ID_ENV, DEV_ENDPOINT_ENV,
         DEV_ENV_PATH_ENV,
     },
     DiagnosticsComponent, EmitDisposition,
@@ -31,11 +31,15 @@ const TEST_POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// forces a strictly increasing mtime so the refresh loop's stat cannot miss a
 /// rewrite on filesystems with coarse timestamp granularity.
 fn write_snippet(path: &Path, sequence: u64, endpoint: &str, capability: &str, boot_id: &str) {
-    let snippet = format!(
+    let snippet = render_snippet(path, endpoint, capability, boot_id);
+    write_raw(path, sequence, &snippet);
+}
+
+fn render_snippet(path: &Path, endpoint: &str, capability: &str, boot_id: &str) -> String {
+    format!(
         "{DEV_ENDPOINT_ENV}={endpoint}\n{DEV_CAPABILITY_ENV}={capability}\n{DEV_COLLECTOR_BOOT_ID_ENV}={boot_id}\n{DEV_ENV_PATH_ENV}={}\n",
         path.display(),
-    );
-    write_raw(path, sequence, &snippet);
+    )
 }
 
 fn write_raw(path: &Path, sequence: u64, content: &str) {
@@ -60,16 +64,14 @@ fn ready_snapshot(inner: &ProducerInner) -> Option<(String, u64)> {
 
 #[test]
 fn parse_accepts_the_published_four_line_snippet() {
-    let directory = tempfile::tempdir().expect("tempdir");
-    let path = directory.path().join("diagnostics-dev.env");
-    write_snippet(
-        &path,
-        1,
+    let path = Path::new("/tmp/app/diagnostics-dev.env");
+    let snippet = render_snippet(
+        path,
         "http://127.0.0.1:53421/",
         TEST_CAPABILITY,
         TEST_COLLECTOR_BOOT,
     );
-    let parsed = parse_dev_env_file(&path).expect("valid snippet parses");
+    let parsed = parse_dev_env_snippet(&snippet).expect("valid snippet parses");
     assert_eq!(parsed.endpoint, "http://127.0.0.1:53421/");
     assert_eq!(parsed.capability, TEST_CAPABILITY);
     assert_eq!(parsed.collector_boot_id, TEST_COLLECTOR_BOOT);
@@ -77,37 +79,35 @@ fn parse_accepts_the_published_four_line_snippet() {
 
 #[test]
 fn parse_rejects_missing_keys_out_of_bound_values_and_oversized_files() {
-    let directory = tempfile::tempdir().expect("tempdir");
-    let path = directory.path().join("diagnostics-dev.env");
+    let path = Path::new("/tmp/app/diagnostics-dev.env");
 
     // Missing capability line.
-    write_raw(
-        &path,
-        1,
-        &format!("{DEV_ENDPOINT_ENV}=http://127.0.0.1:1/\n{DEV_COLLECTOR_BOOT_ID_ENV}=boot\n"),
-    );
-    assert!(parse_dev_env_file(&path).is_none());
+    assert!(parse_dev_env_snippet(&format!(
+        "{DEV_ENDPOINT_ENV}=http://127.0.0.1:1/\n{DEV_COLLECTOR_BOOT_ID_ENV}=boot\n"
+    ))
+    .is_none());
 
     // Boot id past the protocol id bound (128 bytes).
-    write_snippet(
-        &path,
-        2,
+    assert!(parse_dev_env_snippet(&render_snippet(
+        path,
         "http://127.0.0.1:1/",
         TEST_CAPABILITY,
         &"b".repeat(129),
-    );
-    assert!(parse_dev_env_file(&path).is_none());
+    ))
+    .is_none());
 
     // Empty value.
-    write_snippet(&path, 3, "", TEST_CAPABILITY, TEST_COLLECTOR_BOOT);
-    assert!(parse_dev_env_file(&path).is_none());
+    assert!(parse_dev_env_snippet(&render_snippet(
+        path,
+        "",
+        TEST_CAPABILITY,
+        TEST_COLLECTOR_BOOT,
+    ))
+    .is_none());
 
-    // A file that is clearly not the four-line snippet.
-    write_raw(&path, 4, &"x".repeat(10_000));
-    assert!(parse_dev_env_file(&path).is_none());
-
-    // Missing file.
-    assert!(parse_dev_env_file(&directory.path().join("absent.env")).is_none());
+    // Content that is clearly not the four-line snippet.
+    assert!(parse_dev_env_snippet(&"x".repeat(10_000)).is_none());
+    assert!(parse_dev_env_snippet("").is_none());
 }
 
 /// A rewrite carrying a new collector boot id swaps the producer onto the new
@@ -186,6 +186,52 @@ async fn rewrite_with_same_boot_id_does_not_swap() {
         ready_snapshot(&inner),
         Some((TEST_COLLECTOR_BOOT.to_owned(), 1)),
         "a republished snippet for the same boot id must leave generation 1 in place"
+    );
+    refresh.abort();
+}
+
+/// The host's rewrite is not atomic: a poll can catch a torn/garbage read at
+/// some mtime T. The loop must not latch T on a failed parse, or a valid
+/// re-read at the indistinguishable same timestamp would be locked out —
+/// reproducing the outage this slice exists to fix.
+#[tokio::test(flavor = "multi_thread")]
+async fn torn_read_then_valid_content_at_the_same_mtime_still_reattaches() {
+    let old = CollectorFixture::accepting(TEST_COLLECTOR_BOOT).await;
+    let fresh = CollectorFixture::accepting(FRESH_COLLECTOR_BOOT).await;
+    let directory = tempfile::tempdir().expect("tempdir");
+    let path = directory.path().join("diagnostics-dev.env");
+    let inner = producer(
+        DiagnosticsComponent::AnyHarness,
+        CollectorAvailability::Ready(Arc::new(old.generation(1))),
+        None,
+    );
+    let refresh = tokio::spawn(dev_generation_refresh_with_interval(
+        Arc::clone(&inner),
+        path.clone(),
+        TEST_POLL_INTERVAL,
+    ));
+
+    // A torn read: the truncate landed, the content did not.
+    write_raw(&path, 1, "");
+    // Give the loop several ticks to observe the torn state at mtime T.
+    tokio::time::sleep(TEST_POLL_INTERVAL * 5).await;
+    assert_eq!(
+        ready_snapshot(&inner),
+        Some((TEST_COLLECTOR_BOOT.to_owned(), 1)),
+        "a torn read must not swap"
+    );
+
+    // The completed write, indistinguishable by timestamp (same sequence).
+    write_snippet(
+        &path,
+        1,
+        fresh.endpoint(),
+        TEST_CAPABILITY,
+        FRESH_COLLECTOR_BOOT,
+    );
+    assert!(
+        wait_for(|| { ready_snapshot(&inner) == Some((FRESH_COLLECTOR_BOOT.to_owned(), 2)) }).await,
+        "the completed write at the same mtime must still re-attach"
     );
     refresh.abort();
 }
