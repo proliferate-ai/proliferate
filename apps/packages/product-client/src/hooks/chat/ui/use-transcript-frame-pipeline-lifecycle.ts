@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import type { ContentHeightScrollAnchor } from "#product/hooks/chat/ui/transcript-row-list-model";
 import type { TranscriptFramePipeline } from "#product/hooks/chat/ui/transcript-frame-pipeline";
 
@@ -50,6 +50,16 @@ export function useTranscriptFramePipelineLifecycle({
   clearAllMarkers,
   beginGlue,
 }: UseTranscriptFramePipelineLifecycleOptions): void {
+  // Running maximum of the viewport's reported total content height within the
+  // CURRENT compensation anchor's window, so the compensation delta can be
+  // clamped monotonic (see runFramePass). Keyed by anchor identity: a fresh
+  // anchor (each prepend installs a new object) resets the floor to that
+  // anchor's captured pre-prepend total.
+  const compensationTotalFloorRef = useRef<{
+    anchor: ContentHeightScrollAnchor | null;
+    maxScrollHeight: number;
+  }>({ anchor: null, maxScrollHeight: 0 });
+
   const runFramePass = useCallback(() => {
     const viewport = scrollRef.current;
     if (!viewport) {
@@ -75,8 +85,28 @@ export function useTranscriptFramePipelineLifecycle({
       compensationAnchorRef.current = null;
       return;
     }
+    // Rung 5: composition-derived estimates plus the write-through
+    // measured-height cache make the virtualizer's reported total scrollHeight
+    // move NON-MONOTONICALLY while the freshly-prepended older rows correct from
+    // estimate to measured over the throttled settle. A transient dip in that
+    // total — below the anchor's pre-prepend height, or below a height already
+    // observed this window — would shrink the compensation delta and jump the
+    // reader UP toward the newly prepended top (the r5 chromium regression:
+    // scrollTop 120 vs > 150). Clamp the effective total to its running maximum
+    // within this anchor's window, so the delta is monotonic non-decreasing and
+    // never negative and the reading row never travels backward as the estimate
+    // churns. The real added-above height only ever grows toward its measured
+    // truth here (the older rows correct taller), so the running max converges
+    // on the correct compensation without over-shooting.
+    const floor = compensationTotalFloorRef.current;
+    if (floor.anchor !== anchor) {
+      floor.anchor = anchor;
+      floor.maxScrollHeight = anchor.scrollHeight;
+    }
+    floor.maxScrollHeight = Math.max(floor.maxScrollHeight, viewport.scrollHeight);
+    const effectiveScrollHeight = floor.maxScrollHeight;
     notifyProgrammaticScroll(() => {
-      viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+      viewport.scrollTop = anchor.scrollTop + (effectiveScrollHeight - anchor.scrollHeight);
     });
   }, [
     compensationAnchorRef,
