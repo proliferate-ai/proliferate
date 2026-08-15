@@ -1073,33 +1073,43 @@ fn stale_launch_failure_holds() {
 
 #[test]
 fn commands_other_than_redo_are_illegal_on_terminal_runs() {
-    let mut state = mid_run();
-    state.run.status = WorkflowRunStatus::Completed;
-    for command in [
-        WorkflowCommand::ApproveGate {
-            node_row_id: "n2".into(),
-        },
-        WorkflowCommand::FlipType {
-            node_row_id: "n3".into(),
-            node_type: WorkflowNodeType::HumanInLoop,
-        },
-        WorkflowCommand::UndoAdvance,
-        WorkflowCommand::Resume,
-        WorkflowCommand::AddAdhocNode {
-            anchor_node_row_id: "n2".into(),
-            prompt: "late addition".into(),
-            model: None,
-        },
-        WorkflowCommand::Cancel,
+    // Parameterized over every terminal status: the matrix previously only
+    // ever set Completed, so Failed and Cancelled read as covered when they
+    // were not actually exercised.
+    for terminal_status in [
+        WorkflowRunStatus::Completed,
+        WorkflowRunStatus::Failed,
+        WorkflowRunStatus::Cancelled,
     ] {
-        assert!(
-            matches!(
-                next(&state, &WorkflowEvent::Command(command.clone())),
-                Decision::Illegal(_)
-            ),
-            "command {} should be illegal on a terminal run",
-            command.as_str()
-        );
+        let mut state = mid_run();
+        state.run.status = terminal_status;
+        for command in [
+            WorkflowCommand::ApproveGate {
+                node_row_id: "n2".into(),
+            },
+            WorkflowCommand::FlipType {
+                node_row_id: "n3".into(),
+                node_type: WorkflowNodeType::HumanInLoop,
+            },
+            WorkflowCommand::UndoAdvance,
+            WorkflowCommand::Resume,
+            WorkflowCommand::AddAdhocNode {
+                anchor_node_row_id: "n2".into(),
+                prompt: "late addition".into(),
+                model: None,
+            },
+            WorkflowCommand::Cancel,
+        ] {
+            assert!(
+                matches!(
+                    next(&state, &WorkflowEvent::Command(command.clone())),
+                    Decision::Illegal(_)
+                ),
+                "command {} should be illegal on a {} run",
+                command.as_str(),
+                terminal_status.as_str()
+            );
+        }
     }
 }
 
@@ -1116,7 +1126,7 @@ fn cancel_from_running_disposes_the_live_session() {
         transition,
         Transition::Cancel {
             node_row_id: "n2".into(),
-            disposed_session_id: Some("sess-n2".into()),
+            disposed_session_ids: vec!["sess-n2".into()],
         }
     );
 }
@@ -1133,7 +1143,7 @@ fn cancel_from_awaiting_human_gate_disposes_nothing() {
         transition,
         Transition::Cancel {
             node_row_id: "n2".into(),
-            disposed_session_id: None,
+            disposed_session_ids: vec![],
         }
     );
 }
@@ -1154,7 +1164,27 @@ fn cancel_from_interrupted_run_disposes_nothing() {
         transition,
         Transition::Cancel {
             node_row_id: "n2".into(),
-            disposed_session_id: None,
+            disposed_session_ids: vec![],
+        }
+    );
+}
+
+#[test]
+fn cancel_with_a_running_adhoc_row_disposes_both_sessions() {
+    // HIGH finding: a running adhoc row is never the current node
+    // (invariants.rs forbids it), so it is invisible to a disposal scan that
+    // only looks at `state.current_node()`. Cancel must scan every running
+    // row, chain or adhoc, exactly like `on_boot_fence` does.
+    let state = with_adhoc(mid_run(), WorkflowNodeStatus::Running);
+    let transition = expect_transition(next(
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::Cancel),
+    ));
+    assert_eq!(
+        transition,
+        Transition::Cancel {
+            node_row_id: "n2".into(),
+            disposed_session_ids: vec!["sess-n2".into(), "sess-a1".into()],
         }
     );
 }

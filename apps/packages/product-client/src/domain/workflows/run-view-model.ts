@@ -31,6 +31,9 @@ const NODE_STATUS_TONE: Record<WorkflowRunNodeStatusV2, WorkflowNodeTone> = {
   awaiting_human: "info",
   completed: "success",
   failed: "danger",
+  // Terminal-inert, same as `pending`: the user stopped it deliberately, it
+  // is not an error to flag the way `failed` is.
+  cancelled: "muted",
 };
 
 /**

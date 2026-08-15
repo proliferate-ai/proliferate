@@ -100,6 +100,34 @@ fn seed_pre_0070(conn: &mut Connection) {
         [],
     )
     .expect("seed pre-0070 node");
+
+    // A dependent row on each side of the two rebuilt tables, so the FK-check
+    // proof downstream actually proves something: `workflow_run_docs.run_id`
+    // FK-references `workflow_runs(id)` directly, and this session carries
+    // the loose `workflow_run_id`/`workflow_node_row_id` link 0069 added onto
+    // the pre-existing `sessions` table.
+    conn.execute(
+        "INSERT INTO workflow_run_docs (
+            id, run_id, slug, filename, producing_node_row_id, seeded_from_template,
+            created_at, updated_at
+         ) VALUES (
+            'doc-1', 'run-1', 'plan', '00-plan.md', 'node-1', 0,
+            '2026-01-01T00:01:30Z', '2026-01-01T00:01:30Z'
+         )",
+        [],
+    )
+    .expect("seed pre-0070 doc");
+    conn.execute(
+        "INSERT INTO sessions (
+            id, workspace_id, agent_kind, status, created_at, updated_at,
+            workflow_run_id, workflow_node_row_id
+         ) VALUES (
+            'session-1', 'workspace-1', 'claude', 'idle', '2026-01-01T00:00:45Z',
+            '2026-01-01T00:00:45Z', 'run-1', 'node-1'
+         )",
+        [],
+    )
+    .expect("seed pre-0070 session");
 }
 
 fn index_names(conn: &Connection, table_name: &str) -> Vec<String> {

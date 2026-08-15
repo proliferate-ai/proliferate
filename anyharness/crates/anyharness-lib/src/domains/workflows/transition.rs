@@ -265,14 +265,16 @@ pub enum Transition {
         outcome: AdhocOutcome,
     },
     /// User-initiated cancel: the run and its current node both go terminal.
-    /// `disposed_session_id` mirrors Ruling L (Redo): set only when the
-    /// current node was RUNNING, since pause states hold no live turn to
-    /// kill. Any concurrently running adhoc row is left alone — same as
-    /// FailNode/CompleteRun/Redo, it self-resolves via its own turn report
-    /// regardless of the run's now-terminal status.
+    /// `disposed_session_ids` collects EVERY running row's live session —
+    /// the chain node (Ruling L's condition: only when it was RUNNING, since
+    /// pause states hold no live turn to kill) plus any concurrently running
+    /// adhoc row. Unlike FailNode/CompleteRun, an adhoc row cannot be trusted
+    /// to self-resolve via its own turn report once the run is terminal and
+    /// the workspace policy releases: a wedged adhoc turn would otherwise
+    /// stay live forever. Mirrors `on_boot_fence`'s "every running row" scan.
     Cancel {
         node_row_id: String,
-        disposed_session_id: Option<String>,
+        disposed_session_ids: Vec<String>,
     },
 }
 
@@ -700,15 +702,18 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
             let Some(node) = state.current_node() else {
                 return illegal(state, command.as_str(), None, "no current node to cancel");
             };
+            // Every running row's live session, chain or adhoc — same scan as
+            // `on_boot_fence` — so a running adhoc row is not left with a live
+            // agent burning tokens under a now-terminal, dispose-released run.
+            let disposed_session_ids: Vec<String> = state
+                .nodes
+                .iter()
+                .filter(|other| other.status == WorkflowNodeStatus::Running)
+                .filter_map(|other| other.session_id.clone())
+                .collect();
             Decision::Transition(Transition::Cancel {
                 node_row_id: node.id.clone(),
-                // Ruling L's disposal condition, reused: only a RUNNING node
-                // holds a live turn worth killing.
-                disposed_session_id: if node.status == WorkflowNodeStatus::Running {
-                    node.session_id.clone()
-                } else {
-                    None
-                },
+                disposed_session_ids,
             })
         }
     }

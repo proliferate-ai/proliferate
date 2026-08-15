@@ -127,4 +127,15 @@ export class WorkflowRunsV2Client {
       options,
     );
   }
+
+  async cancel(
+    runId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkflowRunProjectionV2> {
+    return this.transport.post<WorkflowRunProjectionV2>(
+      `/v1/workflow-runs/${encodeURIComponent(runId)}/cancel`,
+      {},
+      options,
+    );
+  }
 }

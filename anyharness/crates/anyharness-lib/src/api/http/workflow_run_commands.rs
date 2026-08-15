@@ -1,4 +1,4 @@
-//! The six workflow command POSTs. Every command goes through the manager's
+//! The seven workflow command POSTs. Every command goes through the manager's
 //! one door and its oneshot reply IS the response body (Illegal = the 409);
 //! the pre-dispatch 404s — unknown run and unknown node carry distinct codes,
 //! per the ADR — come from one cheap membership read, never a second full

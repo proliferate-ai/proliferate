@@ -758,8 +758,8 @@ fn cancel_from_running_disposes_the_session_and_persists_in_one_commit() {
     assert_healthy(&applied.state);
     assert_eq!(
         applied.side_effect,
-        ResolvedSideEffect::DisposeSession {
-            session_id: "sess-plan".into(),
+        ResolvedSideEffect::DisposeSessions {
+            session_ids: vec!["sess-plan".into()],
         }
     );
     assert_eq!(applied.state.run.status, WorkflowRunStatus::Cancelled);
@@ -769,6 +769,9 @@ fn cancel_from_running_disposes_the_session_and_persists_in_one_commit() {
     // The node row's own `completed_at` means "completed successfully"
     // (mirrors FailNode/InterruptNode); a cancel never stamps it.
     assert!(plan.completed_at.is_none());
+    // The disposed chain node's own session_id is NULLed, matching
+    // UndoAdvance's convention for a killed session.
+    assert!(plan.session_id.is_none());
 
     // Persisted, not just returned: a fresh read agrees.
     let reloaded = store.load_run_state("run-1").expect("load").expect("run");
@@ -784,6 +787,101 @@ fn cancel_from_running_disposes_the_session_and_persists_in_one_commit() {
         next(&reloaded, &cancel),
         Decision::Illegal(_)
     ));
+}
+
+/// HIGH finding: a running adhoc row is never `state.current_node()` (by
+/// invariant it can't be), so a disposal path that only looks at the current
+/// node leaves a running adhoc row's session alive forever — with the
+/// workspace already released for destruction by the now-cancelled run's
+/// terminal status. Cancel must dispose every running row's session, chain
+/// or adhoc, mirroring `on_boot_fence`'s "every running row" scan.
+#[test]
+fn cancel_with_a_running_adhoc_row_disposes_both_sessions() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+    store
+        .stamp_session(&plan_id, "sess-plan", Some("prompt-plan"), Some("claude"))
+        .expect("stamp plan session");
+
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+    let add_adhoc = WorkflowEvent::Command(WorkflowCommand::AddAdhocNode {
+        anchor_node_row_id: plan_id.clone(),
+        prompt: "investigate the flaky login test".into(),
+        model: None,
+    });
+    let applied = decide_and_apply(&store, "run-1", &state, &add_adhoc);
+    let adhoc_id = applied.created_node_row_id.clone().expect("adhoc row minted");
+    store
+        .stamp_session(&adhoc_id, "sess-adhoc", Some("prompt-adhoc"), Some("claude"))
+        .expect("stamp adhoc session");
+
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+    assert_eq!(
+        state.node(&adhoc_id).unwrap().status,
+        WorkflowNodeStatus::Running
+    );
+    let cancel = WorkflowEvent::Command(WorkflowCommand::Cancel);
+    let applied = decide_and_apply(&store, "run-1", &state, &cancel);
+    assert_healthy(&applied.state);
+
+    let ResolvedSideEffect::DisposeSessions { session_ids } = applied.side_effect.clone() else {
+        panic!("expected DisposeSessions, got {:?}", applied.side_effect);
+    };
+    assert_eq!(
+        session_ids.iter().collect::<std::collections::HashSet<_>>(),
+        [&"sess-plan".to_string(), &"sess-adhoc".to_string()]
+            .into_iter()
+            .collect::<std::collections::HashSet<_>>(),
+        "both the chain node's and the running adhoc row's sessions must be disposed"
+    );
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Cancelled);
+
+    // The adhoc row is untouched by the transition itself (its resolution is
+    // its disposed session, not a status flip); the chain node goes cancelled.
+    assert_eq!(
+        applied.state.node(&plan_id).unwrap().status,
+        WorkflowNodeStatus::Cancelled
+    );
+}
+
+/// MEDIUM finding: `interruption_code` must not survive a cancel — ResumeNode
+/// and Redo both clear it on their own terminal-adjacent transitions, so a
+/// cancelled run that was Interrupted must not still read as
+/// interrupted-for-a-reason.
+#[test]
+fn cancel_from_interrupted_run_clears_interruption_code() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+    store
+        .stamp_session(&plan_id, "sess-plan", Some("prompt-plan"), Some("claude"))
+        .expect("stamp plan session");
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+
+    let fence = WorkflowEvent::BootFence {
+        code: WorkflowInterruptionCode::AppShutdown,
+    };
+    let applied = decide_and_apply(&store, "run-1", &state, &fence);
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Interrupted);
+    assert_eq!(
+        applied.state.run.interruption_code,
+        Some(WorkflowInterruptionCode::AppShutdown)
+    );
+
+    let cancel = WorkflowEvent::Command(WorkflowCommand::Cancel);
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &cancel);
+    assert_healthy(&applied.state);
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Cancelled);
+    assert_eq!(applied.state.run.interruption_code, None);
+
+    // Persisted, not just returned.
+    let reloaded = store.load_run_state("run-1").expect("load").expect("run");
+    assert_eq!(reloaded.run.interruption_code, None);
 }
 
 #[test]

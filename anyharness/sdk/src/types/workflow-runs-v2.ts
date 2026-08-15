@@ -60,7 +60,8 @@ export type WorkflowRunStatusV2 =
   | "awaiting_human"
   | "interrupted"
   | "completed"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export type WorkflowRunNodeStatusV2 =
   | "pending"
@@ -68,7 +69,8 @@ export type WorkflowRunNodeStatusV2 =
   | "needs_attention"
   | "awaiting_human"
   | "completed"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export type WorkflowRunNodeKindV2 = "defined" | "replacement" | "adhoc";
 

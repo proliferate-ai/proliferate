@@ -640,7 +640,7 @@ CREATE TABLE workflow_run_nodes (
     chain_index           INTEGER,                   -- position on the linear chain; adhoc copies its anchor's
     title                 TEXT NOT NULL,
     prompt                TEXT NOT NULL,
-    status                TEXT NOT NULL CHECK (status IN ('pending','running','needs_attention','awaiting_human','completed','failed')),
+    status                TEXT NOT NULL CHECK (status IN ('pending','running','needs_attention','awaiting_human','completed','failed','cancelled')),
     session_id            TEXT,
     prompt_id             TEXT,                      -- the envelope prompt's id (provenance; the extension reports every turn end of a linked session)
     model                 TEXT,                      -- JSON NodeModel: the row's own launch pick (adhoc); NULL = resolve via the frozen definition, then the app default
@@ -660,7 +660,7 @@ CREATE TABLE workflow_runs (
     definition_json     TEXT NOT NULL,               -- verbatim snapshot, IMMUTABLE after insert
     arguments_json      TEXT NOT NULL,
     workspace_id        TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    status              TEXT NOT NULL CHECK (status IN ('running','awaiting_human','interrupted','completed','failed')),
+    status              TEXT NOT NULL CHECK (status IN ('running','awaiting_human','interrupted','completed','failed','cancelled')),
     current_node_row_id TEXT,
     failure_code        TEXT CHECK (failure_code IS NULL OR failure_code IN ('node_launch_failed','turn_error','refusal','empty_turn','harness_cap','superseded')),
     interruption_code   TEXT CHECK (interruption_code IS NULL OR interruption_code IN ('user_cancel','app_shutdown','runtime_restarted')),

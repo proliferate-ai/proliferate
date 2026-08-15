@@ -10,9 +10,9 @@ ALTER TABLE workflow_run_nodes RENAME TO workflow_run_nodes_pre_cancel;
 ALTER TABLE workflow_runs RENAME TO workflow_runs_pre_cancel;
 
 CREATE TABLE workflow_runs (
-    id                  TEXT PRIMARY KEY,
+    id                  TEXT PRIMARY KEY,            -- minted by the courier; PUT is idempotent on it
     invocation_id       TEXT NOT NULL,
-    definition_json     TEXT NOT NULL,
+    definition_json     TEXT NOT NULL,               -- verbatim snapshot, IMMUTABLE after insert
     arguments_json      TEXT NOT NULL,
     workspace_id        TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     status              TEXT NOT NULL CHECK (status IN ('running','awaiting_human','interrupted','completed','failed','cancelled')),
@@ -37,23 +37,23 @@ SELECT
 FROM workflow_runs_pre_cancel;
 
 CREATE TABLE workflow_run_nodes (
-    id                    TEXT PRIMARY KEY,
+    id                    TEXT PRIMARY KEY,          -- the node row id, the API-addressable identity
     run_id                TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
-    definition_node_id    TEXT,
+    definition_node_id    TEXT,                      -- null for adhoc; replacements inherit it
     kind                  TEXT NOT NULL CHECK (kind IN ('defined','replacement','adhoc')),
-    node_type             TEXT NOT NULL CHECK (node_type IN ('agent','human_in_loop')),
+    node_type             TEXT NOT NULL CHECK (node_type IN ('agent','human_in_loop')),  -- MUTABLE, type flips land here
     replaces_node_row_id  TEXT,
-    anchor_node_row_id    TEXT,
-    chain_index           INTEGER,
+    anchor_node_row_id    TEXT,                      -- adhoc: where it hangs off the chain
+    chain_index           INTEGER,                   -- position on the linear chain; adhoc copies its anchor's
     title                 TEXT NOT NULL,
     prompt                TEXT NOT NULL,
     status                TEXT NOT NULL CHECK (status IN ('pending','running','needs_attention','awaiting_human','completed','failed','cancelled')),
     session_id            TEXT,
-    prompt_id             TEXT,
-    model                 TEXT,
-    rendered_envelope     TEXT,
+    prompt_id             TEXT,                      -- the envelope prompt's id (provenance; the extension reports every turn end of a linked session)
+    model                 TEXT,                      -- JSON NodeModel: the row's own launch pick (adhoc); NULL = resolve via the frozen definition, then the app default
+    rendered_envelope     TEXT,                      -- JSON {instructionBlocks, firstMessage, systemPromptAppend}
     failure_code          TEXT CHECK (failure_code IS NULL OR failure_code IN ('node_launch_failed','turn_error','refusal','empty_turn','harness_cap','superseded')),
-    first_turn_finished_at TEXT,
+    first_turn_finished_at TEXT,                     -- first turn end of the CURRENT execution; bounds UndoAdvance
     created_at            TEXT NOT NULL,
     started_at            TEXT,
     completed_at          TEXT,

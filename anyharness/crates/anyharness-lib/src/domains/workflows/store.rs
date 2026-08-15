@@ -74,6 +74,10 @@ pub enum ResolvedSideEffect {
         session_id: String,
         node_row_id: String,
     },
+    /// Cancel's compound effect: every running row's live session (chain node
+    /// plus any concurrently running adhoc rows) is disposed; nothing starts
+    /// after, since the run is terminal.
+    DisposeSessions { session_ids: Vec<String> },
 }
 
 #[derive(Debug, Clone)]
@@ -537,25 +541,46 @@ impl WorkflowStore {
                 }
                 Transition::Cancel {
                     node_row_id,
-                    disposed_session_id,
+                    disposed_session_ids,
                 } => {
                     // Mirrors FailNode/InterruptNode: the node row's own
                     // `completed_at` stays NULL (that column means "completed
                     // successfully"), only the run stamps its terminal time.
-                    set_node_status(tx, node_row_id, WorkflowNodeStatus::Cancelled)?;
+                    // The chain node's own `session_id` is NULLed exactly when
+                    // its session is being disposed here (it was RUNNING),
+                    // matching UndoAdvance's convention for a killed session;
+                    // a disposed adhoc row keeps its historical session_id,
+                    // same as any other resolved adhoc row.
+                    let node_was_running = state
+                        .node(node_row_id)
+                        .map(|node| node.status == WorkflowNodeStatus::Running)
+                        .unwrap_or(false);
+                    if node_was_running {
+                        tx.execute(
+                            "UPDATE workflow_run_nodes SET status = 'cancelled', session_id = NULL
+                             WHERE id = ?1",
+                            params![node_row_id],
+                        )?;
+                    } else {
+                        set_node_status(tx, node_row_id, WorkflowNodeStatus::Cancelled)?;
+                    }
                     update_run(
                         tx,
                         run_id,
                         &timestamp,
                         RunUpdate {
                             status: Some(WorkflowRunStatus::Cancelled),
+                            // A cancelled run no longer reads as
+                            // interrupted-for-a-reason: ResumeNode and Redo
+                            // both clear this column, cancel must too.
+                            interruption_code: Some(None),
                             completed_at: Some(Some(timestamp.clone())),
                             ..RunUpdate::default()
                         },
                     )?;
-                    if let Some(session_id) = disposed_session_id {
-                        side_effect = ResolvedSideEffect::DisposeSession {
-                            session_id: session_id.clone(),
+                    if !disposed_session_ids.is_empty() {
+                        side_effect = ResolvedSideEffect::DisposeSessions {
+                            session_ids: disposed_session_ids.clone(),
                         };
                     }
                 }
