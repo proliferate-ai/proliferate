@@ -52,6 +52,9 @@ export function SidebarPinnedNavigation({
 
 interface SidebarScrollingNavigationProps {
   workspacesActive: boolean;
+  /** False while the workflows_v2 gate is off: the row is omitted entirely,
+   * not rendered disabled. */
+  showWorkflows: boolean;
   workflowsActive: boolean;
   supportActive: boolean;
   shortcutRevealVisible: boolean;
@@ -63,6 +66,7 @@ interface SidebarScrollingNavigationProps {
 
 export function SidebarScrollingNavigation({
   workspacesActive,
+  showWorkflows,
   workflowsActive,
   supportActive,
   shortcutRevealVisible,
@@ -78,17 +82,19 @@ export function SidebarScrollingNavigation({
       icon: <Grid />,
       label: "Workspaces",
     },
-    {
-      id: "workflows",
-      active: workflowsActive,
-      icon: <Fork />,
-      label: "Workflows",
-      status: (
-        <span className="font-mono text-ui-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
-          beta
-        </span>
-      ),
-    },
+    ...(showWorkflows
+      ? [{
+        id: "workflows",
+        active: workflowsActive,
+        icon: <Fork />,
+        label: "Workflows",
+        status: (
+          <span className="font-mono text-ui-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
+            beta
+          </span>
+        ),
+      }]
+      : []),
     {
       id: "support",
       active: supportActive,
