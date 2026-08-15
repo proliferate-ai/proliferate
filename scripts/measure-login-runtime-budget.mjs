@@ -99,7 +99,14 @@ const DIST = join(REPO_ROOT, "apps", "web", "dist");
 // each PR fit its own cap view, but the sum overflowed by 291 B. The standing
 // intent above is unchanged: lazy-load the support modal out of the first-load
 // graph and bring this cap back down; the raise is the unblock, not the fix.
-const CAPS = { js: 500500, css: 66000 };
+//
+// Raised to JS 502000 / CSS 66250 on 2026-08-15 (PRO-165): home-screen
+// attachments put the composed bundle at 501563 B JS / 66013 B CSS. The
+// growth is genuine feature bytes in the shared shell (the home composer now
+// runs the same attachment controller, drop overlay, and launch-snapshot
+// plumbing chat uses; the drop overlay's utility combos add the CSS bytes).
+// The support-modal lazy-load intent above remains the path back down.
+const CAPS = { js: 502000, css: 66250 };
 // Baseline requests zero of these on /login; any byte is a fail-closed
 // regression (login/callback must not eagerly load fonts/images/audio).
 const ZERO_KINDS = ["font", "image", "audio"];
