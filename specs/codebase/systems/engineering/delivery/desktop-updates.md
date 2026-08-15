@@ -158,7 +158,11 @@ version is confidently older
 (`isDesktopVersionSupported`, which fails open on dev/unstamped sentinels and
 unparseable strings), and the server actually declared a well-formed `/meta`.
 A self-hosted server that fails the structural shape check, or omits the
-fields entirely (older server), never blocks. A `desktop_minversion_block`
+fields entirely (older server), never blocks. The takeover blocks the *user*,
+not the runtime: background sessions keep executing beneath it. It never
+covers the sign-in/connect surface, and it carries a "Sign out and switch
+server" escape hatch, so a misconfigured self-hosted floor (one no published
+desktop build can satisfy) can strand a session but never the app. A `desktop_minversion_block`
 telemetry event fires once per transition into the blocked state; a
 `desktop.minversion.block_rate` server-side dashboard is a follow-up, not built
 here.

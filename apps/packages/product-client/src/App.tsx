@@ -289,9 +289,15 @@ function AppUpdateSurface() {
  * connectable server to be behind on, so Web never pays for the query hooks.
  */
 function AppMinDesktopVersionGate() {
-  const hasUpdater = Boolean(useProductHost().desktop?.updater)
+  const host = useProductHost()
+  const hasUpdater = Boolean(host.desktop?.updater)
+  // Never cover the sign-in/connect surface: a signed-out user must always be
+  // able to reach it and point the app at a different server, so a
+  // misconfigured floor can only ever strand a session, not the app itself.
+  const authenticated =
+    host.auth.state.status === "authenticated" || !host.auth.authRequired
 
-  if (!hasUpdater) {
+  if (!hasUpdater || !authenticated) {
     return null
   }
 

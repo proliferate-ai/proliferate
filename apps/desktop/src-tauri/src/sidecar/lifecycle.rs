@@ -198,6 +198,14 @@ pub(super) async fn wait_healthy(sidecar: &SharedSidecar, require_child: bool) -
                 {
                     let mut guard = sidecar.lock().await;
                     guard.info.status = RuntimeStatus::Failed;
+                    // Unlike the other Failed paths, this child is alive and
+                    // healthy — kill it so a "Failed" boot never leaves a
+                    // running runtime process behind the status.
+                    if let Some(child) = guard.child.as_mut() {
+                        let _ = child.start_kill();
+                    }
+                    guard.child = None;
+                    sidecar.set_child_shutdown_signal(None);
                     persist_runtime_info(&guard.info, health.as_ref());
                     return BootOutcome::Failed("runtime_version_mismatch");
                 }

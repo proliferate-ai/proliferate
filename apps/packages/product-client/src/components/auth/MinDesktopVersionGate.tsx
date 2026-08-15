@@ -3,6 +3,7 @@ import { AlertTriangle } from "#product/primitives/icons/status";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { useMinDesktopVersionGate } from "#product/hooks/access/cloud/server-capabilities/use-min-desktop-version-gate";
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
+import { useAppSidebarSignOutAction } from "#product/hooks/app/workflows/use-app-sidebar-sign-out-action";
 
 /**
  * Full-screen takeover blocking a desktop below the connected server's
@@ -20,6 +21,7 @@ import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 export function MinDesktopVersionGate() {
   const gate = useMinDesktopVersionGate();
   const { checkNow } = useUpdater();
+  const signOut = useAppSidebarSignOutAction();
 
   if (!gate || !gate.blocked) {
     return null;
@@ -45,6 +47,15 @@ export function MinDesktopVersionGate() {
           <RefreshCw className="icon-paired" />
           Check for update
         </Button>
+        {/* Escape hatch: "Check for update" drives the vendor updater feed,
+            which a self-hosted floor may never be satisfiable against. Signing
+            out returns to the connect surface (which this gate never covers),
+            so the user can point the app at a different server. */}
+        <div className="mt-3">
+          <Button variant="ghost" size="sm" onClick={signOut}>
+            Sign out and switch server
+          </Button>
+        </div>
       </div>
     </div>
   );
