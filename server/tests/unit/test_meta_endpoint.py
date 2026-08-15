@@ -87,10 +87,7 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
 def test_meta_enforce_min_desktop_version_opt_in(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     _clear_pin_env(monkeypatch)
     monkeypatch.setenv("ENFORCE_MIN_DESKTOP_VERSION", "true")
-
-    body = _client().get("/meta").json()
-
-    assert body["minDesktopVersionEnforced"] is True
+    assert _client().get("/meta").json()["minDesktopVersionEnforced"] is True
 
 
 def test_meta_enforce_min_desktop_version_default_permissive(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -109,10 +106,7 @@ def test_meta_enforce_min_desktop_version_default_permissive(monkeypatch) -> Non
 def test_meta_enforce_min_desktop_version_garbage_is_permissive(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     _clear_pin_env(monkeypatch)
     monkeypatch.setenv("ENFORCE_MIN_DESKTOP_VERSION", "not-a-bool")
-
-    body = _client().get("/meta").json()
-
-    assert body["minDesktopVersionEnforced"] is False
+    assert _client().get("/meta").json()["minDesktopVersionEnforced"] is False
 
 
 # T1-SH-3 (specs/TESTING/self-hosting.md): the /meta wire contract.

@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react"
 import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
+import { MinDesktopVersionGate } from "#product/components/auth/MinDesktopVersionGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
 import { ToastHost } from "#product/primitives/patterns/toast/ToastHost"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
@@ -125,6 +126,7 @@ export function App({ RoutesComponent }: AppProps) {
   return (
       <ShortcutRevealProvider>
         <MacWindowControlsSafeArea />
+        <AppMinDesktopVersionGate />
         <RoutesComponent>
           <Route path="/index.html" element={<Navigate to="/" replace />} />
           <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
@@ -279,5 +281,20 @@ function AppUpdateSurface() {
       <DesktopUpdateSurface />
     </Suspense>
   )
+}
+
+/**
+ * Same desktop-only gate as `AppUpdateSurface`: the min-desktop-version block
+ * screen only makes sense where there's an updater to jump into and a
+ * connectable server to be behind on, so Web never pays for the query hooks.
+ */
+function AppMinDesktopVersionGate() {
+  const hasUpdater = Boolean(useProductHost().desktop?.updater)
+
+  if (!hasUpdater) {
+    return null
+  }
+
+  return <MinDesktopVersionGate />
 }
 
