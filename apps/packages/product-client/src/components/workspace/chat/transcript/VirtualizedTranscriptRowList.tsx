@@ -92,6 +92,7 @@ export function VirtualizedTranscriptRowList({
     estimateSize,
     estimatedRowsHeight,
     getItemKey,
+    measureElement: recordingMeasureElement,
     rowCompositionKey,
   } = useTranscriptVirtualMeasurementModel({
     activeSessionId,
@@ -111,6 +112,7 @@ export function VirtualizedTranscriptRowList({
     getScrollElement: () => scrollRef.current,
     getItemKey,
     estimateSize,
+    measureElement: recordingMeasureElement,
     overscan: VIRTUALIZER_OVERSCAN,
     paddingStart: TRANSCRIPT_TOP_PADDING_PX,
     paddingEnd: structuralBottomInsetPx,

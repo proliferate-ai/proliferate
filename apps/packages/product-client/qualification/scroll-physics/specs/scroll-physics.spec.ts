@@ -678,4 +678,51 @@ test.describe("transcript scroll physics", () => {
       expect(after.scrollTop).toBeGreaterThan(before.scrollTop + 20);
     },
   );
+
+  // Rung 5 (PRO-187): composition-derived virtualizer estimates +
+  // per-row-key measured-height persistence. A collapsed tool-ledger row (30
+  // small tool calls folded into ONE `collapsed_actions` display block, see
+  // appendCollapsedToolLedgerTurn) renders as a compact disclosure — its REAL
+  // height is nowhere near the old flat 360px-per-row guess used for every
+  // other non-special-cased row.
+  //
+  // seedConversationWithToolLedger seeds the ledger turn INTO THE FIRST
+  // commit, buried under enough finalized filler turns that it starts
+  // virtualized OFF-SCREEN (well outside the pinned-bottom viewport +
+  // overscan window). At that moment the virtualizer's TOTAL content size —
+  // the scrollbar geometry the reader sees before ever touching that row —
+  // is built entirely from ESTIMATES, not real measurements.
+  // sweepEveryRowIntoView then steps through the WHOLE transcript so every
+  // row mounts and is measured for real at least once, giving a ground-truth
+  // total. The gap between the all-estimated initial total and the
+  // all-real-measured total is the virtualizer's literal "correction
+  // budget": how far off the guess was, and therefore how large a correction
+  // the frame pipeline has to absorb as those rows come into view.
+  //
+  // Negative control (see PR body for the literal run): temporarily forcing
+  // `estimateTurnRowHeight` in transcript-row-height-estimate.ts back to the
+  // OLD flat 360px-per-row guess makes this same gap ~2.5-3x larger and
+  // fails the bound below.
+  test("estimate accuracy: an off-screen collapsed tool-ledger row's estimate tracks its real measured height", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedConversationWithToolLedger", 2, 40, 30);
+    await waitForViewport(page);
+
+    const estimated = await metrics(page);
+    expect(estimated.found).toBe(true);
+    // A short viewport against many filler turns must actually overflow and
+    // bury the ledger row off-screen, else this test proves nothing.
+    expect(estimated.scrollHeight).toBeGreaterThan(estimated.clientHeight + 1000);
+
+    await drive(page, "sweepEveryRowIntoView", 40);
+    await settle(page, 300);
+    const real = await metrics(page);
+    expect(real.found).toBe(true);
+
+    const estimateError = Math.abs(estimated.scrollHeight - real.scrollHeight);
+    expect(estimateError).toBeLessThan(1400);
+  });
 });
