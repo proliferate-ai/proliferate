@@ -345,6 +345,7 @@ export interface ScrollPhysicsDriver {
   prependOlderHistory(turns?: number): void;
   switchSession(sessionId: string, seedTurns: number): void;
   getMetrics(): ViewportMetrics;
+  scrollToBottomInstant(): void;
   // True pin state, read from the floating "Scroll to bottom" control, which is
   // aria-hidden exactly when pinned to bottom. Returns null if the control is
   // not present.
@@ -485,6 +486,20 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
 
   getMetrics(): ViewportMetrics {
     return metrics();
+  },
+
+  // Engine-portable pin-to-bottom baseline: sets scrollTop directly, which
+  // fires a real, trusted native `scroll` event (unlike a JS-dispatched
+  // synthetic WheelEvent, which does not trigger the browser's default wheel
+  // scroll action). The transcript's own scroll classification re-pins from
+  // ANY scroll event that lands inside the repin band, so this is equivalent
+  // to a real bottom-directed gesture for baseline purposes.
+  scrollToBottomInstant(): void {
+    const el = viewport();
+    if (!el) {
+      return;
+    }
+    el.scrollTop = el.scrollHeight;
   },
 
   isPinned(): boolean | null {

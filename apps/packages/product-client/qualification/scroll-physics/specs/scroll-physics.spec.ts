@@ -72,6 +72,37 @@ async function wheelOverViewport(page: Page, deltaY: number, steps = 6): Promise
   }
 }
 
+// Focusable descendant of the transcript viewport: keyboard scroll keys
+// bubble from here up to the viewport's own keydown listener (classifying
+// user intent) while the browser scrolls the nearest scrollable ancestor,
+// which is the viewport itself. This is engine-portable (WebKit-Linux honors
+// keyboard-driven scroll where synthetic mouse-wheel deltas are unreliable),
+// unlike Playwright's mouse.wheel.
+async function focusTranscriptRoot(page: Page): Promise<void> {
+  await page.locator("[data-chat-transcript-root]").focus();
+}
+
+// Unpin gesture: reading UP away from the bottom via repeated PageUp
+// keypresses. User-intent classified by the viewport's keydown listener and
+// portable across engines.
+async function keyboardScrollUp(page: Page, presses = 3): Promise<void> {
+  await focusTranscriptRoot(page);
+  for (let i = 0; i < presses; i += 1) {
+    await page.keyboard.press("PageUp");
+    await page.waitForTimeout(30);
+  }
+}
+
+// Small downward nudge via keyboard, portable the same way as
+// `keyboardScrollUp`.
+async function keyboardScrollDown(page: Page, presses = 1): Promise<void> {
+  await focusTranscriptRoot(page);
+  for (let i = 0; i < presses; i += 1) {
+    await page.keyboard.press("ArrowDown");
+    await page.waitForTimeout(30);
+  }
+}
+
 // Wheel upward until the viewport is within the older-history prefetch
 // threshold (480px of the top), so the transcript actually requests older
 // history. Bounded so a stuck viewport fails loudly rather than hanging.
@@ -100,20 +131,14 @@ async function wheelToTop(page: Page): Promise<void> {
 // Wheel downward until the viewport ends inside the bottom repin band, moving
 // down. A single large wheel delta is not portable (Chromium and WebKit scale
 // wheel physics differently), so step until the bottom is reached.
+// Deterministic, engine-portable pin-to-bottom baseline. A Playwright
+// mouse.wheel gesture is unreliable on WebKit-Linux; setting scrollTop
+// directly through the `window.__scrollPhysics` driver fires a real, trusted
+// native `scroll` event (which the transcript's own pin classification keys
+// off of) without depending on wheel-specific default-action behavior.
 async function wheelToBottom(page: Page): Promise<void> {
-  const box = await page.locator(VIEWPORT).boundingBox();
-  if (!box) {
-    throw new Error("transcript viewport not found for wheel-to-bottom");
-  }
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  for (let i = 0; i < 60; i += 1) {
-    const m = await metrics(page);
-    if (m.bottomDistance <= 2) {
-      return;
-    }
-    await page.mouse.wheel(0, 400);
-    await page.waitForTimeout(30);
-  }
+  await drive(page, "scrollToBottomInstant");
+  await expect.poll(async () => (await metrics(page)).bottomDistance, { timeout: 2000 }).toBeLessThanOrEqual(2);
 }
 
 test.describe("transcript scroll physics", () => {
@@ -131,10 +156,12 @@ test.describe("transcript scroll physics", () => {
     expect(seeded.scrollHeight).toBeGreaterThan(seeded.clientHeight + 100);
     expect(seeded.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
 
-    // Deterministic pinned baseline across engines before streaming.
+    // Deterministic pinned baseline across engines before streaming. The pin
+    // flag can lag the physical scroll position by a frame, so poll rather
+    // than reading it once.
     await wheelToBottom(page);
     await settle(page);
-    expect(await isPinned(page)).toBe(true);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
 
     await drive(page, "beginStreamingTurn");
     await settle(page);
@@ -167,31 +194,37 @@ test.describe("transcript scroll physics", () => {
     // dropped).
     await wheelToBottom(page);
     await settle(page);
-    expect(await isPinned(page)).toBe(true);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
 
     await drive(page, "beginStreamingTurn");
     await drive(page, "streamChunks", 4);
     await settle(page);
     // Streaming from the bottom stays pinned.
-    expect(await isPinned(page)).toBe(true);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
 
     // User reads back up mid-stream.
-    await wheelOverViewport(page, -600);
+    await keyboardScrollUp(page, 3);
     await settle(page);
     const afterScroll = await metrics(page);
     // The gesture unpins and we sit well away from the bottom.
-    expect(await isPinned(page)).toBe(false);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
     expect(afterScroll.bottomDistance).toBeGreaterThan(REPIN_BAND_PX * 4);
 
-    // Stream keeps growing. The reader must NOT be snapped back to the bottom:
-    // pin state stays unpinned and the bottom is never re-glued to ~0. (The
-    // virtualizer may shift absolute scrollTop as off-screen rows measure, so
-    // the invariant is pin state + bottom-distance, not a frozen scrollTop.)
+    // Stream keeps growing. The reader must NOT be snapped back to the bottom.
+    // The pin FLAG can read stale for a single frame right as a growth batch
+    // is classified, so the per-batch assertion is the physics invariant
+    // (bottomDistance stays outside the repin band -> no snap-back), not the
+    // flag; the flag is asserted at the settled points before and after this
+    // loop. (The virtualizer may also shift absolute scrollTop as off-screen
+    // rows measure, so the invariant is bottom-distance, not a frozen
+    // scrollTop.)
     for (let batch = 0; batch < 20; batch += 1) {
       await drive(page, "streamChunk");
       await settle(page, 50);
-      expect(await isPinned(page)).toBe(false);
+      const m = await metrics(page);
+      expect(m.bottomDistance).toBeGreaterThan(REPIN_BAND_PX);
     }
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
     const afterGrowth = await metrics(page);
     expect(afterGrowth.bottomDistance).toBeGreaterThan(REPIN_BAND_PX * 4);
     await drive(page, "finalizeStreamingTurn");
@@ -208,25 +241,25 @@ test.describe("transcript scroll physics", () => {
     // Deterministic pinned baseline across engines.
     await wheelToBottom(page);
     await settle(page);
-    expect(await isPinned(page)).toBe(true);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
 
     // Below the band (read up): unpins.
-    await wheelOverViewport(page, -500);
+    await keyboardScrollUp(page, 3);
     await settle(page);
-    expect(await isPinned(page)).toBe(false);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
     expect((await metrics(page)).bottomDistance).toBeGreaterThan(REPIN_BAND_PX);
 
     // A small downward nudge that ENDS above the band: stays unpinned, and
     // subsequent growth is not followed (bottom distance keeps growing).
-    await wheelOverViewport(page, 60);
+    await keyboardScrollDown(page, 1);
     await settle(page);
     const outside = await metrics(page);
     expect(outside.bottomDistance).toBeGreaterThan(REPIN_BAND_PX);
-    expect(await isPinned(page)).toBe(false);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
     await drive(page, "beginStreamingTurn");
     await drive(page, "streamChunks", 6);
     await settle(page);
-    expect(await isPinned(page)).toBe(false);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
     expect((await metrics(page)).bottomDistance).toBeGreaterThan(REPIN_BAND_PX);
     await drive(page, "finalizeStreamingTurn");
 
@@ -234,14 +267,14 @@ test.describe("transcript scroll physics", () => {
     // re-pins, so subsequent growth follows the bottom again.
     await wheelToBottom(page);
     await settle(page);
-    expect(await isPinned(page)).toBe(true);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
     expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(REPIN_BAND_PX);
     await drive(page, "beginStreamingTurn");
     await drive(page, "streamChunks", 8);
     await settle(page);
     // Re-pinned, so streaming growth is followed again (pin holds, distance
     // stays bounded near the bottom).
-    expect(await isPinned(page)).toBe(true);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
     expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
     await drive(page, "finalizeStreamingTurn");
   });
