@@ -273,7 +273,10 @@ test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () 
     await expectEntryStepVisible(page);
 
     await page.getByRole("button", { name: "Set up in Cloud" }).click();
-    await expect(page.getByRole("heading", { name: "Add a cloud repo" })).toBeVisible();
+    // StepHeader renders the step name as a plain <span>, not a heading (only
+    // CloudRepoPickerBlocker's blocker.title below is a real <h3>), so assert
+    // on the text directly rather than a heading role.
+    await expect(page.getByText("Add a cloud repo", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
 
     // The truthful operator blocker (CloudRepoPickerBlocker renders blocker.title
