@@ -54,6 +54,73 @@ pub enum InstallError {
     Io(#[from] std::io::Error),
 }
 
+/// One truthful classification of an install failure, threaded additively from
+/// the installer through reconcile → contract → HTTP → toast so a terminal
+/// failure can name WHY (Update Flow R2.5 / PRO-115) instead of collapsing to
+/// an opaque `error.to_string()`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallErrorKind {
+    /// A network fetch failed (download unreachable / interrupted / registry).
+    Network,
+    /// A downloaded artifact did not match its pinned sha256.
+    Checksum,
+    /// The live artifact could not be replaced because it is in use / busy /
+    /// permission-blocked while running.
+    InUse,
+    /// The disk is full (ENOSPC).
+    Disk,
+    /// Anything else (invalid spec, missing artifact, unclassified io).
+    Other,
+}
+
+impl InstallErrorKind {
+    /// Stable machine token for the contract/HTTP surface and toast copy.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Network => "network",
+            Self::Checksum => "checksum",
+            Self::InUse => "in_use",
+            Self::Disk => "disk",
+            Self::Other => "other",
+        }
+    }
+}
+
+impl InstallError {
+    /// Classify this failure into the typed enum. Io errors are inspected for
+    /// the OS-specific "no space" and "busy/permission-on-live" cases so the
+    /// UI can say "disk full" or "in use" rather than a raw errno.
+    pub fn kind(&self) -> InstallErrorKind {
+        match self {
+            Self::FetchFailed { .. } | Self::RegistryFailed(_) => InstallErrorKind::Network,
+            Self::ChecksumMismatch { .. } => InstallErrorKind::Checksum,
+            Self::Io(error) => io_error_kind(error),
+            _ => InstallErrorKind::Other,
+        }
+    }
+}
+
+fn io_error_kind(error: &std::io::Error) -> InstallErrorKind {
+    use std::io::ErrorKind;
+    match error.kind() {
+        ErrorKind::PermissionDenied => return InstallErrorKind::InUse,
+        _ => {}
+    }
+    if let Some(code) = error.raw_os_error() {
+        // ENOSPC = disk full; ETXTBSY / EBUSY = live artifact in use.
+        const ENOSPC: i32 = 28;
+        const EBUSY: i32 = 16;
+        // ETXTBSY is 26 on Linux and macOS.
+        const ETXTBSY: i32 = 26;
+        match code {
+            ENOSPC => return InstallErrorKind::Disk,
+            EBUSY | ETXTBSY => return InstallErrorKind::InUse,
+            _ => {}
+        }
+    }
+    InstallErrorKind::Other
+}
+
 impl From<LauncherError> for InstallError {
     fn from(error: LauncherError) -> Self {
         match error {
@@ -324,4 +391,80 @@ fn install_pinned_role(
         reporter,
     )?;
     Ok(Some(result))
+}
+
+#[cfg(test)]
+mod install_error_kind_tests {
+    use super::*;
+
+    #[test]
+    fn maps_each_install_error_to_its_typed_kind() {
+        let cases: Vec<(InstallError, InstallErrorKind)> = vec![
+            (
+                InstallError::FetchFailed {
+                    url: "https://x".into(),
+                    message: "boom".into(),
+                },
+                InstallErrorKind::Network,
+            ),
+            (
+                InstallError::RegistryFailed("down".into()),
+                InstallErrorKind::Network,
+            ),
+            (
+                InstallError::ChecksumMismatch {
+                    url: "https://x".into(),
+                    expected: "a".into(),
+                    actual: "b".into(),
+                },
+                InstallErrorKind::Checksum,
+            ),
+            (
+                InstallError::Io(std::io::Error::from_raw_os_error(28)),
+                InstallErrorKind::Disk,
+            ),
+            (
+                InstallError::Io(std::io::Error::from_raw_os_error(26)),
+                InstallErrorKind::InUse,
+            ),
+            (
+                InstallError::Io(std::io::Error::from_raw_os_error(16)),
+                InstallErrorKind::InUse,
+            ),
+            (
+                InstallError::Io(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "busy",
+                )),
+                InstallErrorKind::InUse,
+            ),
+            (
+                InstallError::InvalidInstallSpec("nope".into()),
+                InstallErrorKind::Other,
+            ),
+            (
+                InstallError::MissingManagedArtifact(PathBuf::from("/x")),
+                InstallErrorKind::Other,
+            ),
+            (
+                InstallError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "gone",
+                )),
+                InstallErrorKind::Other,
+            ),
+        ];
+        for (error, expected) in cases {
+            assert_eq!(error.kind(), expected, "mismatch for {error:?}");
+        }
+    }
+
+    #[test]
+    fn kind_tokens_are_stable() {
+        assert_eq!(InstallErrorKind::Network.as_str(), "network");
+        assert_eq!(InstallErrorKind::Checksum.as_str(), "checksum");
+        assert_eq!(InstallErrorKind::InUse.as_str(), "in_use");
+        assert_eq!(InstallErrorKind::Disk.as_str(), "disk");
+        assert_eq!(InstallErrorKind::Other.as_str(), "other");
+    }
 }

@@ -123,6 +123,30 @@ specifier. Fail-closed rules, enforced in code
 - Installed adapters get a generated launcher script that `exec`s the
   resolved binary with the pin's baked ACP args; per-session flags are
   applied by the runtime at spawn, never baked into the launcher.
+- Every LIVE launcher write is staged-then-atomically-renamed, never written
+  in place. `generate_launcher_script_atomic`
+  ([`integrations/agent_cli/launcher.rs`](../../../../anyharness/crates/anyharness-lib/src/integrations/agent_cli/launcher.rs))
+  writes a `.{name}.next` sibling, makes it executable, then renames it over
+  the live launcher, keeping a transient `.{name}.previous` so a failed
+  promotion leaves the prior launcher in place. A managed session already
+  running keeps its old inode open (POSIX rename semantics) — no kills, no
+  waiting. The archive-adapter path stages the same way through
+  `ArchiveTreeActivation::activate_launcher`
+  ([`installer/downloads/activation.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/downloads/activation.rs)).
+- The launcher's env is data-driven from the registry's per-harness
+  `selfUpdateNeutralization` record (`managed_launcher_env` in
+  [`installer/agent_process.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/agent_process.rs)):
+  an `env` mechanism injects each declared var (claude disables its own
+  auto-updater with `DISABLE_AUTOUPDATER=1`); `none_found`/`not_applicable`
+  inject nothing and exist to record the static-analysis finding honestly, so
+  the managed lane stays the single version authority.
+- A terminal install failure carries a typed classification, not just a
+  string. `InstallError::kind()`
+  ([`installer/service.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/service.rs))
+  maps to `InstallErrorKind` `{ network, checksum, in_use, disk, other }`,
+  threaded additively through `AgentReconcileResult.failure_kind` → the
+  contract's `ReconcileAgentResult.failureKind` → the terminal-failure toast,
+  so the UI names WHY a reinstall failed.
 
 Installation is automatic. Every harness supported on a surface converges
 with no user action: absent means install, drifted means reinstall, and

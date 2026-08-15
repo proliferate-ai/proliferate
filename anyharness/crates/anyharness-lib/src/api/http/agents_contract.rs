@@ -170,6 +170,9 @@ fn reconcile_result_to_contract(result: &InternalAgentReconcileResult) -> Reconc
             AgentReconcileOutcome::Failed => ReconcileOutcome::Failed,
         },
         message: result.message.clone(),
+        failure_kind: result
+            .failure_kind
+            .map(|kind| kind.as_str().to_string()),
         installed_artifacts: result
             .installed_artifacts
             .iter()

@@ -4195,6 +4195,13 @@ export interface components {
         /** @enum {string} */
         ReasoningVisibility: "private";
         ReconcileAgentResult: {
+            /**
+             * @description Typed classification of a terminal failure: one of `network`,
+             *     `checksum`, `in_use`, `disk`, `other`. Additive and tolerant: absent on
+             *     success/skip and on runtimes that predate typed failures, so old readers
+             *     simply ignore it.
+             */
+            failureKind?: string | null;
             installedArtifacts: components["schemas"]["ArtifactStatus"][];
             kind: string;
             message?: string | null;

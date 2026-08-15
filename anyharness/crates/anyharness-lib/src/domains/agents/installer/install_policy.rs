@@ -195,6 +195,9 @@ pub fn agent_process_pinned_version(spec: &AgentProcessInstallSpec) -> Option<St
             }
             _ => None,
         },
+        // Direct-archive adapters are sha256-attested by the catalog pin, not
+        // version-pinned in the registry spec (like TarballRelease natives).
+        AgentProcessInstallSpec::DirectArchive { .. } => None,
         _ => None,
     }
 }
