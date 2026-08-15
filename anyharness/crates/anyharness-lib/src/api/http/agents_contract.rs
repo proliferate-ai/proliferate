@@ -23,6 +23,7 @@ use crate::domains::agents::installer::reconcile::{
 };
 use crate::domains::agents::installer::InstalledArtifactResult;
 use crate::domains::agents::model::*;
+use crate::domains::agents::readiness::service::has_user_path_copy;
 use crate::domains::agents::runtime::AgentInstallRequest as DomainInstallAgentRequest;
 
 pub(super) fn install_request(req: InstallAgentRequest) -> DomainInstallAgentRequest {
@@ -265,6 +266,7 @@ pub(super) fn to_summary(
         docs_url: desc.docs_url.clone(),
         message,
         cli_auth_state,
+        user_path_copy_detected: has_user_path_copy(desc),
     }
 }
 

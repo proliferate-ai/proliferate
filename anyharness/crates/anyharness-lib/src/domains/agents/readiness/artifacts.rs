@@ -276,6 +276,25 @@ fn uses_registry_binary_hint(install: &AgentProcessInstallSpec) -> bool {
     )
 }
 
+/// Whether the user has their OWN copy of this agent's process binary on
+/// PATH, independent of whatever `resolve_agent_process_artifact` actually
+/// picked. Resolution itself never needs "both exist" — a managed copy always
+/// wins there — but the settings notice (R2.0: Proliferate now always
+/// maintains a managed copy alongside a user's own) does, and a managed hit
+/// short-circuits before ever looking at PATH.
+pub(super) fn agent_process_has_path_artifact(descriptor: &AgentDescriptor) -> bool {
+    if let AgentProcessInstallSpec::RegistryBacked {
+        fallback: AgentProcessFallback::BinaryHint { candidate_binaries, .. },
+        ..
+    } = &descriptor.agent_process.install
+    {
+        return candidate_binaries
+            .iter()
+            .any(|binary| find_real_binary_in_path(binary).is_some());
+    }
+    find_real_binary_in_path(&descriptor.launch.executable_name).is_some()
+}
+
 fn resolve_path_only(
     role: ArtifactRole,
     candidate_binaries: &[String],
