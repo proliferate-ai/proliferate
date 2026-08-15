@@ -5,6 +5,7 @@
   "agents": [
     {
       "kind": "claude",
+      "authCardinality": "single",
       "displayName": "Claude",
       "description": "Claude Code through claude-agent-acp.",
       "native": {
@@ -152,6 +153,7 @@
     },
     {
       "kind": "codex",
+      "authCardinality": "single",
       "displayName": "Codex",
       "description": "OpenAI Codex through codex-acp.",
       "native": {
@@ -285,6 +287,7 @@
     },
     {
       "kind": "cursor",
+      "authCardinality": "single",
       "displayName": "Cursor",
       "description": "Cursor Agent CLI through ACP.",
       "native": null,
@@ -358,6 +361,7 @@
     },
     {
       "kind": "opencode",
+      "authCardinality": "multi",
       "displayName": "OpenCode",
       "description": "OpenCode through its ACP surface.",
       "native": null,
@@ -518,6 +522,7 @@
     },
     {
       "kind": "grok",
+      "authCardinality": "single",
       "displayName": "Grok",
       "description": "xAI's Grok Build coding agent through its native ACP surface.",
       "native": null,
