@@ -454,3 +454,101 @@ async fn reads_project_from_rows_and_the_list_envelope_filters() {
         })
         .await;
 }
+
+/// Capture everything a future's inline polls emit through tracing, formatted
+/// by the fmt subscriber, alongside the future's output. Only inline handler
+/// emissions are visible — `spawn_blocking`/actor-task events land on other
+/// dispatchers — which is exactly the scope of the acceptance events.
+async fn capture_logs<F: std::future::Future>(future: F) -> (String, F::Output) {
+    use std::sync::{Arc, Mutex};
+    use tracing::instrument::WithSubscriber;
+
+    #[derive(Clone)]
+    struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
+
+    impl std::io::Write for SharedLogWriter {
+        fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+            self.0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend_from_slice(buffer);
+            Ok(buffer.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let bytes = Arc::new(Mutex::new(Vec::new()));
+    let writer = Arc::clone(&bytes);
+    let subscriber = tracing_subscriber::fmt()
+        .without_time()
+        .with_ansi(false)
+        .with_writer(move || SharedLogWriter(Arc::clone(&writer)))
+        .finish();
+    let output = future.with_subscriber(subscriber).await;
+    let logged = String::from_utf8(
+        bytes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone(),
+    )
+    .expect("formatted log is UTF-8");
+    (logged, output)
+}
+
+/// pr11 subscriber-capture proof for the PUT accept path: the named
+/// acceptance event fires once per outcome (`created` on the 201,
+/// `replayed` on the idempotent 200) and the named workspace-materialized
+/// event fires only on the path that committed rows.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn put_emits_named_acceptance_and_materialization_events() {
+    let fixture = fixture("wf-route-put-obs");
+    let run_id = run_uuid(0x0b);
+    let uri = format!("/v1/workflow-runs/{run_id}");
+    let body = fixture.snapshot(single_node_definition("blocking turn"));
+
+    let (created_logs, (status, projection)) =
+        capture_logs(fixture.request(Method::PUT, &uri, Some(body.clone()))).await;
+    assert_eq!(status, StatusCode::CREATED, "{projection}");
+    let accepted_line = created_logs
+        .lines()
+        .find(|line| line.contains("anyharness.workflow_run_accepted"))
+        .expect("named acceptance event captured");
+    assert!(accepted_line.contains("created"), "{accepted_line}");
+    assert!(accepted_line.contains("wd-route"), "{accepted_line}");
+    let materialized_line = created_logs
+        .lines()
+        .find(|line| line.contains("anyharness.workflow_workspace_materialized"))
+        .expect("named materialization event captured");
+    assert!(materialized_line.contains("doc_count"), "{materialized_line}");
+    assert!(
+        materialized_line.contains(run_id.as_str()),
+        "{materialized_line}"
+    );
+
+    // The idempotent replay answers with its own outcome and, having
+    // materialized nothing new past the replay check, no materialization
+    // event.
+    fixture.wait_for_control("turn-seen").await;
+    let (replay_logs, (status, replay)) =
+        capture_logs(fixture.request(Method::PUT, &uri, Some(body))).await;
+    assert_eq!(status, StatusCode::OK, "{replay}");
+    let replay_line = replay_logs
+        .lines()
+        .find(|line| line.contains("anyharness.workflow_run_accepted"))
+        .expect("replay acceptance event captured");
+    assert!(replay_line.contains("replayed"), "{replay_line}");
+    assert!(
+        !replay_logs.contains("anyharness.workflow_workspace_materialized"),
+        "{replay_logs}"
+    );
+
+    fixture.touch_control("release-turn");
+    fixture
+        .wait_for_run(&run_id, "run completes", |state| {
+            state.run.status == WorkflowRunStatus::Completed
+        })
+        .await;
+}

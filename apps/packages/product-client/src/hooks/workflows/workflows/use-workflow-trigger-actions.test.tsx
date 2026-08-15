@@ -17,6 +17,12 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowRuntimeNotConnectedError } from "#product/lib/domain/workflows/workflow-trigger-failure";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+  type RendererDiagnosticInput,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import { prevalidateRendererDiagnostic } from "@/lib/infra/diagnostics/renderer-diagnostic-prevalidate";
 import type { TriggerCourierInput } from "#product/lib/workflows/trigger/trigger-courier";
 import { useWorkflowTriggerActions } from "./use-workflow-trigger-actions";
 
@@ -181,6 +187,72 @@ describe("useWorkflowTriggerActions cache write-through", () => {
     expect(queryClient.getQueryData<WorkflowRunProjectionV2>(
       anyHarnessWorkflowRunKey(RUNTIME_URL, RUNTIME_URL, "id-2"),
     )).toEqual(projection("id-2"));
+  });
+});
+
+describe("useWorkflowTriggerActions diagnostics", () => {
+  const records: RendererDiagnosticInput[] = [];
+
+  beforeEach(() => {
+    records.length = 0;
+    setRendererDiagnosticsSink({ emit: (input) => records.push(input) });
+  });
+
+  afterEach(() => {
+    resetRendererDiagnosticsSinkForTest();
+  });
+
+  it("emits a launch_submitted milestone that survives the desktop prevalidator", async () => {
+    const { result } = renderTriggerActions();
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    const record = records.find(
+      (input) => input.name === "renderer.workflows.launch_submitted",
+    );
+    expect(record).toBeDefined();
+    const accepted = prevalidateRendererDiagnostic(record!);
+    expect(accepted).not.toBeNull();
+    expect(accepted!.correlation.workflowId).toBe("id-2");
+  });
+
+  it("emits a classified, correlated launch_failed that survives the desktop prevalidator", async () => {
+    planes.putRun.mockRejectedValueOnce(runtimeError("WORKFLOW_PLACEMENT_CONFLICT"));
+    const { result } = renderTriggerActions();
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    const record = records.find(
+      (input) => input.name === "renderer.workflows.launch_failed",
+    );
+    expect(record).toBeDefined();
+    const accepted = prevalidateRendererDiagnostic(record!);
+    expect(accepted).not.toBeNull();
+    expect(accepted!.errorClassification).toBe("trigger_run");
+    expect(accepted!.correlation.workflowId).toBe("id-2");
+  });
+
+  it("negative control: an uppercase classification voids the whole record", async () => {
+    planes.putRun.mockRejectedValueOnce(runtimeError("WORKFLOW_PLACEMENT_CONFLICT"));
+    const { result } = renderTriggerActions();
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    const record = records.find(
+      (input) => input.name === "renderer.workflows.launch_failed",
+    );
+    expect(
+      prevalidateRendererDiagnostic({
+        ...record!,
+        errorClassification: "WORKFLOW_PLACEMENT_CONFLICT",
+      }),
+    ).toBeNull();
   });
 });
 

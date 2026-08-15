@@ -9,7 +9,10 @@ use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
 use crate::domains::agents::route_auth::resolve_launch_route_auth;
 use crate::domains::agents::route_auth::state::load_state_file;
-use crate::domains::sessions::extensions::{SessionStartedContext, SessionTurnFinishedContext};
+use crate::domains::sessions::extensions::{
+    SessionInteractionRequestedContext, SessionInteractionResolvedContext, SessionStartedContext,
+    SessionTurnFinishedContext,
+};
 use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
     assemble_session_mcp_launch, SessionMcpLaunchAssemblyError,
@@ -498,6 +501,32 @@ impl SessionRuntime {
                             error_details: result.error_details.clone(),
                         });
                     }
+                }
+            })),
+            // Both interaction hooks fire while the caller holds the session
+            // event-sink lock, and the workflow extension does a synchronous
+            // store lookup — so the fan-out is pushed to the blocking pool and
+            // the sink lock is never held across a database read.
+            on_interaction_requested: Some(Arc::new({
+                let extensions = self.session_extensions.clone();
+                move |ctx: SessionInteractionRequestedContext| {
+                    let extensions = extensions.clone();
+                    tokio::task::spawn_blocking(move || {
+                        for extension in &extensions {
+                            extension.on_interaction_requested(ctx.clone());
+                        }
+                    });
+                }
+            })),
+            on_interaction_resolved: Some(Arc::new({
+                let extensions = self.session_extensions.clone();
+                move |ctx: SessionInteractionResolvedContext| {
+                    let extensions = extensions.clone();
+                    tokio::task::spawn_blocking(move || {
+                        for extension in &extensions {
+                            extension.on_interaction_resolved(ctx.clone());
+                        }
+                    });
                 }
             })),
             on_exit: None,

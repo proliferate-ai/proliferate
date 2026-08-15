@@ -15,12 +15,15 @@ use super::model::{
     WorkflowRunStatus,
 };
 use super::projection::{project, RunProjection};
-use super::transition::{AdhocOutcome, Decision, NewNodeSpec, RunState, Transition, WorkflowEvent};
+use super::transition::{
+    AdhocOutcome, Decision, NewNodeSpec, RunState, Transition, TurnStopReason, WorkflowEvent,
+};
 use crate::observability::{
-    WORKFLOW_BOOT_FENCE_TRACING_TARGET, WORKFLOW_NODE_LAUNCHED_TRACING_TARGET,
-    WORKFLOW_NODE_LAUNCH_FAILED_TRACING_TARGET, WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET,
-    WORKFLOW_RUN_FINISHED_TRACING_TARGET, WORKFLOW_RUN_STARTED_TRACING_TARGET,
-    WORKFLOW_TRANSITION_ILLEGAL_TRACING_TARGET, WORKFLOW_TRANSITION_TRACING_TARGET,
+    WORKFLOW_BOOT_FENCE_TRACING_TARGET, WORKFLOW_INTERJECTION_HELD_TRACING_TARGET,
+    WORKFLOW_NODE_LAUNCHED_TRACING_TARGET, WORKFLOW_NODE_LAUNCH_FAILED_TRACING_TARGET,
+    WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET, WORKFLOW_RUN_FINISHED_TRACING_TARGET,
+    WORKFLOW_RUN_STARTED_TRACING_TARGET, WORKFLOW_TRANSITION_ILLEGAL_TRACING_TARGET,
+    WORKFLOW_TRANSITION_TRACING_TARGET,
 };
 use crate::persistence::Db;
 
@@ -865,14 +868,31 @@ pub fn emit_decision_events(run_id: &str, event: &WorkflowEvent, decision: &Deci
         Decision::Transition(_) => {}
         Decision::Hold => {
             if let WorkflowEvent::TurnFinished(turn) = event {
-                tracing::warn!(
-                    target: WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET,
-                    run_id = %run_id,
-                    node_row_id = %turn.node_row_id,
-                    stop_reason = turn.stop_reason.as_str(),
-                    queue_empty = turn.queue_empty,
-                    "workflow turn report held",
-                );
+                // Accepted imprecision: classified by the TurnFinished payload
+                // (stop_reason + queue_empty), not by which transition-table
+                // rule produced this Hold — a truly stale report arriving
+                // with a non-empty queue would be routed here too. Telling
+                // those apart needs a `HoldReason` payload on `Decision`,
+                // out of instrumentation-only scope.
+                if turn.stop_reason == TurnStopReason::CleanEndTurn && !turn.queue_empty {
+                    tracing::info!(
+                        target: WORKFLOW_INTERJECTION_HELD_TRACING_TARGET,
+                        run_id = %run_id,
+                        node_row_id = %turn.node_row_id,
+                        stop_reason = turn.stop_reason.as_str(),
+                        queue_empty = turn.queue_empty,
+                        "workflow interjection held",
+                    );
+                } else {
+                    tracing::warn!(
+                        target: WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET,
+                        run_id = %run_id,
+                        node_row_id = %turn.node_row_id,
+                        stop_reason = turn.stop_reason.as_str(),
+                        queue_empty = turn.queue_empty,
+                        "workflow turn report held",
+                    );
+                }
             }
         }
         Decision::Illegal(illegal) => {
@@ -1097,6 +1117,16 @@ fn emit_transition_events(
         WorkflowEvent::NodeLaunchFailed { .. } => ("node_launch_failed", None),
     };
     let node_row_id = transition_node_row_id(transition, applied);
+    // The classification a failing transition carries, so a node_failed row is
+    // diagnosable from the event alone (empty on every non-failing shape).
+    let failure_code = match transition {
+        Transition::FailNode { code, .. } => code.as_str(),
+        Transition::AdhocTurn {
+            outcome: AdhocOutcome::Failed(code),
+            ..
+        } => code.as_str(),
+        _ => "",
+    };
     tracing::info!(
         target: WORKFLOW_TRANSITION_TRACING_TARGET,
         run_id = %applied.state.run.id,
@@ -1104,6 +1134,7 @@ fn emit_transition_events(
         event = transition.label(),
         cause = cause,
         stop_reason = stop_reason.unwrap_or(""),
+        failure_code = failure_code,
         from_state = from_state.as_str(),
         to_state = applied.state.run.status.as_str(),
         "workflow transition applied",
