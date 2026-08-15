@@ -233,6 +233,15 @@ function ExistingWorkflowDefinitionEditor({
   }
 
   const definition = workflowDefinitionModel(definitionQuery.data);
+  if (!definition) {
+    return (
+      <WorkflowResourceState
+        title="Unsupported workflow version"
+        description="This workflow was saved by a newer builder and cannot be edited here."
+        onBack={onBack}
+      />
+    );
+  }
   return (
     <PersistedWorkflowEditor
       authCacheScope={authCacheScope}

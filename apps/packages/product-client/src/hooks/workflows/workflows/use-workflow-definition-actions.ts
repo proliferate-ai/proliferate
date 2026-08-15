@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { WorkflowDefinitionResponse } from "@proliferate/cloud-sdk";
+import type { WorkflowDefinitionAnyResponse } from "@proliferate/cloud-sdk";
 import {
   createWorkflowDefinitionDraft,
   workflowDefinitionToDraft,
@@ -62,7 +62,7 @@ export function useCreateWorkflowDefinitionActions({
 }
 
 export interface WorkflowDefinitionRefetchResult {
-  data?: WorkflowDefinitionResponse;
+  data?: WorkflowDefinitionAnyResponse;
   error?: unknown;
   isError: boolean;
 }
@@ -117,7 +117,11 @@ export function usePersistedWorkflowDefinitionActions({
       if (result.isError || !result.data) {
         throw result.error ?? new Error("Workflow could not be reloaded.");
       }
-      adopt(workflowDefinitionModel(result.data));
+      const next = workflowDefinitionModel(result.data);
+      if (!next) {
+        throw new Error("This workflow was saved by a newer builder and cannot be edited here.");
+      }
+      adopt(next);
     } catch (error) {
       setFailureMessage(workflowDefinitionWriteFailureMessage(error));
     }
@@ -135,7 +139,10 @@ export function usePersistedWorkflowDefinitionActions({
         workflowDefinitionId: base.id,
         body: workflowDraftToUpdateRequest(draft, base.revision, catalog),
       });
-      adopt(workflowDefinitionModel(updated));
+      const saved = workflowDefinitionModel(updated);
+      if (saved) {
+        adopt(saved);
+      }
       onSaved(updated.id);
     } catch (error) {
       recordWriteFailure(error);
