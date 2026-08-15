@@ -39,6 +39,9 @@ mod tests_loss;
 #[cfg(test)]
 #[path = "tests_queue.rs"]
 mod tests_queue;
+#[cfg(all(test, unix))]
+#[path = "tests_reattach.rs"]
+mod tests_reattach;
 #[cfg(test)]
 #[path = "tests_receipt.rs"]
 mod tests_receipt;
