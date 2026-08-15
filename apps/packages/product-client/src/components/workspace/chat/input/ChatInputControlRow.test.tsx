@@ -17,14 +17,8 @@ vi.mock("#product/stores/activity/goal-bar-store", () => ({
 vi.mock("#product/hooks/cloud/derived/use-composer-integrations-state", () => ({
   useComposerIntegrationsState: () => ({ mode: "hidden", connectedCount: 0, providers: [], reauthLabel: null }),
 }));
-vi.mock("#product/hooks/workspaces/facade/use-runtime-pressure-control-state", () => ({
-  useRuntimePressureControlState: () => ({
-    visible: false,
-    indicator: null,
-    targets: [],
-    isDiscovering: false,
-    actions: {},
-  }),
+vi.mock("#product/hooks/chat/derived/use-active-session-usage", () => ({
+  useActiveSessionUsage: () => null,
 }));
 Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
   configurable: true,
