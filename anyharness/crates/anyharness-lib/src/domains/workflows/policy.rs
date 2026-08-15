@@ -22,21 +22,22 @@ impl WorkflowSessionControllerPolicy {
 
 impl SessionControllerPolicy for WorkflowSessionControllerPolicy {
     /// The id of the non-terminal gen-2 run whose node links `session_id`, if
-    /// any. Terminal runs (completed, failed) release their sessions: their
-    /// workspaces are ordinary destruction candidates again.
+    /// any. Terminal runs (completed, failed, cancelled) release their
+    /// sessions: their workspaces are ordinary destruction candidates again.
     fn controlling_run_id(&self, session_id: &str) -> anyhow::Result<Option<String>> {
         let terminal = [
             WorkflowRunStatus::Completed.as_str(),
             WorkflowRunStatus::Failed.as_str(),
+            WorkflowRunStatus::Cancelled.as_str(),
         ];
         self.db.with_conn(|conn| {
             conn.query_row(
                 "SELECT runs.id
                  FROM workflow_run_nodes AS nodes
                  JOIN workflow_runs AS runs ON runs.id = nodes.run_id
-                 WHERE nodes.session_id = ?1 AND runs.status NOT IN (?2, ?3)
+                 WHERE nodes.session_id = ?1 AND runs.status NOT IN (?2, ?3, ?4)
                  LIMIT 1",
-                rusqlite::params![session_id, terminal[0], terminal[1]],
+                rusqlite::params![session_id, terminal[0], terminal[1], terminal[2]],
                 |row| row.get(0),
             )
             .map(Some)

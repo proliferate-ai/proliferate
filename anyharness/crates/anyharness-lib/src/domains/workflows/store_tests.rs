@@ -742,6 +742,123 @@ fn undo_advance_parks_the_gate_and_disposes_the_new_session() {
 }
 
 #[test]
+fn cancel_from_running_disposes_the_session_and_persists_in_one_commit() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+    store
+        .stamp_session(&plan_id, "sess-plan", Some("prompt-plan"), Some("claude"))
+        .expect("stamp plan session");
+
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+    let cancel = WorkflowEvent::Command(WorkflowCommand::Cancel);
+    let applied = decide_and_apply(&store, "run-1", &state, &cancel);
+    assert_healthy(&applied.state);
+    assert_eq!(
+        applied.side_effect,
+        ResolvedSideEffect::DisposeSession {
+            session_id: "sess-plan".into(),
+        }
+    );
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Cancelled);
+    assert!(applied.state.run.completed_at.is_some());
+    let plan = applied.state.node(&plan_id).unwrap();
+    assert_eq!(plan.status, WorkflowNodeStatus::Cancelled);
+    // The node row's own `completed_at` means "completed successfully"
+    // (mirrors FailNode/InterruptNode); a cancel never stamps it.
+    assert!(plan.completed_at.is_none());
+
+    // Persisted, not just returned: a fresh read agrees.
+    let reloaded = store.load_run_state("run-1").expect("load").expect("run");
+    assert_eq!(reloaded.run.status, WorkflowRunStatus::Cancelled);
+    assert_eq!(
+        reloaded.node(&plan_id).unwrap().status,
+        WorkflowNodeStatus::Cancelled
+    );
+
+    // A cancelled run is terminal: cancel again is illegal, same as any other
+    // command save fail-and-redo.
+    assert!(matches!(
+        next(&reloaded, &cancel),
+        Decision::Illegal(_)
+    ));
+}
+
+#[test]
+fn cancel_from_awaiting_human_gate_persists_without_disposing_a_session() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+    store
+        .stamp_session(&plan_id, "sess-plan", Some("prompt-plan"), Some("claude"))
+        .expect("stamp plan session");
+    let applied = decide_and_apply(&store, "run-1", &created.state, &clean_turn(&plan_id));
+    let review_id = applied.state.current_node().unwrap().id.clone();
+    store
+        .stamp_session(
+            &review_id,
+            "sess-review",
+            Some("prompt-review"),
+            Some("claude"),
+        )
+        .expect("stamp review session");
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &clean_turn(&review_id));
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::AwaitingHuman);
+
+    let cancel = WorkflowEvent::Command(WorkflowCommand::Cancel);
+    let applied = decide_and_apply(&store, "run-1", &applied.state, &cancel);
+    assert_healthy(&applied.state);
+    // The waiting gate holds no live turn (Ruling L's disposal condition,
+    // reused): nothing to dispose.
+    assert_eq!(applied.side_effect, ResolvedSideEffect::None);
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Cancelled);
+    assert_eq!(
+        applied.state.node(&review_id).unwrap().status,
+        WorkflowNodeStatus::Cancelled
+    );
+}
+
+/// pr11 subscriber-capture proof, cancel's twin of
+/// `fail_node_transition_event_carries_named_target_and_failure_code`: the
+/// widened `is_terminal()` (Cancelled now included) must still fire the
+/// named run-finished event on the same commit that cancels the run.
+#[test]
+fn cancel_transition_emits_the_named_run_finished_event() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-obs"))
+        .expect("create run");
+    let plan_id = created.first_node_row_id.clone();
+    store
+        .stamp_session(&plan_id, "sess-plan", Some("prompt-plan"), Some("claude"))
+        .expect("stamp plan session");
+    let state = store
+        .load_run_state("run-obs")
+        .expect("load")
+        .expect("run exists");
+    let cancel = WorkflowEvent::Command(WorkflowCommand::Cancel);
+
+    let (applied, logged) =
+        capture_tracing_output(|| decide_and_apply(&store, "run-obs", &state, &cancel));
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Cancelled);
+
+    let transition_line = logged
+        .lines()
+        .find(|line| line.contains("anyharness.workflow_transition"))
+        .expect("named transition event captured");
+    assert!(transition_line.contains("run-obs"), "{transition_line}");
+    assert!(transition_line.contains("cancel"), "{transition_line}");
+    assert!(
+        logged.contains("anyharness.workflow_run_finished"),
+        "{logged}"
+    );
+}
+
+#[test]
 fn undo_window_closes_after_first_turn_and_reopens_on_reexecution() {
     let store = test_store();
     let created = store

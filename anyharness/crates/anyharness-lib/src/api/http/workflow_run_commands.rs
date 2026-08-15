@@ -219,3 +219,20 @@ pub async fn add_workflow_adhoc_node(
     )
     .await
 }
+
+#[utoipa::path(
+    post,
+    path = "/v1/workflow-runs/{run_id}/cancel",
+    responses(
+        (status = 200, description = "Run cancelled; the fresh projection", body = RunProjection),
+        (status = 404, description = "WORKFLOW_RUN_NOT_FOUND"),
+        (status = 409, description = "WORKFLOW_TRANSITION_ILLEGAL"),
+    ),
+    tag = "workflow-runs"
+)]
+pub async fn cancel_workflow_run(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+) -> Result<Json<RunProjection>, ApiError> {
+    dispatch_command(&state, &run_id, None, WorkflowCommand::Cancel).await
+}

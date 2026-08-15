@@ -16,6 +16,7 @@ use utoipa::OpenApi;
         super::http::workflow_run_commands::undo_workflow_advance,
         super::http::workflow_run_commands::resume_workflow_run,
         super::http::workflow_run_commands::add_workflow_adhoc_node,
+        super::http::workflow_run_commands::cancel_workflow_run,
     ),
     components(schemas(
         super::http::workflow_runs::WorkflowRunPutRequest,

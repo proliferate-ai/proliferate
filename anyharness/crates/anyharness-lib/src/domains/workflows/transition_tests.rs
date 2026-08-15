@@ -1090,6 +1090,7 @@ fn commands_other_than_redo_are_illegal_on_terminal_runs() {
             prompt: "late addition".into(),
             model: None,
         },
+        WorkflowCommand::Cancel,
     ] {
         assert!(
             matches!(
@@ -1100,4 +1101,60 @@ fn commands_other_than_redo_are_illegal_on_terminal_runs() {
             command.as_str()
         );
     }
+}
+
+// ---- cancel ----
+
+#[test]
+fn cancel_from_running_disposes_the_live_session() {
+    let state = mid_run();
+    let transition = expect_transition(next(
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::Cancel),
+    ));
+    assert_eq!(
+        transition,
+        Transition::Cancel {
+            node_row_id: "n2".into(),
+            disposed_session_id: Some("sess-n2".into()),
+        }
+    );
+}
+
+#[test]
+fn cancel_from_awaiting_human_gate_disposes_nothing() {
+    // Ruling L's reused disposal condition: a waiting gate holds no live turn.
+    let state = gated_run();
+    let transition = expect_transition(next(
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::Cancel),
+    ));
+    assert_eq!(
+        transition,
+        Transition::Cancel {
+            node_row_id: "n2".into(),
+            disposed_session_id: None,
+        }
+    );
+}
+
+#[test]
+fn cancel_from_interrupted_run_disposes_nothing() {
+    // The fenced node already had its session disposed by the boot fence; a
+    // needs_attention node holds no live turn either.
+    let mut state = mid_run();
+    state.run.status = WorkflowRunStatus::Interrupted;
+    state.run.interruption_code = Some(WorkflowInterruptionCode::UserCancel);
+    state.nodes[1].status = WorkflowNodeStatus::NeedsAttention;
+    let transition = expect_transition(next(
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::Cancel),
+    ));
+    assert_eq!(
+        transition,
+        Transition::Cancel {
+            node_row_id: "n2".into(),
+            disposed_session_id: None,
+        }
+    );
 }

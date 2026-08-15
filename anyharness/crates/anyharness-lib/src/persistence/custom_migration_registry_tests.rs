@@ -49,6 +49,21 @@ fn custom_foreign_key_migrations_register_the_workspace_drop_cleanup_columns_reb
             .iter()
             .map(|(name, _)| *name)
             .collect::<Vec<_>>(),
-        vec!["0069_workflow_runs_gen2"]
+        vec!["0069_workflow_runs_gen2", "0070_workflow_run_cancel_status"]
     );
+}
+
+#[test]
+fn custom_foreign_key_migrations_register_the_workflow_run_cancel_status_rebuild_after_gen2() {
+    // The cancel-status rebuild widens the CHECK vocabularies 0069 first
+    // creates, so it must run strictly after 0069 claims the table names.
+    let gen2_position = CUSTOM_FOREIGN_KEY_MIGRATIONS
+        .iter()
+        .position(|(name, _)| *name == "0069_workflow_runs_gen2")
+        .expect("registry contains the gen-2 rebuild");
+    let cancel_position = CUSTOM_FOREIGN_KEY_MIGRATIONS
+        .iter()
+        .position(|(name, _)| *name == "0070_workflow_run_cancel_status")
+        .expect("registry contains the cancel-status rebuild");
+    assert!(cancel_position > gen2_position);
 }

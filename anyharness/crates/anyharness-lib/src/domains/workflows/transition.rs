@@ -101,6 +101,7 @@ pub enum WorkflowCommand {
         prompt: String,
         model: Option<super::definition::NodeModel>,
     },
+    Cancel,
 }
 
 impl WorkflowCommand {
@@ -112,6 +113,7 @@ impl WorkflowCommand {
             Self::UndoAdvance => "undo_advance",
             Self::Resume => "resume",
             Self::AddAdhocNode { .. } => "add_adhoc_node",
+            Self::Cancel => "cancel",
         }
     }
 }
@@ -262,6 +264,16 @@ pub enum Transition {
         node_row_id: String,
         outcome: AdhocOutcome,
     },
+    /// User-initiated cancel: the run and its current node both go terminal.
+    /// `disposed_session_id` mirrors Ruling L (Redo): set only when the
+    /// current node was RUNNING, since pause states hold no live turn to
+    /// kill. Any concurrently running adhoc row is left alone — same as
+    /// FailNode/CompleteRun/Redo, it self-resolves via its own turn report
+    /// regardless of the run's now-terminal status.
+    Cancel {
+        node_row_id: String,
+        disposed_session_id: Option<String>,
+    },
 }
 
 impl Transition {
@@ -280,6 +292,7 @@ impl Transition {
             Self::ResumeNode { .. } => "resume",
             Self::AddAdhoc { .. } => "add_adhoc_node",
             Self::AdhocTurn { .. } => "adhoc_turn",
+            Self::Cancel { .. } => "cancel",
         }
     }
 }
@@ -677,6 +690,24 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                     prompt: prompt.clone(),
                     rendered_envelope: None,
                     model: model.clone(),
+                },
+            })
+        }
+        WorkflowCommand::Cancel => {
+            // The terminal-run gate above already rejects Cancel once the run
+            // is terminal, so this arm only ever sees running / awaiting_human
+            // / interrupted — exactly the legal set the QA finding needs.
+            let Some(node) = state.current_node() else {
+                return illegal(state, command.as_str(), None, "no current node to cancel");
+            };
+            Decision::Transition(Transition::Cancel {
+                node_row_id: node.id.clone(),
+                // Ruling L's disposal condition, reused: only a RUNNING node
+                // holds a live turn worth killing.
+                disposed_session_id: if node.status == WorkflowNodeStatus::Running {
+                    node.session_id.clone()
+                } else {
+                    None
                 },
             })
         }

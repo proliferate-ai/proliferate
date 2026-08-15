@@ -535,6 +535,30 @@ impl WorkflowStore {
                     }
                     update_run(tx, run_id, &timestamp, RunUpdate::default())?;
                 }
+                Transition::Cancel {
+                    node_row_id,
+                    disposed_session_id,
+                } => {
+                    // Mirrors FailNode/InterruptNode: the node row's own
+                    // `completed_at` stays NULL (that column means "completed
+                    // successfully"), only the run stamps its terminal time.
+                    set_node_status(tx, node_row_id, WorkflowNodeStatus::Cancelled)?;
+                    update_run(
+                        tx,
+                        run_id,
+                        &timestamp,
+                        RunUpdate {
+                            status: Some(WorkflowRunStatus::Cancelled),
+                            completed_at: Some(Some(timestamp.clone())),
+                            ..RunUpdate::default()
+                        },
+                    )?;
+                    if let Some(session_id) = disposed_session_id {
+                        side_effect = ResolvedSideEffect::DisposeSession {
+                            session_id: session_id.clone(),
+                        };
+                    }
+                }
             }
 
             let state = Self::load_run_state_tx(tx, run_id)?
@@ -1194,7 +1218,8 @@ fn transition_node_row_id<'a>(
         | Transition::InterruptNode { node_row_id, .. }
         | Transition::FlipNodeType { node_row_id, .. }
         | Transition::ResumeNode { node_row_id }
-        | Transition::AdhocTurn { node_row_id, .. } => Some(node_row_id),
+        | Transition::AdhocTurn { node_row_id, .. }
+        | Transition::Cancel { node_row_id, .. } => Some(node_row_id),
         Transition::Redo { .. } | Transition::AddAdhoc { .. } => {
             applied.created_node_row_id.as_deref()
         }
