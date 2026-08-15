@@ -135,24 +135,15 @@ describe("buildSettingsRepositoryEntries", () => {
     });
   });
 
-  it("includes configured cloud repos without a local checkout", () => {
+  // Cloud culling (PRO-10, FR-2): a cloud-only repo is a cloud surface and is
+  // hidden entirely — never listed, never shown as "local, not yet set up".
+  // (Pre-cull, this test asserted the cloud-only repo appeared with
+  // availability "cloud".)
+  it("hides configured cloud-only repos without a local checkout", () => {
     const entries = buildSettingsRepositoryEntries([], [], [makeRepoConfig({
       gitRepoName: "cloud-only",
     })]);
 
-    expect(entries).toEqual([expect.objectContaining({
-      sourceRoot: "cloud:proliferate-ai/cloud-only",
-      name: "cloud-only",
-      secondaryLabel: null,
-      workspaceCount: 0,
-      repoRootId: "",
-      localWorkspaceId: null,
-      gitProvider: "github",
-      gitOwner: "proliferate-ai",
-      gitRepoName: "cloud-only",
-      defaultBranch: "main",
-      cloudConfigured: true,
-      availability: "cloud",
-    })]);
+    expect(entries).toEqual([]);
   });
 });

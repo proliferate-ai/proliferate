@@ -4,6 +4,7 @@ import { SidebarScrollingNavigation } from "#product/components/workspace/shell/
 import { APP_ROUTES } from "#product/config/app-routes";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
+import { isWorkflowsV2Enabled } from "#product/lib/domain/capabilities/workflows-v2";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
 
@@ -40,6 +41,10 @@ export function SidebarScrollingNavigationSection({
     <DebugProfiler id="workspace-sidebar-scrolling-nav">
       <SidebarScrollingNavigation
         workspacesActive={location.pathname === APP_ROUTES.workspaces}
+        // Gen-2 ships dark behind the workflows_v2 gate, so the row is not
+        // rendered at all while the gate is off rather than routing to a
+        // deliberately unavailable page.
+        showWorkflows={isWorkflowsV2Enabled()}
         workflowsActive={location.pathname.startsWith(APP_ROUTES.workflows)}
         supportActive={false}
         onGoWorkspaces={onGoWorkspaces}

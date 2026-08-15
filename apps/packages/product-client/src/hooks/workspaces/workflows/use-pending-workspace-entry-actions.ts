@@ -10,6 +10,7 @@ import {
   resolvePendingWorktreeRetryInput,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
@@ -33,6 +34,12 @@ import {
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
 
+// Matches the message used at the command-surface gate
+// (use-app-new-workspace-command-actions.ts) and the create-flow gate
+// (use-create-cloud-workspace.ts) so every cloud unavailability surface reads
+// the same regardless of entry point.
+const CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE = "Cloud workspaces are temporarily unavailable.";
+
 export function usePendingWorkspaceEntryActions() {
   const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
@@ -54,6 +61,7 @@ export function usePendingWorkspaceEntryActions() {
     createWorktreeAndEnter,
   } = useWorkspaceEntryActions();
   const { retryCloudWorkspaceAndEnter } = useCreateCloudWorkspace();
+  const { cloudComputeEnabled } = useAppCapabilities();
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
 
@@ -105,6 +113,16 @@ export function usePendingWorkspaceEntryActions() {
         return;
       }
       case "cloud": {
+        // Second gate layer: the create flow itself refuses when disabled,
+        // but checking here too means a gated retry never touches the flow
+        // at all and reads exactly like the cowork "not wired up" case above
+        // (toast + end the dead attempt) instead of round-tripping through a
+        // pending-entry failure state.
+        if (!cloudComputeEnabled) {
+          showToast(CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE);
+          endAttempt(entry);
+          return;
+        }
         const replacement = retryCloudWorkspaceAndEnter(entry.request.input);
         endAttempt(entry);
         await replacement;
@@ -180,6 +198,7 @@ export function usePendingWorkspaceEntryActions() {
     }
   }, [
     clearPendingWorkspaceEntry,
+    cloudComputeEnabled,
     createLocalWorkspaceAndEnter,
     createWorktreeAndEnter,
     endAttempt,

@@ -1,0 +1,25 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "inputs.1.name",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step n_a",
+        "prompt": "Run step n_a."
+      }
+    ],
+    "inputs": [
+      {
+        "name": "topic",
+        "required": true
+      },
+      {
+        "name": "topic",
+        "required": false
+      }
+    ]
+  }
+}

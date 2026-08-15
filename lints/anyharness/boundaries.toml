@@ -13,7 +13,7 @@
 id = "AH-API-1"
 title = "api/** does not import live runtime internals"
 owner = "anyharness"
-status = "law"
+status = "holds"
 enforced_by = "scripts/check_anyharness_boundaries.py"
 mode = "lint"
 scope = "anyharness/crates/anyharness-lib/src/api/**"

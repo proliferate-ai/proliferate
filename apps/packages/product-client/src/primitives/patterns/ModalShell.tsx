@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, type RefObject } from "react";
 import {
   Dialog,
   DialogClose,
@@ -27,6 +27,12 @@ export interface ModalShellProps {
   panelClassName?: string;
   showCloseButton?: boolean;
   telemetryBlocked?: boolean;
+  /**
+   * Element to focus when the dialog opens, instead of Radix's default (the
+   * first tabbable element). Lets a dialog nominate its default action so
+   * Enter activates it on open.
+   */
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }
 
 // NOTE: ModalShell is modal (Radix Dialog): it traps focus and disables
@@ -50,6 +56,7 @@ export function ModalShell({
   panelClassName = "border-border bg-background shadow-modal",
   showCloseButton = true,
   telemetryBlocked = false,
+  initialFocusRef,
 }: ModalShellProps) {
   useNativeOverlayRegistration(open);
 
@@ -67,6 +74,12 @@ export function ModalShell({
         showCloseButton={false}
         data-telemetry-block={telemetryBlocked ? true : undefined}
         {...(description ? {} : { "aria-describedby": undefined })}
+        onOpenAutoFocus={initialFocusRef
+          ? (event) => {
+              event.preventDefault();
+              initialFocusRef.current?.focus();
+            }
+          : undefined}
         onEscapeKeyDown={(event) => {
           // Always shield desktop-global Escape handlers (parity with the old
           // hand-rolled shell, which preventDefault'ed every Escape while open).

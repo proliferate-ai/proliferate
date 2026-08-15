@@ -180,6 +180,14 @@ PRODUCT_CLIENT_DOMAIN_FIXTURE_IMPORTS = {
         "../../../../../../fixtures/contracts/workflow-definition/minimal.json",
     ): "fixtures/contracts/workflow-definition/minimal.json",
     (
+        "workflows/definition.test.ts",
+        "../../../../../../fixtures/contracts/workflow-definition/v2-full.json",
+    ): "fixtures/contracts/workflow-definition/v2-full.json",
+    (
+        "workflows/definition-v2.test.ts",
+        "../../../../../../fixtures/contracts/workflow-definition/v2-full.json",
+    ): "fixtures/contracts/workflow-definition/v2-full.json",
+    (
         "chats/transcript/transcript-presentation.test.ts",
         "../../../../../../../fixtures/contracts/native-subagent-transcript/claude.json",
     ): "fixtures/contracts/native-subagent-transcript/claude.json",

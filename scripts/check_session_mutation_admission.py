@@ -59,7 +59,14 @@ CLASSIFICATION_PATH = REPO_ROOT / "scripts/session_mutation_admission.txt"
 # sees router handlers, so these are enumerated + fenced separately here.
 NON_HTTP_OWNERS_PATH = REPO_ROOT / "scripts/session_mutation_admission_non_http.txt"
 
-ROUTER_FILES = [API_DIR / "router.rs", API_DIR / "router" / "pending_prompt_routes.rs"]
+ROUTER_FILES = [
+    API_DIR / "router.rs",
+    API_DIR / "router" / "pending_prompt_routes.rs",
+    # The gen-2 workflow plane registers its mutating routes in its own
+    # sub-router (merged into the main router), so the ratchet must scan
+    # the file itself or every workflow handler escapes enumeration.
+    HTTP_DIR / "workflow_runs.rs",
+]
 MUTATING = ("post", "put", "patch", "delete")
 ADMIT_RE = re.compile(r"admit_session_mutation|admit_review_parent_session|admit_plan_session|admit_all_workspace_sessions")
 # The enumerated effect surfaces a fenced handler may only touch AFTER
@@ -114,6 +121,13 @@ def collect_mutating_handlers() -> set[str]:
             if fn in qualified:
                 continue
             module = import_map.get(fn)
+            if module is None and re.search(
+                rf"\bfn {re.escape(fn)}\s*\(", text
+            ):
+                # A sub-router file registering a handler it defines itself
+                # (e.g. workflow_runs.rs's `put(put_workflow_run)`): the
+                # handler's module is the scanned file's own module name.
+                module = router.stem
             if module is None:
                 unresolved.append(
                     diagnostic(

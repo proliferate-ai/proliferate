@@ -15,6 +15,7 @@ pub(crate) mod persisted_payloads;
 pub(crate) mod sessions;
 pub(crate) mod support_windows;
 mod titles;
+mod workflow_links;
 
 #[cfg(test)]
 mod tests;

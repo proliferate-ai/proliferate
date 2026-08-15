@@ -15,13 +15,8 @@ reason = "existing AnyHarness contract oversized file (+caller-selected idempote
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/openapi.rs"
-max_lines = 695
-reason = "existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas + worktree restore path/schemas + WorktreeBaseFetch + RuntimeDiskPressure schemas (subagent registrations extracted to their owned OpenAPI document) ; -10: R1 archiving deletes the three retire path registrations, the three worktree-retention path registrations and the three WorkspaceRetire* schema registrations ; +22: R4 archiving registers the two lifecycle paths and the fourteen lifecycle schemas ; -4: R5 deletes the purge-preflight/retry path registrations and the WorkspaceCleanupOperation/WorkspacePurgePreflightResponse schema registrations"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/api/router.rs"
-max_lines = 611
-reason = "AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs/cancel + local materialization operations + workflow-run-workspaces routes + worktree restore route; subagent routes composed from their HTTP owner) ; -21: R1 archiving deletes the three retire routes and the two worktree-retention routes ; +8: R4 archiving adds the archive and unarchive routes and their import ; -8: R5 deletes the purge-preflight and purge-retry routes"
+max_lines = 683
+reason = "existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas + worktree restore path/schemas + WorktreeBaseFetch + RuntimeDiskPressure schemas (subagent registrations extracted to their owned OpenAPI document) ; -10: R1 archiving deletes the three retire path registrations, the three worktree-retention path registrations and the three WorkspaceRetire* schema registrations ; +22: R4 archiving registers the two lifecycle paths and the fourteen lifecycle schemas ; -4: R5 deletes the purge-preflight/retry path registrations and the WorkspaceCleanupOperation/WorkspacePurgePreflightResponse schema registrations ; -30: workflows gen-2 PR1 deletes the gen-1 workflow-runs and workflow-run-workspaces path/schema registrations ; +2: PR5a merges the workflow-runs OpenAPI document into the composed doc ; +16: agent-auth canonical evidence model registers the thirteen AgentAuth* schemas"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/router_tests.rs"
@@ -29,14 +24,9 @@ max_lines = 1898
 reason = "existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version tests, +managed default-placement route test, +model-snapshot status route shape/auth tests, +agent-auth/install poke contract tests, +agent-auth/install poke-suppression proofs against the automatic_poke_engine seam (F-036 cycle-2 review item 1); the catalog-push handler tests are gone with the heartbeat transport)"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs"
-max_lines = 2472
-reason = "workflow-runs HTTP + runtime/extension crossing suite (run-control PROOF-01 battery + 2b admission races: reservation/create/bind window, terminal release, PR1227-WORKSPACE-FENCE-01 purge/retire destruction-vs-late-bind proofs, and FENCE-02 bind->terminalize->destruction race proofs over the real executor) ; -313: R1 archiving deletes the two retire-barrier FENCE proofs with retire_barriers.rs (the purge-side FENCE-01/02 proofs keep their teeth) ; -5: R5's purge rewrite trims the purge fence proofs' fixture plumbing"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/app/mod.rs"
-max_lines = 658
-reason = "AnyHarness app wiring (+gateway model planner wiring; the gateway model resolver + probe-engine store wiring is gone with the old-chain deletion, A9) (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +worktree restore runtime wiring; local materialization service wiring is now the materialization runtime valve, moved to app/materialization.rs per grid PR 7; -3: WorkspaceService construction/pass-through deleted, grid PR 8; net 0 in grid PR 9: WorkspaceRetireService joins AppState while the preflight-checker/purge/retire constructions move to the app/workspaces.rs wiring family); PR #1753 extracts process/runtime configuration helpers to app/config.rs while adding Workspace MCP composition; PR #3 moves Agent Operations graph construction to app/agent_operations.rs; PR10 removes legacy Subagents MCP wiring while adding live product-context composition ; -24: R1 archiving unwires WorkspaceRetireService and WorkspaceRetentionService (fields, constructions, the retention startup pass and the WorktreeRetentionPolicyStore import) ; +12: R4 archiving wires WorkspaceArchiveService (import, field, deps pass-through, construction, and the cfg(not(test)) sweep boot pass) ; +7 net: R5 wires QuiescePlanes and the deletion-family purge construction while the clippy fix drops the dead session_delete_workflow argument"
+max_lines = 674
+reason = "AnyHarness app wiring (+gateway model planner wiring; the gateway model resolver + probe-engine store wiring is gone with the old-chain deletion, A9) (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +worktree restore runtime wiring; local materialization service wiring is now the materialization runtime valve, moved to app/materialization.rs per grid PR 7; -3: WorkspaceService construction/pass-through deleted, grid PR 8; net 0 in grid PR 9: WorkspaceRetireService joins AppState while the preflight-checker/purge/retire constructions move to the app/workspaces.rs wiring family); PR #1753 extracts process/runtime configuration helpers to app/config.rs while adding Workspace MCP composition; PR #3 moves Agent Operations graph construction to app/agent_operations.rs; PR10 removes legacy Subagents MCP wiring while adding live product-context composition ; -24: R1 archiving unwires WorkspaceRetireService and WorkspaceRetentionService (fields, constructions, the retention startup pass and the WorktreeRetentionPolicyStore import) ; +12: R4 archiving wires WorkspaceArchiveService (import, field, deps pass-through, construction, and the cfg(not(test)) sweep boot pass) ; +7 net: R5 wires QuiescePlanes and the deletion-family purge construction while the clippy fix drops the dead session_delete_workflow argument ; -10: workflows gen-2 PR1 unwires the gen-1 two-phase workflow-run and workflow-workspace services ; +26: PR4 wires the WorkflowManager (construction, extension registration, boot fence pass)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agent_operations/runtime/error.rs"
@@ -67,11 +57,6 @@ reason = "B-2 validation-cut rewrote the refusal assertions in place (single SES
 path = "anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs"
 max_lines = 609
 reason = "existing catalog validator router; unattended-mode invariants live in a focused submodule"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/agents/model.rs"
-max_lines = 605
-reason = "agents domain type barrel, previously exactly at the cap (+ResolvedAgent.credentials_from_route, the route-vs-native readiness provenance flag); split into model/ on next growth per guides/domains.md"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs"
@@ -109,19 +94,9 @@ max_lines = 1019
 reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume)"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/workflows/service.rs"
-max_lines = 664
-reason = "workflow durable rules (+run-control cancel-intent use case and helpers); split into service/ on next growth per guides/domains.md"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs"
-max_lines = 1320
-reason = "workflow-runs merge-gated domain suite (+2b partial-uniqueness contract on nonterminal session binding)"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs"
-max_lines = 645
-reason = "session startup (+goal/loop capability parsing, roster reconcile-on-attach); R3: +1 line initializing the new pending_stop_response field on SessionActor construction; observability PR9: +2 session.established record fields"
+max_lines = 650
+reason = "session startup (+goal/loop capability parsing, roster reconcile-on-attach); R3: +1 line initializing the new pending_stop_response field on SessionActor construction; observability PR9: +2 session.established record fields ; +5: pr11b threads the interaction hooks into the event sink at construction"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/tests/workspace_stop.rs"
@@ -140,8 +115,8 @@ reason = "R3 workspace-stop terminal suite: +615 lines of stop_all_for_workspace
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs"
-max_lines = 1308
-reason = "custom migration with legacy schema coverage (+0063 partial unique controller index, ordered after the 0062 rebuild) ; +110: R1 archiving adds the 0067_workspace_archived_lifecycle FK-off full-table rebuild ; +72: R5 adds the 0068_workspace_drop_cleanup_columns FK-off full-table rebuild"
+max_lines = 1318
+reason = "custom migration with legacy schema coverage (+0063 partial unique controller index, ordered after the 0062 rebuild) ; +110: R1 archiving adds the 0067_workspace_archived_lifecycle FK-off full-table rebuild ; +72: R5 adds the 0068_workspace_drop_cleanup_columns FK-off full-table rebuild ; +10: workflows gen-2 PR1 registers the 0069_workflow_runs_gen2 FK-off rebuild"
 
 [[max_lines]]
 path = "anyharness/crates/proliferate-diagnostics-client/src/fallback/tests.rs"
@@ -177,3 +152,43 @@ reason = "existing SDK oversized test file; legacy Subagents MCP reducer coverag
 path = "anyharness/sdk/src/reducer/transcript.ts"
 max_lines = 1515
 reason = "existing SDK oversized file; legacy Subagents MCP reducer branch removed in PR10"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt.rs"
+max_lines = 609
+reason = "session prompt dispatch ; +39: workflows gen-2 PR4 adds send_text_blocks_prompt_with_id (the workflow envelope's multi-block twin) sharing one send_payload_prompt_with_id seam with the text path"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt_message_actor_tests.rs"
+max_lines = 601
+reason = "scripted-ACP prompt/queue race suite over the real actor ; +2: workflows gen-2 PR4 teaches the scripted agent program a refusal stop-reason branch"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/store.rs"
+max_lines = 1327
+reason = "workflows gen-2 durable store: run/node/doc writes, apply_transition and projections share one SQLite seam; split into store/ on next growth per guides/domains.md ; +62: PR3 adds the docs-registry register/read seam and rendered-envelope persistence ; +32: PR4 adds the Ruling L DisposeThenStart side effect, the node model column, and queue-aware hold event emission ; +115: PR5a adds the courier PUT upsert (Ruling B one-live-run refusal, key-sorted definition JSON note) and the node_membership 404 discriminator read ; +11: pr11 adds the failure_code classification to the named transition event ; +20: pr11b splits the queued-interjection Hold out of the stale-notification target"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/store_tests.rs"
+max_lines = 1462
+reason = "workflows gen-2 store suite over real migrations (idempotent create, transition application, projections, boot fence, docs registry) ; +139: PR3 adds docs-registry and rendered-envelope round-trip proofs ; +31: PR5a adds one-live-run refusal and membership-discriminator proofs ; +79: pr11 adds the subscriber-capture proof for the named transition event ; +89: pr11b adds the shared capture harness plus interjection-held and node_launched join-key proofs"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs"
+max_lines = 738
+reason = "workflows gen-2 pure transition table: the ADR's ruling rows and their guards in one match ; +27: PR4 adds the ForcedUnload stop reason (parks as app_shutdown) and Ruling L redo-from-running"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/transition_tests.rs"
+max_lines = 1103
+reason = "workflows gen-2 transition suite: one test per ADR table row plus staleness and illegal-command proofs ; +76: PR4 adds ForcedUnload-parking and Ruling L redo-from-running proofs"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/live/sessions/model.rs"
+max_lines = 606
+reason = "live-session shared model: actor messages, hooks, capabilities, event persist; split per guides/domains.md on next growth ; +7: pr11b adds the interaction-requested/resolved hook fields to SessionHooks"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/live/workflows/lifecycle_tests.rs"
+max_lines = 1070
+reason = "workflows gen-2 engine lifecycle suite: scripted-ACP agents drive real runs through the manager/actor (happy path, gate approve, flip, redo, undo, boot fence) with zero mocks of our machinery"

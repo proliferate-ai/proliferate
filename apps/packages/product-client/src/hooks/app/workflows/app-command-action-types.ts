@@ -23,7 +23,6 @@ export interface AppCommandActions {
   addRepository: AppCommandAction;
   newLocalWorkspace: AppCommandAction;
   newWorktreeWorkspace: AppCommandAction;
-  newCloudWorkspace: AppCommandAction;
   copyWorkspacePath: AppCommandAction;
   copyBranchName: AppCommandAction;
 }

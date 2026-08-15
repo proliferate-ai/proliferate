@@ -655,12 +655,6 @@ reason = "1 wire type import below the mapper boundary; target = sessions domain
 
 [[exception]]
 rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workflows/execution.rs"
-site = "anyharness_contract::v1::ConfigApplyState"
-reason = "1 wire type import below the mapper boundary; target = workflows domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
 path = "anyharness/crates/anyharness-lib/src/domains/workspaces/access_model.rs"
 site = "anyharness_contract::v1::WorkspaceMobilityRuntimeMode"
 reason = "1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
@@ -810,18 +804,6 @@ site = "crate::live::terminals::TerminalService"
 reason = "purge holds live terminals directly (row-dies-last quiesce is deliberately duplicated from archive/quiesce.rs rather than shared, R5); target = workspaces runtime valve (grid plan PR 6b)"
 
 [[exception]]
-rule = "AH-POLICY-1"
-path = "anyharness/crates/anyharness-lib/src/domains/workflows/control/policy.rs"
-site = "crate::domains::workflows::store::WorkflowRunStore"
-reason = "store-holding policy file: imports WorkflowRunStore at :8 and keeps it as a field, so the decision reads the DB instead of taking facts; target = pass the controlling run id in, or rename to a gate (cleanup PR TBD)"
-
-[[exception]]
-rule = "AH-STORE-3"
-path = "anyharness/crates/anyharness-lib/src/domains/workflows/workspace_materialization/test_support.rs"
-site = "fn table_count::SELECT COUNT(*) FROM"
-reason = "format!-built COUNT query in a test-support file (not excluded by should_skip); target = none, test fixture"
-
-[[exception]]
 rule = "AH-STORE-3"
 path = "anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs"
 site = "fn runtime_state_reports_access_store_failure_as_unexpected::DROP TABLE"
@@ -946,3 +928,137 @@ path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/workspa
 site = "crate::domains::terminals::service::new_command_run_record"
 reason = "R3: split from manager.rs to stay under the line cap (spec Scope section F); carries forward manager.rs's own already-allowlisted occurrence of this same live/terminals-uses-the-older-lock-based-doctrine exception for the TerminalCommandService/new_command_run_record calls the three workspace-wide stop primitives need; ratchet only, do not fix"
 
+
+# --- workflows gen-2 (merged from main) ---
+
+[[exception]]
+rule = "AH-API-1"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "crate::live::workflows::WorkflowCommandError"
+reason = "the command handlers match live::workflows::WorkflowCommandError to pick status codes (the oneshot reply IS the response per the gen-2 ADR); target = re-export the error through the domain or map it at the manager seam (post-merge, journaled)"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_run_commands.rs"
+site = "crate::domains::workflows::store::NodeMembership"
+reason = "the command routes answer their 404 discriminator and post-command projection from WorkflowStore reads; the gen-2 ADR rules reads-from-rows-never-actors (no domain facade exists by design); target = a thin reads facade if one ever grows (post-merge, journaled)"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_run_commands.rs"
+site = "fn dispatch_command::state.workflow_store"
+reason = "the command routes answer their 404 discriminator and post-command projection from WorkflowStore reads; the gen-2 ADR rules reads-from-rows-never-actors (no domain facade exists by design); target = a thin reads facade if one ever grows (post-merge, journaled)"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "crate::domains::workflows::store::NewRunParams"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "crate::domains::workflows::store::WorkspaceOccupied"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "fn list_workflow_runs::state.workflow_store"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "fn load_projection::state.workflow_store"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "fn put_workflow_run::state.workflow_store"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "fn put_workflow_run::state.workflow_store#2"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "fn put_workflow_run::state.workflow_store#3"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs"
+site = "fn controlling_run_id::\"SELECT"
+reason = "the gen-2 destruction-controller policy's controlling-run lookup runs its SELECT inline over a raw Db handle instead of through WorkflowStore; target = move the query into store.rs and pass facts in (journaled ADR wart, cleanup PR TBD)"
+
+[[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs"
+site = "fn controlling_run_id::rusqlite::params"
+reason = "the gen-2 destruction-controller policy's controlling-run lookup runs its SELECT inline over a raw Db handle instead of through WorkflowStore; target = move the query into store.rs and pass facts in (journaled ADR wart, cleanup PR TBD)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/session_extension.rs"
+site = "anyharness_contract::v1::InteractionKind"
+reason = "1 wire type import (InteractionKind/InteractionOutcome, the types the extension contexts in sessions/extensions.rs already carry) mapped to tracing discriminants below the mapper boundary; resolves with the sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/session_extension.rs"
+site = "crate::live::workflows::WorkflowManager"
+reason = "the turn-finished extension hands its notification straight to live::workflows::WorkflowManager instead of a runtime valve; deliberate in the gen-2 ADR (the manager IS the engine's front door) but the import shape is valve-less; target = a workflows runtime valve or capability trait (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+site = "crate::domains::sessions::store::SessionStore"
+reason = "the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+site = "crate::domains::workflows::store::ResolvedSideEffect"
+reason = "the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+site = "crate::domains::workflows::store::WorkflowStore"
+reason = "the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+site = "crate::domains::workflows::store::emit_decision_events"
+reason = "the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+site = "crate::domains::workspaces::store::WorkspaceStore"
+reason = "the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/mod.rs"
+site = "mod lifecycle_tests::crate::domains::sessions::store::SessionStore"
+reason = "the WorkflowManager constructs actors and heals the boot fence from the same three stores the actor uses; same gen-2 ADR ruling and same capability-trait target as actor.rs"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/mod.rs"
+site = "mod lifecycle_tests::crate::domains::workflows::store::WorkflowStore"
+reason = "the WorkflowManager constructs actors and heals the boot fence from the same three stores the actor uses; same gen-2 ADR ruling and same capability-trait target as actor.rs"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/mod.rs"
+site = "mod lifecycle_tests::crate::domains::workspaces::store::WorkspaceStore"
+reason = "the WorkflowManager constructs actors and heals the boot fence from the same three stores the actor uses; same gen-2 ADR ruling and same capability-trait target as actor.rs"

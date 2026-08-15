@@ -453,13 +453,14 @@ jobs:
       - name: Test product client
         run: pnpm --filter @proliferate/product-client test
 
-      # Focused Tier-1 gate for the workflow definition surface: passive
-      # refetch draft preservation, revision-conflict handling, failed-reload
-      # retry, and create-state reset (specs/FEATURE_DOCS/WORKFLOWS.md
-      # assigns UI conflict behavior to Tier 1). Keep this exact-file signal in
-      # addition to the package suite so regressions remain immediately named.
-      - name: Test workflow definition surface
-        run: pnpm --filter @proliferate/product-client exec vitest run src/components/workflows/definitions/WorkflowDefinitionsSurface.test.tsx
+      # Focused Tier-1 gate for the workflow authoring surface: builder save
+      # gating (title + unresolved-reference blocks), schema-version refusal,
+      # and main-page row lifecycle including confirmed delete
+      # (specs/FEATURE_DOCS/WORKFLOWS.md assigns UI conflict behavior to
+      # Tier 1). Keep this exact-file signal in addition to the package suite
+      # so regressions remain immediately named.
+      - name: Test workflow authoring surface
+        run: pnpm --filter @proliferate/product-client exec vitest run src/components/workflows/builder-v2/WorkflowBuilderSurface.test.tsx src/components/workflows/main/WorkflowsMainSurface.test.tsx
 
   # Fail-closed Tier-2 gate for the workflow-definition lifecycle (T2-WFDEF-1)
   # only. No continue-on-error: a red result fails the CI workflow on PRs and

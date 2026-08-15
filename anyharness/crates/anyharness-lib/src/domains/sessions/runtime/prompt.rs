@@ -278,12 +278,52 @@ impl SessionRuntime {
             .await
     }
 
+    /// Workflow-owned multi-block twin of [`Self::send_text_prompt_with_id`]:
+    /// the leading blocks are a node envelope's already-wrapped
+    /// system-instruction blocks, delivered in-band ahead of the first
+    /// message, which is always the LAST block (Ruling D). Same access check,
+    /// live handle, actor command, and acknowledgement-ambiguity contract.
+    pub(crate) async fn send_text_blocks_prompt_with_id(
+        &self,
+        session_id: &str,
+        texts: Vec<String>,
+        prompt_id: String,
+    ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
+        let payload = crate::domains::sessions::prompt::PromptPayload::text_blocks(texts);
+        if payload.blocks.is_empty() {
+            return Err(TextPromptDispatchError::Dispatch(
+                SendPromptError::EmptyPrompt,
+            ));
+        }
+        self.send_payload_prompt_with_id(session_id, payload, prompt_id)
+            .await
+    }
+
     async fn send_text_prompt_with_id_inner(
         &self,
         session_id: &str,
         text: String,
         prompt_id: String,
         provenance: Option<PromptProvenance>,
+    ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
+        if text.trim().is_empty() {
+            return Err(TextPromptDispatchError::Dispatch(
+                SendPromptError::EmptyPrompt,
+            ));
+        }
+        let mut payload = crate::domains::sessions::prompt::PromptPayload::text(text);
+        if let Some(provenance) = provenance {
+            payload = payload.with_provenance(provenance);
+        }
+        self.send_payload_prompt_with_id(session_id, payload, prompt_id)
+            .await
+    }
+
+    async fn send_payload_prompt_with_id(
+        &self,
+        session_id: &str,
+        payload: crate::domains::sessions::prompt::PromptPayload,
+        prompt_id: String,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
@@ -292,11 +332,6 @@ impl SessionRuntime {
                     error.to_string()
                 )))
             })?;
-        if text.trim().is_empty() {
-            return Err(TextPromptDispatchError::Dispatch(
-                SendPromptError::EmptyPrompt,
-            ));
-        }
         let record = self.get_session_or_not_found(session_id).map_err(|error| {
             TextPromptDispatchError::Dispatch(map_lifecycle_error_to_prompt(error))
         })?;
@@ -304,10 +339,6 @@ impl SessionRuntime {
             .ensure_live_session_handle(&record, None)
             .await
             .map_err(|error| TextPromptDispatchError::Dispatch(map_start_error_to_prompt(error)))?;
-        let mut payload = crate::domains::sessions::prompt::PromptPayload::text(text);
-        if let Some(provenance) = provenance {
-            payload = payload.with_provenance(provenance);
-        }
         let acceptance = handle
             .send_prompt(payload, Some(prompt_id))
             .await

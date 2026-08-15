@@ -24,21 +24,11 @@ export function buildTargetGroups(
 
 export function firstDefaultTarget(
   repoDrafts: TargetRepoDraft[],
-  cloudAvailable: boolean,
+  _cloudAvailable?: boolean,
 ): AutomationTargetSelection | null {
-  if (cloudAvailable) {
-    const cloudDraft = repoDrafts.find((draft) =>
-      draft.hasConfiguredCloud || draft.hasCloudWorkspace
-    );
-    if (cloudDraft) {
-      return {
-        executionTarget: "cloud",
-        gitOwner: cloudDraft.gitOwner,
-        gitRepoName: cloudDraft.gitRepoName,
-      };
-    }
-  }
-
+  // Cloud is culled (PRO-10): new automations never default to a cloud target.
+  // Existing cloud-target automations still render their saved row (badged
+  // unavailable) in edit mode, but creation no longer offers cloud.
   const localDraft = repoDrafts.find((draft) => draft.hasLocalRepository);
   return localDraft
     ? {
@@ -106,8 +96,11 @@ function buildTargetGroup(
   sshTargets: readonly ComputeLaunchTargetOption[],
 ): AutomationTargetGroup {
   const rows: AutomationTargetRow[] = [];
-  const hasCloudTargetRow =
-    draft.hasConfiguredCloud || draft.hasCloudWorkspace || draft.hasSavedCloudTarget;
+  // Cloud is culled (PRO-10): the picker no longer offers a cloud target for a
+  // fresh automation. Only a saved cloud target (edit mode) still renders its
+  // row, badged unavailable, so an existing cloud automation is honest about
+  // its now-inactive target instead of silently switching to local.
+  const hasCloudTargetRow = draft.hasSavedCloudTarget;
 
   if (hasCloudTargetRow) {
     const target = {
@@ -129,20 +122,6 @@ function buildTargetGroup(
           ? null
           : "Cloud workspace is not configured.",
       selected: isSameAutomationTarget(selectedTarget, target),
-    });
-  }
-
-  if (!draft.hasConfiguredCloud && !draft.hasCloudWorkspace
-    && (draft.hasCloudConfig || draft.hasLocalRepository)) {
-    rows.push({
-      kind: "configureCloud",
-      id: `${draft.repoKey}:configure-cloud`,
-      repoKey: draft.repoKey,
-      repoLabel: draft.label,
-      label: "Configure cloud workspace",
-      description: "Set tracked files before running this automation in cloud.",
-      gitOwner: draft.gitOwner,
-      gitRepoName: draft.gitRepoName,
     });
   }
 

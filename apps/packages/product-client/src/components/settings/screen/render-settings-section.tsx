@@ -51,15 +51,14 @@ export function renderSettingsSection(
   onSelectRepoContext: (context: RepoSettingsContext) => void,
   onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void,
 ): ReactNode {
-  const cloudGate: CloudGateFlags = {
-    cloudEnabled,
-    cloudActive,
-    cloudSignInChecking,
-    cloudSignInAvailable,
-  };
-  // Auth-plane gate: surfaces that only need a signed-in control plane (not
-  // cloud compute/E2B). CloudGuard renders children when its `cloudActive` is
-  // true, so feed it the authentication signal instead of the compute one.
+  // Control-plane gate: surfaces that only need a reachable, signed-in control
+  // plane (not cloud compute/E2B). These are the ADR FM6/Q9 control-plane
+  // features — API keys, personal/organization secrets, organization
+  // integrations, SSO, and model policy — which must stay available whenever the
+  // control plane is reachable and the user is authenticated, independent of
+  // `cloudComputeEnabled`. CloudGuard renders children when its `cloudActive` is
+  // true (and still shows CloudUnavailablePane when `cloudEnabled` is false), so
+  // feed it the authentication signal instead of the compute one.
   const authGate: CloudGateFlags = {
     cloudEnabled,
     cloudActive: authenticated,
@@ -70,7 +69,7 @@ export function renderSettingsSection(
     return <HarnessPane harnessKind={getHarnessKindForSettingsSection(activeSection)} />;
   }
   if (activeSection === "agent-api-keys") {
-    return renderCloudGatedPane(cloudGate, () => <ApiKeysPane />);
+    return renderCloudGatedPane(authGate, () => <ApiKeysPane />);
   }
   if (activeSection === "general") {
     return <GeneralPane />;
@@ -82,7 +81,7 @@ export function renderSettingsSection(
     return <AccountPane />;
   }
   if (activeSection === "personal-secrets") {
-    return renderCloudGatedPane(cloudGate, () => <PersonalSecretsPane />);
+    return renderCloudGatedPane(authGate, () => <PersonalSecretsPane />);
   }
   if (activeSection === "integrations") {
     return renderCloudGatedPane(authGate, () => <UserIntegrationsPane focus={focus} />);
@@ -100,19 +99,19 @@ export function renderSettingsSection(
     return <OrganizationMembersPane />;
   }
   if (activeSection === "organization-secrets") {
-    return renderCloudGatedPane(cloudGate, () => <OrganizationSecretsPane />);
+    return renderCloudGatedPane(authGate, () => <OrganizationSecretsPane />);
   }
   if (activeSection === "organization-integrations") {
-    return renderCloudGatedPane(cloudGate, () => <OrganizationIntegrationsPane />);
+    return renderCloudGatedPane(authGate, () => <OrganizationIntegrationsPane />);
   }
   if (activeSection === "organization-limits") {
     return <OrganizationBudgetsPane />;
   }
   if (activeSection === "organization-sso") {
-    return renderCloudGatedPane(cloudGate, () => <OrganizationSsoPane />);
+    return renderCloudGatedPane(authGate, () => <OrganizationSsoPane />);
   }
   if (activeSection === "organization-model-policy") {
-    return renderCloudGatedPane(cloudGate, () => <OrganizationModelPolicyPane />);
+    return renderCloudGatedPane(authGate, () => <OrganizationModelPolicyPane />);
   }
   if (isSettingsScaffoldPageId(activeSection)) {
     return <SettingsScaffoldPane pageId={activeSection} />;

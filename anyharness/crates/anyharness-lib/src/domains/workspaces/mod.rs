@@ -7,6 +7,7 @@ pub mod creator_context;
 pub mod deletion;
 pub mod detector;
 pub mod env;
+pub mod exclude;
 pub mod files_runtime;
 pub mod inventory;
 pub mod managed_root;

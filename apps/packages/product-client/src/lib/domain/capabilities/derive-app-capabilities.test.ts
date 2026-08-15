@@ -50,7 +50,10 @@ describe("deriveAppCapabilities", () => {
     expect(caps.cloudEnabled).toBe(true);
     expect(caps.billingEnabled).toBe(true);
     expect(caps.usageMeteringEnabled).toBe(true);
-    expect(caps.cloudComputeEnabled).toBe(true);
+    // Cloud culling (PRO-10): CLOUD_COMPUTE_TEMPORARILY_DISABLED is now `true`,
+    // so cloudComputeEnabled is forced off even for a fully-enabled hosted
+    // contract. (Pre-gate-flip this was `true`.)
+    expect(caps.cloudComputeEnabled).toBe(false);
     expect(caps.agentGatewayEnabled).toBe(true);
     expect(caps.workflowManagedRunsEnabled).toBe(false);
     expect(caps.isSelfManaged).toBe(false);
@@ -96,7 +99,9 @@ describe("deriveAppCapabilities", () => {
     expect(caps.isSelfManaged).toBe(true);
     expect(caps.serverDisplayName).toBe("Acme Internal");
     expect(caps.serverLogoUrl).toBe("https://acme.example.com/logo.svg");
-    expect(caps.cloudComputeEnabled).toBe(true);
+    // Cloud culling (PRO-10): forced off by CLOUD_COMPUTE_TEMPORARILY_DISABLED
+    // even though this self-managed contract declares cloud compute.
+    expect(caps.cloudComputeEnabled).toBe(false);
     expect(caps.agentGatewayEnabled).toBe(true);
     // Billing/web/pricing stay off unless declared.
     expect(caps.billingEnabled).toBe(false);
@@ -213,7 +218,9 @@ describe("resolveEffectiveContract", () => {
     });
 
     expect(caps.billingEnabled).toBe(true);
-    expect(caps.cloudComputeEnabled).toBe(true);
+    // Cloud culling (PRO-10): forced off by CLOUD_COMPUTE_TEMPORARILY_DISABLED
+    // even for the synthesized older-official hosted contract.
+    expect(caps.cloudComputeEnabled).toBe(false);
     expect(caps.isSelfManaged).toBe(false);
     expect(caps.serverDisplayName).toBeNull();
   });

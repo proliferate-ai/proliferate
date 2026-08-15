@@ -31,6 +31,13 @@ interface UseRightPanelLifecycleOptions {
   visibleTerminalCount: number;
   activeTerminalId: string | null;
   openViewerTargets: readonly ViewerTarget[];
+  /**
+   * Run-scoped availability of the workflow tool (tri-state; `undefined` while
+   * the runs list has not settled). Reconciled here rather than only filtered
+   * in the header, so an active workflow entry cannot outlive the run that
+   * justified it — a pane rendering under no highlighted tab.
+   */
+  hasWorkflowRun: boolean | undefined;
   terminalActivationRequest: RightPanelTerminalActivationRequest | null;
   updateState: RightPanelStateUpdater;
   setActiveTerminalForWorkspace: (workspaceId: string, terminalId: string | null) => void;
@@ -50,6 +57,7 @@ export function useRightPanelLifecycle({
   visibleTerminalCount,
   activeTerminalId,
   openViewerTargets,
+  hasWorkflowRun,
   terminalActivationRequest,
   updateState,
   setActiveTerminalForWorkspace,
@@ -67,12 +75,14 @@ export function useRightPanelLifecycle({
       isCloudWorkspaceSelected,
       liveTerminals: terminalsQueryIsSuccess ? terminals : undefined,
       liveViewerTargets: openViewerTargets,
+      hasWorkflowRun,
     });
     if (rightPanelStateEqual(state, next)) {
       return;
     }
     updateState(next);
   }, [
+    hasWorkflowRun,
     isCloudWorkspaceSelected,
     openViewerTargets,
     state,
