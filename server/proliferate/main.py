@@ -166,12 +166,38 @@ def _redacts_entire_body(request: Request) -> bool:
     return request.method == "POST" and "/agent-auth/keys" in request.url.path
 
 
+def _is_workflow_invocation_put(request: Request) -> bool:
+    return request.method == "PUT" and "/workflow-invocations/" in request.url.path
+
+
 def _is_workflow_invocation_argument_error(request: Request, loc: object) -> bool:
-    if request.method != "PUT" or "/workflow-invocations/" not in request.url.path:
+    if not _is_workflow_invocation_put(request):
         return False
     if not isinstance(loc, tuple | list):
         return False
     return len(loc) >= 2 and loc[0] == "body" and "arguments" in loc[1:]
+
+
+def _redact_workflow_invocation_arguments(value: object) -> object:
+    """Blank the arguments subtree wherever it appears in an echoed input.
+
+    A union request body makes pydantic echo the whole submitted document on
+    branch-level errors, so loc-based matching alone no longer catches every
+    place an argument value can surface.
+    """
+
+    if isinstance(value, dict):
+        return {
+            key: (
+                _REDACTED_INPUT
+                if key == "arguments"
+                else _redact_workflow_invocation_arguments(child)
+            )
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_workflow_invocation_arguments(child) for child in value]
+    return value
 
 
 async def _validation_error_handler(
@@ -191,7 +217,10 @@ async def _validation_error_handler(
             ):
                 item["input"] = _REDACTED_INPUT
             else:
-                item["input"] = _redact_validation_input(item["input"])
+                redacted = _redact_validation_input(item["input"])
+                if _is_workflow_invocation_put(request):
+                    redacted = _redact_workflow_invocation_arguments(redacted)
+                item["input"] = redacted
         errors.append(item)
     return JSONResponse(status_code=422, content=jsonable_encoder({"detail": errors}))
 

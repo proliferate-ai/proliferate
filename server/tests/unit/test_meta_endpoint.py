@@ -77,7 +77,11 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
 
     body = _client().get("/meta").json()
 
-    assert set(body) == set(_VERSION_FIELDS) | {"capabilities", "minDesktopVersionEnforced"}
+    assert set(body) == set(_VERSION_FIELDS) | {
+        "capabilities",
+        "minDesktopVersionEnforced",
+        "desktopUpdater",
+    }
     for field in _VERSION_FIELDS:
         assert isinstance(body[field], str) and body[field]
     assert isinstance(body["capabilities"], dict)
@@ -125,6 +129,9 @@ _META_GOLDEN_FIELDS = [
     "minDesktopVersion",
     "minDesktopVersionEnforced",
     "capabilities",
+    # Additive (FR-2): optional desktop updater cadence override, null unless
+    # the deployment configured it.
+    "desktopUpdater",
 ]
 
 
@@ -595,3 +602,33 @@ def test_version_helper_dev_fallback(monkeypatch) -> None:  # type: ignore[no-un
     monkeypatch.setattr(version_module, "_read_version_file", lambda: None)
 
     assert version_module.server_version() == "0.0.0-dev"
+
+
+def _clear_cadence_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    for name in ("DESKTOP_UPDATER_CHECK_INTERVAL_MS", "DESKTOP_UPDATER_STALL_THRESHOLD_MS"):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_meta_desktop_updater_cadence_absent_by_default(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # Additive field: present but null unless a deployment configured overrides.
+    _clear_cadence_env(monkeypatch)
+    assert _client().get("/meta").json()["desktopUpdater"] is None
+
+
+def test_desktop_updater_cadence_builder_is_env_driven(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from proliferate.server.meta import _desktop_updater_cadence
+
+    _clear_cadence_env(monkeypatch)  # No env overrides -> None.
+    assert _desktop_updater_cadence() is None
+
+    monkeypatch.setenv("DESKTOP_UPDATER_CHECK_INTERVAL_MS", "900000")  # one set -> populated
+    cadence = _desktop_updater_cadence()
+    assert cadence is not None
+    assert cadence.checkIntervalMs == 900_000
+    assert cadence.stallThresholdMs is None
+
+    # Garbage / non-positive env values are ignored (tolerant read -> None).
+    _clear_cadence_env(monkeypatch)
+    monkeypatch.setenv("DESKTOP_UPDATER_CHECK_INTERVAL_MS", "not-a-number")
+    monkeypatch.setenv("DESKTOP_UPDATER_STALL_THRESHOLD_MS", "0")
+    assert _desktop_updater_cadence() is None

@@ -22,7 +22,10 @@ export function useAutoUpdateDownload(): void {
   const startedForVersion = useRef<string | null>(null);
 
   useEffect(() => {
-    if (phase !== "available") {
+    // `reusingStaged` is treated like `available` here: a verified artifact for
+    // this version is already on disk, so the same auto-start advances it (the
+    // download hook short-circuits reuse straight to `ready`, no bytes moved).
+    if (phase !== "available" && phase !== "reusingStaged") {
       if (phase === "idle" || phase === "current") {
         startedForVersion.current = null;
       }

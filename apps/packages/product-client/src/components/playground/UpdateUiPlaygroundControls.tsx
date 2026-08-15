@@ -4,186 +4,19 @@ import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { setDevRunningAgentCount } from "#product/hooks/app/lifecycle/use-running-agent-count";
-import { useUpdater, type UpdaterErrorSource } from "#product/hooks/access/tauri/use-updater";
+import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import {
   updateDevUpdaterMock,
   writeDevUpdaterMock,
-  type DevUpdaterMockState,
 } from "#product/hooks/access/tauri/updater-dev-mock";
 import { SidebarUpdateFooterButton } from "#product/components/app/sidebar/SidebarUpdateFooterButton";
-
-type ProductionSurfacePreview =
-  | "available"
-  | "downloading"
-  | "stalled"
-  | "stalled-no-total"
-  | "ready-reminder"
-  | "restart-dialog"
-  | "ready-armed"
-  | "restart-countdown"
-  | "manual-check-current"
-  | "check-error"
-  | "download-error";
-
-const PREVIEW_VERSION = "0.1.42";
-const PREVIEW_TITLE = "Introducing Grok";
-const CHECK_ERROR_MESSAGE = "Couldn't reach the update server.";
-const DOWNLOAD_ERROR_MESSAGE = "Couldn't finish downloading the update.";
-const PREVIEW_DOWNLOAD_TOTAL_BYTES = 125_000_000;
-/** Comfortably past the 8s stall threshold, so the copy reads "12 seconds". */
-const PREVIEW_STALL_SILENCE_MS = 12_000;
-const PRODUCTION_SURFACE_PREVIEWS: {
-  id: ProductionSurfacePreview;
-  label: string;
-}[] = [
-  { id: "available", label: "Available" },
-  { id: "downloading", label: "Downloading" },
-  { id: "stalled", label: "Stalled" },
-  { id: "stalled-no-total", label: "Stalled (no size)" },
-  { id: "ready-reminder", label: "Ready reminder" },
-  { id: "restart-dialog", label: "Restart dialog" },
-  { id: "ready-armed", label: "Restart armed" },
-  { id: "restart-countdown", label: "Restart countdown" },
-  { id: "manual-check-current", label: "Up to date" },
-  { id: "check-error", label: "Check failed" },
-  { id: "download-error", label: "Download failed" },
-];
-
-function setDevUpdaterMockErrorSource(source: UpdaterErrorSource): void {
-  updateDevUpdaterMock((current) =>
-    current && current.phase === "error"
-      ? {
-          ...current,
-          errorSource: source,
-          errorMessage:
-            source === "check" ? CHECK_ERROR_MESSAGE : DOWNLOAD_ERROR_MESSAGE,
-        }
-      : current,
-  );
-}
-
-function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdaterMockState {
-  const baseState = {
-    version: PREVIEW_VERSION,
-    title: PREVIEW_TITLE,
-    downloadProgress: null,
-    downloadReceivedBytes: null,
-    downloadTotalBytes: null,
-    restartPromptOpen: false,
-    restartWhenIdle: false,
-    lastCheckedAt: new Date().toISOString(),
-    errorMessage: null,
-    errorSource: null,
-    manualCheckCompletedAt: null,
-    lastProgressAt: null,
-    downloadRetryCount: 0,
-    downloadStartedAt: null,
-    restartCountdownStartedAt: null,
-  } satisfies Omit<DevUpdaterMockState, "phase">;
-
-  if (preview === "downloading") {
-    return {
-      ...baseState,
-      phase: "downloading",
-      downloadProgress: 68,
-      downloadReceivedBytes: 85_000_000,
-      downloadTotalBytes: PREVIEW_DOWNLOAD_TOTAL_BYTES,
-      // 68% in 30s: gives the pill's remaining-time estimate real inputs, which
-      // is the only way that label can be reviewed here.
-      downloadStartedAt: Date.now() - 30_000,
-      lastProgressAt: Date.now(),
-    };
-  }
-
-  // Bytes frozen at a known percentage, twice retried: the full stall copy.
-  if (preview === "stalled") {
-    return {
-      ...baseState,
-      phase: "stalled",
-      downloadProgress: 38,
-      downloadReceivedBytes: 47_500_000,
-      downloadTotalBytes: PREVIEW_DOWNLOAD_TOTAL_BYTES,
-      lastProgressAt: Date.now() - PREVIEW_STALL_SILENCE_MS,
-      downloadStartedAt: Date.now() - PREVIEW_STALL_SILENCE_MS - 40_000,
-      downloadRetryCount: 2,
-    };
-  }
-
-  // The other stall shape: a server that advertised no total, so there is no
-  // percentage to name and no bar to freeze — only the silence.
-  if (preview === "stalled-no-total") {
-    return {
-      ...baseState,
-      phase: "stalled",
-      downloadTotalBytes: null,
-      lastProgressAt: Date.now() - PREVIEW_STALL_SILENCE_MS,
-    };
-  }
-
-  if (preview === "ready-reminder") {
-    return {
-      ...baseState,
-      phase: "ready",
-    };
-  }
-
-  if (preview === "restart-dialog") {
-    return {
-      ...baseState,
-      phase: "ready",
-      restartPromptOpen: true,
-    };
-  }
-
-  if (preview === "ready-armed") {
-    return {
-      ...baseState,
-      phase: "ready",
-      restartWhenIdle: true,
-    };
-  }
-
-  // Armed, sessions have gone idle, clock running: the cancellable warning.
-  if (preview === "restart-countdown") {
-    return {
-      ...baseState,
-      phase: "ready",
-      restartWhenIdle: true,
-      restartCountdownStartedAt: Date.now(),
-    };
-  }
-
-  if (preview === "manual-check-current") {
-    return {
-      ...baseState,
-      phase: "current",
-      manualCheckCompletedAt: Date.now(),
-    };
-  }
-
-  if (preview === "check-error") {
-    return {
-      ...baseState,
-      phase: "error",
-      errorMessage: CHECK_ERROR_MESSAGE,
-      errorSource: "check",
-    };
-  }
-
-  if (preview === "download-error") {
-    return {
-      ...baseState,
-      phase: "error",
-      errorMessage: DOWNLOAD_ERROR_MESSAGE,
-      errorSource: "download",
-    };
-  }
-
-  return {
-    ...baseState,
-    phase: "available",
-  };
-}
+import {
+  buildProductionSurfaceMock,
+  PREVIEW_DOWNLOAD_TOTAL_BYTES,
+  PRODUCTION_SURFACE_PREVIEWS,
+  setDevUpdaterMockErrorSource,
+  type ProductionSurfacePreview,
+} from "./update-ui-playground-mocks";
 
 function LiveStateDatum({ label, value }: { label: string; value: string }) {
   return (

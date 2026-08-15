@@ -4293,18 +4293,18 @@
         }
       }
     },
-    "/v1/workflow-run-workspaces/{run_id}": {
+    "/v1/workflow-runs": {
       "get": {
         "tags": [
-          "workflow-run-workspaces"
+          "workflow-runs"
         ],
-        "operationId": "get_workflow_run_workspace",
+        "operationId": "list_workflow_runs",
         "parameters": [
           {
-            "name": "run_id",
-            "in": "path",
-            "description": "Canonical UUID for the workflow run",
-            "required": true,
+            "name": "workspace_id",
+            "in": "query",
+            "description": "Restrict to one workspace",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -4312,110 +4312,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Durable materialization record",
+            "description": "Run rows, newest first",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkflowRunWorkspaceResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Non-canonical run ID",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Unknown workflow run workspace",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "workflow-run-workspaces"
-        ],
-        "operationId": "put_workflow_run_workspace",
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "description": "Canonical UUID for the workflow run",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PutWorkflowRunWorkspaceRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Exact replay of an identical placement request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkflowRunWorkspaceResponse"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "New durable materialization (status ready or failed)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkflowRunWorkspaceResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid ID or placement request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Same ID with a different placement request, or the workflow run already claimed this ID before placement acceptance",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Materialization storage failure",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/WorkflowRunsListResponse"
                 }
               }
             }
@@ -4433,7 +4334,6 @@
           {
             "name": "run_id",
             "in": "path",
-            "description": "Canonical UUID for the workflow run",
             "required": true,
             "schema": {
               "type": "string"
@@ -4442,44 +4342,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Durable run and step status",
+            "description": "The run projected from rows",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VersionedWorkflowRunResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Non-canonical run ID",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Direct-attach token is outside its workspace scope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/RunProjection"
                 }
               }
             }
           },
           "404": {
-            "description": "Unknown workflow run",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "description": "WORKFLOW_RUN_NOT_FOUND"
           }
         }
       },
@@ -4492,7 +4365,7 @@
           {
             "name": "run_id",
             "in": "path",
-            "description": "Canonical UUID for the workflow run",
+            "description": "Client-minted run id (a UUID); the PUT is idempotent on it",
             "required": true,
             "schema": {
               "type": "string"
@@ -4503,7 +4376,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/VersionedPutWorkflowRunRequest"
+                "$ref": "#/components/schemas/WorkflowRunPutRequest"
               }
             }
           },
@@ -4511,99 +4384,101 @@
         },
         "responses": {
           "200": {
-            "description": "Exact replay of an identical invocation",
+            "description": "Idempotent replay: the existing run, untouched",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VersionedWorkflowRunResponse"
+                  "$ref": "#/components/schemas/RunProjection"
                 }
               }
             }
           },
           "201": {
-            "description": "New durable acceptance",
+            "description": "Run placed and started",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VersionedWorkflowRunResponse"
+                  "$ref": "#/components/schemas/RunProjection"
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid ID, definition, arguments, or rendered prompt",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
+            "description": "WORKFLOW_SNAPSHOT_INVALID (malformed body, non-UUID run id, unknown repo root id)"
+          },
+          "409": {
+            "description": "WORKFLOW_PLACEMENT_CONFLICT, zero rows inserted"
+          },
+          "503": {
+            "description": "WORKFLOW_WORKSPACE_MATERIALIZATION_FAILED, zero rows inserted"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/adhoc-nodes": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "add_workflow_adhoc_node",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunAddAdhocNodeRequest"
               }
             }
           },
-          "403": {
-            "description": "Direct-attach token is outside its workspace scope",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Adhoc row running beside the chain; the fresh projection",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/RunProjection"
                 }
               }
             }
           },
           "404": {
-            "description": "Workspace not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "description": "WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND (anchor)"
           },
           "409": {
-            "description": "Same ID with different invocation, workspace mutation blocked, or a schema-v2 workflow-workspace binding conflict (workflow_workspace_not_ready when this run's materialization is not ready; workflow_workspace_mismatch when the ready materialization's workspace differs from the request)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Portable target cannot be resolved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Acceptance storage failure; no committed run or step",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
           }
         }
       }
     },
-    "/v1/workflow-runs/{run_id}/cancel": {
+    "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/approve": {
       "post": {
         "tags": [
           "workflow-runs"
         ],
-        "operationId": "cancel_workflow_run",
+        "operationId": "approve_workflow_node",
         "parameters": [
           {
             "name": "run_id",
             "in": "path",
-            "description": "Canonical UUID for the workflow run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_row_id",
+            "in": "path",
             "required": true,
             "schema": {
               "type": "string"
@@ -4612,44 +4487,200 @@
         ],
         "responses": {
           "200": {
-            "description": "Durable cancellation intent acknowledged; current truthful versioned snapshot",
+            "description": "Gate approved; the fresh projection",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VersionedWorkflowRunResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Non-canonical run ID",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/RunProjection"
                 }
               }
             }
           },
           "404": {
-            "description": "Unknown workflow run",
+            "description": "WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/fail-redo": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "fail_redo_workflow_node",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunFailRedoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Replacement row running; the fresh projection",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/RunProjection"
                 }
               }
             }
           },
-          "500": {
-            "description": "Cancel-intent storage failure; nothing changed, or a post-commit snapshot read failed with intent preserved",
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/type": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "flip_workflow_node_type",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunFlipTypeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Node type flipped; the fresh projection",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/RunProjection"
                 }
               }
             }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/resume": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "resume_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run resumed; the fresh projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/undo-advance": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "undo_workflow_advance",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Advance undone; the fresh projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
           }
         }
       }
@@ -8588,6 +8619,10 @@
           },
           "supportsLogin": {
             "type": "boolean"
+          },
+          "userPathCopyDetected": {
+            "type": "boolean",
+            "description": "True when the user has their own copy of this agent on PATH,\nregardless of whether a managed copy also exists and wins resolution\n(R2.0, always-managed: a managed copy never displaces a PATH one).\nDrives the settings-pane one-time notice explaining the managed copy\nwhen both exist. Additive and tolerant: absent on runtimes that\npredate R2.0, so old readers simply see no notice."
           }
         }
       },
@@ -10590,6 +10625,77 @@
           }
         }
       },
+      "DefinitionEdge": {
+        "type": "object",
+        "required": [
+          "from",
+          "to"
+        ],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DefinitionInput": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DefinitionNode": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "title",
+          "prompt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "model": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NodeModel"
+              }
+            ]
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/WorkflowNodeType"
+          }
+        },
+        "additionalProperties": false
+      },
       "DeleteWorkspaceFileEntryResponse": {
         "type": "object",
         "required": [
@@ -10646,6 +10752,69 @@
             "items": {
               "$ref": "#/components/schemas/SetupHint"
             }
+          }
+        }
+      },
+      "DocTemplate": {
+        "type": "object",
+        "required": [
+          "slug",
+          "producingNodeId",
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "producingNodeId": {
+            "type": "string",
+            "description": "Required on every plane: every doc has exactly one producing node, and\nthe filename law (`NN-slug.md`) derives NN from that node's chain\nposition."
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DocView": {
+        "type": "object",
+        "required": [
+          "id",
+          "runId",
+          "slug",
+          "filename",
+          "producingNodeRowId",
+          "seededFromTemplate",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "producingNodeRowId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runId": {
+            "type": "string"
+          },
+          "seededFromTemplate": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
           }
         }
       },
@@ -12228,6 +12397,21 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "InvocationPlacement": {
+        "type": "object",
+        "required": [
+          "repoConfigId",
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/PlacementMode"
+          },
+          "repoConfigId": {
+            "type": "string"
           }
         }
       },
@@ -13866,6 +14050,133 @@
           }
         }
       },
+      "NodeModel": {
+        "type": "object",
+        "required": [
+          "agentKind"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "NodeView": {
+        "type": "object",
+        "required": [
+          "id",
+          "runId",
+          "definitionNodeId",
+          "kind",
+          "nodeType",
+          "replacesNodeRowId",
+          "anchorNodeRowId",
+          "chainIndex",
+          "title",
+          "prompt",
+          "status",
+          "sessionId",
+          "promptId",
+          "failureCode",
+          "createdAt",
+          "startedAt",
+          "completedAt"
+        ],
+        "properties": {
+          "anchorNodeRowId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "chainIndex": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "definitionNodeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WorkflowNodeKind"
+          },
+          "nodeType": {
+            "$ref": "#/components/schemas/WorkflowNodeType"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "promptId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "replacesNodeRowId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowNodeStatus"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
       "NormalizedSessionControl": {
         "type": "object",
         "description": "A product-normalized live session control derived from raw ACP config options.\n\nThis is the product semantics layer used by clients to render consistent\ncontrols such as model, mode, reasoning, effort, and fast mode across\ndifferent harnesses.",
@@ -14431,6 +14742,13 @@
           "rawInput": {},
           "rawOutput": {}
         }
+      },
+      "PlacementMode": {
+        "type": "string",
+        "enum": [
+          "worktree",
+          "repo_root"
+        ]
       },
       "PlanDecisionRequest": {
         "type": "object",
@@ -15305,89 +15623,6 @@
           }
         }
       },
-      "PutWorkflowRunRequest": {
-        "type": "object",
-        "description": "`PUT /v1/workflow-runs/{runId}` request body. The `runId` lives in the path\nonly and never appears in the body.",
-        "required": [
-          "schemaVersion",
-          "workspaceId",
-          "definition"
-        ],
-        "properties": {
-          "arguments": {
-            "type": "object",
-            "description": "Concrete scalar argument values keyed by declared input name.",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/WorkflowRunArgumentValue"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "definition": {
-            "$ref": "#/components/schemas/WorkflowRunDefinition"
-          },
-          "schemaVersion": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "workspaceId": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "PutWorkflowRunRequestV2": {
-        "type": "object",
-        "description": "Schema-v2 portable invocation. Model, mode, and optional effort are target\nintent until AnyHarness resolves and persists a concrete plan.",
-        "required": [
-          "schemaVersion",
-          "workspaceId",
-          "definition"
-        ],
-        "properties": {
-          "arguments": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/WorkflowRunArgumentValue"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "definition": {
-            "$ref": "#/components/schemas/WorkflowRunDefinitionV2"
-          },
-          "schemaVersion": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "workspaceId": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "PutWorkflowRunWorkspaceRequest": {
-        "type": "object",
-        "description": "`PUT /v1/workflow-run-workspaces/{runId}` body. The path `runId` is the\ncanonical UUID later reused by the AnyHarness run and Cloud invocation; it is\nnever carried in the body.",
-        "required": [
-          "schemaVersion",
-          "placement"
-        ],
-        "properties": {
-          "placement": {
-            "$ref": "#/components/schemas/WorkflowWorkspacePlacementRequest"
-          },
-          "schemaVersion": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Exactly `1`.",
-            "minimum": 0
-          }
-        },
-        "additionalProperties": false
-      },
       "RawSessionConfigOption": {
         "type": "object",
         "description": "A raw ACP session configuration option as exposed by the active session.\n\nThis is the transport-fidelity layer. It should match the live ACP state as\nclosely as possible without applying product-specific interpretation.",
@@ -15530,6 +15765,13 @@
           "installedArtifacts"
         ],
         "properties": {
+          "failureKind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Typed classification of a terminal failure: one of `network`,\n`checksum`, `in_use`, `disk`, `other`. Additive and tolerant: absent on\nsuccess/skip and on runtimes that predate typed failures, so old readers\nsimply ignore it."
+          },
           "installedArtifacts": {
             "type": "array",
             "items": {
@@ -16713,6 +16955,100 @@
             "type": "string"
           },
           "stdout": {
+            "type": "string"
+          }
+        }
+      },
+      "RunProjection": {
+        "type": "object",
+        "description": "The full projection every read and every command returns.",
+        "required": [
+          "run",
+          "nodes",
+          "docs"
+        ],
+        "properties": {
+          "docs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocView"
+            }
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NodeView"
+            }
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunView"
+          }
+        }
+      },
+      "RunView": {
+        "type": "object",
+        "required": [
+          "id",
+          "invocationId",
+          "definitionJson",
+          "argumentsJson",
+          "workspaceId",
+          "status",
+          "currentNodeRowId",
+          "failureCode",
+          "interruptionCode",
+          "createdAt",
+          "updatedAt",
+          "completedAt"
+        ],
+        "properties": {
+          "argumentsJson": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "currentNodeRowId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "definitionJson": {
+            "type": "string",
+            "description": "The verbatim definition snapshot, exactly as frozen at PUT time."
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "interruptionCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "invocationId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStatus"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
             "type": "string"
           }
         }
@@ -19697,867 +20033,178 @@
           }
         }
       },
-      "VersionedPutWorkflowRunRequest": {
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/PutWorkflowRunRequest"
-          },
-          {
-            "$ref": "#/components/schemas/PutWorkflowRunRequestV2"
-          }
-        ],
-        "description": "Operation-level PUT union. API decoding first inspects the required integer\n`schemaVersion`, then strictly decodes the selected member."
-      },
-      "VersionedWorkflowRunResponse": {
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/WorkflowRunResponse"
-          },
-          {
-            "$ref": "#/components/schemas/WorkflowRunResponseV2"
-          }
-        ]
-      },
-      "WorkflowRun": {
+      "WorkflowDefinition": {
         "type": "object",
-        "description": "The durable run view.",
         "required": [
-          "id",
           "schemaVersion",
-          "definition",
-          "arguments",
-          "status",
-          "workspaceId",
-          "stateVersion",
-          "createdAt",
-          "updatedAt"
+          "nodes"
         ],
         "properties": {
-          "arguments": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/WorkflowRunArgumentValue"
-            },
-            "propertyNames": {
-              "type": "string"
+          "docTemplates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocTemplate"
             }
           },
-          "cancelRequestedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "First durable cancellation intent; omitted when never requested."
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DefinitionEdge"
+            }
           },
-          "createdAt": {
-            "type": "string"
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DefinitionInput"
+            }
           },
-          "definition": {
-            "$ref": "#/components/schemas/WorkflowRunDefinition"
-          },
-          "failureCode": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkflowRunFailureCode"
-              }
-            ]
-          },
-          "finishedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "type": "string"
-          },
-          "interruptionCode": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkflowRunInterruptionCode",
-                "description": "Present if and only if `status` is `interrupted`."
-              }
-            ]
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DefinitionNode"
+            }
           },
           "schemaVersion": {
             "type": "integer",
-            "format": "int64"
-          },
-          "sessionId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "startedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "stateVersion": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Monotonic snapshot version: 1 at acceptance, +1 per externally visible\nsnapshot transaction."
-          },
-          "status": {
-            "$ref": "#/components/schemas/WorkflowRunStatus"
-          },
-          "updatedAt": {
-            "type": "string"
-          },
-          "workspaceId": {
-            "type": "string"
-          }
-        }
-      },
-      "WorkflowRunArgumentValue": {
-        "oneOf": [
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "string"
-          }
-        ]
-      },
-      "WorkflowRunDefinition": {
-        "type": "object",
-        "description": "The frozen executable definition: inputs plus exactly one stage.",
-        "required": [
-          "stages"
-        ],
-        "properties": {
-          "inputs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowRunInput"
-            }
-          },
-          "stages": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowRunStage"
-            }
+            "format": "int32",
+            "minimum": 0
           }
         },
         "additionalProperties": false
       },
-      "WorkflowRunDefinitionV2": {
-        "type": "object",
-        "required": [
-          "stages"
-        ],
-        "properties": {
-          "inputs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowRunInput"
-            }
-          },
-          "stages": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowRunStageV2"
-            }
-          }
-        },
-        "additionalProperties": false
-      },
-      "WorkflowRunFailureCode": {
-        "type": "string",
-        "description": "The stable machine failure result on failed runs and steps (spec §6.1).",
-        "enum": [
-          "workspace_unavailable",
-          "session_create_failed",
-          "session_start_failed",
-          "prompt_dispatch_failed",
-          "session_turn_failed",
-          "session_turn_cancelled",
-          "runtime_restarted"
-        ]
-      },
-      "WorkflowRunFailureCodeV2": {
-        "type": "string",
-        "description": "V2 extends, but does not widen, the stable V1 failure-code component.",
-        "enum": [
-          "workspace_unavailable",
-          "session_create_failed",
-          "session_start_failed",
-          "prompt_dispatch_failed",
-          "session_turn_failed",
-          "session_turn_cancelled",
-          "runtime_restarted",
-          "session_config_apply_failed"
-        ]
-      },
-      "WorkflowRunHarnessConfig": {
-        "type": "object",
-        "description": "Harness selection for the stage's session.",
-        "required": [
-          "agentKind",
-          "modelId",
-          "modeId"
-        ],
-        "properties": {
-          "agentKind": {
-            "type": "string"
-          },
-          "modeId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Required key; `null` requests existing `SessionRuntime` mode behavior."
-          },
-          "modelId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Required key; `null` requests the target-default model. The\n`schema(required)` override keeps the generated OpenAPI/SDK in sync\nwith the wire rule (present key, nullable value) that `nullable_string`\nenforces at deserialization."
-          }
-        },
-        "additionalProperties": false
-      },
-      "WorkflowRunHarnessConfigV2": {
-        "type": "object",
-        "required": [
-          "agentKind",
-          "modelSelection",
-          "permissionPolicy"
-        ],
-        "properties": {
-          "agentKind": {
-            "type": "string"
-          },
-          "effort": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "modelSelection": {
-            "$ref": "#/components/schemas/WorkflowRunModelSelection"
-          },
-          "permissionPolicy": {
-            "$ref": "#/components/schemas/WorkflowRunPermissionPolicy"
-          }
-        },
-        "additionalProperties": false
-      },
-      "WorkflowRunInput": {
-        "type": "object",
-        "description": "A declared scalar input.",
-        "required": [
-          "name",
-          "type",
-          "required"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "required": {
-            "type": "boolean"
-          },
-          "type": {
-            "$ref": "#/components/schemas/WorkflowRunInputType"
-          }
-        },
-        "additionalProperties": false
-      },
-      "WorkflowRunInputType": {
-        "type": "string",
-        "description": "The only permitted input types (scalars). Defaults, arrays, objects,\nchoices, and secret types are rejected by omission from this enum.",
-        "enum": [
-          "string",
-          "number",
-          "boolean"
-        ]
-      },
-      "WorkflowRunInterruptionCode": {
-        "type": "string",
-        "description": "The closed run interruption code: present if and only if the run status is\n`interrupted`.",
-        "enum": [
-          "runtime_restarted"
-        ]
-      },
-      "WorkflowRunModelSelection": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "targetDefault"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "modelId",
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "exact"
-                ]
-              },
-              "modelId": {
-                "type": "string"
-              }
-            }
-          }
-        ]
-      },
-      "WorkflowRunPermissionPolicy": {
+      "WorkflowNodeKind": {
         "type": "string",
         "enum": [
-          "workflowDefault"
+          "defined",
+          "replacement",
+          "adhoc"
         ]
       },
-      "WorkflowRunPromptStep": {
+      "WorkflowNodeStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "needs_attention",
+          "awaiting_human",
+          "completed",
+          "failed"
+        ]
+      },
+      "WorkflowNodeType": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "human_in_loop"
+        ]
+      },
+      "WorkflowRunAddAdhocNodeRequest": {
         "type": "object",
-        "description": "The single `agent.prompt` step.",
         "required": [
-          "kind",
+          "anchorNodeRowId",
           "prompt"
         ],
         "properties": {
-          "kind": {
+          "anchorNodeRowId": {
             "type": "string"
+          },
+          "model": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NodeModel"
+              }
+            ]
           },
           "prompt": {
             "type": "string"
           }
-        },
-        "additionalProperties": false
+        }
       },
-      "WorkflowRunResolvedHarnessV2": {
+      "WorkflowRunFailRedoRequest": {
         "type": "object",
-        "required": [
-          "agentKind",
-          "modelId",
-          "modeId",
-          "effort"
-        ],
         "properties": {
-          "agentKind": {
-            "type": "string"
-          },
-          "effort": {
+          "prompt": {
             "type": [
               "string",
               "null"
             ]
-          },
-          "modeId": {
-            "type": "string"
-          },
-          "modelId": {
-            "type": "string"
           }
         }
       },
-      "WorkflowRunResponse": {
+      "WorkflowRunFlipTypeRequest": {
         "type": "object",
-        "description": "PUT/GET response envelope.",
         "required": [
-          "run",
-          "steps"
+          "nodeType"
         ],
         "properties": {
-          "run": {
-            "$ref": "#/components/schemas/WorkflowRun"
-          },
-          "steps": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowRunStep"
-            }
+          "nodeType": {
+            "$ref": "#/components/schemas/WorkflowNodeType"
           }
         }
       },
-      "WorkflowRunResponseV2": {
+      "WorkflowRunPutRequest": {
         "type": "object",
-        "required": [
-          "run",
-          "steps",
-          "resolvedHarness"
-        ],
-        "properties": {
-          "resolvedHarness": {
-            "$ref": "#/components/schemas/WorkflowRunResolvedHarnessV2"
-          },
-          "run": {
-            "$ref": "#/components/schemas/WorkflowRunV2"
-          },
-          "steps": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowRunStepV2"
-            }
-          }
-        }
-      },
-      "WorkflowRunStage": {
-        "type": "object",
-        "description": "Exactly one stage: a harness configuration plus exactly one prompt step.",
-        "required": [
-          "harnessConfig",
-          "steps"
-        ],
-        "properties": {
-          "harnessConfig": {
-            "$ref": "#/components/schemas/WorkflowRunHarnessConfig"
-          },
-          "steps": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowRunPromptStep"
-            }
-          }
-        },
-        "additionalProperties": false
-      },
-      "WorkflowRunStageV2": {
-        "type": "object",
-        "required": [
-          "harnessConfig",
-          "steps"
-        ],
-        "properties": {
-          "harnessConfig": {
-            "$ref": "#/components/schemas/WorkflowRunHarnessConfigV2"
-          },
-          "steps": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowRunPromptStep"
-            }
-          }
-        },
-        "additionalProperties": false
-      },
-      "WorkflowRunStatus": {
-        "type": "string",
-        "description": "Durable run status. Shared by the v1 and v2 response families; the\n`cancelled`/`interrupted` widening is the workflow-run-control §3.4\nsupersession of the earlier no-widening rule.",
-        "enum": [
-          "accepted",
-          "running",
-          "completed",
-          "failed",
-          "cancelled",
-          "interrupted"
-        ]
-      },
-      "WorkflowRunStep": {
-        "type": "object",
-        "description": "The durable materialized step view.",
-        "required": [
-          "stageIndex",
-          "stepIndex",
-          "status",
-          "promptId",
-          "createdAt",
-          "updatedAt"
-        ],
-        "properties": {
-          "createdAt": {
-            "type": "string"
-          },
-          "failureCode": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkflowRunFailureCode"
-              }
-            ]
-          },
-          "finishedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "promptId": {
-            "type": "string"
-          },
-          "stageIndex": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "startedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "$ref": "#/components/schemas/WorkflowRunStepStatus"
-          },
-          "stepIndex": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "turnId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "updatedAt": {
-            "type": "string"
-          }
-        }
-      },
-      "WorkflowRunStepStatus": {
-        "type": "string",
-        "description": "Durable step status (shared by both response families; see\n[`WorkflowRunStatus`] for the widening provenance).",
-        "enum": [
-          "pending",
-          "running",
-          "completed",
-          "failed",
-          "cancelled",
-          "interrupted"
-        ]
-      },
-      "WorkflowRunStepV2": {
-        "type": "object",
-        "required": [
-          "stageIndex",
-          "stepIndex",
-          "status",
-          "promptId",
-          "createdAt",
-          "updatedAt"
-        ],
-        "properties": {
-          "createdAt": {
-            "type": "string"
-          },
-          "failureCode": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkflowRunFailureCodeV2"
-              }
-            ]
-          },
-          "finishedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "promptId": {
-            "type": "string"
-          },
-          "stageIndex": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "startedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "$ref": "#/components/schemas/WorkflowRunStepStatus"
-          },
-          "stepIndex": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "turnId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "updatedAt": {
-            "type": "string"
-          }
-        }
-      },
-      "WorkflowRunV2": {
-        "type": "object",
+        "description": "The PUT body: the frozen invocation snapshot the courier reconstitutes\nfrom the control plane's flat invocation response. Extra fields a future\ncourier might forward verbatim (`title`, `definitionRevision`, ...) are\ntolerated and ignored. `id` is the frozen invocation's own id and becomes\nthe run row's `invocation_id`.",
         "required": [
           "id",
           "schemaVersion",
+          "workflowDefinitionId",
           "definition",
-          "arguments",
-          "status",
-          "workspaceId",
-          "stateVersion",
-          "createdAt",
-          "updatedAt"
+          "placement"
         ],
         "properties": {
           "arguments": {
             "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/WorkflowRunArgumentValue"
-            },
+            "additionalProperties": {},
             "propertyNames": {
               "type": "string"
             }
           },
-          "cancelRequestedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "First durable cancellation intent; omitted when never requested."
-          },
-          "createdAt": {
-            "type": "string"
-          },
           "definition": {
-            "$ref": "#/components/schemas/WorkflowRunDefinitionV2"
-          },
-          "failureCode": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkflowRunFailureCodeV2"
-              }
-            ]
-          },
-          "finishedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "$ref": "#/components/schemas/WorkflowDefinition"
           },
           "id": {
             "type": "string"
           },
-          "interruptionCode": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WorkflowRunInterruptionCode",
-                "description": "Present if and only if `status` is `interrupted`."
-              }
-            ]
-          },
-          "schemaVersion": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "sessionId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "startedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "stateVersion": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Monotonic snapshot version: 1 at acceptance, +1 per externally visible\nsnapshot transaction."
-          },
-          "status": {
-            "$ref": "#/components/schemas/WorkflowRunStatus"
-          },
-          "updatedAt": {
-            "type": "string"
-          },
-          "workspaceId": {
-            "type": "string"
-          }
-        }
-      },
-      "WorkflowRunWorkspaceResponse": {
-        "type": "object",
-        "description": "`PUT`/`GET` response for a Workflow run workspace materialization.",
-        "required": [
-          "runId",
-          "schemaVersion",
-          "status",
-          "placement",
-          "createdAt",
-          "updatedAt"
-        ],
-        "properties": {
-          "createdAt": {
-            "type": "string"
-          },
-          "failureCode": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "A bounded, secret-free failure code, present only when `status` is\n`failed`."
-          },
-          "finishedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "placement": {
-            "$ref": "#/components/schemas/WorkflowWorkspaceResolvedPlacement"
-          },
-          "runId": {
-            "type": "string"
+            "$ref": "#/components/schemas/InvocationPlacement"
           },
           "schemaVersion": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "status": {
-            "$ref": "#/components/schemas/WorkflowWorkspaceStatus"
-          },
-          "updatedAt": {
+          "workflowDefinitionId": {
             "type": "string"
-          },
-          "workspaceId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "The durable ordinary workspace id, present once the artifact exists."
           }
         }
       },
-      "WorkflowWorkspacePlacementRequest": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "No user repository: an internal blank Git repository. No repository fields are permitted.",
-            "required": [
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "scratch"
-                ]
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "description": "A new deterministic branch/worktree from one immutable source commit.",
-            "required": [
-              "kind",
-              "repoRootId",
-              "baseRef"
-            ],
-            "properties": {
-              "baseRef": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "repositoryWorktree"
-                ]
-              },
-              "repoRootId": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
-          }
-        ],
-        "description": "Strict workflow workspace placement discriminated by `kind`."
-      },
-      "WorkflowWorkspaceResolvedPlacement": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "scratch"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "repoRootId",
-              "baseRef",
-              "kind"
-            ],
-            "properties": {
-              "baseOid": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "Present once the immutable base OID has been resolved and persisted."
-              },
-              "baseRef": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "repositoryWorktree"
-                ]
-              },
-              "repoRootId": {
-                "type": "string"
-              }
-            }
-          }
-        ],
-        "description": "The resolved placement echoed on the response. For a repository worktree it\nexposes the resolved base OID as non-secret correlation; it never exposes\ncredentials or arbitrary runtime paths."
-      },
-      "WorkflowWorkspaceStatus": {
+      "WorkflowRunStatus": {
         "type": "string",
-        "description": "The durable materialization status.",
         "enum": [
-          "accepted",
-          "materializing",
-          "ready",
+          "running",
+          "awaiting_human",
+          "interrupted",
+          "completed",
           "failed"
         ]
+      },
+      "WorkflowRunsListResponse": {
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunView"
+            }
+          }
+        }
       },
       "Workspace": {
         "type": "object",

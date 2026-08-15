@@ -165,6 +165,15 @@ impl WorkspaceRuntime {
         })?;
         let mut current = root.clone();
         for component in suffix.components() {
+            // Lexical starts_with alone is defeated by `..` in the suffix
+            // (`root/workflows/../..` starts with root and still resolves
+            // outside it): with the root canonical, only Normal components
+            // below it keep the resolved path contained.
+            if !matches!(component, std::path::Component::Normal(_)) {
+                return Err(WorkflowPlacementError::Mismatch(
+                    "target path escapes managed root".into(),
+                ));
+            }
             current = current.join(component);
             match std::fs::symlink_metadata(&current) {
                 Ok(meta) if meta.file_type().is_symlink() => {
@@ -177,6 +186,49 @@ impl WorkspaceRuntime {
             }
         }
         Ok(())
+    }
+
+    /// Tear down a worktree placement whose PUT failed AFTER the artifact
+    /// existed but BEFORE any run row did, so a retry re-resolves from
+    /// scratch: without this, a base ref that moved between attempts leaves
+    /// an artifact the exact-match adoption laws refuse forever, and the
+    /// deterministic `workflow/<runId>` branch name-conflicts the re-cut.
+    /// Best-effort by design — it runs on an already-failing path, must not
+    /// mask the original error, and a leftover only re-parks the retry on the
+    /// same fail-closed checks. Scratch/repo-root placements are never torn
+    /// down (a repo-root workspace is the user's own checkout).
+    pub fn compensate_workflow_placement(
+        &self,
+        resolved: &ResolvedWorkflowPlacement,
+        workspace_id: &str,
+    ) {
+        let ResolvedWorkflowPlacement::RepositoryWorktree {
+            repo_root_id,
+            branch,
+            target_path,
+            ..
+        } = resolved
+        else {
+            return;
+        };
+        if let Err(error) = self.store.delete_by_id(workspace_id) {
+            tracing::warn!(workspace_id = %workspace_id, %error, "workflow placement compensation: workspace row delete failed");
+        }
+        let repo_root = match self.repo_root_service.get_repo_root(repo_root_id) {
+            Ok(Some(repo_root)) => repo_root,
+            other => {
+                tracing::warn!(repo_root_id = %repo_root_id, found = other.is_ok(), "workflow placement compensation: repo root unavailable; artifact left for the adoption checks");
+                return;
+            }
+        };
+        if let Err(error) = GitService::remove_worktree_force(&repo_root.path, target_path) {
+            tracing::warn!(run_id = %resolved.run_id(), %error, "workflow placement compensation: worktree remove failed");
+        }
+        if let Err(error) =
+            GitService::stdout_result(Path::new(&repo_root.path), &["branch", "-D", branch])
+        {
+            tracing::warn!(run_id = %resolved.run_id(), %error, "workflow placement compensation: branch delete failed");
+        }
     }
 
     // ── Fresh creation (rule 2) ──────────────────────────────────────────────

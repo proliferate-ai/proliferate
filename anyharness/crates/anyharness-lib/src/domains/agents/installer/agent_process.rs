@@ -8,7 +8,7 @@ use crate::domains::agents::model::*;
 use crate::domains::agents::readiness::paths::artifact_root;
 use crate::domains::agents::registry::built_in_registry;
 use crate::integrations::agent_cli::executable::is_valid_executable;
-use crate::integrations::agent_cli::launcher::generate_launcher_script;
+use crate::integrations::agent_cli::launcher::generate_launcher_script_atomic;
 
 pub(super) fn regenerate_seeded_agent_launchers(
     runtime_home: &Path,
@@ -72,7 +72,7 @@ fn regenerate_agent_process_launcher(
         ));
     };
 
-    generate_launcher_script(&launcher_path, &exec_path, &[], &env, &path_prefixes)?;
+    generate_launcher_script_atomic(&launcher_path, &exec_path, &[], &env, &path_prefixes)?;
     Ok(Some(InstalledArtifactResult {
         role: ArtifactRole::AgentProcess,
         path: launcher_path,
@@ -94,10 +94,22 @@ pub(super) fn launcher_path_prefixes(runtime_home: &Path, kind: &AgentKind) -> V
     prefixes
 }
 
+/// Launcher env for a managed agent, derived from the registry's per-harness
+/// self-update neutralization record (Update Flow FR-3). An `env` mechanism
+/// injects each declared var (e.g. claude's `DISABLE_AUTOUPDATER=1`);
+/// `none_found`/`not_applicable` inject nothing. No hardcoded per-kind rules.
 pub(super) fn managed_launcher_env(kind: &AgentKind) -> HashMap<String, String> {
-    let mut env = HashMap::new();
-    if *kind == AgentKind::Claude {
-        env.insert("DISABLE_AUTOUPDATER".into(), "1".into());
-    }
-    env
+    let registry = built_in_registry();
+    registry
+        .iter()
+        .find(|descriptor| &descriptor.kind == kind)
+        .map(|descriptor| {
+            descriptor
+                .self_update_neutralization
+                .env
+                .iter()
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default()
 }

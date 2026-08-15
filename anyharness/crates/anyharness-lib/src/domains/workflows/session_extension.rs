@@ -1,160 +1,409 @@
-//! The workflow completion hook. It maps a generic session turn completion
-//! into the domain completion input, matches exact session and prompt
-//! identity, returns immediately on the per-session actor runtime, and
-//! performs the checked terminal CAS on the process/main runtime under the
-//! shared per-run gate (spec workflow-run-control §6.2), so a cancel request
-//! and a terminal callback cannot cross in an unobservable interval. The run
-//! key comes from an exact session+prompt store lookup; the deterministic
-//! prompt ID is never parsed.
+//! The one sessions-domain touchpoint (gen-2). Two duties, both keyed by the
+//! loose workflow columns on `sessions`:
+//!
+//! - At launch, `resolve_launch_extras` passes through the envelope's
+//!   DSL-authored `systemPrompt.append` strings — and nothing else. The
+//!   preamble instruction blocks never ride launch extras: the actor delivers
+//!   them in-band, prepended to the first message payload, identically for
+//!   every harness (Ruling D).
+//! - At every turn end, `on_turn_finished` peeks the durable pending-prompt
+//!   queue AT THAT INSTANT (the actor's mailbox introduces latency during
+//!   which the session actor re-drains the queue itself; peeking early is what
+//!   makes "a queued interjection holds the node open" race-free), maps the
+//!   stop reason, and notifies the manager fire-and-forget. It never blocks
+//!   the session actor.
+//!
+//! The manager is built after `SessionRuntime` (which consumes the extension
+//! list), so the handle arrives late through a `OnceLock` — holding `Weak`,
+//! because the manager's deps own that same runtime and an `Arc` here would
+//! close the cycle and leak every actor task for the process lifetime.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock, Weak};
 
-use tokio::runtime::Handle;
+use anyharness_contract::v1::{InteractionKind, InteractionOutcome};
 
-use crate::domains::sessions::admission::{
-    SessionMutationAdmission, SessionMutationKind, SessionMutationSource,
-};
 use crate::domains::sessions::extensions::{
-    SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
+    SessionExtension, SessionInteractionRequestedContext, SessionInteractionResolvedContext,
+    SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext, SessionTurnOutcome,
 };
-use crate::domains::workflows::control::WorkflowRunGates;
-use crate::domains::workflows::model::{WorkflowTurnOutcome, WORKFLOW_PROMPT_ID_PREFIX};
-use crate::domains::workflows::service::WorkflowRunService;
+use crate::domains::sessions::store::SessionStore;
+use crate::domains::workflows::store::WorkflowStore;
+use crate::domains::workflows::transition::{TurnFinished, TurnStopReason};
+use crate::live::workflows::WorkflowManager;
+use crate::observability::{
+    WORKFLOW_NODE_INTERACTION_REQUESTED_TRACING_TARGET,
+    WORKFLOW_NODE_INTERACTION_RESOLVED_TRACING_TARGET,
+};
 
-pub struct WorkflowRunSessionExtension {
-    service: Arc<WorkflowRunService>,
-    gates: Arc<WorkflowRunGates>,
-    admission: Arc<SessionMutationAdmission>,
-    main_handle: Handle,
-}
-
-impl WorkflowRunSessionExtension {
-    pub fn new(
-        service: Arc<WorkflowRunService>,
-        gates: Arc<WorkflowRunGates>,
-        admission: Arc<SessionMutationAdmission>,
-        main_handle: Handle,
-    ) -> Self {
-        Self {
-            service,
-            gates,
-            admission,
-            main_handle,
-        }
+fn interaction_kind_str(kind: &InteractionKind) -> &'static str {
+    match kind {
+        InteractionKind::Permission => "permission",
+        InteractionKind::UserInput => "user_input",
+        InteractionKind::McpElicitation => "mcp_elicitation",
     }
 }
 
-impl SessionExtension for WorkflowRunSessionExtension {
+fn interaction_outcome_str(outcome: &InteractionOutcome) -> &'static str {
+    match outcome {
+        InteractionOutcome::Selected { .. } => "selected",
+        InteractionOutcome::Submitted { .. } => "submitted",
+        InteractionOutcome::Accepted { .. } => "accepted",
+        InteractionOutcome::Declined => "declined",
+        InteractionOutcome::Cancelled => "cancelled",
+        InteractionOutcome::Dismissed => "dismissed",
+    }
+}
+
+pub struct WorkflowSessionExtension {
+    session_store: SessionStore,
+    workflow_store: WorkflowStore,
+    manager: OnceLock<Weak<WorkflowManager>>,
+}
+
+impl WorkflowSessionExtension {
+    pub fn new(session_store: SessionStore, workflow_store: WorkflowStore) -> Self {
+        Self {
+            session_store,
+            workflow_store,
+            manager: OnceLock::new(),
+        }
+    }
+
+    /// Wiring-order late bind; one shot, further binds are ignored. Stores a
+    /// `Weak` so runtime → extension → manager → runtime never becomes an
+    /// `Arc` cycle.
+    pub fn bind_manager(&self, manager: &Arc<WorkflowManager>) {
+        let _ = self.manager.set(Arc::downgrade(manager));
+    }
+}
+
+/// The ruled mapping from the generic turn context to the table's vocabulary.
+/// The session actor's empty-turn reclassification is the one `Failed` with a
+/// clean `end_turn` stop (every other failure carries an error stop or none),
+/// so that exact pair is the ADR's `empty_turn`. `forced_unload` is the
+/// hook-only marker `finish_forced_unload_cancel` stamps on a non-terminal
+/// actor unload: cancelled, but by the platform, not the user.
+fn map_stop_reason(outcome: SessionTurnOutcome, stop_reason: Option<&str>) -> TurnStopReason {
+    match outcome {
+        SessionTurnOutcome::Cancelled => match stop_reason {
+            Some("forced_unload") => TurnStopReason::ForcedUnload,
+            _ => TurnStopReason::Cancelled,
+        },
+        SessionTurnOutcome::Failed => match stop_reason {
+            Some("end_turn") => TurnStopReason::EmptyTurn,
+            _ => TurnStopReason::Error,
+        },
+        SessionTurnOutcome::Completed => match stop_reason {
+            Some("refusal") => TurnStopReason::Refusal,
+            Some("max_tokens") | Some("max_turn_requests") => TurnStopReason::HarnessCap,
+            _ => TurnStopReason::CleanEndTurn,
+        },
+    }
+}
+
+impl SessionExtension for WorkflowSessionExtension {
+    fn resolve_launch_extras(
+        &self,
+        ctx: &SessionLaunchContext<'_>,
+    ) -> anyhow::Result<SessionLaunchExtras> {
+        let columns = self.session_store.workflow_columns(&ctx.session.id)?;
+        let Some((run_id, node_row_id)) = columns else {
+            return Ok(SessionLaunchExtras::default());
+        };
+        let Some(state) = self.workflow_store.load_run_state(&run_id)? else {
+            return Ok(SessionLaunchExtras::default());
+        };
+        let Some(envelope) = state
+            .node(&node_row_id)
+            .and_then(|node| node.rendered_envelope.as_ref())
+        else {
+            // A linked session with no stored envelope: the actor persists the
+            // envelope before it creates the session, so this only means rows
+            // moved underneath a straggler start. Launch plain.
+            return Ok(SessionLaunchExtras::default());
+        };
+        // Only the DSL-authored appends; the preamble goes in-band with the
+        // first message (Ruling D), so no harness receives it twice or not
+        // at all.
+        Ok(SessionLaunchExtras {
+            system_prompt_append: envelope.system_prompt_append.clone(),
+            ..SessionLaunchExtras::default()
+        })
+    }
+
     fn on_turn_finished(&self, ctx: SessionTurnFinishedContext) {
-        // Only workflow-owned prompts terminalize a workflow run. The prefix
-        // is a cheap pre-filter; identity is established by the exact
-        // session+prompt store lookup below, never by parsing the prompt ID.
-        let Some(prompt_id) = ctx.prompt_id else {
+        let columns = match self.session_store.workflow_columns(&ctx.session_id) {
+            Ok(columns) => columns,
+            Err(error) => {
+                tracing::error!(
+                    session_id = %ctx.session_id,
+                    error = %error,
+                    "workflow column lookup failed at turn end; report dropped",
+                );
+                return;
+            }
+        };
+        let Some((run_id, node_row_id)) = columns else {
+            return; // ordinary session, or unlinked by undo-advance
+        };
+        // Queue emptiness at the finish instant. A peek failure counts as
+        // empty, mirroring the session actor's own drain posture.
+        let queue_empty = self
+            .session_store
+            .peek_head_pending_prompt(&ctx.session_id)
+            .map(|head| head.is_none())
+            .unwrap_or(true);
+        let stop_reason = map_stop_reason(ctx.outcome, ctx.stop_reason.as_deref());
+        let Some(manager) = self.manager.get().and_then(Weak::upgrade) else {
+            tracing::error!(
+                session_id = %ctx.session_id,
+                run_id = %run_id,
+                "workflow manager unbound or dropped at turn end; report dropped",
+            );
             return;
         };
-        if !prompt_id.starts_with(WORKFLOW_PROMPT_ID_PREFIX) {
-            return;
+        manager.notify(
+            &run_id,
+            TurnFinished {
+                node_row_id,
+                stop_reason,
+                queue_empty,
+            },
+        );
+    }
+
+    fn on_interaction_requested(&self, ctx: SessionInteractionRequestedContext) {
+        let columns = match self.session_store.workflow_columns(&ctx.session_id) {
+            Ok(columns) => columns,
+            Err(error) => {
+                tracing::error!(
+                    session_id = %ctx.session_id,
+                    error = %error,
+                    "workflow column lookup failed at interaction request; report dropped",
+                );
+                return;
+            }
+        };
+        let Some((run_id, node_row_id)) = columns else {
+            return; // ordinary session, or unlinked by undo-advance
+        };
+        tracing::info!(
+            target: WORKFLOW_NODE_INTERACTION_REQUESTED_TRACING_TARGET,
+            run_id = %run_id,
+            node_row_id = %node_row_id,
+            session_id = %ctx.session_id,
+            request_id = %ctx.request_id,
+            kind = interaction_kind_str(&ctx.kind),
+            "workflow node interaction requested",
+        );
+    }
+
+    fn on_interaction_resolved(&self, ctx: SessionInteractionResolvedContext) {
+        let columns = match self.session_store.workflow_columns(&ctx.session_id) {
+            Ok(columns) => columns,
+            Err(error) => {
+                tracing::error!(
+                    session_id = %ctx.session_id,
+                    error = %error,
+                    "workflow column lookup failed at interaction resolution; report dropped",
+                );
+                return;
+            }
+        };
+        let Some((run_id, node_row_id)) = columns else {
+            return; // ordinary session, or unlinked by undo-advance
+        };
+        tracing::info!(
+            target: WORKFLOW_NODE_INTERACTION_RESOLVED_TRACING_TARGET,
+            run_id = %run_id,
+            node_row_id = %node_row_id,
+            session_id = %ctx.session_id,
+            request_id = %ctx.request_id,
+            kind = interaction_kind_str(&ctx.kind),
+            outcome = interaction_outcome_str(&ctx.outcome),
+            "workflow node interaction resolved",
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stop_reason_mapping_covers_the_ruled_table() {
+        use SessionTurnOutcome::*;
+        assert_eq!(
+            map_stop_reason(Completed, Some("end_turn")),
+            TurnStopReason::CleanEndTurn
+        );
+        assert_eq!(
+            map_stop_reason(Completed, Some("refusal")),
+            TurnStopReason::Refusal
+        );
+        assert_eq!(
+            map_stop_reason(Completed, Some("max_tokens")),
+            TurnStopReason::HarnessCap
+        );
+        assert_eq!(
+            map_stop_reason(Completed, Some("max_turn_requests")),
+            TurnStopReason::HarnessCap
+        );
+        assert_eq!(map_stop_reason(Completed, None), TurnStopReason::CleanEndTurn);
+        // The empty-turn reclassification: the only Failed that ends with a
+        // clean end_turn stop (turn/finish.rs) is the zero-activity turn.
+        assert_eq!(
+            map_stop_reason(Failed, Some("end_turn")),
+            TurnStopReason::EmptyTurn
+        );
+        assert_eq!(map_stop_reason(Failed, None), TurnStopReason::Error);
+        assert_eq!(
+            map_stop_reason(Failed, Some("something_else")),
+            TurnStopReason::Error
+        );
+        assert_eq!(
+            map_stop_reason(Cancelled, Some("cancelled")),
+            TurnStopReason::Cancelled
+        );
+        // A platform unload is not a user cancel: it parks app_shutdown.
+        assert_eq!(
+            map_stop_reason(Cancelled, Some("forced_unload")),
+            TurnStopReason::ForcedUnload
+        );
+    }
+
+    /// pr11b subscriber-capture proof: a workflow-linked session's interaction
+    /// request emits the named `anyharness.workflow_node_interaction_requested`
+    /// event with full run/node/session/request correlation; an unlinked
+    /// session (no workflow columns) produces zero output — the extension's
+    /// pre-filter, exercised without a bound manager (neither hook needs it).
+    /// Negative control (recorded in the PR body): removing the
+    /// `tracing::info!` call from `on_interaction_requested` fails this test;
+    /// restoring it passes.
+    #[test]
+    fn on_interaction_requested_emits_full_correlation_for_a_linked_session() {
+        let extension = linked_extension_fixture();
+        let logged = capture_tracing_output(|| {
+            extension.on_interaction_requested(SessionInteractionRequestedContext {
+                session_id: "session-1".into(),
+                request_id: "req-1".into(),
+                kind: InteractionKind::Permission,
+            });
+            // Silence case: session-2 carries no workflow columns, so the
+            // workflow_columns pre-filter drops the report — zero output.
+            extension.on_interaction_requested(SessionInteractionRequestedContext {
+                session_id: "session-2".into(),
+                request_id: "req-2".into(),
+                kind: InteractionKind::Permission,
+            });
+        });
+
+        let matches: Vec<&str> = logged
+            .lines()
+            .filter(|line| line.contains("anyharness.workflow_node_interaction_requested"))
+            .collect();
+        assert_eq!(matches.len(), 1, "{logged}");
+        let requested_line = matches[0];
+        assert!(requested_line.contains("run-x"), "{requested_line}");
+        assert!(requested_line.contains("node-x"), "{requested_line}");
+        assert!(requested_line.contains("session-1"), "{requested_line}");
+        assert!(requested_line.contains("req-1"), "{requested_line}");
+        assert!(requested_line.contains("permission"), "{requested_line}");
+    }
+
+    /// The resolve-side sibling: a linked session's resolution emits the named
+    /// `anyharness.workflow_node_interaction_resolved` event with the same
+    /// correlation plus the `outcome` discriminant; an unlinked session stays
+    /// silent. Negative control (recorded in the PR body): removing the
+    /// `tracing::info!` call from `on_interaction_resolved` fails this test;
+    /// restoring it passes.
+    #[test]
+    fn on_interaction_resolved_emits_the_outcome_for_a_linked_session() {
+        let extension = linked_extension_fixture();
+        let logged = capture_tracing_output(|| {
+            extension.on_interaction_resolved(SessionInteractionResolvedContext {
+                session_id: "session-1".into(),
+                request_id: "req-1".into(),
+                kind: InteractionKind::Permission,
+                outcome: InteractionOutcome::Declined,
+            });
+            // Silence case: session-2 carries no workflow columns.
+            extension.on_interaction_resolved(SessionInteractionResolvedContext {
+                session_id: "session-2".into(),
+                request_id: "req-2".into(),
+                kind: InteractionKind::Permission,
+                outcome: InteractionOutcome::Declined,
+            });
+        });
+
+        let matches: Vec<&str> = logged
+            .lines()
+            .filter(|line| line.contains("anyharness.workflow_node_interaction_resolved"))
+            .collect();
+        assert_eq!(matches.len(), 1, "{logged}");
+        let resolved_line = matches[0];
+        assert!(resolved_line.contains("run-x"), "{resolved_line}");
+        assert!(resolved_line.contains("node-x"), "{resolved_line}");
+        assert!(resolved_line.contains("session-1"), "{resolved_line}");
+        assert!(resolved_line.contains("req-1"), "{resolved_line}");
+        assert!(resolved_line.contains("declined"), "{resolved_line}");
+    }
+
+    /// One linked (`session-1` → `run-x`/`node-x`) and one unlinked
+    /// (`session-2`) session over an in-memory store, no bound manager —
+    /// neither interaction hook needs it.
+    fn linked_extension_fixture() -> WorkflowSessionExtension {
+        use crate::app::test_support::{insert_session_row, seed_workspace_with_repo_root};
+        use crate::persistence::Db;
+
+        let db = Db::open_in_memory().expect("in-memory db with full migrations");
+        seed_workspace_with_repo_root(&db, "workspace-1", "worktree", "/tmp/workspace-1");
+        let session_store = SessionStore::new(db.clone());
+        insert_session_row(&session_store, "workspace-1", "session-1", "idle");
+        insert_session_row(&session_store, "workspace-1", "session-2", "idle");
+        session_store
+            .link_workflow_columns("session-1", "run-x", "node-x")
+            .expect("link workflow columns");
+        WorkflowSessionExtension::new(session_store, WorkflowStore::new(db))
+    }
+
+    /// Local twin of `store_tests::capture_tracing_output` (that helper is
+    /// private to its module): runs `body` under a captured fmt subscriber and
+    /// returns everything it logged.
+    fn capture_tracing_output(body: impl FnOnce()) -> String {
+        use std::io;
+        use std::sync::{Arc, Mutex};
+
+        #[derive(Clone)]
+        struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
+
+        impl io::Write for SharedLogWriter {
+            fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+                self.0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .extend_from_slice(buffer);
+                Ok(buffer.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
         }
 
-        let session_id = ctx.session_id;
-        // Treat an empty-string turn id from the context as absent.
-        let turn_id = if ctx.turn_id.is_empty() {
-            None
-        } else {
-            Some(ctx.turn_id)
-        };
-        let outcome = match ctx.outcome {
-            SessionTurnOutcome::Completed => WorkflowTurnOutcome::Completed,
-            SessionTurnOutcome::Failed => WorkflowTurnOutcome::Failed,
-            SessionTurnOutcome::Cancelled => WorkflowTurnOutcome::Cancelled,
-        };
+        let log_bytes = Arc::new(Mutex::new(Vec::new()));
+        let log_writer = Arc::clone(&log_bytes);
+        let subscriber = tracing_subscriber::fmt()
+            .without_time()
+            .with_ansi(false)
+            .with_writer(move || SharedLogWriter(Arc::clone(&log_writer)))
+            .finish();
+        tracing::subscriber::with_default(subscriber, body);
 
-        let service = self.service.clone();
-        let gates = self.gates.clone();
-        let admission = self.admission.clone();
-        // Return immediately on the per-session actor runtime; durable work
-        // rides the main runtime — the session permit below is awaited HERE,
-        // never on the actor thread (spec 2b nonblocking rule).
-        self.main_handle.spawn(async move {
-            // Opaque run key via exact session+prompt lookup.
-            let key_service = service.clone();
-            let key_session_id = session_id.clone();
-            let key_prompt_id = prompt_id.clone();
-            let run_key = tokio::task::spawn_blocking(move || {
-                key_service.find_run_id_by_session_and_prompt(&key_session_id, &key_prompt_id)
-            })
-            .await;
-            let run_key = match run_key {
-                Ok(Ok(Some(run_key))) => run_key,
-                Ok(Ok(None)) => return,
-                Ok(Err(_)) | Err(_) => {
-                    // Leave rows nonterminal for the next startup fence; never
-                    // claim completion. Correlation IDs only.
-                    tracing::error!(
-                        session_id = %session_id,
-                        prompt_id = %prompt_id,
-                        "workflow completion key lookup failed"
-                    );
-                    return;
-                }
-            };
-
-            // Serialize the terminal CAS on the shared per-run gate.
-            let gate = match gates.slot(&run_key) {
-                Ok(gate) => gate,
-                Err(_poisoned) => {
-                    tracing::error!(
-                        run_id = %run_key,
-                        "workflow run gate unavailable for completion"
-                    );
-                    return;
-                }
-            };
-            let _guard = gate.lock_owned().await;
-
-            // Spec 2b: the terminal CAS holds the controlled session's
-            // mutation permit under the run gate (canonical order). The
-            // extension's callback session IS the bound session.
-            let _permit = match admission
-                .acquire(
-                    &session_id,
-                    SessionMutationKind::WorkflowTerminal,
-                    &SessionMutationSource::workflow_run(&run_key),
-                )
-                .await
-            {
-                Ok(permit) => Some(permit),
-                Err(_conflict) => {
-                    tracing::error!(
-                        run_id = %run_key,
-                        session_id = %session_id,
-                        "session permit unavailable for workflow completion; proceeding under run gate alone"
-                    );
-                    None
-                }
-            };
-
-            let finish_session_id = session_id.clone();
-            let finish_prompt_id = prompt_id.clone();
-            let joined = tokio::task::spawn_blocking(move || {
-                service.finish_turn(
-                    &finish_session_id,
-                    &finish_prompt_id,
-                    turn_id.as_deref(),
-                    outcome,
-                )
-            })
-            .await;
-            match joined {
-                Ok(Ok(_outcome)) => {}
-                Ok(Err(_)) | Err(_) => {
-                    tracing::error!(
-                        session_id = %session_id,
-                        prompt_id = %prompt_id,
-                        "workflow completion write failed"
-                    );
-                }
-            }
-        });
+        let bytes = log_bytes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        String::from_utf8(bytes).expect("formatted log is UTF-8")
     }
 }

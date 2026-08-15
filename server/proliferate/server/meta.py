@@ -22,6 +22,7 @@ booleans and safe, user-facing destinations (support email, pricing/web URL).
 
 from __future__ import annotations
 
+import os
 from typing import Literal
 
 from fastapi import APIRouter, status
@@ -279,6 +280,18 @@ def build_server_capabilities(config: Settings) -> ServerCapabilities:
     )
 
 
+class DesktopUpdaterCadence(BaseModel):
+    """Optional desktop updater cadence overrides.
+
+    Both fields default to ``None``; the desktop keeps its baked defaults unless
+    a deployment sets them. Additive and tolerant — the desktop ignores absent
+    or malformed values.
+    """
+
+    checkIntervalMs: int | None = None
+    stallThresholdMs: int | None = None
+
+
 class MetaResponse(BaseModel):
     serverVersion: str
     desktopVersion: str
@@ -291,6 +304,33 @@ class MetaResponse(BaseModel):
     # safe block signal because it defaults to this server's own version.
     minDesktopVersionEnforced: bool
     capabilities: ServerCapabilities
+    # Additive: absent (``None``) unless the deployment configured an override.
+    desktopUpdater: DesktopUpdaterCadence | None = None
+
+
+def _cadence_env_ms(name: str) -> int | None:
+    """Tolerant positive-int env read; unset, empty, or garbage means None."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def _desktop_updater_cadence() -> DesktopUpdaterCadence | None:
+    """Env-driven like ``MIN_DESKTOP_VERSION`` (version.py): a deployment knob
+    on the version-identity surface, not a Settings field."""
+    check_interval = _cadence_env_ms("DESKTOP_UPDATER_CHECK_INTERVAL_MS")
+    stall_threshold = _cadence_env_ms("DESKTOP_UPDATER_STALL_THRESHOLD_MS")
+    if check_interval is None and stall_threshold is None:
+        return None
+    return DesktopUpdaterCadence(
+        checkIntervalMs=check_interval,
+        stallThresholdMs=stall_threshold,
+    )
 
 
 @router.get("/meta", response_model=MetaResponse)
@@ -303,6 +343,7 @@ async def meta() -> MetaResponse:
         minDesktopVersion=min_desktop_version(),
         minDesktopVersionEnforced=min_desktop_version_enforced(),
         capabilities=build_server_capabilities(settings),
+        desktopUpdater=_desktop_updater_cadence(),
     )
 
 

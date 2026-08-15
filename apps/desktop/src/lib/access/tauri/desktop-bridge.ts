@@ -41,11 +41,16 @@ import { fetchServerMeta, isTauriRuntimeAvailable } from "./connect-server";
 import { reportReactRenderError } from "@/lib/infra/diagnostics/renderer-error-diagnostics";
 import { setWorkspaceActivityIndicator } from "./dock";
 import {
+  cancelOwnedDownload,
   checkForUpdate,
+  checkForUpdateOwned,
   downloadAndInstall as downloadAndInstallUpdate,
+  downloadOwnedStaged,
   getAppVersion,
+  installOwnedStaged,
   isTauriPackaged,
   relaunch,
+  stagedUpdateStatus,
 } from "./updater";
 import { getDesktopInstallId } from "./desktop-install-id";
 import {
@@ -215,6 +220,48 @@ export const desktopBridge: DesktopBridge = {
       );
     },
     relaunch,
+    async checkOwned(endpointOverride?: string): Promise<DesktopUpdate | null> {
+      const result = await checkForUpdateOwned(endpointOverride);
+      if (result.kind === "current") {
+        return null;
+      }
+      if (result.kind === "error") {
+        throw new Error(result.message);
+      }
+      return {
+        version: result.version,
+        title: result.title,
+        handle: result.update,
+      };
+    },
+    async downloadOwned(
+      update: DesktopUpdate,
+      onProgress?: (progress: DesktopUpdateDownloadProgress) => void,
+    ): Promise<{ version: string; sha256: string }> {
+      const staged = await downloadOwnedStaged(
+        update.handle,
+        onProgress
+          ? (progress) =>
+              onProgress({
+                receivedBytes: progress.receivedBytes,
+                totalBytes: progress.totalBytes,
+              })
+          : undefined,
+      );
+      return { version: staged.version, sha256: staged.sha256 };
+    },
+    async cancelDownload(): Promise<void> {
+      await cancelOwnedDownload();
+    },
+    async stagedStatus(
+      version: string,
+    ): Promise<{ version: string; sha256: string } | null> {
+      const staged = await stagedUpdateStatus(version);
+      return staged ? { version: staged.version, sha256: staged.sha256 } : null;
+    },
+    async installStaged(update: DesktopUpdate): Promise<void> {
+      await installOwnedStaged(update.handle, update.version);
+    },
   },
 
   worker: {
